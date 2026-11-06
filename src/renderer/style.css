@@ -1863,16 +1863,24 @@ dialog::backdrop {
   text-transform: none;
   white-space: nowrap;
 }
-/* The numerals' box keeps equal visible margins around IBM Plex Sans's side bearings. */
+/* A small 45-degree corner cut keeps the visible side padding balanced. */
 .wordmark b {
+  --wordmark-chamfer: 0.25em;
   display: inline-block;
   margin-left: 0.1em;
-  padding: 0.227em 0.136em 0.182em;
+  padding: 0.227em 0.16em 0.182em 0.136em;
   line-height: 1;
   font-weight: 600;
   background: var(--primary);
   color: var(--primary-text);
   text-box: trim-both cap alphabetic;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--wordmark-chamfer)) 0,
+    100% var(--wordmark-chamfer),
+    100% 100%,
+    0 100%
+  );
 }
 .splash-title {
   position: absolute;
