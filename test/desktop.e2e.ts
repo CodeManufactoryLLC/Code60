@@ -603,7 +603,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         const first = Menu.getApplicationMenu()?.items[0];
         return { label: first?.label, about: first?.submenu?.items[0]?.label };
       }),
-    ).toEqual({ label: "Code60", about: "About Code60" });
+    ).toEqual({ label: "Code60", about: process.platform === "darwin" ? "About Code60" : "About" });
     // The command palette filters commands, exposes unavailable actions, and restores focus.
     const connect = page.getByRole("button", { name: "Connect to database", exact: true });
     await connect.focus();
