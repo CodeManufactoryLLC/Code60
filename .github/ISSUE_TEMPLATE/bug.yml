@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible problem in the desktop app or CLI.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before submitting. Remove credentials, private prompts,
+        repository content, and personal information from logs and screenshots.
+        Code60 currently supports macOS and Linux; Windows is not supported.
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal example, or explain what you know if reproduction is intermittent.
+      placeholder: |
+        1. Open the app or run this command...
+        2. ...
+        3. Observe...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+      description: Use Settings About, code60 --version, or the source commit SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Affected interface
+      options: [Desktop, CLI, Both, Unsure]
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Node.js and agent versions when relevant. No credentials or private prompts.
+      placeholder: |
+        Operating system and version:
+        CPU architecture:
+        Installation method:
+        Node.js version:
+        Agent and version:
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and frequency
+      description: Does this prevent work? How often does it happen? Is there a workaround?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or other evidence
+      description: Optional. Review attachments and redact sensitive information before posting.

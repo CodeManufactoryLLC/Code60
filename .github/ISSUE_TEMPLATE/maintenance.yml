@@ -1,0 +1,27 @@
+name: Maintenance
+description: Propose tooling, documentation, dependency, refactoring, or release preparation work.
+labels: [maintenance, needs-triage]
+body:
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason
+      description: What problem or risk does this work address?
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed change
+      description: Describe the scope and link any dependencies.
+    validations:
+      required: true
+  - type: textarea
+    id: completion
+    attributes:
+      label: Completion criteria
+      description: State how a reviewer can verify completion. For a release, use the checklist in RELEASING.md.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true

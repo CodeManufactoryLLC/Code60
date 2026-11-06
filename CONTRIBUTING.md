@@ -1,5 +1,55 @@
 # Contributing to Code60
 
+## Issues and planning
+
+Use the [issue forms](https://github.com/CodeManufactoryLLC/code60/issues/new/choose)
+for bug reports, feature requests, and maintenance. Search existing issues first.
+Keep each issue focused on one problem or independently verifiable outcome. Break
+large proposals into linked issues before implementation. Documentation work uses
+the maintenance form and the `documentation` label.
+
+Maintainers clarify acceptance criteria, check scope against `ARCHITECTURE.md`,
+apply labels, and remove `needs-triage` once a decision is recorded. Accepted work
+can remain in the backlog without a milestone. Assign a milestone only when the
+work is intended for that version; milestone dates are targets, not guarantees.
+Use [RELEASING.md](RELEASING.md) for milestone and release templates.
+
+Link implementing pull requests with `Closes #<issue-number>`. Close an issue when
+its acceptance criteria are met and the implementation is merged. A closed issue
+means implemented; the release notes establish which published version includes
+the change. Close duplicates or declined requests with an explanation and, when
+applicable, a link to the existing issue.
+
+### Labels
+
+The following labels are the shared vocabulary. Colors are six-digit hex values.
+Maintainers assign priority and platform labels during triage; selecting a platform
+in an issue form does not automatically apply a platform label.
+
+| Label | Color | Use |
+| --- | --- | --- |
+| `bug` | `d73a4a` | Existing behavior is broken. |
+| `enhancement` | `a2eeef` | New or improved user-visible behavior. |
+| `maintenance` | `ededed` | Tooling, dependencies, refactoring, or release preparation. |
+| `documentation` | `0075ca` | Documentation additions or corrections. |
+| `needs-triage` | `fbca04` | Awaiting a maintainer's scope and priority decision. |
+| `needs-info` | `d876e3` | Awaiting details needed to proceed. |
+| `blocked` | `b60205` | Cannot proceed; link the blocking dependency in the issue. |
+| `priority:high` | `b60205` | Address before normal-priority work. |
+| `priority:normal` | `fbca04` | Normal scheduling priority. |
+| `priority:low` | `c5def5` | Can wait behind other accepted work. |
+| `platform:macos` | `bfd4f2` | Specific to macOS. |
+| `platform:linux` | `bfd4f2` | Specific to Linux. |
+| `platform:windows` | `bfd4f2` | Windows requests; Windows is currently unsupported. |
+| `good first issue` | `7057ff` | Small, clear scope with guidance and no unresolved design decisions. |
+| `help wanted` | `008672` | Contributions are welcome. |
+| `release-blocker` | `b60205` | Must be resolved or explicitly removed from the target release's scope. |
+
+Use one priority label at a time and only the relevant platform labels. Existing
+labels such as `accessibility`, `duplicate`, `invalid`, `question`, and `wontfix`
+remain available. A platform label does not imply platform support; expanding
+support requires updating the architecture and adding validation.
+
 ## Setup and checks
 
 Use macOS or Linux with Node.js 22.12 or later and npm.

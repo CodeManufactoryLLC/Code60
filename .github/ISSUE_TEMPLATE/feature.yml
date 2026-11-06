@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a user-visible improvement with a clear outcome.
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Describe the user need before the implementation.
+        Maintainers review scope against ARCHITECTURE.md before scheduling work.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who encounters this problem, and what are they trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: Describe the experience from the user's perspective, including Desktop or CLI scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Describe observable outcomes, including error states and keyboard/accessibility behavior where relevant.
+      placeholder: |
+        - [ ] A user can...
+        - [ ] When something fails...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      placeholder: |
+        Included:
+        Excluded:
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related issues
+      description: Link prerequisites or related proposals, if known.
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation notes
+      description: Optional technical guidance, alternatives, or design sketches.
