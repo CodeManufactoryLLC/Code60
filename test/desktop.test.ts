@@ -514,8 +514,8 @@ describe("desktop orchestration", () => {
     await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
     const status = (id: string) =>
       controller.snapshot().runs.find((run) => run.record.id === id)?.view?.status;
-    expect(first.map(status)).toEqual(["idle", "queued"]);
-    expect(second.map(status)).toEqual(["idle", "queued"]);
+    await vi.waitFor(() => expect(first.map(status)).toEqual(["idle", "queued"]));
+    await vi.waitFor(() => expect(second.map(status)).toEqual(["idle", "queued"]));
     await controller.action({ type: "finish", id: first[0] as string });
     await vi.waitFor(() => expect(status(first[1] as string)).toBe("idle"));
     expect(status(second[1] as string)).toBe("queued");
