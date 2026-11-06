@@ -74,5 +74,10 @@ export async function launchDesktop(
     },
     { folder, database },
   );
+  await launched.firstWindow();
+  await launched.evaluate(({ app, BrowserWindow }) => {
+    app.focus({ steal: true });
+    BrowserWindow.getAllWindows()[0]?.focus();
+  });
   return launched;
 }

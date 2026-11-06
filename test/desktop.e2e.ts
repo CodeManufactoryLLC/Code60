@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type _electron, expect, type Page, test } from "@playwright/test";
+import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
 import { launchDesktop } from "./electron-launcher.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,6 +25,40 @@ const clickMenu = (id: string) =>
 
 // The row-number column, Agent width, and half the Actions width.
 const actionsColumnX = 40 + 95 + 45;
+
+async function scrollGrid(grid: Locator, left: number) {
+  await grid.locator(".dvn-scroller").evaluate(async (element, position) => {
+    element.scrollLeft = position;
+    // Glide debounces its accessibility tree by 200ms after scrolling.
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  }, left);
+}
+
+async function expectGridHeaders(grid: Locator, expected: string[]) {
+  // Glide exposes only visible columns. Inspect the whole table on small CI displays.
+  await expect
+    .poll(async () => {
+      const { width, total } = await grid.locator(".dvn-scroller").evaluate((element) => ({
+        width: element.clientWidth,
+        total: element.scrollWidth,
+      }));
+      const seen = new Set<string>();
+      try {
+        for (let left = 0; left < total; left += Math.max(1, width / 2)) {
+          await scrollGrid(grid, left);
+          for (const label of await grid.locator("th[role='columnheader']").allTextContents())
+            seen.add(label);
+        }
+        return [...seen];
+      } finally {
+        await scrollGrid(grid, 0);
+      }
+    })
+    .toEqual(expected);
+}
 
 async function selectSidebarPage(page: Page, name: string) {
   if (["Configurations", "Events", "Messages", "Polling", "Sessions", "Worktrees"].includes(name)) {
@@ -356,7 +390,18 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       }),
     );
     expect(tabGaps).toEqual(Array(12).fill(4));
-    await expect(page.locator(".window-drag-strip")).toHaveCSS("height", "28px");
+    const nativeTitlebarHeight = await page.evaluate(() => {
+      const overlay = (
+        navigator as Navigator & {
+          windowControlsOverlay: { getTitlebarAreaRect(): DOMRect };
+        }
+      ).windowControlsOverlay;
+      return overlay.getTitlebarAreaRect().height;
+    });
+    await expect(page.locator(".window-drag-strip")).toHaveCSS(
+      "height",
+      `${Math.max(28, nativeTitlebarHeight)}px`,
+    );
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Settings", exact: true })).toHaveCSS(
       "border-top-right-radius",
@@ -607,6 +652,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     // The command palette filters commands, exposes unavailable actions, and restores focus.
     const connect = page.getByRole("button", { name: "Connect to database", exact: true });
     await connect.focus();
+    await expect(connect).toBeFocused();
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
     await expect(palette).toBeVisible();
@@ -767,12 +813,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const worktreesPanel = page.locator("#panel-worktrees");
     const worktreesGrid = worktreesPanel.locator(".sessions-grid");
     await expect(worktreesGrid.locator("tbody [role='row']")).toHaveCount(2);
-    await expect(worktreesGrid.locator("th[role='columnheader']")).toHaveText([
+    await expectGridHeaders(worktreesGrid, [
       "Worktree",
       "Actions",
       "Branch",
       "Created",
       "Repository",
+      "Size",
     ]);
     const listedPaths = await worktreesGrid
       .locator("[data-testid^='glide-cell-1-']")
@@ -782,11 +829,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       .allTextContents();
     expect(listedPaths.some((path) => path.includes(".worktrees"))).toBe(true);
     expect(listedBranches.some((branch) => branch.startsWith("code60/"))).toBe(true);
-    await expect(worktreesGrid.getByTestId("glide-cell-5-0")).toHaveText("repo");
     await expect(page.locator(".sidebar-title")).toHaveText("repo");
     await worktreesGrid.locator(".dvn-scroller").evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
     });
+    await expect(worktreesGrid.getByTestId("glide-cell-5-0")).toHaveText("repo");
     await expect(worktreesGrid.getByTestId("glide-cell-6-0")).not.toHaveText("Unknown");
     await worktreesGrid.locator(".dvn-scroller").evaluate((element) => {
       element.scrollLeft = 0;
@@ -954,13 +1001,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await messagesTab.click();
     const messagesGrid = page.locator("#panel-messages .sessions-grid");
     await expect(messagesGrid.locator("tbody [role='row']")).toHaveCount(5);
-    await expect(messagesGrid.locator("th[role='columnheader']")).toHaveText([
-      "Time",
-      "Agent",
-      "Session",
-      "Type",
-      "Message",
-    ]);
+    await expectGridHeaders(messagesGrid, ["Time", "Agent", "Session", "Type", "Message"]);
+    await scrollGrid(messagesGrid, Number.MAX_SAFE_INTEGER);
     await expect(
       messagesGrid.locator("[data-testid^='glide-cell-5-']").filter({ hasText: /^follow up$/ }),
     ).toHaveCount(1);
@@ -1437,6 +1479,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(grid.locator("tbody [role='row']")).toHaveCount(1);
     // Accessibility cell IDs count the row-number column, which the table itself omits.
     await expect(grid.getByTestId("glide-cell-3-0")).toHaveText("Finished");
+    await scrollGrid(grid, 500);
     await expect(grid.getByTestId("glide-cell-7-0")).toHaveText(/^\d+$/);
     // The grid exposes only visible columns, so widen the window past the sidebar to list them all.
     const sessionSize = await application.evaluate(({ BrowserWindow }) =>
@@ -1445,8 +1488,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(1700, 900),
     );
-    const headers = grid.locator("th[role='columnheader']");
-    await expect(headers).toHaveText([
+    await expectGridHeaders(grid, [
       "Agent",
       "Actions",
       "Status",
@@ -2042,7 +2084,7 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await editor.getByRole("button", { name: "Save configuration", exact: true }).click();
     await expect(editor).toHaveCount(0);
     const grid = panel.locator(".sessions-grid");
-    await expect(grid.locator("th[role='columnheader']")).toHaveText([
+    await expectGridHeaders(grid, [
       "Name",
       "Actions",
       "Preset Provider",
@@ -2055,7 +2097,9 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await expect(grid.getByTestId("glide-cell-3-0")).toHaveText("fake, fake2");
     await expect(grid.getByTestId("glide-cell-4-0")).toHaveText("2");
     await expect(grid.getByTestId("glide-cell-5-0")).toHaveText("0");
+    await scrollGrid(grid, Number.MAX_SAFE_INTEGER);
     await expect(grid.getByTestId("glide-cell-6-0")).toHaveText("Never");
+    await scrollGrid(grid, 0);
     await expect(panel.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
     await clickMenu("open-project");
@@ -2105,8 +2149,11 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
       settings: { parallel: "2" },
     });
     expect(JSON.stringify(after.configurations)).not.toContain("one-time private task");
+    // Keep the agent chat from covering table actions on small displays.
+    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
     await configurationsTab.click();
     await expect(grid.locator("tbody [role='row']")).toHaveCount(2);
+    await scrollGrid(grid, 0);
     const bounds = await grid.getByTestId("data-grid-canvas").boundingBox();
     if (!bounds) throw new Error("Missing configuration grid");
     // The row-number column, Name width, and half the Actions width.
@@ -2730,11 +2777,11 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await selectSidebarPage(page, "Events");
     const eventPanel = page.locator("#panel-events");
     await expect(eventPanel.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
-    await expect(eventPanel.locator(".sessions-grid thead")).toContainText("Tool call ID");
     // Glide virtualizes columns; Details is beyond the viewport after the ACP update column.
     await eventPanel.locator(".dvn-scroller").evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
     });
+    await expect(eventPanel.locator(".sessions-grid thead")).toContainText("Tool call ID");
     await expect(eventPanel.locator(".sessions-grid tbody")).toContainText("Parser fixed");
     await expect(
       eventPanel.getByText("2 transcripts unavailable. Results are incomplete."),
@@ -3014,6 +3061,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await experiments.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(page.locator("#panel-episodic-memory")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(experiments).toBeFocused();
     await experiments.press("Home");
