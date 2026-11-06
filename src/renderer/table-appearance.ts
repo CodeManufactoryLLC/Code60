@@ -96,7 +96,7 @@ export function useTableAppearance(textStyles: TextStyles, lines: TableLines) {
       };
     return { cell: draw(cellSize, "normal"), header: draw(heading.size, heading.spacing) };
   }, [cellSize, heading]);
-  // Alternate row backgrounds so neighbouring sessions are easy to tell apart.
+  // Both row tokens use the same resting fill in Light and Dark; selection is separate.
   const rowTheme = useMemo<Partial<Theme>>(() => ({ bgCell: color("--row-alt") }), [color]);
   const getRowThemeOverride = useCallback(
     (row: number) => (row % 2 === 1 ? rowTheme : undefined),

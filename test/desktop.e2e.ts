@@ -215,6 +215,80 @@ async function expectThemeContrast(page: Page) {
   }
 }
 
+async function expectNeutralTheme(page: Page) {
+  const palette = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const color = (token: string) => {
+      probe.style.color = `var(${token})`;
+      return getComputedStyle(probe).color;
+    };
+    const dark = getComputedStyle(document.documentElement).colorScheme === "dark";
+    const fills = Object.fromEntries(
+      [
+        "--bg",
+        "--surface",
+        "--surface-hover",
+        "--row-alt",
+        "--code",
+        "--chat-bg",
+        "--control-fill",
+        "--field-fill",
+        "--group-fill",
+        "--disabled-fill",
+        "--warning-bg",
+        "--surface-band",
+        "--footer-bg",
+      ].map((token) => [token, color(token)]),
+    );
+    const colors = Object.fromEntries(
+      [
+        "--text",
+        "--muted",
+        "--border",
+        "--control-border",
+        "--accent-bg",
+        "--surface-edge",
+        "--disabled-stripe",
+        "--primary",
+        "--hover-bg",
+        "--human-text",
+      ].map((token) => [token, color(token)]),
+    );
+    probe.remove();
+    return { dark, fills, colors };
+  });
+  for (const [token, fill] of Object.entries(palette.fills))
+    expect(fill, token).toBe(palette.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
+  expect(palette.colors).toEqual(
+    palette.dark
+      ? {
+          "--text": "rgb(255, 255, 255)",
+          "--muted": "rgb(170, 170, 170)",
+          "--border": "rgb(47, 47, 47)",
+          "--control-border": "rgb(136, 136, 136)",
+          "--accent-bg": "rgb(18, 18, 18)",
+          "--surface-edge": "rgb(47, 47, 47)",
+          "--disabled-stripe": "rgba(0, 0, 0, 0)",
+          "--primary": "rgb(197, 177, 125)",
+          "--hover-bg": "rgb(32, 62, 59)",
+          "--human-text": "rgb(181, 200, 211)",
+        }
+      : {
+          "--text": "rgb(0, 0, 0)",
+          "--muted": "rgb(85, 85, 85)",
+          "--border": "rgb(208, 208, 208)",
+          "--control-border": "rgb(119, 119, 119)",
+          "--accent-bg": "rgb(237, 237, 237)",
+          "--surface-edge": "rgb(208, 208, 208)",
+          "--disabled-stripe": "rgba(0, 0, 0, 0)",
+          "--primary": "rgb(67, 179, 174)",
+          "--hover-bg": "rgb(226, 243, 241)",
+          "--human-text": "rgb(20, 108, 103)",
+        },
+  );
+}
+
 async function expectTabAppearance(page: Page) {
   // Hovering an inactive tab gives it the active text color, so measure with the pointer clear.
   await page.mouse.move(1, 1);
@@ -468,6 +542,12 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     application = await launch(directory, directory, database);
     page = await enter();
     await expect(page.locator("html")).toHaveAttribute("data-transparent", "true");
+    await selectSidebarPage(page, "Settings");
+    await page.getByLabel("Theme", { exact: true }).selectOption("dark");
+    await selectSidebarPage(page, "Sessions");
+    await expectNeutralTheme(page);
+    for (const selector of [".sidebar", "#panel-sessions", ".app-footer"])
+      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(0, 0, 0)");
     for (const selector of ["html", "body", ".app", ".page-tabs"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
@@ -651,6 +731,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     ).toEqual({ label: "Code60", about: process.platform === "darwin" ? "About Code60" : "About" });
     // The command palette filters commands, exposes unavailable actions, and restores focus.
     const connect = page.getByRole("button", { name: "Connect to database", exact: true });
+    // Let the preceding sidebar navigation finish its deferred focus before choosing
+    // the control whose focus the palette is expected to restore.
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     await connect.focus();
     await expect(connect).toBeFocused();
     await page.keyboard.press("ControlOrMeta+k");
@@ -793,19 +878,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       expect(colors.composerFrameWidth).toBe("1px");
       expect(colors.footerFrameWidth).toBe("1px");
       expect(colors.shadow).not.toBe("none");
-      if (colors.dark) {
-        expect(colors.popup).not.toBe(colors.grid);
-        expect(colors.header).not.toBe(colors.popup);
-        expect(colors.composer).not.toBe(colors.popup);
-        expect(colors.composerFrame).toBe("rgba(0, 0, 0, 0)");
-        expect(colors.footer).not.toBe(colors.popup);
-      } else {
-        for (const fill of [colors.popup, colors.grid, colors.header, colors.composer])
-          expect(fill).toBe("rgb(255, 255, 255)");
-        expect(colors.footer).toBe("rgb(237, 237, 237)");
-        expect(colors.composerFrame).not.toBe("rgba(0, 0, 0, 0)");
-        expect(colors.headerFrame).not.toBe("rgba(0, 0, 0, 0)");
-      }
+      for (const fill of [colors.popup, colors.grid, colors.header, colors.composer])
+        expect(fill).toBe(colors.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
+      expect(colors.footer).toBe(colors.dark ? "rgb(18, 18, 18)" : "rgb(237, 237, 237)");
+      expect(colors.composerFrame).not.toBe("rgba(0, 0, 0, 0)");
+      expect(colors.headerFrame).not.toBe("rgba(0, 0, 0, 0)");
       expect(colors.footerFrame).toBe("rgba(0, 0, 0, 0)");
     };
     await expectDistinctChatSurfaces();
@@ -1192,36 +1269,14 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await page.getByLabel("Theme").selectOption(theme);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await expectThemeContrast(page);
-      if (
-        await page.evaluate(
-          () => getComputedStyle(document.documentElement).colorScheme === "light",
-        )
-      ) {
-        const fills = await page.evaluate(() => {
-          const probe = document.createElement("span");
-          document.body.append(probe);
-          const fills = [
-            "--bg",
-            "--surface",
-            "--surface-hover",
-            "--row-alt",
-            "--code",
-            "--field-fill",
-            "--group-fill",
-            "--disabled-fill",
-            "--warning-bg",
-            "--surface-band",
-            "--footer-bg",
-          ].map((token) => {
-            probe.style.background = `var(${token})`;
-            return getComputedStyle(probe).backgroundColor;
-          });
-          probe.remove();
-          return fills;
-        });
-        expect(fills.every((fill) => fill === "rgb(255, 255, 255)")).toBe(true);
-        await page.screenshot({ path: "test-results/white-theme-settings.png" });
+      await expectNeutralTheme(page);
+      const chatVisible = await chatPopup.isVisible();
+      if (chatVisible) {
+        await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
+        await expect(chatPopup).toBeHidden();
       }
+      await page.screenshot({ path: `test-results/neutral-theme-settings-${theme}.png` });
+      if (chatVisible) await chatHead.click();
       await expectIndustrialSurfaces(page);
       await sessionsTab.click();
       await expectTabAppearance(page);
@@ -1246,9 +1301,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       );
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
-        await expect(chatHead).toHaveCSS("background-color", "rgb(52, 55, 59)");
-        await expect(chatHead).toHaveCSS("color", "rgb(220, 224, 229)");
-        await expect(chatPopup).toHaveCSS("background-color", "rgb(17, 18, 20)");
+        await expect(chatHead).toHaveCSS("background-color", "rgb(18, 18, 18)");
+        await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
+        await expect(chatPopup).toHaveCSS("background-color", "rgb(0, 0, 0)");
         // Primary buttons stay filled in dark mode.
         const primary = await page.evaluate(() => {
           const probe = document.createElement("button");
@@ -1259,6 +1314,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
           return color;
         });
         expect(primary).toBe("rgb(197, 177, 125)");
+        await page.screenshot({ path: "test-results/black-theme-sessions-chat.png" });
       }
       await settingsTab.click();
     }
@@ -1424,13 +1480,15 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
       .toBe("dark");
     await expectThemeContrast(page);
-    await expect(chatHead).toHaveCSS("background-color", "rgb(52, 55, 59)");
+    await expectNeutralTheme(page);
+    await expect(chatHead).toHaveCSS("background-color", "rgb(18, 18, 18)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
     await expect
       .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
       .toBe("light");
     await expectThemeContrast(page);
+    await expectNeutralTheme(page);
     const snapshot = await page.evaluate(() => window.desktop.snapshot());
     const id = snapshot.liveIds[0] as string;
     expect(snapshot.runs[0]?.view?.turns).toBe(2);
@@ -1938,7 +1996,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await expect(otherPrompt).toHaveCSS("outline-style", "none");
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(52, 55, 59)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(18, 18, 18)",
       );
       await panel.locator(".prompt-editor").evaluate((element) => {
         element.scrollTop = 0;
@@ -1947,7 +2005,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await selectedPrompt.hover();
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(52, 55, 59)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(18, 18, 18)",
       );
       await expect(selectedPrompt).toHaveCSS("border-top-width", "0px");
     }
@@ -3446,7 +3504,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(rows.first().locator(".memory-cloud-light")).toBeHidden();
     await expect(rows.first().locator(".memory-cloud-dark")).toBeVisible();
-    await expect(rows.first()).toHaveCSS("color", "rgb(220, 224, 229)");
+    await expect(rows.first()).toHaveCSS("color", "rgb(255, 255, 255)");
     await page.screenshot({ path: "test-results/episodic-memory-clouds-dark.png" });
     await page.emulateMedia({ colorScheme: "light" });
     await memory.getByRole("button", { name: "Clear", exact: true }).click();
@@ -3677,6 +3735,8 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await page.screenshot({ path: "test-results/table-settings-columns.png" });
     await columnsButton.click();
     await page.emulateMedia({ colorScheme: "dark" });
+    await expectNeutralTheme(page);
+    await expect(modal).toHaveCSS("background-color", "rgb(0, 0, 0)");
     await page.screenshot({ path: "test-results/table-settings-dark.png" });
     await application.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];
@@ -3698,6 +3758,13 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await expect(modal.getByRole("button", { name: "Apply", exact: true })).toBeInViewport();
     await page.screenshot({ path: "test-results/table-settings-narrow.png" });
     await page.emulateMedia({ forcedColors: "active" });
+    expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
+    const forced = await modal.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, text: style.color, border: style.borderColor };
+    });
+    expect(forced.text).not.toBe(forced.background);
+    expect(forced.border).not.toBe(forced.background);
     await page.screenshot({ path: "test-results/table-settings-forced-colors.png" });
     await page.emulateMedia({ forcedColors: "none", colorScheme: "light" });
     await modal.getByRole("button", { name: "Apply", exact: true }).click();
@@ -3905,9 +3972,9 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(25, 27, 30)",
+      "rgb(0, 0, 0)",
     );
-    await expect(file).toHaveCSS("background-color", "rgb(52, 55, 59)");
+    await expect(file).toHaveCSS("background-color", "rgb(18, 18, 18)");
     await page.screenshot({ path: "test-results/files-preview-dark.png" });
     await selectSidebarPage(page, "Settings");
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
@@ -3919,7 +3986,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(25, 27, 30)",
+      "rgb(0, 0, 0)",
     );
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
