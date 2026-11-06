@@ -1,0 +1,12 @@
+Code60
+Copyright 2026 Code Manufactory LLC
+
+This product is licensed under the Apache License, Version 2.0. See the
+LICENSE file for the full text.
+
+"Code60" and the Code60 logo are trademarks of Code Manufactory LLC. The Apache
+License does not grant permission to use them; see TRADEMARKS.md.
+
+This product bundles third-party fonts and icons. Each keeps its own license,
+which is included in the directory that contains it under src/renderer/fonts,
+src/renderer/icons, and docs.

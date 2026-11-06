@@ -1,0 +1,56 @@
+/* Bundled fonts load from the app itself, as the Content Security Policy allows only font-src 'self'. */
+@font-face {
+  font-family: "D-DIN";
+  font-style: normal;
+  font-weight: 400 500;
+  src: url("./fonts/d-din/D-DIN.woff2") format("woff2");
+}
+@font-face {
+  font-family: "D-DIN";
+  font-style: normal;
+  font-weight: 600 700;
+  src: url("./fonts/d-din/D-DIN-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "D-DIN";
+  font-style: italic;
+  font-weight: 400 700;
+  src: url("./fonts/d-din/D-DIN-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-style: normal;
+  font-weight: 400 500;
+  src: url("./fonts/cmu-serif/cmu-serif-500-roman.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-style: normal;
+  font-weight: 600 700;
+  src: url("./fonts/cmu-serif/cmu-serif-700-roman.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-style: italic;
+  font-weight: 400 500;
+  src: url("./fonts/cmu-serif/cmu-serif-500-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-style: italic;
+  font-weight: 600 700;
+  src: url("./fonts/cmu-serif/cmu-serif-700-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Shantell Sans";
+  font-style: normal;
+  font-weight: 300 800;
+  src: url("./fonts/shantell-sans/ShantellSans.ttf") format("truetype");
+}
+@font-face {
+  font-family: "OCR-A";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/ocr-a/OCRA.otf") format("opentype");
+}
