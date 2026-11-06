@@ -1346,6 +1346,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         () => JSON.parse(localStorage.getItem("code60.textStyles") ?? "{}").normalText.typeface,
       ),
     ).toBe("d-din");
+    // Floating chats must not cover the settings controls on smaller displays.
+    await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
     // Every role has independent controls; the case switches exclude one another.
     const roles = [
       "Table Headings",
@@ -1385,6 +1387,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(group.getByRole("switch", { name: "Lowercase", exact: true })).toBeChecked();
     }
     await sessionsTab.click();
+    if (!(await chatPopup.isVisible())) await chatHead.click();
     await expectChatFooterLayout();
     await expect(page.locator(".event.message pre").first()).toHaveCSS("font-size", "18px");
     await expect(page.locator(".event.prompt pre").first()).toHaveCSS("font-size", "19px");
@@ -1392,6 +1395,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "text-transform",
       "lowercase",
     );
+    await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
     await settingsTab.click();
     await page.getByRole("button", { name: "Reset text", exact: true }).click();
     for (const name of roles) {
@@ -1413,6 +1417,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await sessionsTab.click();
     await expect(appearance).toBeHidden();
+    if (!(await chatPopup.isVisible())) await chatHead.click();
     await expect(chatPopup).toBeVisible();
     await page.emulateMedia({ colorScheme: "dark" });
     await expect
