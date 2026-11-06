@@ -17,7 +17,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Merging, committing, pushing, or deciding whether a task succeeded. The user does this with Git.
 - Retries, durable task queues, and exactly-once execution. A failed run is reported, and the user starts a new one.
 - Automatic crash recovery. After a crash, the tool lists what was left behind; recovery starts only when the user sends a new message to an ended session in the desktop app.
-- Storing credentials. Agents log in through their own CLIs, and the tool passes the environment through unchanged.
+- Storing credentials. Agents log in through their own CLIs. The CLI passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
 - Settings profiles, workspace trust, imported project settings, and settings export. The desktop app's saved run configurations (see [Desktop app](#desktop-app)) are the one exception: named batch settings stored in the project database, never applied to the CLI or the config file.
 - CLI orchestration services, external ACP servers, and arbitrary agent-to-agent communication. Only the desktop Orchestration Chat may dispatch and control its own workers in the open project through the scoped MCP tools described below.
 - Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and mid-run model changes. Follow-up prompts between turns are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
@@ -398,6 +398,18 @@ Linux GUI executable is `code60-desktop`, separate from the headless `code60` CL
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
 Installer replacement is manual; there is no automatic updater.
+
+Before restoring sessions or accepting agent launches, the desktop reads PATH
+from the user's interactive login shell once, asynchronously, with a three-second
+deadline and a 64 KiB output limit. It runs the probe in the home directory and
+stops the probe's process group on completion, failure, timeout, or shutdown.
+Only PATH is imported; shell output and other environment variables are never
+logged or imported. Shell PATH entries precede inherited entries, followed by
+`~/.local/bin`, `~/bin`, `/opt/homebrew/bin` on macOS, `/usr/local/bin`, and
+standard system directories. Empty, relative, and duplicate entries are removed.
+Missing or failing shells use inherited PATH and the same fallbacks. This applies
+to Git, agent connection tests, orchestration chats, and workers; absolute agent
+commands remain authoritative. The CLI and configuration files are unchanged.
 
 macOS releases use Developer ID signing and notarization. Packaging preserves
 Electron's Node mode because orchestration providers launch the bundled MCP

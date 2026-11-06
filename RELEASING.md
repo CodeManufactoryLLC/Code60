@@ -13,10 +13,18 @@ Intel macOS installers are not included.
 
 The desktop bundles Electron and its Node.js runtime. Users do not need Node or
 npm to launch it. Git and agent CLIs remain external prerequisites: install and
-authenticate the chosen agent separately. GUI launches may have a smaller PATH
-than terminal sessions. Set an absolute executable path in the existing
-`~/.config/code60/config.json` (or `$XDG_CONFIG_HOME/code60/config.json`) when
-necessary. Agents launched through `npx` still need their own Node/npm setup.
+authenticate the chosen agent separately. Finder and Linux desktop launches
+automatically discover tools using your interactive login shell's PATH, then the
+inherited PATH and common installation directories (`~/.local/bin`, `~/bin`,
+Homebrew on macOS, `/usr/local/bin`, and standard system directories). This covers
+agents such as Droid and tools such as Git and `npx`, including version-manager
+paths configured by your shell. Shell discovery waits at most three seconds;
+if the shell fails or hangs, the app continues with inherited and fallback paths.
+Restart Code60 after changing your shell PATH. No config edit is required for
+ordinary installations. An absolute executable path in the existing
+`~/.config/code60/config.json` (or `$XDG_CONFIG_HOME/code60/config.json`) remains an
+optional override for unusual installations. Agents launched through `npx` still
+need their own Node/npm setup; the bundled desktop runtime does not supply `npx`.
 The installer does not install the headless `code60` command; its existing
 source-based `npm run install:global` workflow is unchanged. The Linux desktop
 launcher is `code60-desktop`.

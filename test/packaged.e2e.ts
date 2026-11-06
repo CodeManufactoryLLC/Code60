@@ -19,13 +19,9 @@ test("installed app launches with a minimal PATH and isolated data", async () =>
   try {
     expect(await app.evaluate(({ app }) => app.isPackaged)).toBe(true);
     expect(await app.evaluate(({ app }) => app.getVersion())).toBe(version);
-    const runtimes = await app.evaluate(async () => {
-      const { spawnSync } = process.getBuiltinModule("node:child_process");
-      return ["node", "npm"].map(
-        (name) => (spawnSync(name, ["--version"]).error as NodeJS.ErrnoException | undefined)?.code,
-      );
+    await expect(readFile(join(directory, "unexpected-runtime"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
     });
-    expect(runtimes).toEqual(["ENOENT", "ENOENT"]);
 
     const page = await app.firstWindow();
     await expect(page.locator(".splash-title")).toHaveText("Code60");
