@@ -388,3 +388,20 @@ The Tables disclosure contains Configurations, Events, Messages, Polling, Sessio
 Experiments follows Chat as a separate disclosure containing Episodic Memory. It uses the same sidebar styles and keyboard controls, reveals its child when selected through the command palette, and remembers expansion independently of Tables. Collapsing either disclosure preserves the active page.
 
 The Prompt Editor groups its four system templates beneath an initially expanded System disclosure. Collapsing the group preserves the selected editor and unsaved drafts. Saved overrides remain in System; individual items omit source labels and show unsaved changes when present. Prompt items have no border and share neutral gray selection and viridian hover with navigation.
+
+
+### Desktop distribution
+
+The release workflow packages the Electron desktop as an Apple Silicon macOS DMG
+and Linux x64 DEB/AppImage. The bundle ID is `com.codemanufactory.code60`; the
+Linux GUI executable is `code60-desktop`, separate from the headless `code60` CLI.
+Installers bundle the desktop runtime and preserve existing config, preferences,
+and user-selected database paths. Git and provider CLIs remain external.
+Installer replacement is manual; there is no automatic updater.
+
+macOS releases use Developer ID signing and notarization. Packaging preserves
+Electron's Node mode because orchestration providers launch the bundled MCP
+sidecar with the app executable and `ELECTRON_RUN_AS_NODE=1`. Packaged tests
+exercise that path through its authenticated gateway. The renderer remains
+sandboxed; the desktop refuses `--no-sandbox` launches, including AppImage
+fallbacks. Packaging adds no bridge methods or application configuration fields.

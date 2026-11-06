@@ -19,8 +19,8 @@ environments.
 
 - Use npm. Install with `npm ci`, and commit `package-lock.json` changes.
 - `npm run check` runs the typecheck, Biome lint and format checks, and the
-  tests. Run it before every commit; CI runs the same command on macOS and
-  Linux with Node.js 22.12 and 24.
+  tests. Run it before every commit; PR CI runs it on Linux with Node.js 22.12 and 24; release CI additionally
+  runs it on macOS with Node.js 24.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
   JSON, and workflow files. Markdown is not auto-formatted.
 - `npm run build` compiles `src` to `dist` and builds the renderer with Vite.

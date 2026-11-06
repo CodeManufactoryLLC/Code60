@@ -185,6 +185,15 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 // Avoid top-level await here: Electron automation attaches only after the main module finishes loading.
 async function ready(): Promise<void> {
+  // Some AppImage launchers fall back to --no-sandbox when user namespaces fail.
+  // Never let a distribution wrapper weaken the renderer's security contract.
+  if (app.commandLine.hasSwitch("no-sandbox")) {
+    process.stderr.write(
+      "Code60 requires the Chromium sandbox. Enable user namespaces or install the DEB package; do not use --no-sandbox.\n",
+    );
+    app.exit(1);
+    return;
+  }
   const transparent = await preferences.transparent();
   let enabled = transparent;
   const clickThrough = transparent && process.platform === "darwin";

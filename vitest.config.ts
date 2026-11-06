@@ -1,5 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { exclude: ["node_modules/**", "dist/**", "test/desktop.e2e.ts"] },
+  test: {
+    exclude: ["node_modules/**", "dist/**", "test/**/*.e2e.ts", "release/**", "release-assets/**"],
+  },
 });

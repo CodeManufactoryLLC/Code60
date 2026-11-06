@@ -96,3 +96,10 @@ git commit -s
 
 The `Signed-off-by` trailer certifies that you have the right to submit the
 contribution under the project's license. Use your own name and email.
+
+## Installer CI
+
+Require the **CI passed** check for merges. Routine PRs use Linux for checks,
+Electron UI tests, and DEB/AppImage packaging and installation tests. macOS runs
+only for manually requested release candidates. See [RELEASING.md](RELEASING.md)
+for local packaging, required GitHub settings, and the signed installer workflow.

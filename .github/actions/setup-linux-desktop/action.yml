@@ -1,0 +1,16 @@
+name: Linux desktop dependencies
+description: Install the display and runtime dependencies for sandboxed Electron and AppImage tests.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1 libasound2t64 libfuse2t64 libxss1 libx11-xcb1
+        # Ubuntu 24.04 restricts user namespaces for unpacked Chromium binaries.
+        # Enable their sandbox on this disposable runner; never pass --no-sandbox.
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    - shell: bash
+      run: |
+        git config --global user.name 'Code60 CI'
+        git config --global user.email 'ci@example.invalid'

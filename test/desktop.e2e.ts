@@ -4,11 +4,11 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron, expect, type Page, test } from "@playwright/test";
+import { type _electron, expect, type Page, test } from "@playwright/test";
+import { launchDesktop } from "./electron-launcher.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const electronPath = require("electron") as string;
 const { version } = require("../package.json") as { version: string };
 const windowTitle = () =>
   application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
@@ -314,30 +314,7 @@ async function launch(directory: string, folder: string, database: string, confi
       await writeFile(file, JSON.stringify({ ...saved, orchestrationProvider: provider }));
     }
   }
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && key !== "ELECTRON_RUN_AS_NODE") env[key] = value;
-  }
-  env.XDG_CONFIG_HOME = join(directory, "config");
-  env.XDG_STATE_HOME = join(directory, "state");
-  const launched = await _electron.launch({
-    executablePath: electronPath,
-    // A separate profile keeps the user's own local storage (theme, typeface) out of the test.
-    args: [root, `--user-data-dir=${join(directory, "user-data")}`],
-    cwd: root,
-    env,
-  });
-  await launched.evaluate(
-    ({ dialog, app }, paths) => {
-      // Native dialogs are deterministic in the test, not exposed through the production bridge.
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths.folder] });
-      dialog.showSaveDialog = async () => ({ canceled: false, filePath: paths.database });
-      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
-      app.setPath("userData", paths.folder);
-    },
-    { folder, database },
-  );
-  return launched;
+  return launchDesktop(directory, folder, database);
 }
 
 test("desktop: sidebar tabs, solid background, and restart-only transparent background", async () => {

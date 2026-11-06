@@ -8,34 +8,72 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
-    name: ${{ matrix.os }} / Node ${{ matrix.node }}
-    runs-on: ${{ fromJSON(matrix.runs-on) }}
+    name: Linux / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-self-hosted]
         node: ["22.12", "24"]
-        include:
-          - os: ubuntu-latest
-            runs-on: '["ubuntu-latest"]'
-            npm-cache: npm
-          # The self-hosted Mac at /Users/matthew/actions-runner (labels: self-hosted, macOS, ARM64).
-          # It keeps its own ~/.npm between runs, so it skips the GitHub cache.
-          - os: macos-self-hosted
-            runs-on: '["self-hosted", "macOS", "ARM64"]'
-            npm-cache: ""
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-          cache: ${{ matrix.npm-cache }}
+          cache: npm
           package-manager-cache: false
       - run: npm ci
       - run: npm run check
       - run: npm run build
-      - name: Smoke test the CLI
-        run: node dist/cli/main.js --help
+      - name: CLI smoke checks
+        run: |
+          node dist/cli/main.js --help
+          node dist/cli/main.js --version
+
+  desktop:
+    name: Linux desktop and installers
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          package-manager-cache: false
+      - uses: ./.github/actions/setup-linux-desktop
+      - run: npm ci
+      - run: xvfb-run -a npm run test:desktop
+      - run: npm run package:linux
+      - run: xvfb-run -a npm run test:installers
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: linux-desktop-failure
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  passed:
+    name: CI passed
+    needs: [check, desktop]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          CHECK: ${{ needs.check.result }}
+          DESKTOP: ${{ needs.desktop.result }}
+        run: test "$CHECK" = success && test "$DESKTOP" = success

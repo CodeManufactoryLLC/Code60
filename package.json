@@ -26,7 +26,12 @@
     "uninstall:global": "npm unlink -g code60",
     "dev": "node scripts/dev.mjs",
     "start": "electron .",
-    "test:desktop": "npm run build && playwright test"
+    "test:desktop": "npm run build && playwright test",
+    "package:dir": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --dir --publish never",
+    "package:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --linux --x64 --publish never",
+    "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
+    "test:packaged": "playwright test --config playwright.packaged.config.ts",
+    "test:installers": "node scripts/test-installers.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
@@ -48,9 +53,20 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.3.0",
     "electron": "^45.2.1",
+    "electron-builder": "26.18.1",
     "typescript": "7.0.2",
     "vite": "^8.3.5",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "yaml": "2.9.1"
   },
-  "main": "dist/desktop/main.js"
+  "main": "dist/desktop/main.js",
+  "author": {
+    "name": "Code Manufactory LLC"
+  },
+  "homepage": "https://github.com/CodeManufactoryLLC/code60",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeManufactoryLLC/code60.git"
+  },
+  "desktopName": "code60-desktop.desktop"
 }

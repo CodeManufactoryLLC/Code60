@@ -16,7 +16,8 @@
       "src/**/*.cts",
       "src/**/*.css",
       "*.config.ts",
-      "scripts/**/*.mjs"
+      "scripts/**/*.mjs",
+      "scripts/**/*.cjs"
     ]
   },
   "formatter": {

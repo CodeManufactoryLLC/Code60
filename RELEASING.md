@@ -4,18 +4,154 @@ Issues describe individual changes. Milestones define planned versions. GitHub
 Releases identify shipped versions and provide notes and any downloadable builds.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for issue triage and labels.
 
-## Current distribution
+## Installers and supported targets
 
-Code60 currently supports macOS and Linux. Windows is an architecture non-goal.
-The repository builds the desktop app and CLI from source; it does not yet define
-an installer packaging, signing, notarization, or automatic-update pipeline.
-`npm run build` produces `dist`, not a standalone installer. The package is private
-to prevent npm publication; public GitHub source releases are still possible.
+The pipeline builds a signed, notarized Apple Silicon macOS DMG and Linux x64
+DEB/AppImage installers. CI verifies macOS 15 and Ubuntu 24.04; this is not a
+claim of compatibility with every older OS or Linux distribution. Windows and
+Intel macOS installers are not included.
 
-Until packaging exists, identify releases as source-only and provide instructions
-to install dependencies, build, and start the tagged source. Do not list installers
-or claim update support that the release does not provide. Track packaging work
-as ordinary issues before promising downloadable desktop builds.
+The desktop bundles Electron and its Node.js runtime. Users do not need Node or
+npm to launch it. Git and agent CLIs remain external prerequisites: install and
+authenticate the chosen agent separately. GUI launches may have a smaller PATH
+than terminal sessions. Set an absolute executable path in the existing
+`~/.config/code60/config.json` (or `$XDG_CONFIG_HOME/code60/config.json`) when
+necessary. Agents launched through `npx` still need their own Node/npm setup.
+The installer does not install the headless `code60` command; its existing
+source-based `npm run install:global` workflow is unchanged. The Linux desktop
+launcher is `code60-desktop`.
+
+Install or upgrade while Code60 is closed:
+
+- macOS: open the DMG and copy Code60 to Applications, replacing the previous app.
+- Ubuntu: run `sudo apt install ./Code60-X.Y.Z-linux-x64.deb` with the downloaded
+  filename. DEB package identity is `code60`; it installs the GUI launcher.
+- AppImage: install the FUSE 2 compatibility runtime (`libfuse2t64` on Ubuntu
+  24.04), make the downloaded AppImage executable, and run it. Replace the old
+  file to upgrade. AppImage also requires working unprivileged user namespaces;
+  on hosts that restrict them, use the DEB (which installs its AppArmor profile)
+  or have the administrator configure the host. Code60 rejects launchers that
+  pass `--no-sandbox`; do not run it as root.
+
+Application replacement preserves existing configuration, desktop preferences,
+run records, and user-selected SQLite databases. There is no automatic updater.
+Back up project databases before a release that changes their schema. Download
+checksums are in `SHA256SUMS`; use `shasum -a 256 -c SHA256SUMS` on macOS or
+`sha256sum -c SHA256SUMS` on Linux after downloading the listed artifacts (or
+compare the relevant line for the installer you downloaded).
+
+## One-time GitHub setup
+
+The repository uses standard GitHub-hosted Linux runners for PRs, and a standard
+Apple Silicon `macos-15` runner only for explicitly requested releases. Remove
+old Mac/Node required checks from branch protection and require **CI passed**.
+The aggregate fails on failed, cancelled, or skipped validation jobs. If merge
+queues are enabled later, add their `merge_group` trigger before using the queue.
+
+Set the following repository secrets in **Settings → Secrets and variables →
+Actions**. Never commit their values or put them in release inputs/logs.
+
+| Secret | Value |
+| --- | --- |
+| `CSC_LINK` | Base64 of the exported password-protected Developer ID Application `.p12` certificate, including its private key. |
+| `CSC_KEY_PASSWORD` | The password used to export that certificate. |
+| `APPLE_API_KEY_P8` | Full PEM contents of an App Store Connect **team** API key `.p8` file. |
+| `APPLE_API_KEY_ID` | That API key's key ID. |
+| `APPLE_API_ISSUER` | That API key's issuer ID. |
+
+Create the team API key through App Store Connect's Users and Access / Integrations
+settings with access suitable for notarization. The API key authorizes Apple's
+notary service; the Developer ID certificate signs the app. App Store distribution
+is not required. Export the certificate and private key from Keychain Access.
+Do not use an Apple Development or Mac App Store signing certificate.
+
+These examples read local files without printing their contents:
+
+```sh
+base64 < DeveloperID.p12 | gh secret set CSC_LINK --repo CodeManufactoryLLC/code60
+gh secret set CSC_KEY_PASSWORD --repo CodeManufactoryLLC/code60
+gh secret set APPLE_API_KEY_P8 --repo CodeManufactoryLLC/code60 < AuthKey.p8
+gh secret set APPLE_API_KEY_ID --repo CodeManufactoryLLC/code60
+gh secret set APPLE_API_ISSUER --repo CodeManufactoryLLC/code60
+```
+
+The commands without redirected files prompt for their value. Also set repository
+variable `RELEASE_MAINTAINER` to a public package contact in `Name <email>` form.
+This address is included in the DEB metadata. PR packages use
+`Code60 CI <ci@example.invalid>` and are not published.
+
+Preflight checks only secret presence, not their values, on Linux. Secret values
+are supplied only to the Mac signing steps, where the API key and certificate
+keychain are temporary and removed even after failure. Apple authorization and
+certificate validity are checked by signing/notarization. Missing credentials or
+maintainer metadata stop the workflow before it starts a Mac runner.
+
+## CI and release validation
+
+PRs and pushes to main run checks, builds, and CLI smoke tests on Linux with
+Node 22.12 and 24. Node 24 additionally runs the Electron suite under Xvfb,
+builds both Linux installers, installs the DEB, and launches both the installed
+DEB application and the actual AppImage. An ephemeral runner-only user-namespace
+setting allows Electron to retain its Chromium sandbox on Ubuntu 24.04.
+
+A release is a manual `Release installers` workflow dispatch from `main`, with
+one existing version tag. The workflow validates the exact tagged commit and
+both package versions; tags outside main, missing tags, published releases, and
+conflicting drafts fail. It runs Linux validation and installer tests first.
+Only successful Linux validation starts macOS checks, desktop tests, packaging,
+Developer ID signing, app and DMG notarization/stapling, and verification of the
+application copied from the final mounted DMG.
+
+Packaged tests launch outside the repository, with isolated test data and fake
+agents. They cover a PATH without Node/npm, version/assets/preload/sandbox,
+SQLite and project persistence, agent execution/cancellation, the packaged MCP
+sidecar's gateway request, and shutdown. No live agents or user credentials are
+needed for tests.
+
+Each platform uploads only its tested final installers and a manifest identifying
+the tag, exact SHA, and SHA-256 hashes. The Linux publication job checks all three
+installers and both manifests, revalidates the tag, and uploads to a matching
+draft before publication. It never rebuilds installers. Only that job receives
+repository write permission. Prerelease suffixes produce GitHub prereleases;
+older stable releases do not replace newer releases as latest. Publication jobs
+are serialized across tags to keep that latest-version decision consistent.
+
+Normal checks have a 15-minute limit, Linux desktop/package validation 30 minutes,
+macOS 45 minutes, and publication 10 minutes. Playwright stops earlier so failure
+traces can upload. Artifacts and failure diagnostics expire after seven days.
+New PR commits cancel superseded runs; release runs do not cancel an active run
+for the same tag. GitHub can replace a pending concurrency-group run with a newer
+pending run; rerun a release that was cancelled while waiting.
+
+## Local packaging and checks
+
+```sh
+npm ci
+npm run check
+npm run test:desktop
+npm run package:dir
+# On the appropriate target host:
+npm run package:mac
+npm run package:linux
+npm run test:installers
+```
+
+On Linux, use `xvfb-run -a` around desktop/installer tests when no display is
+available. Installer tests install the DEB with `sudo apt-get` and require a
+usable FUSE runtime for AppImage. Run them on a disposable test machine. The
+Mac installer test mounts the DMG read-only and copies the app to a temporary
+installation directory; it does not overwrite Applications.
+
+Output is under `release/build/`. Local Mac builds use an ad-hoc signature and
+skip notarization; they are test artifacts, not public releases. Release CI sets
+`CODE60_RELEASE=1`, validates required secrets, enables hardened runtime and
+mandatory signing, and verifies notarization before promotion. Never distribute
+local test artifacts as signed releases. `npm run test:packaged` also accepts an
+absolute `CODE60_PACKAGED_EXECUTABLE` path for inspecting an installed build.
+
+The icon is a reproducible Code60 wordmark: `node scripts/generate-icon.mjs`
+regenerates `packaging/icon.png`. The bundle ID `com.codemanufactory.code60` and
+existing user-data paths must remain stable across updates.
 
 ## Milestones
 
@@ -81,33 +217,22 @@ shown below first; all version commits follow the same checks and sign-off proce
 
 ## Release checklist
 
-Copy this into the release preparation issue. Replace conditional items with
-verification evidence or an explicit reason they do not apply.
+- Required milestone issues are merged and release blockers resolved.
+- Compatibility impact, database migrations, known issues, and source-build
+  instructions are reviewed.
+- `npm run check`, build, and desktop tests pass before the version commit.
+- Version commit is signed off; package and lockfile versions match its tag.
+- Signing secrets, Apple access, and maintainer metadata are configured.
+- The manually requested workflow passes all Linux and Mac validations.
+- All three tested installers and checksums are published for the exact tag.
+- Public release links work; the first installer prerelease has been installed
+  and exercised before declaring the pipeline operational.
 
-```markdown
-- [ ] Scope and supported environments are recorded in the milestone.
-- [ ] Required issues are merged; blockers are resolved or explicitly descoped.
-- [ ] Version and compatibility impact are reviewed.
-- [ ] npm ci, npm run check, and npm run build succeed.
-- [ ] Desktop smoke test passes on a machine with a display.
-- [ ] CLI help, version, and relevant non-interactive workflows are verified.
-- [ ] Primary desktop workflow, cancellation, and data persistence are verified.
-- [ ] Upgrade from the previous release and data/downgrade limits are documented.
-- [ ] Version commit is signed off; tag matches package.json and package-lock.json.
-- [ ] Required CI jobs pass for the exact version commit.
-- [ ] Source-build instructions are verified on the claimed platforms.
-- [ ] If shipping installers: each platform/architecture artifact is installed and tested.
-- [ ] If shipping installers: signing/notarization status is verified and documented.
-- [ ] If shipping binaries: SHA-256 checksums and any required updater files are attached.
-- [ ] Release notes, known issues, and contributor credits are reviewed.
-- [ ] Draft release points at the verified tag and contains all intended assets.
-- [ ] Release is published; public links and downloads are verified.
-```
+## Prepare the version and dispatch
 
-## Prepare the version and tag
-
-Start with a clean, up-to-date `main`. Resolve any local work before switching
-branches. Run commands from the repository root:
+Start with a clean, up-to-date main. Follow semantic versioning above and the
+repository's DCO sign-off policy. Review `git config user.name` and
+`git config user.email` before making the release commit.
 
 ```sh
 git switch main
@@ -117,67 +242,44 @@ npm ci
 npm run check
 npm run build
 npm run test:desktop
-node dist/cli/main.js --help
-node dist/cli/main.js --version
-```
-
-The desktop test needs a display. If unavailable locally, arrange a run on a
-machine with a display and record the result before release. CI currently checks
-macOS and Linux with Node.js 22.12 and 24; it does not run the desktop smoke test.
-Do not infer installer or architecture coverage from the CI matrix.
-
-After choosing the bump, run exactly one version command. This example makes a
-patch release. The message adds the DCO sign-off to npm's automatic version commit
-using your configured Git identity. Verify that `git config user.name` and
-`git config user.email` identify you before proceeding:
-
-```sh
 release_message=$(printf 'chore: release v%%s\n\nSigned-off-by: %s <%s>' "$(git config user.name)" "$(git config user.email)")
 npm version patch --message "$release_message"
-```
-
-[`npm version`](https://docs.npmjs.com/cli/v11/commands/npm-version/) updates the
-package files, commits them, and creates the `v<version>` tag. Check the commit's
-`Signed-off-by` trailer with `git log -1 --format=full`. Do not amend a commit
-after tagging it: the tag must identify the tested version commit.
-
-Validate the bumped version and rebuild so the output reports that version:
-
-```sh
 npm run check
 npm run build
-npm run test:desktop
 node dist/cli/main.js --version
-git status --short
 git push --follow-tags
 ```
 
-Stop on any failure. Do not publish until the working tree is clean, the tag and
-package versions agree, and all required CI jobs pass for that commit. If main
-advances and a push is rejected, reconcile the changes and repeat validation;
-do not force-push main or move a published release tag.
+Choose the bump intentionally; use the preview commands above for the first
+installer validation release. Do not amend a tagged commit or move a published
+tag. CI never bumps versions or creates tags.
 
-## Draft, verify, and publish
+After the version commit reaches main, dispatch the existing tag, substituting
+the actual version:
 
-1. Open [Releases](https://github.com/CodeManufactoryLLC/code60/releases) and create
-   a draft using the existing pushed tag. Do not create a different tag in the UI.
-2. Fill in the release-note template below. Generated notes can help identify PRs,
-   but review them and explain user-visible effects and compatibility changes.
-3. For a source-only release, remove the installer table and clearly say that the
-   GitHub source archives are not installers. Include the source-build steps below.
-4. When packaging exists, build from the exact tag, upload the tested installers
-   and SHA-256 checksums, and attach any updater files the product actually needs.
-5. Mark previews as prereleases. Make the intended stable version the latest
-   release; keep previews out of the stable download path.
-6. Review the complete draft, then publish and verify its public links and assets.
-7. Close the release preparation issue. For the final target version, close the
-   milestone and link the published release from its description.
+```sh
+gh workflow run release.yml --repo CodeManufactoryLLC/code60 --ref main -f tag=vX.Y.Z
+```
 
-Upload every intended asset before publishing. This is also required if repository
-release immutability is enabled. See
-[GitHub's release documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
-For a bad published build, document the problem and ship a new patch version;
-do not silently replace binaries or retag the release.
+The workflow must already exist on main and the tagged commit must contain the
+packaging implementation. Dispatch authorizes automatic publication after all
+checks pass. Do not manually publish a release while its workflow is running.
+Review the resulting generated release notes, add relevant compatibility details,
+verify download links, and close the release preparation issue/milestone.
+
+## Failure recovery
+
+A failed, cancelled, or skipped platform job blocks publication. Fix failing code
+on main and make a new version tag; do not retag published versions. For transient
+infrastructure or Apple failures, rerun the same workflow. A publication failure
+can leave a draft with partial uploads: a rerun may replace assets in that draft
+only when its tag and target SHA match. Published release assets are never
+replaced. After the seven-day artifact retention period, rerun the whole workflow
+so every replacement artifact is built and tested again.
+
+If a published release is bad, document the problem and publish a new patch.
+Manual installer upgrades retain user data; do not promise downgrade compatibility
+across database schema changes without verifying it.
 
 ## Release-note template
 
@@ -186,7 +288,7 @@ Replace placeholders, remove empty sections, and link the relevant issues/PRs.
 ```markdown
 # Code60 vX.Y.Z
 
-What users can now accomplish. State preview or source-only status here.
+What users can now accomplish. State preview status here.
 
 ## Download
 | Platform | Architecture | Installer |
@@ -194,7 +296,7 @@ What users can now accomplish. State preview or source-only status here.
 | Verified platform and minimum version | Verified architecture | Asset link |
 
 Link checksums and describe signing/notarization status for downloadable builds.
-For source-only releases, replace this table with source-build instructions.
+List only the installers validated by the release workflow.
 
 ## New
 - User-visible capability. (#issue)
@@ -215,18 +317,3 @@ needs, and any data compatibility or downgrade restrictions.
 ## Contributors
 Credit contributors and link the full changelog or comparison with the prior tag.
 ```
-
-For source-only notes, replace `vX.Y.Z` with the actual tag and verify these steps
-in a fresh directory on each claimed platform:
-
-```sh
-git clone --branch vX.Y.Z --depth 1 https://github.com/CodeManufactoryLLC/code60.git
-cd code60
-npm ci
-npm run build
-npm start
-```
-
-State the required Node.js version (currently 22.12 or later) and any agent setup
-needed for the primary workflow. To use the CLI from this checkout, run
-`node dist/cli/main.js --help`. Agents authenticate through their own CLIs.

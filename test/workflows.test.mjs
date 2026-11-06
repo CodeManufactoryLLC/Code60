@@ -1,0 +1,64 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
+
+const ci = parse(await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
+const release = parse(
+  await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
+);
+
+describe("CI and release gates", () => {
+  it("keeps PRs on Linux without signing secrets or publication rights", () => {
+    expect(ci.permissions).toEqual({ contents: "read" });
+    for (const job of Object.values(ci.jobs)) expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(JSON.stringify(ci)).not.toContain("secrets.");
+    expect(ci.jobs.check.strategy.matrix.node).toEqual(["22.12", "24"]);
+    expect(ci.jobs.passed.name).toBe("CI passed");
+    expect(ci.jobs.passed.if).toBe("always()");
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop"]);
+    expect(ci.jobs.passed.steps[0].run).toBe(
+      'test "$CHECK" = success && test "$DESKTOP" = success',
+    );
+  });
+  it("requires an explicit dispatch on main, then Linux success before Mac", () => {
+    expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
+    expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
+    expect(release.jobs["linux-check"].needs).toBe("preflight");
+    expect(release.jobs["linux-installers"].needs).toEqual(["preflight", "linux-check"]);
+    expect(release.jobs.mac.needs).toEqual(["preflight", "linux-installers"]);
+    expect(release.jobs.mac["runs-on"]).toBe("macos-15");
+    expect(release.concurrency["cancel-in-progress"]).toBe(false);
+  });
+  it("blocks promotion after failure, cancellation or skip of any required job", () => {
+    const publish = release.jobs.publish;
+    const required = ["preflight", "linux-check", "linux-installers", "mac"];
+    expect(publish.needs).toEqual(required);
+    expect(publish.if).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      "${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac.result == 'success' }}",
+    );
+    expect(publish.permissions).toEqual({ contents: "write" });
+    expect(publish.concurrency.group).toBe("code60-release-publication");
+    for (const [name, job] of Object.entries(release.jobs)) {
+      if (name !== "publish")
+        expect(job.permissions ?? release.permissions).toEqual({ contents: "read" });
+    }
+  });
+  it("builds the validated SHA and downloads only this run's tested artifacts", () => {
+    for (const name of ["linux-check", "linux-installers", "mac"]) {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      expect(release.jobs[name].steps[0].with.ref).toBe("${{ needs.preflight.outputs.sha }}");
+    }
+    const download = release.jobs.publish.steps.find((step) =>
+      step.uses?.startsWith("actions/download-artifact@"),
+    );
+    expect(download.with).toEqual({
+      pattern: "installers-*",
+      "merge-multiple": true,
+      path: "release-assets/",
+    });
+    expect(
+      release.jobs.mac.steps.find((step) => step.name === "Remove temporary signing material").if,
+    ).toBe("always()");
+  });
+});

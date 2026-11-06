@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, memoryExtraction?: boolean }} [options] */
+/** @param {{ authRequired?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   /** @type {Set<() => void>} */
@@ -22,9 +22,10 @@ export function createFakeAgent(options = {}) {
       protocolVersion: PROTOCOL_VERSION,
       agentCapabilities: {},
     }))
-    .onRequest(methods.agent.session.new, ({ params }) => {
+    .onRequest(methods.agent.session.new, async ({ params }) => {
       if (options.authRequired) throw RequestError.authRequired();
       cwd = params.cwd;
+      await options.onSessionNew?.(params);
       return { sessionId: "fake-session" };
     })
     .onNotification(methods.agent.session.cancel, () => {
