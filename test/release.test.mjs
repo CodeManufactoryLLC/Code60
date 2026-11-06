@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { verify } from "../scripts/release/artifacts.mjs";
 import {
   assetNames,
@@ -11,8 +11,40 @@ import {
   validateCandidate,
   versionOf,
 } from "../scripts/release/common.mjs";
+import { staple } from "../scripts/release/staple.mjs";
 
 const sha = "a".repeat(40);
+
+describe("Apple ticket delivery", () => {
+  it("retries temporary service failures and stops after success", async () => {
+    const error = Object.assign(new Error("connection lost"), { status: 68 });
+    const execute = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw error;
+      })
+      .mockReturnValue("");
+    const wait = vi.fn();
+    await staple("installer.dmg", execute, wait);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenLastCalledWith("/usr/bin/xcrun", [
+      "stapler",
+      "staple",
+      "installer.dmg",
+    ]);
+    expect(wait).toHaveBeenCalledWith(15_000);
+  });
+  it.each([68, 65])("fails closed for persistent stapler result %s", async (status) => {
+    const error = Object.assign(new Error("stapling failed"), { status });
+    const execute = vi.fn(() => {
+      throw error;
+    });
+    const wait = vi.fn();
+    await expect(staple("installer.dmg", execute, wait)).rejects.toBe(error);
+    expect(execute).toHaveBeenCalledTimes(status === 68 ? 3 : 1);
+    expect(wait.mock.calls).toEqual(status === 68 ? [[15_000], [30_000]] : []);
+  });
+});
 const candidate = {
   tag: "v0.2.0",
   sha,

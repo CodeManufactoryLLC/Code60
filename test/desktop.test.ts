@@ -478,10 +478,12 @@ describe("desktop orchestration", () => {
     expect(agents.sessions[0]?.prompts).toEqual(["earlier task"]);
     await controller.action({ type: "finish", id: first });
     await vi.waitFor(() => expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0));
-    await controller.poll(["history", "config", "configurations"]);
-    expect(controller.snapshot().runs.find((run) => run.record.id === first)?.record.status).toBe(
-      "finished",
-    );
+    await vi.waitFor(async () => {
+      await controller.poll(["history", "config", "configurations"]);
+      expect(controller.snapshot().runs.find((run) => run.record.id === first)?.record.status).toBe(
+        "finished",
+      );
+    });
     expect(controller.active).toBe(true);
     await expect(controller.open(join(directory, "other"))).rejects.toThrow(/switching folders/);
     await expect(controller.connect(join(directory, "second.sqlite"), true)).rejects.toThrow(

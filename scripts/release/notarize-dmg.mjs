@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { assetNames, json, run } from "./common.mjs";
+import { staple } from "./staple.mjs";
 
 if (process.env.CODE60_RELEASE !== "1") throw new Error("Notarization is a release-only operation");
 for (const key of ["APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"]) {
@@ -30,6 +31,6 @@ const result = JSON.parse(
   ),
 );
 if (result.status !== "Accepted") throw new Error(`DMG notarization failed: ${result.status}`);
-run("/usr/bin/xcrun", ["stapler", "staple", dmg]);
+await staple(dmg);
 run("/usr/bin/xcrun", ["stapler", "validate", dmg]);
 run("/usr/bin/codesign", ["--verify", "--strict", dmg]);

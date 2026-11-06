@@ -271,8 +271,10 @@ verify download links, and close the release preparation issue/milestone.
 
 A failed, cancelled, or skipped platform job blocks publication. Fix failing code
 on main and make a new version tag; do not retag published versions. For transient
-infrastructure or Apple failures, rerun the same workflow. A publication failure
-can leave a draft with partial uploads: a rerun may replace assets in that draft
+infrastructure or Apple failures, rerun the same workflow. The DMG stapling step
+retries Apple's temporary ticket-delivery failures twice, after 15 and 30 seconds;
+persistent failures still block publication. A publication failure can leave a
+draft with partial uploads: a rerun may replace assets in that draft
 only when its tag and target SHA match. Published release assets are never
 replaced. After the seven-day artifact retention period, rerun the whole workflow
 so every replacement artifact is built and tested again.
