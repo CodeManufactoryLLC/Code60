@@ -42,7 +42,12 @@ createFakeAgent({
               child.stdin.write(
                 `${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "code60_get_context", arguments: {} } })}\n`,
               );
-            } else if (result.id === 2) {
+            } else if (result.id === 2 && process.env.CODE60_TEST_DISPATCH === "1") {
+              const context = JSON.parse(result.result.content[0].text);
+              child.stdin.write(
+                `${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "code60_dispatch_agent", arguments: { scope: context.scope, requestId: "path-discovery", provider: "codex", prompt: JSON.stringify([{ message: "discovered-worker-ok" }]) } } })}\n`,
+              );
+            } else if (result.id === 2 || result.id === 3) {
               clearTimeout(timer);
               resolve();
             }

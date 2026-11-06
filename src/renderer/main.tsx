@@ -1,5 +1,14 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import type {
   Action,
@@ -337,9 +346,10 @@ function App() {
     [],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Finish navigation focus before another interaction can focus a control or open a modal.
     if (!splash) document.getElementById(`tab-${tabs.active}`)?.focus();
-  }, [tabs, splash]);
+  }, [tabs.active, splash]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {

@@ -32,6 +32,7 @@ import {
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
 import { DesktopController } from "./controller.js";
+import { desktopPath } from "./environment.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 
@@ -40,6 +41,7 @@ const page = pathToFileURL(join(here, "../renderer/index.html")).href;
 let window: BrowserWindow | undefined;
 let exiting = false;
 let quitPending = false;
+const startup = new AbortController();
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const controller = new DesktopController(
@@ -81,6 +83,7 @@ async function quit(confirm: boolean): Promise<void> {
       });
       if (result.response !== 1) return;
     }
+    startup.abort();
     await controller.shutdown();
     exiting = true;
     app.quit();
@@ -194,6 +197,8 @@ async function ready(): Promise<void> {
     app.exit(1);
     return;
   }
+  process.env.PATH = await desktopPath({ signal: startup.signal });
+  if (startup.signal.aborted) return;
   const transparent = await preferences.transparent();
   let enabled = transparent;
   const clickThrough = transparent && process.platform === "darwin";

@@ -1,4 +1,4 @@
-import { mkdir, stat, symlink } from "node:fs/promises";
+import { mkdir, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { _electron } from "@playwright/test";
@@ -12,6 +12,7 @@ export async function launchDesktop(
   folder: string,
   database: string,
   minimalPath = false,
+  environment: Record<string, string> = {},
 ) {
   const packaged = process.env.CODE60_PACKAGED_EXECUTABLE;
   const env: Record<string, string> = {};
@@ -21,10 +22,15 @@ export async function launchDesktop(
   }
   env.XDG_CONFIG_HOME = join(directory, "config");
   env.XDG_STATE_HOME = join(directory, "state");
+  env.HOME = join(directory, "home");
+  await mkdir(env.HOME, { recursive: true });
+  // Never run the developer's shell startup files during desktop tests.
+  env.SHELL = join(directory, "test-shell");
+  await writeFile(env.SHELL, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o700 });
   if (minimalPath) {
     const bin = join(directory, "minimal-bin");
     await mkdir(bin);
-    // AppImage's shell launcher needs core utilities; deliberately omit node/npm.
+    // AppImage's shell launcher needs core utilities.
     for (const command of [
       "bash",
       "true",
@@ -57,7 +63,18 @@ export async function launchDesktop(
       }
     }
     env.PATH = bin;
+    env.CODE60_TEST_RUNTIME_LOG = join(directory, "unexpected-runtime");
+    // PATH discovery can find host runtimes in fallback folders. Shadow them with
+    // failing stubs to prove that desktop startup never needs to execute either.
+    for (const name of ["node", "npm"]) {
+      await writeFile(
+        join(bin, name),
+        '#!/bin/sh\nprintf "%s\\n" "$0" >> "$CODE60_TEST_RUNTIME_LOG"\nexit 127\n',
+        { mode: 0o700 },
+      );
+    }
   }
+  Object.assign(env, environment);
   const launched = await _electron.launch({
     // Playwright otherwise injects --no-sandbox on Linux.
     chromiumSandbox: true,
