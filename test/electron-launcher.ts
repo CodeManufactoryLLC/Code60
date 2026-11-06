@@ -59,6 +59,8 @@ export async function launchDesktop(
     env.PATH = bin;
   }
   const launched = await _electron.launch({
+    // Playwright otherwise injects --no-sandbox on Linux.
+    chromiumSandbox: true,
     executablePath: packaged ? resolve(packaged) : (require("electron") as string),
     args: [...(packaged ? [] : [root]), `--user-data-dir=${join(directory, "user-data")}`],
     cwd: directory,
