@@ -160,6 +160,14 @@ describe("desktop stream state", () => {
     current.orchestration.provider = "missing";
     expect(hasOrchestrationProvider(current)).toBe(false);
     current.orchestration.provider = "claude";
+    expect(hasOrchestrationProvider(current)).toBe(false);
+    current.agentSetup = {
+      complete: true,
+      primary: "claude",
+      enabled: ["claude"],
+      providers: [],
+      session: null,
+    };
     expect(hasOrchestrationProvider(current)).toBe(true);
     current.agents = [];
     expect(hasOrchestrationProvider(current)).toBe(false);

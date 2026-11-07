@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PromptTemplates } from "../src/bridge/index.js";
-import { type CoreDeps, openWorkspace, type RunRecord } from "../src/core/index.js";
+import { type CoreDeps, DEFAULT_CONFIG, openWorkspace, type RunRecord } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses, flush } from "./fakes.js";
+import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const dirs: string[] = [];
 const controllers: DesktopController[] = [];
@@ -102,6 +103,8 @@ async function setup(
     { confirm: async () => true },
     { openDatabase: () => database, preferences },
   );
+  // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
+  controller["agentSetup"].restore(verifiedAgents(DEFAULT_CONFIG));
   controllers.push(controller);
   await controller.connect(database.path, false);
   await controller.open(dir);

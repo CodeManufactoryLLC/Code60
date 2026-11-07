@@ -28,6 +28,9 @@ import type {
   SearchSummaryRequest,
   SearchSummaryResult,
   SequencedEvent,
+  SetupAttempt,
+  SetupBegin,
+  SetupIdentity,
   Snapshot,
   StartRequest,
   WorktreeListing,
@@ -82,8 +85,10 @@ import {
   summarizeSearch,
   type Workspace,
 } from "../core/index.js";
-import { privateDirectory, samePath } from "../platform/index.js";
-import { testAgentConnection } from "./agent-connection.js";
+import { privateDirectory, samePath, setEnvironmentPath } from "../platform/index.js";
+import { probeAgent } from "./agent-connection.js";
+import { AgentSetup } from "./agent-setup.js";
+import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import {
   type ControlArgs,
@@ -98,6 +103,7 @@ import { Poller } from "./poller.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
+import { desktopConfig, detectProvider } from "./provider-catalog.js";
 import { projectSearchEvidence } from "./search-evidence.js";
 
 export interface DesktopDialogs {
@@ -107,6 +113,8 @@ export interface DesktopDialogs {
 export interface DesktopStorage {
   openDatabase: OpenProjectDatabase;
   preferences: DesktopPreferences;
+  detectAgent?: typeof detectProvider;
+  refreshPath?: (signal: AbortSignal) => Promise<void>;
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -212,6 +220,7 @@ class ChatSession {
 }
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class DesktopController {
+  private readonly agentSetup: AgentSetup;
   private workspace: Workspace | undefined;
   private batches = new Map<Orchestrator, Batch>();
   private history: DesktopRun[] = [];
@@ -263,6 +272,40 @@ export class DesktopController {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.agentSetup = new AgentSetup({
+      command: (id) => this.config?.agents[id]?.command,
+      detect: async (id, command, signal) => {
+        if (this.storage.refreshPath) await this.storage.refreshPath(signal);
+        else if (!this.storage.detectAgent)
+          setEnvironmentPath(
+            this.env as NodeJS.ProcessEnv,
+            await desktopPath({ env: this.env, signal }),
+          );
+        signal.throwIfAborted();
+        await (this.storage.detectAgent ?? detectProvider)(id, command, this.env);
+        signal.throwIfAborted();
+      },
+      probe: (id, command, signal) =>
+        probeAgent(
+          this.deps.agents,
+          {
+            name: id,
+            command,
+            env: Object.fromEntries(
+              Object.entries(this.env).filter(
+                (entry): entry is [string, string] => entry[1] !== undefined,
+              ),
+            ),
+          },
+          signal,
+        ),
+      save: async (record) => {
+        if (!this.storage.preferences.setAgentSetup) throw new Error("Agent setup cannot be saved");
+        await this.storage.preferences.setAgentSetup(record);
+      },
+      changed: () => this.changed(),
+      canChangePrimary: () => !this.hasActiveWork,
+    });
     this.poller = new Poller(
       (key, current) => this.readSource(key, current),
       (key) =>
@@ -306,7 +349,7 @@ export class DesktopController {
           for (const [batch, state] of this.batches) if (!state.active) this.batches.delete(batch);
         }
       } else if (key === "config") {
-        const config = await loadConfig(this.deps.fs, this.env);
+        const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
         if (current()) {
           const provider = this.orchestration.provider;
           if (
@@ -319,7 +362,7 @@ export class DesktopController {
             await this.stopSearchSummary();
             this.orchestration = { ...this.orchestration, connection: "idle", error: null };
           }
-          this.config = config;
+          await this.setConfig(config);
           await this.syncOrchestrationChat();
         }
       } else {
@@ -391,8 +434,79 @@ export class DesktopController {
     this.poller.context(this.active, parsePollVisibility(visibility));
   }
 
+  private async setConfig(config: Awaited<ReturnType<typeof loadConfig>>): Promise<void> {
+    if (JSON.stringify(this.config?.agents) !== JSON.stringify(config.agents))
+      await this.agentSetup.cancel();
+    const changed = JSON.stringify(this.config) !== JSON.stringify(config);
+    this.config = config;
+    if (changed) this.changed();
+  }
+
+  private requireEnabled(provider: string): void {
+    if (!this.agentSetup.complete) throw new Error("Complete agent setup first");
+    if (!this.agentSetup.enabled.includes(provider))
+      throw new Error(`Agent '${provider}' is not enabled. Connect it in Settings.`);
+  }
+
+  private async enabledConfig() {
+    const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
+    await this.setConfig(config);
+    if (!this.agentSetup.complete) throw new Error("Complete agent setup first");
+    return {
+      ...config,
+      defaultAgent: this.agentSetup.record?.primary ?? config.defaultAgent,
+      agents: Object.fromEntries(
+        Object.entries(config.agents).filter(([id]) => this.agentSetup.enabled.includes(id)),
+      ),
+    };
+  }
+
+  beginAgentSetup(request: SetupBegin): Promise<void> {
+    return this.exclusive(async () => {
+      await this.cancelOrchestrationTest();
+      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+      this.agentSetup.begin(request);
+    });
+  }
+  async attemptAgentSetup(request: SetupAttempt): Promise<void> {
+    const { done } = await this.exclusive(async () => {
+      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+      return { done: this.agentSetup.attempt(request) };
+    });
+    await done;
+  }
+  cancelAgentSetup(request?: SetupIdentity): Promise<void> {
+    return this.agentSetup.cancel(request);
+  }
+  abandonAgentSetup(request: SetupIdentity): Promise<void> {
+    return this.exclusive(() => this.agentSetup.abandon(request));
+  }
+  finishAgentSetup(request: SetupIdentity): Promise<void> {
+    return this.exclusive(async () => {
+      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+      const mode = this.agentSetup.snapshot().session?.mode;
+      const record = await this.agentSetup.finish(request);
+      if (mode === "primary") {
+        await this.stopMemoryExtraction();
+        await this.stopSearchSummary();
+        this.chatKey = "";
+      }
+      this.orchestration = {
+        provider: record.primary,
+        allowAll: true,
+        connection: "idle",
+        error: null,
+      };
+      await this.syncOrchestrationChat();
+      this.changed();
+    });
+  }
+
   setOrchestrationProvider(value: string | null): Promise<void> {
     const provider = parseOrchestrationProvider(value);
+    if (!provider || provider !== this.agentSetup.record?.primary)
+      return Promise.reject(new Error("Use agent setup to change the primary"));
+    this.requireEnabled(provider);
     return this.exclusive(async () => {
       if (provider !== null && !Object.hasOwn(this.config?.agents ?? {}, provider))
         throw new Error(`Unavailable provider: ${provider}`);
@@ -410,21 +524,21 @@ export class DesktopController {
 
   async testOrchestrationProvider(): Promise<void> {
     const { done } = await this.exclusive(async () => {
+      if (this.agentSetup.snapshot().session) throw new Error("Finish or cancel agent setup first");
       if (this.connectionTest) return { done: this.connectionTest.done };
       const provider = this.orchestration.provider;
       const agent = provider === null ? undefined : this.config?.agents[provider];
       if (!provider || !agent || !Object.hasOwn(this.config?.agents ?? {}, provider))
         throw new Error("Select an available orchestration provider");
-      const database = this.requireDatabase();
+      this.requireEnabled(provider);
       const abort = new AbortController();
       this.orchestration = { ...this.orchestration, connection: "testing", error: null };
       this.changed();
-      const done = testAgentConnection(
+      const done = probeAgent(
         this.deps.agents,
         {
           name: provider,
           command: agent.command,
-          cwd: join(dirname(database.path), ".code60_workspace"),
         },
         abort.signal,
       )
@@ -458,6 +572,7 @@ export class DesktopController {
 
   async summarizeSearch(value: SearchSummaryRequest): Promise<SearchSummaryResult> {
     const request = parseSearchSummary(value);
+    this.requireEnabled(this.orchestration.provider ?? "");
     const { done } = await this.exclusive(async () => {
       if (this.closing) throw new Error("The app is stopping");
       const workspace = this.requireWorkspace();
@@ -542,6 +657,7 @@ export class DesktopController {
 
   async extractMemory(value: MemoryExtractionRequest): Promise<MemoryExtractionResult> {
     const request = parseMemoryExtraction(value);
+    this.requireEnabled(this.orchestration.provider ?? "");
     const { done } = await this.exclusive(async () => {
       if (this.memoryExtraction) throw new Error("An extraction is already running");
       const workspace = this.requireWorkspace();
@@ -853,7 +969,12 @@ export class DesktopController {
   private async syncOrchestrationChat(restart = false): Promise<void> {
     const provider = this.orchestration.provider;
     const agent = provider ? this.config?.agents[provider] : undefined;
-    const key = JSON.stringify([this.database?.path, provider, agent?.command]);
+    const key = JSON.stringify([
+      this.database?.path,
+      provider,
+      agent?.command,
+      this.agentSetup.complete,
+    ]);
     if (!restart && key === this.chatKey) return;
     if (restart) {
       const previous = this.currentChat;
@@ -884,7 +1005,13 @@ export class DesktopController {
   private async startChat(session: ChatSession): Promise<void> {
     const provider = this.orchestration.provider;
     const config = this.config;
-    if (!this.database || !provider || !config) {
+    if (
+      !this.database ||
+      !provider ||
+      !config ||
+      !this.agentSetup.complete ||
+      !this.agentSetup.enabled.includes(provider)
+    ) {
       this.changed();
       return;
     }
@@ -940,6 +1067,7 @@ export class DesktopController {
   }
   orchestrationChatAction(value: OrchestrationChatAction): Promise<void> {
     const request = parseOrchestrationChatAction(value);
+    if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
         if (!this.database) throw new Error("Connect to a database first");
@@ -1041,14 +1169,15 @@ export class DesktopController {
       chats: this.chats.map(chatSnapshot),
       workers: [...this.workers.keys()],
       orchestration: { ...this.orchestration },
+      agentSetup: this.agentSetup.snapshot(),
       revision: this.revision,
       database: this.database?.path ?? null,
       databaseError: this.databaseError,
       projects: [...this.projects],
       configurations: structuredClone(this.configurations),
       directory: this.workspace?.dir ?? null,
-      agents: Object.keys(this.config?.agents ?? {}),
-      defaultAgent: this.config?.defaultAgent ?? "",
+      agents: this.agentSetup.complete ? this.agentSetup.enabled : [],
+      defaultAgent: this.agentSetup.record?.primary ?? "",
       maxParallel: this.config?.maxParallel ?? 4,
       turnTimeout: this.config?.turnTimeout ?? "30m",
       runs: this.history.map((run) => {
@@ -1102,15 +1231,15 @@ export class DesktopController {
   restore(): Promise<void> {
     return this.exclusive(async () => {
       try {
-        const provider = (await this.storage.preferences.orchestrationProvider?.()) ?? null;
+        this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
-          provider: parseOrchestrationProvider(provider),
+          provider: this.agentSetup.record?.primary ?? null,
           allowAll: true,
           connection: "idle",
           error: null,
         };
       } catch {
-        this.warnings.push("Could not read the saved orchestration provider.");
+        this.warnings.push("Agent setup needs to be completed again.");
       }
       try {
         const overrides = (await this.storage.preferences.polling?.()) ?? {};
@@ -1120,7 +1249,7 @@ export class DesktopController {
         this.warnings.push("Invalid saved polling settings. Using defaults.");
       }
       try {
-        this.config = await loadConfig(this.deps.fs, this.env);
+        await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
       } catch (error) {
         this.warnings.push(message(error));
       }
@@ -1152,7 +1281,7 @@ export class DesktopController {
       await this.stopMemoryExtraction();
       await this.stopSearchSummary();
       this.orchestration = { ...this.orchestration, connection: "idle", error: null };
-      const config = await loadConfig(this.deps.fs, this.env);
+      const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
       const database = this.storage.openDatabase(path, create);
       try {
         await this.storage.preferences.write(database.path);
@@ -1168,7 +1297,7 @@ export class DesktopController {
         throw error;
       }
       previous?.close();
-      this.config = config;
+      await this.setConfig(config);
       if (previous?.path !== database.path) {
         this.clearWorkspace();
         this.savedPrompts = this.readPrompts(database);
@@ -1238,12 +1367,12 @@ export class DesktopController {
     } catch {
       throw new Error(`This folder is not available: ${directory}`);
     }
-    const config = await loadConfig(this.deps.fs, this.env);
+    const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
     const workspace = await openWorkspace(this.deps, dir, this.env);
     const history = await listRuns(commandDeps(this.deps, workspace));
     this.clearWorkspace();
     this.workspace = workspace;
-    this.config = config;
+    await this.setConfig(config);
     this.history = history;
     this.poller.context(this.active);
     try {
@@ -1295,7 +1424,8 @@ export class DesktopController {
       if (request.launchId && !launch) throw new Error("This launch is no longer available");
       if (launch?.saved) throw new Error("This launch was already saved as a run configuration");
       const settings = parseRunSettings(launch?.settings ?? request.settings);
-      const config = await loadConfig(this.deps.fs, this.env);
+      const config = await this.enabledConfig();
+      for (const name of settings.agents) this.requireEnabled(name);
       if (!launch) {
         for (const name of settings.agents) {
           if (!Object.hasOwn(config.agents, name)) throw new Error(`Unavailable provider: ${name}`);
@@ -1488,6 +1618,8 @@ export class DesktopController {
     | Extract<RecoveryResult, { type: "handoff-required" }>
   > {
     const run = await this.recoverableRun(workspace, id);
+    const enabledConfig = await this.enabledConfig();
+    this.requireEnabled(run.record.agent);
     if (!run.record.acpSessionId) {
       return {
         type: "handoff-required",
@@ -1503,6 +1635,7 @@ export class DesktopController {
         this.env,
         {},
         this.workerOverrides(id),
+        enabledConfig,
       );
     } catch (error) {
       if (
@@ -1547,6 +1680,8 @@ export class DesktopController {
     reason: string,
   ): Promise<RecoveryActionResult> {
     const run = await this.recoverableRun(workspace, id);
+    const enabledConfig = await this.enabledConfig();
+    this.requireEnabled(run.record.agent);
     const priorEvents = await workspace.store.readEvents(id);
     const saved = { ...this.savedPrompts };
     const prepared = await prepareRecovery(
@@ -1556,6 +1691,7 @@ export class DesktopController {
       this.env,
       saved,
       this.workerOverrides(id),
+      enabledConfig,
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -1604,12 +1740,17 @@ export class DesktopController {
     if (request.configurationId && !configuration) throw new Error("Unknown run configuration");
     const { configurationId: _configurationId, prompt: _prompt, ...options } = request;
     const settings = parseRunSettings(options);
-    const prepared = await prepareRuns(this.deps, {
-      ...request,
-      cwd: workspace.dir,
-      env: this.env,
-      mode: "interactive",
-    });
+    const enabledConfig = await this.enabledConfig();
+    const prepared = await prepareRuns(
+      this.deps,
+      {
+        ...request,
+        cwd: workspace.dir,
+        env: this.env,
+        mode: "interactive",
+      },
+      enabledConfig,
+    );
     const orchestrator = prepared.orchestrator;
     let warning: string | undefined;
     if (prepared.noWorktree !== undefined) {
@@ -1672,7 +1813,7 @@ export class DesktopController {
       throw new Error("The app is stopping");
     }
     if (warning !== undefined) this.warnings.push(warning);
-    this.config = prepared.config;
+
     this.history = history;
     this.activateBatch(orchestrator, workspace);
     register?.(
@@ -1759,8 +1900,13 @@ export class DesktopController {
         default:
           if (!orchestrator?.runs().some((run) => run.id === action.id))
             throw new Error("This run is not controlled by this app");
-          if (action.type === "reply") orchestrator.reply(action.id, action.text);
-          else if (action.type === "finish") orchestrator.finish(action.id);
+          if (action.type === "reply") {
+            await this.enabledConfig();
+            this.requireEnabled(
+              this.history.find((run) => run.record.id === action.id)?.record.agent ?? "",
+            );
+            orchestrator.reply(action.id, action.text);
+          } else if (action.type === "finish") orchestrator.finish(action.id);
           else if (!orchestrator.cancelTurn(action.id)) throw new Error("No turn is in progress");
       }
       this.changed();
@@ -1884,7 +2030,7 @@ export class DesktopController {
   }
 
   private async assertCapacity(session: ChatSession): Promise<void> {
-    const config = this.config ?? (await loadConfig(this.deps.fs, this.env));
+    const config = this.config ?? desktopConfig(await loadConfig(this.deps.fs, this.env));
     if (this.liveWorkerCount(session) >= config.maxParallel)
       throw new Error(
         `All ${config.maxParallel} worker slots are in use. Finish or stop an idle worker first.`,
@@ -1944,13 +2090,13 @@ export class DesktopController {
       case "code60_get_context":
         parseControlArgs(name, args);
         return this.chatExclusive(session, async () => {
-          const config = this.config ?? (await loadConfig(this.deps.fs, this.env));
+          const config = this.config ?? desktopConfig(await loadConfig(this.deps.fs, this.env));
           const workspace = this.workspace;
           return {
             project: workspace?.dir ?? null,
             scope: workspace ? session.workerScope : null,
             gitRepository: workspace ? workspace.repo !== null : null,
-            providers: Object.keys(config.agents),
+            providers: this.agentSetup.complete ? this.agentSetup.enabled : [],
             defaultProvider: this.orchestration.provider,
             turnTimeout: config.turnTimeout,
             maxParallel: config.maxParallel,
@@ -2015,13 +2161,14 @@ export class DesktopController {
     const generation = session.chatGeneration;
     const result = this.chatExclusive(session, async () => {
       const workspace = this.requireScope(request.scope, session);
-      const config = await loadConfig(this.deps.fs, this.env);
+      const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
       const provider = request.provider ?? this.orchestration.provider;
+      await this.setConfig(config);
+      this.requireEnabled(provider ?? "");
       if (!provider || !Object.hasOwn(config.agents, provider))
         throw new Error(
           `Unknown provider '${provider}' (configured: ${Object.keys(config.agents).join(", ")})`,
         );
-      this.config = config;
       await this.assertCapacity(session);
       const ids = await this.startBatch(
         {
@@ -2096,8 +2243,11 @@ export class DesktopController {
         return { ...this.workerInfo(id), note: stopped.message };
       }
       if (!batch || !live) throw new Error(`Worker ${id} has ended; resume it with a new prompt`);
-      if (name === "code60_send_agent") batch.reply(id, request.prompt as string);
-      else if (name === "code60_finish_agent") batch.finish(id);
+      if (name === "code60_send_agent") {
+        await this.enabledConfig();
+        this.requireEnabled(this.workers.get(id)?.provider ?? "");
+        batch.reply(id, request.prompt as string);
+      } else if (name === "code60_finish_agent") batch.finish(id);
       else if (!batch.cancelTurn(id)) throw new Error(`Worker ${id} has no turn in progress`);
       this.changed();
       return this.workerInfo(id);
@@ -2115,6 +2265,7 @@ export class DesktopController {
 
   async shutdown(force = false): Promise<void> {
     this.closing = true;
+    await this.agentSetup.cancel();
     await this.cancelOrchestrationTest();
     await this.stopMemoryExtraction();
     await this.stopSearchSummary();

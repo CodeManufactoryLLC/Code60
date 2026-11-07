@@ -1,103 +1,50 @@
 import { useId, useState } from "react";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import { AgentLogo, AgentSetupWizard } from "./agent-setup.js";
 
-export function OrchestrationSettings({
-  snapshot,
-  api,
-  heading = true,
-  onSavingChange,
-}: {
-  snapshot: Snapshot;
-  api: DesktopApi;
-  heading?: boolean;
-  onSavingChange?(saving: boolean): void;
-}) {
+export function OrchestrationSettings({ snapshot, api }: { snapshot: Snapshot; api: DesktopApi }) {
   const id = useId();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
-  const { provider, connection, error: connectionError } = snapshot.orchestration;
-  const available = provider !== null && snapshot.agents.includes(provider);
-  const testing = connection === "testing";
-  async function save(value: string) {
-    setSaving(true);
-    onSavingChange?.(true);
-    setError(undefined);
-    try {
-      await api.setOrchestrationProvider(value || null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-      onSavingChange?.(false);
-    }
-  }
-  async function test() {
-    setError(undefined);
-    try {
-      if (testing) await api.cancelOrchestrationTest();
-      else await api.testOrchestrationProvider();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }
+  const [mode, setMode] = useState<"primary" | "add" | null>(null);
+  const setup = snapshot.agentSetup;
   return (
-    <section
-      className="settings-section"
-      aria-labelledby={heading ? id : undefined}
-      aria-label={heading ? undefined : "Orchestration"}
-    >
-      {heading && <h2 id={id}>Orchestration</h2>}
-      <div className="settings-row orchestration-provider-row">
-        <label htmlFor={`${id}-provider`}>Orchestration provider</label>
-        <div className="orchestration-controls">
-          <select
-            id={`${id}-provider`}
-            value={provider ?? ""}
-            disabled={saving || testing}
-            onChange={(event) => void save(event.target.value)}
-          >
-            <option value="">None</option>
-            {provider && !available && (
-              <option value={provider} disabled>
-                {provider} (unavailable)
-              </option>
-            )}
-            {snapshot.agents.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={saving || (!testing && (!available || !snapshot.database))}
-            data-tooltip={
-              !available
-                ? "Select an orchestration provider"
-                : !snapshot.database
-                  ? "Connect to a database first"
-                  : undefined
-            }
-            onClick={() => void test()}
-          >
-            {testing ? "Cancel test" : "Test connection"}
-          </button>
-        </div>
+    <section className="settings-section" aria-labelledby={id}>
+      <h2 id={id}>Agents</h2>
+      <ul className="agent-review">
+        {setup?.enabled.map((provider) => {
+          const p = setup.providers.find((p) => p.id === provider);
+          return (
+            <li className="agent-review-item" key={provider}>
+              <AgentLogo id={p?.logo ?? provider} />
+              <span>
+                {p?.name ?? provider}
+                <small>
+                  {provider === setup.primary ? "Primary / Orchestrator" : "Additional agent"}
+                </small>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="orchestration-controls">
+        <button type="button" onClick={() => setMode("primary")}>
+          {setup?.complete ? "Change primary" : "Set up agents"}
+        </button>
+        <button type="button" disabled={!setup?.complete} onClick={() => setMode("add")}>
+          Add agents
+        </button>
       </div>
       <label className="settings-row">
         Allow all actions without asking
         <input type="checkbox" role="switch" checked aria-checked="true" disabled />
       </label>
-      {(error || connectionError || (provider && !available)) && (
-        <p role="alert">{error || connectionError || `Unavailable provider: ${provider}`}</p>
+      {(mode || (setup?.complete && setup.session)) && (
+        <AgentSetupWizard
+          snapshot={snapshot}
+          api={api}
+          mode={mode ?? setup?.session?.mode ?? "primary"}
+          onClose={() => setMode(null)}
+        />
       )}
-      <p role="status" aria-live="polite">
-        {testing
-          ? "Connecting via ACP…"
-          : connection === "connected"
-            ? "ACP connection successful"
-            : ""}
-      </p>
     </section>
   );
 }

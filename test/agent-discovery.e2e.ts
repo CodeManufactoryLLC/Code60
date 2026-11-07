@@ -64,6 +64,10 @@ for (const location of process.platform === "win32"
         { mode: 0o700 },
       );
     }
+    // A provider prerequisite must exist; npx alone must not count as detection.
+    await writeFile(join(bin, process.platform === "win32" ? "codex.exe" : "codex"), "", {
+      mode: 0o700,
+    });
     const shell = join(directory, "login-shell");
     if (location === "shell") {
       await writeFile(
@@ -96,7 +100,17 @@ for (const location of process.platform === "win32"
       await expect(page.locator(".splash-title")).toHaveText("Code60");
       await page.evaluate(() => window.desktop.connectDatabase("create"));
       await page.evaluate(() => window.desktop.chooseFolder());
-      await page.evaluate(() => window.desktop.setOrchestrationProvider("droid"));
+      await page.evaluate(async () => {
+        let session = (await window.desktop.snapshot()).agentSetup?.session;
+        if (!session) {
+          await window.desktop.beginAgentSetup({ mode: "primary" });
+          session = (await window.desktop.snapshot()).agentSetup?.session;
+        }
+        if (!session) throw new Error("Missing setup session");
+        for (const provider of ["droid", "codex"])
+          await window.desktop.attemptAgentSetup({ sessionId: session.id, provider });
+        await window.desktop.finishAgentSetup({ sessionId: session.id });
+      });
       await expect.poll(() => readFile(probe, "utf8").catch(() => "")).toBe("ok\n");
       await expect
         .poll(() =>

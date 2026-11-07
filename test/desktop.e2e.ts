@@ -2,13 +2,15 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
 import type { UpdateState } from "../src/bridge/index.js";
+import { DEFAULT_CONFIG } from "../src/core/index.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -600,7 +602,7 @@ async function launch(directory: string, folder: string, database: string, confi
     try {
       saved = JSON.parse(await readFile(file, "utf8"));
     } catch {}
-    if (!Object.hasOwn(saved, "orchestrationProvider")) {
+    if (!Object.hasOwn(saved, "agentSetup")) {
       let provider = "claude";
       try {
         const config = JSON.parse(
@@ -609,7 +611,22 @@ async function launch(directory: string, folder: string, database: string, confi
         provider = config.defaultAgent ?? provider;
       } catch {}
       await privateDirectory(dirname(file));
-      await writeFile(file, JSON.stringify({ ...saved, orchestrationProvider: provider }));
+      const config = JSON.parse(await readFile(configFile, "utf8"));
+      await writeFile(
+        file,
+        JSON.stringify({
+          ...saved,
+          orchestrationProvider: provider,
+          agentSetup: verifiedAgents(
+            {
+              ...DEFAULT_CONFIG,
+              ...config,
+              agents: { ...DEFAULT_CONFIG.agents, ...config.agents },
+            },
+            provider,
+          ),
+        }),
+      );
     }
   }
   return launchDesktop(directory, folder, database);
@@ -2055,7 +2072,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       ),
     ).toEqual(["none", "drag"]);
     await expect(page.locator("#panel-settings").getByRole("heading", { level: 2 })).toHaveText([
-      "Orchestration",
+      "Agents",
       "Appearance",
       "Table defaults",
       "Text",
@@ -2597,201 +2614,128 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
   }
 });
 
-test("desktop: splash requires an orchestrator and opens provider setup", async () => {
+test("desktop: agent setup wizard gates legacy entry, connects three agents without a database and reconfigures Settings", async () => {
+  test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-onboarding-"));
   const database = join(directory, "projects.sqlite");
-  const file = join(directory, "state", "code60", "desktop.json");
+  const file = join(directory, "state/code60/desktop.json");
+  const configFile = join(directory, "config/code60/config.json");
+  const command = [process.execPath, join(root, "test/fixtures/fake-agent.mjs")];
+  await mkdir(dirname(configFile), { recursive: true });
+  await writeFile(
+    configFile,
+    JSON.stringify({
+      agents: Object.fromEntries(
+        ["claude", "codex", "droid", "kiro"].map((id) => [id, { command }]),
+      ),
+    }),
+  );
+  await privateDirectory(dirname(file));
+  await writeFile(file, JSON.stringify({ orchestrationProvider: "claude" }));
   try {
     application = await launch(directory, directory, database, false);
-    let page = await application.firstWindow();
-    let setup = page.getByRole("dialog", { name: "Set orchestration provider", exact: true });
-    await expect(setup).toBeVisible();
-    await expect(setup.getByLabel("Orchestration provider", { exact: true })).toHaveValue("");
-    await expect(setup.getByRole("button", { name: "Done", exact: true })).toBeDisabled();
-    await expect(
-      setup.getByRole("switch", { name: "Allow all actions without asking", exact: true }),
-    ).toBeChecked();
-    expect(await page.evaluate(() => sessionStorage.getItem("code60.splashShown"))).toBeNull();
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await expect(wizard).toBeVisible();
+    await expect(wizard.locator(".agent-choice")).toHaveText([
+      "Antigravity",
+      "Claude",
+      "Codex",
+      "Copilot",
+      "Droid",
+      "Kiro",
+      "OpenCode",
+    ]);
+    await expect(wizard.getByRole("button", { name: "Continue", exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await expect(setup).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await expect(wizard).toHaveCount(0);
     await expect(page.locator(".splash")).toBeVisible();
-    await expect(page.locator(".page-tabs")).toHaveCount(0);
-    await page.getByRole("button", { name: "Set orchestration provider", exact: true }).click();
-    await expect(setup).toBeVisible();
-    // Even a stale reload marker cannot bypass the missing provider.
-    await page.evaluate(() => {
-      sessionStorage.setItem("code60.splashShown", "1");
-      localStorage.setItem("code60.theme", "light");
-    });
+    await page.evaluate(() => sessionStorage.setItem("code60.splashShown", "1"));
     await page.reload();
-    if (
-      await page.evaluate(async () => {
-        const s = await window.desktop.snapshot();
-        return s.orchestration.provider !== null && s.agents.includes(s.orchestration.provider);
-      })
-    )
-      await selectSidebarPage(page, "Sessions");
-    await expect(setup).toBeVisible();
-    await page.screenshot({ path: "test-results/orchestration-setup-light.png" });
-
-    // A failed preference write must not unlock entry.
-    await privateDirectory(dirname(file));
-    const temporary = file;
-    await mkdir(temporary, { recursive: true });
-    await setup.getByLabel("Orchestration provider", { exact: true }).selectOption("claude");
-    await expect(setup.getByRole("alert")).toBeVisible();
-    await expect(setup.getByRole("button", { name: "Done", exact: true })).toBeDisabled();
-    await expect(setup.getByLabel("Orchestration provider", { exact: true })).toHaveValue("");
-    await rm(temporary, { recursive: true });
-    await setup.getByLabel("Orchestration provider", { exact: true }).selectOption("claude");
-    await expect(setup.getByRole("button", { name: "Done", exact: true })).toBeEnabled();
-    await setup.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(setup).toHaveCount(0);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Sessions");
-    await expect(page.locator(".splash")).toHaveCount(0);
-    expect(JSON.parse(await readFile(file, "utf8")).orchestrationProvider).toBe("claude");
-
-    // An already open project cannot bypass the gate on reload either.
-    await page.evaluate(async () => {
-      await window.desktop.connectDatabase("create");
-      await window.desktop.chooseFolder();
-      await window.desktop.setOrchestrationProvider(null);
-    });
-    await page.reload();
-    if (
-      await page.evaluate(async () => {
-        const s = await window.desktop.snapshot();
-        return s.orchestration.provider !== null && s.agents.includes(s.orchestration.provider);
-      })
-    )
-      await selectSidebarPage(page, "Sessions");
-    await expect(setup).toBeVisible();
-    await expect(page.locator(".page-tabs")).toHaveCount(0);
-    await setup.getByLabel("Orchestration provider", { exact: true }).selectOption("claude");
-    await expect(page.locator(".splash")).toHaveCount(0);
-    await page.evaluate(() => localStorage.setItem("code60.theme", "dark"));
-    await application.close();
-
-    const saved = JSON.parse(await readFile(file, "utf8"));
-    await writeFile(file, JSON.stringify({ ...saved, orchestrationProvider: "removed" }));
-    application = await launch(directory, directory, database, false);
-    page = await application.firstWindow();
-    setup = page.getByRole("dialog", { name: "Set orchestration provider", exact: true });
-    await expect(setup).toBeVisible();
-    await expect(setup.getByLabel("Orchestration provider", { exact: true })).toHaveValue(
-      "removed",
+    await expect(wizard).toBeVisible();
+    // Arrow keys move focus; Space starts detection and connection immediately.
+    await expect(wizard.getByRole("button", { name: "Antigravity", exact: true })).toBeEnabled();
+    await wizard.getByRole("button", { name: "Antigravity", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toBeFocused();
+    await expect(wizard.locator('input[type="radio"]')).toHaveCount(0);
+    await page.evaluate(() => document.documentElement.style.setProperty("--title-size", "28px"));
+    await expect(wizard.getByRole("heading")).toHaveCSS("font-size", "16px");
+    await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveCSS(
+      "font-size",
+      "13px",
     );
-    await expect(setup.getByRole("alert")).toHaveText("Unavailable provider: removed");
-    await expect(setup.getByRole("button", { name: "Done", exact: true })).toBeDisabled();
+    await page.screenshot({ path: "test-results/agent-setup-select.png" });
+    await page.keyboard.press("Space");
+    await expect(wizard.getByRole("heading")).toHaveText(
+      "Would you like to connect another agent?",
+    );
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
+    expect(JSON.parse(await readFile(file, "utf8")).agentSetup).toBeUndefined();
+    for (const name of ["Codex", "Droid"]) {
+      await wizard.getByRole("button", { name: "Yes, add another", exact: true }).click();
+      await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveCount(0);
+      await wizard.getByRole("button", { name, exact: true }).click();
+      await expect(wizard.getByRole("heading")).toHaveText(
+        "Would you like to connect another agent?",
+      );
+    }
+    // Main process owns the verified set across reloads.
+    await page.reload();
+    await expect(wizard.getByRole("heading")).toHaveText(
+      "Would you like to connect another agent?",
+    );
+    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
+    await expect(wizard.locator(".agent-review li")).toHaveCount(3);
+    await page.screenshot({ path: "test-results/agent-setup-review.png" });
+    // An atomic preference write failure keeps the gate closed and permits retry.
+    const saved = await readFile(file, "utf8");
+    await rm(file, { recursive: true });
+    await mkdir(file);
+    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard.getByRole("alert")).toBeVisible();
+    expect((await page.evaluate(() => window.desktop.snapshot())).agentSetup?.complete).toBe(false);
+    await rm(file, { recursive: true });
+    await writeFile(file, saved);
+    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
+    const record = JSON.parse(await readFile(file, "utf8")).agentSetup;
+    expect(record).toMatchObject({
+      version: 1,
+      primary: "claude",
+      enabled: ["claude", "codex", "droid"],
+    });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.status)
+      .toBe("idle");
+    const chatId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("button", { name: "Add agents", exact: true }).click();
+    await wizard.getByRole("button", { name: "Kiro", exact: true }).click();
+    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(chatId);
+    await page.getByRole("button", { name: "Change primary", exact: true }).click();
+    await wizard.getByRole("button", { name: "Codex", exact: true }).click();
+    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
+    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
-    await page.screenshot({ path: "test-results/orchestration-setup-dark-narrow.png" });
-    await setup.getByLabel("Orchestration provider", { exact: true }).selectOption("claude");
-    await expect(setup.getByRole("button", { name: "Done", exact: true })).toBeEnabled();
-    await page.keyboard.press("Escape");
-    await expect(setup).toHaveCount(0);
-    await expect(page.locator(".splash")).toBeVisible();
-    await expect(page.locator(".splash-prompt h2")).toHaveText(`Continue ${basename(directory)}?`);
-    await page.keyboard.press("Escape");
-    await expect(page.locator(".splash")).toHaveCount(0);
-  } finally {
-    await application.close().catch(() => {});
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("desktop: orchestration provider persistence, ACP probe, failure, and cancellation", async () => {
-  test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-orchestration-"));
-  const config = join(directory, "config", "code60");
-  const database = join(directory, "projects.sqlite");
-  await mkdir(config, { recursive: true });
-  const agent = join(root, "test/fixtures/fake-agent.mjs");
-  await writeFile(
-    join(config, "config.json"),
-    JSON.stringify({
-      defaultAgent: "fake",
-      agents: {
-        fake: { command: [process.execPath, agent] },
-        broken: { command: [process.execPath, "-e", "process.exit(2)"] },
-        hanging: { command: [process.execPath, "-e", "setInterval(() => {}, 1000)"] },
-        auth: { command: [process.execPath, agent, "--auth"] },
-      },
-    }),
-  );
-  try {
-    application = await launch(directory, directory, database);
-    let page = await application.firstWindow();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Sessions");
-    await page.getByRole("tab", { name: "Settings", exact: true }).click();
-    let provider = page.getByLabel("Orchestration provider", { exact: true });
-    await expect(provider).toHaveValue("fake");
-    const allowAll = page.getByRole("switch", {
-      name: "Allow all actions without asking",
-      exact: true,
-    });
-    await expect(allowAll).toBeChecked();
-    await expect(allowAll).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Test connection", exact: true })).toBeDisabled();
-    await page.evaluate(() => window.desktop.connectDatabase("create"));
-    await provider.selectOption("fake");
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "ACP connection successful" }),
-    ).toBeVisible();
-    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toEqual([]);
-    await page.getByLabel("Theme", { exact: true }).selectOption("light");
-    await page.screenshot({ path: "test-results/orchestration-settings-light.png" });
-    await page.getByLabel("Theme", { exact: true }).selectOption("dark");
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(760, 650),
-    );
-    await page.screenshot({ path: "test-results/orchestration-settings-dark-narrow.png" });
-    const row = await page
-      .locator(".orchestration-provider-row")
-      .evaluate((element) => ({ scroll: element.scrollWidth, width: element.clientWidth }));
-    expect(row.scroll).toBeLessThanOrEqual(row.width);
-    await application.close();
-
-    application = await launch(directory, directory, database);
-    page = await application.firstWindow();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Sessions");
-    await page.getByRole("tab", { name: "Settings", exact: true }).click();
-    provider = page.getByLabel("Orchestration provider", { exact: true });
-    await expect(provider).toHaveValue("fake");
-    expect((await page.evaluate(() => window.desktop.snapshot())).orchestration).toEqual({
-      provider: "fake",
-      allowAll: true,
-      connection: "idle",
-      error: null,
-    });
-
-    await provider.selectOption("broken");
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText(/agent exited|ACP connection closed/);
-    await provider.selectOption("auth");
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("log in");
-    await provider.selectOption("hanging");
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(provider).toBeDisabled();
-    await page.getByRole("button", { name: "Cancel test", exact: true }).click();
-    await expect(provider).toBeEnabled();
-    expect((await page.evaluate(() => window.desktop.snapshot())).orchestration.connection).toBe(
-      "idle",
-    );
-    await provider.selectOption("");
-    await expect(page.getByRole("button", { name: "Test connection", exact: true })).toBeDisabled();
+    await page.screenshot({ path: "test-results/agent-setup-dark.png" });
+    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
     await expect
       .poll(
         async () => (await page.evaluate(() => window.desktop.snapshot())).orchestration.provider,
       )
-      .toBeNull();
+      .toBe("codex");
+    await page.reload();
+    await expect(page.locator(".splash")).toHaveCount(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -4460,22 +4404,11 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    await page.evaluate(() => window.desktop.setOrchestrationProvider("broken"));
-    await expect(chat.getByRole("alert")).toBeVisible();
-    const failed = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
-    await chat.getByRole("button", { name: "Retry", exact: true }).click();
-    // Windows native cleanup and startup each have a separate five-second bound.
-    await expect
-      .poll(
-        async () => {
-          const run = (await page.evaluate(() => window.desktop.snapshot())).chat.run;
-          return run !== null && run.id !== failed;
-        },
-        { timeout: 15_000 },
-      )
-      .toBe(true);
-    await page.evaluate(() => window.desktop.setOrchestrationProvider("claude"));
-    await expect(chat.getByRole("status")).toHaveText("Ready");
+    const unchanged = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await expect(
+      page.evaluate(() => window.desktop.setOrchestrationProvider("broken")),
+    ).rejects.toThrow("Use agent setup");
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(unchanged);
     const prior = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id as string;
     const priorDirectory = (await page.evaluate(() => window.desktop.snapshot())).chat
       .directory as string;
@@ -5524,6 +5457,64 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await page.evaluate(() => window.desktop.stopAll());
   } finally {
     await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: agent setup wizard handles missing agents, authentication, timeout, cancellation and retry", async () => {
+  test.setTimeout(75_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-setup-failures-"));
+  const configFile = join(directory, "config/code60/config.json");
+  const command = [process.execPath, join(root, "test/fixtures/fake-agent.mjs")];
+  const agents = {
+    antigravity: { command: [join(directory, "missing-executable")] },
+    claude: { command: [...command, "--auth"] },
+    codex: { command: [process.execPath, "-e", "setInterval(() => {}, 1000)"] },
+  };
+  await mkdir(dirname(configFile), { recursive: true });
+  await writeFile(configFile, JSON.stringify({ agents }));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"), false);
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    const connect = async (name: string) => {
+      await wizard.getByRole("button", { name, exact: true }).click();
+    };
+    await connect("Antigravity");
+    await expect(wizard.getByRole("alert")).toContainText("not found");
+    await wizard.getByRole("button", { name: "Choose another agent", exact: true }).click();
+    await connect("Claude");
+    await expect(wizard.getByRole("alert")).toContainText("log in");
+    await expect(wizard.getByText("Detected", { exact: true })).toBeVisible();
+    expect(
+      (await page.evaluate(() => window.desktop.snapshot())).agentSetup?.session?.verified,
+    ).toEqual([]);
+    await wizard.getByRole("button", { name: "Choose another agent", exact: true }).click();
+    await connect("Codex");
+    await expect(wizard.getByRole("status")).toHaveText("Connecting to Codex…");
+    await wizard.getByRole("button", { name: "Cancel attempt", exact: true }).click();
+    await expect(wizard.getByRole("button", { name: "Codex", exact: true })).toBeVisible();
+    await connect("Codex");
+    await expect(wizard.getByRole("status")).toHaveText("Connecting to Codex…");
+    await page.reload();
+    await expect(wizard.getByRole("button", { name: "Codex", exact: true })).toBeVisible();
+    expect(
+      (await page.evaluate(() => window.desktop.snapshot())).agentSetup?.session?.verified,
+    ).toEqual([]);
+    await connect("Codex");
+    await expect(wizard.getByRole("alert")).toContainText("timed out", { timeout: 25_000 });
+    agents.codex.command = command;
+    await writeFile(configFile, JSON.stringify({ agents }));
+    await wizard.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(wizard.getByRole("heading")).toHaveText(
+      "Would you like to connect another agent?",
+    );
+    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
+  } finally {
+    await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
   }
 });

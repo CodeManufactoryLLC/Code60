@@ -1,3 +1,7 @@
+import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from "./agent-setup.js";
+
+export * from "./agent-setup.js";
+
 import { z } from "zod";
 import {
   boundedString,
@@ -186,6 +190,7 @@ export interface Versions {
 }
 
 export interface Snapshot {
+  agentSetup?: AgentSetupSnapshot;
   versions: Versions;
   chat: OrchestrationChat;
   chats: OrchestrationChat[];
@@ -233,6 +238,11 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  beginAgentSetup(request: SetupBegin): Promise<void>;
+  attemptAgentSetup(request: SetupAttempt): Promise<void>;
+  cancelAgentSetup(request: SetupIdentity): Promise<void>;
+  finishAgentSetup(request: SetupIdentity): Promise<void>;
+  abandonAgentSetup(request: SetupIdentity): Promise<void>;
   update(action: UpdateAction): Promise<UpdateState>;
   onUpdate(listener: (state: UpdateState) => void): () => void;
   summarizeSearch(request: SearchSummaryRequest): Promise<SearchSummaryResult>;

@@ -32,6 +32,9 @@ import {
   parseSavePromptTemplate,
   parseSearchSummary,
   parseSearchSummaryRequestId,
+  parseSetupAttempt,
+  parseSetupBegin,
+  parseSetupSession,
   parseStart,
   parseUpdateAction,
 } from "../bridge/index.js";
@@ -79,6 +82,9 @@ const controller = new DesktopController(
   {
     openDatabase: openProjectDatabase,
     preferences,
+    refreshPath: async (signal) => {
+      setEnvironmentPath(process.env, await desktopPath({ signal }));
+    },
   },
 );
 
@@ -363,6 +369,15 @@ async function ready(): Promise<void> {
   handle("desktop:orchestration-chat", (value) =>
     controller.orchestrationChatAction(parseOrchestrationChatAction(value)),
   );
+  handle("desktop:setup-begin", (value) => controller.beginAgentSetup(parseSetupBegin(value)));
+  handle("desktop:setup-attempt", (value) =>
+    controller.attemptAgentSetup(parseSetupAttempt(value)),
+  );
+  handle("desktop:setup-cancel", (value) => controller.cancelAgentSetup(parseSetupSession(value)));
+  handle("desktop:setup-finish", (value) => controller.finishAgentSetup(parseSetupSession(value)));
+  handle("desktop:setup-abandon", (value) =>
+    controller.abandonAgentSetup(parseSetupSession(value)),
+  );
   handle("desktop:orchestration-provider", (value) =>
     controller.setOrchestrationProvider(parseOrchestrationProvider(value)),
   );
@@ -452,6 +467,7 @@ async function ready(): Promise<void> {
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
+    void controller.cancelAgentSetup().catch(() => {});
     void controller.cancelSearchSummary().catch(() => {});
     window?.setIgnoreMouseEvents(false);
     controller.setVisibility({ visible: false, worktrees: false });
