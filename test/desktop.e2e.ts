@@ -539,6 +539,10 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     await expect(chat.locator(".chat-progress")).toHaveText("Ready");
     const second = page.getByRole("button", { name: "Chat 2", exact: true });
     const send = async (text: string) => {
+      const turn = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+        (chat) => chat.run?.id === firstId,
+      )?.run?.turns;
+      if (turn === undefined) throw new Error("Missing fixture conversation");
       await page.evaluate(
         ({ id, text }) => window.desktop.orchestrationChatAction({ type: "send", id, text }),
         { id: firstId, text },
@@ -548,9 +552,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           async () =>
             (await page.evaluate(() => window.desktop.snapshot())).chats.find(
               (chat) => chat.run?.id === firstId,
-            )?.run?.status,
+            )?.run,
         )
-        .toBe("idle");
+        .toMatchObject({ status: "idle", turns: turn + 1 });
     };
     await send(
       JSON.stringify([
@@ -577,6 +581,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       element.scrollTop = 0;
     });
     await send(JSON.stringify([{ message: "read while open" }, { message: "more" }]));
+    await expect(chat.locator(".event.message pre").last()).toHaveText("read while openmore");
     await expect(first.locator(".chat-unread")).toHaveCount(0);
     await selectSidebarPage(page, "Settings");
     await send("reply while on another page");
