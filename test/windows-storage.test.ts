@@ -115,7 +115,7 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       join(dir, "records", "run-1", "events.jsonl"),
     ];
     for (const path of paths) expect(() => verifyPrivateSync(path)).not.toThrow();
-    // Independently inspect ownership, including elevated tokens whose default owner is a group.
+    // Use .NET directly, independent of the helper and PowerShell's module search path.
     execFileSync(
       "powershell.exe",
       [
@@ -126,7 +126,11 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       $ErrorActionPreference = 'Stop'
       $expected = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
       foreach ($path in ($env:CODE60_ACL_PATHS | ConvertFrom-Json)) {
-        $acl = Get-Acl -LiteralPath $path
+        $acl = if ([IO.Directory]::Exists($path)) {
+          [IO.Directory]::GetAccessControl($path)
+        } else {
+          [IO.File]::GetAccessControl($path)
+        }
         if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $expected) {
           throw 'Private object is not owned by the current user'
         }
