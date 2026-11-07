@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type SearchResult, summaryParts, summarySources } from "./search.js";
+import {
+  type SearchResult,
+  searchContext,
+  sourceResult,
+  summaryParts,
+  summarySources,
+} from "./search.js";
 
 const row = (id: number, text = "The parser is fixed."): SearchResult => ({
   id: `run:${id}`,
@@ -25,6 +31,25 @@ describe("overview evidence and references", () => {
     expect(source?.text.length).toBeLessThanOrEqual(4000);
     expect(source?.text).toContain("MATCH\nEvidence after the match.");
     expect(summarySources([row(1, "short")], "short")[0]?.text).toBe("short");
+  });
+  it("retrieves saved context for natural-language questions without literal all-word matches", () => {
+    expect(
+      searchContext(
+        [row(0, "An accessible palette editor.")],
+        "What is this project about?",
+        "all",
+      ),
+    ).toHaveLength(1);
+    expect(searchContext([row(0)], "What is this project about?", "thought")).toEqual([]);
+    const file = {
+      id: "file:README.md",
+      kind: "file" as const,
+      path: "README.md",
+      title: "README.md",
+      text: "Project description",
+    };
+    expect(sourceResult(file)).toMatchObject({ kind: "file", path: "README.md", at: "" });
+    expect(summarySources([sourceResult(file)], "project")).toEqual([]);
   });
   it("creates only local in-range references and leaves HTML, URLs and malformed references literal", () => {
     expect(summaryParts("A [1] and [2]. [0] [03] [21] <script> https://example.com", 2)).toEqual([

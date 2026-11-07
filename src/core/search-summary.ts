@@ -19,7 +19,6 @@ export async function summarizeSearch(
 ): Promise<string> {
   if (!query.trim() || query.length > SEARCH_QUERY_LIMIT) throw new Error("Invalid search query");
   if (
-    !sources.length ||
     sources.length > SEARCH_SOURCE_LIMIT ||
     sources.some((source) => source.text.length > SEARCH_EXCERPT_LIMIT)
   )

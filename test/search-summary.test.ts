@@ -104,7 +104,6 @@ describe("search summary", () => {
   it("rejects invalid core input before starting an agent", async () => {
     const agents = new FakeAgents();
     for (const sources of [
-      [],
       Array.from({ length: 21 }, () => source),
       [{ ...source, text: "x".repeat(4001) }],
     ])
@@ -117,12 +116,12 @@ describe("search summary", () => {
   it("validates scoped, bounded requests and cancellation IDs", () => {
     const valid = request();
     expect(parseSearchSummary(valid)).toEqual(valid);
+    expect(parseSearchSummary({ ...valid, sources: [] }).sources).toEqual([]);
     expect(parseSearchSummaryRequestId(valid.requestId)).toBe(valid.requestId);
     for (const change of [
       { requestId: "invalid" },
       { query: " " },
       { query: "x".repeat(2049) },
-      { sources: [] },
       { sources: [source, source] },
       { sources: [{ ...source, text: "x".repeat(4001) }] },
       { sources: [{ ...source, runId: "../outside" }] },

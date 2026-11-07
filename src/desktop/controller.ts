@@ -98,6 +98,7 @@ import { Poller } from "./poller.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
+import { projectSearchEvidence } from "./search-evidence.js";
 
 export interface DesktopDialogs {
   confirm(title: string, detail: string): Promise<boolean>;
@@ -493,16 +494,21 @@ export class DesktopController {
           const cwd = join(temporary, "private");
           await privateDirectory(cwd);
           abort.signal.throwIfAborted();
+          const files =
+            request.includeFiles === false
+              ? []
+              : await projectSearchEvidence(workspace.dir, request.query, abort.signal);
+          const sources = [...request.sources.slice(0, files.length ? 10 : 20), ...files];
           const text = await summarizeSearch(
             this.deps.agents,
             { name: provider, command: agent.command, cwd },
             request.query,
-            request.sources,
+            sources,
             abort.signal,
           );
           abort.signal.throwIfAborted();
           if (this.workspace !== workspace) throw new Error("The project changed. Search again.");
-          return { requestId: request.requestId, text };
+          return { requestId: request.requestId, text, sources };
         } finally {
           await rm(temporary, { recursive: true, force: true });
         }

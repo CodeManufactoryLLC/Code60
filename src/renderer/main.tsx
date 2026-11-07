@@ -1189,6 +1189,13 @@ function App() {
             runs={snapshot?.runs ?? []}
             data={transcripts}
             onOpen={(result) => {
+              if (result.kind === "file" && result.path) {
+                fileBrowser.selectRoot();
+                fileBrowser.selectFile(result.path);
+                setExplorerOpen(true);
+                setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+                return;
+              }
               setTabs((current) => updateTabs(current, { type: "select", id: "sessions" }));
               if (result.runId) {
                 setSelected(result.runId);
