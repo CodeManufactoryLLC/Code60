@@ -1,8 +1,16 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { DesktopApi, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type {
+  DesktopApi,
+  DesktopRun,
+  OrchestrationChat,
+  OrchestrationChatAction,
+} from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { delegatedActivity, sessionStatus, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
+import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { type Block, statusSpec, transcript } from "./state.js";
+import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
 function ChatMessage({ block }: { block: Block }) {
   const speaker =
@@ -22,79 +30,103 @@ function ChatMessage({ block }: { block: Block }) {
                 ? "Error"
                 : "Session";
   return (
-    <article className={`event ${block.type}`} aria-label={speaker}>
+    <article
+      className={`event ${block.type}${block.automatic ? " automatic" : ""}`}
+      aria-label={speaker}
+    >
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
       <pre>{block.text}</pre>
+      {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
+        <MessageCopy text={block.text} />
+      )}
       {block.detail && <pre>{block.detail}</pre>}
     </article>
   );
 }
 
 export function ChatSidebar({
-  api,
   chats,
   selectedId,
   database,
+  eventsByRun,
+  open,
+  pending,
+  onSelect,
 }: {
-  api: DesktopApi;
   chats: readonly OrchestrationChat[];
   selectedId: string | undefined;
   database: string | null;
+  eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
+  open: boolean;
+  pending: boolean;
+  onSelect(id: string): void;
 }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const inFlight = useRef(false);
-  async function action(request: OrchestrationChatAction) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setPending(true);
-    setError("");
+  const markers = useRef(new Map<string, number>());
+  const replies = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(eventsByRun).map(([id, events]) => [id, replyTurns(events)]),
+      ),
+    [eventsByRun],
+  );
+  useLayoutEffect(() => {
+    if (!database || !open || !selectedId) return;
+    const turns = replies[selectedId] ?? [];
+    const key = readMarkerKey(database, selectedId);
+    const read = turns.reduce(
+      (latest, turn) => Math.max(latest, turn),
+      markers.current.get(key) ?? loadReadMarker(sessionStorage, key),
+    );
+    markers.current.set(key, read);
     try {
-      await api.orchestrationChatAction(request);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      inFlight.current = false;
-      setPending(false);
+      sessionStorage.setItem(key, String(read));
+    } catch {
+      // Keep in-memory read state when browser storage is unavailable.
     }
-  }
+  }, [database, open, selectedId, replies]);
   return (
     <nav className="chat-sidebar" aria-label="Orchestrator chats">
-      <header className="chat-sidebar-heading">
-        <h2 className="sidebar-title">Chats</h2>
-        <button
-          type="button"
-          className="chat-sidebar-new"
-          disabled={pending || !database}
-          onClick={() => void action({ type: "new" })}
-        >
-          New
-        </button>
-      </header>
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
-      )}
       <div className="chat-sidebar-list">
-        {chats.map(
-          ({ run }, index) =>
-            run && (
-              <button
-                key={run.id}
-                type="button"
-                className="chat-sidebar-entry"
-                aria-current={run.id === selectedId ? "true" : undefined}
-                disabled={pending}
-                onClick={() => void action({ type: "select", id: run.id })}
-              >
-                {run.stopping || run.status === "queued" || run.status === "running" ? (
-                  <span className="chat-loader" aria-hidden="true" />
-                ) : null}
-                <span className="chat-sidebar-label">Chat {index + 1}</span>
-              </button>
-            ),
-        )}
+        {chats.map(({ run, error }, index) => {
+          if (!run) return null;
+          const key = readMarkerKey(database ?? "", run.id);
+          const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
+          const unread =
+            open && run.id === selectedId ? 0 : unreadCount(replies[run.id] ?? [], read);
+          const unreadLabel =
+            unread > 0 ? `${unread} unread ${unread === 1 ? "reply" : "replies"}` : "";
+          const description = [error || sessionStatus(run).label, unreadLabel]
+            .filter(Boolean)
+            .join(". ");
+          return (
+            <button
+              key={run.id}
+              type="button"
+              className="chat-sidebar-entry"
+              aria-label={`Chat ${index + 1}`}
+              aria-description={description}
+              aria-current={run.id === selectedId ? "true" : undefined}
+              disabled={pending}
+              onClick={() => onSelect(run.id)}
+              title={description}
+            >
+              {run.stopping || ["queued", "running", "waiting"].includes(run.status) ? (
+                <span className="chat-loader" aria-hidden="true" />
+              ) : null}
+              <span className="chat-sidebar-label">Chat {index + 1}</span>
+              {unread > 0 && (
+                <span className="chat-unread" role="img" aria-label={unreadLabel}>
+                  <Icon name="chat" />
+                  <span>{unread}</span>
+                </span>
+              )}
+              {(error || sessionStatus(run).icon !== "chat") && (
+                <Icon name={error ? "warning--alt--filled" : sessionStatus(run).icon} />
+              )}
+              <span className="sr-only">{error || sessionStatus(run).label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -108,6 +140,7 @@ export function ChatPage({
   database,
   active,
   onDatabase,
+  runs,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
@@ -116,6 +149,7 @@ export function ChatPage({
   database: string | null;
   active: boolean;
   onDatabase(): void;
+  runs: readonly DesktopRun[];
 }) {
   const id = useId();
   const run = chat?.run;
@@ -132,11 +166,16 @@ export function ChatPage({
   const follow = useRef(true);
   const position = useRef(0);
   const geometry = useRef({ width: 0, height: 0 });
-  const working = run?.status === "running" && run.turns > 0;
+  const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
   const ready = run?.status === "idle" && !run.stopping;
   const ended = run && !["queued", "running", "waiting", "idle"].includes(run.status);
   const blocks = useMemo(() => transcript(events), [events]);
+  const timings = useMemo(
+    () => turnTimings(events, run?.status ?? "interrupted"),
+    [events, run?.status],
+  );
+  const delegated = delegatedActivity(chat?.workers ?? [], runs);
   const items = useMemo(() => {
     const result: { key: string; activity: boolean; blocks: Block[] }[] = [];
     for (const block of blocks.slice(-visible)) {
@@ -144,7 +183,13 @@ export function ChatPage({
         block.automatic === true ||
         ["thought", "toolCall", "permission", "note"].includes(block.type);
       const previous = result.at(-1);
-      if (activity && previous?.activity) previous.blocks.push(block);
+      if (
+        activity &&
+        previous?.activity &&
+        block.type !== "prompt" &&
+        !previous.blocks.some((item) => item.type === "prompt")
+      )
+        previous.blocks.push(block);
       else result.push({ key: block.key, activity, blocks: [block] });
     }
     return result;
@@ -157,15 +202,17 @@ export function ChatPage({
       ? "Stopping"
       : connecting || pending === "restart"
         ? "Connecting"
-        : working
-          ? latest?.type === "message"
-            ? "Responding"
-            : latest?.type === "toolCall" || latest?.type === "permission"
-              ? "Working"
-              : "Thinking"
-          : pending === "send"
-            ? "Sending"
-            : "";
+        : run?.status === "waiting"
+          ? "Waiting for approval"
+          : working
+            ? latest?.type === "message"
+              ? "Responding"
+              : latest?.type === "toolCall" || latest?.type === "permission"
+                ? "Working"
+                : "Thinking"
+            : pending === "send"
+              ? "Sending"
+              : "";
   const failed = run && ["failed", "timed_out", "interrupted"].includes(run.status);
   const failure = error || chat?.error || (failed ? run.reason : "");
   useEffect(() => {
@@ -235,7 +282,6 @@ export function ChatPage({
           Chat
         </h1>
         <div className="orchestration-chat-status">
-          {run && <span>{run.agent}</span>}
           {!database ? (
             <button type="button" onClick={onDatabase}>
               Connect to database
@@ -320,26 +366,34 @@ export function ChatPage({
               Show earlier activity
             </button>
           )}
-          {items.map((item) =>
-            item.activity ? (
-              <details className="chat-activity" key={item.key}>
-                <summary>
-                  <Icon name="terminal" />
-                  Activity
-                </summary>
-                <div className="chat-activity-content">
-                  {item.blocks.map((block) => (
-                    <ChatMessage key={block.key} block={block} />
-                  ))}
-                </div>
-              </details>
-            ) : (
-              <ChatMessage key={item.key} block={item.blocks[0] as Block} />
-            ),
-          )}
+          {items.map((item) => (
+            <div className="chat-turn-content" key={item.key}>
+              {item.activity ? (
+                <details className="chat-activity" key={item.key}>
+                  <summary>
+                    <Icon name="terminal" />
+                    Activity
+                  </summary>
+                  <div className="chat-activity-content">
+                    {item.blocks.map((block) => (
+                      <ChatMessage key={block.key} block={block} />
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <ChatMessage key={item.key} block={item.blocks[0] as Block} />
+              )}
+              {item.blocks.map((block) => {
+                const timing = timings.get(block.key);
+                return timing ? (
+                  <TurnTimer key={block.key} timing={timing} visible={active} />
+                ) : null;
+              })}
+            </div>
+          ))}
         </div>
         <section className="composer" aria-label="Chat composer">
-          {progress ? <span className="chat-loader" aria-hidden="true" /> : null}
+          {progress || delegated ? <span className="chat-loader" aria-hidden="true" /> : null}
           <label className="sr-only" htmlFor={`${id}-message`}>
             Message to orchestrator
           </label>
@@ -360,7 +414,7 @@ export function ChatPage({
           />
           <div className="composer-footer">
             <span className="chat-progress" role="status" aria-live="polite" aria-atomic="true">
-              {progress || label}
+              {[progress || label, delegated].filter(Boolean).join(" · ")}
             </span>
             {working ? (
               <button
@@ -383,6 +437,11 @@ export function ChatPage({
             )}
           </div>
         </section>
+        {run && (
+          <div className="chat-provider" role="note" aria-label="Current provider">
+            {run.agent}
+          </div>
+        )}
       </div>
     </main>
   );

@@ -1,9 +1,16 @@
-import type { DesktopRun } from "../bridge/index.js";
+import {
+  type DesktopRun,
+  SEARCH_SOURCE_LIMIT,
+  type SearchSummaryRequest,
+  type SearchSummarySource,
+  searchEvidenceExcerpt,
+  searchKeywords,
+} from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { messageRows } from "./messages.js";
 import { pathLabel } from "./path-label.js";
 
-export type SearchKind = "project" | "run" | "prompt" | "message" | "thought";
+export type SearchKind = "project" | "run" | "prompt" | "message" | "thought" | "file";
 export interface SearchResult {
   id: string;
   kind: SearchKind;
@@ -12,6 +19,7 @@ export interface SearchResult {
   at: string;
   runId?: string;
   eventIndex?: number;
+  path?: string;
 }
 export function searchIndex(
   directory: string,
@@ -135,4 +143,73 @@ export function searchExcerpt(text: string, query: string, limit = 220): string 
   const start = Math.max(lineStart, match - 60);
   const end = Math.min(lineEnd < 0 ? text.length : lineEnd, start + limit);
   return `${start > lineStart ? "…" : ""}${text.slice(start, end)}${end < (lineEnd < 0 ? text.length : lineEnd) ? "…" : ""}`;
+}
+
+/** A bounded, multiline window around the first matching term, in submitted order. */
+export function summarySources(
+  results: readonly SearchResult[],
+  query: string,
+): SearchSummaryRequest["sources"] {
+  return results
+    .filter((result) => result.kind !== "file")
+    .slice(0, SEARCH_SOURCE_LIMIT)
+    .map((result) => {
+      const text = searchEvidenceExcerpt(result.text, query);
+      return {
+        id: result.id,
+        kind: result.kind as Exclude<SearchKind, "file">,
+        title: result.title.slice(0, 512),
+        text,
+        ...(result.runId === undefined ? {} : { runId: result.runId }),
+        ...(result.eventIndex === undefined ? {} : { eventIndex: result.eventIndex }),
+      };
+    });
+}
+
+/** Natural-language questions can use relevant saved context even without an exact phrase match. */
+export function searchContext(
+  index: readonly SearchResult[],
+  query: string,
+  kind: SearchKind | "all",
+): SearchResult[] {
+  const terms = searchKeywords(query);
+  return index
+    .filter((row) => kind === "all" || row.kind === kind)
+    .map((row) => ({
+      row,
+      score: terms.filter((term) => `${row.title}\n${row.text}`.toLocaleLowerCase().includes(term))
+        .length,
+    }))
+    .sort((a, b) => b.score - a.score || (Date.parse(b.row.at) || 0) - (Date.parse(a.row.at) || 0))
+    .slice(0, 10)
+    .map(({ row }) => row);
+}
+
+export function sourceResult(source: SearchSummarySource): SearchResult {
+  const { runId, eventIndex, ...rest } = source;
+  return {
+    ...rest,
+    at: "",
+    ...(runId === undefined ? {} : { runId }),
+    ...(eventIndex === undefined ? {} : { eventIndex }),
+  };
+}
+
+/** Only in-range numeric references become local actions; everything else stays literal text. */
+export function summaryParts(
+  text: string,
+  sourceCount: number,
+): { text: string; source?: number; start?: number }[] {
+  const parts: { text: string; source?: number; start?: number }[] = [];
+  let end = 0;
+  for (const match of text.matchAll(/\[([1-9]\d*)\]/g)) {
+    const number = Number(match[1]);
+    if (!Number.isSafeInteger(number) || number > sourceCount) continue;
+    const start = match.index;
+    if (start > end) parts.push({ text: text.slice(end, start) });
+    parts.push({ text: match[0], source: number - 1, start });
+    end = start + match[0].length;
+  }
+  if (end < text.length) parts.push({ text: text.slice(end) });
+  return parts;
 }

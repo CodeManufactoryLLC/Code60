@@ -1,12 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopRun } from "../bridge/index.js";
+import { useEffect, useRef, useState } from "react";
+import {
+  type DesktopApi,
+  type DesktopRun,
+  SEARCH_QUERY_LIMIT,
+  type SearchSummarySource,
+} from "../bridge/index.js";
+import { Icon } from "./icons.js";
 import {
   highlights,
   type SearchKind,
   type SearchResult,
+  searchContext,
   searchExcerpt,
   searchIndex,
   searchResults,
+  sourceResult,
+  summaryParts,
+  summarySources,
 } from "./search.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
@@ -19,12 +29,29 @@ function Highlight({ text, query }: { text: string; query: string }) {
     </>
   );
 }
+
+type SubmittedSearch = {
+  query: string;
+  results: SearchResult[] | null;
+  evidence: SearchResult[];
+  includeFiles: boolean;
+};
+type Overview =
+  | { status: "generating" }
+  | { status: "complete"; text: string; sources: SearchSummarySource[] }
+  | { status: "error"; error: string }
+  | { status: "stopped" };
+
 export function SearchPage({
+  api,
+  provider,
   directory,
   runs,
   data,
   onOpen,
 }: {
+  api: Pick<DesktopApi, "summarizeSearch" | "cancelSearchSummary">;
+  provider: string | null;
   directory: string | null;
   runs: readonly DesktopRun[];
   data: Transcripts;
@@ -33,161 +60,321 @@ export function SearchPage({
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<SearchKind | "all">("all");
   const [sort, setSort] = useState<"relevance" | "newest">("relevance");
-  const expanded = query.trim().length > 0;
-  const [selection, setSelection] = useState<string>();
-  const list = useRef<HTMLDivElement>(null);
-  const preview = useRef<HTMLElement>(null);
-  const index = useMemo(
-    () => (directory ? searchIndex(directory, runs, data.events) : []),
-    [directory, runs, data.events],
-  );
-  const results = useMemo(
-    () => searchResults(index, query, kind, sort),
-    [index, query, kind, sort],
-  );
-  const selected = results.find((row) => row.id === selection) ?? results[0];
-  const selectedIndex = selected ? results.indexOf(selected) : -1;
+  const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const active = useRef<string | undefined>(undefined);
+  const list = useRef<HTMLUListElement>(null);
+  const expanded = submitted !== null;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: provider changes invalidate an in-flight helper even though the provider is resolved in main.
   useEffect(() => {
-    if (selected)
-      list.current
-        ?.querySelector(`[data-result-index="${selectedIndex}"]`)
-        ?.scrollIntoView({ block: "nearest" });
-  }, [selected, selectedIndex]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll the preview after its text and marks change.
-  useEffect(() => {
-    if (!preview.current) return;
-    const first = preview.current.querySelector("mark");
-    if (first) first.scrollIntoView({ block: "nearest" });
-    else preview.current.scrollTop = 0;
-  }, [selected, query]);
+    setOverview(null);
+    setSubmitted((current) => (current?.results === null ? null : current));
+    return () => {
+      const id = active.current;
+      active.current = undefined;
+      if (id) void api.cancelSearchSummary(id).catch(() => {});
+    };
+  }, [api, provider]);
+
+  function cancel() {
+    const id = active.current;
+    active.current = undefined;
+    if (id) void api.cancelSearchSummary(id).catch(() => {});
+  }
+
+  async function generate(id: string, search: SubmittedSearch) {
+    if (!directory || active.current !== id) return;
+    setOverview({ status: "generating" });
+    try {
+      const result = await api.summarizeSearch({
+        requestId: id,
+        directory,
+        query: search.query,
+        sources: summarySources(search.evidence, search.query),
+        includeFiles: search.includeFiles,
+      });
+      if (active.current === id && result.requestId === id) {
+        setOverview({ status: "complete", text: result.text, sources: result.sources });
+        setSubmitted((current) => {
+          if (!current) return current;
+          const rows = current.results ?? [];
+          const seen = new Set(rows.map((row) => row.id));
+          return {
+            ...current,
+            results: [
+              ...rows,
+              ...result.sources.filter((source) => !seen.has(source.id)).map(sourceResult),
+            ],
+          };
+        });
+      }
+    } catch (error) {
+      if (active.current === id)
+        setOverview({
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+    } finally {
+      if (active.current === id) active.current = undefined;
+    }
+  }
+
+  async function submit() {
+    if (!directory || !query.trim()) return;
+    cancel();
+    const id = crypto.randomUUID();
+    active.current = id;
+    const searchQuery = query.trim();
+    const includeFiles = kind === "all" || kind === "file";
+    setSubmitted({ query: searchQuery, results: null, evidence: [], includeFiles });
+    setOverview(null);
+    try {
+      const events = await data.read();
+      if (active.current !== id) return;
+      const index = searchIndex(directory, runs, events);
+      const results = searchResults(index, searchQuery, kind, sort);
+      const search = {
+        query: searchQuery,
+        results,
+        includeFiles,
+        evidence: results.length ? results : searchContext(index, searchQuery, kind),
+      };
+      setSubmitted(search);
+      await generate(id, search);
+    } catch (error) {
+      if (active.current === id) {
+        setSubmitted({ query: searchQuery, results: [], evidence: [], includeFiles });
+        setOverview({
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        active.current = undefined;
+      }
+    }
+  }
+
+  function retry() {
+    if (!submitted) return;
+    cancel();
+    const id = crypto.randomUUID();
+    active.current = id;
+    void generate(id, submitted);
+  }
+
   return (
     <main className="search-page" aria-label="Search" data-expanded={expanded}>
       <div className="search-lead-space" aria-hidden="true" />
-      <div className="search-entry">
-        <div className="search-wordmark" aria-hidden={expanded}>
-          <span className="wordmark">
-            Code<b>60</b>
-          </span>
-        </div>
-        <div className="search-controls">
-          <input
-            className="search-query"
-            aria-label="Query"
-            type="search"
-            value={query}
-            placeholder="Search this project"
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                list.current?.focus();
-              }
-              if (event.key === "Enter" && selected) onOpen(selected);
-            }}
-          />
-          <label hidden={!expanded}>
-            Type
-            <select
-              aria-label="Type"
-              value={kind}
-              onChange={(event) => setKind(event.target.value as SearchKind | "all")}
+      <search className="search-entry">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div className="search-wordmark" aria-hidden={expanded}>
+            <span className="wordmark">
+              Code<b>60</b>
+            </span>
+          </div>
+          <div className="search-query-row">
+            <div className="search-query-shell">
+              <input
+                className="search-query"
+                aria-label="Query"
+                type="search"
+                value={query}
+                maxLength={SEARCH_QUERY_LIMIT}
+                placeholder="Search this project"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setQuery(value);
+                  if (!value.trim()) {
+                    cancel();
+                    setSubmitted(null);
+                    setOverview(null);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" && submitted?.results?.length) {
+                    event.preventDefault();
+                    list.current?.querySelector("button")?.focus();
+                  }
+                }}
+              />
+              {overview?.status === "generating" && (
+                <span className="chat-loader" aria-hidden="true" />
+              )}
+            </div>
+            <button
+              className="primary search-submit"
+              type="submit"
+              disabled={!directory || !query.trim()}
             >
-              {(["all", "project", "run", "prompt", "message", "thought"] as const).map((value) => (
-                <option key={value} value={value}>
-                  {value === "all" ? "All types" : value[0]?.toUpperCase() + value.slice(1)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label hidden={!expanded}>
-            Sort
-            <select
-              aria-label="Sort"
-              value={sort}
-              onChange={(event) => setSort(event.target.value as typeof sort)}
-            >
-              <option value="relevance">Relevance</option>
-              <option value="newest">Newest</option>
-            </select>
-          </label>
-        </div>
-      </div>
+              <Icon name="search" />
+              Search
+            </button>
+          </div>
+          <div className="search-controls" hidden={!expanded}>
+            <label>
+              Type
+              <select
+                aria-label="Type"
+                value={kind}
+                onChange={(event) => setKind(event.target.value as SearchKind | "all")}
+              >
+                {(["all", "file", "project", "run", "prompt", "message", "thought"] as const).map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {value === "all" ? "All types" : value[0]?.toUpperCase() + value.slice(1)}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <label>
+              Sort
+              <select
+                aria-label="Sort"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as typeof sort)}
+              >
+                <option value="relevance">Relevance</option>
+                <option value="newest">Newest</option>
+              </select>
+            </label>
+          </div>
+        </form>
+      </search>
       <div className="search-content" hidden={!expanded && !!directory}>
-        <TranscriptNotice data={data} />
+        {expanded && <TranscriptNotice data={data} />}
         {!directory ? (
           <p>Open a project to search.</p>
-        ) : !query.trim() ? null : !results.length ? (
-          <p role="status">
-            {data.pending ? "Searching saved transcripts…" : "No matching results."}
-          </p>
+        ) : submitted?.results === null ? (
+          <p role="status">Searching saved transcripts…</p>
         ) : (
-          <div className="search-body">
-            <div
-              className="search-results"
-              role="listbox"
-              aria-label="Search results"
-              tabIndex={0}
-              ref={list}
-              aria-activedescendant={selected ? `search-result-${selectedIndex}` : undefined}
-              onKeyDown={(event) => {
-                const next =
-                  event.key === "ArrowDown"
-                    ? Math.min(results.length - 1, selectedIndex + 1)
-                    : event.key === "ArrowUp"
-                      ? Math.max(0, selectedIndex - 1)
-                      : event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? results.length - 1
-                          : undefined;
-                if (next !== undefined) {
-                  event.preventDefault();
-                  setSelection(results[next]?.id);
-                }
-                if (event.key === "Enter" && selected) {
-                  event.preventDefault();
-                  onOpen(selected);
-                }
-              }}
-            >
-              {results.map((result, i) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={result.id === selected?.id}
-                  tabIndex={-1}
-                  id={`search-result-${i}`}
-                  data-result-index={i}
-                  key={result.id}
-                  onClick={() => setSelection(result.id)}
-                  onDoubleClick={() => onOpen(result)}
-                >
-                  <strong>
-                    <Highlight text={result.title} query={query} />
-                  </strong>
-                  <span className="result-excerpt">
-                    <Highlight text={searchExcerpt(result.text, query)} query={query} />
-                  </span>
-                  {result.at && (
-                    <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
+          submitted?.results && (
+            <div className="search-body">
+              <section
+                className="search-overview"
+                aria-labelledby="search-overview-heading"
+                aria-busy={overview?.status === "generating"}
+              >
+                <div className="search-overview-heading">
+                  <h2 id="search-overview-heading">AI overview</h2>
+                  {overview?.status === "generating" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cancel();
+                        setOverview({ status: "stopped" });
+                      }}
+                    >
+                      Stop
+                    </button>
+                  ) : (
+                    overview?.status !== "complete" && (
+                      <button type="button" onClick={retry}>
+                        Retry overview
+                      </button>
+                    )
                   )}
-                </button>
-              ))}
-            </div>
-            {selected && (
-              <section className="search-preview" aria-label="Result preview" ref={preview}>
-                <header>
-                  <h2>{selected.title}</h2>
-                  <button type="button" onClick={() => onOpen(selected)}>
-                    {selected.kind === "project" ? "Open project" : "Open chat"}
-                  </button>
-                </header>
-                <pre>
-                  <Highlight text={selected.text} query={query} />
-                </pre>
+                </div>
+                {overview?.status === "generating" ? (
+                  <span className="sr-only" role="status">
+                    Generating overview…
+                  </span>
+                ) : overview?.status === "complete" ? (
+                  <div className="search-overview-text">
+                    {summaryParts(overview.text, overview.sources.length).map((part) =>
+                      part.source === undefined ? (
+                        part.text
+                      ) : (
+                        <button
+                          type="button"
+                          className="search-citation"
+                          key={part.start}
+                          aria-label={`Source ${part.source + 1}: ${overview.sources[part.source]?.title}`}
+                          onClick={() => {
+                            const source = overview.sources[part.source as number];
+                            if (source) onOpen(sourceResult(source));
+                          }}
+                        >
+                          {part.text}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                ) : overview?.status === "error" ? (
+                  <p role="alert">{overview.error}</p>
+                ) : (
+                  <p role="status">
+                    {overview?.status === "stopped" ? "Overview stopped." : "Overview unavailable."}
+                  </p>
+                )}
               </section>
-            )}
-          </div>
+              {!submitted.results.length && overview?.status !== "generating" && (
+                <p role="status">No matching results.</p>
+              )}
+              <ul
+                className="search-results"
+                aria-label="Search results"
+                ref={list}
+                onKeyDown={(event) => {
+                  const buttons = [
+                    ...(list.current?.querySelectorAll<HTMLButtonElement>(
+                      "button[data-result-index]",
+                    ) ?? []),
+                  ];
+                  const index = buttons.indexOf(event.target as HTMLButtonElement);
+                  const next =
+                    event.key === "ArrowDown"
+                      ? Math.min(buttons.length - 1, index + 1)
+                      : event.key === "ArrowUp"
+                        ? Math.max(0, index - 1)
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? buttons.length - 1
+                            : undefined;
+                  if (next !== undefined) {
+                    event.preventDefault();
+                    buttons[next]?.focus();
+                  }
+                }}
+              >
+                {submitted.results.map((result, i) => (
+                  <li key={result.id}>
+                    <div className="search-result-meta">
+                      <span>
+                        {result.kind[0]?.toUpperCase()}
+                        {result.kind.slice(1)}
+                      </span>
+                      {result.at && (
+                        <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
+                      )}
+                    </div>
+                    <h2>
+                      <button
+                        type="button"
+                        className="search-result-title"
+                        data-result-index={i}
+                        onClick={() => onOpen(result)}
+                      >
+                        <Highlight text={result.title} query={submitted.query} />
+                      </button>
+                    </h2>
+                    <p className="result-excerpt">
+                      <Highlight
+                        text={searchExcerpt(result.text, submitted.query)}
+                        query={submitted.query}
+                      />
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
         )}
       </div>
     </main>

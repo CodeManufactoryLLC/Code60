@@ -140,11 +140,12 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       {
         env: { ...process.env, CODE60_ACL_PATHS: JSON.stringify(paths) },
         windowsHide: true,
-        timeout: 8000,
+        // Cold PowerShell startup on hosted Windows runners can exceed eight seconds.
+        timeout: 20_000,
         stdio: "pipe",
       },
     );
-  }, 10_000);
+  }, 30_000);
   it("retries an actual sharing violation and never removes the old destination", async () => {
     const dir = await directory();
     const from = join(dir, "new"),

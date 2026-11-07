@@ -25,6 +25,8 @@ import type {
   RunSettings,
   SaveConfiguration,
   SavePromptTemplate,
+  SearchSummaryRequest,
+  SearchSummaryResult,
   SequencedEvent,
   Snapshot,
   StartRequest,
@@ -48,6 +50,8 @@ import {
   parseRunSettings,
   parseSaveConfiguration,
   parseSavePromptTemplate,
+  parseSearchSummary,
+  parseSearchSummaryRequestId,
   renderPrompt,
 } from "../bridge/index.js";
 import {
@@ -75,6 +79,7 @@ import {
   type RunView,
   listWorktrees as readWorktrees,
   stopRun,
+  summarizeSearch,
   type Workspace,
 } from "../core/index.js";
 import { privateDirectory, samePath } from "../platform/index.js";
@@ -93,6 +98,7 @@ import { Poller } from "./poller.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
+import { projectSearchEvidence } from "./search-evidence.js";
 
 export interface DesktopDialogs {
   confirm(title: string, detail: string): Promise<boolean>;
@@ -240,6 +246,9 @@ export class DesktopController {
   private memoryExtraction:
     | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
     | undefined;
+  private searchSummary:
+    | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
+    | undefined;
   private connectionTest: { abort: AbortController; done: Promise<void> } | undefined;
   private chatKey = "";
   private chatGeneration = 0;
@@ -307,6 +316,7 @@ export class DesktopController {
           ) {
             await this.cancelOrchestrationTest();
             await this.stopMemoryExtraction();
+            await this.stopSearchSummary();
             this.orchestration = { ...this.orchestration, connection: "idle", error: null };
           }
           this.config = config;
@@ -388,6 +398,7 @@ export class DesktopController {
         throw new Error(`Unavailable provider: ${provider}`);
       await this.cancelOrchestrationTest();
       await this.stopMemoryExtraction();
+      await this.stopSearchSummary();
       if (!this.storage.preferences.setOrchestrationProvider)
         throw new Error("Orchestration settings cannot be saved");
       await this.storage.preferences.setOrchestrationProvider(provider);
@@ -443,6 +454,90 @@ export class DesktopController {
     const test = this.connectionTest;
     test?.abort.abort();
     await test?.done;
+  }
+
+  async summarizeSearch(value: SearchSummaryRequest): Promise<SearchSummaryResult> {
+    const request = parseSearchSummary(value);
+    const { done } = await this.exclusive(async () => {
+      if (this.closing) throw new Error("The app is stopping");
+      const workspace = this.requireWorkspace();
+      if (workspace.dir !== request.directory)
+        throw new Error("The project changed. Search again.");
+      const provider = this.orchestration.provider;
+      const agent =
+        provider && this.config && Object.hasOwn(this.config.agents, provider)
+          ? this.config.agents[provider]
+          : undefined;
+      if (!provider || !agent)
+        throw new Error("Select an available orchestration provider in Settings");
+      const known = new Set(this.history.map((run) => run.record.id));
+      for (const source of request.sources) {
+        const valid =
+          source.kind === "project"
+            ? source.id === workspace.dir &&
+              source.runId === undefined &&
+              source.eventIndex === undefined
+            : source.runId !== undefined &&
+              known.has(source.runId) &&
+              (source.kind === "run"
+                ? source.id === source.runId && source.eventIndex === undefined
+                : source.eventIndex !== undefined &&
+                  source.id === `${source.runId}:${source.eventIndex}`);
+        if (!valid) throw new Error("A search source is no longer in the open project");
+      }
+      await this.stopSearchSummary();
+      if (this.closing) throw new Error("The app is stopping");
+      const abort = new AbortController();
+      const operation = async (): Promise<SearchSummaryResult> => {
+        const temporary = await mkdtemp(join(tmpdir(), "code60-search-"));
+        try {
+          const cwd = join(temporary, "private");
+          await privateDirectory(cwd);
+          abort.signal.throwIfAborted();
+          const files =
+            request.includeFiles === false
+              ? []
+              : await projectSearchEvidence(workspace.dir, request.query, abort.signal);
+          const sources = [...request.sources.slice(0, files.length ? 10 : 20), ...files];
+          const text = await summarizeSearch(
+            this.deps.agents,
+            { name: provider, command: agent.command, cwd },
+            request.query,
+            sources,
+            abort.signal,
+          );
+          abort.signal.throwIfAborted();
+          if (this.workspace !== workspace) throw new Error("The project changed. Search again.");
+          return { requestId: request.requestId, text, sources };
+        } finally {
+          await rm(temporary, { recursive: true, force: true });
+        }
+      };
+      const done = operation()
+        .catch((error: unknown) => {
+          if (abort.signal.aborted) throw new Error("Overview cancelled");
+          throw error;
+        })
+        .finally(() => {
+          this.searchSummary = undefined;
+        });
+      void done.catch(() => {});
+      this.searchSummary = { requestId: request.requestId, abort, done };
+      return { done };
+    });
+    return done;
+  }
+
+  cancelSearchSummary(requestId?: string): Promise<void> {
+    const id = requestId === undefined ? undefined : parseSearchSummaryRequestId(requestId);
+    return this.exclusive(() => this.stopSearchSummary(id));
+  }
+
+  private async stopSearchSummary(requestId?: string): Promise<void> {
+    const task = this.searchSummary;
+    if (!task || (requestId !== undefined && task.requestId !== requestId)) return;
+    task.abort.abort();
+    await task.done.catch(() => {});
   }
 
   async extractMemory(value: MemoryExtractionRequest): Promise<MemoryExtractionResult> {
@@ -918,6 +1013,13 @@ export class DesktopController {
     );
     const session = this.currentChat;
     const chatSnapshot = (session: ChatSession) => ({
+      workers: [...this.workers]
+        .filter(
+          ([, worker]) =>
+            worker.generation === session.chatGeneration &&
+            worker.directory === this.workspace?.dir,
+        )
+        .map(([id]) => id),
       run: session.chat?.runs()[0] ?? null,
       directory: session.chatDirectory,
       error: session.chatError,
@@ -1048,6 +1150,7 @@ export class DesktopController {
       if (this.active) throw new Error("Finish or stop all runs before switching databases");
       await this.cancelOrchestrationTest();
       await this.stopMemoryExtraction();
+      await this.stopSearchSummary();
       this.orchestration = { ...this.orchestration, connection: "idle", error: null };
       const config = await loadConfig(this.deps.fs, this.env);
       const database = this.storage.openDatabase(path, create);
@@ -1125,6 +1228,7 @@ export class DesktopController {
 
   private async openDirectory(directory: string): Promise<void> {
     await this.stopMemoryExtraction();
+    await this.stopSearchSummary();
     const database = this.requireDatabase();
     if (this.active) throw new Error("Finish or stop all runs before switching folders");
     let dir: string;
@@ -1847,7 +1951,7 @@ export class DesktopController {
             scope: workspace ? session.workerScope : null,
             gitRepository: workspace ? workspace.repo !== null : null,
             providers: Object.keys(config.agents),
-            defaultProvider: config.defaultAgent,
+            defaultProvider: this.orchestration.provider,
             turnTimeout: config.turnTimeout,
             maxParallel: config.maxParallel,
             liveWorkers: this.liveWorkerCount(session),
@@ -1912,8 +2016,8 @@ export class DesktopController {
     const result = this.chatExclusive(session, async () => {
       const workspace = this.requireScope(request.scope, session);
       const config = await loadConfig(this.deps.fs, this.env);
-      const provider = request.provider ?? config.defaultAgent;
-      if (!Object.hasOwn(config.agents, provider))
+      const provider = request.provider ?? this.orchestration.provider;
+      if (!provider || !Object.hasOwn(config.agents, provider))
         throw new Error(
           `Unknown provider '${provider}' (configured: ${Object.keys(config.agents).join(", ")})`,
         );
@@ -2003,6 +2107,7 @@ export class DesktopController {
     return this.exclusive(async () => {
       for (const session of this.chats) session.updatesPaused = true;
       await this.stopMemoryExtraction();
+      await this.stopSearchSummary();
       await this.shutdownBatches();
       this.changed();
     });
@@ -2012,6 +2117,7 @@ export class DesktopController {
     this.closing = true;
     await this.cancelOrchestrationTest();
     await this.stopMemoryExtraction();
+    await this.stopSearchSummary();
     this.poller.stop();
     this.forceClosing ||= force;
     // A force request must not wait behind an earlier graceful shutdown.

@@ -8,12 +8,16 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("desktop:app-update-state", handler);
     return () => ipcRenderer.removeListener("desktop:app-update-state", handler);
   },
+  summarizeSearch: (request: unknown) => ipcRenderer.invoke("desktop:search-summary", request),
+  cancelSearchSummary: (requestId: unknown) =>
+    ipcRenderer.invoke("desktop:search-summary-cancel", requestId),
   extractMemory: (request: unknown) => ipcRenderer.invoke("desktop:memory-extract", request),
   cancelMemoryExtraction: (requestId: unknown) =>
     ipcRenderer.invoke("desktop:memory-cancel", requestId),
   orchestrationChatAction: (request: unknown) =>
     ipcRenderer.invoke("desktop:orchestration-chat", request),
   windowAppearance: () => ipcRenderer.invoke("desktop:window-appearance"),
+  setWindowTheme: (dark: unknown) => ipcRenderer.invoke("desktop:window-theme", dark),
   setTransparent: (enabled: unknown) => ipcRenderer.invoke("desktop:transparent", enabled),
   setBackgroundHitTest: (ignore: unknown) =>
     ipcRenderer.invoke("desktop:background-hit-test", ignore),

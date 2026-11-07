@@ -8,6 +8,7 @@ import {
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
+  nativeTheme,
 } from "electron";
 import updaterPackage from "electron-updater";
 import {
@@ -29,6 +30,8 @@ import {
   parsePromptTemplateId,
   parseSaveConfiguration,
   parseSavePromptTemplate,
+  parseSearchSummary,
+  parseSearchSummaryRequestId,
   parseStart,
   parseUpdateAction,
 } from "../bridge/index.js";
@@ -51,6 +54,10 @@ const startup = new AbortController();
 let updates: DesktopUpdates | undefined;
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
+const windowControlColors = (dark: boolean) => ({
+  color: dark ? "#242b33" : "#ffffff",
+  symbolColor: dark ? "#ffffff" : "#000000",
+});
 const controller = new DesktopController(
   defaultDeps(),
   process.env,
@@ -292,6 +299,11 @@ async function ready(): Promise<void> {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };
   });
+  handle("desktop:window-theme", (value) => {
+    const dark = parseBoolean(value);
+    if (process.platform === "win32" && window && !window.isDestroyed())
+      window.setTitleBarOverlay({ height: 28, ...windowControlColors(dark) });
+  });
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
     await preferences.setTransparent(next);
@@ -365,6 +377,12 @@ async function ready(): Promise<void> {
   handle("desktop:memory-extract", (value) =>
     controller.extractMemory(parseMemoryExtraction(value)),
   );
+  handle("desktop:search-summary", (value) =>
+    controller.summarizeSearch(parseSearchSummary(value)),
+  );
+  handle("desktop:search-summary-cancel", (value) =>
+    controller.cancelSearchSummary(parseSearchSummaryRequestId(value)),
+  );
   handle("desktop:memory-cancel", (value) =>
     controller.cancelMemoryExtraction(parseMemoryRequestId(value)),
   );
@@ -413,7 +431,10 @@ async function ready(): Promise<void> {
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",
-    titleBarOverlay: { height: 28 },
+    titleBarOverlay: {
+      height: 28,
+      ...(process.platform === "win32" ? windowControlColors(nativeTheme.shouldUseDarkColors) : {}),
+    },
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 18, y: 7 } } : {}),
     webPreferences: {
       preload: join(here, "preload.cjs"),
@@ -431,6 +452,7 @@ async function ready(): Promise<void> {
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
+    void controller.cancelSearchSummary().catch(() => {});
     window?.setIgnoreMouseEvents(false);
     controller.setVisibility({ visible: false, worktrees: false });
   });

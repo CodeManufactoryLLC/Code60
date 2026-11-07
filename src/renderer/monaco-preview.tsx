@@ -9,10 +9,21 @@ import { useCssColors } from "./table-appearance.js";
 // Vite emits a local worker: previews never depend on a CDN or language server.
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 
-export default function MonacoPreview({ text, path }: { text: string; path: string }) {
+export type PreviewViewState = monaco.editor.ICodeEditorViewState;
+
+export default function MonacoPreview({
+  text,
+  path,
+  viewState,
+}: {
+  text: string;
+  path: string;
+  viewState?: { current: PreviewViewState | null } | undefined;
+}) {
   const color = useCssColors();
   const container = useRef<HTMLDivElement>(null);
   const editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const retainedView = useRef(viewState);
   useEffect(() => {
     if (!container.current) return;
     const instance = monaco.editor.create(container.current, {
@@ -31,6 +42,7 @@ export default function MonacoPreview({ text, path }: { text: string; path: stri
     });
     editor.current = instance;
     return () => {
+      if (retainedView.current) retainedView.current.current = instance.saveViewState();
       instance.dispose();
       editor.current = null;
     };
@@ -51,20 +63,27 @@ export default function MonacoPreview({ text, path }: { text: string; path: stri
       inherit: true,
       rules: [],
       colors: {
-        "editor.background": hex("--surface"),
+        "editor.background": hex("--chat-neutral"),
         "editor.foreground": hex("--text"),
-        "editorGutter.background": hex("--surface"),
+        "editorGutter.background": hex("--chat-neutral"),
         "editorLineNumber.foreground": hex("--muted"),
         "editorLineNumber.activeForeground": hex("--text"),
-        "editor.lineHighlightBackground": hex("--surface"),
+        "editor.lineHighlightBackground": hex("--chat-neutral"),
         "editor.selectionBackground": hex("--accent-bg"),
         "editor.inactiveSelectionBackground": hex("--accent-bg"),
-        "editorWidget.background": hex("--surface"),
+        "editorWidget.background": hex("--chat-neutral"),
         "editorWidget.foreground": hex("--text"),
         "editorWidget.border": hex("--border"),
         "input.background": hex("--field-fill"),
         "input.foreground": hex("--text"),
         "input.border": hex("--border"),
+        "toolbar.hoverBackground": "#00000000",
+        "toolbar.hoverOutline": "#00000000",
+        "toolbar.activeBackground": "#00000000",
+        "inputOption.hoverBackground": "#00000000",
+        "inputOption.activeBackground": "#00000000",
+        "inputOption.activeBorder": "#00000000",
+        "inputOption.activeForeground": hex("--accent"),
         "scrollbarSlider.background": hex("--scrollbar-thumb"),
         "scrollbarSlider.hoverBackground": hex("--scrollbar-thumb-hover"),
         "scrollbarSlider.activeBackground": hex("--scrollbar-thumb-hover"),
@@ -97,7 +116,8 @@ export default function MonacoPreview({ text, path }: { text: string; path: stri
     const instance = editor.current;
     const model = instance?.getModel();
     if (!instance || !model) return;
-    const view = instance.saveViewState();
+    const view = retainedView.current?.current ?? instance.saveViewState();
+    if (retainedView.current) retainedView.current.current = null;
     model.setValue(text);
     if (view) instance.restoreViewState(view);
   }, [text, path]);

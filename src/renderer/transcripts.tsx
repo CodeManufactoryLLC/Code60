@@ -130,6 +130,14 @@ export function useTranscripts(
   return {
     ...state,
     events,
+    read: async () => {
+      await cache.load(JSON.parse(manifest));
+      return {
+        ...streamed,
+        ...cache.snapshot().events,
+        ...Object.fromEntries(liveIds.map((id) => [id, streamed[id] ?? []])),
+      };
+    },
     retry: () => {
       void cache.load(JSON.parse(manifest), true);
     },

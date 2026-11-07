@@ -38,6 +38,26 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (text.startsWith("Write a concise AI overview answering the search query")) {
+        const data = JSON.parse(text.split("Search data (JSON):\n\n")[1]);
+        const fileIndex = data.results.findIndex((source) => source.kind === "file");
+        steps =
+          data.query === "fixed"
+            ? [{ hang: "cancellable" }]
+            : [
+                { sleep: 200 },
+                {
+                  message:
+                    data.results.length === 0
+                      ? "No project files or saved session evidence is available for this query."
+                      : fileIndex >= 0
+                        ? `Project overview: ${data.results[fileIndex].text} [${fileIndex + 1}]`
+                        : data.results.every((source) => source.kind === "project")
+                          ? "Only the project identity is available. No documentation or saved sessions found."
+                          : "The recorded sessions report that the parser was fixed. [1]",
+                },
+              ];
+      }
       if (options.memoryExtraction && text.startsWith("Code60 Episodic Memory extraction.")) {
         const instructions =
           text.split("Extraction instructions:\n\n")[1]?.split("\n\nReturn only")[0] ?? "";
