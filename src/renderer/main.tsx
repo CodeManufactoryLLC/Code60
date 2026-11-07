@@ -144,8 +144,7 @@ function App() {
           const content = element?.closest(
             ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
-          const next =
-            !nativeControls && !content && !document.querySelector("dialog[open]");
+          const next = !nativeControls && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;
           ignored = next;
           void api.setBackgroundHitTest(next).catch((cause) => setError(message(cause)));

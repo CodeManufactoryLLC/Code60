@@ -729,9 +729,9 @@ test("desktop: navigation sidebar matches the file panel and collapses without l
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
     );
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
     await toggle.click();
     await expect(sidebar).toHaveCSS("width", "220px");
     await expect(sidebar.getByRole("tab", { name: "Chat", exact: true })).toBeVisible();
@@ -1947,11 +1947,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         (theme === "system" &&
           (await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)));
       if (process.platform === "win32") {
-        await expect.poll(() => lastTitleBarOverlay()).toEqual({
-          color: darkTheme ? "#242b33" : "#ffffff",
-          symbolColor: darkTheme ? "#ffffff" : "#000000",
-          height: 28,
-        });
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#242b33" : "#ffffff",
+            symbolColor: darkTheme ? "#ffffff" : "#000000",
+            height: 28,
+          });
       }
       await expectThemeContrast(page);
       await expectNeutralTheme(page);
@@ -1974,20 +1976,24 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         await expect
           .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
           .toBe(alternateSystemTheme);
-        await expect.poll(() => lastTitleBarOverlay()).toEqual({
-          color: darkTheme ? "#ffffff" : "#242b33",
-          symbolColor: darkTheme ? "#000000" : "#ffffff",
-          height: 28,
-        });
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#ffffff" : "#242b33",
+            symbolColor: darkTheme ? "#000000" : "#ffffff",
+            height: 28,
+          });
         await page.emulateMedia({ colorScheme: null });
         await expect
           .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
           .toBe(currentSystemTheme);
-        await expect.poll(() => lastTitleBarOverlay()).toEqual({
-          color: darkTheme ? "#242b33" : "#ffffff",
-          symbolColor: darkTheme ? "#ffffff" : "#000000",
-          height: 28,
-        });
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#242b33" : "#ffffff",
+            symbolColor: darkTheme ? "#ffffff" : "#000000",
+            height: 28,
+          });
       }
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
