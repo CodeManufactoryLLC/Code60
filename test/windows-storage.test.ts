@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +19,7 @@ async function directory() {
 }
 
 async function lock(path: string) {
+  const releaseFile = `${path}.${randomUUID()}.release`;
   const child = spawn(
     "powershell.exe",
     [
@@ -27,12 +29,19 @@ async function lock(path: string) {
       `
     $ErrorActionPreference = 'Stop'
     $file = [System.IO.File]::Open($env:CODE60_LOCK_FILE, 'Open', 'Read', 'Read')
-    try { [Console]::Out.WriteLine('ready'); [Console]::In.ReadLine() | Out-Null }
+    try {
+      [Console]::Out.WriteLine('ready')
+      $deadline = [DateTime]::UtcNow.AddSeconds(10)
+      while (-not [System.IO.File]::Exists($env:CODE60_LOCK_RELEASE)) {
+        if ([DateTime]::UtcNow -gt $deadline) { throw 'Sharing-lock fixture exceeded its deadline' }
+        Start-Sleep -Milliseconds 10
+      }
+    }
     finally { $file.Dispose() }
   `,
     ],
     {
-      env: { ...process.env, CODE60_LOCK_FILE: path },
+      env: { ...process.env, CODE60_LOCK_FILE: path, CODE60_LOCK_RELEASE: releaseFile },
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -53,8 +62,8 @@ async function lock(path: string) {
     throw error;
   }
   return {
-    release() {
-      child.stdin.end("\n");
+    async release() {
+      await writeFile(releaseFile, "release");
     },
     async close() {
       child.kill();
@@ -100,13 +109,38 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       text: "fixture",
       at: new Date().toISOString(),
     });
-    for (const path of [
+    const paths = [
       join(dir, "records", "run-1"),
       join(dir, "records", "run-1", "run.json"),
       join(dir, "records", "run-1", "events.jsonl"),
-    ])
-      expect(() => verifyPrivateSync(path)).not.toThrow();
-  });
+    ];
+    for (const path of paths) expect(() => verifyPrivateSync(path)).not.toThrow();
+    // Independently inspect ownership, including elevated tokens whose default owner is a group.
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `
+      $ErrorActionPreference = 'Stop'
+      $expected = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+      foreach ($path in ($env:CODE60_ACL_PATHS | ConvertFrom-Json)) {
+        $acl = Get-Acl -LiteralPath $path
+        if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $expected) {
+          throw 'Private object is not owned by the current user'
+        }
+      }
+      `,
+      ],
+      {
+        env: { ...process.env, CODE60_ACL_PATHS: JSON.stringify(paths) },
+        windowsHide: true,
+        timeout: 8000,
+        stdio: "pipe",
+      },
+    );
+  }, 10_000);
   it("retries an actual sharing violation and never removes the old destination", async () => {
     const dir = await directory();
     const from = join(dir, "new"),
@@ -119,7 +153,7 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       const replacement = atomicReplace(from, to);
       void replacement.catch(() => {});
       expect(await readFile(to, "utf8")).toBe("old");
-      release = setTimeout(() => handle.release(), 80);
+      release = setTimeout(() => void handle.release(), 80);
       await replacement;
       expect(await readFile(to, "utf8")).toBe("new");
     } finally {

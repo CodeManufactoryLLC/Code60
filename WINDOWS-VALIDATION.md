@@ -44,6 +44,17 @@ for agent readiness before expecting its worktree in a one-time scan.
 The development artifact and timing observations below predate this integration.
 They do not describe a newly built or signed release.
 
+The first PR CI run passed both Linux Node versions, Linux desktop tests and
+Linux installer checks. Native Windows Server x64 exposed creation paths that
+relied on the token's default owner, which can be an administrator group.
+Private creation now specifies the current user explicitly. Record/event and
+preference contents pass over stdin to the helper, which retains checked path
+handles through creation and writing; ACL checks are not relaxed.
+The ownership test also checks the resulting owner independently with Windows
+security APIs. The sharing-lock fixture uses an explicit release file rather
+than PowerShell console input. A helper timeout at the replacement deadline
+preserves an already observed sharing error, but never masks access denial.
+
 ## Initial development checks
 
 Real Windows checks cover transient and persistent file locks, read-only

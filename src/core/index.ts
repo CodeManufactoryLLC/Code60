@@ -3,7 +3,14 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { type AgentMcpServer, type Agents, createAgents } from "../agents/index.js";
 import type { PromptTemplates } from "../contracts/index.js";
 import { createGit, type Git } from "../git/index.js";
-import { environmentValue, privateDirectory, renameFile, userHome } from "../platform/index.js";
+import {
+  appendPrivateFile,
+  environmentValue,
+  privateDirectory,
+  renameFile,
+  userHome,
+  writePrivateFile,
+} from "../platform/index.js";
 import { type Clock, systemClock } from "./clock.js";
 import { type CommandDeps, markInterrupted } from "./commands.js";
 import { type ConfigFs, loadConfig, parseDuration } from "./config.js";
@@ -67,6 +74,8 @@ export function defaultDeps(): CoreDeps {
       ...fsPromises,
       mkdir: async (path: string) => privateDirectory(path),
       rename: renameFile,
+      writeFile: writePrivateFile,
+      appendFile: appendPrivateFile,
     } as unknown as RecordFs & ConfigFs,
     clock: systemClock,
     processes: createProcesses(),

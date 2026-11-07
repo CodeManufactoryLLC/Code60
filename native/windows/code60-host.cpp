@@ -121,8 +121,8 @@ struct Security {
   PSECURITY_DESCRIPTOR descriptor = nullptr;
   SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), nullptr, FALSE};
   Security() {
-    std::wstring sddl = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;" +
-                        sidOf(GetCurrentProcess()) + L")";
+    const std::wstring owner = sidOf(GetCurrentProcess());
+    std::wstring sddl = L"O:" + owner + L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;" + owner + L")";
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
           sddl.c_str(), SDDL_REVISION_1, &descriptor, nullptr)) fail("Cannot establish privacy");
     attributes.lpSecurityDescriptor = descriptor;
@@ -427,14 +427,37 @@ void privateDirectory(const std::wstring& input, bool verify = true) {
   verifyPrivate(path);
 }
 
-void privateFile(const std::wstring& input) {
+void privateFile(const std::wstring& input, bool existing = false, bool contents = false) {
   const std::wstring path = fullPath(input);
   CheckedPath ancestors(parentPath(path), L"");
   Security security;
   Handle file(CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
-    &security.attributes, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    &security.attributes, existing ? OPEN_ALWAYS : CREATE_NEW,
+    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
   if (file.value == INVALID_HANDLE_VALUE) fail("Cannot create private file");
+  BY_HANDLE_FILE_INFORMATION info{};
+  if (!GetFileInformationByHandle(file.value, &info)) fail("Cannot inspect private file");
+  if (GetFileType(file.value) != FILE_TYPE_DISK ||
+      (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)))
+    throw std::runtime_error("Private file is not a regular file");
   verifyPrivate(path);
+  if (contents) {
+    if (existing) {
+      LARGE_INTEGER end{};
+      if (!SetFilePointerEx(file.value, end, nullptr, FILE_END)) fail("Cannot append private file");
+    }
+    std::string buffer(64 * 1024, '\0');
+    for (;;) {
+      DWORD count = 0;
+      if (!ReadFile(GetStdHandle(STD_INPUT_HANDLE), buffer.data(),
+                    static_cast<DWORD>(buffer.size()), &count, nullptr)) {
+        if (GetLastError() == ERROR_BROKEN_PIPE) break;
+        fail("Cannot read private file contents");
+      }
+      if (!count) break;
+      write(file.value, std::string(buffer.data(), count));
+    }
+  }
 }
 
 void atomicRename(const std::wstring& source, const std::wstring& destination) {
@@ -549,6 +572,8 @@ int wmain(int argc, wchar_t** argv) {
     } else if (mode == L"status" || mode == L"stop") ownedStatus(argc, argv, mode == L"stop");
     else if (mode == L"mkdir-private" && argc == 3) privateDirectory(argv[2]);
     else if (mode == L"create-private" && argc == 3) privateFile(argv[2]);
+    else if (mode == L"write-private" && argc == 3) privateFile(argv[2], false, true);
+    else if (mode == L"append-private" && argc == 3) privateFile(argv[2], true, true);
     else if (mode == L"verify-private" && argc == 3) {
       CheckedPath checked(argv[2], L"");
       verifyPrivate(checked.path);

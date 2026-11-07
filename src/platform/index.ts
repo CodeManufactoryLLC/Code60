@@ -12,10 +12,12 @@ export {
 export { canonicalPath, containedPath, samePath } from "./paths.js";
 export { type OwnedProcess, type ProcessExit, spawnOwnedProcess } from "./process.js";
 export {
+  appendPrivateFile,
   atomicReplace,
   createPrivateFileSync,
   privateDirectory,
   privateDirectorySync,
   renameFile,
   verifyPrivateSync,
+  writePrivateFile,
 } from "./storage.js";

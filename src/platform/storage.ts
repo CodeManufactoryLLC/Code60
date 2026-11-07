@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdir, rename } from "node:fs/promises";
+import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { helperOutput, helperSync } from "./helper.js";
 
 export async function privateDirectory(path: string): Promise<void> {
@@ -19,6 +19,25 @@ export function createPrivateFileSync(path: string): void {
 
 export function verifyPrivateSync(path: string): void {
   if (process.platform === "win32") helperSync(["verify-private", path]);
+}
+
+export async function writePrivateFile(
+  path: string,
+  data: string,
+  options: { mode: number; flag: "wx" },
+): Promise<void> {
+  if (process.platform !== "win32") return writeFile(path, data, options);
+  await helperOutput(["write-private", path], 1024, 7_000, undefined, data);
+}
+
+export async function appendPrivateFile(
+  path: string,
+  data: string,
+  options: { mode: number },
+): Promise<void> {
+  if (process.platform === "win32")
+    await helperOutput(["append-private", path], 1024, 7_000, undefined, data);
+  else await appendFile(path, data, options);
 }
 
 export async function renameFile(from: string, to: string, timeoutMs = 500): Promise<void> {
@@ -45,6 +64,8 @@ export async function atomicReplace(
       await replace(from, to, Math.max(1, remaining));
       return;
     } catch (error) {
+      if (busy && (error as NodeJS.ErrnoException).code === "ETIMEDOUT" && Date.now() >= deadline)
+        throw busy;
       if (
         platform !== "win32" ||
         (error as NodeJS.ErrnoException).code !== "EBUSY" ||

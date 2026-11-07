@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import {
   type PollSettingsPatch,
   parseOrchestrationProvider,
   parsePollSettings,
 } from "../bridge/index.js";
-import { atomicReplace, privateDirectory } from "../platform/index.js";
+import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
 
 /** Remembers the selected project database between launches. */
 export interface DesktopPreferences {
@@ -51,7 +51,10 @@ export function filePreferences(file: string): DesktopPreferences & {
       await privateDirectory(dirname(file));
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
-        await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600, flag: "wx" });
+        await writePrivateFile(temporary, `${JSON.stringify(value)}\n`, {
+          mode: 0o600,
+          flag: "wx",
+        });
         await atomicReplace(temporary, file);
       } finally {
         await rm(temporary, { force: true });

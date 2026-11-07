@@ -31,9 +31,10 @@ export function helperOutput(
   maxBuffer = 2 * 1024 * 1024,
   timeoutMs = 7_000,
   signal?: AbortSignal,
+  input?: string,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       windowsHelper(),
       [...args],
       {
@@ -44,11 +45,27 @@ export function helperOutput(
         encoding: "buffer",
       },
       (error, stdout, stderr) => {
-        if (error)
-          reject(nativeError(stderr.toString("utf8").trim() || "Windows helper operation failed"));
-        else resolve(stdout);
+        if (error) {
+          if (
+            error.killed &&
+            !signal?.aborted &&
+            error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+          )
+            reject(
+              Object.assign(new Error("Windows helper operation timed out"), { code: "ETIMEDOUT" }),
+            );
+          else
+            reject(
+              nativeError(stderr.toString("utf8").trim() || "Windows helper operation failed"),
+            );
+        } else resolve(stdout);
       },
     );
+    if (input !== undefined) {
+      // Rejected operations can close stdin before the payload has finished writing.
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(input);
+    }
   });
 }
 
