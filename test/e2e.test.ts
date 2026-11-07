@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMcpGateway } from "../src/desktop/mcp-gateway.js";
 import { readMcpTool } from "../src/desktop/mcp-tables.js";
+import { nativeIdentity } from "../src/platform/index.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Inside node_modules so the compiled CLI resolves the project's dependencies.
@@ -274,7 +275,15 @@ describe("code60 (spawned)", () => {
       turns: 1,
       lastStopReason: "end_turn",
     });
-    expect(alive(record.agentPid)).toBe(false);
+    if (process.platform === "win32") {
+      // A busy Windows host can reuse the PID after verified job cleanup.
+      expect(record.agentIdentity?.createdAt).toEqual(expect.any(String));
+      expect((await nativeIdentity(record.agentPid))?.createdAt).not.toBe(
+        record.agentIdentity.createdAt,
+      );
+    } else {
+      expect(alive(record.agentPid)).toBe(false);
+    }
 
     const list = await cli(["list", "--json"]);
     expect(JSON.parse(list.stdout).runs.find((run: { id: string }) => run.id === id)).toMatchObject(
