@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { CoreDeps } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import { filePreferences } from "../src/desktop/preferences.js";
-import { openProjectDatabase } from "../src/desktop/projects.js";
+import { openProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses } from "./fakes.js";
 
 const directories: string[] = [];
@@ -131,54 +131,57 @@ it("a failed addition remains disabled after abandonment", async () => {
   expect(controller.snapshot().orchestration.provider).toBe("claude");
 });
 
-it("enforces enabled membership in manual dispatch, saved configurations and authenticated worker tools", async () => {
-  const { dir, controller, agents, identity, attempt } = await fixture();
-  await controller.beginAgentSetup({ mode: "primary" });
-  await attempt("claude");
-  await controller.finishAgentSetup(identity());
-  await controller.connect(join(dir, "projects.sqlite"), true);
-  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-  await controller.open(dir);
-  const request = { agents: ["codex"], allow: [], allowAll: false };
-  await expect(controller.start(request)).rejects.toThrow("unknown agent");
-  await expect(
-    controller.saveConfiguration({ name: "Unverified", settings: request }),
-  ).rejects.toThrow("not enabled");
-  expect(controller.snapshot().runs).toEqual([]);
-  const server = agents.specs.find((spec) => spec.mcpServers)?.mcpServers?.[0];
-  if (!server) throw new Error("Missing chat gateway");
-  const env = Object.fromEntries(server.env.map((item) => [item.name, item.value]));
-  const call = async (name: string, args = {}) => {
-    const response = await fetch(env.CODE60_MCP_GATEWAY_URL as string, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.CODE60_MCP_GATEWAY_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ name, arguments: args }),
+it.runIf(sqliteAvailable())(
+  "enforces enabled membership in manual dispatch, saved configurations and authenticated worker tools",
+  async () => {
+    const { dir, controller, agents, identity, attempt } = await fixture();
+    await controller.beginAgentSetup({ mode: "primary" });
+    await attempt("claude");
+    await controller.finishAgentSetup(identity());
+    await controller.connect(join(dir, "projects.sqlite"), true);
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.open(dir);
+    const request = { agents: ["codex"], allow: [], allowAll: false };
+    await expect(controller.start(request)).rejects.toThrow("unknown agent");
+    await expect(
+      controller.saveConfiguration({ name: "Unverified", settings: request }),
+    ).rejects.toThrow("not enabled");
+    expect(controller.snapshot().runs).toEqual([]);
+    const server = agents.specs.find((spec) => spec.mcpServers)?.mcpServers?.[0];
+    if (!server) throw new Error("Missing chat gateway");
+    const env = Object.fromEntries(server.env.map((item) => [item.name, item.value]));
+    const call = async (name: string, args = {}) => {
+      const response = await fetch(env.CODE60_MCP_GATEWAY_URL as string, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.CODE60_MCP_GATEWAY_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name, arguments: args }),
+      });
+      return { status: response.status, body: await response.json() };
+    };
+    const context = await call("code60_get_context");
+    expect(context.body.result.providers).toEqual(["claude"]);
+    const denied = await call("code60_dispatch_agent", {
+      scope: context.body.result.scope,
+      requestId: "disabled",
+      provider: "codex",
+      prompt: "No dispatch",
     });
-    return { status: response.status, body: await response.json() };
-  };
-  const context = await call("code60_get_context");
-  expect(context.body.result.providers).toEqual(["claude"]);
-  const denied = await call("code60_dispatch_agent", {
-    scope: context.body.result.scope,
-    requestId: "disabled",
-    provider: "codex",
-    prompt: "No dispatch",
-  });
-  expect(denied.status).toBe(400);
-  expect(denied.body.error).toContain("not enabled");
-  expect(controller.snapshot().runs).toEqual([]);
-  const chatId = controller.snapshot().chat.run?.id;
-  await controller.beginAgentSetup({ mode: "add" });
-  await attempt("codex");
-  await controller.finishAgentSetup(identity());
-  expect(controller.snapshot().chat.run?.id).toBe(chatId);
-  expect((await call("code60_get_context")).body.result.providers).toEqual(["claude", "codex"]);
-  agents.script = () => "hang";
-  await controller.orchestrationChatAction({ type: "send", id: chatId as string, text: "work" });
-  await expect(controller.beginAgentSetup({ mode: "primary" })).rejects.toThrow(
-    "active orchestration work",
-  );
-});
+    expect(denied.status).toBe(400);
+    expect(denied.body.error).toContain("not enabled");
+    expect(controller.snapshot().runs).toEqual([]);
+    const chatId = controller.snapshot().chat.run?.id;
+    await controller.beginAgentSetup({ mode: "add" });
+    await attempt("codex");
+    await controller.finishAgentSetup(identity());
+    expect(controller.snapshot().chat.run?.id).toBe(chatId);
+    expect((await call("code60_get_context")).body.result.providers).toEqual(["claude", "codex"]);
+    agents.script = () => "hang";
+    await controller.orchestrationChatAction({ type: "send", id: chatId as string, text: "work" });
+    await expect(controller.beginAgentSetup({ mode: "primary" })).rejects.toThrow(
+      "active orchestration work",
+    );
+  },
+);
