@@ -23,9 +23,9 @@ import type {
 } from "../bridge/index.js";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
-import { ChatDock, type OpenChat } from "./chat-dock.js";
 import { ChatPage } from "./chat-page.js";
 import { newestMessage } from "./chat-presentation.js";
+import type { OpenChat } from "./chats.js";
 import { agentCount, ConfigurationsTable, providers } from "./configurations.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
@@ -83,6 +83,7 @@ import { initialTabs, updateTabs } from "./tabs.js";
 import { parseChartTick } from "./ticker.js";
 import { useTranscripts } from "./transcripts.js";
 import { UpdateIndicator, UpdatesSection, useUpdateNotice, useUpdates } from "./updates.js";
+import { WorkerChat } from "./worker-chat.js";
 import { WorktreesPage } from "./worktrees.js";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
@@ -205,14 +206,6 @@ function App() {
   }>();
   const [pollMenu, setPollMenu] = useState<{ id: string; bounds: Rectangle }>();
   const [confirmation, setConfirmation] = useState<{ launchId: string; count: number }>();
-  const [chatRequest, setChatRequest] = useState<OpenChat>();
-  const openChat = (id: string, compose = false, eventIndex?: number) =>
-    setChatRequest((current) => ({
-      id,
-      serial: (current?.serial ?? 0) + 1,
-      compose,
-      ...(eventIndex === undefined ? {} : { eventIndex }),
-    }));
   const [changes, setChanges] = useState<string>();
   const [menu, setMenu] = useState<{
     id: string;
@@ -284,6 +277,40 @@ function App() {
   const database = snapshot?.database ?? null;
   const directory = snapshot?.directory;
   const workspace = `${database}:${directory}`;
+  const [workerSelection, setWorkerSelection] = useState<{ workspace: string; id: string }>();
+  const [visitedWorkers, setVisitedWorkers] = useState<{ workspace: string; ids: string[] }>({
+    workspace: "",
+    ids: [],
+  });
+  const workerScope = workspace;
+  if (workerSelection && workerSelection.workspace !== workerScope) setWorkerSelection(undefined);
+  if (visitedWorkers.workspace !== workerScope)
+    setVisitedWorkers({ workspace: workerScope, ids: [] });
+  const workerId =
+    workerSelection?.workspace === workerScope &&
+    snapshot?.runs.some(({ record }) => record.id === workerSelection.id)
+      ? workerSelection.id
+      : undefined;
+  const selectWorker = (id: string | undefined) => {
+    setWorkerSelection(id ? { workspace: workerScope, id } : undefined);
+    if (id) setSelected(id);
+    if (id)
+      setVisitedWorkers((current) => ({
+        workspace: workerScope,
+        ids: [...new Set([...(current.workspace === workerScope ? current.ids : []), id])],
+      }));
+  };
+  const [chatRequest, setChatRequest] = useState<OpenChat>();
+  const openChat = (id: string, compose = false, eventIndex?: number) => {
+    selectWorker(id);
+    setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    setChatRequest((current) => ({
+      id,
+      serial: (current?.serial ?? 0) + 1,
+      compose,
+      ...(eventIndex === undefined ? {} : { eventIndex }),
+    }));
+  };
   const [fileTabs, setFileTabs] = useState(() => emptyFileTabs(workspace));
   if (fileTabs.workspace !== workspace) setFileTabs(emptyFileTabs(workspace));
   const currentFileTabs = fileTabs.workspace === workspace ? fileTabs : emptyFileTabs(workspace);
@@ -308,7 +335,9 @@ function App() {
     api,
     workspace,
     !!directory && !splash,
-    snapshot?.runs,
+    tabs.active === "chat"
+      ? snapshot?.runs.filter(({ record }) => record.id === workerId)
+      : snapshot?.runs,
     snapshot?.liveIds,
     state?.events,
   );
@@ -908,10 +937,13 @@ function App() {
             tabs={tabs}
             api={api}
             chats={snapshot?.chats ?? []}
-            selectedId={snapshot?.chat.run?.id}
+            selectedId={workerId ?? snapshot?.chat.run?.id}
+            navigationSerial={chatRequest?.serial}
+            runs={snapshot?.runs ?? []}
+            onWorkerSelect={selectWorker}
             database={database}
             version={snapshot?.versions.code60}
-            eventsByRun={state?.chatEventsByRun ?? {}}
+            eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
             projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
@@ -938,18 +970,41 @@ function App() {
                   key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
                   api={api}
                   chat={chat}
-                  hidden={chat?.directory !== snapshot?.chat.directory}
+                  hidden={!!workerId || chat?.directory !== snapshot?.chat.directory}
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
                   runs={snapshot?.runs ?? []}
                   active={
                     !splash &&
                     tabs.active === "chat" &&
+                    !workerId &&
                     chat?.directory === snapshot?.chat.directory
                   }
                   onDatabase={() => showPicker("database")}
                 />
               ))}
+              {(visitedWorkers.workspace === workerScope ? visitedWorkers.ids : []).map((id) => {
+                const run = snapshot?.runs.find(({ record }) => record.id === id);
+                if (!run) return null;
+                return (
+                  <WorkerChat
+                    key={`${workerScope}:${id}`}
+                    api={api}
+                    run={run}
+                    orchestrated={snapshot?.workers.includes(id) ?? false}
+                    events={transcripts.events[id] ?? []}
+                    active={!splash && tabs.active === "chat" && workerId === id}
+                    request={chatRequest}
+                    loading={
+                      !snapshot?.liveIds.includes(id) &&
+                      transcripts.events[id] === undefined &&
+                      !transcripts.errors[id]
+                    }
+                    historyError={transcripts.errors[id]}
+                    onRetry={transcripts.retry}
+                  />
+                );
+              })}
             </div>
             <FilePanel
               key={workspace}
@@ -1382,13 +1437,15 @@ function App() {
               polling={snapshot.polling}
               api={api}
               messageScope={
-                tabs.active === "chat"
-                  ? "selected orchestration conversation"
-                  : "current project sessions"
+                tabs.active === "chat" ? "selected conversation" : "current project sessions"
               }
               messageAt={
                 tabs.active === "chat"
-                  ? newestMessage(state?.chatEvents ?? [])
+                  ? workerId && (transcripts.errors[workerId] || !transcripts.events[workerId])
+                    ? null
+                    : newestMessage(
+                        workerId ? (transcripts.events[workerId] ?? []) : (state?.chatEvents ?? []),
+                      )
                   : transcripts.pending || Object.keys(transcripts.errors).length
                     ? null
                     : newestMessage(
@@ -1400,16 +1457,18 @@ function App() {
             />
           )}
           <UpdateIndicator state={updates.state} onOpen={openUpdates} />
-          {directory && snapshot && state && (
-            <ChatDock
-              key={`${database}:${directory}`}
-              api={api}
-              snapshot={snapshot}
-              events={state.events}
-              request={chatRequest}
-              active
-              onSelect={setSelected}
-            />
+          {snapshot?.runs.some((run) => run.view?.pending.length) && (
+            <button
+              type="button"
+              className="footer-note"
+              onClick={() => {
+                const waiting = snapshot.runs.find((run) => run.view?.pending.length);
+                if (waiting) openChat(waiting.record.id);
+              }}
+            >
+              {snapshot.runs.reduce((sum, run) => sum + (run.view?.pending.length ?? 0), 0)}{" "}
+              approvals waiting
+            </button>
           )}
         </footer>
       )}

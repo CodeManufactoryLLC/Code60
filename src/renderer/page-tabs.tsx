@@ -1,7 +1,12 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { DesktopApi, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
+import type {
+  DesktopApi,
+  DesktopRun,
+  OrchestrationChat,
+  OrchestrationChatAction,
+} from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
-import { ChatSidebar } from "./chat-page.js";
+import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon, type IconName } from "./icons.js";
 import { pathLabel } from "./path-label.js";
 import type { PageId, PageTabs } from "./tabs.js";
@@ -49,7 +54,10 @@ export function PageTabBar({
   projectDisabled,
   api,
   chats,
+  runs,
+  onWorkerSelect,
   selectedId,
+  navigationSerial,
   database,
   version,
   eventsByRun,
@@ -67,7 +75,10 @@ export function PageTabBar({
   projectDisabled: boolean;
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
+  runs: readonly DesktopRun[];
+  onWorkerSelect(id: string | undefined): void;
   selectedId: string | undefined;
+  navigationSerial: number | undefined;
   database: string | null;
   version: string | undefined;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
@@ -138,7 +149,10 @@ export function PageTabBar({
           onSelect={onSelect}
           api={api}
           chats={chats}
+          runs={runs}
+          onWorkerSelect={onWorkerSelect}
           selectedId={selectedId}
+          navigationSerial={navigationSerial}
           database={database}
           eventsByRun={eventsByRun}
         />
@@ -170,7 +184,10 @@ function PageTabList({
   onSelect,
   api,
   chats,
+  runs,
+  onWorkerSelect,
   selectedId,
+  navigationSerial,
   database,
   eventsByRun,
 }: {
@@ -180,7 +197,10 @@ function PageTabList({
   onSelect(id: PageId): void;
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
+  runs: readonly DesktopRun[];
+  onWorkerSelect(id: string | undefined): void;
   selectedId: string | undefined;
+  navigationSerial: number | undefined;
   database: string | null;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
 }) {
@@ -195,6 +215,7 @@ function PageTabList({
     onSelect("chat");
     try {
       await api.orchestrationChatAction(request);
+      onWorkerSelect(undefined);
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -231,6 +252,7 @@ function PageTabList({
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem("code60.tablesExpanded") === "true",
   );
+  const navigationFrame = useRef<number | undefined>(undefined);
   const experimentActive = experimentPages.includes(tabs.active);
   const tableActive = tablePages.includes(tabs.active);
   useLayoutEffect(() => {
@@ -238,10 +260,13 @@ function PageTabList({
     else if (experimentPages.includes(tabs.active)) setExperimentsExpanded(true);
     else return;
     // Expansion and modal focus restoration must finish before focusing the revealed page.
-    const frame = requestAnimationFrame(() =>
-      document.getElementById(`tab-${tabs.active}`)?.focus(),
-    );
-    return () => cancelAnimationFrame(frame);
+    navigationFrame.current = requestAnimationFrame(() => {
+      navigationFrame.current = undefined;
+      document.getElementById(`tab-${tabs.active}`)?.focus();
+    });
+    return () => {
+      if (navigationFrame.current !== undefined) cancelAnimationFrame(navigationFrame.current);
+    };
   }, [tabs]);
   useEffect(() => {
     localStorage.setItem("code60.tablesExpanded", String(expanded));
@@ -267,10 +292,15 @@ function PageTabList({
     ...(open && expanded ? tables : []),
   ];
   function navigate(event: KeyboardEvent<HTMLButtonElement>, id: (typeof visible)[number]) {
+    // A delayed reveal must not undo a subsequent keyboard navigation.
+    if (navigationFrame.current !== undefined) {
+      cancelAnimationFrame(navigationFrame.current);
+      navigationFrame.current = undefined;
+    }
     if (id === "experiments" && event.key === "ArrowUp" && open && chatExpanded) {
-      const children = document.querySelectorAll<HTMLButtonElement>(
-        "#chat-pages button:not(:disabled)",
-      );
+      const children = [
+        ...document.querySelectorAll<HTMLButtonElement>("#chat-pages button:not(:disabled)"),
+      ].filter((button) => !button.closest("[hidden]"));
       if (children.length) {
         event.preventDefault();
         children[children.length - 1]?.focus();
@@ -278,9 +308,12 @@ function PageTabList({
       }
     }
     if (id === "chat" && event.key === "ArrowDown" && open && chatExpanded) {
-      event.preventDefault();
-      document.querySelector<HTMLButtonElement>("#chat-pages button:not(:disabled)")?.focus();
-      return;
+      const child = document.querySelector<HTMLButtonElement>("#chat-pages button:not(:disabled)");
+      if (child) {
+        event.preventDefault();
+        child.focus();
+        return;
+      }
     }
     if (id === "chat" && event.key === "ArrowLeft") {
       event.preventDefault();
@@ -444,7 +477,7 @@ function PageTabList({
         onKeyDown={(event) => {
           const buttons = [
             ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-          ];
+          ].filter((button) => !button.closest("[hidden]"));
           const index = buttons.indexOf(event.target as HTMLButtonElement);
           if (index < 0) return;
           if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
@@ -478,12 +511,20 @@ function PageTabList({
       >
         <ChatSidebar
           chats={chats}
+          runs={runs}
           selectedId={selectedId}
+          navigationSerial={navigationSerial}
           database={database}
           eventsByRun={eventsByRun}
           open={tabs.active === "chat"}
           pending={chatPending}
-          onSelect={(id) => void chatAction({ type: "select", id })}
+          onSelect={(id) => {
+            if (chats.some((chat) => chat.run?.id === id)) void chatAction({ type: "select", id });
+            else {
+              onWorkerSelect(id);
+              onSelect("chat");
+            }
+          }}
         />
       </div>
       <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">

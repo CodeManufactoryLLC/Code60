@@ -1,53 +1,68 @@
-export interface ChatEntry {
+import type { DesktopRun, OrchestrationChat } from "../bridge/index.js";
+
+export interface Conversation {
   id: string;
-  expanded: boolean;
+  label: string;
+  role: "orchestrator" | "worker";
+  parentId?: string;
 }
 
-export interface Chats {
-  entries: ChatEntry[];
-  seen: string[];
+/** Ownership comes only from the current chat snapshots, never agent names or liveness. */
+export function conversations(
+  chats: readonly OrchestrationChat[],
+  runs: readonly DesktopRun[],
+): Conversation[] {
+  const result: Conversation[] = [];
+  const owned = new Set<string>();
+  const available = new Map(runs.map((run) => [run.record.id, run]));
+  for (const [index, chat] of chats.entries()) {
+    if (!chat.run) continue;
+    result.push({ id: chat.run.id, label: `Chat ${index + 1}`, role: "orchestrator" });
+    for (const id of chat.workers ?? []) {
+      if (!available.has(id) || owned.has(id)) continue;
+      const run = available.get(id);
+      if (!run) continue;
+      owned.add(id);
+      result.push({
+        id,
+        label: `${run.record.agent} / ${id.slice(-6)}`,
+        role: "worker",
+        parentId: chat.run.id,
+      });
+    }
+  }
+  for (const { record } of runs) {
+    if (owned.has(record.id)) continue;
+    result.push({
+      id: record.id,
+      label: `${record.agent} / ${record.id.slice(-6)}`,
+      role: "worker",
+    });
+  }
+  return result;
 }
 
-export const emptyChats: Chats = { entries: [], seen: [] };
+export interface OpenChat {
+  id: string;
+  serial: number;
+  compose?: boolean;
+  eventIndex?: number;
+}
 
-export type ChatAction =
-  | { type: "sync"; ids: string[]; live: string[] }
-  | { type: "open" | "minimize" | "close"; id: string }
-  | { type: "move"; id: string; to: number };
-
-export function updateChats(state: Chats, action: ChatAction): Chats {
-  if (action.type === "sync") {
-    const entries = state.entries.filter((entry) => action.ids.includes(entry.id));
-    const added = action.live.filter((id) => !state.seen.includes(id) && action.ids.includes(id));
-    if (!added.length && entries.length === state.entries.length) return state;
-    return {
-      entries: [...entries, ...added.map((id) => ({ id, expanded: false }))],
-      seen: [...new Set([...state.seen, ...added])],
-    };
+/** Preserve manual collapse until the owner gains a new child. */
+export function reconcileDisclosure(
+  previous: Readonly<Record<string, readonly string[]>>,
+  next: readonly Conversation[],
+  collapsed: ReadonlySet<string>,
+): Set<string> {
+  const result = new Set(collapsed);
+  const parents = new Set(
+    next.filter((entry) => entry.role === "orchestrator").map(({ id }) => id),
+  );
+  for (const id of result) if (!parents.has(id)) result.delete(id);
+  for (const entry of next) {
+    if (entry.parentId && !previous[entry.parentId]?.includes(entry.id))
+      result.delete(entry.parentId);
   }
-  if (action.type === "move") {
-    const from = state.entries.findIndex((entry) => entry.id === action.id);
-    if (from < 0 || !Number.isInteger(action.to)) return state;
-    const to = Math.max(0, Math.min(state.entries.length - 1, action.to));
-    if (from === to) return state;
-    const entries = [...state.entries];
-    const [entry] = entries.splice(from, 1);
-    if (entry) entries.splice(to, 0, entry);
-    return { ...state, entries };
-  }
-  const existing = state.entries.find((entry) => entry.id === action.id);
-  if (action.type === "close") {
-    return existing
-      ? { ...state, entries: state.entries.filter((entry) => entry.id !== action.id) }
-      : state;
-  }
-  if (action.type === "minimize" && !existing) return state;
-  const expanded = action.type === "open";
-  if (existing?.expanded === expanded) return state;
-  return {
-    entries: existing
-      ? state.entries.map((entry) => (entry.id === action.id ? { ...entry, expanded } : entry))
-      : [...state.entries, { id: action.id, expanded }],
-    seen: state.seen.includes(action.id) ? state.seen : [...state.seen, action.id],
-  };
+  return result;
 }

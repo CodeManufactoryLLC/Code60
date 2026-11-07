@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   DesktopApi,
   DesktopRun,
@@ -6,11 +6,10 @@ import type {
   OrchestrationChatAction,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
-import { delegatedActivity, sessionStatus, turnTimings } from "./chat-presentation.js";
+import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { type Block, statusSpec, transcript } from "./state.js";
-import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
 function ChatMessage({ block }: { block: Block }) {
   const speaker =
@@ -41,94 +40,6 @@ function ChatMessage({ block }: { block: Block }) {
       )}
       {block.detail && <pre>{block.detail}</pre>}
     </article>
-  );
-}
-
-export function ChatSidebar({
-  chats,
-  selectedId,
-  database,
-  eventsByRun,
-  open,
-  pending,
-  onSelect,
-}: {
-  chats: readonly OrchestrationChat[];
-  selectedId: string | undefined;
-  database: string | null;
-  eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
-  open: boolean;
-  pending: boolean;
-  onSelect(id: string): void;
-}) {
-  const markers = useRef(new Map<string, number>());
-  const replies = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(eventsByRun).map(([id, events]) => [id, replyTurns(events)]),
-      ),
-    [eventsByRun],
-  );
-  useLayoutEffect(() => {
-    if (!database || !open || !selectedId) return;
-    const turns = replies[selectedId] ?? [];
-    const key = readMarkerKey(database, selectedId);
-    const read = turns.reduce(
-      (latest, turn) => Math.max(latest, turn),
-      markers.current.get(key) ?? loadReadMarker(sessionStorage, key),
-    );
-    markers.current.set(key, read);
-    try {
-      sessionStorage.setItem(key, String(read));
-    } catch {
-      // Keep in-memory read state when browser storage is unavailable.
-    }
-  }, [database, open, selectedId, replies]);
-  return (
-    <nav className="chat-sidebar" aria-label="Orchestrator chats">
-      <div className="chat-sidebar-list">
-        {chats.map(({ run, error }, index) => {
-          if (!run) return null;
-          const key = readMarkerKey(database ?? "", run.id);
-          const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
-          const unread =
-            open && run.id === selectedId ? 0 : unreadCount(replies[run.id] ?? [], read);
-          const unreadLabel =
-            unread > 0 ? `${unread} unread ${unread === 1 ? "reply" : "replies"}` : "";
-          const description = [error || sessionStatus(run).label, unreadLabel]
-            .filter(Boolean)
-            .join(". ");
-          return (
-            <button
-              key={run.id}
-              type="button"
-              className="chat-sidebar-entry"
-              aria-label={`Chat ${index + 1}`}
-              aria-description={description}
-              aria-current={run.id === selectedId ? "true" : undefined}
-              disabled={pending}
-              onClick={() => onSelect(run.id)}
-              title={description}
-            >
-              {run.stopping || ["queued", "running", "waiting"].includes(run.status) ? (
-                <span className="chat-loader" aria-hidden="true" />
-              ) : null}
-              <span className="chat-sidebar-label">Chat {index + 1}</span>
-              {unread > 0 && (
-                <span className="chat-unread" role="img" aria-label={unreadLabel}>
-                  <Icon name="chat" />
-                  <span>{unread}</span>
-                </span>
-              )}
-              {(error || sessionStatus(run).icon !== "chat") && (
-                <Icon name={error ? "warning--alt--filled" : sessionStatus(run).icon} />
-              )}
-              <span className="sr-only">{error || sessionStatus(run).label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
   );
 }
 
