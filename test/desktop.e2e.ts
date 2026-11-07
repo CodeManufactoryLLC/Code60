@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -63,6 +63,21 @@ async function expectGridHeaders(grid: Locator, expected: string[]) {
 }
 
 async function selectSidebarPage(page: Page, name: string) {
+  if (name === "Files") {
+    await selectSidebarPage(page, "Chat");
+    const toggle = page
+      .locator("#panel-chat .orchestration-chat-page:visible")
+      .getByRole("button", { name: "File Explorer", exact: true });
+    if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+    return;
+  }
+  if (
+    name === "Chat" &&
+    (await page.locator("#tab-chat").getAttribute("aria-selected")) === "true"
+  ) {
+    await page.locator("#tab-chat").focus();
+    return;
+  }
   if (["Configurations", "Events", "Messages", "Polling", "Sessions", "Worktrees"].includes(name)) {
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
@@ -88,6 +103,35 @@ async function expectSplashLayout(page: Page) {
     dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
   );
   await expect(page.locator(".splash-card, .project-preview")).toHaveCount(0);
+}
+
+async function expectMessageCopy(control: Locator) {
+  await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(control).toHaveCSS("border-top-width", "0px");
+  await expect(control).toHaveCSS("box-shadow", "none");
+  await expect(control.locator("svg")).toHaveCSS("width", "12px");
+  await expect(control.locator("svg")).toHaveCSS("height", "12px");
+  await expect(control).toHaveCSS("width", "24px");
+  await expect(control).toHaveCSS("height", "24px");
+  await control.hover();
+  await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(control).toHaveCSS("border-top-width", "0px");
+}
+
+async function expectChatBorder(composer: Locator, color = "var(--focus-line)") {
+  const expected = await composer.evaluate((_, color) => {
+    const probe = document.createElement("span");
+    probe.style.color = color;
+    document.body.append(probe);
+    const result = getComputedStyle(probe).color;
+    probe.remove();
+    return result;
+  }, color);
+  for (const side of ["top", "right", "bottom", "left"])
+    await expect(composer).toHaveCSS(`border-${side}-color`, expected);
+  await expect(composer).toHaveCSS("border-top-width", "1px");
+  await expect(composer).toHaveCSS("outline-width", "0px");
+  await expect(composer).toHaveCSS("box-shadow", "none");
 }
 
 async function expectIndustrialSurfaces(page: Page) {
@@ -146,7 +190,7 @@ async function expectIndustrialSurfaces(page: Page) {
               ? 0
               : grouped
                 ? 28
-                : element.matches("[role='tab']")
+                : element.matches("[role='tab'], .message-copy button, .sidebar button")
                   ? 24
                   : 36,
           };
@@ -158,7 +202,7 @@ async function expectIndustrialSurfaces(page: Page) {
     if (surface.chamfered) expect(surface.corner).toBe("superellipse(0)");
     if (!surface.focused && !surface.overlay && !surface.baseline)
       expect(surface.shadow).toBe("none");
-    if ((surface.disabled && !surface.selectedProject) || surface.emptyProject)
+    if (surface.disabled && !surface.selectedProject && !surface.emptyProject)
       expect(surface.image).toContain("repeating-linear-gradient");
     else expect(surface.image).toBe("none");
     expect(surface.animation).toBe("none");
@@ -303,8 +347,12 @@ async function expectNeutralTheme(page: Page) {
 }
 
 async function expectTabAppearance(page: Page) {
-  // Hovering an inactive tab gives it the active text color, so measure with the pointer clear.
-  await page.mouse.move(1, 1);
+  // The native drag strip can retain stale hover. Clear into the non-draggable footer instead.
+  await page.bringToFront();
+  const corner = await page.evaluate(() => ({ x: innerWidth - 2, y: innerHeight - 2 }));
+  const clearPointer = () => page.mouse.move(corner.x, corner.y);
+  await clearPointer();
+  await expect(page.locator(".sidebar button:hover")).toHaveCount(0);
   const appearance = await page.evaluate(() => {
     const active = document.querySelector<HTMLElement>("[role='tab'][aria-selected='true']");
     const inactive = document.querySelector<HTMLElement>("[role='tab'][aria-selected='false']");
@@ -326,17 +374,28 @@ async function expectTabAppearance(page: Page) {
         probe.remove();
         return color;
       })(),
-      accentBackground: (() => {
-        const probe = document.createElement("span");
-        probe.style.background = "var(--accent-bg)";
-        document.body.append(probe);
-        const color = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return color;
-      })(),
+      sidebarBackground: getComputedStyle(bar).backgroundColor,
+      buttonBackgrounds: [...bar.querySelectorAll("button")].map((button) => ({
+        label: button.getAttribute("aria-label") ?? button.textContent,
+        background: getComputedStyle(button).backgroundColor,
+      })),
       activeRight: active.getBoundingClientRect().right,
       panelLeft: panel.getBoundingClientRect().left,
       barTop: bar.getBoundingClientRect().top,
+      barLeft: bar.getBoundingClientRect().left,
+      barBottom: bar.getBoundingClientRect().bottom,
+      versionBottom: (() => {
+        const version = document.querySelector(".sidebar-version");
+        if (!version) throw new Error("Missing sidebar version");
+        const range = document.createRange();
+        range.selectNodeContents(version);
+        return range.getBoundingClientRect().bottom;
+      })(),
+      timestampTop: document.querySelector(".poll-timestamp")?.getBoundingClientRect().top,
+      footerTop: document.querySelector(".app-footer")?.getBoundingClientRect().top,
+      dragBottom: document.querySelector(".window-drag-strip")?.getBoundingClientRect().bottom,
+      dragBackground: getComputedStyle(document.querySelector(".window-drag-strip") as Element)
+        .backgroundImage,
       panelTop: panel.getBoundingClientRect().top,
       barWidth: bar.getBoundingClientRect().width,
       tabTops: [...bar.querySelectorAll("[role='tab']")]
@@ -345,13 +404,23 @@ async function expectTabAppearance(page: Page) {
       inactiveBackground: getComputedStyle(inactive).backgroundColor,
     };
   });
-  // Sidebar items carry no side rule; the selected tab has a neutral fill.
-  expect(appearance.leftBorders).toEqual(["1px", "1px", "1px"]);
-  expect(appearance.activeBackground).toBe(appearance.accentBackground);
+  // Every resting control, including selection and the project card, matches the sidebar.
+  expect(appearance.leftBorders).toEqual(["1px", "1px", "0px"]);
+  expect(appearance.activeBackground).toBe(appearance.sidebarBackground);
+  for (const button of appearance.buttonBackgrounds)
+    expect(button.background, button.label ?? "Sidebar button").toBe(appearance.sidebarBackground);
   expect(appearance.activeBackground).not.toBe(appearance.hoverBackground);
   expect(appearance.barWidth).toBe(220);
   expect(appearance.activeRight).toBeLessThan(appearance.panelLeft);
   expect(appearance.barTop).toBe(appearance.panelTop);
+  expect(appearance.barTop).toBe(appearance.dragBottom);
+  expect(appearance.barLeft).toBe(0);
+  expect(appearance.barBottom).toBe(appearance.footerTop);
+  // The version's text stays clear of the footer's floating message-age row.
+  expect(appearance.versionBottom).toBeLessThanOrEqual(appearance.timestampTop ?? 0);
+  expect(appearance.dragBackground).toContain(appearance.sidebarBackground);
+  await expect(page.locator(".sidebar")).toHaveCSS("border-radius", "0px");
+  await expect(page.locator("#tab-chat")).toHaveCSS("padding-top", "4px");
   expect(appearance.tabTops.every((top, i, tops) => i === 0 || top > (tops[i - 1] ?? 0))).toBe(
     true,
   );
@@ -359,24 +428,30 @@ async function expectTabAppearance(page: Page) {
     "aria-orientation",
     "vertical",
   );
-  expect(appearance.inactiveBackground).not.toBe(appearance.activeBackground);
+  expect(appearance.inactiveBackground).toBe(appearance.activeBackground);
   await expect(page.locator(".sidebar")).toHaveCSS("border-top-width", "0px");
   const inactive = page.locator('[role="tab"][aria-selected="false"]:visible').first();
   const border = await inactive.evaluate((element) => getComputedStyle(element).borderColor);
-  await expect(async () => {
-    await inactive.hover();
-    await expect(inactive).toHaveCSS("background-color", appearance.hoverBackground, {
-      timeout: 500,
-    });
-  }).toPass({ timeout: 5_000 });
+  async function expectHover(button: Locator) {
+    await expect(async () => {
+      await clearPointer();
+      await button.hover();
+      await expect(button).toHaveCSS("background-color", appearance.hoverBackground, {
+        timeout: 500,
+      });
+    }).toPass({ timeout: 5_000 });
+  }
+  await expectHover(inactive);
   await expect(inactive).toHaveCSS("border-color", border);
   await expect(inactive).toHaveCSS("outline-style", "none");
-  await page.locator(`#${appearance.activeId}`).hover();
-  await expect(page.locator(`#${appearance.activeId}`)).toHaveCSS(
-    "background-color",
-    appearance.activeBackground,
+  await expectHover(page.locator(`#${appearance.activeId}`));
+  const otherButtons = page.locator(
+    ".sidebar .project-card:enabled, .sidebar .page-group-toggle:visible, .sidebar .chat-sidebar-new:visible:enabled, .sidebar .chat-sidebar-entry[aria-current='true']:visible:enabled",
   );
-  await page.mouse.move(1, 1);
+  for (const button of await otherButtons.all()) {
+    await expectHover(button);
+  }
+  await clearPointer();
 
   await expect(page.getByRole("button", { name: "Close Settings tab" })).toHaveCount(0);
 }
@@ -386,6 +461,9 @@ async function appendRow(page: Page, table: "sessions" | "configurations" = "ses
   const canvas = grid.getByTestId("data-grid-canvas");
   // The add row ignores clicks while it is disabled, such as while a project opens.
   await expect(page.locator(`#panel-${table} .table-add-accessible`)).toBeEnabled();
+  // Project success toasts can arrive during that wait and cover the sticky row.
+  const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  for (let count = 0; count < 3 && (await dismiss.count()); count++) await dismiss.first().click();
   // The canvas is resized after layout; wait until it matches the grid before aiming at it.
   await expect
     .poll(async () => {
@@ -394,10 +472,15 @@ async function appendRow(page: Page, table: "sessions" | "configurations" = "ses
     })
     .toBe(true);
   const box = await canvas.boundingBox();
-  if (!box) throw new Error("Missing table canvas");
+  // Glide receives pointer events on its transparent scroller above the canvas.
+  const scroller = grid.locator(".dvn-scroller");
+  const receiver = await scroller.boundingBox();
+  if (!box || !receiver) throw new Error("Missing table canvas");
   const row = Number(await grid.getAttribute("data-row-height"));
   // The sticky add row is pinned to the bottom of the canvas, whatever the row count.
-  await page.mouse.click(box.x + 70, box.y + box.height - row / 2);
+  await scroller.click({
+    position: { x: box.x + 70 - receiver.x, y: box.y + box.height - row / 2 - receiver.y },
+  });
 }
 
 async function launch(directory: string, folder: string, database: string, configured = true) {
@@ -438,6 +521,292 @@ async function launch(directory: string, folder: string, database: string, confi
   return launchDesktop(directory, folder, database);
 }
 
+test("desktop: unread turns stay isolated and survive renderer reloads", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-unread-"));
+  application = await launch(directory, directory, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    const chat = page.locator("#panel-chat .orchestration-chat-page:visible");
+    await expect(chat.locator(".chat-progress")).toHaveText("Ready");
+    const firstId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!firstId) throw new Error("Missing initial conversation");
+    const first = page.getByRole("button", { name: "Chat 1", exact: true });
+    await expect(first.locator("svg")).toHaveCount(0);
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(chat.locator(".chat-progress")).toHaveText("Ready");
+    const second = page.getByRole("button", { name: "Chat 2", exact: true });
+    const send = async (text: string) => {
+      const turn = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+        (chat) => chat.run?.id === firstId,
+      )?.run?.turns;
+      if (turn === undefined) throw new Error("Missing fixture conversation");
+      await page.evaluate(
+        ({ id, text }) => window.desktop.orchestrationChatAction({ type: "send", id, text }),
+        { id: firstId, text },
+      );
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+              (chat) => chat.run?.id === firstId,
+            )?.run,
+        )
+        .toMatchObject({ status: "idle", turns: turn + 1 });
+    };
+    await send(
+      JSON.stringify([
+        { message: "" },
+        { thought: "not a reply" },
+        { message: "first\n".repeat(120) },
+        { message: "streamed chunk" },
+        { thought: "between chunks" },
+        { message: "last chunk" },
+      ]),
+    );
+    await expect(first.locator(".chat-unread")).toHaveText("1");
+    await expect(first.locator(".chat-unread svg")).toHaveCount(1);
+    await expect(second.locator(".chat-unread")).toHaveCount(0);
+    await send("second turn");
+    await expect(first.locator(".chat-unread")).toHaveText("2");
+    await page.reload();
+    await expect(second).toHaveAttribute("aria-current", "true");
+    await expect(first.locator(".chat-unread")).toHaveText("2");
+    await first.focus();
+    await first.press("Enter");
+    await expect(first.locator(".chat-unread")).toHaveCount(0);
+    await chat.locator(".transcript").evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await send(JSON.stringify([{ message: "read while open" }, { message: "more" }]));
+    await expect(chat.locator(".event.message pre").last()).toHaveText("read while openmore");
+    await expect(first.locator(".chat-unread")).toHaveCount(0);
+    await selectSidebarPage(page, "Settings");
+    await send("reply while on another page");
+    await expect(first.locator(".chat-unread")).toHaveText("1");
+    await selectSidebarPage(page, "Chat");
+    await expect(first.locator(".chat-unread")).toHaveCount(0);
+    await expect(first.locator("svg")).toHaveCount(0);
+    await page.reload();
+    await expect(first.locator(".chat-unread")).toHaveCount(0);
+    const markers = await page.evaluate(() =>
+      Object.entries(sessionStorage).filter(([key]) => key.startsWith("code60.chatRead:")),
+    );
+    expect(markers.length).toBe(2);
+    for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
+    await expect(page.locator("#tab-chat svg").first()).toBeVisible();
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-qol-"));
+  application = await launch(directory, directory, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Files");
+    await page
+      .locator(".files-page")
+      .getByRole("button", { name: "Open project", exact: true })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Open Project", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page
+      .locator("#panel-chat")
+      .getByRole("button", { name: "File Explorer", exact: true })
+      .click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+      await window.desktop.setPollingPaused(true);
+    });
+    const chat = page.locator("#panel-chat .orchestration-chat-page:visible");
+    const composer = chat.getByLabel("Message to orchestrator", { exact: true });
+    await expect(composer).toBeEnabled();
+    const age = page.locator(".footer-polling [role=img]");
+    await expect(age).toHaveText("No messages yet");
+    await expect(page.getByRole("note", { name: "Running Code60 version" })).toHaveText(
+      `Code60 ${version}`,
+    );
+    const source = "  ```ts\n  const value = '<not markup>';\n```\n";
+    const prompt = JSON.stringify([
+      { message: source },
+      { sleep: 2000 },
+      { message: "later chunk" },
+      { hang: "cancellable" },
+    ]);
+    await composer.fill(prompt);
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(chat.locator(".event.message pre")).toHaveText(source);
+    await expect(chat.locator(".turn-timer")).toContainText("Working for");
+    await expect(age).toHaveText(/Last message \d+s ago/);
+    await expect(age).toHaveAttribute("aria-label", /selected orchestration conversation/);
+    await expect(page.getByRole("button", { name: "Start polling", exact: true })).toBeVisible();
+    await composer.fill("untouched draft");
+    await page.evaluate(() => {
+      const harness = {
+        values: [] as string[],
+        resolve: () => {},
+        reject: () => {},
+      };
+      (window as unknown as { copyHarness: typeof harness }).copyHarness = harness;
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: (value: string) => {
+          harness.values.push(value);
+          return new Promise<void>((resolve, reject) => {
+            harness.resolve = resolve;
+            harness.reject = () => reject(new Error("Clipboard denied"));
+          });
+        },
+      });
+    });
+    const agentCopy = chat.locator(".event.message").getByRole("button", { name: "Copy message" });
+    await expect(agentCopy).toHaveText("");
+    await expect(agentCopy.locator("svg")).toHaveCount(1);
+    await expectMessageCopy(agentCopy);
+    await composer.focus();
+    const selectedText = await chat.locator(".event.message pre").evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return selection?.toString();
+    });
+    const beforeScroll = await chat.locator(".transcript").evaluate((element) => element.scrollTop);
+    await agentCopy.click();
+    await expect(composer).toBeFocused();
+    expect(await page.evaluate(() => getSelection()?.toString())).toBe(selectedText);
+    await expect(agentCopy).toHaveAttribute("aria-disabled", "true");
+    await expect(agentCopy).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(chat.getByText("Copied.", { exact: true })).toHaveCount(0);
+    await expect(chat.locator(".event.message pre")).toHaveText(`${source}later chunk`);
+    const clipboardValues = () =>
+      page.evaluate(
+        () => (window as unknown as { copyHarness: { values: string[] } }).copyHarness.values,
+      );
+    expect(await clipboardValues()).toEqual([source]);
+    await page.evaluate(() =>
+      (window as unknown as { copyHarness: { reject(): void } }).copyHarness.reject(),
+    );
+    const retry = chat.getByRole("button", { name: "Retry Copy message", exact: true });
+    await expect(retry).toHaveText("");
+    await expect(retry.locator("svg")).toHaveCount(1);
+    await expect(retry).toBeVisible();
+    await expectMessageCopy(retry);
+    await expect(chat.getByRole("status").filter({ hasText: "Copy failed." })).toBeVisible();
+    await retry.focus();
+    await page.keyboard.press("Enter");
+    expect(await clipboardValues()).toEqual([source, `${source}later chunk`]);
+    await page.evaluate(() =>
+      (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
+    );
+    await expect(chat.getByRole("status").filter({ hasText: "Copied." })).toBeVisible();
+    await expect(retry).toHaveCount(0);
+    await expect(composer).toHaveValue("untouched draft");
+    // Feedback is overlaid, not inserted into the transcript's scrolling layout.
+    expect(await chat.locator(".transcript").evaluate((element) => element.scrollTop)).toBe(
+      beforeScroll,
+    );
+    const userCopy = chat.locator(".event.prompt").getByRole("button", { name: "Copy message" });
+    await expectMessageCopy(userCopy);
+    const userBubble = await chat.locator(".event.prompt pre").boundingBox();
+    const userControl = await userCopy.boundingBox();
+    expect(userControl?.y).toBeGreaterThanOrEqual((userBubble?.y ?? 0) + (userBubble?.height ?? 0));
+    await userCopy.click();
+    expect((await clipboardValues()).at(-1)).toBe(prompt);
+    await page.evaluate(() =>
+      (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
+    );
+    await chat.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(chat.locator(".turn-timer")).toContainText(/Worked for .+ \(cancelled\)/);
+    const frozen = await chat.locator(".turn-timer").textContent();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(age).toHaveText("No messages yet");
+    await page.getByRole("button", { name: "Chat 1", exact: true }).click();
+    await expect(composer).toHaveValue("untouched draft");
+    await expect(chat.locator(".turn-timer")).toHaveText(frozen ?? "");
+    await page.locator("#tab-chat").press("ArrowLeft");
+    await page.reload();
+    await expect(page.locator("#tab-chat")).toHaveAttribute("aria-expanded", "false");
+    await expect(chat.locator(".turn-timer")).toHaveText(frozen ?? "");
+    await page.locator("#tab-chat").press("ArrowRight");
+    await page.locator("#tab-chat").press("Tab");
+    await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#tab-chat")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("button", { name: "Chat 1", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.locator("#tab-chat")).toBeFocused();
+    const [id] = await page.evaluate(() =>
+      window.desktop.start({
+        agents: ["claude"],
+        allow: [],
+        allowAll: false,
+        prompt: JSON.stringify([
+          { permission: { id: "qol-approval", title: "Execute fixture", kind: "execute" } },
+          { message: "  historical\n```code```\n" },
+        ]),
+      }),
+    );
+    if (!id) throw new Error("Missing fixture run");
+    const head = page.locator(`[data-chat-id="${id}"] > .chat-head`);
+    await expect(head).toContainText("Approval needed");
+    await expect(head).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".chat-popup:visible")).toHaveCount(0);
+    // A manual session must not become delegated activity for the orchestrator.
+    await expect(chat.locator(".chat-loader")).toHaveCount(0);
+    await head.click();
+    const popup = page.locator(`#chat-${id}`);
+    await expect(popup).toHaveCSS("width", "400px");
+    await expect(popup.locator(".turn-timer")).toContainText("Working for");
+    await popup.getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect(head).toContainText("Awaiting input");
+    await expect(popup.locator(".turn-timer")).toContainText(/Worked for .+ \(finished\)/);
+    const worked = await popup.locator(".turn-timer").textContent();
+    await page.reload();
+    await expect(head).toHaveAttribute("aria-pressed", "false");
+    await head.click();
+    await expect(popup.locator(".turn-timer")).toHaveText(worked ?? "");
+    const historical = popup.locator(".event.message");
+    await expectMessageCopy(historical.getByRole("button", { name: "Copy message" }));
+    await expect(historical).toHaveCSS("border-top-width", "0px");
+    await expect(popup.locator(".event.prompt pre")).toHaveCSS(
+      "background-color",
+      "rgb(67, 179, 174)",
+    );
+    await expect(popup.locator(".event.prompt pre")).toHaveCSS("color", "rgb(0, 0, 0)");
+    await expect(historical.getByRole("button", { name: "Copy message" })).toHaveText("");
+    await historical.getByRole("button", { name: "Copy message" }).click();
+    await expect(historical.getByRole("status")).toHaveText("Copied.");
+    // Native Windows clipboard text uses CRLF; the write harness above checks exact source.
+    expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
+      ["permission qol-approval: opt-allow_once  historical", "```code```", ""].join(
+        process.platform === "win32" ? "\r\n" : "\n",
+      ),
+    );
+    await selectSidebarPage(page, "Sessions");
+    await expect(age).toHaveAttribute("aria-label", /current project sessions/);
+    await expect(age).toHaveText(/Last message/);
+    await expect(page.locator(".app-footer")).toHaveCSS("height", "40px");
+    await page.evaluate(() => document.documentElement.style.setProperty("--button-size", "32px"));
+    expect(
+      await page.locator(".app-footer").evaluate((element) => element.clientHeight),
+    ).toBeGreaterThan(40);
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: sidebar tabs, solid background, and restart-only transparent background", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-appearance-"));
   const database = join(directory, "projects.sqlite");
@@ -458,7 +827,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-top-right-radius", "5px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(12);
+    await expect(tabs).toHaveCount(11);
     const tabCorners = await tabs.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -469,14 +838,15 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       expect(radius).toBe("5px");
       expect(shape).not.toMatch(/^(bevel|superellipse\(0\))$/);
     }
-    const tabGaps = await page.locator(".page-tabs button:visible").evaluateAll((elements) =>
+    const tabGaps = await page.locator("#table-pages button:visible").evaluateAll((elements) =>
       elements.slice(1).map((element, index) => {
         const previous = elements[index];
         if (!previous) throw new Error("Missing previous tab");
         return element.getBoundingClientRect().top - previous.getBoundingClientRect().bottom;
       }),
     );
-    expect(tabGaps).toEqual(Array(12).fill(4));
+    expect(tabGaps).toEqual(Array(5).fill(4));
+    await expect(page.locator(".page-tabs")).toHaveCSS("gap", "4px");
     const nativeTitlebarHeight = await page.evaluate(() => {
       const overlay = (
         navigator as Navigator & {
@@ -559,7 +929,8 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Sessions");
     await expectNeutralTheme(page);
-    for (const selector of [".sidebar", "#panel-sessions", ".app-footer"])
+    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgb(44, 53, 63)");
+    for (const selector of ["#panel-sessions", ".app-footer"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(36, 43, 51)");
     for (const selector of ["html", "body", ".app", ".page-tabs"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -601,10 +972,12 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         { x, y },
       );
     const mac = process.platform === "darwin";
-    await move(4, 200);
-    await expect.poll(ignored).toBe(mac);
-    // Passive page corners are square and remain clickable.
     const width = await page.evaluate(() => window.innerWidth);
+    await move(width - 4, 200);
+    await expect.poll(ignored).toBe(mac);
+    await move(4, 200);
+    await expect.poll(ignored).toBe(false);
+    // Passive page corners are square and remain clickable.
     await move(width - 15, 31);
     await expect.poll(ignored).toBe(false);
     const firstTab = await page.getByRole("tab", { name: "Sessions", exact: true }).boundingBox();
@@ -626,6 +999,10 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await move(firstTab.x + firstTab.width / 2, firstTab.y + firstTab.height + 2);
     await expect.poll(ignored).toBe(false);
     await move(4, 200);
+    await expect.poll(ignored).toBe(false);
+    await move(100, 14);
+    await expect.poll(ignored).toBe(false);
+    await move(width - 4, 200);
     await expect.poll(ignored).toBe(mac);
     await move(30, 14);
     await expect.poll(ignored).toBe(false);
@@ -697,7 +1074,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const worktreesTab = page.getByRole("tab", { name: "Worktrees", exact: true });
     const settingsTab = page.getByRole("tab", { name: "Settings", exact: true });
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(10);
     await settingsTab.click();
     await expect(settingsTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
@@ -831,15 +1208,33 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect.poll(async () => (await menuItem("open-project"))?.enabled).toBe(false);
     // Starting a batch expands the right-aligned chat head into a flush chat with subtle depth.
     const chatPopup = page.getByRole("dialog", { name: /^fake \/ / });
+    await expect(page.locator(".chat-head")).toHaveAttribute("aria-pressed", "false");
+    await page.locator(".chat-head").click();
     await expect(chatPopup).toBeVisible();
     const chatHead = page.locator(".app-footer .chat-head");
     await expect(chatHead).toHaveCount(1);
     await expect(chatHead).toHaveAttribute("aria-pressed", "true");
     await expect(chatPopup).not.toHaveCSS("box-shadow", "none");
     await expect(chatPopup).toHaveCSS("border-top-right-radius", "0px");
-    const popupBox = await chatPopup.boundingBox();
-    const headBox = await chatHead.boundingBox();
-    const footerBox = await page.locator(".app-footer").boundingBox();
+    // The final footer inset is meaningful only after the slot finishes moving.
+    await page.locator(".chat-slot.open").evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished.catch(() => {})),
+      );
+    });
+    // Take all measurements in one frame, including during the dock's move animation.
+    const [popupBox, headBox, footerBox] = await page.evaluate(() =>
+      [".chat-popup:not([hidden])", ".app-footer .chat-head", ".app-footer"].map((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing chat layout: ${selector}`);
+        return element.getBoundingClientRect().toJSON() as {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+      }),
+    );
     if (!popupBox || !headBox || !footerBox) throw new Error("Missing chat layout");
     expect(popupBox.x).toBe(headBox.x);
     expect(popupBox.width).toBe(headBox.width);
@@ -897,9 +1292,45 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       expect(colors.composerFrame).not.toBe("rgba(0, 0, 0, 0)");
       expect(colors.headerFrame).not.toBe("rgba(0, 0, 0, 0)");
       expect(colors.footerFrame).toBe("rgba(0, 0, 0, 0)");
+      for (const message of await chatPopup.locator(".event.message").all())
+        await expect(message).toHaveCSS("border-top-width", "0px");
+      for (const prompt of await chatPopup.locator(".event.prompt:not(.automatic)").all()) {
+        await expect(prompt.locator("pre")).toHaveCSS(
+          "background-color",
+          colors.dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
+        );
+        await expect(prompt.locator("pre")).toHaveCSS("color", "rgb(0, 0, 0)");
+        const copy = prompt.getByRole("button", { name: "Copy message" });
+        await expectMessageCopy(copy);
+        const bubble = await prompt.locator("pre").boundingBox();
+        expect((await copy.boundingBox())?.y).toBeGreaterThanOrEqual(
+          (bubble?.y ?? 0) + (bubble?.height ?? 0),
+        );
+      }
     };
     await expectDistinctChatSurfaces();
-    await expect(chatPopup.getByLabel("Message")).toBeEnabled();
+    await expect(chatPopup.getByLabel("Message", { exact: true })).toBeEnabled();
+    await settingsTab.click();
+    const focusHighlight = page.getByRole("switch", {
+      name: "Focus highlight border",
+      exact: true,
+    });
+    await focusHighlight.check();
+    await sessionsTab.click();
+    // Navigation restores tab focus on the next frame; focus the composer after it settles.
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    await chatPopup.getByLabel("Message", { exact: true }).focus();
+    await expect(chatPopup.getByLabel("Message", { exact: true })).toBeFocused();
+    await expectChatBorder(chatPopup.locator(".composer"));
+    await expect(chatPopup.getByLabel("Message", { exact: true })).toHaveCSS(
+      "outline-width",
+      "0px",
+    );
+    await page.screenshot({ path: "test-results/worker-chat-border-highlight.png" });
+    await settingsTab.click();
+    await focusHighlight.uncheck();
     await worktreesTab.click();
     const worktreesPanel = page.locator("#panel-worktrees");
     const worktreesGrid = worktreesPanel.locator(".sessions-grid");
@@ -961,9 +1392,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     });
     expect(panelFrame).toEqual({
       widths: ["0px", "0px", "0px", "0px"],
-      left: 244,
+      left: 232,
       right: 12,
-      bottom: 76,
+      bottom: 52,
       clip: "none",
       barRule: ["0px", "none"],
       toolbarPadding: ["16px", "16px"],
@@ -1039,7 +1470,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         );
       })
       .toBe(true);
-    await expect(pollingWidget.locator("time")).toHaveAttribute("datetime", /T/);
+    await expect(pollingWidget.getByRole("img")).toHaveAttribute(
+      "aria-label",
+      /Agent text in current project sessions:/,
+    );
     const stamp = await pollingWidget.locator(".poll-timestamp").boundingBox();
     const footer = await page.locator(".app-footer").boundingBox();
     if (!stamp || !footer) throw new Error("Missing polling timestamp");
@@ -1067,7 +1501,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         ]),
       );
     await page.getByRole("button", { name: "Send", exact: true }).click();
-    await expect(chatHead).toContainText("1 approval");
+    await expect(chatHead).toHaveAttribute("aria-label", /1 approval/);
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
     await expectIndustrialSurfaces(page);
     await expect(chatHead).toHaveCSS("font-family", /D-DIN/);
@@ -1117,6 +1551,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     // The splash shows once per launch, not on renderer reloads.
     await expect(page.locator(".splash")).toHaveCount(0);
     expect(await windowTitle()).toBe(`Code60 - ${version}`);
+    await expect(chatHead).toHaveAttribute("aria-pressed", "false");
+    await chatHead.click();
     await expect(page.getByLabel("Message", { exact: true })).toBeEnabled();
     await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
     await expect(chatPopup).toBeHidden();
@@ -1138,12 +1574,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.mouse.click(cell.x, cell.y);
     const menu = page.getByRole("menu", { name: /^Actions for fake \/ / });
     await expect(menu).toHaveText(
-      "Open chatReview changesBrowse filesCancel turnFinish runResumeStop leftover agentDelete worktree",
+      "Open chatReview changesBrowse project filesCancel turnFinish runResumeStop leftover agentDelete worktree",
     );
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Open chat",
       "Review changes",
-      "Browse files",
+      "Browse project files",
       "Cancel turn",
       "Finish run",
       "Resume",
@@ -1189,7 +1625,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(10);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await settingsPage.evaluate((element) => {
@@ -1212,7 +1648,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const alphabeticalPages = [
       "Chat",
       "Experiments",
-      "Files",
       "Prompt Editor",
       "Search",
       "Settings",
@@ -1229,6 +1664,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     );
     await sessionsTab.focus();
     await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowLeft");
     await expect(page.getByRole("tab", { name: alphabeticalPages[0], exact: true })).toBeFocused();
     for (const name of alphabeticalPages.slice(1)) {
       await page.keyboard.press("ArrowDown");
@@ -1249,7 +1685,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(10);
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -1304,15 +1740,16 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         "font-family",
         /^"?D-DIN"?/,
       );
-      // Human messages use the theme’s accent text, with no side rule.
+      // Solid human bubbles keep contrasting text and no side rule.
       const darkTheme =
         theme === "dark" ||
         (theme === "system" &&
           (await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)));
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
-        "color",
-        darkTheme ? "rgb(181, 200, 211)" : "rgb(20, 108, 103)",
+        "background-color",
+        darkTheme ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
       );
+      await expect(page.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
         await expect(chatHead).toHaveCSS("background-color", "rgb(50, 60, 70)");
@@ -1416,8 +1853,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         () => JSON.parse(localStorage.getItem("code60.textStyles") ?? "{}").normalText.typeface,
       ),
     ).toBe("d-din");
-    // Floating chats must not cover the settings controls on smaller displays.
-    await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
+    // Renderer reload reconstructs the dock minimized, without covering Settings.
+    await expect(chatHead).toHaveAttribute("aria-pressed", "false");
+    await expect(chatPopup).toBeHidden();
     // Every role has independent controls; the case switches exclude one another.
     const roles = [
       "Table Headings",
@@ -1654,7 +2092,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await again.keyboard.press("ArrowDown");
     await expect(restoredMenu.getByRole("menuitem", { name: "Review changes" })).toBeFocused();
     await again.keyboard.press("ArrowDown");
-    await expect(restoredMenu.getByRole("menuitem", { name: "Browse files" })).toBeFocused();
+    await expect(
+      restoredMenu.getByRole("menuitem", { name: "Browse project files" }),
+    ).toBeFocused();
     await again.keyboard.press("ArrowDown");
     await expect(restoredMenu.getByRole("menuitem", { name: "Cancel turn" })).toBeFocused();
     await again.keyboard.press("End");
@@ -2228,8 +2668,9 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
       settings: { parallel: "2" },
     });
     expect(JSON.stringify(after.configurations)).not.toContain("one-time private task");
-    // Keep the agent chat from covering table actions on small displays.
-    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
+    // Starting the batch leaves both chats minimized and table actions unobscured.
+    await expect(page.locator(".chat-head")).toHaveCount(2);
+    await expect(page.locator(".chat-head[aria-pressed=true]")).toHaveCount(0);
     await configurationsTab.click();
     await expect(grid.locator("tbody [role='row']")).toHaveCount(2);
     await scrollGrid(grid, 0);
@@ -2315,8 +2756,10 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
       name: `fake / ${earlier.slice(-6)}`,
       exact: true,
     });
-    await expect(earlierPopup.getByLabel("Message")).toBeEnabled();
-    await earlierPopup.getByLabel("Message").fill("draft A");
+    await expect(page.locator(".chat-head")).toHaveAttribute("aria-pressed", "false");
+    await page.locator(".chat-head").click();
+    await expect(earlierPopup.getByLabel("Message", { exact: true })).toBeEnabled();
+    await earlierPopup.getByLabel("Message", { exact: true }).fill("draft A");
     await expect(page.locator("#panel-sessions .table-add-accessible")).toBeEnabled();
     await appendRow(page);
     await page.getByRole("button", { name: "Do not use a run configuration" }).click();
@@ -2358,7 +2801,7 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
       await expect(popup(id)).toBeVisible();
     };
     await expect(popup(a)).toBeVisible();
-    await expect(popup(a).getByLabel("Message")).toHaveValue("draft A");
+    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     for (const tab of [
       "Messages",
       "Search",
@@ -2371,7 +2814,7 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
       await page.getByRole("tab", { name: tab, exact: true }).click();
       await expect(page.locator(".app-footer")).toBeVisible();
       await expect(popup(a)).toBeVisible();
-      await expect(popup(a).getByLabel("Message")).toHaveValue("draft A");
+      await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
       if (tab === "Messages") {
         await popup(a).getByRole("button", { name: "Minimize chat" }).click();
         await expect(popup(a)).toBeHidden();
@@ -2380,21 +2823,24 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
         await page.screenshot({ path: join(root, "test-results", "chat-dock-messages.png") });
       }
     }
-    // Starting another batch opens its first session, not the earlier live session.
+    // New batches never open a popup automatically.
+    await expect(head(b)).toHaveAttribute("aria-pressed", "false");
+    await expect(popup(b)).toBeHidden();
+    await head(b).click();
     await expect(popup(b)).toBeVisible();
     await expect(popup(b).locator(".event")).toHaveCount(0);
     await expect(popup(a)).toBeVisible();
     await expect(popup(b)).toBeVisible();
-    await popup(a).getByLabel("Message").fill("draft A");
+    await popup(a).getByLabel("Message", { exact: true }).fill("draft A");
     await popup(b)
-      .getByLabel("Message")
+      .getByLabel("Message", { exact: true })
       .fill(JSON.stringify([{ message: "only chat B" }]));
     await popup(b).getByRole("button", { name: "Send", exact: true }).click();
     await expect(popup(b).locator(".event.message")).toContainText("only chat B");
-    await expect(popup(a).getByLabel("Message")).toHaveValue("draft A");
+    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expect(popup(a)).not.toContainText("only chat B");
     // Full screen uses the same chat instance, without losing drafts or transcript state.
-    const message = popup(a).getByLabel("Message");
+    const message = popup(a).getByLabel("Message", { exact: true });
     await message.evaluate((element) => {
       element.dataset.fullScreenIdentity = "preserved";
     });
@@ -2471,9 +2917,9 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
     await expect(head(a)).toHaveCount(0);
     expect((await page.evaluate(() => window.desktop.snapshot())).liveIds).toContain(a);
     await reopen(a);
-    await expect(popup(a).getByLabel("Message")).toHaveValue("draft A");
+    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await popup(a)
-      .getByLabel("Message")
+      .getByLabel("Message", { exact: true })
       .fill(
         JSON.stringify([
           { message: "only chat A" },
@@ -2484,30 +2930,30 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
     await expect(popup(a).getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
     await popup(a).getByRole("button", { name: "Close chat", exact: true }).click();
     await expect(page.locator(".footer-note")).toHaveText("1 approval waiting");
-    await expect(popup(b).getByLabel("Message")).toBeEnabled();
+    await expect(popup(b).getByLabel("Message", { exact: true })).toBeEnabled();
     await reopen(a);
     await popup(a).getByRole("button", { name: "Allow once", exact: true }).click();
-    await expect(popup(a).getByLabel("Message")).toBeEnabled();
+    await expect(popup(a).getByLabel("Message", { exact: true })).toBeEnabled();
     // The chat has no Finish control; reopening selected the session, so finish it from the palette.
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("combobox", { name: "Search commands" }).fill("finish run");
     await expect(page.getByRole("option", { name: /^Finish run/ })).toContainText(a.slice(-6));
     await page.keyboard.press("Enter");
     await expect(head(a)).toContainText("Finished");
-    await expect(popup(a).getByLabel("Message")).toBeEnabled();
+    await expect(popup(a).getByLabel("Message", { exact: true })).toBeEnabled();
     await expect(popup(a)).not.toContainText("Sending a message resumes this session.");
     // Resume is just a shortcut to the composer, not an agent-start action.
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("combobox", { name: "Search commands" }).fill("resume");
     await page.keyboard.press("Enter");
-    await expect(popup(a).getByLabel("Message")).toBeFocused();
+    await expect(popup(a).getByLabel("Message", { exact: true })).toBeFocused();
     await expect(head(a)).toContainText("Finished");
-    await popup(a).getByLabel("Message").fill("Continue with tests");
+    await popup(a).getByLabel("Message", { exact: true }).fill("Continue with tests");
     await popup(a).getByRole("button", { name: "Send", exact: true }).click();
-    await expect(head(a)).toContainText("Ready");
-    await expect(popup(a).getByLabel("Message")).toHaveValue("");
+    await expect(head(a)).toContainText("Awaiting input");
+    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("");
     await expect(popup(a).getByText("Loading…", { exact: true })).toHaveCount(0);
-    await expect(popup(a).locator(".event.prompt").last()).toHaveText("Continue with tests");
+    await expect(popup(a).locator(".event.prompt pre").last()).toHaveText("Continue with tests");
     const handoff = popup(a).locator(".event.note").filter({ hasText: "Started a fresh session" });
     await expect(handoff).toContainText("could not be restored");
     await expect(handoff.locator("details")).not.toHaveAttribute("open", "");
@@ -2531,7 +2977,7 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
       }),
     );
     for (const box of boxes) {
-      expect(box.footer.height).toBe(64);
+      expect(box.footer.height).toBe(40);
       expect(box.popup.width).toBe(box.footer.width);
       expect(box.popup.bottom).toBe(box.footer.top);
     }
@@ -2762,11 +3208,6 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     });
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await selectSidebarPage(page, "Sessions");
-    await page.evaluate(async () => {
-      await window.desktop.connectDatabase("create");
-      await window.desktop.chooseFolder();
-    });
-    await expect(page.locator("#panel-sessions .sessions-grid tbody [role='row']")).toHaveCount(5); // five recorded sessions
     await application.evaluate(({ ipcMain }) => {
       const handlers = (
         ipcMain as unknown as {
@@ -2784,13 +3225,19 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
         return original(...args);
       });
     });
+    // Instrument before opening: the footer shares history with Search, Messages and Events.
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    await expect(page.locator("#panel-sessions .sessions-grid tbody [role='row']")).toHaveCount(5);
     await page.getByRole("tab", { name: "Search", exact: true }).click();
     const search = page.locator("#panel-search");
     const query = search.getByLabel("Query", { exact: true });
     const wordmark = search.locator(".search-wordmark");
     await expect(wordmark).toBeVisible();
     await expect(search.getByLabel("Type", { exact: true })).toBeHidden();
-    const entryBox = await query.boundingBox();
+    const entryBox = await search.locator(".search-entry").boundingBox();
     const pageBox = await search.boundingBox();
     if (!entryBox || !pageBox) throw new Error("Missing search entry");
     expect(entryBox.width).toBeLessThanOrEqual(560);
@@ -2799,47 +3246,146 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     );
     await page.screenshot({ path: join(root, "test-results", "search-entry.png") });
     await query.fill("parser fixed");
-    expect(
-      await search
-        .locator(".search-page")
-        .evaluate((element) =>
-          element
-            .getAnimations()
-            .some(
-              (animation) =>
-                animation.effect instanceof KeyframeEffect &&
-                animation.effect.getKeyframes().some((frame) => "gridTemplateRows" in frame),
-            ),
-        ),
-    ).toBe(true);
+    await expect(search.getByLabel("Type", { exact: true })).toBeHidden();
+    await expect(search.locator(".search-results li")).toHaveCount(0);
+    await query.press("Enter");
     await expect(query).toBeFocused();
     await expect
       .poll(async () => (await query.boundingBox())?.y ?? Infinity)
       .toBeLessThan(entryBox.y - 40);
+    await expect(search.locator(".search-results li")).toHaveCount(3);
+    const overview = search.getByRole("region", { name: "AI overview", exact: true });
+    await expect(overview).toContainText("The recorded sessions report");
+    const summaryBox = await overview.boundingBox();
+    const resultsBox = await search.locator(".search-results").boundingBox();
+    if (!summaryBox || !resultsBox) throw new Error("Missing results layout");
+    expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(resultsBox.y);
+    await expect(search.locator(".search-preview")).toHaveCount(0);
     await page.screenshot({ path: join(root, "test-results", "search-expanded.png") });
+    const originalTheme = await page.locator("html").getAttribute("data-theme");
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "dark";
+    });
+    await expect(search.locator(".search-page")).toHaveCSS("color", "rgb(255, 255, 255)");
+    await page.screenshot({ path: join(root, "test-results", "search-dark.png") });
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window?.setMinimumSize(0, 0);
+      window?.setSize(680, 720);
+    });
+    const originalText = await page.evaluate(() => {
+      const style = document.documentElement.style;
+      const original = ["--text-size", "--title-size", "--button-size"].map((key) => [
+        key,
+        style.getPropertyValue(key),
+      ]);
+      style.setProperty("--text-size", "24px");
+      style.setProperty("--title-size", "28px");
+      style.setProperty("--button-size", "24px");
+      return original;
+    });
+    await expect(search.locator(".search-overview-text")).toHaveCSS("font-size", "24px");
+    expect(
+      await search
+        .locator(".search-page")
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    expect(
+      await search
+        .locator(".search-content")
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    await page.screenshot({ path: join(root, "test-results", "search-narrow-large-text.png") });
+    await page.evaluate((properties) => {
+      for (const [key, value] of properties) {
+        if (key && value) document.documentElement.style.setProperty(key, value);
+        else if (key) document.documentElement.style.removeProperty(key);
+      }
+    }, originalText);
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1280, 860),
+    );
+    await page.evaluate((theme) => {
+      if (theme) document.documentElement.dataset.theme = theme;
+      else delete document.documentElement.dataset.theme;
+    }, originalTheme);
+    await expect(
+      search.getByText("2 transcripts unavailable. Results are incomplete."),
+    ).toBeVisible();
+
+    // Draft edits and filters leave the submitted result set and overview intact.
+    await query.fill("not yet submitted");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
+    await search.getByLabel("Type", { exact: true }).selectOption("thought");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
+    await query.fill("parser fixed");
+    await query.press("Enter");
+    await expect(search.getByText("No matching results.")).toBeVisible();
+    await expect(overview).toHaveCount(0);
+    await search.getByLabel("Type", { exact: true }).selectOption("message");
+    await search.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(overview).toContainText("The recorded sessions report");
+
+    // A citation opens the exact captured source through existing event navigation.
+    await overview.getByRole("button", { name: /^Source 1:/ }).click();
+    await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    await selectSidebarPage(page, "Search");
+    await expect(overview).toContainText("The recorded sessions report");
+    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
+
+    // Simulate a provider failure once; Retry keeps the same results and then succeeds.
+    await application.evaluate(({ ipcMain }) => {
+      const handlers = (
+        ipcMain as unknown as {
+          _invokeHandlers: Map<string, (...args: unknown[]) => Promise<unknown>>;
+        }
+      )._invokeHandlers;
+      const original = handlers.get("desktop:search-summary");
+      if (!original) throw new Error("Missing summary handler");
+      handlers.set("desktop:search-summary", async () => {
+        handlers.set("desktop:search-summary", original);
+        throw new Error("Provider unavailable");
+      });
+    });
+    await query.press("Enter");
+    await expect(overview.getByRole("alert")).toContainText("Provider unavailable");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
+    await overview.getByRole("button", { name: "Retry overview" }).click();
+    await expect(overview).toContainText("The recorded sessions report");
+
+    // Cancellation leaves matches available, and clearing returns to the entry view.
+    await query.fill("fixed");
+    await query.press("Enter");
+    await expect(overview).toContainText("Generating overview…");
+    await overview.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(overview).toContainText("Overview stopped.");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
     await query.fill("");
     await expect(search.getByLabel("Type", { exact: true })).toBeHidden();
     await expect
-      .poll(async () => (await query.boundingBox())?.y ?? 0)
+      .poll(async () => (await search.locator(".search-entry").boundingBox())?.y ?? 0)
       .toBeGreaterThan(entryBox.y - 2);
-    await expect(query).toBeFocused();
     await page.emulateMedia({ reducedMotion: "reduce" });
     await query.fill("parser fixed");
+    await query.press("Enter");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
     expect(
       await search
         .locator(".search-page")
         .evaluate((element) => element.getAnimations({ subtree: true }).length),
     ).toBe(0);
+    await expect(overview).toContainText("The recorded sessions report");
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await expect(search.locator(".search-results [role=option]")).toHaveCount(3);
-    await expect(
-      search.getByText("2 transcripts unavailable. Results are incomplete."),
-    ).toBeVisible();
-    await search.getByLabel("Type", { exact: true }).selectOption("thought");
-    await expect(search.getByText("No matching results.")).toBeVisible();
-    await search.getByLabel("Type", { exact: true }).selectOption("message");
-    await search.getByRole("listbox").focus();
+
+    // Single-click titles and keyboard actions both open sources without a preview pane.
+    await search.locator(".search-result-title").first().click();
+    await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
+    await selectSidebarPage(page, "Search");
+    await query.focus();
+    await query.press("ArrowDown");
     await page.keyboard.press("End");
+    await expect(search.locator(".search-result-title").last()).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("tab", { name: "Sessions", exact: true })).toHaveAttribute(
       "aria-selected",
@@ -2877,7 +3423,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     const reads = await application.evaluate(
       () => (globalThis as unknown as { transcriptReads: Record<string, number> }).transcriptReads,
     );
-    expect(reads["record-b"]).toBe(1); // shared by Search, Messages and Events
+    expect(reads["record-b"]).toBe(2); // one shared cache read and one explicit source-chat read
     await selectSidebarPage(page, "Sessions");
     const sessions = page.locator("#panel-sessions");
     await sessions.getByRole("button", { name: "Settings", exact: true }).click();
@@ -3008,6 +3554,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await filters.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("tab", { name: "Search", exact: true }).click();
     await search.getByLabel("Query", { exact: true }).fill("parser");
+    await query.press("Enter");
     await expect(
       search.getByText("2 transcripts unavailable. Results are incomplete."),
     ).toBeVisible();
@@ -3073,6 +3620,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
       await selectSidebarPage(page, "Sessions");
     await page.getByRole("tab", { name: "Search", exact: true }).click();
     await search.getByLabel("Query", { exact: true }).fill("parser");
+    await search.getByLabel("Query", { exact: true }).press("Enter");
     await expect(search.getByText("Loading saved transcripts…")).toBeVisible();
     await application.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
@@ -3080,9 +3628,10 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await page.evaluate(() => window.desktop.chooseFolder());
     await expect(page.locator(".sidebar-title")).toHaveText("other-project");
     await search.getByLabel("Query", { exact: true }).fill("parser");
+    await search.getByLabel("Query", { exact: true }).press("Enter");
     await expect(search.getByText("No matching results.")).toBeVisible();
     await page.waitForTimeout(700);
-    await expect(search.locator(".search-results [role=option]")).toHaveCount(0);
+    await expect(search.locator(".search-results li")).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await application.close();
@@ -3124,6 +3673,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const experimentPages = page.getByRole("tablist", { name: "Experiments", exact: true });
     await expect(experiments).toHaveAttribute("aria-expanded", "false");
     await expect(experimentPages).toBeHidden();
+    await page.getByRole("tab", { name: "Chat", exact: true }).press("ArrowLeft");
     await page.getByRole("tab", { name: "Chat", exact: true }).press("ArrowDown");
     await expect(experiments).toBeFocused();
     await experiments.press("ArrowRight");
@@ -3152,18 +3702,11 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await experiments.click();
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     await expect(tables).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByRole("tab")).toHaveText([
-      "Chat",
-      "Files",
-      "Prompt Editor",
-      "Search",
-      "Settings",
-    ]);
+    await expect(page.getByRole("tab")).toHaveText(["Chat", "Prompt Editor", "Search", "Settings"]);
     await tables.press("ArrowRight");
     await expect(tables).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab")).toHaveText([
       "Chat",
-      "Files",
       "Prompt Editor",
       "Search",
       "Settings",
@@ -3200,6 +3743,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     expect(first.runs).toEqual([]);
     const chatList = () =>
       page.getByRole("navigation", { name: "Orchestrator chats", exact: true });
+    await page.locator("#tab-chat").press("ArrowRight");
     await expect(chatList()).toBeVisible();
     await expect(chat.locator(".chat-empty .wordmark")).toHaveText("Code60");
     await expect(chat.locator(".chat-empty .wordmark")).toHaveCSS("font-size", "48px");
@@ -3228,7 +3772,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       };
       return [rect(".sidebar"), rect(".chat-sidebar"), rect("#panel-chat")];
     });
-    expect(columns[0]?.right).toBeLessThan(columns[1]?.left ?? 0);
+    expect(columns[0]?.right).toBeGreaterThan(columns[1]?.right ?? 0);
     expect(columns[1]?.right).toBeLessThan(columns[2]?.left ?? 0);
     await expect(chatList().getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
       "aria-current",
@@ -3239,9 +3783,16 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await input().press("Enter");
     await expect(chat.locator(".event.message pre")).toHaveText("ok");
     await expect(chat.locator(".wordmark")).toHaveCount(0);
-    await expect(chat.locator(".orchestration-chat-status")).toContainText("claude");
+    await expect(chat.locator(".orchestration-chat-status")).not.toContainText("claude");
+    const provider = chat.getByLabel("Current provider", { exact: true });
+    await expect(provider).toHaveText("claude");
+    const providerBox = await provider.boundingBox();
+    const composerBounds = await chat.locator(".composer").boundingBox();
+    expect(providerBox?.y).toBeGreaterThanOrEqual(
+      (composerBounds?.y ?? 0) + (composerBounds?.height ?? 0),
+    );
     await expect(chat.locator(".event.message .chat-message-speaker")).toHaveCount(0);
-    await expect(chat.locator(".event.message")).toHaveCSS("border-top-width", "1px");
+    await expect(chat.locator(".event.message")).toHaveCSS("border-top-width", "0px");
     await expect(input()).toHaveValue("");
     const script = JSON.stringify([
       { message: "alpha" },
@@ -3265,7 +3816,22 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "kept across launches",
     );
     await input().fill("draft retained");
-    await chatList().getByRole("button", { name: "New", exact: true }).click();
+    const newChat = page.getByRole("button", { name: "New chat", exact: true });
+    await expect(newChat).toHaveText("");
+    await expect(newChat.locator("svg")).toHaveCount(1);
+    await expect(chatList().getByRole("button", { name: "New chat", exact: true })).toHaveCount(0);
+    const plus = await newChat.boundingBox();
+    const chevron = await page.locator("#tab-chat > svg").last().boundingBox();
+    expect((plus?.x ?? 0) + (plus?.width ?? 0)).toBeLessThan(chevron?.x ?? 0);
+    expect((plus?.y ?? 0) + (plus?.height ?? 0) / 2).toBeCloseTo(
+      (chevron?.y ?? 0) + (chevron?.height ?? 0) / 2,
+      0,
+    );
+    await page.locator("#tab-chat").click();
+    await expect(chatList()).toBeHidden();
+    await expect(newChat).toBeVisible();
+    await newChat.click();
+    await expect(chatList()).toBeVisible();
     await expect(chat.getByRole("status")).toHaveText("Ready");
     const secondChat = await page.evaluate(() => window.desktop.snapshot());
     const secondId = secondChat.chat.run?.id as string;
@@ -3281,7 +3847,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(input()).toHaveValue("draft retained");
     await expect(chat.locator(".event.prompt")).toHaveCount(2);
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
-    await expect(chatList()).toHaveCount(0);
+    await expect(chatList()).toBeVisible();
     await page.getByRole("tab", { name: "Chat", exact: true }).click();
     await expect(input()).toHaveValue("draft retained");
     await page.evaluate(() => window.desktop.chooseFolder());
@@ -3342,9 +3908,9 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const lineBox = await loader.boundingBox();
     const composerBox = await composer.boundingBox();
     if (!lineBox || !composerBox) throw new Error("Missing chat loading line");
-    expect(lineBox.x).toBeCloseTo(composerBox.x + 2, 0);
-    expect(lineBox.y).toBeCloseTo(composerBox.y + 2, 0);
-    expect(lineBox.width).toBeCloseTo(composerBox.width - 4, 0);
+    expect(lineBox.x).toBeCloseTo(composerBox.x + 1, 0);
+    expect(lineBox.y).toBeCloseTo(composerBox.y + 1, 0);
+    expect(lineBox.width).toBeCloseTo(composerBox.width - 2, 0);
     await expect(loader).toHaveCSS("height", "12px");
     await expect(loader).toHaveCSS("animation-name", "chat-bar-stripe");
     const sidebarLineBox = await sidebarLoader.boundingBox();
@@ -3359,25 +3925,41 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await activeCard.click();
     await expect(loader).toBeVisible();
 
-    for (const [theme, background, stripe] of [
-      ["light", "rgb(226, 243, 241)", "rgb(20, 108, 103)"],
-      ["dark", "rgb(32, 62, 59)", "rgb(208, 188, 131)"],
+    for (const [theme, background, stripe, neutral, bubble] of [
+      [
+        "light",
+        "rgb(226, 243, 241)",
+        "rgb(20, 108, 103)",
+        "rgb(243, 243, 243)",
+        "rgb(67, 179, 174)",
+      ],
+      ["dark", "rgb(32, 62, 59)", "rgb(208, 188, 131)", "rgb(44, 53, 63)", "rgb(197, 177, 125)"],
+      [
+        "system",
+        "rgb(226, 243, 241)",
+        "rgb(20, 108, 103)",
+        "rgb(243, 243, 243)",
+        "rgb(67, 179, 174)",
+      ],
+      ["system", "rgb(32, 62, 59)", "rgb(208, 188, 131)", "rgb(44, 53, 63)", "rgb(197, 177, 125)"],
     ] as const) {
+      await page.emulateMedia({ colorScheme: neutral === "rgb(243, 243, 243)" ? "light" : "dark" });
       await selectSidebarPage(page, "Settings");
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await selectSidebarPage(page, "Chat");
-      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
-      const restingShadow = await composer.evaluate(
-        (element) => getComputedStyle(element).boxShadow,
-      );
+      await expect(composer).toHaveCSS("border-top-width", "1px");
+      await expect(composer).not.toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
+      await expect(composer).toHaveCSS("background-color", neutral);
+      await expect(page.locator(".sidebar")).toHaveCSS("background-color", neutral);
+      await expect(composer).toHaveCSS("box-shadow", "none");
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("background-color", bubble);
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
+      await expect(chat.locator(".event.message").first()).toHaveCSS("border-top-width", "0px");
+      const beforeFocus = await composer.boundingBox();
       await input().focus();
-      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
-      await expect(composer).toHaveCSS("outline-style", "none");
-      await expect(composer).toHaveCSS("box-shadow", /0px 0px 12px 0px/);
-      const focusedShadow = await composer.evaluate(
-        (element) => getComputedStyle(element).boxShadow,
-      );
-      expect(focusedShadow).not.toBe(restingShadow);
+      await expectChatBorder(composer);
+      expect(await composer.boundingBox()).toEqual(beforeFocus);
+      await expect(input()).toHaveCSS("outline-width", "0px");
       await expect(loader).toHaveCSS("background-color", background);
       await expect(sidebarLoader).toHaveCSS("background-color", background);
       expect(
@@ -3385,12 +3967,15 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       ).toContain(stripe);
       await page.screenshot({ path: `test-results/chat-loader-${theme}.png` });
       await chat.getByRole("button", { name: "Stop", exact: true }).focus();
-      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
-      await expect(composer).toHaveCSS("box-shadow", focusedShadow);
+      await expectChatBorder(composer);
       await selectSidebarPage(page, "Chat");
-      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
-      await expect(composer).toHaveCSS("box-shadow", restingShadow);
+      await expect(composer).toHaveCSS("box-shadow", "none");
     }
+    await page.emulateMedia({ forcedColors: "active" });
+    await input().focus();
+    await expectChatBorder(composer, "Highlight");
+    await expect(chat.locator(".event.message").first()).toHaveCSS("border-top-width", "0px");
+    await page.emulateMedia({ forcedColors: "none" });
 
     await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
     await chat.getByRole("button", { name: "Stop", exact: true }).click();
@@ -3432,9 +4017,16 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.getByRole("alert")).toBeVisible();
     const failed = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
     await chat.getByRole("button", { name: "Retry", exact: true }).click();
+    // Windows native cleanup and startup each have a separate five-second bound.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
-      .not.toBe(failed);
+      .poll(
+        async () => {
+          const run = (await page.evaluate(() => window.desktop.snapshot())).chat.run;
+          return run !== null && run.id !== failed;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
     await page.evaluate(() => window.desktop.setOrchestrationProvider("claude"));
     await expect(chat.getByRole("status")).toHaveText("Ready");
     const prior = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id as string;
@@ -3517,7 +4109,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await expect
       .poll(() => page.evaluate(async () => (await window.desktop.snapshot()).active))
       .toBe(false);
-    await page.getByRole("button", { name: "Close chat", exact: true }).click();
+    await page.locator(".chat-head-close").click();
     const count = await page.evaluate(async (id) => {
       const events = await window.desktop.action({ type: "events", id });
       return Array.isArray(events) ? events.length : 0;
@@ -3933,6 +4525,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
   await mkdir(join(folder, "src"), { recursive: true });
   await writeFile(join(folder, "src", "main.ts"), "export const answer = 42;\n");
   await writeFile(join(folder, "empty.txt"), "");
+  await writeFile(join(folder, ".hidden.txt"), "hidden fixture");
   await writeFile(join(folder, "binary.bin"), Buffer.from([0, 1, 2]));
   execFileSync("git", ["init", "-b", "main", folder]);
   execFileSync("git", ["-C", folder, "add", "."]);
@@ -3965,7 +4558,49 @@ test("desktop: Files tree and shared read-only preview", async () => {
       BrowserWindow.getAllWindows()[0]?.setSize(1500, 900),
     );
     await selectSidebarPage(page, "Files");
-    const files = page.locator("#panel-files");
+    const files = page.locator("#panel-chat .files-page");
+    const fileSettings = files.getByRole("button", { name: "File Explorer settings", exact: true });
+    const settingsDialog = page.getByRole("dialog", {
+      name: "File Explorer settings",
+      exact: true,
+    });
+    const hiddenFile = files.getByRole("treeitem", { name: ".hidden.txt", exact: true });
+    await expect(files.getByRole("checkbox", { name: "Show hidden files" })).toHaveCount(0);
+    await expect(hiddenFile).toHaveCount(0);
+    await fileSettings.focus();
+    await fileSettings.press("Enter");
+    await expect(settingsDialog).toBeVisible();
+    const hiddenOption = settingsDialog.getByRole("checkbox", { name: "Show hidden files" });
+    await expect(hiddenOption).toBeFocused();
+    await hiddenOption.press("Tab");
+    await expect(settingsDialog.getByRole("button", { name: "Done", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(
+      settingsDialog.getByRole("button", { name: "Close File Explorer settings" }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(hiddenOption).toBeFocused();
+    await hiddenOption.press("Space");
+    await page.keyboard.press("Escape");
+    await expect(settingsDialog).toHaveCount(0);
+    await expect(fileSettings).toBeFocused();
+    await expect(hiddenFile).toBeVisible();
+    await fileSettings.press("Enter");
+    await expect(hiddenOption).toBeChecked();
+    await hiddenOption.uncheck();
+    await settingsDialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(fileSettings).toBeFocused();
+    await expect(hiddenFile).toHaveCount(0);
+    const explorerDivider = files.getByRole("button", {
+      name: "Resize File Explorer",
+      exact: true,
+    });
+    await expect(explorerDivider).toHaveCSS("border-left-width", "1px");
+    const initialExplorer = (await files.boundingBox())?.width ?? 0;
+    await explorerDivider.focus();
+    await explorerDivider.press("ArrowLeft");
+    await expect(explorerDivider).toHaveCSS("outline-style", "solid");
+    await expect.poll(async () => (await files.boundingBox())?.width).toBe(initialExplorer + 20);
     const src = files.getByRole("treeitem", { name: "src", exact: true });
     await expect(src).toBeVisible();
     await expect(files.getByRole("treeitem", { name: "main.ts", exact: true })).toHaveCount(0);
@@ -3977,10 +4612,74 @@ test("desktop: Files tree and shared read-only preview", async () => {
     const inspector = page.getByRole("complementary", { name: "File preview" });
     await expect(inspector).toBeVisible();
     await expect(inspector.locator(".view-lines")).toContainText("42");
+    await expect(inspector.getByRole("button", { name: "Reveal in Files" })).toHaveCount(0);
+    const previewBeforeExplorerResize = (await inspector.boundingBox())?.width;
+    const explorerGrip = await explorerDivider.boundingBox();
+    if (!explorerGrip) throw new Error("Missing Explorer divider");
+    await page.mouse.move(
+      explorerGrip.x + explorerGrip.width / 2,
+      explorerGrip.y + explorerGrip.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(explorerGrip.x - 37, explorerGrip.y + explorerGrip.height / 2);
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await files.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(initialExplorer + 40);
+    await expect
+      .poll(async () => (await inspector.boundingBox())?.width)
+      .toBe(previewBeforeExplorerResize);
+    const layout = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect();
+        if (!rect) throw new Error(`Missing ${selector}`);
+        return { left: rect.left, right: rect.right };
+      };
+      return [
+        box(".sidebar"),
+        box(".chat-conversations"),
+        box(".files-page"),
+        box(".file-inspector"),
+      ];
+    });
+    for (let index = 1; index < layout.length; index++)
+      expect(layout[index]?.left).toBeGreaterThanOrEqual(layout[index - 1]?.right ?? 0);
+    expect(layout[3]?.left).toBeCloseTo(layout[2]?.right ?? 0, 0);
+    const divider = inspector.getByRole("button", { name: "Resize file preview", exact: true });
+    await expect(divider).toHaveCSS("border-left-width", "1px");
+    await divider.focus();
+    await expect(divider).toBeFocused();
+    const initialWidth = (await inspector.boundingBox())?.width ?? 0;
+    await divider.press("ArrowRight");
+    await expect(divider).toHaveCSS("outline-style", "solid");
+    await expect.poll(async () => (await inspector.boundingBox())?.width).toBe(initialWidth - 20);
+    const grip = await divider.boundingBox();
+    if (!grip) throw new Error("Missing preview divider");
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x - 38, grip.y + grip.height / 2);
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await inspector.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(initialWidth);
+    await page.emulateMedia({ forcedColors: "active" });
+    await explorerDivider.focus();
+    await explorerDivider.press("ArrowRight");
+    await explorerDivider.press("ArrowLeft");
+    await expect(explorerDivider).toHaveCSS("outline-style", "solid");
+    await expect(explorerDivider).toHaveCSS("border-left-width", "1px");
+    await fileSettings.click();
+    await expect(hiddenOption).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(fileSettings).toBeFocused();
+    await divider.focus();
+    await expect(divider).toHaveCSS("border-left-width", "1px");
+    await expect(divider).toHaveCSS("outline-style", "solid");
+    await page.emulateMedia({ forcedColors: "none" });
     await expect(inspector.locator("textarea")).toHaveAttribute("readonly", "true");
     await expect(files).toHaveCSS("border-top-width", "0px");
     await expect(inspector).toHaveCSS("border-top-width", "0px");
-    await expect(files.getByRole("heading", { name: "Files", exact: true })).toHaveCSS(
+    await expect(files.getByRole("heading", { name: "File Explorer", exact: true })).toHaveCSS(
       "font-family",
       /D-DIN/,
     );
@@ -3994,6 +4693,8 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await src.hover();
     await expect(src).toHaveCSS("background-color", "rgb(226, 243, 241)");
     await page.screenshot({ path: "test-results/files-preview-light.png" });
+    await selectSidebarPage(page, "Settings");
+    await expect(inspector).toHaveCount(0);
     await selectSidebarPage(page, "Chat");
     await expect(inspector.locator(".view-lines")).toContainText("42");
     await writeFile(join(folder, "src", "main.ts"), "export const answer = 43;\n");
@@ -4003,7 +4704,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await src.click();
     await expect(file).toHaveCount(0);
     await selectSidebarPage(page, "Chat");
-    await inspector.getByRole("button", { name: "Reveal in Files" }).click();
+    await src.click();
     await expect(files).toBeVisible();
     await expect(file).toBeVisible();
     await expect(file).toHaveAttribute("aria-selected", "true");
@@ -4011,13 +4712,9 @@ test("desktop: Files tree and shared read-only preview", async () => {
       .getByLabel("File root")
       .locator("option")
       .evaluateAll((elements) => elements.map((element) => (element as HTMLOptionElement).value));
-    const workerRoot = options.find((path) => /[\\/]worker$/.test(path));
-    expect(workerRoot).toBeTruthy();
-    await files.getByLabel("File root").selectOption(workerRoot as string);
-    await expect(inspector).toHaveCount(0);
-    await files.getByRole("treeitem", { name: "src", exact: true }).click();
-    await file.click();
-    await expect(inspector.locator(".view-lines")).toContainText("99");
+    expect(options).toEqual([await realpath(folder)]);
+    await expect(files.getByLabel("File root")).toHaveValue(await realpath(folder));
+    await expect(inspector.locator(".view-lines")).toContainText("43");
     await selectSidebarPage(page, "Settings");
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Files");
@@ -4044,10 +4741,50 @@ test("desktop: Files tree and shared read-only preview", async () => {
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
     );
     await expect(inspector).toBeVisible();
+    await page.evaluate(() => {
+      for (const role of ["button", "human", "agent", "text"])
+        document.documentElement.style.setProperty(`--${role}-size`, "32px");
+    });
+    const stacked = await page.evaluate(() => {
+      const chat = document.querySelector(".chat-conversations")?.getBoundingClientRect();
+      const files = document.querySelector(".chat-files")?.getBoundingClientRect();
+      const composer = document
+        .querySelector(".orchestration-chat-page:not([hidden]) .composer")
+        ?.getBoundingClientRect();
+      const provider = document
+        .querySelector(".orchestration-chat-page:not([hidden]) .chat-provider")
+        ?.getBoundingClientRect();
+      return {
+        chatBottom: chat?.bottom,
+        filesTop: files?.top,
+        composerBottom: composer?.bottom,
+        providerTop: provider?.top,
+        providerBottom: provider?.bottom,
+      };
+    });
+    expect(stacked.chatBottom).toBeLessThanOrEqual(stacked.filesTop ?? 0);
+    expect(stacked.composerBottom).toBeLessThanOrEqual(stacked.providerTop ?? 0);
+    expect(stacked.providerBottom).toBeLessThanOrEqual(stacked.filesTop ?? 0);
+    await inspector.scrollIntoViewIfNeeded();
+    await expect(inspector.getByRole("button", { name: "Close file preview" })).toBeVisible();
+    await expect(files.getByLabel("File root")).toBeVisible();
+    await expect(divider).toBeVisible();
+    await expect(explorerDivider).toBeVisible();
+    await fileSettings.click();
+    await expect(settingsDialog).toBeVisible();
+    await expect(hiddenOption).toBeVisible();
+    await page.screenshot({ path: "test-results/files-settings-narrow.png" });
+    await page.keyboard.press("Escape");
+    await expect(fileSettings).toBeFocused();
+    await expect(inspector.locator(".view-lines")).toBeVisible();
     await page.screenshot({ path: "test-results/files-preview-narrow.png" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    await page.evaluate(() => {
+      for (const role of ["button", "human", "agent", "text"])
+        document.documentElement.style.removeProperty(`--${role}-size`);
+    });
     await inspector.getByRole("button", { name: "Close file preview" }).click();
     await files.getByRole("treeitem", { name: "binary.bin", exact: true }).click();
     await expect(inspector.getByRole("alert")).toContainText("binary");
@@ -4061,7 +4798,9 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, plain);
+    await fileSettings.click();
     await page.evaluate(() => window.desktop.chooseFolder());
+    await expect(settingsDialog).toHaveCount(0);
     await expect(inspector).toHaveCount(0);
     await expect(files.getByRole("treeitem", { name: "note.txt", exact: true })).toBeVisible();
     await files.getByRole("treeitem", { name: "note.txt", exact: true }).click();
@@ -4076,7 +4815,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
   }
 });
 
-test("desktop: Browse files from sessions and worktrees", async () => {
+test("desktop: Browse project files from sessions and worktrees", async () => {
   test.setTimeout(60000);
   const directory = await mkdtemp(join(tmpdir(), "code60-browse-actions-"));
   const folder = join(directory, "repo");
@@ -4124,15 +4863,17 @@ test("desktop: Browse files from sessions and worktrees", async () => {
       await page.mouse.click(box.x + actionsColumnX, box.y + 44);
     };
     await openSessionActions();
-    await page.getByRole("menuitem", { name: "Browse files", exact: true }).click();
-    const files = page.locator("#panel-files");
+    await page.getByRole("menuitem", { name: "Browse project files", exact: true }).click();
+    const files = page.locator("#panel-chat .files-page");
     await expect(files).toBeVisible();
-    await expect(files.getByLabel("File root")).toHaveValue(run?.record.worktree as string);
+    await expect(files.getByLabel("File root")).toHaveValue(await realpath(folder));
     await files.getByRole("treeitem", { name: "marker.txt", exact: true }).click();
     const inspector = page.getByRole("complementary", { name: "File preview" });
     await expect(inspector.locator(".view-lines")).toContainText("project marker");
 
     await selectSidebarPage(page, "Worktrees");
+    // Explorer no longer scans worktree roots. Explicit refresh still works while paused.
+    await page.getByRole("button", { name: "Refresh project data", exact: true }).click();
     const grid = page.locator("#panel-worktrees .sessions-grid");
     await expect(
       grid.locator("[data-testid^='glide-cell-1-']").filter({ hasText: /[\\/]external$/ }),
@@ -4145,20 +4886,20 @@ test("desktop: Browse files from sessions and worktrees", async () => {
     if (!worktreeBox) throw new Error("Missing worktrees grid");
     await page.mouse.click(worktreeBox.x + 70, worktreeBox.y + 32 + 24 * (index + 0.5));
     await canvas.press("Shift+F10");
-    const browse = page.getByRole("menuitem", { name: "Browse files", exact: true });
+    const browse = page.getByRole("menuitem", { name: "Browse project files", exact: true });
     await expect(browse).toBeFocused();
     await browse.press("Enter");
     await expect(files).toBeVisible();
-    await expect(files.getByLabel("File root")).toHaveValue(paths[index] as string);
+    await expect(files.getByLabel("File root")).toHaveValue(await realpath(folder));
     await expect(inspector).toHaveCount(0);
     await files.getByRole("treeitem", { name: "marker.txt", exact: true }).click();
-    await expect(inspector.locator(".view-lines")).toContainText("external marker");
+    await expect(inspector.locator(".view-lines")).toContainText("project marker");
 
     await page.evaluate(() => window.desktop.stopAll());
     await page.evaluate((id) => window.desktop.action({ type: "discard", id }), id as string);
     await selectSidebarPage(page, "Sessions");
     await openSessionActions();
-    await expect(browse).toHaveAttribute("aria-disabled", "true");
+    await expect(browse).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 
     const plain = join(directory, "plain");
@@ -4202,10 +4943,13 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     const modal = page.getByRole("dialog", { name: "Open Project", exact: true });
     const done = page.getByRole("group", { name: "Done notification", exact: true });
     await expect(card).toHaveText("Open a project");
-    await expect(card).toHaveCSS("border-top-style", "dotted");
-    expect(await card.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain(
-      "repeating-linear-gradient",
-    );
+    await expect(card).toHaveCSS("border-top-width", "0px");
+    await expect(card).toHaveCSS("background-image", "none");
+    await page.mouse.move(1, 1);
+    const sidebarFill = await page
+      .locator(".sidebar")
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    await expect(card).toHaveCSS("background-color", sidebarFill);
     await expect(card.locator("svg")).toHaveCount(1);
     await page.screenshot({ path: "test-results/project-card-empty.png" });
     await card.focus();
@@ -4231,8 +4975,10 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await modal.getByRole("button", { name: "Create new project…", exact: true }).click();
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveText("project-one");
-    await expect(card).toHaveCSS("border-top-style", "solid");
+    await expect(card).toHaveCSS("border-top-width", "0px");
     await expect(card).toHaveCSS("background-image", "none");
+    await page.mouse.move(1, 1);
+    await expect(card).toHaveCSS("background-color", sidebarFill);
     await expect(done).toContainText("Opened project-one.");
     await page.screenshot({ path: "test-results/project-card-open.png" });
     await done.getByRole("button", { name: "Dismiss notification" }).click();
@@ -4251,8 +4997,10 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
       window.desktop.start({ agents: ["claude"], allow: [], allowAll: false }),
     );
     await expect(card).toBeDisabled();
+    await card.hover();
+    await expect(card).toHaveCSS("background-color", sidebarFill);
     await expect(card).toHaveCSS("background-image", "none");
-    await expect(card).toHaveCSS("border-top-style", "solid");
+    await expect(card).toHaveCSS("border-top-width", "0px");
     await page.evaluate(() => window.desktop.stopAll());
   } finally {
     await application?.close().catch(() => {});

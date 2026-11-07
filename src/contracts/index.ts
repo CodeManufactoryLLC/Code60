@@ -70,6 +70,7 @@ export function parseValue<S extends z.ZodType>(schema: S, value: unknown): z.ou
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./prompts.js";
+export * from "./search-summary.js";
 
 const promptTemplateSchema = (id: PromptId) =>
   z.string().superRefine((template, ctx) => {

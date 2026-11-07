@@ -1,4 +1,9 @@
-import type { DesktopRun } from "../bridge/index.js";
+import {
+  type DesktopRun,
+  SEARCH_EXCERPT_LIMIT,
+  SEARCH_SOURCE_LIMIT,
+  type SearchSummarySource,
+} from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { messageRows } from "./messages.js";
 import { pathLabel } from "./path-label.js";
@@ -135,4 +140,50 @@ export function searchExcerpt(text: string, query: string, limit = 220): string 
   const start = Math.max(lineStart, match - 60);
   const end = Math.min(lineEnd < 0 ? text.length : lineEnd, start + limit);
   return `${start > lineStart ? "…" : ""}${text.slice(start, end)}${end < (lineEnd < 0 ? text.length : lineEnd) ? "…" : ""}`;
+}
+
+/** A bounded, multiline window around the first matching term, in submitted order. */
+export function summarySources(
+  results: readonly SearchResult[],
+  query: string,
+): SearchSummarySource[] {
+  return results.slice(0, SEARCH_SOURCE_LIMIT).map((result) => {
+    const lower = result.text.toLocaleLowerCase();
+    const positions = queryTerms(query)
+      .map((term) => lower.indexOf(term))
+      .filter((at) => at >= 0);
+    const match = positions.length ? Math.min(...positions) : 0;
+    const start = Math.max(0, match - Math.floor(SEARCH_EXCERPT_LIMIT / 3));
+    const truncated = start > 0 || result.text.length > SEARCH_EXCERPT_LIMIT;
+    const text = truncated
+      ? `${start > 0 ? "…" : ""}${result.text.slice(start, start + SEARCH_EXCERPT_LIMIT - 2)}…`
+      : result.text;
+    return {
+      id: result.id,
+      kind: result.kind,
+      title: result.title.slice(0, 512),
+      text,
+      ...(result.runId === undefined ? {} : { runId: result.runId }),
+      ...(result.eventIndex === undefined ? {} : { eventIndex: result.eventIndex }),
+    };
+  });
+}
+
+/** Only in-range numeric references become local actions; everything else stays literal text. */
+export function summaryParts(
+  text: string,
+  sourceCount: number,
+): { text: string; source?: number; start?: number }[] {
+  const parts: { text: string; source?: number; start?: number }[] = [];
+  let end = 0;
+  for (const match of text.matchAll(/\[([1-9]\d*)\]/g)) {
+    const number = Number(match[1]);
+    if (!Number.isSafeInteger(number) || number > sourceCount) continue;
+    const start = match.index;
+    if (start > end) parts.push({ text: text.slice(end, start) });
+    parts.push({ text: match[0], source: number - 1, start });
+    end = start + match[0].length;
+  }
+  if (end < text.length) parts.push({ text: text.slice(end) });
+  return parts;
 }

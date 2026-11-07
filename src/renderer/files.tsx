@@ -1,6 +1,6 @@
 import { hotkeysCoreFeature, syncDataLoaderFeature } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DesktopApi, FileContext, FileEntry, Snapshot } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import { pathLabel } from "./path-label.js";
@@ -19,7 +19,6 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
   }>();
   const [expansions, setExpansions] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
-  const [revealSerial, setRevealSerial] = useState(0);
   const [selectionWorkspace, setSelectionWorkspace] = useState(workspace);
   if (selectionWorkspace !== workspace) {
     setSelectionWorkspace(workspace);
@@ -49,7 +48,7 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
       : null;
   const requestJson = JSON.stringify({
     workspace,
-    context: active || preview !== null ? context : null,
+    context: active ? context : null,
   });
   useEffect(() => {
     let current = true;
@@ -67,18 +66,10 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
     snapshot?.files?.context.project === project && snapshot.files.context.root === root
       ? snapshot.files
       : null;
-  const roots = project
-    ? [
-        { path: project, label: `Project · ${pathLabel(project)}` },
-        ...(snapshot?.worktrees?.worktrees ?? [])
-          .filter((item) => item.path !== project)
-          .map((item) => ({
-            path: item.path,
-            label: `Worktree · ${item.branch ?? "Detached HEAD"} · ${item.path}`,
-          })),
-      ]
-    : [];
-  const selectRoot = (next: string) => setSelection({ workspace, root: next, preview: null });
+  const roots = project ? [{ path: project, label: `Project · ${pathLabel(project)}` }] : [];
+  const selectRoot = (_next?: string) => {
+    if (project) setSelection({ workspace, root: project, preview: null });
+  };
   const selectFile = (path: string | null) => {
     if (root) setSelection({ workspace, root, preview: path });
   };
@@ -91,18 +82,9 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
     setError("");
     setExpansions((previous) => ({ ...previous, [expansionKey]: paths }));
   };
-  const reveal = () => {
-    if (preview === null) return;
-    const parts = preview.split("/");
-    const ancestors = parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
-    setExpanded([...new Set([...ancestors, ...expanded])].slice(0, 63));
-    setRevealSerial((serial) => serial + 1);
-  };
   return {
     root,
     preview,
-    reveal,
-    revealSerial,
     expanded,
     setExpanded,
     files,
@@ -118,16 +100,42 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
 }
 export type FileBrowser = ReturnType<typeof useFiles>;
 
-export function FilesPage({ browser }: { browser: FileBrowser }) {
+export function FilesPage({
+  browser,
+  onOpenProject,
+  active = true,
+}: {
+  browser: FileBrowser;
+  onOpenProject(): void;
+  active?: boolean;
+}) {
   const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    if (browser.revealSerial && browser.preview?.split("/").some((part) => part.startsWith(".")))
-      setHidden(true);
-  }, [browser.revealSerial, browser.preview]);
+  const [settings, setSettings] = useState(false);
+  const [width, setWidth] = useState(280);
+  // A project/page switch must never leave an unrelated modal over the next page.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: workspace changes dismiss the modal.
+  useEffect(() => setSettings(false), [browser.workspace, active]);
   return (
-    <main className="files-page" aria-label="Files">
+    <section className="files-page" aria-label="File Explorer" style={{ width }}>
+      <FileResize
+        label="Resize File Explorer"
+        width={width}
+        onResize={(value) => setWidth(Math.max(180, Math.min(600, value)))}
+      />
       <header className="files-header">
-        <h1>Files</h1>
+        <div className="files-title">
+          <h2>File Explorer</h2>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="File Explorer settings"
+            aria-haspopup="dialog"
+            title="File Explorer settings"
+            onClick={() => setSettings(true)}
+          >
+            <Icon name="settings" />
+          </button>
+        </div>
         {browser.root && (
           <div className="files-controls">
             <label>
@@ -147,18 +155,17 @@ export function FilesPage({ browser }: { browser: FileBrowser }) {
                 ))}
               </select>
             </label>
-            <label className="files-hidden">
-              <input
-                type="checkbox"
-                checked={hidden}
-                onChange={(event) => setHidden(event.target.checked)}
-              />
-              Show hidden files
-            </label>
           </div>
         )}
       </header>
-      {!browser.root && <p className="files-status">Open a project to browse files.</p>}
+      {!browser.root && (
+        <div className="files-status">
+          <p>Open a project to browse files.</p>
+          <button type="button" onClick={onOpenProject}>
+            Open project
+          </button>
+        </div>
+      )}
       {browser.error && (
         <p className="error-banner" role="alert">
           {browser.error}
@@ -167,7 +174,104 @@ export function FilesPage({ browser }: { browser: FileBrowser }) {
       {browser.root && (
         <FileTree key={`${browser.workspace}:${browser.root}`} browser={browser} hidden={hidden} />
       )}
-    </main>
+      {settings && active && (
+        <FileSettings hidden={hidden} onHidden={setHidden} onClose={() => setSettings(false)} />
+      )}
+    </section>
+  );
+}
+
+function FileSettings({
+  hidden,
+  onHidden,
+  onClose,
+}: {
+  hidden: boolean;
+  onHidden(value: boolean): void;
+  onClose(): void;
+}) {
+  const id = useId();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const checkbox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const element = dialog.current;
+    element?.showModal();
+    checkbox.current?.focus();
+    return () => {
+      element?.close();
+      previous?.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      className="setup-dialog picker-dialog"
+      aria-labelledby={id}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <div className="modal-heading">
+        <h2 id={id}>File Explorer settings</h2>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Close File Explorer settings"
+          onClick={onClose}
+        >
+          <Icon name="close" />
+        </button>
+      </div>
+      <label className="files-hidden">
+        <input
+          ref={checkbox}
+          type="checkbox"
+          checked={hidden}
+          onChange={(event) => onHidden(event.target.checked)}
+        />
+        Show hidden files
+      </label>
+      <div className="modal-footer">
+        <button type="button" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+function FileResize({
+  label,
+  width,
+  onResize,
+}: {
+  label: string;
+  width: number;
+  onResize(value: number): void;
+}) {
+  return (
+    <button
+      type="button"
+      className="file-column-resize"
+      aria-label={label}
+      title={`${label} (Left/Right arrows)`}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const current = event.currentTarget.parentElement?.getBoundingClientRect().width ?? width;
+          onResize(current + (event.key === "ArrowLeft" ? 20 : -20));
+        }
+      }}
+      onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+      onPointerMove={(event) => {
+        const parent = event.currentTarget.parentElement;
+        if (parent && event.currentTarget.hasPointerCapture(event.pointerId))
+          onResize(parent.getBoundingClientRect().right - event.clientX);
+      }}
+      onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+    />
   );
 }
 
@@ -207,22 +311,6 @@ function FileTree({ browser, hidden }: { browser: FileBrowser; hidden: boolean }
   useEffect(() => {
     tree.rebuildTree();
   }, [tree, browser.files, hidden]);
-  const revealed = useRef(0);
-  useEffect(() => {
-    if (
-      !browser.preview ||
-      !entries.has(browser.preview) ||
-      revealed.current === browser.revealSerial
-    )
-      return;
-    const item = tree.getItems().find((item) => item.getId() === browser.preview);
-    const element = item?.getElement();
-    if (!element) return;
-    item?.setFocused();
-    element.focus();
-    element.scrollIntoView({ block: "nearest" });
-    revealed.current = browser.revealSerial;
-  }, [tree, browser.preview, browser.revealSerial, entries]);
   const issues = browser.files?.directories.filter((dir) => dir.error || dir.truncated) ?? [];
   return (
     <>
@@ -270,7 +358,7 @@ function FileTree({ browser, hidden }: { browser: FileBrowser; hidden: boolean }
   );
 }
 
-export function FileInspector({ browser, onReveal }: { browser: FileBrowser; onReveal(): void }) {
+export function FileInspector({ browser }: { browser: FileBrowser }) {
   const [width, setWidth] = useState(440);
   const path = browser.preview;
   if (path === null) return null;
@@ -278,40 +366,17 @@ export function FileInspector({ browser, onReveal }: { browser: FileBrowser; onR
   const resize = (value: number) => setWidth(Math.max(300, Math.min(800, value)));
   return (
     <aside className="file-inspector" aria-label="File preview" style={{ width }}>
-      <button
-        type="button"
-        className="file-inspector-resize"
-        aria-label="Resize file preview"
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            event.preventDefault();
-            resize(width + (event.key === "ArrowLeft" ? 20 : -20));
-          }
-        }}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={(event) => {
-          const parent = event.currentTarget.parentElement;
-          if (parent && event.currentTarget.hasPointerCapture(event.pointerId))
-            resize(parent.getBoundingClientRect().right - event.clientX);
-        }}
-        onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-      />
+      <FileResize label="Resize file preview" width={width} onResize={resize} />
       <header className="file-inspector-header">
         <h2>{path.split("/").at(-1)}</h2>
-        <div className="button-group">
-          <button type="button" onClick={onReveal}>
-            Reveal in Files
-          </button>
-          <button
-            type="button"
-            aria-label="Close file preview"
-            onClick={() => browser.selectFile(null)}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Close file preview"
+          onClick={() => browser.selectFile(null)}
+        >
+          <Icon name="close" />
+        </button>
       </header>
       <div className="file-inspector-context">
         <span>

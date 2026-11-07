@@ -28,6 +28,8 @@ import {
   parsePromptTemplateId,
   parseSaveConfiguration,
   parseSavePromptTemplate,
+  parseSearchSummary,
+  parseSearchSummaryRequestId,
   parseStart,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
@@ -281,6 +283,12 @@ async function ready(): Promise<void> {
   handle("desktop:memory-extract", (value) =>
     controller.extractMemory(parseMemoryExtraction(value)),
   );
+  handle("desktop:search-summary", (value) =>
+    controller.summarizeSearch(parseSearchSummary(value)),
+  );
+  handle("desktop:search-summary-cancel", (value) =>
+    controller.cancelSearchSummary(parseSearchSummaryRequestId(value)),
+  );
   handle("desktop:memory-cancel", (value) =>
     controller.cancelMemoryExtraction(parseMemoryRequestId(value)),
   );
@@ -347,6 +355,7 @@ async function ready(): Promise<void> {
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
+    void controller.cancelSearchSummary().catch(() => {});
     window?.setIgnoreMouseEvents(false);
     controller.setVisibility({ visible: false, worktrees: false });
   });

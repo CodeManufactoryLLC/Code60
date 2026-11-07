@@ -23,7 +23,8 @@ import type {
 } from "../bridge/index.js";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
 import { ChatDock, type OpenChat } from "./chat-dock.js";
-import { ChatPage, ChatSidebar } from "./chat-page.js";
+import { ChatPage } from "./chat-page.js";
+import { newestMessage } from "./chat-presentation.js";
 import { agentCount, ConfigurationsTable, providers } from "./configurations.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
@@ -141,7 +142,12 @@ function App() {
           const content = element?.closest(
             ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
-          const next = !nativeControls && !content && !document.querySelector("dialog[open]");
+          const sidebarStrip =
+            element?.closest(".window-drag-strip") &&
+            event.clientX <
+              (document.querySelector(".sidebar")?.getBoundingClientRect().right ?? 0);
+          const next =
+            !nativeControls && !sidebarStrip && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;
           ignored = next;
           void api.setBackgroundHitTest(next).catch((cause) => setError(message(cause)));
@@ -232,6 +238,7 @@ function App() {
     parseRowDensity(localStorage.getItem("code60.rowDensity")),
   );
   const [tabs, setTabs] = useState(initialTabs);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const [chartTickMs, setChartTickMs] = useState(() =>
     parseChartTick(localStorage.getItem("code60.chartTickMs")),
   );
@@ -267,11 +274,11 @@ function App() {
   const database = snapshot?.database ?? null;
   const directory = snapshot?.directory;
   const workspace = `${database}:${directory}`;
-  const fileBrowser = useFiles(api, snapshot, !splash && tabs.active === "files");
+  const fileBrowser = useFiles(api, snapshot, !splash && tabs.active === "chat" && explorerOpen);
   const transcripts = useTranscripts(
     api,
     workspace,
-    !!directory && ["messages", "events", "search", "episodic-memory"].includes(tabs.active),
+    !!directory && !splash,
     snapshot?.runs,
     snapshot?.liveIds,
     state?.events,
@@ -281,15 +288,15 @@ function App() {
       void api
         .setVisibility({
           visible: !document.hidden && !splash,
-          worktrees: tabs.active === "worktrees" || tabs.active === "files",
-          files: tabs.active === "files" || fileBrowser.preview !== null,
+          worktrees: tabs.active === "worktrees",
+          files: tabs.active === "chat" && explorerOpen,
         })
         .catch((cause) => setError(message(cause)));
     };
     visibility();
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
-  }, [tabs.active, splash, fileBrowser.preview]);
+  }, [tabs.active, splash, explorerOpen]);
   const loaded = snapshot !== undefined || error !== "";
   // With a connected database and no open project, the splash offers the most recent project.
   const lastProject = database && !directory ? snapshot?.projects[0] : undefined;
@@ -442,15 +449,16 @@ function App() {
     }
   }
 
-  const browseFiles = async (root: string) => {
+  const browseFiles = async () => {
     if (!snapshot) return;
     setBusy(true);
     try {
-      const latest = await prepareFileNavigation(api, snapshot, root);
+      const latest = await prepareFileNavigation(api, snapshot);
       if (!latest) return;
       setState((current) => applyUpdate(current, latest));
-      fileBrowser.selectRoot(root);
-      setTabs((current) => updateTabs(current, { type: "select", id: "files" }));
+      fileBrowser.selectRoot();
+      setExplorerOpen(true);
+      setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     } catch (cause) {
       notify(message(cause), "error");
     } finally {
@@ -496,9 +504,7 @@ function App() {
     const view = target.view;
     const waitBusy = "Wait for the current action to finish";
     const reasons = {
-      browse: busy
-        ? waitBusy
-        : unless(!!target.record.discardedAt, "This run's worktree was deleted"),
+      browse: busy ? waitBusy : unless(!directory, "Open a project to browse files"),
       review: busy
         ? waitBusy
         : unless(!hasWorktree(target), "This run has no worktree, so there is no diff"),
@@ -549,7 +555,7 @@ function App() {
         openChat(target.record.id);
       }),
       entry("review", "Review changes", "compare", () => setChanges(target.record.id)),
-      entry("browse", "Browse files", "document", () => void browseFiles(target.record.worktree)),
+      entry("browse", "Browse project files", "document", () => void browseFiles()),
       entry(
         "cancel",
         "Cancel turn",
@@ -597,12 +603,18 @@ function App() {
     group: "Pages",
     icon: "document",
     checked: tabs.active === id,
-    run: () => setTabs((current) => updateTabs(current, { type: "select", id })),
+    run: () => {
+      if (id === "files") {
+        fileBrowser.selectRoot();
+        setExplorerOpen(true);
+      }
+      setTabs((current) => updateTabs(current, { type: "select", id }));
+    },
   });
   const commands: Command[] = [
     page("chat", "Chat"),
     page("episodic-memory", "Episodic Memory"),
-    page("files", "Files"),
+    page("files", "File Explorer"),
     page("sessions", "Sessions"),
     page("configurations", "Configurations"),
     page("messages", "Messages"),
@@ -756,11 +768,11 @@ function App() {
           groups={[
             [
               {
-                label: "Browse files",
+                label: "Browse project files",
                 icon: "document",
                 disabled: busy,
                 reason: "Wait for the current action to finish",
-                run: () => void browseFiles(menuWorktree.path),
+                run: () => void browseFiles(),
               },
             ],
           ]}
@@ -839,11 +851,19 @@ function App() {
       <div
         className="app-workspace"
         data-chat={!splash && tabs.active === "chat"}
-        data-inspector={!splash && fileBrowser.preview !== null}
+        data-inspector={
+          !splash && tabs.active === "chat" && explorerOpen && fileBrowser.preview !== null
+        }
       >
         {!splash && (
           <PageTabBar
             tabs={tabs}
+            api={api}
+            chats={snapshot?.chats ?? []}
+            selectedId={snapshot?.chat.run?.id}
+            database={database}
+            version={snapshot?.versions.code60}
+            eventsByRun={state?.chatEventsByRun ?? {}}
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
             projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
@@ -856,14 +876,6 @@ function App() {
             }}
           />
         )}
-        {!splash && tabs.active === "chat" && (
-          <ChatSidebar
-            api={api}
-            chats={snapshot?.chats ?? []}
-            selectedId={snapshot?.chat.run?.id}
-            database={database}
-          />
-        )}
         <div
           className="page-panel"
           role="tabpanel"
@@ -871,29 +883,38 @@ function App() {
           aria-labelledby="tab-chat"
           hidden={tabs.active !== "chat"}
         >
-          {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
-            <ChatPage
-              key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
-              api={api}
-              chat={chat}
-              hidden={chat?.directory !== snapshot?.chat.directory}
-              events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
-              database={database}
-              active={
-                !splash && tabs.active === "chat" && chat?.directory === snapshot?.chat.directory
-              }
-              onDatabase={() => showPicker("database")}
-            />
-          ))}
-        </div>
-        <div
-          className="page-panel"
-          role="tabpanel"
-          id="panel-files"
-          aria-labelledby="tab-files"
-          hidden={tabs.active !== "files"}
-        >
-          <FilesPage browser={fileBrowser} />
+          <div className="chat-conversations">
+            {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
+              <ChatPage
+                key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
+                api={api}
+                chat={chat}
+                hidden={chat?.directory !== snapshot?.chat.directory}
+                events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
+                database={database}
+                runs={snapshot?.runs ?? []}
+                explorerOpen={explorerOpen}
+                onExplorer={() => {
+                  if (!explorerOpen) fileBrowser.selectRoot();
+                  setExplorerOpen((value) => !value);
+                }}
+                active={
+                  !splash && tabs.active === "chat" && chat?.directory === snapshot?.chat.directory
+                }
+                onDatabase={() => showPicker("database")}
+              />
+            ))}
+          </div>
+          {explorerOpen && (
+            <div className="chat-files" data-preview={fileBrowser.preview !== null}>
+              <FilesPage
+                browser={fileBrowser}
+                onOpenProject={() => showPicker("project")}
+                active={!splash && tabs.active === "chat"}
+              />
+              {!splash && tabs.active === "chat" && <FileInspector browser={fileBrowser} />}
+            </div>
+          )}
         </div>
         {tabs.open.includes("settings") && (
           <div
@@ -1162,6 +1183,8 @@ function App() {
         >
           <SearchPage
             key={workspace}
+            api={api}
+            provider={snapshot?.orchestration.provider ?? null}
             directory={directory ?? null}
             runs={snapshot?.runs ?? []}
             data={transcripts}
@@ -1295,20 +1318,31 @@ function App() {
             </Modal>
           )}
         </div>
-        {!splash && (
-          <FileInspector
-            browser={fileBrowser}
-            onReveal={() => {
-              fileBrowser.reveal();
-              setTabs((current) => updateTabs(current, { type: "select", id: "files" }));
-            }}
-          />
-        )}
       </div>
       {!splash && (
         <footer className="app-footer">
           {snapshot && (
-            <PollingWidget key={database ?? "none"} polling={snapshot.polling} api={api} />
+            <PollingWidget
+              key={database ?? "none"}
+              polling={snapshot.polling}
+              api={api}
+              messageScope={
+                tabs.active === "chat"
+                  ? "selected orchestration conversation"
+                  : "current project sessions"
+              }
+              messageAt={
+                tabs.active === "chat"
+                  ? newestMessage(state?.chatEvents ?? [])
+                  : transcripts.pending || Object.keys(transcripts.errors).length
+                    ? null
+                    : newestMessage(
+                        snapshot.runs.flatMap(({ record }) => [
+                          ...(transcripts.events[record.id] ?? []),
+                        ]),
+                      )
+              }
+            />
           )}
           {directory && snapshot && state && (
             <ChatDock
@@ -1369,7 +1403,6 @@ function App() {
               setSelected(first);
               setSetup(false);
               setConfirmation({ launchId: first, count: ids.length });
-              openChat(first);
             });
           }}
         />

@@ -8,7 +8,7 @@ import {
   type PromptTemplates,
   type RunConfiguration,
 } from "../src/bridge/index.js";
-import type { CoreDeps } from "../src/core/index.js";
+import { type CoreDeps, DEFAULT_CONFIG } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
@@ -1401,6 +1401,72 @@ describe("orchestrated workers over ACP", () => {
     return result.body.result.runId as string;
   }
 
+  it.each(["droid", "codex"])(
+    "defaults workers to the selected %s provider, not the CLI default",
+    async (provider) => {
+      agents.script = () => "hang";
+      await controller.setOrchestrationProvider(provider);
+      await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+      await controller.open(directory);
+      const call = caller();
+      const context = await call("code60_get_context");
+      const scope = context.body.result.scope;
+      const runId = await dispatch(call, scope, "HANG default worker");
+      await vi.waitFor(() => expect(session(runId)).toBeDefined());
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.record.agent).toBe(
+        provider,
+      );
+      expect(agents.specs.find((spec) => spec.cwd.endsWith(runId))?.command).toEqual(
+        DEFAULT_CONFIG.agents[provider]?.command,
+      );
+      expect(context.body.result.defaultProvider).toBe(provider);
+      expect(controller.snapshot().defaultAgent).toBe("claude");
+
+      const override = await call("code60_dispatch_agent", {
+        scope,
+        requestId: "explicit provider",
+        prompt: "HANG explicit worker",
+        provider: "claude",
+      });
+      expect(override.status).toBe(200);
+      const overrideId = override.body.result.runId;
+      await vi.waitFor(() => expect(session(overrideId)).toBeDefined());
+      expect(
+        controller.snapshot().runs.find((run) => run.record.id === overrideId)?.record.agent,
+      ).toBe("claude");
+      expect(agents.specs.find((spec) => spec.cwd.endsWith(overrideId))?.command).toEqual(
+        DEFAULT_CONFIG.agents.claude?.command,
+      );
+    },
+  );
+
+  it("does not fall back to the CLI default when the selected worker provider disappears", async () => {
+    const configDirectory = join(directory, "config", "code60");
+    const configPath = join(configDirectory, "config.json");
+    await fs.mkdir(configDirectory, { recursive: true });
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({ agents: { custom: { command: ["custom-agent", "acp"] } } }),
+    );
+    await controller.poll(["config"]);
+    await controller.setOrchestrationProvider("custom");
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    await controller.open(directory);
+    const call = caller();
+    const context = await call("code60_get_context");
+    expect(context.body.result.defaultProvider).toBe("custom");
+    await fs.writeFile(configPath, "{}");
+    const before = agents.specs.length;
+    const result = await call("code60_dispatch_agent", {
+      scope: context.body.result.scope,
+      requestId: "missing provider",
+      prompt: "Do not launch another provider",
+    });
+    expect(result.status).toBe(400);
+    expect(result.body.error).toContain("Unknown provider 'custom'");
+    expect(agents.specs).toHaveLength(before);
+  });
+
   it("isolates gateways, ownership, request IDs, capacity and updates across chats", async () => {
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
@@ -1418,6 +1484,10 @@ describe("orchestrated workers over ACP", () => {
     const firstWorker = await dispatch(firstCall, firstScope, "HANG first", "shared-id");
     const secondWorker = await dispatch(secondCall, secondScope, "HANG second", "shared-id");
     expect(firstWorker).not.toBe(secondWorker);
+    expect(controller.snapshot().chats.find((chat) => chat.run?.id === firstId)?.workers).toEqual([
+      firstWorker,
+    ]);
+    expect(controller.snapshot().chat.workers).toEqual([secondWorker]);
     expect((await firstCall("code60_get_context")).body.result.liveWorkers).toBe(1);
     expect((await secondCall("code60_get_context")).body.result.liveWorkers).toBe(1);
     expect((await firstCall("code60_list_agents")).body.result.workers).toEqual([
@@ -1662,6 +1732,7 @@ describe("orchestrated workers over ACP", () => {
       (await next("code60_finish_agent", { scope: context.body.result.scope, runId })).body.error,
     ).toContain("No worker with this ID");
     expect(controller.snapshot().workers).toContain(runId);
+    expect(controller.snapshot().chat.workers).toEqual([]);
   });
 });
 
@@ -1759,4 +1830,124 @@ describe("episodic memory controller", () => {
       await expect(fs.stat(agents.specs.at(-1)?.cwd ?? "")).rejects.toThrow();
     },
   );
+});
+
+describe("search overview helpers", () => {
+  async function summaryRequest() {
+    await controller.open(directory);
+    await controller.setOrchestrationProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const path = controller.snapshot().directory as string;
+    return {
+      requestId: crypto.randomUUID(),
+      directory: path,
+      query: "parser",
+      sources: [{ id: path, kind: "project" as const, title: "Project", text: "Parser fixed." }],
+    };
+  }
+
+  it("uses the orchestration provider in a disposable directory without records or worktrees", async () => {
+    const input = await summaryRequest();
+    const initial = controller.snapshot();
+    const count = agents.sessions.length;
+    agents.script = (_, session) => {
+      session.update({ type: "message", text: "Parser fixed. [1]" });
+      return "end_turn";
+    };
+    expect(await controller.summarizeSearch(input)).toEqual({
+      requestId: input.requestId,
+      text: "Parser fixed. [1]",
+    });
+    expect(agents.sessions).toHaveLength(count + 1);
+    const spec = agents.specs.at(-1);
+    expect(spec?.name).toBe("claude");
+    expect(spec?.mcpServers).toBeUndefined();
+    expect(spec?.cwd).not.toBe(input.directory);
+    await expect(fs.stat(spec?.cwd as string)).rejects.toThrow();
+    expect(agents.sessions.at(-1)?.stops).toEqual([1000]);
+    expect(controller.snapshot().runs).toEqual(initial.runs);
+    expect(controller.snapshot().chats).toEqual(initial.chats);
+    expect(git.worktrees).toEqual([]);
+  });
+
+  it("rejects stale projects, foreign sessions and malformed source addresses", async () => {
+    const input = await summaryRequest();
+    await expect(controller.summarizeSearch({ ...input, directory: "/elsewhere" })).rejects.toThrow(
+      "project changed",
+    );
+    for (const source of [
+      { id: "/elsewhere", kind: "project" as const, title: "Project", text: "" },
+      { id: "foreign", kind: "run" as const, title: "Foreign", text: "", runId: "foreign" },
+      {
+        id: "foreign:0",
+        kind: "message" as const,
+        title: "Foreign",
+        text: "",
+        runId: "foreign",
+        eventIndex: 0,
+      },
+    ])
+      await expect(controller.summarizeSearch({ ...input, sources: [source] })).rejects.toThrow(
+        "source",
+      );
+  });
+
+  it("fully stops a superseded worker before starting the replacement and ignores stale cancellation", async () => {
+    const input = await summaryRequest();
+    agents.script = () => "hang";
+    const first = controller.summarizeSearch(input);
+    const rejected = expect(first).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+    const oldSession = agents.sessions.at(-1);
+    const oldDirectory = agents.specs.at(-1)?.cwd as string;
+    agents.script = (_, session) => {
+      expect(oldSession?.stops).toEqual([1000]);
+      session.update({ type: "message", text: "Replacement. [1]" });
+      return "end_turn";
+    };
+    const next = { ...input, requestId: crypto.randomUUID() };
+    expect((await controller.summarizeSearch(next)).text).toBe("Replacement. [1]");
+    await rejected;
+    await expect(fs.stat(oldDirectory)).rejects.toThrow();
+    await controller.cancelSearchSummary(input.requestId);
+  });
+
+  it.each(["cancel", "reload", "provider", "project", "database", "stop-all", "shutdown"])(
+    "cancels and cleans up on %s",
+    async (mode) => {
+      const input = await summaryRequest();
+      agents.script = () => "hang";
+      const pending = controller.summarizeSearch(input);
+      const rejected = expect(pending).rejects.toThrow("cancelled");
+      await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+      const worker = agents.sessions.at(-1);
+      const cwd = agents.specs.at(-1)?.cwd as string;
+      if (mode === "cancel") await controller.cancelSearchSummary(input.requestId);
+      else if (mode === "reload") await controller.cancelSearchSummary();
+      else if (mode === "provider") await controller.setOrchestrationProvider(null);
+      else if (mode === "project") {
+        const next = join(directory, "next-project");
+        await fs.mkdir(next);
+        await controller.open(next);
+      } else if (mode === "database")
+        await controller.connect(join(directory, "next.sqlite"), true);
+      else if (mode === "stop-all") await controller.stopAll();
+      else await controller.shutdown(true);
+      await rejected;
+      expect(worker?.stops).toEqual([1000]);
+      await expect(fs.stat(cwd)).rejects.toThrow();
+    },
+  );
+
+  it("does not cancel the active worker for another request ID", async () => {
+    const input = await summaryRequest();
+    agents.script = () => "hang";
+    const pending = controller.summarizeSearch(input);
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+    await controller.cancelSearchSummary(crypto.randomUUID());
+    expect(agents.sessions.at(-1)?.turnActive).toBe(true);
+    await controller.cancelSearchSummary(input.requestId);
+    await rejected;
+  });
 });
