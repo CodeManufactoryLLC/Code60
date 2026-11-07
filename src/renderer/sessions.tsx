@@ -3,7 +3,7 @@ import { type ComponentProps, useCallback, useMemo } from "react";
 import type { RunEvent } from "../core/index.js";
 import { DataTable, type TableOptions, useCssColors } from "./data-table.js";
 import { drawIcon } from "./icons.js";
-import { monospaceFont, resolveText, type SessionRow, statusSpec } from "./state.js";
+import { resolveText, type SessionRow, statusSpec } from "./state.js";
 import { useTableView } from "./table-view.js";
 import {
   bucketCount,
@@ -102,24 +102,20 @@ function paintStatus(
   const x = rect.x + 6;
   const y = rect.y + (rect.height - height) / 2;
   let text = color("--muted");
-  let weight = 400;
   if (spec.emphasis === "active") {
     text = color("--text");
-    weight = 500;
   } else if (spec.emphasis === "decision") {
     ctx.fillStyle = color("--text");
     ctx.fillRect(x, y, Math.min(128, rect.width - 12), height);
     text = color("--bg");
-    weight = 600;
   } else if (spec.emphasis === "abnormal") {
     text = color("--danger");
-    weight = 600;
     ctx.fillStyle = text;
     ctx.fillRect(x, y, 3, height);
   }
   ctx.fillStyle = text;
   drawIcon(ctx, spec.icon, x + 6, rect.y + rect.height / 2 - 8);
-  ctx.font = `${weight} 12px ${font}`;
+  ctx.font = `400 12px ${font}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.letterSpacing = "0px";
@@ -133,12 +129,13 @@ function paintChart(
   key: "turnTime" | "activity" | "history",
   scales: { turns: number; events: number },
   color: (name: string) => string,
+  font: string,
 ) {
   const { ctx, rect } = paint;
   const data = row.telemetry;
   const x = rect.x + 8;
   const middle = rect.y + rect.height / 2;
-  ctx.font = `12px ${monospaceFont}`;
+  ctx.font = `400 12px ${font}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.letterSpacing = "0px";
@@ -268,7 +265,7 @@ export function SessionsTable(
     (args: Parameters<Paint>[0], row: ChartRow, key: Key) => {
       if (key === "statusLabel") paintStatus(args, row, color, font);
       else if (key === "turnTime" || key === "activity" || key === "history")
-        paintChart(args, row, key, scales, color);
+        paintChart(args, row, key, scales, color, font);
       else return false;
       return true;
     },

@@ -55,6 +55,7 @@ import {
   fontWeights,
   hasOrchestrationProvider,
   migrateAppearance,
+  migrateTypography,
   parseFitColumns,
   parseRowDensity,
   parseTableLines,
@@ -96,6 +97,7 @@ declare global {
 }
 
 migrateAppearance(localStorage);
+migrateTypography(localStorage);
 const api = window.desktop;
 const kinds = [
   "read",
@@ -244,7 +246,7 @@ function App() {
     let cancelled = false;
     // Wait for the face so the wordmark never flashes in a fallback font.
     void document.fonts
-      .load('600 64px "IBM Plex Sans"')
+      .load('400 64px "D-DIN"')
       .catch(() => [])
       .then(() => {
         if (!cancelled) setSplashReady(true);
@@ -1768,9 +1770,7 @@ function SettingsPage({
                       })
                     }
                   >
-                    <option value="">
-                      Default (IBM Plex {role.id === "humanMessages" ? "Serif" : "Sans"})
-                    </option>
+                    <option value="">Default (D-DIN)</option>
                     {typefaces.map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.label}

@@ -157,8 +157,13 @@ mandatory signing, and verifies notarization before promotion. Never distribute
 local test artifacts as signed releases. `npm run test:packaged` also accepts an
 absolute `CODE60_PACKAGED_EXECUTABLE` path for inspecting an installed build.
 
-The icon is a reproducible Code60 wordmark: `node scripts/generate-icon.mjs`
-regenerates `packaging/icon.png`. The bundle ID `com.codemanufactory.code60` and
+The icon has a full viridian (`#40826d`) background with black 60 numerals and a
+black upper-right corner behind a 45-degree chamfer. The desktop cut extends
+352px into the 1024px canvas so it remains visible inside macOS's rounded icon mask.
+After `npm ci`, `node scripts/generate-icon.mjs` regenerates the 1024px
+`packaging/icon.png` using Electron, the renderer styles, and bundled D-DIN
+Regular. On Linux without a display, use `xvfb-run -a node scripts/generate-icon.mjs`.
+The bundle ID `com.codemanufactory.code60` and
 existing user-data paths must remain stable across updates.
 
 ## Milestones

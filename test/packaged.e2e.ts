@@ -47,7 +47,7 @@ test("installed app launches with a minimal PATH and isolated data", async () =>
     });
     expect(security).toEqual({ sandbox: true, contextIsolation: true, nodeIntegration: false });
     expect(await app.evaluate(({ app }) => app.commandLine.hasSwitch("no-sandbox"))).toBe(false);
-    expect(await page.evaluate(() => document.fonts.check('16px "IBM Plex Sans"'))).toBe(true);
+    expect(await page.evaluate(() => document.fonts.check('400 16px "D-DIN"'))).toBe(true);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
