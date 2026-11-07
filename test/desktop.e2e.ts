@@ -2630,7 +2630,7 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
       ),
     }),
   );
-  await mkdir(dirname(file), { recursive: true });
+  await privateDirectory(dirname(file));
   await writeFile(file, JSON.stringify({ orchestrationProvider: "claude" }));
   try {
     application = await launch(directory, directory, database, false);
