@@ -2072,7 +2072,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       ),
     ).toEqual(["none", "drag"]);
     await expect(page.locator("#panel-settings").getByRole("heading", { level: 2 })).toHaveText([
-      "Orchestration",
+      "Agents",
       "Appearance",
       "Table defaults",
       "Text",
