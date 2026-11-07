@@ -1043,7 +1043,6 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       selection?.addRange(range);
       return selection?.toString();
     });
-    const beforeScroll = await chat.locator(".transcript").evaluate((element) => element.scrollTop);
     await agentCopy.click();
     await expect(composer).toBeFocused();
     expect(await page.evaluate(() => getSelection()?.toString())).toBe(selectedText);
@@ -1056,6 +1055,12 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
         () => (window as unknown as { copyHarness: { values: string[] } }).copyHarness.values,
       );
     expect(await clipboardValues()).toEqual([source]);
+    // Streaming may legitimately move a following transcript. Measure feedback
+    // only after the final chunk, independently of the viewport's available height.
+    const beforeFeedback = await chat.locator(".transcript").evaluate((element) => ({
+      top: element.scrollTop,
+      height: element.scrollHeight,
+    }));
     await page.evaluate(() =>
       (window as unknown as { copyHarness: { reject(): void } }).copyHarness.reject(),
     );
@@ -1075,12 +1080,13 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(retry).toHaveCount(0);
     await expect(composer).toHaveValue("untouched draft");
     // Feedback is overlaid, not inserted into the transcript's scrolling layout.
+    const afterFeedback = await chat.locator(".transcript").evaluate((element) => ({
+      top: element.scrollTop,
+      height: element.scrollHeight,
+    }));
+    expect(afterFeedback.height).toBe(beforeFeedback.height);
     // Native focus can round the Windows scroll offset by one CSS pixel.
-    expect(
-      Math.abs(
-        (await chat.locator(".transcript").evaluate((element) => element.scrollTop)) - beforeScroll,
-      ),
-    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(afterFeedback.top - beforeFeedback.top)).toBeLessThanOrEqual(1);
     const userCopy = chat.locator(".event.prompt").getByRole("button", { name: "Copy message" });
     await expectMessageCopy(userCopy);
     const userBubble = await chat.locator(".event.prompt pre").boundingBox();
@@ -5320,6 +5326,7 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     await expect(info).toContainText("Code60 auto-approval: On");
     const selector = info.getByLabel("Harness mode", { exact: true });
     await expect(selector).toHaveValue("ask");
+    await expect(selector).toBeEnabled();
     await selector.focus();
     await expect(selector).toBeFocused();
     await selector.selectOption("full");
