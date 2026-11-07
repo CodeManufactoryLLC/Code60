@@ -14,3 +14,5 @@
 - Stay within the non-goals in ARCHITECTURE.md. Retries, durable queues, budgets, and automatic recovery are out of scope.
 
 - Preserve prompt dispatch timestamps and record actual turn completion before persistence/cleanup. Optional turnEnd outcome/completedAt and terminal status turn/completedAt metadata distinguish timeout, cancellation and transport failure without changing CLI outcomes. Keep older events readable; never infer successful completion after a crash.
+
+- The search summary helper runs one evidence-only ACP turn through injected agents, with denied permission requests, bounded text and timeout, and unconditional process/listener/timer cleanup. It never creates run records or worktrees.

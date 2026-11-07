@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   DesktopApi,
   DesktopRun,
@@ -10,6 +10,7 @@ import { delegatedActivity, sessionStatus, turnTimings } from "./chat-presentati
 import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { type Block, statusSpec, transcript } from "./state.js";
+import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
 function ChatMessage({ block }: { block: Block }) {
   const speaker =
@@ -29,7 +30,10 @@ function ChatMessage({ block }: { block: Block }) {
                 ? "Error"
                 : "Session";
   return (
-    <article className={`event ${block.type}`} aria-label={speaker}>
+    <article
+      className={`event ${block.type}${block.automatic ? " automatic" : ""}`}
+      aria-label={speaker}
+    >
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
       <pre>{block.text}</pre>
       {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
@@ -41,82 +45,88 @@ function ChatMessage({ block }: { block: Block }) {
 }
 
 export function ChatSidebar({
-  api,
   chats,
   selectedId,
   database,
-  onNavigate,
+  eventsByRun,
+  open,
+  pending,
+  onSelect,
 }: {
-  api: DesktopApi;
   chats: readonly OrchestrationChat[];
   selectedId: string | undefined;
   database: string | null;
-  onNavigate(): void;
+  eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
+  open: boolean;
+  pending: boolean;
+  onSelect(id: string): void;
 }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const inFlight = useRef(false);
-  async function action(request: OrchestrationChatAction) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setPending(true);
-    setError("");
+  const markers = useRef(new Map<string, number>());
+  const replies = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(eventsByRun).map(([id, events]) => [id, replyTurns(events)]),
+      ),
+    [eventsByRun],
+  );
+  useLayoutEffect(() => {
+    if (!database || !open || !selectedId) return;
+    const turns = replies[selectedId] ?? [];
+    const key = readMarkerKey(database, selectedId);
+    const read = turns.reduce(
+      (latest, turn) => Math.max(latest, turn),
+      markers.current.get(key) ?? loadReadMarker(sessionStorage, key),
+    );
+    markers.current.set(key, read);
     try {
-      await api.orchestrationChatAction(request);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      inFlight.current = false;
-      setPending(false);
+      sessionStorage.setItem(key, String(read));
+    } catch {
+      // Keep in-memory read state when browser storage is unavailable.
     }
-  }
+  }, [database, open, selectedId, replies]);
   return (
     <nav className="chat-sidebar" aria-label="Orchestrator chats">
-      <header className="chat-sidebar-heading">
-        <button
-          type="button"
-          className="chat-sidebar-new"
-          disabled={pending || !database}
-          onClick={() => {
-            onNavigate();
-            void action({ type: "new" });
-          }}
-        >
-          New chat
-        </button>
-      </header>
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
-      )}
       <div className="chat-sidebar-list">
-        {chats.map(
-          ({ run, error }, index) =>
-            run && (
-              <button
-                key={run.id}
-                type="button"
-                className="chat-sidebar-entry"
-                aria-label={`Chat ${index + 1}`}
-                aria-description={error || sessionStatus(run).label}
-                aria-current={run.id === selectedId ? "true" : undefined}
-                disabled={pending}
-                onClick={() => {
-                  onNavigate();
-                  void action({ type: "select", id: run.id });
-                }}
-                title={error || sessionStatus(run).label}
-              >
-                {run.stopping || ["queued", "running", "waiting"].includes(run.status) ? (
-                  <span className="chat-loader" aria-hidden="true" />
-                ) : null}
-                <span className="chat-sidebar-label">Chat {index + 1}</span>
+        {chats.map(({ run, error }, index) => {
+          if (!run) return null;
+          const key = readMarkerKey(database ?? "", run.id);
+          const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
+          const unread =
+            open && run.id === selectedId ? 0 : unreadCount(replies[run.id] ?? [], read);
+          const unreadLabel =
+            unread > 0 ? `${unread} unread ${unread === 1 ? "reply" : "replies"}` : "";
+          const description = [error || sessionStatus(run).label, unreadLabel]
+            .filter(Boolean)
+            .join(". ");
+          return (
+            <button
+              key={run.id}
+              type="button"
+              className="chat-sidebar-entry"
+              aria-label={`Chat ${index + 1}`}
+              aria-description={description}
+              aria-current={run.id === selectedId ? "true" : undefined}
+              disabled={pending}
+              onClick={() => onSelect(run.id)}
+              title={description}
+            >
+              {run.stopping || ["queued", "running", "waiting"].includes(run.status) ? (
+                <span className="chat-loader" aria-hidden="true" />
+              ) : null}
+              <span className="chat-sidebar-label">Chat {index + 1}</span>
+              {unread > 0 && (
+                <span className="chat-unread" role="img" aria-label={unreadLabel}>
+                  <Icon name="chat" />
+                  <span>{unread}</span>
+                </span>
+              )}
+              {(error || sessionStatus(run).icon !== "chat") && (
                 <Icon name={error ? "warning--alt--filled" : sessionStatus(run).icon} />
-                <span className="sr-only">{error || sessionStatus(run).label}</span>
-              </button>
-            ),
-        )}
+              )}
+              <span className="sr-only">{error || sessionStatus(run).label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -279,7 +289,6 @@ export function ChatPage({
           Chat
         </h1>
         <div className="orchestration-chat-status">
-          {run && <span>{run.agent}</span>}
           {!database ? (
             <button type="button" onClick={onDatabase}>
               Connect to database
@@ -435,6 +444,11 @@ export function ChatPage({
             )}
           </div>
         </section>
+        {run && (
+          <div className="chat-provider" role="note" aria-label="Current provider">
+            {run.agent}
+          </div>
+        )}
       </div>
     </main>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { durationText, type TurnTiming, timingText } from "./chat-presentation.js";
+import { Icon } from "./icons.js";
 import { useTicker } from "./ticker.js";
 
 export async function copyMessage(
@@ -42,12 +43,14 @@ export function MessageCopy({ text }: { text: string }) {
     <div className="message-copy">
       <button
         type="button"
+        className="icon-button"
+        title={state === "failed" ? "Retry Copy message" : "Copy message"}
         aria-label={state === "failed" ? "Retry Copy message" : "Copy message"}
         aria-disabled={state === "copying"}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => void copy()}
       >
-        {state === "failed" ? "Retry Copy" : "Copy"}
+        <Icon name="copy" />
       </button>
       <span
         className="message-copy-feedback"

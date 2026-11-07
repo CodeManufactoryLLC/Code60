@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { DesktopApi, OrchestrationChat } from "../bridge/index.js";
+import type { DesktopApi, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
+import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-page.js";
 import { Icon, type IconName } from "./icons.js";
 import { pathLabel } from "./path-label.js";
@@ -46,6 +47,7 @@ export function PageTabBar({
   selectedId,
   database,
   version,
+  eventsByRun,
 }: {
   tabs: PageTabs;
   /** The open project folder, if any. */
@@ -58,6 +60,7 @@ export function PageTabBar({
   selectedId: string | undefined;
   database: string | null;
   version: string | undefined;
+  eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
 }) {
   const repository = directory ? pathLabel(directory) : directory;
   return (
@@ -81,6 +84,7 @@ export function PageTabBar({
         chats={chats}
         selectedId={selectedId}
         database={database}
+        eventsByRun={eventsByRun}
       />
       <div className="sidebar-version" role="note" aria-label="Running Code60 version">
         Code60 {version ?? "Version unavailable"}
@@ -109,6 +113,7 @@ function PageTabList({
   chats,
   selectedId,
   database,
+  eventsByRun,
 }: {
   tabs: PageTabs;
   onSelect(id: PageId): void;
@@ -116,7 +121,26 @@ function PageTabList({
   chats: readonly OrchestrationChat[];
   selectedId: string | undefined;
   database: string | null;
+  eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
 }) {
+  const [chatPending, setChatPending] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const chatInFlight = useRef(false);
+  async function chatAction(request: OrchestrationChatAction) {
+    if (chatInFlight.current) return;
+    chatInFlight.current = true;
+    setChatPending(true);
+    setChatError("");
+    onSelect("chat");
+    try {
+      await api.orchestrationChatAction(request);
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      chatInFlight.current = false;
+      setChatPending(false);
+    }
+  }
   const [chatExpanded, setChatExpanded] = useState(
     () => localStorage.getItem("code60.chatExpanded") !== "false",
   );
@@ -282,27 +306,54 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
-      <div className="page-tab" role="tablist" aria-label="Chat page" aria-orientation="vertical">
+      <div className="chat-page-heading">
+        <div className="page-tab" role="tablist" aria-label="Chat page" aria-orientation="vertical">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tabs.active === "chat"}
+            id="tab-chat"
+            className="page-group-toggle"
+            aria-expanded={chatExpanded}
+            aria-controls="panel-chat chat-pages"
+            data-active={tabs.active === "chat"}
+            onClick={() => {
+              if (tabs.active !== "chat") onSelect("chat");
+              else setChatExpanded((value) => !value);
+            }}
+            onKeyDown={(event) => navigate(event, "chat")}
+          >
+            <Icon name="chat" />
+            <span className="page-tab-label">Chat</span>
+            <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
+          </button>
+        </div>
         <button
           type="button"
-          role="tab"
-          aria-selected={tabs.active === "chat"}
-          id="tab-chat"
-          className="page-group-toggle"
-          aria-expanded={chatExpanded}
-          aria-controls="panel-chat chat-pages"
-          data-active={tabs.active === "chat"}
+          className="chat-sidebar-new"
+          aria-label="New chat"
+          title="New chat"
+          disabled={chatPending || !database}
           onClick={() => {
-            if (tabs.active !== "chat") onSelect("chat");
-            else setChatExpanded((value) => !value);
+            setChatExpanded(true);
+            void chatAction({ type: "new" });
           }}
-          onKeyDown={(event) => navigate(event, "chat")}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              document.getElementById("tab-chat")?.focus();
+            } else if (["ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              navigate(event, "chat");
+          }}
         >
-          <Icon name="chat" />
-          <span className="page-tab-label">Chat</span>
-          <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
+          <Icon name="add" />
         </button>
       </div>
+      {chatError && (
+        <p className="error-banner" role="alert">
+          {chatError}
+        </p>
+      )}
       {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
       <div
         id="chat-pages"
@@ -346,11 +397,13 @@ function PageTabList({
         }}
       >
         <ChatSidebar
-          api={api}
           chats={chats}
           selectedId={selectedId}
           database={database}
-          onNavigate={() => onSelect("chat")}
+          eventsByRun={eventsByRun}
+          open={tabs.active === "chat"}
+          pending={chatPending}
+          onSelect={(id) => void chatAction({ type: "select", id })}
         />
       </div>
       <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">

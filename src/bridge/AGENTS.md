@@ -8,3 +8,5 @@
 - Chat snapshots expose current-project worker IDs scoped to the owning conversation.
   Keep lifecycle timing metadata optional for older events; add no clipboard or generic
   filesystem capability for renderer presentation.
+
+- Search summary requests carry only request/project identity, a bounded query and bounded source excerpts with local addresses. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.

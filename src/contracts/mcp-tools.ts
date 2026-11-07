@@ -165,7 +165,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
   control(
     "code60_get_context",
     "Get worker context",
-    "Returns the open project, the scope token required by worker changes, configured providers, the default provider and turn timeout, whether workers get isolated worktrees, and how many of the parallel slots this chat's live workers use.",
+    "Returns the open project, the scope token required by worker changes, configured providers, the selected orchestration provider as the default worker provider, the turn timeout, whether workers get isolated worktrees, and how many of the parallel slots this chat's live workers use.",
     object({}),
     true,
   ),
@@ -186,7 +186,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Configured agent name. Defaults to the default provider.",
+          description: "Configured agent name. Defaults to the selected orchestration provider.",
         },
         ...promptInput("The complete task for the worker."),
         base: {

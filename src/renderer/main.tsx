@@ -142,7 +142,12 @@ function App() {
           const content = element?.closest(
             ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
-          const next = !nativeControls && !content && !document.querySelector("dialog[open]");
+          const sidebarStrip =
+            element?.closest(".window-drag-strip") &&
+            event.clientX <
+              (document.querySelector(".sidebar")?.getBoundingClientRect().right ?? 0);
+          const next =
+            !nativeControls && !sidebarStrip && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;
           ignored = next;
           void api.setBackgroundHitTest(next).catch((cause) => setError(message(cause)));
@@ -858,6 +863,7 @@ function App() {
             selectedId={snapshot?.chat.run?.id}
             database={database}
             version={snapshot?.versions.code60}
+            eventsByRun={state?.chatEventsByRun ?? {}}
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
             projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
@@ -877,9 +883,6 @@ function App() {
           aria-labelledby="tab-chat"
           hidden={tabs.active !== "chat"}
         >
-          {explorerOpen && (
-            <FilesPage browser={fileBrowser} onOpenProject={() => showPicker("project")} />
-          )}
           <div className="chat-conversations">
             {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
               <ChatPage
@@ -902,6 +905,16 @@ function App() {
               />
             ))}
           </div>
+          {explorerOpen && (
+            <div className="chat-files" data-preview={fileBrowser.preview !== null}>
+              <FilesPage
+                browser={fileBrowser}
+                onOpenProject={() => showPicker("project")}
+                active={!splash && tabs.active === "chat"}
+              />
+              {!splash && tabs.active === "chat" && <FileInspector browser={fileBrowser} />}
+            </div>
+          )}
         </div>
         {tabs.open.includes("settings") && (
           <div
@@ -1170,6 +1183,8 @@ function App() {
         >
           <SearchPage
             key={workspace}
+            api={api}
+            provider={snapshot?.orchestration.provider ?? null}
             directory={directory ?? null}
             runs={snapshot?.runs ?? []}
             data={transcripts}
@@ -1303,15 +1318,6 @@ function App() {
             </Modal>
           )}
         </div>
-        {!splash && tabs.active === "chat" && explorerOpen && (
-          <FileInspector
-            browser={fileBrowser}
-            onReveal={() => {
-              fileBrowser.reveal();
-              setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
-            }}
-          />
-        )}
       </div>
       {!splash && (
         <footer className="app-footer">

@@ -7,6 +7,9 @@ import {
   type PromptId,
   parseValue,
   runIdSchema,
+  SEARCH_EXCERPT_LIMIT,
+  SEARCH_QUERY_LIMIT,
+  SEARCH_SOURCE_LIMIT,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
@@ -39,6 +42,10 @@ export {
   type PromptId,
   type PromptTemplates,
   renderPrompt,
+  SEARCH_EXCERPT_LIMIT,
+  SEARCH_QUERY_LIMIT,
+  SEARCH_SOURCE_LIMIT,
+  type SearchSummarySource,
   validatePromptTemplate,
 } from "../contracts/index.js";
 
@@ -223,6 +230,8 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  summarizeSearch(request: SearchSummaryRequest): Promise<SearchSummaryResult>;
+  cancelSearchSummary(requestId: string): Promise<void>;
   extractMemory(request: MemoryExtractionRequest): Promise<MemoryExtractionResult>;
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
@@ -611,4 +620,41 @@ export interface MemoryExtractionResult {
 export const parseMemoryExtraction = (value: unknown): MemoryExtractionRequest =>
   parseValue(memoryExtractionSchema, value);
 export const parseMemoryRequestId = (value: unknown): string =>
+  parseValue(memoryRequestIdSchema, value);
+
+const searchSummarySchema = z
+  .strictObject({
+    requestId: memoryRequestIdSchema,
+    directory: boundedString("project path", 4096).min(1),
+    query: boundedString("search query", SEARCH_QUERY_LIMIT).refine(
+      (value) => value.trim().length > 0,
+      "Enter a search query",
+    ),
+    sources: z
+      .array(
+        z.strictObject({
+          id: boundedString("source ID", 4096).min(1),
+          kind: z.enum(["project", "run", "prompt", "message", "thought"]),
+          title: boundedString("source title", 512),
+          text: boundedString("source excerpt", SEARCH_EXCERPT_LIMIT),
+          runId: runIdSchema.optional(),
+          eventIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+        }),
+      )
+      .min(1)
+      .max(SEARCH_SOURCE_LIMIT),
+  })
+  .refine(
+    (request) =>
+      new Set(request.sources.map((source) => source.id)).size === request.sources.length,
+    "Duplicate search sources",
+  );
+export type SearchSummaryRequest = z.infer<typeof searchSummarySchema>;
+export interface SearchSummaryResult {
+  requestId: string;
+  text: string;
+}
+export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
+  parseValue(searchSummarySchema, value);
+export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);

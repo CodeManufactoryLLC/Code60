@@ -67,7 +67,9 @@
   --disabled-fill: #ffffff;
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
-  --chat-composer-shadow: #40826d;
+  --chat-neutral: #f3f3f3;
+  --user-bubble: #43b3ae;
+  --on-user-bubble: #000000;
   --human-text: #146c67;
   --destructive: #a03d31;
   --destructive-hover: #873327;
@@ -107,7 +109,9 @@
   --code: #242b33;
   --disabled-stripe: transparent;
   --chat-bg: #242b33;
-  --chat-composer-shadow: var(--primary);
+  --chat-neutral: #2c353f;
+  --user-bubble: var(--primary);
+  --on-user-bubble: #000000;
   --human-text: #b5c8d3;
   --destructive: #df9d8f;
   --destructive-hover: #edb3a7;
@@ -148,7 +152,9 @@
     --code: #242b33;
     --disabled-stripe: transparent;
     --chat-bg: #242b33;
-    --chat-composer-shadow: var(--primary);
+    --chat-neutral: #2c353f;
+    --user-bubble: var(--primary);
+    --on-user-bubble: #000000;
     --human-text: #b5c8d3;
     --destructive: #df9d8f;
     --destructive-hover: #edb3a7;
@@ -481,6 +487,11 @@ kbd {
   height: var(--app-titlebar-height);
   flex-shrink: 0;
   -webkit-app-region: drag;
+  background: linear-gradient(
+    to right,
+    var(--chat-neutral) 0 var(--sidebar-width),
+    transparent var(--sidebar-width)
+  );
 }
 .app-workspace {
   display: grid;
@@ -490,22 +501,24 @@ kbd {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--page-margin) var(--page-margin);
+  margin: 0 var(--page-margin) 0 0;
 }
 
 /* Repository identity above the interactive page tabs. */
 .sidebar {
+  --control-fill: var(--chat-neutral);
+  --disabled-fill: var(--chat-neutral);
   grid-column: 1;
   grid-row: 1;
-  align-self: start;
+  align-self: stretch;
   max-height: 100%;
   padding: 6px;
   border: 0;
-  border-radius: 5px;
-  background: var(--surface-band);
+  border-radius: 0;
+  background: var(--chat-neutral);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   min-height: 0;
 }
@@ -514,8 +527,8 @@ kbd {
   flex-direction: column;
   gap: 2px;
   flex-shrink: 0;
-  padding: 8px 12px;
-  border: 1px solid transparent;
+  padding: 4px 12px;
+  border: 0;
   background: transparent;
 }
 button.project-card {
@@ -524,28 +537,14 @@ button.project-card {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 5px;
-  background-color: var(--surface);
+  background-color: var(--control-fill);
   text-align: left;
 }
-.app button.project-card[data-empty="false"] {
-  border-style: solid;
+.app button.project-card[data-empty] {
+  border: 0;
   background-image: none;
-}
-.app button.project-card[data-empty="true"] {
-  border-style: dotted;
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 4px,
-    color-mix(in srgb, var(--muted) 12%, transparent) 4px 6px
-  );
-}
-@media (forced-colors: active) {
-  .app button.project-card[data-empty="true"] {
-    background-image: none;
-    border-color: ButtonText;
-  }
 }
 .sidebar-title {
   margin: 0;
@@ -587,10 +586,10 @@ button.project-card {
 .page-tab [role="tab"],
 .page-tab .page-group-toggle {
   width: 100%;
-  min-height: 36px;
-  padding: 8px 12px;
+  min-height: 28px;
+  padding: 4px 12px;
   border: 1px solid transparent;
-  background: var(--row-alt);
+  background: var(--control-fill);
   color: var(--muted);
   font-weight: var(--button-weight, 400);
   text-align: left;
@@ -610,10 +609,10 @@ button.project-card {
   background: var(--hover-bg);
   color: var(--text);
 }
-/* A neutral fill marks selection; viridian is reserved for hover. */
+/* Selection changes text contrast, not the sidebar fill. */
 .page-tab [role="tab"][aria-selected="true"],
 .page-tab .page-group-toggle[data-active="true"] {
-  background: var(--accent-bg);
+  background: var(--control-fill);
   color: var(--text);
   font-weight: var(--button-weight, 400);
 }
@@ -632,6 +631,13 @@ button.project-card {
 }
 .page-group-toggle .page-tab-label {
   flex: 1;
+}
+.chat-page-heading {
+  position: relative;
+  flex-shrink: 0;
+}
+.chat-page-heading .page-tab-label {
+  padding-right: 28px;
 }
 
 /* Unframed main content alongside the navigation. */
@@ -654,6 +660,9 @@ button.project-card {
 }
 .page-panel[hidden] {
   display: none;
+}
+.app-workspace > .page-panel {
+  margin-bottom: var(--page-margin);
 }
 
 /* Prompt Editor */
@@ -1367,6 +1376,19 @@ button.project-card {
   line-height: 1.65;
   color: var(--human-text);
 }
+.event.prompt:not(.automatic) {
+  width: fit-content;
+  max-width: 85%;
+  margin-left: auto;
+  margin-right: 0;
+  border: 0;
+}
+.event.prompt:where(:not(.automatic)) pre {
+  padding: 12px 18px;
+  border-radius: 5px;
+  background: var(--user-bubble);
+  color: var(--on-user-bubble);
+}
 .event.toolCall {
   background: var(--code);
   border: 1px solid var(--surface-edge);
@@ -1441,9 +1463,9 @@ button.project-card {
   box-shadow: none;
 }
 :where(:root[data-focus-highlight="on"]) .composer:focus-within {
-  outline: 2px solid var(--focus-line);
-  outline-offset: -3px;
-  box-shadow: inset 0 0 0 5px var(--focus-band);
+  border-color: var(--focus-line);
+  outline: 0;
+  box-shadow: none;
 }
 .composer-footer {
   display: flex;
@@ -2784,8 +2806,8 @@ dialog::backdrop {
   flex: 1;
   overflow: auto;
 }
-.search-controls,
-.filter-library {
+.filter-library,
+.search-controls {
   display: flex;
   align-items: end;
   flex-wrap: wrap;
@@ -2797,72 +2819,104 @@ dialog::backdrop {
   flex-direction: column;
   gap: 4px;
 }
+.search-query-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
 .search-query {
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
+}
+.search-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 16px;
+}
+.search-controls {
+  margin-top: 12px;
 }
 .search-body {
-  display: grid;
-  grid-template-columns: minmax(240px, 2fr) minmax(280px, 3fr);
-  min-height: 0;
-  flex: 1;
-  gap: 20px;
-}
-.search-results,
-.search-preview {
   min-width: 0;
-  overflow: auto;
 }
-/* biome-ignore lint/style/noDescendingSpecificity: search results cannot be button-group children. */
-.search-results button {
+.search-overview {
+  padding-block: 4px 24px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--surface-edge);
+}
+.search-overview-heading {
   display: flex;
-  flex-direction: column;
-  align-items: start;
-  text-align: left;
-  white-space: normal;
-  width: 100%;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.search-overview h2,
+.search-results h2 {
+  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  text-transform: var(--title-case, none);
+}
+.search-overview-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.search-results li {
+  margin-bottom: 28px;
+  min-width: 0;
+}
+.search-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
   margin-bottom: 4px;
-  padding: 12px;
+}
+/* Text actions keep native button activation and visible keyboard focus. */
+.search-results .search-result-title,
+.search-overview .search-citation {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--human-text);
+  padding: 0;
+  min-height: 0;
+  height: auto;
+  font: inherit;
+  text-transform: inherit;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.search-results .search-result-title:hover,
+.search-overview .search-citation:hover {
+  text-decoration: underline;
   background: transparent;
 }
-.search-results button:hover {
-  background: var(--hover-bg);
+.search-results .search-result-title:focus-visible,
+.search-overview .search-citation:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
-.search-results button[aria-selected="true"] {
-  background: var(--accent-bg);
+.search-overview .search-citation {
+  display: inline;
+  margin-inline: 2px;
 }
 .result-excerpt {
   overflow-wrap: anywhere;
+  line-height: 1.6;
+  margin-top: 6px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-.search-results time {
-  color: var(--muted);
-  font-size: 12px;
-}
-.search-preview {
-  background: var(--surface);
-  border: 1px solid var(--surface-edge);
-  padding: 16px;
-}
-.search-preview header {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  align-items: start;
-}
-.search-preview h2 {
-  overflow-wrap: anywhere;
-  font-size: 15px;
-}
-/* biome-ignore lint/style/noDescendingSpecificity: search preview is independent of transcript notes. */
-.search-preview pre {
-  margin-top: 20px;
-  font: inherit;
-  white-space: pre-wrap;
 }
 /* biome-ignore lint/style/noDescendingSpecificity: Search and the command palette are separate pages. */
 .search-page mark {
@@ -2910,19 +2964,6 @@ dialog::backdrop {
 .filter-rule select {
   width: 100%;
   min-width: 0;
-}
-@media (max-width: 1000px) {
-  .search-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-  .search-results {
-    max-height: 40vh;
-    flex-shrink: 0;
-  }
-  .search-preview {
-    overflow: visible;
-  }
 }
 @media (max-width: 700px) {
   .filter-rule {
@@ -3029,7 +3070,8 @@ dialog::backdrop {
   transition: max-width 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .search-page[data-expanded="true"] .search-entry {
-  max-width: 100%;
+  max-width: 780px;
+  margin-inline: 0;
 }
 .search-wordmark {
   display: flex;
@@ -3037,7 +3079,7 @@ dialog::backdrop {
   max-height: 64px;
   margin-bottom: 28px;
   overflow: hidden;
-  font-size: 40px;
+  font-size: 32px;
   line-height: 1.35;
   opacity: 1;
   transition:
@@ -3056,7 +3098,7 @@ dialog::backdrop {
   padding: 12px 16px;
   font-size: var(--text-size, 16px);
 }
-.search-controls > [hidden] {
+.search-controls[hidden] {
   display: none;
 }
 .search-content {
@@ -3065,11 +3107,13 @@ dialog::backdrop {
   gap: 20px;
   min-height: 0;
   overflow: hidden;
-  padding-top: 20px;
+  padding-top: 24px;
+  max-width: 780px;
+  width: 100%;
+  overflow-y: auto;
 }
 .search-content[hidden] {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 .search-content .search-body {
   animation: search-reveal 220ms 120ms both ease-out;
@@ -3111,33 +3155,20 @@ dialog::backdrop {
   padding: 0;
   border: 0;
   border-radius: 5px;
-  background: var(--surface);
-}
-.chat-sidebar-heading {
-  flex-shrink: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0;
-  /* Match the main sidebar's 6px inset and header's 8px padding plus 1px border. */
-  padding: 6px 0 8px;
-}
-.chat-sidebar-heading .sidebar-title {
-  padding: 9px 0 9px 8px;
+  background: transparent;
 }
 .chat-sidebar-new {
-  min-height: 32px;
-  padding: 4px 10px;
-  gap: 4px;
+  position: absolute;
+  top: 50%;
+  right: 32px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 4px;
   margin: 0;
-  flex-shrink: 0;
-  min-width: 0;
-  border: 1px solid var(--control-border);
-  background: transparent;
-  justify-content: center;
-  align-items: baseline;
-  text-align: center;
-  white-space: nowrap;
+  border: 0;
+  background: var(--control-fill);
 }
 .chat-sidebar-list {
   display: flex;
@@ -3154,15 +3185,14 @@ dialog::backdrop {
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  min-height: 36px;
-  /* Match nav rows: 8px padding plus their transparent 1px border, without a card border. */
-  padding: 9px 8px;
+  min-height: 28px;
+  padding: 5px 8px;
   margin: 0;
   border: 0;
   text-align: left;
 }
 .chat-sidebar-entry[aria-current="true"] {
-  background: var(--accent-bg);
+  background: var(--control-fill);
   color: var(--text);
   font-weight: 400;
 }
@@ -3170,10 +3200,6 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.chat-sidebar .error-banner {
-  margin: 0 6px 12px;
-  overflow-wrap: anywhere;
 }
 
 /* App-wide Chat: a readable conversation with a persistent composer and progress. */
@@ -3223,20 +3249,9 @@ dialog::backdrop {
 }
 .orchestration-chat-body .event.message {
   padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-}
-.orchestration-chat-body .event.prompt {
-  width: fit-content;
-  max-width: 85%;
-  margin-left: auto;
-  padding: 12px 18px;
-  background: var(--surface);
-  border: 1px solid transparent;
-  border-radius: 5px;
+  border: 0;
 }
 .orchestration-chat-body .event.prompt pre {
-  color: var(--text);
   font-weight: var(--human-weight, 400);
 }
 .chat-message-speaker {
@@ -3299,17 +3314,22 @@ dialog::backdrop {
   position: relative;
   flex-shrink: 0;
   margin: 0;
-  border: 2px solid transparent;
+  border: 1px solid var(--control-border);
   border-top-right-radius: 24px;
   corner-top-right-shape: bevel;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 6%);
-  background: var(--surface);
+  box-shadow: none;
+  background: var(--chat-neutral);
 }
 .orchestration-chat-body .composer:focus-within {
+  border-color: var(--focus-line);
   outline: 0;
-  box-shadow:
-    0 0 12px color-mix(in srgb, var(--chat-composer-shadow) 45%, transparent),
-    0 0 4px rgb(0 0 0 / 25%);
+  box-shadow: none;
+}
+.chat-provider {
+  flex-shrink: 0;
+  padding: 6px 2px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .orchestration-chat-body .composer textarea {
   min-height: 72px;
@@ -3392,10 +3412,11 @@ dialog::backdrop {
     --color-1: Canvas;
     --color-2: CanvasText;
   }
-  .orchestration-chat-body .event.prompt,
-  .orchestration-chat-body .event.message,
+  .event.prompt:not(.automatic) pre {
+    border: 1px solid CanvasText;
+  }
   .orchestration-chat-body .composer:focus-within {
-    border-color: CanvasText;
+    border-color: Highlight;
   }
 }
 @media (max-width: 900px) {
@@ -3554,31 +3575,40 @@ dialog::backdrop {
   flex: 1;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
-:where(#panel-chat) > .files-page {
-  flex: 0 1 280px;
-  min-width: min(180px, 35%);
-  border-right: 1px solid var(--border);
-  overflow: auto;
+.chat-files {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 180px;
+  min-height: 0;
+  max-width: calc(100% - 260px);
+}
+.chat-files > :where(.files-page) {
+  flex: 0 1 auto;
+  min-width: 160px;
+}
+.chat-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+}
+.chat-unread > span {
+  min-width: 1.5em;
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: var(--accent-bg);
+  text-align: center;
 }
 .sidebar-version {
   flex-shrink: 0;
-  padding: 8px;
+  padding: 8px 8px 24px;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 #chat-pages .chat-sidebar {
   background: transparent;
-}
-#chat-pages .chat-sidebar-heading {
-  padding: 0 0 4px;
-}
-#chat-pages .chat-sidebar-new {
-  width: 100%;
-  min-height: 36px;
-  text-align: left;
-  justify-content: flex-start;
-  border: 0;
 }
 #chat-pages .chat-sidebar-entry {
   flex-direction: row;
@@ -3597,6 +3627,10 @@ dialog::backdrop {
   color: var(--muted);
   text-transform: none;
 }
+.event.prompt .message-copy {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
 .message-copy-feedback:not(:empty) {
   position: absolute;
   bottom: 100%;
@@ -3608,8 +3642,20 @@ dialog::backdrop {
   z-index: 1;
 }
 :is(.transcript .event) .message-copy button {
-  min-height: 36px;
-  padding: 3px 8px;
+  --icon-size: 12px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  color: var(--muted);
+}
+:is(.transcript .event) .message-copy button:hover {
+  color: var(--text);
 }
 .turn-timer {
   margin: 8px 0;
@@ -3639,30 +3685,55 @@ dialog::backdrop {
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
-@media (max-width: 800px) {
-  #panel-chat:has(> .files-page) {
+@media (max-width: 1200px) {
+  #panel-chat:has(> .chat-files) {
     flex-direction: column;
+    overflow-y: auto;
   }
-  #panel-chat > .files-page {
-    flex: 0 1 35%;
-    min-height: 90px;
+  #panel-chat:has(> .chat-files) > .chat-conversations {
+    flex: 1 0
+      max(
+        300px,
+        calc(
+          8 *
+          max(var(--human-size, 14px), var(--button-size, 13px), var(--text-size, 13px)) +
+          140px
+        )
+      );
   }
-}
-.app-workspace[data-inspector="true"] {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
-}
-.app-workspace[data-chat="true"][data-inspector="true"] {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
+  #panel-chat > .chat-files {
+    flex: 1 0 max(300px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
+    max-width: 100%;
+  }
+  .chat-files > :where(.files-page) {
+    flex-grow: 1;
+  }
 }
 .files-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
 }
+.files-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.files-title h2 {
+  min-width: 0;
+}
+.setup-dialog .files-hidden {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .files-header,
 .file-inspector-header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -3738,12 +3809,12 @@ dialog::backdrop {
 }
 .file-inspector {
   position: relative;
-  grid-column: -2;
-  grid-row: 1;
   display: flex;
+  flex-shrink: 1;
   flex-direction: column;
   min-height: 0;
-  max-width: 55vw;
+  min-width: min(300px, 50%);
+  max-width: calc(100% - 160px);
   border: 0;
   border-radius: 5px;
   background: var(--surface);
@@ -3751,6 +3822,7 @@ dialog::backdrop {
 }
 .file-inspector-context {
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
   gap: 6px;
   padding: 12px 16px;
@@ -3774,7 +3846,7 @@ dialog::backdrop {
   min-height: 0;
   min-width: 0;
 }
-.file-inspector-resize {
+.file-column-resize {
   position: absolute;
   left: 0;
   top: 0;
@@ -3782,27 +3854,25 @@ dialog::backdrop {
   width: 6px;
   min-width: 0;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--control-border);
   border-radius: 0;
-  background: transparent;
+  background: var(--chat-neutral);
   z-index: 2;
   cursor: col-resize;
   touch-action: none;
 }
-@media (max-width: 1200px) {
-  .app-workspace[data-inspector="true"] {
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+.file-column-resize:focus-visible,
+.files-title button:focus-visible,
+.setup-dialog .files-hidden input:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+@media (forced-colors: active) {
+  .file-column-resize {
+    border-color: ButtonText;
   }
-  .app-workspace[data-chat="true"][data-inspector="true"] {
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  }
-  .file-inspector {
-    position: fixed;
-    right: 12px;
-    top: var(--app-titlebar-height);
-    bottom: calc(var(--app-footer-height) + var(--page-margin));
-    max-width: calc(100vw - 24px);
-    z-index: 10;
-    box-shadow: -4px 0 16px #0003;
-  }
+}
+
+.sidebar button:hover:not(:disabled) {
+  background: var(--hover-bg);
 }

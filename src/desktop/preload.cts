@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  summarizeSearch: (request: unknown) => ipcRenderer.invoke("desktop:search-summary", request),
+  cancelSearchSummary: (requestId: unknown) =>
+    ipcRenderer.invoke("desktop:search-summary-cancel", requestId),
   extractMemory: (request: unknown) => ipcRenderer.invoke("desktop:memory-extract", request),
   cancelMemoryExtraction: (requestId: unknown) =>
     ipcRenderer.invoke("desktop:memory-cancel", requestId),

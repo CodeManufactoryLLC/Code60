@@ -322,7 +322,7 @@ export function ChatPopup({
             {blocks.slice(-visible).map((block) => (
               <Fragment key={block.key}>
                 <article
-                  className={`event ${block.type}${matchRequest?.index === Number(block.key) ? " search-match" : ""}`}
+                  className={`event ${block.type}${block.automatic ? " automatic" : ""}${matchRequest?.index === Number(block.key) ? " search-match" : ""}`}
                   key={block.key}
                   data-event-index={block.key}
                   tabIndex={-1}

@@ -25,3 +25,5 @@
 - Deliver bounded worker turn-end/failure updates only between orchestration turns, with automatic prompt origin. Stop and Stop all pause automatic updates; user send or Resume updates unpauses them. Revoke the gateway on chat replacement and clear update timers on shutdown.
 
 - Include current-project worker IDs owned by each chat generation in every chat snapshot. Renderer aggregate activity must not derive ownership from the global list or process existence. Preserve Windows process/job support and sandbox boundaries.
+
+- Search overview helpers are the dedicated UI-requested exception to chat-gateway worker dispatch: validate current-project evidence and use the configured provider in a generated temporary directory, with no gateway, run records, worktrees or chat entries. Deny permissions; bound input, output and total runtime. Serialize replacement, stop on scope/provider changes, renderer reload, Stop all and shutdown, and remove the temporary directory only after process cleanup.

@@ -38,6 +38,16 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (text.startsWith("Write a concise AI overview answering the search query")) {
+        const data = JSON.parse(text.split("Search data (JSON):\n\n")[1]);
+        steps =
+          data.query === "fixed"
+            ? [{ hang: "cancellable" }]
+            : [
+                { sleep: 200 },
+                { message: "The recorded sessions report that the parser was fixed. [1]" },
+              ];
+      }
       if (options.memoryExtraction && text.startsWith("Code60 Episodic Memory extraction.")) {
         const instructions =
           text.split("Extraction instructions:\n\n")[1]?.split("\n\nReturn only")[0] ?? "";
