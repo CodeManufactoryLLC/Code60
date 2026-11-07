@@ -99,6 +99,7 @@ async function expectIndustrialSurfaces(page: Page) {
         .map((element) => {
           const style = getComputedStyle(element);
           const grouped = element.parentElement?.matches(".button-group");
+          const chamfered = element.matches(".orchestration-chat-body .composer");
           const controls = grouped
             ? [...(element.parentElement?.children ?? [])].filter(
                 (child) =>
@@ -108,7 +109,16 @@ async function expectIndustrialSurfaces(page: Page) {
             : [];
           const end = controls[0] === element || controls.at(-1) === element;
           return {
-            expectedRadius: grouped ? (end ? 5 : 0) : element.tagName === "BUTTON" ? 5 : 0,
+            expectedRadius: chamfered
+              ? 24
+              : grouped
+                ? end
+                  ? 5
+                  : 0
+                : element.tagName === "BUTTON"
+                  ? 5
+                  : 0,
+            chamfered,
             radius: Math.max(
               ...[
                 style.borderTopLeftRadius,
@@ -143,6 +153,7 @@ async function expectIndustrialSurfaces(page: Page) {
   expect(surfaces.length).toBeGreaterThan(0);
   for (const surface of surfaces) {
     expect(surface.radius).toBe(surface.expectedRadius);
+    if (surface.chamfered) expect(surface.corner).toBe("superellipse(0)");
     if (!surface.focused && !surface.overlay && !surface.baseline)
       expect(surface.shadow).toBe("none");
     if ((surface.disabled && !surface.selectedProject) || surface.emptyProject)
@@ -259,16 +270,16 @@ async function expectNeutralTheme(page: Page) {
     return { dark, fills, colors };
   });
   for (const [token, fill] of Object.entries(palette.fills))
-    expect(fill, token).toBe(palette.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
+    expect(fill, token).toBe(palette.dark ? "rgb(36, 43, 51)" : "rgb(255, 255, 255)");
   expect(palette.colors).toEqual(
     palette.dark
       ? {
           "--text": "rgb(255, 255, 255)",
           "--muted": "rgb(170, 170, 170)",
-          "--border": "rgb(47, 47, 47)",
+          "--border": "rgb(65, 75, 86)",
           "--control-border": "rgb(136, 136, 136)",
-          "--accent-bg": "rgb(18, 18, 18)",
-          "--surface-edge": "rgb(47, 47, 47)",
+          "--accent-bg": "rgb(50, 60, 70)",
+          "--surface-edge": "rgb(65, 75, 86)",
           "--disabled-stripe": "rgba(0, 0, 0, 0)",
           "--primary": "rgb(197, 177, 125)",
           "--hover-bg": "rgb(32, 62, 59)",
@@ -547,7 +558,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await selectSidebarPage(page, "Sessions");
     await expectNeutralTheme(page);
     for (const selector of [".sidebar", "#panel-sessions", ".app-footer"])
-      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(0, 0, 0)");
+      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(36, 43, 51)");
     for (const selector of ["html", "body", ".app", ".page-tabs"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
@@ -662,7 +673,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     // Without a previous project, the splash waits for the yellow Start button.
     const splash = page.locator(".splash");
     await expect(splash).toHaveText("Code60Start");
-    await expect(splash.locator(".splash-title")).toHaveCSS("font-family", /^"?IBM Plex Sans"?/);
+    await expect(splash.locator(".splash-title")).toHaveCSS("font-family", /^"?D-DIN"?/);
     await expect(splash.getByRole("button", { name: "Start", exact: true })).toBeFocused();
     await expect(splash.getByRole("button")).toHaveCount(1);
     await expectSplashLayout(page);
@@ -750,10 +761,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("Escape");
     await expect(palette).toHaveCount(0);
     await expect(connect).toBeFocused();
-    // Default interface text uses IBM Plex Sans.
+    // Default interface text uses D-DIN Regular.
     await expect
       .poll(() => page.evaluate(() => getComputedStyle(document.body).fontFamily))
-      .toMatch(/^"?IBM Plex Sans"?/);
+      .toMatch(/^"?D-DIN"?/);
     expect(await page.evaluate(() => localStorage.getItem("code60.appearanceVersion"))).toBe(
       "theme-4",
     );
@@ -879,8 +890,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       expect(colors.footerFrameWidth).toBe("1px");
       expect(colors.shadow).not.toBe("none");
       for (const fill of [colors.popup, colors.grid, colors.header, colors.composer])
-        expect(fill).toBe(colors.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
-      expect(colors.footer).toBe(colors.dark ? "rgb(18, 18, 18)" : "rgb(237, 237, 237)");
+        expect(fill).toBe(colors.dark ? "rgb(36, 43, 51)" : "rgb(255, 255, 255)");
+      expect(colors.footer).toBe(colors.dark ? "rgb(50, 60, 70)" : "rgb(237, 237, 237)");
       expect(colors.composerFrame).not.toBe("rgba(0, 0, 0, 0)");
       expect(colors.headerFrame).not.toBe("rgba(0, 0, 0, 0)");
       expect(colors.footerFrame).toBe("rgba(0, 0, 0, 0)");
@@ -1056,7 +1067,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(chatHead).toContainText("1 approval");
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
     await expectIndustrialSurfaces(page);
-    await expect(chatHead).toHaveCSS("font-family", /monospace/);
+    await expect(chatHead).toHaveCSS("font-family", /D-DIN/);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.getByLabel("Message", { exact: true })).toBeEnabled();
     await expect(page.locator(".event.message").first()).toContainText(
@@ -1284,11 +1295,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expectDistinctChatSurfaces();
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
-        /^"?IBM Plex Serif"?/,
+        /^"?D-DIN"?/,
       );
       await expect(page.locator(".event.message pre").first()).toHaveCSS(
         "font-family",
-        /^"?IBM Plex Sans"?/,
+        /^"?D-DIN"?/,
       );
       // Human messages use the theme’s accent text, with no side rule.
       const darkTheme =
@@ -1301,9 +1312,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       );
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
-        await expect(chatHead).toHaveCSS("background-color", "rgb(18, 18, 18)");
+        await expect(chatHead).toHaveCSS("background-color", "rgb(50, 60, 70)");
         await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
-        await expect(chatPopup).toHaveCSS("background-color", "rgb(0, 0, 0)");
+        await expect(chatPopup).toHaveCSS("background-color", "rgb(36, 43, 51)");
         // Primary buttons stay filled in dark mode.
         const primary = await page.evaluate(() => {
           const probe = document.createElement("button");
@@ -1314,7 +1325,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
           return color;
         });
         expect(primary).toBe("rgb(197, 177, 125)");
-        await page.screenshot({ path: "test-results/black-theme-sessions-chat.png" });
+        await page.screenshot({ path: "test-results/steel-gray-theme-sessions-chat.png" });
       }
       await settingsTab.click();
     }
@@ -1346,7 +1357,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(headingCase).not.toBeChecked();
     await headingCase.check();
     await expect(typeface.locator("option")).toHaveText([
-      "Default (IBM Plex Sans)",
+      "Default (D-DIN)",
       "System",
       "Computer Modern",
       "D-DIN",
@@ -1382,7 +1393,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
           }, family),
         )
         .toEqual([family, true]);
-      // Typefaces use normal tracking; data controls stay monospace and untracked.
+      // Typefaces use normal tracking; data controls keep D-DIN and normal tracking.
       const spacing = await page.evaluate(() => {
         const body = getComputedStyle(document.body);
         const select = getComputedStyle(document.querySelector("select") ?? document.body);
@@ -1392,7 +1403,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
             : Number.parseFloat(body.letterSpacing) / Number.parseFloat(body.fontSize);
         return [
           Math.round(em * 100) / 100,
-          select.fontFamily.includes("monospace") && select.letterSpacing === "normal",
+          select.fontFamily.includes("D-DIN") && select.letterSpacing === "normal",
         ];
       });
       expect(spacing).toEqual([0, true]);
@@ -1481,7 +1492,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       .toBe("dark");
     await expectThemeContrast(page);
     await expectNeutralTheme(page);
-    await expect(chatHead).toHaveCSS("background-color", "rgb(18, 18, 18)");
+    await expect(chatHead).toHaveCSS("background-color", "rgb(50, 60, 70)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
     await expect
@@ -1996,7 +2007,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await expect(otherPrompt).toHaveCSS("outline-style", "none");
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(18, 18, 18)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(50, 60, 70)",
       );
       await panel.locator(".prompt-editor").evaluate((element) => {
         element.scrollTop = 0;
@@ -2005,7 +2016,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await selectedPrompt.hover();
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(18, 18, 18)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(50, 60, 70)",
       );
       await expect(selectedPrompt).toHaveCSS("border-top-width", "0px");
     }
@@ -3186,6 +3197,20 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chatList()).toBeVisible();
     await expect(chat.locator(".chat-empty .wordmark")).toHaveText("Code60");
     await expect(chat.locator(".chat-empty .wordmark")).toHaveCSS("font-size", "48px");
+    await expect(chat.locator(".chat-empty .wordmark")).toHaveCSS("font-family", /^"?D-DIN"?/);
+    expect(
+      await page
+        .locator("body *")
+        .evaluateAll((elements) =>
+          elements
+            .filter(
+              (element) =>
+                element.getClientRects().length > 0 &&
+                Number(getComputedStyle(element).fontWeight) > 400,
+            )
+            .map((element) => element.tagName),
+        ),
+    ).toEqual([]);
     await expect(chat.locator(".orchestration-chat-heading .wordmark")).toHaveCount(0);
     await page.screenshot({ path: "test-results/chat-empty-wordmark.png" });
     await expect(chat.getByRole("combobox", { name: "Orchestrator chat" })).toHaveCount(0);
@@ -3305,12 +3330,14 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.getByRole("status")).toHaveText("Responding");
     const loader = chat.locator(".chat-loader");
     const composer = chat.getByRole("region", { name: "Chat composer" });
+    await expect(composer).toHaveCSS("corner-top-right-shape", "superellipse(0)");
+    await expect(composer).toHaveCSS("border-top-right-radius", "24px");
     const lineBox = await loader.boundingBox();
     const composerBox = await composer.boundingBox();
     if (!lineBox || !composerBox) throw new Error("Missing chat loading line");
-    expect(lineBox.x).toBeCloseTo(composerBox.x, 0);
-    expect(lineBox.y).toBeCloseTo(composerBox.y, 0);
-    expect(lineBox.width).toBeCloseTo(composerBox.width, 0);
+    expect(lineBox.x).toBeCloseTo(composerBox.x + 2, 0);
+    expect(lineBox.y).toBeCloseTo(composerBox.y + 2, 0);
+    expect(lineBox.width).toBeCloseTo(composerBox.width - 4, 0);
     await expect(loader).toHaveCSS("height", "12px");
     await expect(loader).toHaveCSS("animation-name", "chat-bar-stripe");
     const sidebarLineBox = await sidebarLoader.boundingBox();
@@ -3332,12 +3359,30 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       await selectSidebarPage(page, "Settings");
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await selectSidebarPage(page, "Chat");
+      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
+      const restingShadow = await composer.evaluate(
+        (element) => getComputedStyle(element).boxShadow,
+      );
+      await input().focus();
+      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
+      await expect(composer).toHaveCSS("outline-style", "none");
+      await expect(composer).toHaveCSS("box-shadow", /0px 0px 12px 0px/);
+      const focusedShadow = await composer.evaluate(
+        (element) => getComputedStyle(element).boxShadow,
+      );
+      expect(focusedShadow).not.toBe(restingShadow);
       await expect(loader).toHaveCSS("background-color", background);
       await expect(sidebarLoader).toHaveCSS("background-color", background);
       expect(
         await loader.evaluate((element) => getComputedStyle(element).backgroundImage),
       ).toContain(stripe);
       await page.screenshot({ path: `test-results/chat-loader-${theme}.png` });
+      await chat.getByRole("button", { name: "Stop", exact: true }).focus();
+      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
+      await expect(composer).toHaveCSS("box-shadow", focusedShadow);
+      await selectSidebarPage(page, "Chat");
+      await expect(composer).toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
+      await expect(composer).toHaveCSS("box-shadow", restingShadow);
     }
 
     await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
@@ -3736,7 +3781,7 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await columnsButton.click();
     await page.emulateMedia({ colorScheme: "dark" });
     await expectNeutralTheme(page);
-    await expect(modal).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(modal).toHaveCSS("background-color", "rgb(36, 43, 51)");
     await page.screenshot({ path: "test-results/table-settings-dark.png" });
     await application.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];
@@ -3930,7 +3975,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await expect(inspector).toHaveCSS("border-top-width", "0px");
     await expect(files.getByRole("heading", { name: "Files", exact: true })).toHaveCSS(
       "font-family",
-      /IBM Plex Sans/,
+      /D-DIN/,
     );
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
@@ -3972,9 +4017,9 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(0, 0, 0)",
+      "rgb(36, 43, 51)",
     );
-    await expect(file).toHaveCSS("background-color", "rgb(18, 18, 18)");
+    await expect(file).toHaveCSS("background-color", "rgb(50, 60, 70)");
     await page.screenshot({ path: "test-results/files-preview-dark.png" });
     await selectSidebarPage(page, "Settings");
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
@@ -3986,7 +4031,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(0, 0, 0)",
+      "rgb(36, 43, 51)",
     );
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),

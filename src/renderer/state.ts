@@ -230,11 +230,11 @@ export function letterSpacing(typeface: Typeface): string {
 export const monospaceFont = "ui-monospace, SFMono-Regular, Menlo, monospace";
 /** Text that can be styled on its own. `size` and `weight` are the built-in defaults. */
 export const textRoles = [
-  { id: "tableHeadings", label: "Table Headings", css: "heading", size: 12, weight: 500 },
-  { id: "buttons", label: "Button Text", css: "button", size: 13, weight: 500 },
+  { id: "tableHeadings", label: "Table Headings", css: "heading", size: 12, weight: 400 },
+  { id: "buttons", label: "Button Text", css: "button", size: 13, weight: 400 },
   { id: "agentMessages", label: "Agent Chat Messages", css: "agent", size: 14, weight: 400 },
   { id: "humanMessages", label: "Human Chat Messages", css: "human", size: 14, weight: 400 },
-  { id: "pageTitles", label: "Page Titles", css: "title", size: 18, weight: 600 },
+  { id: "pageTitles", label: "Page Titles", css: "title", size: 18, weight: 400 },
   { id: "normalText", label: "Normal Text", css: "text", size: 13, weight: 400 },
 ] as const;
 export type TextRole = (typeof textRoles)[number]["id"];
@@ -290,6 +290,17 @@ export function parseTextStyles(value: string | null): TextStyles {
   }
   return styles;
 }
+/** Apply D-DIN Regular once, preserving sizes, case, theme and later user choices. */
+export function migrateTypography(storage: Pick<Storage, "getItem" | "setItem">): void {
+  if (storage.getItem("code60.typographyVersion") === "d-din-regular-1") return;
+  const styles = parseTextStyles(storage.getItem("code60.textStyles"));
+  for (const role of textRoles) {
+    delete styles[role.id].typeface;
+    delete styles[role.id].weight;
+  }
+  storage.setItem("code60.textStyles", JSON.stringify(styles));
+  storage.setItem("code60.typographyVersion", "d-din-regular-1");
+}
 /** The concrete text style a role draws with, after applying defaults. */
 export type ResolvedText = {
   family: string;
@@ -301,8 +312,7 @@ export type ResolvedText = {
 export function resolveText(styles: TextStyles, role: TextRole): ResolvedText {
   const style = styles[role];
   const defaults = textRoles.find((entry) => entry.id === role) ?? textRoles[5];
-  const typeface =
-    style.typeface ?? (role === "humanMessages" ? "ibm-plex-serif" : "ibm-plex-sans");
+  const typeface = style.typeface ?? "d-din";
   return {
     family: fontFamily(typeface),
     spacing: letterSpacing(typeface),
@@ -318,7 +328,7 @@ export function applyCase(text: string, textCase: ResolvedText["case"]): string 
 }
 /**
  * CSS custom properties for the text styles. Family, spacing, size, and weight are always set;
- * case only when chosen. Sent prompts default to medium weight unless a weight is chosen.
+ * case only when chosen. Sent prompts use regular weight unless a weight is chosen.
  */
 export function textStyleProperties(styles: TextStyles): Record<string, string | undefined> {
   const properties: Record<string, string | undefined> = {};

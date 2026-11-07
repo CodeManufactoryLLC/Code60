@@ -1,7 +1,7 @@
 /* Code60 theme tokens and components. See ARCHITECTURE.md for the visual system. */
 :root {
-  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --logo: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --logo: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--text-font, var(--font));
   --letter-spacing: var(--text-spacing, normal);
@@ -64,6 +64,7 @@
   --disabled-fill: #ffffff;
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
+  --chat-composer-shadow: #40826d;
   --human-text: #146c67;
   --destructive: #a03d31;
   --destructive-hover: #873327;
@@ -82,27 +83,28 @@
   --surface-band: var(--surface);
   --disabled-fill: var(--surface);
   --footer-bg: var(--surface);
-  --bg: #000000;
-  --surface: #000000;
-  --surface-hover: #000000;
-  --row-alt: #000000;
+  --bg: #242b33;
+  --surface: #242b33;
+  --surface-hover: #242b33;
+  --row-alt: #242b33;
   --text: #ffffff;
   --muted: #aaaaaa;
-  --border: #2f2f2f;
+  --border: #414b56;
   --control-border: #888888;
   --accent: #d0bc83;
-  --accent-bg: #121212;
+  --accent-bg: #323c46;
   --hover-bg: #203e3b;
   --primary: #c5b17d;
   --primary-hover: #d4c18f;
   --primary-text: #1b1d20;
   --danger: #ffffff;
-  --warning-bg: #000000;
+  --warning-bg: #242b33;
   --warning-text: #d0bc83;
   --success: #aaaaaa;
-  --code: #000000;
+  --code: #242b33;
   --disabled-stripe: transparent;
-  --chat-bg: #000000;
+  --chat-bg: #242b33;
+  --chat-composer-shadow: var(--primary);
   --human-text: #b5c8d3;
   --destructive: #df9d8f;
   --destructive-hover: #edb3a7;
@@ -122,27 +124,28 @@
     --surface-band: var(--surface);
     --disabled-fill: var(--surface);
     --footer-bg: var(--surface);
-    --bg: #000000;
-    --surface: #000000;
-    --surface-hover: #000000;
-    --row-alt: #000000;
+    --bg: #242b33;
+    --surface: #242b33;
+    --surface-hover: #242b33;
+    --row-alt: #242b33;
     --text: #ffffff;
     --muted: #aaaaaa;
-    --border: #2f2f2f;
+    --border: #414b56;
     --control-border: #888888;
     --accent: #d0bc83;
-    --accent-bg: #121212;
+    --accent-bg: #323c46;
     --hover-bg: #203e3b;
     --primary: #c5b17d;
     --primary-hover: #d4c18f;
     --primary-text: #1b1d20;
     --danger: #ffffff;
-    --warning-bg: #000000;
+    --warning-bg: #242b33;
     --warning-text: #d0bc83;
     --success: #aaaaaa;
-    --code: #000000;
+    --code: #242b33;
     --disabled-stripe: transparent;
-    --chat-bg: #000000;
+    --chat-bg: #242b33;
+    --chat-composer-shadow: var(--primary);
     --human-text: #b5c8d3;
     --destructive: #df9d8f;
     --destructive-hover: #edb3a7;
@@ -168,6 +171,7 @@
 }
 * {
   box-sizing: border-box;
+  font-weight: inherit;
 }
 body {
   margin: 0;
@@ -213,7 +217,7 @@ button {
   font-family: var(--button-font, var(--font));
   --letter-spacing: var(--button-spacing, normal);
   font-size: var(--button-size, 13px);
-  font-weight: var(--button-weight, 500);
+  font-weight: var(--button-weight, 400);
   text-transform: var(--button-case, none);
   font-synthesis: none;
   color: var(--text);
@@ -245,7 +249,7 @@ button.primary {
   background: var(--primary);
   color: var(--primary-text);
   border-color: transparent;
-  font-weight: var(--button-weight, 600);
+  font-weight: var(--button-weight, 400);
 }
 button.primary:hover:not(:disabled) {
   background: var(--primary-hover);
@@ -259,7 +263,7 @@ button.destructive {
   background: var(--destructive);
   color: var(--on-destructive);
   border-color: var(--destructive);
-  font-weight: var(--button-weight, 600);
+  font-weight: var(--button-weight, 400);
 }
 button.destructive:hover:not(:disabled) {
   background: var(--destructive-hover);
@@ -313,7 +317,7 @@ textarea {
   box-shadow: inset 0 -1px var(--control-border);
 }
 input[type="number"] {
-  font-family: var(--mono);
+  font-family: var(--font);
   --letter-spacing: normal;
 }
 textarea {
@@ -383,7 +387,7 @@ input[type="checkbox"][role="switch"]::after {
   position: absolute;
   right: 5px;
   top: 0;
-  font: 700 9px / 24px var(--mono);
+  font: 400 9px / 24px var(--font);
   --letter-spacing: normal;
   color: var(--muted);
 }
@@ -449,7 +453,7 @@ pre {
   margin: 0;
 }
 kbd {
-  font: 11px var(--mono);
+  font: 11px var(--font);
   --letter-spacing: normal;
   display: inline-block;
   border: 1px solid transparent;
@@ -546,7 +550,7 @@ button.project-card {
   --letter-spacing: var(--title-spacing, normal);
   letter-spacing: var(--title-tracking, normal);
   font-size: 15px;
-  font-weight: var(--title-weight, 600);
+  font-weight: var(--title-weight, 400);
   text-transform: var(--title-case, none);
   color: var(--text);
   overflow: hidden;
@@ -585,7 +589,7 @@ button.project-card {
   border: 1px solid transparent;
   background: var(--row-alt);
   color: var(--muted);
-  font-weight: var(--button-weight, 500);
+  font-weight: var(--button-weight, 400);
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -608,7 +612,7 @@ button.project-card {
 .page-tab .page-group-toggle[data-active="true"] {
   background: var(--accent-bg);
   color: var(--text);
-  font-weight: var(--button-weight, 600);
+  font-weight: var(--button-weight, 400);
 }
 
 .page-tab-list {
@@ -698,7 +702,7 @@ button.project-card {
   color: var(--text);
 }
 .prompt-editor-name {
-  font-weight: 600;
+  font-weight: 400;
 }
 .prompt-editor-source,
 .prompt-editor-status {
@@ -790,7 +794,7 @@ button.project-card {
 }
 .prompt-editor-mcp-tool h3 {
   margin: 0 0 8px;
-  font: 12px / 1.4 var(--mono);
+  font: 12px / 1.4 var(--font);
   overflow-wrap: anywhere;
 }
 .prompt-editor-mcp-tool p {
@@ -846,7 +850,7 @@ button.project-card {
   --letter-spacing: var(--title-spacing, normal);
   letter-spacing: var(--title-tracking, normal);
   font-size: var(--title-size, 18px);
-  font-weight: var(--title-weight, 600);
+  font-weight: var(--title-weight, 400);
   text-transform: var(--title-case, none);
   line-height: 1.25;
   font-synthesis: none;
@@ -874,7 +878,7 @@ button.project-card {
 .eyebrow {
   font-family: var(--font);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--muted);
   text-transform: none;
   --letter-spacing: normal;
@@ -882,7 +886,7 @@ button.project-card {
 .settings-section h2 {
   margin: 24px 0 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text);
 }
 .settings-section > p {
@@ -896,7 +900,7 @@ button.project-card {
 }
 .settings-row select {
   min-width: 140px;
-  font-family: var(--mono);
+  font-family: var(--font);
   --letter-spacing: normal;
 }
 .orchestration-controls {
@@ -938,7 +942,7 @@ button.project-card {
   min-width: 0;
 }
 .path {
-  font-family: var(--mono);
+  font-family: var(--font);
   --letter-spacing: normal;
   font-size: 11px;
   color: var(--muted);
@@ -972,7 +976,7 @@ button.project-card {
   flex-wrap: wrap;
   gap: 9px 22px;
   padding: 0 0 12px;
-  font: 11px var(--mono);
+  font: 11px var(--font);
   --letter-spacing: normal;
   color: var(--muted);
 }
@@ -1111,7 +1115,7 @@ button.project-card {
   display: block;
   width: 100%;
   height: 100%;
-  font: 600 11px var(--mono);
+  font: 400 11px var(--font);
   --letter-spacing: normal;
   text-transform: none;
   text-align: left;
@@ -1169,7 +1173,7 @@ button.project-card {
   padding: 0;
 }
 .footer-note {
-  font: 11px var(--mono);
+  font: 11px var(--font);
   --letter-spacing: normal;
   color: var(--warning-text);
   white-space: nowrap;
@@ -1257,7 +1261,7 @@ button.project-card {
   justify-content: space-between;
 }
 .chat-title h2 {
-  font: 700 13px var(--mono);
+  font: 400 13px var(--font);
   --letter-spacing: normal;
   overflow: hidden;
   white-space: nowrap;
@@ -1283,17 +1287,17 @@ button.project-card {
 }
 .status-label:is([data-status="running"], [data-status="idle"]) {
   color: var(--text);
-  font-weight: 500;
+  font-weight: 400;
 }
 .status-label[data-status="waiting"] {
   color: var(--bg);
   background: var(--text);
   border-color: var(--text);
-  font-weight: 600;
+  font-weight: 400;
 }
 .status-label:is([data-status="failed"], [data-status="timed_out"], [data-status="interrupted"]) {
   color: var(--danger);
-  font-weight: 600;
+  font-weight: 400;
   border-left: 3px solid currentColor;
   padding-left: 4px;
 }
@@ -1330,7 +1334,7 @@ button.project-card {
   font-family: var(--human-font, var(--font));
   --letter-spacing: var(--human-spacing, normal);
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-prompt-weight, 500);
+  font-weight: var(--human-prompt-weight, 400);
   text-transform: var(--human-case, none);
   line-height: 1.65;
   color: var(--human-text);
@@ -1439,7 +1443,7 @@ button.project-card {
   );
   color: var(--muted);
   font-size: var(--text-size, 12px);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 /* Welcome */
@@ -1474,7 +1478,7 @@ button.project-card {
 .error-banner::before,
 .warning-banner::before {
   flex-shrink: 0;
-  font: 600 12px var(--font);
+  font: 400 12px var(--font);
   --letter-spacing: normal;
 }
 .error-banner {
@@ -1526,7 +1530,7 @@ button.project-card {
 }
 .approval strong {
   font-size: var(--text-size, 12px);
-  font-weight: 600;
+  font-weight: 400;
   color: var(--warning-text);
 }
 .approvals .approval pre {
@@ -1649,7 +1653,7 @@ fieldset {
 fieldset label {
   display: block;
   font-size: var(--text-size, 12px);
-  font-weight: var(--text-weight, 500);
+  font-weight: var(--text-weight, 400);
   margin-bottom: 9px;
 }
 .setup-dialog textarea,
@@ -1693,7 +1697,7 @@ summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
 }
 .event.note {
   border-left: 2px solid var(--border);
@@ -1761,14 +1765,14 @@ label.check-label {
   font-size: var(--text-size, 13px);
 }
 .permission-grid label.check-label {
-  font: 12px var(--mono);
+  font: 12px var(--font);
   --letter-spacing: normal;
 }
 .settings-options label.check-label {
   font-size: inherit;
 }
 .connected-path {
-  font-family: var(--mono);
+  font-family: var(--font);
   --letter-spacing: normal;
   font-size: 11px;
   overflow-wrap: anywhere;
@@ -1797,7 +1801,7 @@ label.check-label {
   font-weight: 400;
 }
 .project-item strong {
-  font-weight: 600;
+  font-weight: 400;
 }
 .project-list > li > .project-item {
   width: 100%;
@@ -1806,7 +1810,7 @@ label.check-label {
   max-width: 100%;
 }
 .recovery-reason {
-  font-family: var(--mono);
+  font-family: var(--font);
 }
 .sr-only {
   position: absolute;
@@ -1858,21 +1862,29 @@ dialog::backdrop {
 }
 .wordmark {
   font-family: var(--logo);
-  font-weight: 600;
+  font-weight: 400;
   --letter-spacing: 0.02em;
   text-transform: none;
   white-space: nowrap;
 }
-/* The numerals' box keeps equal visible margins around IBM Plex Sans's side bearings. */
+/* A small 45-degree corner cut keeps the visible side padding balanced. */
 .wordmark b {
+  --wordmark-chamfer: 0.25em;
   display: inline-block;
   margin-left: 0.1em;
-  padding: 0.227em 0.136em 0.182em;
+  padding: 0.227em 0.16em 0.182em 0.136em;
   line-height: 1;
-  font-weight: 600;
+  font-weight: 400;
   background: var(--primary);
   color: var(--primary-text);
   text-box: trim-both cap alphabetic;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--wordmark-chamfer)) 0,
+    100% var(--wordmark-chamfer),
+    100% 100%,
+    0 100%
+  );
 }
 .splash-title {
   position: absolute;
@@ -1896,7 +1908,7 @@ dialog::backdrop {
 }
 .splash-prompt h2 {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   margin-bottom: 12px;
   overflow-wrap: anywhere;
   text-transform: none;
@@ -2059,7 +2071,7 @@ dialog::backdrop {
   border-top: 0;
 }
 .actions-menu [role="menuitem"] .menu-key {
-  font: 11px var(--mono);
+  font: 11px var(--font);
   color: var(--muted);
 }
 .actions-menu [role="menuitem"]:focus {
@@ -2174,7 +2186,7 @@ dialog::backdrop {
   border: 0;
   background: transparent;
   padding: 0;
-  font: 14px var(--mono);
+  font: 14px var(--font);
   --letter-spacing: normal;
 }
 .command-palette .palette-input input:focus-visible {
@@ -2190,7 +2202,7 @@ dialog::backdrop {
 .command-palette .palette-group {
   padding: 8px 16px 4px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--muted);
 }
 .command-palette [role="option"] {
@@ -2216,7 +2228,7 @@ dialog::backdrop {
 .command-palette [role="option"] mark {
   background: none;
   color: inherit;
-  font-weight: 700;
+  font-weight: 400;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -2228,7 +2240,7 @@ dialog::backdrop {
 }
 .command-hint {
   color: var(--muted);
-  font: 11px var(--mono);
+  font: 11px var(--font);
   --letter-spacing: normal;
 }
 .command-palette .palette-empty {
@@ -2241,7 +2253,7 @@ dialog::backdrop {
   gap: 12px;
   border-top: 1px solid transparent;
   padding: 8px 16px;
-  font: 11px var(--mono);
+  font: 11px var(--font);
   --letter-spacing: normal;
   color: var(--muted);
   background: var(--surface);
@@ -2293,7 +2305,7 @@ dialog::backdrop {
 }
 .app-toast .toast-kind {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
 }
 .app-toast .toast-actions {
   margin-top: 6px;
@@ -2392,7 +2404,7 @@ dialog::backdrop {
 .table-title {
   margin: 0;
   flex-shrink: 0;
-  font: var(--title-weight, 600) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
 }
@@ -2418,7 +2430,7 @@ dialog::backdrop {
   box-shadow: none;
   font-family: var(--button-font, var(--font));
   font-size: var(--button-size, 13px);
-  font-weight: var(--button-weight, 500);
+  font-weight: var(--button-weight, 400);
   text-transform: var(--button-case, none);
   --letter-spacing: var(--button-spacing, normal);
 }
@@ -2464,7 +2476,7 @@ dialog::backdrop {
   padding: 0;
   margin: 0 0 12px;
   font-size: var(--text-size, 13px);
-  font-weight: 600;
+  font-weight: 400;
 }
 .table-preview-grid {
   width: 100%;
@@ -2729,7 +2741,7 @@ dialog::backdrop {
   gap: 8px 24px;
 }
 .workspace-heading h1 {
-  font: var(--title-weight, 600) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
 }
 .workspace-heading span {
@@ -3124,7 +3136,7 @@ dialog::backdrop {
 .chat-sidebar-entry[aria-current="true"] {
   background: var(--accent-bg);
   color: var(--text);
-  font-weight: 600;
+  font-weight: 400;
 }
 .chat-sidebar-label {
   display: flex;
@@ -3201,7 +3213,7 @@ dialog::backdrop {
 }
 .chat-message-speaker {
   font-size: var(--text-size, 12px);
-  font-weight: 600;
+  font-weight: 400;
   margin-bottom: 8px;
   color: var(--muted);
 }
@@ -3228,7 +3240,7 @@ dialog::backdrop {
 }
 .chat-empty h2 {
   font-size: var(--title-size, 20px);
-  font-weight: 500;
+  font-weight: 400;
   margin: 0;
 }
 .orchestration-chat-body .chat-activity {
@@ -3259,9 +3271,17 @@ dialog::backdrop {
   position: relative;
   flex-shrink: 0;
   margin: 0;
-  border: 1px solid var(--border);
+  border: 2px solid transparent;
+  border-top-right-radius: 24px;
+  corner-top-right-shape: bevel;
   box-shadow: 0 2px 6px rgb(0 0 0 / 6%);
   background: var(--surface);
+}
+.orchestration-chat-body .composer:focus-within {
+  outline: 0;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--chat-composer-shadow) 45%, transparent),
+    0 0 4px rgb(0 0 0 / 25%);
 }
 .orchestration-chat-body .composer textarea {
   min-height: 72px;
@@ -3320,6 +3340,11 @@ dialog::backdrop {
   width: 100%;
   height: 6px;
 }
+.orchestration-chat-body .composer > .chat-loader {
+  top: 0;
+  left: 0;
+  width: 100%;
+}
 @keyframes chat-bar-stripe {
   from {
     background-position: 1em 0;
@@ -3341,7 +3366,7 @@ dialog::backdrop {
   }
   .orchestration-chat-body .event.prompt,
   .orchestration-chat-body .event.message,
-  .orchestration-chat-body .composer {
+  .orchestration-chat-body .composer:focus-within {
     border-color: CanvasText;
   }
 }
@@ -3389,7 +3414,7 @@ dialog::backdrop {
   width: 100%;
   min-height: 160px;
   resize: vertical;
-  font-family: var(--mono);
+  font-family: var(--font);
   text-transform: none;
 }
 .memory-content {
@@ -3518,13 +3543,13 @@ dialog::backdrop {
 .files-header h1,
 .file-inspector-header h2 {
   margin: 0;
-  font: var(--title-weight, 600) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
   overflow-wrap: anywhere;
 }
 .file-inspector-header h2 {
-  font-family: var(--mono);
+  font-family: var(--font);
   text-transform: none;
   --letter-spacing: normal;
 }
@@ -3542,7 +3567,7 @@ dialog::backdrop {
   min-width: 0;
 }
 .files-controls select {
-  font-family: var(--mono);
+  font-family: var(--font);
   --letter-spacing: normal;
   text-transform: none;
   max-width: 320px;
@@ -3568,7 +3593,7 @@ dialog::backdrop {
   border: 1px solid transparent;
   background: transparent;
   text-align: left;
-  font-family: var(--mono);
+  font-family: var(--font);
   text-transform: none;
   white-space: nowrap;
 }
@@ -3577,7 +3602,7 @@ dialog::backdrop {
 }
 .file-tree-item[aria-selected="true"] {
   background: var(--accent-bg);
-  font-weight: 600;
+  font-weight: 400;
 }
 .file-tree-item[aria-disabled="true"] {
   color: var(--muted);

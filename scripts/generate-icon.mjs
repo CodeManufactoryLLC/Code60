@@ -1,62 +1,89 @@
-// Dependency-free, reproducible Code60 wordmark. Run when changing the icon.
-import { writeFile } from "node:fs/promises";
-import { deflateSync } from "node:zlib";
+// Render a full-bleed viridian desktop icon with the wordmark's chamfer and font.
+// Run with Node after npm ci; Electron supplies Chromium without extra dependencies.
+import { execFileSync } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
-const size = 1024;
-const pixels = Buffer.alloc((size * 4 + 1) * size);
-const glyphs = {
-  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
-  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
-  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
-  6: ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
-  0: ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
-};
-function fill(x, y, width, height, color) {
-  for (let row = y; row < y + height; row++)
-    for (let col = x; col < x + width; col++) {
-      const offset = row * (size * 4 + 1) + 1 + col * 4;
-      pixels.set([...color, 255], offset);
-    }
+const root = new URL("../", import.meta.url);
+
+if (!process.versions.electron) {
+  const { default: electron } = await import("electron");
+  const environment = { ...process.env };
+  delete environment.ELECTRON_RUN_AS_NODE;
+  delete environment.NODE_OPTIONS;
+  execFileSync(electron, [fileURLToPath(import.meta.url)], {
+    cwd: fileURLToPath(root),
+    env: environment,
+    stdio: "inherit",
+    timeout: 30_000,
+  });
+} else {
+  const { app, BrowserWindow } = await import("electron");
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("force-device-scale-factor", "1");
+  app
+    .whenReady()
+    .then(async () => {
+      const [styles, font] = await Promise.all([
+        readFile(new URL("src/renderer/style.css", root), "utf8"),
+        readFile(new URL("src/renderer/fonts/d-din/D-DIN.woff2", root)),
+      ]);
+      const window = new BrowserWindow({
+        width: 1024,
+        height: 1024,
+        useContentSize: true,
+        show: false,
+        frame: false,
+        backgroundColor: "#000000",
+        webPreferences: {
+          offscreen: true,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          partition: "code60-icon",
+        },
+      });
+      const html = `<!doctype html>
+<html data-theme="light"><head><meta charset="utf-8"><style>
+@font-face {
+  font-family: "D-DIN";
+  font-weight: 400;
+  src: url(data:font/woff2;base64,${font.toString("base64")}) format("woff2");
 }
-fill(0, 0, size, size, [23, 28, 31]);
-function word(text, y, scale, color) {
-  const left = Math.floor((size - (text.length * 6 - 1) * scale) / 2);
-  for (const [index, letter] of [...text].entries()) {
-    for (const [line, row] of glyphs[letter].entries()) {
-      for (const [column, bit] of [...row].entries()) {
-        if (bit === "1")
-          fill(left + (index * 6 + column) * scale, y + line * scale, scale, scale, color);
-      }
-    }
-  }
+${styles}
+html, body { margin: 0; width: 1024px; height: 1024px; background: #000000; }
+.wordmark { display: block; width: 100%; height: 100%; font-size: 576px; line-height: 1; }
+.wordmark b {
+  /* Extend the desktop cut past macOS's rounded icon mask. */
+  --wordmark-chamfer: 352px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #40826d;
+  color: #000000;
 }
-word("CODE", 210, 32, [236, 238, 237]);
-word("60", 500, 48, [67, 179, 174]);
-function chunk(type, data) {
-  const content = Buffer.concat([Buffer.from(type), data]);
-  let crc = 0xffffffff;
-  for (const byte of content) {
-    crc ^= byte;
-    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-  }
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length);
-  const checksum = Buffer.alloc(4);
-  checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
-  return Buffer.concat([length, content, checksum]);
+</style></head><body><span class="wordmark"><b>60</b></span></body></html>`;
+      await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      await window.webContents.executeJavaScript(`
+      document.fonts.ready.then(() => {
+        if (!document.fonts.check('400 576px "D-DIN"'))
+          throw new Error("The icon font did not load");
+        return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      })
+    `);
+      const image = await window.webContents.capturePage();
+      const { width, height } = image.getSize();
+      if (width !== 1024 || height !== 1024) throw new Error("Expected a 1024px desktop icon");
+      await writeFile(new URL("packaging/icon.png", root), image.toPNG());
+      window.destroy();
+      app.quit();
+    })
+    .catch((error) => {
+      console.error(error);
+      app.exit(1);
+    });
 }
-const header = Buffer.alloc(13);
-header.writeUInt32BE(size);
-header.writeUInt32BE(size, 4);
-header[8] = 8;
-header[9] = 6;
-await writeFile(
-  "packaging/icon.png",
-  Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk("IHDR", header),
-    chunk("IDAT", deflateSync(pixels)),
-    chunk("IEND", Buffer.alloc(0)),
-  ]),
-);

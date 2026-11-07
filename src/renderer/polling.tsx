@@ -457,7 +457,7 @@ export function PollingPage({
               ? "checkmark"
               : "time";
       drawIcon(ctx, icon, rect.x + 14, middle - 8);
-      ctx.font = `${failed ? 600 : 400} 12px ${theme.fontFamily}`;
+      ctx.font = `400 12px ${theme.fontFamily}`;
       ctx.fillText(display(row, "status"), rect.x + 36, middle, rect.width - 44);
       return true;
     }

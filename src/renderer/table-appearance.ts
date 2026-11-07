@@ -1,6 +1,6 @@
 import type { Theme } from "@glideapps/glide-data-grid";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { monospaceFont, resolveText, type TableLines, type TextStyles } from "./state.js";
+import { resolveText, type TableLines, type TextStyles } from "./state.js";
 
 /** The grid draws on a canvas, so the app's CSS variables are resolved to concrete colors. */
 export function useCssColors(): (name: string) => string {
@@ -58,7 +58,7 @@ export function useTableAppearance(textStyles: TextStyles, lines: TableLines) {
   const heading = useMemo(() => resolveText(textStyles, "tableHeadings"), [textStyles]);
   const normal = useMemo(() => resolveText(textStyles, "normalText"), [textStyles]);
   const cellSize = textStyles.normalText.size ?? 12;
-  const cellTheme = useMemo(() => ({ fontFamily: monospaceFont }), []);
+  const cellTheme = useMemo(() => ({ fontFamily: normal.family }), [normal.family]);
   const theme = useMemo<Partial<Theme>>(
     () => ({
       accentColor: color("--accent"),

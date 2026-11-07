@@ -9,6 +9,7 @@ import {
   hasOrchestrationProvider,
   letterSpacing,
   migrateAppearance,
+  migrateTypography,
   parseFitColumns,
   parseRowDensity,
   parseTableLines,
@@ -190,7 +191,7 @@ describe("desktop stream state", () => {
     ]);
     expect(
       resolveText(parseTextStyles(storage.getItem("code60.textStyles")), "normalText").family,
-    ).toMatch(/^"IBM Plex Sans"/);
+    ).toMatch(/^"D-DIN"/);
     values.set("code60.theme", "light");
     values.set("code60.textStyles", '{"normalText":{"typeface":"georgia"}}');
     values.set("code60.tableLines", '{"horizontal":false,"vertical":false,"heading":false}');
@@ -200,7 +201,7 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults to IBM Plex Sans with Serif for human messages and sentence case", () => {
+  it("defaults every category to D-DIN Regular and sentence case", () => {
     for (const role of [
       "tableHeadings",
       "buttons",
@@ -209,17 +210,49 @@ describe("desktop stream state", () => {
       "pageTitles",
       "normalText",
     ] as const)
-      expect(resolveText(defaultTextStyles, role).family).toBe(
-        fontFamily(role === "humanMessages" ? "ibm-plex-serif" : "ibm-plex-sans"),
-      );
+      expect(resolveText(defaultTextStyles, role)).toMatchObject({
+        family: fontFamily("d-din"),
+        weight: 400,
+      });
     expect(resolveText(defaultTextStyles, "tableHeadings")).toMatchObject({
       size: 12,
-      weight: 500,
+      weight: 400,
       case: undefined,
     });
-    expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({ size: 18, weight: 600 });
+    expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({ size: 18, weight: 400 });
     expect(parseTextStyles(JSON.stringify(defaultTextStyles))).toEqual(defaultTextStyles);
     expect(defaultTextStyles.normalText).toEqual({});
+  });
+
+  it("updates only typography once and preserves sizes, case and later choices", () => {
+    const values = new Map([
+      ["code60.typographyVersion", "old"],
+      ["code60.theme", "dark"],
+      ["code60.tableView.v1:sessions", "saved layout"],
+      [
+        "code60.textStyles",
+        JSON.stringify({
+          normalText: { typeface: "georgia", weight: 700, size: 22, case: "lower" },
+          humanMessages: { typeface: "ibm-plex-serif", weight: 600 },
+        }),
+      ],
+    ]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    migrateTypography(storage);
+    const styles = parseTextStyles(storage.getItem("code60.textStyles"));
+    for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
+      expect(resolveText(styles, role)).toMatchObject({ family: fontFamily("d-din"), weight: 400 });
+    expect(styles.normalText).toEqual({ size: 22, case: "lower" });
+    expect(storage.getItem("code60.theme")).toBe("dark");
+    expect(storage.getItem("code60.tableView.v1:sessions")).toBe("saved layout");
+    expect(storage.getItem("code60.typographyVersion")).toBe("d-din-regular-1");
+    storage.setItem("code60.textStyles", '{"normalText":{"typeface":"georgia","weight":700}}');
+    const later = [...values];
+    migrateTypography(storage);
+    expect([...values]).toEqual(later);
   });
 
   it("validates stored role styles without accepting arbitrary fonts or values", () => {
@@ -262,7 +295,7 @@ describe("desktop stream state", () => {
     });
     expect(resolveText(styles, "buttons")).toMatchObject({
       size: 13,
-      weight: 500,
+      weight: 400,
       case: undefined,
     });
     expect(resolveText(styles, "normalText")).toMatchObject({ weight: 700, case: "lower" });
@@ -275,7 +308,7 @@ describe("desktop stream state", () => {
     });
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
       "--heading-size": "12px",
-      "--heading-weight": "500",
+      "--heading-weight": "400",
       "--heading-case": undefined,
       "--text-size": "13px",
     });
