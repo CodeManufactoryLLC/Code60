@@ -77,6 +77,10 @@ export function createAgents(options: { clientVersion: string }): Agents {
 
     return {
       sessionId: session.sessionId,
+      get sessionState() {
+        return session.sessionState;
+      },
+      setMode: (change) => session.setMode(change),
       pid: proc.pid,
       ...(proc.identity === undefined ? {} : { identity: proc.identity }),
       exited: proc.exited.then(() => {}),

@@ -9,6 +9,7 @@ import type { RunEvent } from "../core/index.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
+import { SessionInfo } from "./session-info.js";
 import { type Block, statusSpec, transcript } from "./state.js";
 
 function ChatMessage({ block }: { block: Block }) {
@@ -79,7 +80,7 @@ export function ChatPage({
   const geometry = useRef({ width: 0, height: 0 });
   const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
-  const ready = run?.status === "idle" && !run.stopping;
+  const ready = run?.status === "idle" && !run.stopping && !run.modeChanging;
   const ended = run && !["queued", "running", "waiting", "idle"].includes(run.status);
   const blocks = useMemo(() => transcript(events), [events]);
   const timings = useMemo(
@@ -106,7 +107,11 @@ export function ChatPage({
     return result;
   }, [blocks, visible]);
   const latest = events.findLast(
-    (event) => event.type !== "status" && event.type !== "turnEnd" && event.type !== "acp",
+    (event) =>
+      event.type !== "status" &&
+      event.type !== "turnEnd" &&
+      event.type !== "acp" &&
+      event.type !== "sessionState",
   );
   const progress =
     run?.stopping || pending === "cancel" || pending === "stop"
@@ -352,6 +357,18 @@ export function ChatPage({
           <div className="chat-provider" role="note" aria-label="Current provider">
             {run.agent}
           </div>
+        )}
+        {run && (
+          <SessionInfo
+            state={run.sessionState}
+            ended={!!ended}
+            editable={ready && !busy}
+            changing={!!run.modeChanging || pending === "set-mode"}
+            autoApproval
+            onMode={(change) => {
+              void action({ type: "set-mode", id: run.id, change });
+            }}
+          />
         )}
       </div>
     </main>

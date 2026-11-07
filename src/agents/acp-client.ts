@@ -9,6 +9,8 @@ import {
   type SessionUpdate,
   type Stream,
 } from "@agentclientprotocol/sdk";
+import { type ModeChange, type SessionState, supportsModeChange } from "../contracts/index.js";
+import { SessionStateTracker } from "./session-state.js";
 import type { AgentMcpServer } from "./types.js";
 import {
   type AgentUpdate,
@@ -23,6 +25,8 @@ const AUTH_REQUIRED = -32000;
 
 export interface AcpSession {
   readonly sessionId: string;
+  readonly sessionState: SessionState;
+  setMode(change: ModeChange): Promise<void>;
   readonly closed: Promise<void>;
   prompt(text: string): Promise<StopReason>;
   cancel(): Promise<void>;
@@ -192,14 +196,60 @@ async function connectSession(
   let sessionId: string | undefined;
   let busy = false;
   let suppressUpdates = false;
+  const state = new SessionStateTracker();
+  let modeRequest: AbortController | undefined;
+  let modeRevision = 0;
+  const early: { sessionId: string; update: SessionUpdate }[] = [];
+  let earlyBytes = 0;
+  const startupRaw: RawAcpUpdate[] = [];
+  let startupRawBytes = 0;
+  const retainRaw = (raw: RawAcpUpdate) => {
+    const bytes = new TextEncoder().encode(raw.payload).length;
+    if (startupRaw.length < 128 && startupRawBytes + bytes <= RAW_UPDATE_LIMIT) {
+      startupRaw.push(raw);
+      startupRawBytes += bytes;
+    }
+  };
+  const publishState = (previous: SessionState) => {
+    if (JSON.stringify(previous) === JSON.stringify(state.state)) return;
+    for (const listener of listeners) listener({ type: "sessionState", state: state.state });
+  };
+  const trackState = (update: SessionUpdate) => {
+    const previous = state.state;
+    state.update(update);
+    if (
+      update.sessionUpdate === "config_option_update" ||
+      update.sessionUpdate === "current_mode_update"
+    )
+      modeRevision++;
+    if (!suppressUpdates) publishState(previous);
+  };
 
   const app = client({ name: "code60" })
     .onNotification(methods.client.session.update, ({ params }) => {
-      if (sessionId === undefined || params.sessionId !== sessionId) return;
+      if (sessionId === undefined) {
+        // A new session may report state before its ID is returned. Retain only bounded
+        // state notifications, and only apply them after matching the response's ID.
+        if (
+          ["usage_update", "config_option_update", "current_mode_update"].includes(
+            params.update.sessionUpdate,
+          )
+        ) {
+          const bytes = new TextEncoder().encode(JSON.stringify(params)).length;
+          if (early.length < 128 && earlyBytes + bytes <= RAW_UPDATE_LIMIT) {
+            early.push(params);
+            earlyBytes += bytes;
+          }
+        }
+        return;
+      }
+      if (params.sessionId !== sessionId) return;
+      trackState(params.update);
       // Tool-call state must track replayed history even when the replay itself is suppressed.
       const update = mapUpdate(params.update, toolCalls);
       if (suppressUpdates) return;
       const raw = rawUpdate(params.update);
+      if (listeners.size === 0) retainRaw(raw);
       for (const listener of listeners) {
         listener(raw);
         if (update !== undefined) listener(update);
@@ -286,6 +336,13 @@ async function connectSession(
         }),
       );
       sessionId = session.sessionId;
+      for (const entry of early)
+        if (entry.sessionId === sessionId) {
+          trackState(entry.update);
+          retainRaw(rawUpdate(entry.update));
+        }
+      early.length = 0;
+      state.setup(session);
     } else {
       const method = restoreMethod(init.agentCapabilities ?? {});
       if (method === undefined) {
@@ -295,25 +352,27 @@ async function connectSession(
       }
       sessionId = restoreId;
       if (method === "resume") {
-        await call(
+        const response = await call(
           ctx.request(methods.agent.session.resume, {
             sessionId: restoreId,
             cwd: options.cwd,
             mcpServers: acpMcpServers(options.mcpServers),
           }),
         );
+        state.setup(response);
       } else {
         // session/load replays the full prior transcript before responding. Those notifications
         // are already present in the append-only run log, so do not append them again.
         suppressUpdates = true;
         try {
-          await call(
+          const response = await call(
             ctx.request(methods.agent.session.load, {
               sessionId: restoreId,
               cwd: options.cwd,
               mcpServers: acpMcpServers(options.mcpServers),
             }),
           );
+          state.setup(response);
         } finally {
           suppressUpdates = false;
         }
@@ -327,9 +386,72 @@ async function connectSession(
 
   return {
     sessionId: id,
+    get sessionState() {
+      return state.state;
+    },
+    async setMode(change) {
+      if (busy || modeRequest) throw new Error("the session is busy");
+      if (!supportsModeChange(state.state, change))
+        throw new Error("This harness mode is no longer available");
+      const controller = new AbortController();
+      modeRequest = controller;
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 15_000);
+      const revision = modeRevision;
+      try {
+        const requestOptions = { cancellationSignal: controller.signal, stopWaitingOnCancel: true };
+        if (change.source === "config") {
+          const response = await call(
+            ctx.request(
+              methods.agent.session.setConfigOption,
+              {
+                sessionId: id,
+                configId: change.configId,
+                value: change.value,
+              },
+              requestOptions,
+            ),
+          );
+          const previous = state.state;
+          state.config(response.configOptions);
+          publishState(previous);
+        } else {
+          await call(
+            ctx.request(
+              methods.agent.session.setMode,
+              { sessionId: id, modeId: change.value },
+              requestOptions,
+            ),
+          );
+          // A notification received during the request is newer authority than its empty response.
+          if (modeRevision === revision) {
+            const previous = state.state;
+            state.confirmLegacy(change.value);
+            publishState(previous);
+          }
+        }
+      } catch (error) {
+        if (timedOut) {
+          const previous = state.state;
+          state.unconfirmed();
+          publishState(previous);
+          throw new Error(
+            "Harness mode change timed out; current mode is unconfirmed. Retry to confirm it.",
+          );
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        if (modeRequest === controller) modeRequest = undefined;
+      }
+    },
     closed: connection.closed,
     async prompt(text) {
       if (busy) throw new Error("a turn is already in progress");
+      if (modeRequest) throw new Error("the session is busy");
       busy = true;
       try {
         const response = await call(
@@ -348,10 +470,13 @@ async function connectSession(
       await Promise.race([ctx.notify(methods.agent.session.cancel, { sessionId: id }), terminated]);
     },
     close() {
+      modeRequest?.abort();
       connection.close();
     },
     onUpdate(listener) {
       listeners.add(listener);
+      for (const raw of startupRaw.splice(0)) listener(raw);
+      startupRawBytes = 0;
       return () => listeners.delete(listener);
     },
     onPermission(handler) {

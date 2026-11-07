@@ -47,7 +47,10 @@ export function completedTurns(events: readonly RunEvent[]): CompletedTurn[] {
 
 /** Raw ACP copies and turn-end records would double-count the activity they describe. */
 const activity = (event: RunEvent) =>
-  event.type !== "status" && event.type !== "acp" && event.type !== "turnEnd";
+  event.type !== "status" &&
+  event.type !== "acp" &&
+  event.type !== "sessionState" &&
+  event.type !== "turnEnd";
 
 export function telemetry(events: readonly RunEvent[] | undefined, now: number): Telemetry {
   if (!events?.length) return { turns: null, buckets: null, history: null };

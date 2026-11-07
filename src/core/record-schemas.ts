@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { runIdSchema, stopReasonSchema, toolKindSchema } from "../contracts/index.js";
+import {
+  runIdSchema,
+  sessionStateSchema,
+  stopReasonSchema,
+  toolKindSchema,
+} from "../contracts/index.js";
 
 export const runStatusSchema = z.enum([
   "queued",
@@ -43,6 +48,7 @@ export const runRecordSchema = z
     agentCommand: z.array(z.string()).readonly().optional(),
     /** Absent on records written before explicit session recovery was added. */
     acpSessionId: z.string().optional(),
+    sessionState: sessionStateSchema.optional(),
     /** The command line reported by ps, used to guard against reused PIDs. */
     agentCommandLine: z.string().optional(),
     startedAt: z.string(),
@@ -57,6 +63,7 @@ export const runRecordSchema = z
   );
 
 export const runEventBodySchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("sessionState"), state: sessionStateSchema }),
   z.object({
     type: z.literal("status"),
     status: runStatusSchema,

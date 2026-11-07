@@ -107,6 +107,7 @@ export function workerTranscript(events: readonly RunEvent[]): WorkerEntry[] {
   const tools = new Map<string, Raw>();
   let open: Raw | undefined;
   for (const event of events) {
+    if (event.type === "sessionState") continue;
     if (event.type === "message" || event.type === "thought") {
       if (open?.type === event.type) open.text = `${String(open.text)}${event.text}`;
       else {

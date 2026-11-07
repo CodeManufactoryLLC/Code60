@@ -1,6 +1,6 @@
 export { TOOL_KINDS } from "../contracts/index.js";
 
-import type { StopReason, ToolKind } from "../contracts/index.js";
+import type { ModeChange, SessionState, StopReason, ToolKind } from "../contracts/index.js";
 import type { NativeProcessIdentity } from "../platform/index.js";
 
 export type { StopReason, ToolKind };
@@ -20,6 +20,7 @@ export type AgentUpdate =
   | { type: "message"; text: string }
   | { type: "thought"; text: string }
   | { type: "toolCall"; toolCallId: string; title: string; kind: ToolKind; status: string }
+  | { type: "sessionState"; state: SessionState }
   | RawAcpUpdate;
 
 /** One choice the agent offered for a permission request. */
@@ -66,6 +67,8 @@ export interface AgentSpec {
 export interface AgentSession {
   /** ACP session identifier. Persist this to allow an explicit later restore attempt. */
   readonly sessionId: string;
+  readonly sessionState?: SessionState;
+  setMode?(change: ModeChange): Promise<void>;
   /** PID of the agent process, which is also its process group ID. */
   readonly pid: number;
   /** Native Windows process creation time, owner SID and owned job. Absent on POSIX. */

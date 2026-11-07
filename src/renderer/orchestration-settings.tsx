@@ -34,7 +34,7 @@ export function OrchestrationSettings({ snapshot, api }: { snapshot: Snapshot; a
         </button>
       </div>
       <label className="settings-row">
-        Allow all actions without asking
+        Code60 auto-approval
         <input type="checkbox" role="switch" checked aria-checked="true" disabled />
       </label>
       {(mode || (setup?.complete && setup.session)) && (

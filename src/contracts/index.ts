@@ -71,6 +71,7 @@ export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./prompts.js";
 export * from "./search-summary.js";
+export * from "./session-state.js";
 
 const promptTemplateSchema = (id: PromptId) =>
   z.string().superRefine((template, ctx) => {

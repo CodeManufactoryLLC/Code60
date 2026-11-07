@@ -1043,7 +1043,6 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       selection?.addRange(range);
       return selection?.toString();
     });
-    const beforeScroll = await chat.locator(".transcript").evaluate((element) => element.scrollTop);
     await agentCopy.click();
     await expect(composer).toBeFocused();
     expect(await page.evaluate(() => getSelection()?.toString())).toBe(selectedText);
@@ -1056,6 +1055,12 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
         () => (window as unknown as { copyHarness: { values: string[] } }).copyHarness.values,
       );
     expect(await clipboardValues()).toEqual([source]);
+    // Streaming may legitimately move a following transcript. Measure feedback
+    // only after the final chunk, independently of the viewport's available height.
+    const beforeFeedback = await chat.locator(".transcript").evaluate((element) => ({
+      top: element.scrollTop,
+      height: element.scrollHeight,
+    }));
     await page.evaluate(() =>
       (window as unknown as { copyHarness: { reject(): void } }).copyHarness.reject(),
     );
@@ -1075,12 +1080,13 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(retry).toHaveCount(0);
     await expect(composer).toHaveValue("untouched draft");
     // Feedback is overlaid, not inserted into the transcript's scrolling layout.
+    const afterFeedback = await chat.locator(".transcript").evaluate((element) => ({
+      top: element.scrollTop,
+      height: element.scrollHeight,
+    }));
+    expect(afterFeedback.height).toBe(beforeFeedback.height);
     // Native focus can round the Windows scroll offset by one CSS pixel.
-    expect(
-      Math.abs(
-        (await chat.locator(".transcript").evaluate((element) => element.scrollTop)) - beforeScroll,
-      ),
-    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(afterFeedback.top - beforeFeedback.top)).toBeLessThanOrEqual(1);
     const userCopy = chat.locator(".event.prompt").getByRole("button", { name: "Copy message" });
     await expectMessageCopy(userCopy);
     const userBubble = await chat.locator(".event.prompt pre").boundingBox();
@@ -5283,6 +5289,110 @@ test("desktop: agent setup wizard handles missing agents, authentication, timeou
     await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
     await expect(wizard).toHaveCount(0);
     expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: ACP session information and idle-only harness modes", async () => {
+  const testInfo = test.info();
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-session-info-"));
+  const configFile = join(directory, "config", "code60", "config.json");
+  await mkdir(dirname(configFile), { recursive: true });
+  await writeFile(
+    configFile,
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--session-info"],
+        },
+      },
+    }),
+  );
+  application = await launch(directory, directory, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const chat = page.locator("#panel-chat .orchestration-chat-page:not(.worker-chat-page)");
+    const info = chat.getByLabel("Session information", { exact: true });
+    await expect(info).toContainText("Model: Fixture Model");
+    await expect(info).toContainText("26.5%");
+    await expect(info).toContainText("Code60 auto-approval: On");
+    const selector = info.getByLabel("Harness mode", { exact: true });
+    await expect(selector).toHaveValue("ask");
+    await expect(selector).toBeEnabled();
+    await selector.focus();
+    await expect(selector).toBeFocused();
+    await selector.selectOption("full");
+    await expect(selector).toHaveValue("full");
+    const composer = chat.getByLabel("Message to orchestrator", { exact: true });
+    await composer.fill(
+      JSON.stringify([{ usage: { used: 20000, size: 200000 } }, { hang: "cancellable" }]),
+    );
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(selector).toBeDisabled();
+    await expect(info).toContainText("10.0%");
+    await chat.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(selector).toBeEnabled();
+    await selector.selectOption("ask");
+    await composer.fill("Keep my draft");
+    await page.reload();
+    await expect(composer).toHaveValue("Keep my draft");
+    await expect(selector).toHaveValue("ask");
+    await expect(info).toContainText("10.0%");
+
+    const [id] = await page.evaluate(() =>
+      window.desktop.start({ agents: ["claude"], allow: [], allowAll: false }),
+    );
+    if (!id) throw new Error("Missing worker");
+    await page.locator(`#conversation-${id}`).click();
+    const worker = page.locator(`#chat-${id}`);
+    await expect(worker.getByLabel("Message", { exact: true })).toBeEnabled();
+    const workerInfo = worker.getByLabel("Session information", { exact: true });
+    await expect(workerInfo).toContainText("Fixture Model");
+    const workerMode = workerInfo.getByLabel("Harness mode", { exact: true });
+    await workerMode.selectOption("full");
+    await expect(workerMode).toHaveValue("full");
+    await expect(selector).toHaveValue("ask");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 700),
+    );
+    expect(await workerInfo.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("session-info-light.png"),
+      animations: "disabled",
+    });
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "dark";
+    });
+    await page.screenshot({
+      path: testInfo.outputPath("session-info-dark.png"),
+      animations: "disabled",
+    });
+    await page.evaluate(async (id) => {
+      await window.desktop.action({ type: "finish", id });
+    }, id);
+    await expect(workerInfo).toContainText("Last reported");
+    await expect(workerInfo).toContainText("Full Access");
+    await expect(workerInfo.locator("select")).toHaveCount(0);
+    await page.reload();
+    await selectSidebarPage(page, "Sessions");
+    const grid = page.locator("#panel-sessions .sessions-grid").getByTestId("data-grid-canvas");
+    await expect(grid).toBeVisible();
+    const box = await grid.boundingBox();
+    if (!box) throw new Error("Missing sessions grid");
+    await page.mouse.click(box.x + 20, box.y + 48);
+    await expect(workerInfo).toContainText("Last reported");
+    await expect(workerInfo).toContainText("Full Access");
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

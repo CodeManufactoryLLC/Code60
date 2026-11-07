@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { AgentMcpServer, Agents, PermissionAnswer } from "../agents/index.js";
-import { DEFAULT_PROMPT_TEMPLATES, type PromptTemplates } from "../contracts/index.js";
+import {
+  DEFAULT_PROMPT_TEMPLATES,
+  type ModeChange,
+  type PromptTemplates,
+} from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import type { Clock } from "./clock.js";
 import { decide, type PolicyOverrides } from "./policy.js";
@@ -82,6 +86,7 @@ export interface Orchestrator {
   restore(runId: string): Promise<RecoveryResult>;
   /** Starts a fresh ACP session whose first turn sends the summary and the user's message. */
   handoff(runId: string, summary: string, text: string, reason: string): Promise<void>;
+  setMode(runId: string, change: ModeChange): Promise<void>;
   finish(runId: string): void;
   /** Resolves after this run's cleanup and final record write, independently of other runs. */
   settled(runId: string): Promise<void>;
@@ -232,6 +237,7 @@ export async function createOrchestrator(
     reply: (runId, text, origin) => find(runId).reply(text, origin),
     restore: (runId) => find(runId).restore(),
     handoff: (runId, summary, text, reason) => find(runId).handoff(summary, text, reason),
+    setMode: (runId, change) => find(runId).setMode(change),
     finish: (runId) => find(runId).finish(),
     cancelTurn: (runId) => find(runId).cancelTurn("user"),
     answerPermission(permissionId, answer) {

@@ -2,7 +2,7 @@ import type { StopReason, ToolKind } from "../agents/index.js";
 import type { PermissionRule, PromptTemplates } from "../contracts/index.js";
 import type { RunStatus } from "./record-schemas.js";
 
-export type { PermissionRule } from "../contracts/index.js";
+export type { ModeChange, ModeControl, PermissionRule, SessionState } from "../contracts/index.js";
 export type { RunEvent, RunEventBody, RunRecord, RunStatus } from "./record-schemas.js";
 export type { StopReason, ToolKind };
 
@@ -63,6 +63,8 @@ export interface RunView {
   pending: readonly PendingPermission[];
   /** The run is ending and its agent is being stopped. */
   stopping: boolean;
+  sessionState?: import("../contracts/index.js").SessionState;
+  modeChanging?: boolean;
 }
 
 export interface RunResult {

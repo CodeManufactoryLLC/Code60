@@ -285,3 +285,25 @@ describe("desktop IPC validation", () => {
       expect(() => parseProjectPath(value)).toThrow();
   });
 });
+
+describe("harness mode IPC", () => {
+  it("accepts only scoped bounded mode selections", () => {
+    const value = {
+      type: "set-mode",
+      id: "run-1",
+      change: { source: "config", configId: "permissions", value: "ask" },
+    };
+    for (const parse of [parseAction, parseOrchestrationChatAction]) {
+      expect(parse(value)).toEqual(value);
+      for (const invalid of [
+        { ...value, id: "../outside" },
+        { ...value, command: "shell" },
+        { ...value, change: { ...value.change, source: "unknown" } },
+        { ...value, change: { ...value.change, value: true } },
+        { ...value, change: { ...value.change, value: "x".repeat(257) } },
+        { ...value, change: { ...value.change, allowAll: true } },
+      ])
+        expect(() => parse(invalid)).toThrow();
+    }
+  });
+});

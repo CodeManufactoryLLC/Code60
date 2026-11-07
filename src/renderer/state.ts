@@ -76,7 +76,7 @@ export function transcript(events: readonly RunEvent[]): Block[] {
   let open: Block | undefined;
   for (const [index, event] of events.entries()) {
     // Raw protocol records must not split the corresponding streamed text message.
-    if (event.type === "acp") continue;
+    if (event.type === "acp" || event.type === "sessionState") continue;
     if (event.type === "message" || event.type === "thought") {
       if (open?.type === event.type) open.text += event.text;
       else {

@@ -6,6 +6,7 @@ import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { continueBlocker } from "./recovery.js";
+import { SessionInfo } from "./session-info.js";
 import { statusSpec, transcript } from "./state.js";
 
 const endedStatuses = new Set(["finished", "failed", "cancelled", "timed_out", "interrupted"]);
@@ -52,7 +53,7 @@ export function WorkerChat({
   const ended = endedStatuses.has(status);
   const blocker = ended ? continueBlocker(run) : undefined;
   const inactive = ended && run.record.discardedAt !== undefined;
-  const editable = run.view?.status === "idle" && !run.view.stopping;
+  const editable = run.view?.status === "idle" && !run.view.stopping && !run.view.modeChanging;
   const resumable = ended && blocker === undefined;
   const sendable = editable || resumable;
   const working = ["running", "waiting"].includes(status);
@@ -168,7 +169,7 @@ export function WorkerChat({
             className="status-label chat-worker-label"
             title="Dispatched by an orchestrator. Each tool call is allowed once without asking."
           >
-            Orchestrator worker, allows all
+            Orchestrator worker
           </span>
         )}
       </header>
@@ -373,6 +374,16 @@ export function WorkerChat({
         <div className="chat-provider" role="note" aria-label="Current provider">
           {run.record.agent}
         </div>
+        <SessionInfo
+          state={run.view?.sessionState ?? run.record.sessionState}
+          ended={ended}
+          editable={editable && !busy}
+          changing={!!run.view?.modeChanging}
+          autoApproval={orchestrated}
+          onMode={(change) => {
+            void act({ type: "set-mode", id, change });
+          }}
+        />
       </div>
     </main>
   );
