@@ -1206,6 +1206,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(chatHead).toHaveAttribute("aria-pressed", "true");
     await expect(chatPopup).not.toHaveCSS("box-shadow", "none");
     await expect(chatPopup).toHaveCSS("border-top-right-radius", "0px");
+    // The final footer inset is meaningful only after the slot finishes moving.
+    await page.locator(".chat-slot.open").evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished.catch(() => {})),
+      );
+    });
     // Take all measurements in one frame, including during the dock's move animation.
     const [popupBox, headBox, footerBox] = await page.evaluate(() =>
       [".chat-popup:not([hidden])", ".app-footer .chat-head", ".app-footer"].map((selector) => {
