@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PROMPT_TEMPLATES,
@@ -1101,7 +1101,7 @@ describe("app-wide orchestration chat", () => {
     const first = controller.snapshot().chat;
     const root = join(directory, ".code60_workspace");
     expect(first.directory).not.toBe(root);
-    expect(first.directory?.startsWith(`${root}/`)).toBe(true);
+    expect(first.directory?.startsWith(`${root}${sep}`)).toBe(true);
     await fs.writeFile(join(first.directory as string, "notes.txt"), "first chat");
     await controller.orchestrationChatAction({ type: "send", id: firstId, text: "first" });
     await controller.orchestrationChatAction({ type: "new" });
@@ -1110,7 +1110,8 @@ describe("app-wide orchestration chat", () => {
     const secondId = second.run?.id as string;
     expect(secondId).not.toBe(firstId);
     expect(second.directory).not.toBe(first.directory);
-    expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
+    if (process.platform !== "win32")
+      expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
     expect(await fs.readFile(join(first.directory as string, "notes.txt"), "utf8")).toBe(
       "first chat",
     );
@@ -1317,7 +1318,7 @@ describe("app-wide orchestration chat", () => {
     await fs.rm(folder);
     await controller.orchestrationChatAction({ type: "restart", id: null });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
+    if (process.platform !== "win32") expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
   });
 });
 

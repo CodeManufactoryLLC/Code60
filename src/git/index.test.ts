@@ -56,8 +56,12 @@ describe("git", () => {
     await writeFile(join(wt, "nested", "data.txt"), "nested data");
     const external = join(dir, "external.txt");
     await writeFile(external, "outside");
-    await symlink(external, join(wt, "external-link"));
-    await symlink(parent, join(wt, "directory-link"));
+    if (process.platform !== "win32") await symlink(external, join(wt, "external-link"));
+    await symlink(
+      parent,
+      join(wt, "directory-link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     await writeFile(join(wt, "ignored.txt"), "ignored content");
 
     const worktrees = await g.listWorktrees(repo);
@@ -67,9 +71,9 @@ describe("git", () => {
       path: wt,
       branch: "code60/r1",
       sizeBytes:
-        Buffer.byteLength("one\n") +
-        Buffer.byteLength("bee\n") +
-        Buffer.byteLength("ignored.txt\n") +
+        (await readFile(join(wt, "a.txt"))).length +
+        (await readFile(join(wt, "b.txt"))).length +
+        (await readFile(join(wt, ".gitignore"))).length +
         Buffer.byteLength("ignored content") +
         Buffer.byteLength("nested data"),
     });
@@ -82,7 +86,10 @@ describe("git", () => {
   });
 
   it("lists externally created detached worktrees and skips missing paths", async () => {
-    const detached = join(dir, "detached\nworktree");
+    const detached = join(
+      dir,
+      process.platform === "win32" ? "detached 雪 worktree" : "detached\nworktree",
+    );
     const missing = join(dir, "missing");
     git(repo, "worktree", "add", "--detach", detached, "HEAD");
     git(repo, "worktree", "add", "--detach", missing, "HEAD");

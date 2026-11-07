@@ -1,6 +1,6 @@
 import type { ChangedFile, Git } from "../git/index.js";
 import { type Clock, sleep } from "./clock.js";
-import type { Processes } from "./processes.js";
+import { type Processes, recordedAgentAlive } from "./processes.js";
 import { assertRunId, type RecordStore } from "./records.js";
 import { ACTIVE_STATUSES, RefusedError, type RunRecord } from "./types.js";
 
@@ -26,7 +26,11 @@ export async function markInterrupted(
 ): Promise<number> {
   let changed = 0;
   for (const record of records) {
-    if (!ACTIVE_STATUSES.has(record.status) || deps.processes.isAlive(record.ownerPid)) continue;
+    if (!ACTIVE_STATUSES.has(record.status)) continue;
+    const ownerAlive = deps.processes.ownerAlive
+      ? await deps.processes.ownerAlive(record.ownerPid, record.ownerIdentity)
+      : deps.processes.isAlive(record.ownerPid);
+    if (ownerAlive) continue;
     const reason = `the owning process (PID ${record.ownerPid}) is gone`;
     record.status = "interrupted";
     record.reason = reason;
@@ -52,7 +56,7 @@ export async function listRuns(deps: CommandDeps): Promise<ListedRun[]> {
       const agentAlive =
         record.agentPid !== undefined &&
         !ACTIVE_STATUSES.has(record.status) &&
-        deps.processes.groupAlive(record.agentPid);
+        (await recordedAgentAlive(deps.processes, record));
       const listed: ListedRun = { record, agentAlive };
       if (agentAlive) {
         const line = await deps.processes.commandLine(record.agentPid as number);
@@ -105,7 +109,7 @@ export async function discardRun(
   if (ACTIVE_STATUSES.has(record.status)) {
     throw new RefusedError(`run ${id} is ${record.status}; finish or cancel it before discarding`);
   }
-  if (record.agentPid !== undefined && deps.processes.groupAlive(record.agentPid)) {
+  if (await recordedAgentAlive(deps.processes, record)) {
     throw new RefusedError(
       `the agent for run ${id} may still be running (process group ${record.agentPid}); stop it first with 'code60 stop ${id}'`,
     );
@@ -136,8 +140,18 @@ export async function stopRun(deps: CommandDeps, id: string): Promise<StopResult
     );
   }
   const pid = record.agentPid;
-  if (pid === undefined || !deps.processes.groupAlive(pid)) {
+  if (pid === undefined || !(await recordedAgentAlive(deps.processes, record))) {
     return { stopped: false, message: `no agent process is running for run ${id}` };
+  }
+  if (deps.processes.stopOwned) {
+    try {
+      await deps.processes.stopOwned(pid, record.agentIdentity);
+    } catch {
+      throw new RefusedError(
+        `cannot verify native process/job identity for process ${pid}; not stopping the agent for run ${id}`,
+      );
+    }
+    return { stopped: true, pid, message: `stopped the agent for run ${id} (owned Windows job)` };
   }
   const live = await deps.processes.commandLine(pid);
   if (

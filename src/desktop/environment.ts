@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { homedir, userInfo } from "node:os";
-import { isAbsolute, join, normalize } from "node:path";
+import { isAbsolute, join, normalize, win32 } from "node:path";
+import { environmentValue, helperOutput, mergeSearchPath, userHome } from "../platform/index.js";
 
 interface PathOptions {
   env?: NodeJS.ProcessEnv;
@@ -11,6 +12,7 @@ interface PathOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   maxOutputBytes?: number;
+  windowsPaths?: () => Promise<{ user: string; machine: string }>;
 }
 
 function loginShell(): string | null {
@@ -28,8 +30,57 @@ function absolute(value: string | undefined | null): value is string {
 /** Desktop-only: recover executable search paths without importing shell credentials. */
 export async function desktopPath(options: PathOptions = {}): Promise<string> {
   const env = options.env ?? process.env;
-  const home = options.home ?? (absolute(env.HOME) ? env.HOME : homedir());
+  const home = options.home ?? (absolute(userHome(env)) ? userHome(env) : homedir());
   const platform = options.platform ?? process.platform;
+  if (platform === "win32") {
+    const registry = options.signal?.aborted
+      ? { user: "", machine: "" }
+      : await (
+          options.windowsPaths ??
+          (async () => {
+            const value: unknown = JSON.parse(
+              (
+                await helperOutput(
+                  ["environment"],
+                  128 * 1024,
+                  options.timeoutMs ?? 3_000,
+                  options.signal,
+                )
+              ).toString("utf8"),
+            );
+            if (
+              value === null ||
+              typeof value !== "object" ||
+              typeof (value as { user?: unknown }).user !== "string" ||
+              typeof (value as { machine?: unknown }).machine !== "string"
+            )
+              throw new Error("Invalid Windows environment");
+            return value as { user: string; machine: string };
+          })
+        )().catch(() => ({ user: "", machine: "" }));
+    const local = environmentValue(env, "LOCALAPPDATA", platform);
+    const roaming = environmentValue(env, "APPDATA", platform);
+    const programs = environmentValue(env, "ProgramFiles", platform);
+    return mergeSearchPath(
+      [
+        ...(environmentValue(env, "PATH", platform) ?? "").split(";"),
+        ...registry.user.split(";"),
+        ...registry.machine.split(";"),
+        win32.join(home, ".local", "bin"),
+        win32.join(home, "bin"),
+        ...(local
+          ? [
+              win32.join(local, "Microsoft", "WinGet", "Links"),
+              win32.join(local, "Programs", "Git", "cmd"),
+              win32.join(local, "Programs", "nodejs"),
+            ]
+          : []),
+        ...(programs ? [win32.join(programs, "Git", "cmd"), win32.join(programs, "nodejs")] : []),
+        ...(roaming ? [win32.join(roaming, "npm")] : []),
+      ],
+      platform,
+    );
+  }
   const accountShell = absolute(env.SHELL) ? null : (options.accountShell ?? loginShell)();
   const shell = absolute(env.SHELL)
     ? env.SHELL

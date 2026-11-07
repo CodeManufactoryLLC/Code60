@@ -3,6 +3,7 @@ import { useTree } from "@headless-tree/react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopApi, FileContext, FileEntry, Snapshot } from "../bridge/index.js";
 import { Icon } from "./icons.js";
+import { pathLabel } from "./path-label.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
 const rootId = "/";
@@ -68,7 +69,7 @@ export function useFiles(api: DesktopApi, snapshot: Snapshot | undefined, active
       : null;
   const roots = project
     ? [
-        { path: project, label: `Project · ${project.split("/").at(-1)}` },
+        { path: project, label: `Project · ${pathLabel(project)}` },
         ...(snapshot?.worktrees?.worktrees ?? [])
           .filter((item) => item.path !== project)
           .map((item) => ({

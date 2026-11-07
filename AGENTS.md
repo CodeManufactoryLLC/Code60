@@ -8,7 +8,7 @@ environments.
 ## Architecture and Module Rules
 
 - Read `ARCHITECTURE.md` before changing behavior. It defines the modules
-  (`cli`, `desktop`, `bridge`, `renderer`, `core`, `agents`, `git`, `contracts`), their
+  (`cli`, `desktop`, `bridge`, `renderer`, `core`, `agents`, `git`, `contracts`, `platform`), their
   dependency rules, and the non-goals.
 - Each `src/<module>/AGENTS.md` adds rules for that module. Follow them when
   changing its code.
@@ -19,7 +19,7 @@ environments.
 
 - Use npm. Install with `npm ci`, and commit `package-lock.json` changes.
 - `npm run check` runs the typecheck, Biome lint and format checks, and the
-  tests. Run it before every commit; PR CI runs it on Linux with Node.js 22.12 and 24; release CI additionally
+  tests. Run it before every commit; PR CI runs it on Linux with Node.js 22.12 and 24 and Windows x64 with Node.js 24; release CI additionally
   runs it on macOS with Node.js 24.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
   JSON, and workflow files. Markdown is not auto-formatted.

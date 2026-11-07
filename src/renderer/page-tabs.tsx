@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useState } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { pathLabel } from "./path-label.js";
 import type { PageId, PageTabs } from "./tabs.js";
 
 const labels: Record<PageId, string> = {
@@ -46,7 +47,7 @@ export function PageTabBar({
   onOpenProject(): void;
   projectDisabled: boolean;
 }) {
-  const repository = directory?.split("/").filter(Boolean).at(-1) ?? directory;
+  const repository = directory ? pathLabel(directory) : directory;
   return (
     <nav className="sidebar" aria-label="Sidebar">
       <button

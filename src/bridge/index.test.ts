@@ -5,6 +5,7 @@ import {
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseFileContext,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
   parsePollKeys,
@@ -19,6 +20,26 @@ import {
 } from "./index.js";
 
 describe("desktop IPC validation", () => {
+  it("preserves POSIX file names while rejecting Windows devices, streams and ambiguous names", () => {
+    const context = (root: string, preview: string) => ({
+      project: root,
+      root,
+      directories: [""],
+      preview,
+    });
+    for (const path of ["con.txt", "name:stream", "a?b", "trailing.", "space "]) {
+      expect(parseFileContext(context("/repo", path))).toEqual(context("/repo", path));
+      expect(() => parseFileContext(context("C:\\repo", path))).toThrow();
+    }
+    expect(parseFileContext(context("D:\\雪 project", "src/雪.ts"))).toEqual(
+      context("D:\\雪 project", "src/雪.ts"),
+    );
+    for (const path of ["../escape", "src\\escape", "/absolute", "a\0b"])
+      expect(() => parseFileContext(context("C:\\repo", path))).toThrow();
+    for (const root of ["C:repo", "\\\\server\\share", "\\\\?\\C:\\repo", "C:\\repo:stream"])
+      expect(() => parseProjectPath(root)).toThrow();
+  });
+
   it("validates orchestration chat messages and session-bound controls", () => {
     expect(parseOrchestrationChatAction({ type: "send", id: "run-1", text: "hello" })).toEqual({
       type: "send",

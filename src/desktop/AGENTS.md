@@ -2,7 +2,7 @@
 
 `src/desktop` is the Electron main process: the window, native dialogs, IPC handlers, and the `DesktopController` that owns one workspace and multiple independent run batches. Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
-- Depend only on `core` and `bridge`. Only this module imports `electron`.
+- Depend only on `core`, `bridge`, and the Node-only `platform` leaf. Only this module imports `electron`.
 - Keep the renderer sandboxed: context isolation on, Node.js integration off, navigation and new windows blocked.
 - Keep `preload.cts` self-contained and expose only fixed methods. Never expose `ipcRenderer` or raw channels.
 - Check the sender of every IPC request and parse its arguments with `bridge` before acting. Act only on runs recorded in the open workspace.

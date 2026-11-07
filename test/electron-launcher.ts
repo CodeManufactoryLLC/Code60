@@ -1,10 +1,21 @@
-import { mkdir, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { _electron } from "@playwright/test";
 
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, "..");
+
+/** Chromium may briefly retain a directory/image lock after Electron exits. */
+export async function removeDesktopFixture(
+  directory: string,
+  options: { recursive: true; force?: boolean },
+): Promise<void> {
+  await rm(directory, {
+    ...options,
+    ...(process.platform === "win32" ? { maxRetries: 10, retryDelay: 100 } : {}),
+  });
+}
 
 /** Launch the same app entrypoint from source or an installed package. */
 export async function launchDesktop(
@@ -23,35 +34,39 @@ export async function launchDesktop(
   env.XDG_CONFIG_HOME = join(directory, "config");
   env.XDG_STATE_HOME = join(directory, "state");
   env.HOME = join(directory, "home");
+  if (process.platform === "win32") env.USERPROFILE = env.HOME;
   await mkdir(env.HOME, { recursive: true });
   // Never run the developer's shell startup files during desktop tests.
   env.SHELL = join(directory, "test-shell");
-  await writeFile(env.SHELL, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o700 });
+  if (process.platform !== "win32")
+    await writeFile(env.SHELL, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o700 });
   if (minimalPath) {
     const bin = join(directory, "minimal-bin");
     await mkdir(bin);
     // AppImage's shell launcher needs core utilities.
-    for (const command of [
-      "bash",
-      "true",
-      "unshare",
-      "cat",
-      "ls",
-      "dirname",
-      "basename",
-      "readlink",
-      "realpath",
-      "uname",
-      "sed",
-      "grep",
-      "head",
-      "tr",
-      "cut",
-      "which",
-      "env",
-      "fusermount",
-      "fusermount3",
-    ]) {
+    for (const command of process.platform === "win32"
+      ? []
+      : [
+          "bash",
+          "true",
+          "unshare",
+          "cat",
+          "ls",
+          "dirname",
+          "basename",
+          "readlink",
+          "realpath",
+          "uname",
+          "sed",
+          "grep",
+          "head",
+          "tr",
+          "cut",
+          "which",
+          "env",
+          "fusermount",
+          "fusermount3",
+        ]) {
       for (const base of ["/usr/bin", "/bin"]) {
         try {
           await stat(join(base, command));
@@ -62,14 +77,17 @@ export async function launchDesktop(
         }
       }
     }
+    for (const key of Object.keys(env)) if (key.toLowerCase() === "path") delete env[key];
     env.PATH = bin;
     env.CODE60_TEST_RUNTIME_LOG = join(directory, "unexpected-runtime");
     // PATH discovery can find host runtimes in fallback folders. Shadow them with
     // failing stubs to prove that desktop startup never needs to execute either.
     for (const name of ["node", "npm"]) {
       await writeFile(
-        join(bin, name),
-        '#!/bin/sh\nprintf "%s\\n" "$0" >> "$CODE60_TEST_RUNTIME_LOG"\nexit 127\n',
+        join(bin, process.platform === "win32" ? `${name}.cmd` : name),
+        process.platform === "win32"
+          ? '@echo unexpected-runtime>>"%CODE60_TEST_RUNTIME_LOG%"\r\n@exit /b 127\r\n'
+          : '#!/bin/sh\nprintf "%s\\n" "$0" >> "$CODE60_TEST_RUNTIME_LOG"\nexit 127\n',
         { mode: 0o700 },
       );
     }

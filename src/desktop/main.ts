@@ -31,6 +31,7 @@ import {
   parseStart,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
+import { setEnvironmentPath } from "../platform/index.js";
 import { DesktopController } from "./controller.js";
 import { desktopPath } from "./environment.js";
 import { filePreferences } from "./preferences.js";
@@ -197,7 +198,7 @@ async function ready(): Promise<void> {
     app.exit(1);
     return;
   }
-  process.env.PATH = await desktopPath({ signal: startup.signal });
+  setEnvironmentPath(process.env, await desktopPath({ signal: startup.signal }));
   if (startup.signal.aborted) return;
   const transparent = await preferences.transparent();
   let enabled = transparent;
@@ -354,6 +355,18 @@ async function ready(): Promise<void> {
     event.preventDefault();
     void quit(true);
   });
+  if (process.platform === "win32") {
+    window.on("query-session-end", () => {
+      startup.abort();
+      // Do not veto sign-out. The owned jobs also close if Windows terminates us
+      // before these best-effort final record writes finish.
+      void controller.shutdown(true).catch(() => {});
+    });
+    window.on("session-end", () => {
+      startup.abort();
+      void controller.shutdown(true).catch(() => {});
+    });
+  }
   window.loadURL(page).catch(() => void quit(false));
 }
 

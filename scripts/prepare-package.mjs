@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { resolveCommand } from "../dist/platform/index.js";
 
 const output = "release/licenses";
 await rm(output, { recursive: true, force: true });
@@ -22,7 +23,8 @@ async function notices(directory, base, target) {
 await notices("src/renderer/fonts", "src", "vendored");
 await notices("src/renderer/icons", "src", "vendored");
 // Include only production dependency notices; development tooling is not shipped.
-const dependencies = execFileSync("npm", ["ls", "--omit=dev", "--all", "--parseable"], {
+const command = await resolveCommand(["npm", "ls", "--omit=dev", "--all", "--parseable"]);
+const dependencies = execFileSync(command.file, command.args, {
   encoding: "utf8",
   timeout: 60_000,
 });

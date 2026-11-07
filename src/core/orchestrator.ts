@@ -83,6 +83,8 @@ export interface Orchestrator {
   /** Starts a fresh ACP session whose first turn sends the summary and the user's message. */
   handoff(runId: string, summary: string, text: string, reason: string): Promise<void>;
   finish(runId: string): void;
+  /** Resolves after this run's cleanup and final record write, independently of other runs. */
+  settled(runId: string): Promise<void>;
   cancelTurn(runId: string): boolean;
   answerPermission(permissionId: string, answer: PermissionAnswer): boolean;
   /** Cancels every active turn and ends every run. With `force`, skips the grace periods. */
@@ -103,6 +105,8 @@ export async function createOrchestrator(
   deps: OrchestratorDeps,
   options: OrchestratorOptions,
 ): Promise<Orchestrator> {
+  const ownerIdentity = await deps.processes.identity?.(deps.ownerPid);
+  if (ownerIdentity === null) throw new Error("Cannot verify the run owner");
   const eventListeners = new Set<(event: RunEvent) => void>();
   const changeListeners = new Set<() => void>();
   const warningListeners = new Set<(message: string) => void>();
@@ -117,6 +121,7 @@ export async function createOrchestrator(
     clock: deps.clock,
     processes: deps.processes,
     ownerPid: deps.ownerPid,
+    ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
     onEvent(event: RunEvent) {
       for (const listener of eventListeners) listener(event);
       notifyChange();
@@ -179,6 +184,7 @@ export async function createOrchestrator(
               }
             : { base: null, branch: null, worktree: options.directory }),
           ownerPid: deps.ownerPid,
+          ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
           startedAt,
         };
         return new Run(record, runDeps, runSettings(config));
@@ -210,6 +216,7 @@ export async function createOrchestrator(
     mode: options.mode,
     start: pump,
     runs: () => runs.map((run) => run.view()),
+    settled: (runId) => find(runId).finished,
     onEvent(listener) {
       eventListeners.add(listener);
       return () => eventListeners.delete(listener);

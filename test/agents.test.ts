@@ -250,7 +250,8 @@ describe("agent processes", () => {
     expect(alive(grandchild)).toBe(true);
     const started = Date.now();
     await session.stop(300);
-    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+    if (process.platform !== "win32") expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+    expect(Date.now() - started).toBeLessThan(7_000);
     expect(alive(session.pid)).toBe(false);
     expect(alive(grandchild)).toBe(false);
     await expect(turn).rejects.toThrow();

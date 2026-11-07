@@ -1,13 +1,16 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { launchDesktop } from "./electron-launcher.js";
+import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
 
 const fixture = resolve(import.meta.dirname, "fixtures/packaged-agent.mjs");
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
-for (const location of ["fallback", "shell"] as const) {
+for (const location of process.platform === "win32"
+  ? ["fallback", "inherited"]
+  : ["fallback", "shell"]) {
   test(`discovers default Droid and npx workers from ${location} PATH`, async () => {
     test.setTimeout(60_000);
     const directory = await mkdtemp(join(tmpdir(), "code60-discovery-"));
@@ -19,6 +22,32 @@ for (const location of ["fallback", "shell"] as const) {
     // The host Node path is explicit only inside the fake executable. Application
     // configuration is absent: Code60 must resolve its shipped Droid/npx commands.
     for (const name of ["droid", "npx"]) {
+      if (process.platform === "win32") {
+        const entry =
+          name === "npx"
+            ? join(bin, "node_modules", "npm", "bin", "npx-cli.js")
+            : join(bin, "droid.cjs");
+        await mkdir(join(bin, "node_modules", "npm", "bin"), { recursive: true });
+        await copyFile(process.execPath, join(bin, "node.exe"));
+        const expected =
+          name === "droid"
+            ? ["exec", "--output-format", "acp"]
+            : ["-y", "@agentclientprotocol/codex-acp"];
+        await writeFile(
+          entry,
+          `
+          require("node:assert/strict").deepEqual(process.argv.slice(2), ${JSON.stringify(expected)});
+          process.env.CODE60_TEST_DISPATCH = "1";
+          process.argv = [process.execPath, __filename, ${JSON.stringify(probe)}];
+          import(${JSON.stringify(pathToFileURL(fixture).href)});
+        `,
+        );
+        await writeFile(
+          join(bin, `${name}.cmd`),
+          `@echo off\r\n"${join(bin, "node.exe")}" "${entry}" %*\r\n`,
+        );
+        continue;
+      }
       const check =
         name === "droid"
           ? '[ "$1" = exec ] && [ "$2" = --output-format ] && [ "$3" = acp ]'
@@ -40,6 +69,7 @@ for (const location of ["fallback", "shell"] as const) {
     const app = await launchDesktop(directory, directory, join(directory, "db.sqlite"), true, {
       SHELL: shell, // Missing shell deliberately exercises the fallback branch.
       CODE60_TEST_AGENT_BIN: bin,
+      ...(location === "inherited" ? { PATH: `${bin};${process.env.SystemRoot}\\System32` } : {}),
     });
     try {
       const page = await app.firstWindow();

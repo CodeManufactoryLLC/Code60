@@ -1,12 +1,14 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verify } from "../scripts/release/artifacts.mjs";
 import {
   assetNames,
   digest,
   newerStable,
+  run,
   signingReady,
   validateCandidate,
   versionOf,
@@ -14,6 +16,27 @@ import {
 import { staple } from "../scripts/release/staple.mjs";
 
 const sha = "a".repeat(40);
+
+it.runIf(process.platform === "win32")(
+  "routes the native helper through the Windows signing transformer",
+  () => {
+    const resources = JSON.parse(
+      run(
+        process.execPath,
+        ["-p", "JSON.stringify(require('./scripts/packaging-config.cjs').extraResources)"],
+        {
+          cwd: fileURLToPath(new URL("..", import.meta.url)),
+          env: { ...process.env, CODE60_RELEASE: "0" },
+        },
+      ),
+    );
+    expect(resources.find((resource) => resource.to === "native")).toEqual({
+      from: "native/win32/x64",
+      to: "native",
+      filter: ["code60-host.exe"],
+    });
+  },
+);
 
 describe("Apple ticket delivery", () => {
   it("retries temporary service failures and stops after success", async () => {
@@ -58,6 +81,9 @@ const ready = {
   HAS_APPLE_API_KEY: "true",
   HAS_APPLE_API_KEY_ID: "true",
   HAS_APPLE_API_ISSUER: "true",
+  HAS_WIN_CSC_LINK: "true",
+  HAS_WIN_CSC_KEY_PASSWORD: "true",
+  HAS_WIN_SIGNING_THUMBPRINT: "true",
   RELEASE_MAINTAINER: "Code60 Test <ci@example.invalid>",
 };
 const directories = [];
@@ -108,7 +134,7 @@ describe("release validation", () => {
 async function artifacts() {
   const directory = await mkdtemp(join(tmpdir(), "code60-artifacts-"));
   directories.push(directory);
-  for (const platform of ["mac", "linux"]) {
+  for (const platform of ["mac", "linux", "win"]) {
     const assets = [];
     for (const name of assetNames("0.2.0", platform)) {
       await writeFile(join(directory, name), `installer ${name}`);
@@ -116,7 +142,13 @@ async function artifacts() {
     }
     await writeFile(
       join(directory, `manifest-${platform}.json`),
-      JSON.stringify({ tag: "v0.2.0", sha, platform, assets }),
+      JSON.stringify({
+        tag: "v0.2.0",
+        sha,
+        platform,
+        assets,
+        ...(platform === "win" ? { signaturesVerified: true } : {}),
+      }),
     );
   }
   return directory;
@@ -124,7 +156,7 @@ async function artifacts() {
 describe("release artifact promotion", () => {
   it("requires every installer from the same exact commit", async () => {
     const directory = await artifacts();
-    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(3);
+    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(4);
     await expect(verify(directory, "v0.2.0", "b".repeat(40))).rejects.toThrow("identity");
   });
   it("rejects changed bytes, missing installers, missing manifests and unexpected files", async () => {
