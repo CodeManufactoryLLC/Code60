@@ -240,6 +240,7 @@ export interface DesktopApi {
   setFileContext(context: FileContext | null): Promise<void>;
   orchestrationChatAction(request: OrchestrationChatAction): Promise<void>;
   windowAppearance(): Promise<{ transparent: boolean; enabled: boolean; clickThrough: boolean }>;
+  setWindowTheme(dark: boolean): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;

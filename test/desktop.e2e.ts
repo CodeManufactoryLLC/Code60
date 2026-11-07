@@ -14,6 +14,36 @@ const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 const windowTitle = () =>
   application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
+type TitleBarOverlayCall = {
+  color?: string | undefined;
+  symbolColor?: string | undefined;
+  height?: number | undefined;
+};
+const watchTitleBarOverlay = () =>
+  application.evaluate(({ BrowserWindow }) => {
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (!mainWindow) throw new Error("Desktop window is missing");
+    const scope = globalThis as typeof globalThis & {
+      __code60TitleBarOverlayCalls?: TitleBarOverlayCall[];
+    };
+    scope.__code60TitleBarOverlayCalls = [];
+    const setTitleBarOverlay = mainWindow.setTitleBarOverlay.bind(mainWindow);
+    mainWindow.setTitleBarOverlay = (options) => {
+      scope.__code60TitleBarOverlayCalls?.push({
+        color: options.color,
+        symbolColor: options.symbolColor,
+        height: options.height,
+      });
+      setTitleBarOverlay(options);
+    };
+  });
+const lastTitleBarOverlay = () =>
+  application.evaluate(() => {
+    const scope = globalThis as typeof globalThis & {
+      __code60TitleBarOverlayCalls?: TitleBarOverlayCall[];
+    };
+    return scope.__code60TitleBarOverlayCalls?.at(-1) ?? null;
+  });
 let application: Awaited<ReturnType<typeof _electron.launch>>;
 const menuItem = (id: string) =>
   application.evaluate(({ Menu }, itemId) => {
@@ -451,6 +481,7 @@ async function expectTabAppearance(page: Page) {
       dragBackground: getComputedStyle(document.querySelector(".window-drag-strip") as Element)
         .backgroundImage,
       panelTop: panel.getBoundingClientRect().top,
+      panelBottom: panel.getBoundingClientRect().bottom,
       barWidth: bar.getBoundingClientRect().width,
       tabTops: [...bar.querySelectorAll("[role='tab']")]
         .filter((tab) => tab.getClientRects().length > 0)
@@ -470,11 +501,12 @@ async function expectTabAppearance(page: Page) {
   expect(appearance.activeRight).toBeLessThan(appearance.panelLeft);
   expect(appearance.barTop).toBe(appearance.panelTop);
   expect(appearance.barTop).toBe(appearance.dragBottom);
-  expect(appearance.barLeft).toBe(0);
-  expect(appearance.barBottom).toBe(appearance.footerTop);
+  expect(appearance.barLeft).toBe(12);
+  expect(appearance.barBottom).toBe(appearance.panelBottom);
+  expect((appearance.footerTop ?? 0) - appearance.barBottom).toBe(12);
   // The version's text stays clear of the footer's floating message-age row.
   expect(appearance.versionBottom).toBeLessThanOrEqual(appearance.timestampTop ?? 0);
-  expect(appearance.dragBackground).toContain(appearance.sidebarBackground);
+  expect(appearance.dragBackground).toBe("none");
   await expect(page.locator(".sidebar")).toHaveCSS("border-radius", "0px");
   await expect(page.locator("#tab-chat")).toHaveCSS("padding-top", "4px");
   expect(appearance.tabTops.every((top, i, tops) => i === 0 || top > (tops[i - 1] ?? 0))).toBe(
@@ -485,7 +517,7 @@ async function expectTabAppearance(page: Page) {
     "vertical",
   );
   expect(appearance.inactiveBackground).toBe(appearance.activeBackground);
-  await expect(page.locator(".sidebar")).toHaveCSS("border-top-width", "0px");
+  await expect(page.locator(".sidebar")).toHaveCSS("border-width", "1px");
   const inactive = page.locator('[role="tab"][aria-selected="false"]:visible').first();
   const border = await inactive.evaluate((element) => getComputedStyle(element).borderColor);
   async function expectHover(button: Locator) {
@@ -581,6 +613,133 @@ async function launch(directory: string, folder: string, database: string, confi
   }
   return launchDesktop(directory, folder, database);
 }
+
+test("desktop: navigation sidebar matches the file panel and collapses without losing state", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-"));
+  application = await launch(directory, directory, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1500, 900),
+    );
+    const sidebar = page.getByRole("navigation", { name: "Sidebar", exact: true });
+    const toggle = page.getByRole("button", { name: "Toggle navigation sidebar" });
+    const files = page.getByRole("complementary", { name: "Files panel", exact: true });
+    const filesToggle = page.getByRole("button", { name: "Toggle files panel" });
+    const workspace = page.locator(".app-workspace");
+    const composer = page.locator("#panel-chat .orchestration-chat-page:visible textarea");
+    await composer.fill("Keep this draft while the sidebar is collapsed");
+    await filesToggle.click();
+    await expect(filesToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(sidebar).toHaveCSS("width", "220px");
+    await expect(workspace).toHaveCSS("transition-property", "grid-template-columns");
+    await expect(workspace).toHaveCSS("transition-duration", "0.2s");
+    await expectIconAction(toggle);
+    expect(await toggle.locator("svg").innerHTML()).toBe(
+      await filesToggle.locator("svg").innerHTML(),
+    );
+    const heights = await page.evaluate(() => {
+      const left = document.querySelector(".sidebar")?.getBoundingClientRect();
+      const right = document.querySelector(".file-panel")?.getBoundingClientRect();
+      return { left: [left?.top, left?.bottom], right: [right?.top, right?.bottom] };
+    });
+    expect(heights.left).toEqual(heights.right);
+    for (const theme of ["light", "dark", "system"]) {
+      await selectSidebarPage(page, "Settings");
+      await page.getByLabel("Theme", { exact: true }).selectOption(theme);
+      await selectSidebarPage(page, "Chat");
+      for (const edge of ["top", "right", "bottom", "left"]) {
+        await expect(sidebar).toHaveCSS(`border-${edge}-width`, "1px");
+        await expect(sidebar).toHaveCSS(
+          `border-${edge}-color`,
+          await files.evaluate((element) => getComputedStyle(element).borderTopColor),
+        );
+      }
+    }
+    await toggle.click();
+    await expect(sidebar).toHaveCSS("width", "48px");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toBeFocused();
+    await expect(sidebar.getByRole("tab")).toHaveText([
+      "Chat",
+      "Prompt Editor",
+      "Search",
+      "Settings",
+    ]);
+    await expect(sidebar.getByRole("button", { name: "Experiments", exact: true })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Tables", exact: true })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Chat 1", exact: true })).toHaveCount(0);
+    await expect(sidebar.locator(".sidebar-content")).not.toHaveAttribute("inert", "");
+    await expect(composer).toHaveValue("Keep this draft while the sidebar is collapsed");
+    await expect(filesToggle).toHaveAttribute("aria-expanded", "true");
+    // Hover is temporary, including when the pointer moves into the newly revealed area.
+    await page.mouse.move(600, 180);
+    for (let i = 0; i < 2; i++) {
+      await page.mouse.move(30, 180);
+      await expect(sidebar).toHaveCSS("width", "220px");
+      await expect(sidebar).toHaveAttribute("data-pinned", "false");
+      await page.mouse.move(200, 180);
+      await expect(sidebar).toHaveCSS("width", "220px");
+      await page.mouse.move(600, 180);
+      await expect(sidebar).toHaveCSS("width", "48px");
+    }
+    // Reverse an opening animation before it completes.
+    await page.mouse.move(30, 180);
+    await expect(sidebar).toHaveAttribute("data-minimized", "false");
+    await page.mouse.move(600, 180);
+    await expect(sidebar).toHaveCSS("width", "48px");
+    await sidebar.getByRole("tab", { name: "Settings", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#panel-settings")).toBeVisible();
+    await expect(sidebar).toHaveCSS("width", "48px");
+    const tablesToggle = sidebar.getByRole("button", { name: "Tables", exact: true });
+    await tablesToggle.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(sidebar.getByRole("tab", { name: "Settings", exact: true })).toBeFocused();
+    await tablesToggle.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(sidebar).toHaveCSS("width", "220px");
+    await expect(sidebar.getByRole("tab", { name: "Sessions", exact: true })).toBeVisible();
+    await selectSidebarPage(page, "Chat");
+    await toggle.click();
+    await expect(sidebar).toHaveCSS("width", "48px");
+    await filesToggle.click();
+    expect(await toggle.locator("svg").innerHTML()).toBe(
+      await filesToggle.locator("svg").innerHTML(),
+    );
+    await toggle.focus();
+    await page.keyboard.press("Space");
+    await expect(sidebar).toHaveCSS("width", "220px");
+    await expect(sidebar.getByRole("tab", { name: "Chat", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(composer).toHaveValue("Keep this draft while the sidebar is collapsed");
+    await expect(sidebar.getByRole("note", { name: "Running Code60 version" })).toBeVisible();
+    await page.mouse.move(600, 180);
+    await expect(sidebar).toHaveCSS("width", "220px");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(workspace).toHaveCSS("transition-duration", "0s");
+    await toggle.click();
+    await expect(sidebar).toHaveCSS("width", "48px");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await toggle.click();
+    await expect(sidebar).toHaveCSS("width", "220px");
+    await expect(sidebar.getByRole("tab", { name: "Chat", exact: true })).toBeVisible();
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("desktop: unread turns stay isolated and survive renderer reloads", async () => {
   test.setTimeout(60_000);
@@ -1039,7 +1198,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     const width = await page.evaluate(() => window.innerWidth);
     await move(width - 4, 200);
     await expect.poll(ignored).toBe(mac);
-    await move(4, 200);
+    await move(16, 200);
     await expect.poll(ignored).toBe(false);
     // Passive page corners are square and remain clickable.
     await move(width - 15, 31);
@@ -1062,10 +1221,10 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     // The enclosing sidebar stays opaque and interactive between its buttons.
     await move(firstTab.x + firstTab.width / 2, firstTab.y + firstTab.height + 2);
     await expect.poll(ignored).toBe(false);
-    await move(4, 200);
+    await move(16, 200);
     await expect.poll(ignored).toBe(false);
     await move(100, 14);
-    await expect.poll(ignored).toBe(false);
+    await expect.poll(ignored).toBe(mac);
     await move(width - 4, 200);
     await expect.poll(ignored).toBe(mac);
     await move(30, 14);
@@ -1456,7 +1615,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     });
     expect(panelFrame).toEqual({
       widths: ["0px", "0px", "0px", "0px"],
-      left: 232,
+      left: 244,
       right: 12,
       bottom: 52,
       clip: "none",
@@ -1779,9 +1938,23 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         : Infinity;
     });
     expect(centered).toBeLessThan(10);
+    if (process.platform === "win32") await watchTitleBarOverlay();
     for (const theme of ["dark", "light", "system"]) {
       await page.getByLabel("Theme").selectOption(theme);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      const darkTheme =
+        theme === "dark" ||
+        (theme === "system" &&
+          (await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)));
+      if (process.platform === "win32") {
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#242b33" : "#ffffff",
+            symbolColor: darkTheme ? "#ffffff" : "#000000",
+            height: 28,
+          });
+      }
       await expectThemeContrast(page);
       await expectNeutralTheme(page);
       const chatVisible = await chatPopup.isVisible();
@@ -1796,6 +1969,32 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expectTabAppearance(page);
       await expectChatFooterLayout();
       await expectDistinctChatSurfaces();
+      if (theme === "system" && process.platform === "win32") {
+        const currentSystemTheme = darkTheme ? "dark" : "light";
+        const alternateSystemTheme = darkTheme ? "light" : "dark";
+        await page.emulateMedia({ colorScheme: alternateSystemTheme });
+        await expect
+          .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
+          .toBe(alternateSystemTheme);
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#ffffff" : "#242b33",
+            symbolColor: darkTheme ? "#000000" : "#ffffff",
+            height: 28,
+          });
+        await page.emulateMedia({ colorScheme: null });
+        await expect
+          .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
+          .toBe(currentSystemTheme);
+        await expect
+          .poll(() => lastTitleBarOverlay())
+          .toEqual({
+            color: darkTheme ? "#242b33" : "#ffffff",
+            symbolColor: darkTheme ? "#ffffff" : "#000000",
+            height: 28,
+          });
+      }
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
         /^"?D-DIN"?/,
@@ -1805,10 +2004,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         /^"?D-DIN"?/,
       );
       // Solid human bubbles keep contrasting text and no side rule.
-      const darkTheme =
-        theme === "dark" ||
-        (theme === "system" &&
-          (await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)));
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "background-color",
         darkTheme ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
@@ -4688,6 +4883,11 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(panel).toHaveAttribute("data-minimized", "true");
     await expect(panel).toHaveCSS("width", "48px");
+    for (const edge of ["top", "right", "bottom", "left"]) {
+      await expect(panel).toHaveCSS(`border-${edge}-width`, "1px");
+      await expect(panel).toHaveCSS(`border-${edge}-style`, "solid");
+      await expect(panel).toHaveCSS(`border-${edge}-color`, "rgb(208, 208, 208)");
+    }
     await toggle.click();
     await expect(open).toBeVisible();
     await expectIconAction(toggle);
@@ -4888,6 +5088,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Chat");
     await expect(panel).toHaveCSS("background-color", "rgb(44, 53, 63)");
+    await expect(panel).toHaveCSS("border-color", "rgb(65, 75, 86)");
     await expectIconAction(toggle);
     await expectIconAction(add);
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
@@ -4900,13 +5101,16 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
     await selectSidebarPage(page, "Chat");
     await expect(panel).toHaveCSS("background-color", "rgb(243, 243, 243)");
+    await expect(panel).toHaveCSS("border-color", "rgb(208, 208, 208)");
     await page.emulateMedia({ colorScheme: "dark" });
+    await expect(panel).toHaveCSS("border-color", "rgb(65, 75, 86)");
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
       "rgb(44, 53, 63)",
     );
     await expectIconAction(toggle);
     await page.emulateMedia({ colorScheme: "light" });
+    await expect(panel).toHaveCSS("border-color", "rgb(208, 208, 208)");
     await expectIconAction(toggle);
     await page.screenshot({ path: "test-results/file-panel-light.png" });
     // Explicit file switches update the existing reader even while automatic polling is paused.
@@ -4961,6 +5165,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     }));
     expect(layout.chat).toBeLessThanOrEqual(layout.panel ?? 0);
     expect(layout.overflow).toBe(false);
+    await expect(panel).toHaveCSS("border-width", "1px");
     await expect(divider).toBeHidden();
     await expect(add).toBeVisible();
     await page.screenshot({ path: "test-results/file-panel-narrow.png" });

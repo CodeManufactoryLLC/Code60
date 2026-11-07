@@ -144,12 +144,7 @@ function App() {
           const content = element?.closest(
             ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
-          const sidebarStrip =
-            element?.closest(".window-drag-strip") &&
-            event.clientX <
-              (document.querySelector(".sidebar")?.getBoundingClientRect().right ?? 0);
-          const next =
-            !nativeControls && !sidebarStrip && !content && !document.querySelector("dialog[open]");
+          const next = !nativeControls && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;
           ignored = next;
           void api.setBackgroundHitTest(next).catch((cause) => setError(message(cause)));
@@ -240,6 +235,9 @@ function App() {
     parseRowDensity(localStorage.getItem("code60.rowDensity")),
   );
   const [tabs, setTabs] = useState(initialTabs);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const sidebarExpanded = sidebarOpen || sidebarHovered;
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [chartTickMs, setChartTickMs] = useState(() =>
     parseChartTick(localStorage.getItem("code60.chartTickMs")),
@@ -332,6 +330,16 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("code60.theme", theme);
+    const updateWindowTheme = () => {
+      void api
+        .setWindowTheme(getComputedStyle(document.documentElement).colorScheme === "dark")
+        .catch((cause) => setError(message(cause)));
+    };
+    updateWindowTheme();
+    if (theme !== "system") return;
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    systemTheme.addEventListener("change", updateWindowTheme);
+    return () => systemTheme.removeEventListener("change", updateWindowTheme);
   }, [theme]);
 
   useEffect(() => {
@@ -869,9 +877,24 @@ function App() {
         />
       )}
       {!splash && <div className="window-drag-strip" aria-hidden="true" />}
-      <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
+      <div
+        className="app-workspace"
+        data-chat={!splash && tabs.active === "chat"}
+        data-sidebar-minimized={!sidebarExpanded}
+      >
         {!splash && (
           <PageTabBar
+            open={sidebarExpanded}
+            pinned={sidebarOpen}
+            onHoverChange={setSidebarHovered}
+            onExpand={() => {
+              setSidebarOpen(true);
+              setSidebarHovered(false);
+            }}
+            onToggle={() => {
+              setSidebarOpen((value) => !value);
+              setSidebarHovered(false);
+            }}
             tabs={tabs}
             api={api}
             chats={snapshot?.chats ?? []}

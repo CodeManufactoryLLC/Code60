@@ -8,6 +8,7 @@ import {
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
+  nativeTheme,
 } from "electron";
 import {
   CODE60_COPYRIGHT,
@@ -47,6 +48,10 @@ let quitPending = false;
 const startup = new AbortController();
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
+const windowControlColors = (dark: boolean) => ({
+  color: dark ? "#242b33" : "#ffffff",
+  symbolColor: dark ? "#ffffff" : "#000000",
+});
 const controller = new DesktopController(
   defaultDeps(),
   process.env,
@@ -210,6 +215,11 @@ async function ready(): Promise<void> {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };
   });
+  handle("desktop:window-theme", (value) => {
+    const dark = parseBoolean(value);
+    if (process.platform === "win32" && window && !window.isDestroyed())
+      window.setTitleBarOverlay({ height: 28, ...windowControlColors(dark) });
+  });
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
     await preferences.setTransparent(next);
@@ -337,7 +347,10 @@ async function ready(): Promise<void> {
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",
-    titleBarOverlay: { height: 28 },
+    titleBarOverlay: {
+      height: 28,
+      ...(process.platform === "win32" ? windowControlColors(nativeTheme.shouldUseDarkColors) : {}),
+    },
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 18, y: 7 } } : {}),
     webPreferences: {
       preload: join(here, "preload.cjs"),

@@ -487,11 +487,6 @@ kbd {
   height: var(--app-titlebar-height);
   flex-shrink: 0;
   -webkit-app-region: drag;
-  background: linear-gradient(
-    to right,
-    var(--chat-neutral) 0 var(--sidebar-width),
-    transparent var(--sidebar-width)
-  );
 }
 .app-workspace {
   display: grid;
@@ -501,7 +496,11 @@ kbd {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--page-margin) 0 0;
+  margin: 0 var(--page-margin);
+  transition: grid-template-columns 200ms ease;
+}
+.app-workspace[data-sidebar-minimized="true"] {
+  --sidebar-width: 48px;
 }
 
 /* Repository identity above the interactive page tabs. */
@@ -512,15 +511,50 @@ kbd {
   grid-row: 1;
   align-self: stretch;
   max-height: 100%;
-  padding: 6px;
-  border: 0;
+  margin-bottom: var(--page-margin);
+  border: 1px solid var(--border);
   border-radius: 0;
   background: var(--chat-neutral);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  overflow: hidden;
   min-width: 0;
   min-height: 0;
+}
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+.sidebar[data-minimized="true"] :is(.sidebar-version, .chat-sidebar-new) {
+  display: none;
+}
+.sidebar[data-minimized="true"] :is(.sidebar-title, .page-tab-label) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sidebar[data-minimized="true"] :is(.project-card, .page-tab > button) {
+  justify-content: center;
+  padding: 4px;
+  gap: 0;
+}
+.sidebar[data-minimized="true"] .page-group-toggle > svg:last-child {
+  display: none;
+}
+.sidebar-toggle {
+  margin-right: auto;
+}
+.sidebar-toggle > svg {
+  transform: scaleX(-1);
 }
 .sidebar-header {
   display: flex;
@@ -3603,6 +3637,7 @@ dialog::backdrop {
   transition: width 200ms ease;
   min-height: 0;
   padding-left: 6px;
+  border: 1px solid var(--border);
   background: var(--chat-neutral);
 }
 .file-panel[data-minimized="true"] {
@@ -3628,7 +3663,8 @@ dialog::backdrop {
 .file-panel-toggle {
   margin-left: auto;
 }
-.file-panel-toolbar {
+.file-panel-toolbar,
+.sidebar-toolbar {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -3996,6 +4032,7 @@ button.file-open-link {
   outline-offset: -2px;
 }
 @media (prefers-reduced-motion: reduce) {
+  .app-workspace,
   .chat-workspace-body > .file-panel {
     transition: none;
   }
