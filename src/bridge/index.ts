@@ -10,6 +10,7 @@ import {
   SEARCH_EXCERPT_LIMIT,
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
+  type SearchSummarySource,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
@@ -46,6 +47,8 @@ export {
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
+  searchEvidenceExcerpt,
+  searchKeywords,
   validatePromptTemplate,
 } from "../contracts/index.js";
 
@@ -630,6 +633,7 @@ const searchSummarySchema = z
       (value) => value.trim().length > 0,
       "Enter a search query",
     ),
+    includeFiles: z.boolean().optional(),
     sources: z
       .array(
         z.strictObject({
@@ -641,7 +645,6 @@ const searchSummarySchema = z
           eventIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
         }),
       )
-      .min(1)
       .max(SEARCH_SOURCE_LIMIT),
   })
   .refine(
@@ -653,6 +656,7 @@ export type SearchSummaryRequest = z.infer<typeof searchSummarySchema>;
 export interface SearchSummaryResult {
   requestId: string;
   text: string;
+  sources: SearchSummarySource[];
 }
 export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
   parseValue(searchSummarySchema, value);

@@ -3,16 +3,18 @@ import {
   type DesktopApi,
   type DesktopRun,
   SEARCH_QUERY_LIMIT,
-  SEARCH_SOURCE_LIMIT,
+  type SearchSummarySource,
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import {
   highlights,
   type SearchKind,
   type SearchResult,
+  searchContext,
   searchExcerpt,
   searchIndex,
   searchResults,
+  sourceResult,
   summaryParts,
   summarySources,
 } from "./search.js";
@@ -28,10 +30,15 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-type SubmittedSearch = { query: string; results: SearchResult[] | null };
+type SubmittedSearch = {
+  query: string;
+  results: SearchResult[] | null;
+  evidence: SearchResult[];
+  includeFiles: boolean;
+};
 type Overview =
   | { status: "generating" }
-  | { status: "complete"; text: string }
+  | { status: "complete"; text: string; sources: SearchSummarySource[] }
   | { status: "error"; error: string }
   | { status: "stopped" };
 
@@ -76,18 +83,32 @@ export function SearchPage({
     if (id) void api.cancelSearchSummary(id).catch(() => {});
   }
 
-  async function generate(id: string, searchQuery: string, results: SearchResult[]) {
+  async function generate(id: string, search: SubmittedSearch) {
     if (!directory || active.current !== id) return;
     setOverview({ status: "generating" });
     try {
       const result = await api.summarizeSearch({
         requestId: id,
         directory,
-        query: searchQuery,
-        sources: summarySources(results, searchQuery),
+        query: search.query,
+        sources: summarySources(search.evidence, search.query),
+        includeFiles: search.includeFiles,
       });
-      if (active.current === id && result.requestId === id)
-        setOverview({ status: "complete", text: result.text });
+      if (active.current === id && result.requestId === id) {
+        setOverview({ status: "complete", text: result.text, sources: result.sources });
+        setSubmitted((current) => {
+          if (!current) return current;
+          const rows = current.results ?? [];
+          const seen = new Set(rows.map((row) => row.id));
+          return {
+            ...current,
+            results: [
+              ...rows,
+              ...result.sources.filter((source) => !seen.has(source.id)).map(sourceResult),
+            ],
+          };
+        });
+      }
     } catch (error) {
       if (active.current === id)
         setOverview({
@@ -105,18 +126,25 @@ export function SearchPage({
     const id = crypto.randomUUID();
     active.current = id;
     const searchQuery = query.trim();
-    setSubmitted({ query: searchQuery, results: null });
+    const includeFiles = kind === "all" || kind === "file";
+    setSubmitted({ query: searchQuery, results: null, evidence: [], includeFiles });
     setOverview(null);
     try {
       const events = await data.read();
       if (active.current !== id) return;
-      const results = searchResults(searchIndex(directory, runs, events), searchQuery, kind, sort);
-      setSubmitted({ query: searchQuery, results });
-      if (results.length) await generate(id, searchQuery, results);
-      else active.current = undefined;
+      const index = searchIndex(directory, runs, events);
+      const results = searchResults(index, searchQuery, kind, sort);
+      const search = {
+        query: searchQuery,
+        results,
+        includeFiles,
+        evidence: results.length ? results : searchContext(index, searchQuery, kind),
+      };
+      setSubmitted(search);
+      await generate(id, search);
     } catch (error) {
       if (active.current === id) {
-        setSubmitted({ query: searchQuery, results: [] });
+        setSubmitted({ query: searchQuery, results: [], evidence: [], includeFiles });
         setOverview({
           status: "error",
           error: error instanceof Error ? error.message : String(error),
@@ -127,11 +155,11 @@ export function SearchPage({
   }
 
   function retry() {
-    if (!submitted?.results?.length) return;
+    if (!submitted) return;
     cancel();
     const id = crypto.randomUUID();
     active.current = id;
-    void generate(id, submitted.query, submitted.results);
+    void generate(id, submitted);
   }
 
   return (
@@ -150,29 +178,34 @@ export function SearchPage({
             </span>
           </div>
           <div className="search-query-row">
-            <input
-              className="search-query"
-              aria-label="Query"
-              type="search"
-              value={query}
-              maxLength={SEARCH_QUERY_LIMIT}
-              placeholder="Search this project"
-              onChange={(event) => {
-                const value = event.target.value;
-                setQuery(value);
-                if (!value.trim()) {
-                  cancel();
-                  setSubmitted(null);
-                  setOverview(null);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown" && submitted?.results?.length) {
-                  event.preventDefault();
-                  list.current?.querySelector("button")?.focus();
-                }
-              }}
-            />
+            <div className="search-query-shell">
+              <input
+                className="search-query"
+                aria-label="Query"
+                type="search"
+                value={query}
+                maxLength={SEARCH_QUERY_LIMIT}
+                placeholder="Search this project"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setQuery(value);
+                  if (!value.trim()) {
+                    cancel();
+                    setSubmitted(null);
+                    setOverview(null);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" && submitted?.results?.length) {
+                    event.preventDefault();
+                    list.current?.querySelector("button")?.focus();
+                  }
+                }}
+              />
+              {overview?.status === "generating" && (
+                <span className="chat-loader" aria-hidden="true" />
+              )}
+            </div>
             <button
               className="primary search-submit"
               type="submit"
@@ -190,7 +223,7 @@ export function SearchPage({
                 value={kind}
                 onChange={(event) => setKind(event.target.value as SearchKind | "all")}
               >
-                {(["all", "project", "run", "prompt", "message", "thought"] as const).map(
+                {(["all", "file", "project", "run", "prompt", "message", "thought"] as const).map(
                   (value) => (
                     <option key={value} value={value}>
                       {value === "all" ? "All types" : value[0]?.toUpperCase() + value.slice(1)}
@@ -219,8 +252,6 @@ export function SearchPage({
           <p>Open a project to search.</p>
         ) : submitted?.results === null ? (
           <p role="status">Searching saved transcripts…</p>
-        ) : submitted && !submitted.results?.length ? (
-          <p role="status">No matching results.</p>
         ) : (
           submitted?.results && (
             <div className="search-body">
@@ -250,13 +281,12 @@ export function SearchPage({
                   )}
                 </div>
                 {overview?.status === "generating" ? (
-                  <p role="status">Generating overview…</p>
+                  <span className="sr-only" role="status">
+                    Generating overview…
+                  </span>
                 ) : overview?.status === "complete" ? (
                   <div className="search-overview-text">
-                    {summaryParts(
-                      overview.text,
-                      Math.min(SEARCH_SOURCE_LIMIT, submitted.results.length),
-                    ).map((part) =>
+                    {summaryParts(overview.text, overview.sources.length).map((part) =>
                       part.source === undefined ? (
                         part.text
                       ) : (
@@ -264,10 +294,10 @@ export function SearchPage({
                           type="button"
                           className="search-citation"
                           key={part.start}
-                          aria-label={`Source ${part.source + 1}: ${submitted.results?.[part.source]?.title}`}
+                          aria-label={`Source ${part.source + 1}: ${overview.sources[part.source]?.title}`}
                           onClick={() => {
-                            const source = submitted.results?.[part.source as number];
-                            if (source) onOpen(source);
+                            const source = overview.sources[part.source as number];
+                            if (source) onOpen(sourceResult(source));
                           }}
                         >
                           {part.text}
@@ -283,6 +313,9 @@ export function SearchPage({
                   </p>
                 )}
               </section>
+              {!submitted.results.length && overview?.status !== "generating" && (
+                <p role="status">No matching results.</p>
+              )}
               <ul
                 className="search-results"
                 aria-label="Search results"

@@ -3320,8 +3320,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(search.locator(".search-results li")).toHaveCount(3);
     await query.fill("parser fixed");
     await query.press("Enter");
-    await expect(search.getByText("No matching results.")).toBeVisible();
-    await expect(overview).toHaveCount(0);
+    await expect(overview).toContainText("The recorded sessions report");
+    await expect(search.locator(".search-results li")).toHaveCount(3);
     await search.getByLabel("Type", { exact: true }).selectOption("message");
     await search.getByRole("button", { name: "Search", exact: true }).click();
     await expect(overview).toContainText("The recorded sessions report");
@@ -3357,7 +3357,24 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await query.fill("fixed");
     await query.press("Enter");
     await expect(overview).toContainText("Generating overview…");
+    const searchLoader = search.locator(".search-query-shell > .chat-loader");
+    await expect(searchLoader).toBeVisible();
+    await expect(overview.locator(".chat-loader")).toHaveCount(0);
+    const searchLineBox = await searchLoader.boundingBox();
+    const searchQueryBox = await query.boundingBox();
+    if (!searchLineBox || !searchQueryBox) throw new Error("Missing search loading line");
+    expect(searchLineBox.x).toBeCloseTo(searchQueryBox.x + 1, 0);
+    expect(searchLineBox.y).toBeCloseTo(searchQueryBox.y + 1, 0);
+    expect(searchLineBox.width).toBeCloseTo(searchQueryBox.width - 2, 0);
+    await expect(searchLoader).toHaveCSS("height", "12px");
+    await expect(searchLoader).toHaveCSS("animation-name", "chat-bar-stripe");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(searchLoader).toHaveCSS("animation-name", "none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect(search.locator(".search-body")).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: "test-results/search-loading-line.png" });
     await overview.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(searchLoader).toHaveCount(0);
     await expect(overview).toContainText("Overview stopped.");
     await expect(search.locator(".search-results li")).toHaveCount(3);
     await query.fill("");
@@ -3629,10 +3646,47 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(page.locator(".sidebar-title")).toHaveText("other-project");
     await search.getByLabel("Query", { exact: true }).fill("parser");
     await search.getByLabel("Query", { exact: true }).press("Enter");
-    await expect(search.getByText("No matching results.")).toBeVisible();
+    await expect(search.getByRole("region", { name: "AI overview" })).toContainText(
+      "Only the project identity is available",
+    );
     await page.waitForTimeout(700);
-    await expect(search.locator(".search-results li")).toHaveCount(0);
+    await expect(search.locator(".search-results li")).toHaveCount(1);
+    await expect(search.locator(".search-result-title")).toHaveText("other-project");
     expect(errors).toEqual([]);
+  } finally {
+    await application.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: project questions use files without saved sessions", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-project-question-"));
+  const repo = join(directory, "palette-project");
+  await mkdir(repo);
+  await writeFile(join(repo, "README.md"), "A color wheel for building accessible palettes.");
+  application = await launch(directory, repo, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    await selectSidebarPage(page, "Search");
+    const search = page.locator("#panel-search");
+    await search.getByLabel("Query", { exact: true }).fill("What is this project about?");
+    await search.getByLabel("Query", { exact: true }).press("Enter");
+    const overview = search.getByRole("region", { name: "AI overview", exact: true });
+    await expect(overview).toContainText("accessible palettes");
+    await expect(
+      search.locator(".search-result-title").filter({ hasText: "README.md" }),
+    ).toBeVisible();
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    await overview.getByRole("button", { name: /^Source \d+: README.md/ }).click();
+    await expect(page.locator("#tab-chat")).toHaveAttribute("aria-selected", "true");
+    await expect(
+      page.getByRole("complementary", { name: "File preview", exact: true }),
+    ).toContainText("README.md");
   } finally {
     await application.close();
     await rm(directory, { recursive: true, force: true });

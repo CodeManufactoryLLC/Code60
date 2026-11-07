@@ -1857,6 +1857,7 @@ describe("search overview helpers", () => {
     expect(await controller.summarizeSearch(input)).toEqual({
       requestId: input.requestId,
       text: "Parser fixed. [1]",
+      sources: input.sources,
     });
     expect(agents.sessions).toHaveLength(count + 1);
     const spec = agents.specs.at(-1);
@@ -1868,6 +1869,27 @@ describe("search overview helpers", () => {
     expect(controller.snapshot().runs).toEqual(initial.runs);
     expect(controller.snapshot().chats).toEqual(initial.chats);
     expect(git.worktrees).toEqual([]);
+  });
+
+  it("starts a worker for a natural-language question with no matching saved sessions", async () => {
+    const input = await summaryRequest();
+    await fs.writeFile(
+      join(directory, "README.md"),
+      "This project builds accessible color palettes.",
+    );
+    agents.script = (prompt, session) => {
+      expect(prompt).toContain("This project builds accessible color palettes.");
+      session.update({ type: "message", text: "It builds accessible color palettes. [1]" });
+      return "end_turn";
+    };
+    const result = await controller.summarizeSearch({
+      ...input,
+      query: "What is this project about?",
+      sources: [],
+    });
+    expect(result.text).toContain("color palettes");
+    expect(result.sources[0]).toMatchObject({ kind: "file", path: "README.md" });
+    expect(controller.snapshot().runs).toHaveLength(0);
   });
 
   it("rejects stale projects, foreign sessions and malformed source addresses", async () => {

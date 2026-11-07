@@ -9,4 +9,4 @@
   Keep lifecycle timing metadata optional for older events; add no clipboard or generic
   filesystem capability for renderer presentation.
 
-- Search summary requests carry only request/project identity, a bounded query and bounded source excerpts with local addresses. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.
+- Search summary requests carry only request/project identity, a bounded query, an optional project-file inclusion flag and bounded saved-source excerpts with local addresses. Empty source lists are valid; file sources are supplied only by main-process retrieval and returned with the completed overview. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.
