@@ -22,6 +22,7 @@ import type {
   StartRequest,
 } from "../bridge/index.js";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
+import { AgentSetupWizard } from "./agent-setup.js";
 import { ChatDock, type OpenChat } from "./chat-dock.js";
 import { ChatPage } from "./chat-page.js";
 import { newestMessage } from "./chat-presentation.js";
@@ -2020,8 +2021,6 @@ function Splash({
   const configured = hasOrchestrationProvider(snapshot);
   const providerLoaded = snapshot !== undefined;
   const [setup, setSetup] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const testing = snapshot?.orchestration.connection === "testing";
   // A modal dialog keeps the app behind it out of reach until the splash is gone.
   useEffect(() => {
     dialog.current?.showModal();
@@ -2065,38 +2064,19 @@ function Splash({
                 </button>
               )}
               <button type="button" className="primary" ref={yes} onClick={() => answer(true)}>
-                {!configured ? "Set orchestration provider" : project ? "Yes" : "Start"}
+                {!configured ? "Set up agents" : project ? "Yes" : "Start"}
               </button>
             </div>
           </div>
         )}
       </dialog>
       {setup && snapshot && (
-        <Modal
-          title="Set orchestration provider"
-          busy={saving || testing}
+        <AgentSetupWizard
+          snapshot={snapshot}
+          api={api}
+          mode="primary"
           onClose={() => setSetup(false)}
-        >
-          <OrchestrationSettings
-            snapshot={snapshot}
-            api={api}
-            heading={false}
-            onSavingChange={setSaving}
-          />
-          <div className="modal-footer">
-            <button type="button" disabled={saving || testing} onClick={() => setSetup(false)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={!configured || saving || testing}
-              onClick={() => setSetup(false)}
-            >
-              Done
-            </button>
-          </div>
-        </Modal>
+        />
       )}
     </>
   );

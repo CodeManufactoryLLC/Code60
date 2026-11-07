@@ -16,3 +16,5 @@
 - Preserve prompt dispatch timestamps and record actual turn completion before persistence/cleanup. Optional turnEnd outcome/completedAt and terminal status turn/completedAt metadata distinguish timeout, cancellation and transport failure without changing CLI outcomes. Keep older events readable; never infer successful completion after a crash.
 
 - The search summary helper runs one evidence-only ACP turn through injected agents, with denied permission requests, bounded text and timeout, and unconditional process/listener/timer cleanup. It never creates run records or worktrees.
+
+- Run preparation/recovery may accept an already resolved configuration from desktop so it can enforce enabled-provider policy. Without that explicit argument, retain the existing headless config loading and defaults; core must not depend on desktop preferences or setup state.

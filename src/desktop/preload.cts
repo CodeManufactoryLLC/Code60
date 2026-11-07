@@ -2,6 +2,11 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  beginAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-begin", request),
+  attemptAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-attempt", request),
+  cancelAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-cancel", request),
+  finishAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-finish", request),
+  abandonAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-abandon", request),
   update: (action: unknown) => ipcRenderer.invoke("desktop:app-update", action),
   onUpdate: (listener: (value: unknown) => void) => {
     const handler = (_event: unknown, value: unknown) => listener(value);

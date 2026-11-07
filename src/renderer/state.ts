@@ -10,10 +10,14 @@ export interface DesktopState {
 }
 
 export function hasOrchestrationProvider(
-  snapshot: Pick<Snapshot, "agents" | "orchestration"> | undefined,
+  snapshot: Pick<Snapshot, "agents" | "orchestration" | "agentSetup"> | undefined,
 ): boolean {
   const provider = snapshot?.orchestration.provider;
-  return provider != null && snapshot?.agents.includes(provider) === true;
+  return (
+    snapshot?.agentSetup?.complete === true &&
+    provider != null &&
+    snapshot.agents.includes(provider)
+  );
 }
 
 /** Snapshot revisions and event revisions avoid duplicates across initial load and reload. */

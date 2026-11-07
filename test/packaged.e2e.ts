@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "@playwright/test";
+import { DEFAULT_CONFIG } from "../src/core/index.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
@@ -80,7 +82,19 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
   await privateDirectory(join(directory, "state", "code60"));
   await writeFile(
     join(directory, "state", "code60", "desktop.json"),
-    JSON.stringify({ orchestrationProvider: "fake" }),
+    JSON.stringify({
+      agentSetup: verifiedAgents(
+        {
+          ...DEFAULT_CONFIG,
+          agents: {
+            fake: {
+              command: [process.execPath, join(root, "test/fixtures/packaged-agent.mjs"), probe],
+            },
+          },
+        },
+        "fake",
+      ),
+    }),
   );
   let app = await launchDesktop(directory, repo, database);
   try {

@@ -8,11 +8,12 @@ import {
   type PromptTemplates,
   type RunConfiguration,
 } from "../src/bridge/index.js";
-import { type CoreDeps, DEFAULT_CONFIG } from "../src/core/index.js";
+import { type CoreDeps, DEFAULT_CONFIG, loadConfig } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
+import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 let directory: string;
 let controller: DesktopController;
@@ -101,6 +102,21 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   };
 });
 const preferences: DesktopPreferences = {
+  agentSetup: async () =>
+    orchestrationProvider
+      ? verifiedAgents(
+          {
+            ...DEFAULT_CONFIG,
+            agents: {
+              ...DEFAULT_CONFIG.agents,
+              ...(orchestrationProvider === "removed"
+                ? { removed: { command: ["removed"] as const } }
+                : {}),
+            },
+          },
+          orchestrationProvider,
+        )
+      : null,
   orchestrationProvider: async () => orchestrationProvider,
   setOrchestrationProvider: async (provider) => {
     if (preferencesFail) throw new Error("read-only");
@@ -157,12 +173,37 @@ beforeEach(async () => {
     { confirm },
     { openDatabase, preferences },
   );
+  // These controller scenarios start after onboarding; wizard integration has separate tests.
+  // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
+  controller["agentSetup"].restore(verifiedAgents(DEFAULT_CONFIG));
   await controller.connect(join(directory, "first.sqlite"), true);
 });
 afterEach(async () => {
   await controller.shutdown(true);
   await fs.rm(directory, { recursive: true, force: true });
 });
+
+// Simulate a successfully committed setup for tests of downstream chat lifecycles.
+// The public wizard transaction and gate are covered in agent-setup.test.ts.
+async function setProvider(provider: string | null) {
+  if (preferencesFail) throw new Error("read-only");
+  const config = await loadConfig(controllerDeps().fs, {
+    XDG_CONFIG_HOME: join(directory, "config"),
+  });
+  if (provider && !config.agents[provider]) throw new Error(`Unavailable provider: ${provider}`);
+  if (provider === null) {
+    orchestrationProvider = null;
+    // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
+    await controller["stopMemoryExtraction"]();
+    // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
+    await controller["stopSearchSummary"]();
+    await controller.restore();
+  } else {
+    // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
+    controller["agentSetup"].restore(verifiedAgents(config, provider));
+    await controller.setOrchestrationProvider(provider);
+  }
+}
 
 async function start(prompt?: string) {
   await controller.open(directory);
@@ -174,10 +215,8 @@ async function start(prompt?: string) {
 describe("desktop orchestration", () => {
   it("saves an orchestration provider with fixed allow-all and probes ACP without creating a run", async () => {
     await expect(controller.testOrchestrationProvider()).rejects.toThrow("Select an available");
-    await expect(controller.setOrchestrationProvider("missing")).rejects.toThrow(
-      "Unavailable provider",
-    );
-    await controller.setOrchestrationProvider("claude");
+    await expect(setProvider("missing")).rejects.toThrow("Unavailable provider");
+    await setProvider("claude");
     expect(orchestrationProvider).toBe("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     const probe = agents.specs.length;
@@ -192,14 +231,14 @@ describe("desktop orchestration", () => {
     expect(agents.sessions[probe]?.stops).toEqual([1000]);
     expect(controller.snapshot().runs).toEqual([]);
     expect(confirm).not.toHaveBeenCalled();
-    await controller.setOrchestrationProvider(null);
+    await setProvider(null);
     expect(controller.snapshot().orchestration.provider).toBeNull();
   });
 
   it("retains settings on save failure and exposes failed connection tests", async () => {
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     preferencesFail = true;
-    await expect(controller.setOrchestrationProvider("codex")).rejects.toThrow("read-only");
+    await expect(setProvider("codex")).rejects.toThrow("read-only");
     expect(controller.snapshot().orchestration.provider).toBe("claude");
     agents.startError = new Error("ACP authentication required");
     await controller.testOrchestrationProvider();
@@ -210,7 +249,7 @@ describe("desktop orchestration", () => {
   });
 
   it("deduplicates tests, keeps the action queue responsive, and cancels on database changes", async () => {
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     agents.startGate = new Promise(() => {});
     const first = controller.testOrchestrationProvider();
@@ -239,7 +278,7 @@ describe("desktop orchestration", () => {
   });
 
   it("stops connection probes on shutdown", async () => {
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     agents.startGate = new Promise(() => {});
     const test = controller.testOrchestrationProvider();
     await vi.waitFor(() => expect(controller.snapshot().orchestration.connection).toBe("testing"));
@@ -427,7 +466,7 @@ describe("desktop orchestration", () => {
     await vi.waitFor(() => expect(agents.sessions).toHaveLength(1));
     await expect(
       controller.saveConfiguration({ name: "Bad", settings: { ...request, agents: ["missing"] } }),
-    ).rejects.toThrow(/Unavailable provider/);
+    ).rejects.toThrow(/not enabled/);
     await expect(controller.start({ ...request, configurationId: "unknown" })).rejects.toThrow(
       /Unknown run configuration/,
     );
@@ -966,7 +1005,7 @@ describe("project database", () => {
 
 describe("app-wide orchestration chat", () => {
   async function ready() {
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     return controller.snapshot().chat.run?.id as string;
   }
@@ -1091,7 +1130,7 @@ describe("app-wide orchestration chat", () => {
     expect((await call("code60_read_configurations")).body.result.total).toBe(1);
     expect((await call("code60_read_worktrees")).status).toBe(400);
 
-    await controller.setOrchestrationProvider(null);
+    await setProvider(null);
     await expect(call("code60_read_sessions")).rejects.toThrow();
   });
 
@@ -1179,7 +1218,7 @@ describe("app-wide orchestration chat", () => {
     await expect(
       controller.orchestrationChatAction({ type: "select", id: secondId }),
     ).rejects.toThrow("no longer current");
-    await controller.setOrchestrationProvider("codex");
+    await setProvider("codex");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(controller.snapshot().chats).toHaveLength(1);
     expect(agents.sessions.slice(0, 3).map((session) => session.stops.length)).toEqual([1, 1, 1]);
@@ -1243,7 +1282,7 @@ describe("app-wide orchestration chat", () => {
 
   it("replaces sessions on provider/database changes and refuses stale actions", async () => {
     const id = await ready();
-    await controller.setOrchestrationProvider("codex");
+    await setProvider("codex");
     await vi.waitFor(() =>
       expect(controller.snapshot().chat.run).toMatchObject({ status: "idle", agent: "codex" }),
     );
@@ -1257,7 +1296,7 @@ describe("app-wide orchestration chat", () => {
     expect(controller.snapshot().chat.events.some((entry) => entry.event.type === "prompt")).toBe(
       false,
     );
-    await controller.setOrchestrationProvider(null);
+    await setProvider(null);
     expect(controller.snapshot().chat.run).toBeNull();
     expect(controller.snapshot().chat.events).toEqual([]);
   });
@@ -1288,7 +1327,7 @@ describe("app-wide orchestration chat", () => {
 
   it("surfaces startup failures and retries with a new ACP session", async () => {
     agents.startError = new Error("ACP authentication required");
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("failed"));
     const id = controller.snapshot().chat.run?.id as string;
     expect(controller.snapshot().chat.run?.reason).toContain("authentication");
@@ -1300,7 +1339,7 @@ describe("app-wide orchestration chat", () => {
 
   it("aborts ACP startup during shutdown", async () => {
     agents.startGate = new Promise(() => {});
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(agents.specs).toHaveLength(1));
     expect(controller.hasActiveWork).toBe(true);
     await controller.shutdown(true);
@@ -1311,7 +1350,7 @@ describe("app-wide orchestration chat", () => {
   it("reports worktree-directory conflicts without overwriting existing files", async () => {
     const folder = join(directory, ".code60_workspace");
     await fs.writeFile(folder, "preserve me");
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     expect(controller.snapshot().chat.error).toBeTruthy();
     expect(await fs.readFile(folder, "utf8")).toBe("preserve me");
     expect(controller.connected).toBe(true);
@@ -1323,7 +1362,7 @@ describe("app-wide orchestration chat", () => {
 });
 
 it("includes the orchestration session when warning about a shared non-Git folder", async () => {
-  await controller.setOrchestrationProvider("claude");
+  await setProvider("claude");
   await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
   git.repoInfo = async () => {
     throw new Error("not a repository");
@@ -1380,7 +1419,7 @@ describe("orchestrated workers over ACP", () => {
       if (!text.includes("--- ")) current.update({ type: "message", text: `done: ${text}` });
       return "end_turn";
     };
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
     await controller.open(directory);
     const call = caller();
@@ -1405,7 +1444,7 @@ describe("orchestrated workers over ACP", () => {
     "defaults workers to the selected %s provider, not the CLI default",
     async (provider) => {
       agents.script = () => "hang";
-      await controller.setOrchestrationProvider(provider);
+      await setProvider(provider);
       await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
       await controller.open(directory);
       const call = caller();
@@ -1420,7 +1459,7 @@ describe("orchestrated workers over ACP", () => {
         DEFAULT_CONFIG.agents[provider]?.command,
       );
       expect(context.body.result.defaultProvider).toBe(provider);
-      expect(controller.snapshot().defaultAgent).toBe("claude");
+      expect(controller.snapshot().defaultAgent).toBe(provider);
 
       const override = await call("code60_dispatch_agent", {
         scope,
@@ -1449,7 +1488,7 @@ describe("orchestrated workers over ACP", () => {
       JSON.stringify({ agents: { custom: { command: ["custom-agent", "acp"] } } }),
     );
     await controller.poll(["config"]);
-    await controller.setOrchestrationProvider("custom");
+    await setProvider("custom");
     await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
     await controller.open(directory);
     const call = caller();
@@ -1463,7 +1502,7 @@ describe("orchestrated workers over ACP", () => {
       prompt: "Do not launch another provider",
     });
     expect(result.status).toBe(400);
-    expect(result.body.error).toContain("Unknown provider 'custom'");
+    expect(result.body.error).toContain("Complete agent setup first");
     expect(agents.specs).toHaveLength(before);
   });
 
@@ -1613,7 +1652,7 @@ describe("orchestrated workers over ACP", () => {
           provider: "nope",
         })
       ).body.error,
-    ).toContain("Unknown provider");
+    ).toContain("not enabled");
     expect(
       (await call("code60_dispatch_agent", { scope, requestId: "a", prompt: " " })).status,
     ).toBe(400);
@@ -1722,7 +1761,7 @@ describe("orchestrated workers over ACP", () => {
       await restored?.requestPermission({ toolCallId: "t", title: "x", kind: "execute" }),
     ).toBe("allow");
 
-    await controller.setOrchestrationProvider("codex");
+    await setProvider("codex");
     await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
     await expect(call("code60_list_agents")).rejects.toThrow();
     const next = caller(agents.specs.findLastIndex((spec) => spec.mcpServers !== undefined));
@@ -1741,7 +1780,7 @@ describe("episodic memory controller", () => {
     const id = await start("Use npm for the project.");
     await controller.action({ type: "finish", id });
     await vi.waitFor(() => expect(controller.snapshot().active).toBe(false));
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     const events = await controller.action({ type: "events", id });
     if (!Array.isArray(events)) throw new Error("Missing fixture events");
@@ -1820,7 +1859,7 @@ describe("episodic memory controller", () => {
       await controller.cancelMemoryExtraction(crypto.randomUUID());
       expect(agents.sessions.at(-1)?.stops).toEqual([]);
       if (action === "cancel") await controller.cancelMemoryExtraction(request.requestId);
-      else if (action === "provider") await controller.setOrchestrationProvider(null);
+      else if (action === "provider") await setProvider(null);
       else if (action === "project") {
         await controller.open(directory);
       } else if (action === "stop all") await controller.stopAll();
@@ -1835,7 +1874,7 @@ describe("episodic memory controller", () => {
 describe("search overview helpers", () => {
   async function summaryRequest() {
     await controller.open(directory);
-    await controller.setOrchestrationProvider("claude");
+    await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     const path = controller.snapshot().directory as string;
     return {
@@ -1946,7 +1985,7 @@ describe("search overview helpers", () => {
       const cwd = agents.specs.at(-1)?.cwd as string;
       if (mode === "cancel") await controller.cancelSearchSummary(input.requestId);
       else if (mode === "reload") await controller.cancelSearchSummary();
-      else if (mode === "provider") await controller.setOrchestrationProvider(null);
+      else if (mode === "provider") await setProvider(null);
       else if (mode === "project") {
         const next = join(directory, "next-project");
         await fs.mkdir(next);

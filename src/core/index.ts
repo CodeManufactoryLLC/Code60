@@ -218,8 +218,12 @@ export const MAX_COPIES = 32;
  * With one agent, `parallel` is the number of runs of it to start; with several, the limit on
  * active runs.
  */
-export async function prepareRuns(deps: CoreDeps, request: RunRequest): Promise<PreparedRuns> {
-  const config = await loadConfig(deps.fs, request.env);
+export async function prepareRuns(
+  deps: CoreDeps,
+  request: RunRequest,
+  configuration?: Config,
+): Promise<PreparedRuns> {
+  const config = configuration ?? (await loadConfig(deps.fs, request.env));
   let maxParallel = config.maxParallel;
   if (request.parallel !== undefined) {
     if (!/^[1-9]\d*$/.test(request.parallel)) {
@@ -319,6 +323,7 @@ export async function prepareRecovery(
   prompts: Partial<PromptTemplates> = {},
   /** Permission overrides, such as the fixed allow-all policy of orchestrated workers. */
   overrides?: PolicyOverrides,
+  configuration?: Config,
 ): Promise<PreparedRecovery> {
   if (ACTIVE_STATUSES.has(record.status)) {
     throw new RefusedError(
@@ -330,7 +335,7 @@ export async function prepareRecovery(
       `the leftover agent for run ${record.id} is still alive (process group ${record.agentPid}); stop it before retrying`,
     );
   }
-  const config = await loadConfig(deps.fs, env);
+  const config = configuration ?? (await loadConfig(deps.fs, env));
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
   await preparePrivateRecords(deps, workspace, env);

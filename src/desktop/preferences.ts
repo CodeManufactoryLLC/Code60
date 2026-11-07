@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import {
+  type AgentSetupRecord,
   type PollSettingsPatch,
+  parseAgentSetupRecord,
   parseOrchestrationProvider,
   parsePollSettings,
 } from "../bridge/index.js";
@@ -10,6 +12,8 @@ import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/i
 
 /** Remembers the selected project database between launches. */
 export interface DesktopPreferences {
+  agentSetup?(): Promise<AgentSetupRecord | null>;
+  setAgentSetup?(record: AgentSetupRecord): Promise<void>;
   read(): Promise<string | undefined>;
   write(database: string): Promise<void>;
   polling?(): Promise<PollSettingsPatch>;
@@ -66,6 +70,14 @@ export function filePreferences(file: string): DesktopPreferences & {
     return result;
   }
   return {
+    async agentSetup() {
+      const value = (await load()).agentSetup;
+      return value == null ? null : parseAgentSetupRecord(value);
+    },
+    setAgentSetup(value) {
+      const record = parseAgentSetupRecord(value);
+      return update({ agentSetup: record, orchestrationProvider: record.primary });
+    },
     async read() {
       const { database } = await load();
       return typeof database === "string" && isAbsolute(database) ? database : undefined;
