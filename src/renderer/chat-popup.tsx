@@ -44,7 +44,8 @@ export function ChatPopup({
   const titleId = useId();
   const replyId = useId();
   const [history, setHistory] = useState<RunEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [historyLoading, setLoading] = useState(false);
+  const loading = !live && historyLoading;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [visible, setVisible] = useState(300);

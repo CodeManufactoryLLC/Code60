@@ -1,10 +1,12 @@
 import { execFile, execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "@playwright/test";
-import { launchDesktop } from "./electron-launcher.js";
+import { privateDirectory } from "../src/platform/index.js";
+import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
+import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
@@ -55,23 +57,14 @@ test("installed app launches with a minimal PATH and isolated data", async () =>
 });
 
 test("installed app persists projects and runs agents, MCP and cancellation", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-package-"));
+  const directory = await mkdtemp(
+    join(process.env.CODE60_PACKAGED_DATA_ROOT ?? tmpdir(), "code60-package-"),
+  );
   const repo = join(directory, "project");
   const database = join(directory, "code60.sqlite");
   const probe = join(directory, "mcp-ok");
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
-  execFileSync("git", [
-    "-C",
-    repo,
-    "-c",
-    "user.name=Code60 Test",
-    "-c",
-    "user.email=ci@example.invalid",
-    "commit",
-    "--allow-empty",
-    "-qm",
-    "Fixture",
-  ]);
+  commitFixture(repo);
   await mkdir(join(directory, "config", "code60"), { recursive: true });
   await writeFile(
     join(directory, "config", "code60", "config.json"),
@@ -84,7 +77,7 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
       },
     }),
   );
-  await mkdir(join(directory, "state", "code60"), { recursive: true });
+  await privateDirectory(join(directory, "state", "code60"));
   await writeFile(
     join(directory, "state", "code60", "desktop.json"),
     JSON.stringify({ orchestrationProvider: "fake" }),
@@ -108,7 +101,10 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
         agents: ["fake"],
         allow: [],
         allowAll: false,
-        prompt: JSON.stringify([{ message: "installer-ok" }]),
+        prompt: JSON.stringify([
+          { write: { path: "installer-marker.txt", content: "kept" } },
+          { message: "installer-ok" },
+        ]),
       }),
     );
     const id = ids[0];
@@ -188,7 +184,8 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     expect((await stat(database)).size).toBeGreaterThan(0);
   } finally {
     await app.close().catch(() => {});
-    await rm(directory, { recursive: true, force: true });
+    if (!process.env.CODE60_PACKAGED_DATA_ROOT)
+      await rm(directory, { recursive: true, force: true });
   }
 });
 

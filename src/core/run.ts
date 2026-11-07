@@ -10,7 +10,7 @@ import {
 import { type PromptTemplates, renderPrompt } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import type { Clock } from "./clock.js";
-import type { Processes } from "./processes.js";
+import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
 import { HANDOFF_PROMPT_LIMIT } from "./recovery.js";
 import type {
@@ -36,6 +36,7 @@ export interface RunDeps {
   clock: Clock;
   processes: Processes;
   ownerPid?: number;
+  ownerIdentity?: NonNullable<RunRecord["ownerIdentity"]>;
   onEvent(event: RunEvent): void;
   /** Called when view-only state changes without an event, such as a run starting to stop. */
   onChange(): void;
@@ -166,7 +167,7 @@ export class Run {
 
   /** Restores a saved ACP session without replaying a previous prompt. */
   async restore(): Promise<RecoveryResult> {
-    this.assertRecoverableAndSafe();
+    await this.assertRecoverableAndSafe();
     const previousStatus = this.status;
     const previousReason = this.record.reason;
     const sessionId = this.record.acpSessionId;
@@ -226,7 +227,7 @@ export class Run {
    * summary with the user's message; the transcript records the summary as a note.
    */
   async handoff(summary: string, text: string, reason: string): Promise<void> {
-    this.assertRecoverableAndSafe();
+    await this.assertRecoverableAndSafe();
     if (summary.trim() === "") throw new Error("the recovery handoff is empty");
     if (summary.length > HANDOFF_PROMPT_LIMIT)
       throw new Error("the recovery handoff exceeds its size limit");
@@ -436,6 +437,10 @@ export class Run {
     });
 
     this.record.agentPid = session.pid;
+    if (session.identity === undefined) delete this.record.agentIdentity;
+    else this.record.agentIdentity = session.identity;
+    if (this.deps.ownerIdentity) this.record.ownerIdentity = this.deps.ownerIdentity;
+    else delete this.record.ownerIdentity;
     this.record.agentCommand = this.settings.command;
     this.record.acpSessionId = session.sessionId;
     const commandLine = await this.deps.processes.commandLine(session.pid).catch(() => undefined);
@@ -444,14 +449,11 @@ export class Run {
     await this.save();
   }
 
-  private assertRecoverableAndSafe(): void {
+  private async assertRecoverableAndSafe(): Promise<void> {
     if (ACTIVE_STATUSES.has(this.status) || this.ending) {
       throw new RefusedError(`run ${this.id} is ${this.status}; only ended runs can be recovered`);
     }
-    if (
-      this.record.agentPid !== undefined &&
-      this.deps.processes.groupAlive(this.record.agentPid)
-    ) {
+    if (await recordedAgentAlive(this.deps.processes, this.record)) {
       throw new RefusedError(
         `the leftover agent for run ${this.id} is still alive (process group ${this.record.agentPid}); stop it before retrying`,
       );
@@ -623,7 +625,16 @@ export class Run {
     this.deps.onChange();
     const session = this.session;
     if (session !== undefined) {
-      await session.stop(this.forced ? 0 : this.settings.killGraceMs).catch(() => {});
+      try {
+        await session.stop(this.forced ? 0 : this.settings.killGraceMs);
+      } catch (error) {
+        const reason = `could not verify agent cleanup: ${message(error)}`;
+        this.deps.warn(reason);
+        outcome = {
+          status: outcome.status === "finished" ? "failed" : outcome.status,
+          reason: outcome.reason ? `${outcome.reason}; ${reason}` : reason,
+        };
+      }
       const tail = session.stderrTail();
       if (tail !== "") this.emit({ type: "stderr", text: tail });
     }

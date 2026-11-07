@@ -17,6 +17,7 @@ async function shell(script: string) {
   return file;
 }
 const inherited = "/inherited:/usr/bin";
+const unixTest = test.skipIf(process.platform === "win32");
 function fallback(platform: NodeJS.Platform = "darwin") {
   return [
     "/inherited",
@@ -31,7 +32,7 @@ function fallback(platform: NodeJS.Platform = "darwin") {
   ].join(":");
 }
 
-test("shell PATH wins, with noise, spaces, duplicates and unsafe entries removed", async () => {
+unixTest("shell PATH wins, with noise, spaces, duplicates and unsafe entries removed", async () => {
   const executable = await shell(
     `echo banner; echo ignored >&2\nexport PATH='/custom tools:/usr/bin:/custom tools:relative::/inherited'\neval "$2"\necho goodbye`,
   );
@@ -42,7 +43,7 @@ test("shell PATH wins, with noise, spaces, duplicates and unsafe entries removed
   expect(env).toEqual({ HOME: home, SHELL: executable, PATH: inherited, KEEP: "original" });
 });
 
-test.each(["exit 1", "echo no-markers", 'eval "$2"; exit 2'])(
+unixTest.each(["exit 1", "echo no-markers", 'eval "$2"; exit 2'])(
   "failed or unsupported shell falls back: %s",
   async (script) => {
     expect(
@@ -54,7 +55,7 @@ test.each(["exit 1", "echo no-markers", 'eval "$2"; exit 2'])(
   },
 );
 
-test("missing shell and invalid spawn environment fall back", async () => {
+unixTest("missing shell and invalid spawn environment fall back", async () => {
   for (const extra of [{}, { BAD: "\0" }]) {
     expect(
       await desktopPath({
@@ -65,7 +66,7 @@ test("missing shell and invalid spawn environment fall back", async () => {
   }
 });
 
-test("relative SHELL uses the account shell, otherwise uses the platform default", async () => {
+unixTest("relative SHELL uses the account shell, otherwise uses the platform default", async () => {
   const executable = await shell('export PATH=/account; eval "$2"');
   expect(
     await desktopPath({
@@ -85,7 +86,7 @@ test("relative SHELL uses the account shell, otherwise uses the platform default
   ).toBe(fallback("linux"));
 });
 
-test.each(["stdout", "stderr"])("bounds %s without exposing output", async (stream) => {
+unixTest.each(["stdout", "stderr"])("bounds %s without exposing output", async (stream) => {
   const executable = await shell(
     `while :; do echo 'never log shell output' ${stream === "stderr" ? ">&2" : ""}; done`,
   );
@@ -98,7 +99,7 @@ test.each(["stdout", "stderr"])("bounds %s without exposing output", async (stre
   ).toBe(fallback());
 });
 
-test.each(["timeout", "abort", "success", "failure"])(
+unixTest.each(["timeout", "abort", "success", "failure"])(
   "%s stops shell and its descendants",
   async (reason) => {
     const executable = await shell(
@@ -137,3 +138,44 @@ test.each(["timeout", "abort", "success", "failure"])(
       .toBe(true);
   },
 );
+
+test("Windows PATH preserves drive separators and never probes a shell", async () => {
+  const env = {
+    Path: "C:\\Inherited Tools;C:\\Windows\\System32;relative;;C:\\Inherited Tools",
+    HOME: "C:\\Users\\Test",
+    SHELL: "must-not-run.exe",
+  };
+  let shellRead = false;
+  const path = await desktopPath({
+    platform: "win32",
+    env,
+    home: env.HOME,
+    accountShell: () => {
+      shellRead = true;
+      throw new Error("must not read shell");
+    },
+    windowsPaths: async () => ({ user: "D:\\User Tools", machine: "C:\\Machine Tools" }),
+  });
+  expect(path.split(";").slice(0, 4)).toEqual([
+    "C:\\Inherited Tools",
+    "C:\\Windows\\System32",
+    "D:\\User Tools",
+    "C:\\Machine Tools",
+  ]);
+  expect(path).not.toContain("relative");
+  expect(shellRead).toBe(false);
+  expect(env.Path).toContain("relative");
+});
+
+test("Windows discovery failure uses inherited PATH and documented directories", async () => {
+  expect(
+    await desktopPath({
+      platform: "win32",
+      env: { PATH: "C:\\Tools" },
+      home: "C:\\Users\\Test",
+      windowsPaths: async () => {
+        throw new Error("access denied");
+      },
+    }),
+  ).toBe("C:\\Tools;C:\\Users\\Test\\.local\\bin;C:\\Users\\Test\\bin");
+});

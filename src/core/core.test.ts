@@ -32,8 +32,10 @@ describe("parseDuration", () => {
 
 describe("config", () => {
   it("uses XDG_CONFIG_HOME, then ~/.config", () => {
-    expect(configPath({ XDG_CONFIG_HOME: "/x" })).toBe("/x/code60/config.json");
-    expect(configPath({ HOME: "/home/u" })).toBe("/home/u/.config/code60/config.json");
+    expect(configPath({ XDG_CONFIG_HOME: "/x" })).toBe(join("/x", "code60", "config.json"));
+    expect(configPath({ HOME: "/home/u" })).toBe(
+      join("/home/u", ".config", "code60", "config.json"),
+    );
   });
 
   it("returns the defaults when the file is missing", async () => {
@@ -159,8 +161,10 @@ describe("record store", () => {
     ]);
     const runDir = join(dir, "code60", "runs", "r1");
     expect((await readdir(runDir)).sort()).toEqual(["events.jsonl", "run.json"]);
-    expect((await stat(join(runDir, "run.json"))).mode & 0o777).toBe(0o600);
-    expect((await stat(join(runDir, "events.jsonl"))).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect((await stat(join(runDir, "run.json"))).mode & 0o777).toBe(0o600);
+      expect((await stat(join(runDir, "events.jsonl"))).mode & 0o777).toBe(0o600);
+    }
     expect((await store.read("r1")).status).toBe("running");
     const events = await store.readEvents("r1");
     expect(events.map((e) => (e.type === "message" ? e.text : ""))).toEqual(
@@ -180,7 +184,9 @@ describe("record store", () => {
   it("keys records outside a repository by directory", () => {
     expect(directoryRunsDir("/state", "/a")).toBe(directoryRunsDir("/state", "/a"));
     expect(directoryRunsDir("/state", "/a")).not.toBe(directoryRunsDir("/state", "/b"));
-    expect(directoryRunsDir("/state", "/a")).toMatch(/^\/state\/code60\/dirs\/[0-9a-f]{16}\/runs$/);
+    expect(directoryRunsDir("/state", "/a").replaceAll("\\", "/")).toMatch(
+      /^\/state\/code60\/dirs\/[0-9a-f]{16}\/runs$/,
+    );
   });
 
   it("lists runs by start time and rejects unknown or unsafe IDs", async () => {

@@ -33,7 +33,7 @@ async function setup(
   const deps: CoreDeps = {
     agents,
     git,
-    fs: fs as unknown as CoreDeps["fs"],
+    fs: { ...fs } as unknown as CoreDeps["fs"],
     clock: new FakeClock(),
     processes,
     ownerPid: 500,
@@ -105,10 +105,56 @@ async function setup(
   controllers.push(controller);
   await controller.connect(database.path, false);
   await controller.open(dir);
-  return { controller, agents, processes, record, workspace };
+  return { controller, agents, processes, record, workspace, deps };
 }
 
 describe("desktop ended-run recovery", () => {
+  it("waits for the final record before continuing one run while another stays idle", async () => {
+    const { controller, agents, deps } = await setup(false);
+    const [id, other] = await controller.start({
+      agents: ["claude"],
+      parallel: "2",
+      allow: [],
+      allowAll: false,
+    });
+    await expect
+      .poll(() => controller.snapshot().runs.find((run) => run.record.id === id)?.view?.status)
+      .toBe("idle");
+    const rename = deps.fs.rename;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let saving = false;
+    deps.fs.rename = async (from, to) => {
+      const record = JSON.parse(await fs.readFile(from, "utf8")) as RunRecord;
+      if (record.id === id && record.status === "finished") {
+        saving = true;
+        await gate;
+      }
+      await rename(from, to);
+    };
+    try {
+      await controller.action({ type: "finish", id: id as string });
+      await expect.poll(() => saving).toBe(true);
+      const continued = controller
+        .action({ type: "continue", id: id as string, text: "Continue" })
+        .then(
+          (result) => ({ result }),
+          (error: unknown) => ({ error }),
+        );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      release();
+      await expect(continued).resolves.toEqual({ result: { type: "restored" } });
+      expect(agents.restores).toHaveLength(1);
+      expect(controller.snapshot().runs.find((run) => run.record.id === other)?.view?.status).toBe(
+        "idle",
+      );
+    } finally {
+      release();
+    }
+  });
+
   it("restores a finished run and sends only the new message", async () => {
     const { controller, agents, workspace, record } = await setup(true, "finished");
 

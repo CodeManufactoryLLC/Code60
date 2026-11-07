@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -10,6 +10,7 @@ import {
   type RunConfiguration,
   validatePromptTemplate,
 } from "../bridge/index.js";
+import { createPrivateFileSync, privateDirectorySync } from "../platform/index.js";
 
 /** Saved template edits; rows that cannot be used are described in `skipped`, never applied. */
 export interface SavedPromptTemplates {
@@ -123,11 +124,14 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
   const { DatabaseSync } = sqlite();
   let db: DatabaseSync | undefined;
   try {
+    if (!existed) createPrivateFileSync(path);
     db = new DatabaseSync(path);
-    db.exec("PRAGMA busy_timeout = 2000");
+    // DatabaseSync runs on the main thread. A contending writer must fail promptly,
+    // not freeze cancellation and the window for the previous two-second timeout.
+    db.exec(`PRAGMA busy_timeout = ${process.platform === "win32" ? 0 : 2000}`);
     prepare(db, path);
     if (!existed) chmodSync(path, 0o600);
-    mkdirSync(join(dirname(path), ".code60_workspace"), { recursive: true, mode: 0o700 });
+    privateDirectorySync(join(dirname(path), ".code60_workspace"));
   } catch (error) {
     db?.close();
     if (!existed) rmSync(path, { force: true });

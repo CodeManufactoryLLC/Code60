@@ -77,6 +77,7 @@ import {
   stopRun,
   type Workspace,
 } from "../core/index.js";
+import { privateDirectory, samePath } from "../platform/index.js";
 import { testAgentConnection } from "./agent-connection.js";
 import { readFiles } from "./files.js";
 import {
@@ -270,7 +271,7 @@ export class DesktopController {
     if (key === "files") {
       const context = this.fileContext;
       if (!context) return;
-      this.validateFileRoot(context);
+      await this.validateFileRoot(context);
       const files = await readFiles(context, () => current() && this.fileContext === context);
       if (current() && this.fileContext === context) this.files = files;
       return;
@@ -319,19 +320,22 @@ export class DesktopController {
     });
   }
 
-  private validateFileRoot(context: FileContext): void {
+  private async validateFileRoot(context: FileContext): Promise<void> {
     const workspace = this.requireWorkspace();
-    if (context.project !== workspace.dir) throw new Error("The open project has changed.");
-    if (
-      context.root !== workspace.dir &&
-      !this.worktrees?.worktrees.some((worktree) => worktree.path === context.root)
-    )
-      throw new Error("This file root is not in the open project.");
+    if (!(await samePath(context.project, workspace.dir)))
+      throw new Error("The open project has changed.");
+    if (await samePath(context.root, workspace.dir)) return;
+    for (const worktree of this.worktrees?.worktrees ?? []) {
+      if (await samePath(worktree.path, context.root)) return;
+    }
+    throw new Error("This file root is not in the open project.");
   }
 
   async setFileContext(value: FileContext | null): Promise<void> {
     const context = parseFileContext(value);
-    if (context) this.validateFileRoot(context);
+    const workspace = this.workspace;
+    if (context) await this.validateFileRoot(context);
+    if (this.workspace !== workspace) throw new Error("The open project has changed.");
     if (JSON.stringify(context) === JSON.stringify(this.fileContext)) return;
     this.fileContext = context;
     if (
@@ -470,7 +474,9 @@ export class DesktopController {
           events.push(...saved.slice(0, run.count));
         }
         abort.signal.throwIfAborted();
-        const cwd = await mkdtemp(join(tmpdir(), "code60-memory-"));
+        const temporary = await mkdtemp(join(tmpdir(), "code60-memory-"));
+        const cwd = join(temporary, "private");
+        await privateDirectory(cwd);
         try {
           const statements = await extractEpisodicMemory(
             this.deps.agents,
@@ -487,7 +493,7 @@ export class DesktopController {
             throw new Error("The project changed during extraction");
           return { statements, eventCount: events.length };
         } finally {
-          await rm(cwd, { recursive: true, force: true });
+          await rm(temporary, { recursive: true, force: true });
         }
       };
       const done = operation()
@@ -1340,6 +1346,9 @@ export class DesktopController {
   private async recoverableRun(workspace: Workspace, id: string): Promise<DesktopRun> {
     if (!this.history.some((run) => run.record.id === id))
       throw new Error("Unknown run in this workspace");
+    const batch = this.liveBatch(id);
+    const view = batch?.runs().find((run) => run.id === id);
+    if (view && !ACTIVE_STATUSES.has(view.status)) await batch?.settled(id);
     this.history = await listRuns(commandDeps(this.deps, workspace));
     const run = this.history.find((entry) => entry.record.id === id);
     if (!run) throw new Error("Unknown run in this workspace");

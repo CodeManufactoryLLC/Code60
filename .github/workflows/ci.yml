@@ -65,9 +65,44 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  windows:
+    name: Windows x64 / Node 24
+    needs: check
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          architecture: x64
+          cache: npm
+          package-manager-cache: false
+      - name: Require native Windows x64
+        run: node -e "if(process.platform !== 'win32' || process.arch !== 'x64') process.exit(1)"
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:desktop
+      - name: CLI smoke checks
+        run: |
+          node dist/cli/main.js --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node dist/cli/main.js --version
+      - run: npm run package:win
+      - run: npm run test:installers
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: windows-desktop-failure
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   passed:
     name: CI passed
-    needs: [check, desktop]
+    needs: [check, desktop, windows]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
@@ -76,4 +111,5 @@ jobs:
         env:
           CHECK: ${{ needs.check.result }}
           DESKTOP: ${{ needs.desktop.result }}
-        run: test "$CHECK" = success && test "$DESKTOP" = success
+          WINDOWS: ${{ needs.windows.result }}
+        run: test "$CHECK" = success && test "$DESKTOP" = success && test "$WINDOWS" = success

@@ -70,6 +70,9 @@ export function signingReady(env) {
     "HAS_APPLE_API_KEY",
     "HAS_APPLE_API_KEY_ID",
     "HAS_APPLE_API_ISSUER",
+    "HAS_WIN_CSC_LINK",
+    "HAS_WIN_CSC_KEY_PASSWORD",
+    "HAS_WIN_SIGNING_THUMBPRINT",
   ];
   if (required.some((key) => env[key] !== "true"))
     throw new Error("Missing signing configuration; see RELEASING.md");
@@ -80,6 +83,7 @@ export function assetNames(version, platform) {
   if (platform === "linux")
     return [`Code60-${version}-linux-x64.deb`, `Code60-${version}-linux-x64.AppImage`];
   if (platform === "mac") return [`Code60-${version}-mac-arm64.dmg`];
+  if (platform === "win") return [`Code60-${version}-win-x64.exe`];
   throw new Error("Unknown installer platform");
 }
 export async function github(path, options = {}) {

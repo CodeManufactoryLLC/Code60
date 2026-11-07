@@ -7,3 +7,4 @@ test-results/
 playwright-report/
 /release/
 /release-assets/
+/native/win32/

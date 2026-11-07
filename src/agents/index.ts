@@ -22,11 +22,15 @@ export function createAgents(options: { clientVersion: string }): Agents {
     } catch (error) {
       throw new AgentStartError(error instanceof Error ? error.message : String(error), "");
     }
+    if (signal?.aborted) {
+      await proc.stop(0);
+      throw new AgentStartError("agent start cancelled", proc.stderrTail());
+    }
     const terminated = proc.exited.then(async (info) => {
       await new Promise((resolve) => setTimeout(resolve, DRAIN_MS).unref());
       return new Error(describeExit(info));
     });
-    const onAbort = () => void proc.stop();
+    const onAbort = () => void proc.stop().catch(() => {});
     signal?.addEventListener("abort", onAbort, { once: true });
 
     let session: Awaited<ReturnType<typeof openSession>>;
@@ -74,6 +78,7 @@ export function createAgents(options: { clientVersion: string }): Agents {
     return {
       sessionId: session.sessionId,
       pid: proc.pid,
+      ...(proc.identity === undefined ? {} : { identity: proc.identity }),
       exited: proc.exited.then(() => {}),
       prompt: (text) => session.prompt(text),
       cancel: () => session.cancel(),

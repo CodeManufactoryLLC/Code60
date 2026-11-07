@@ -15,6 +15,11 @@ if (release && process.platform === "darwin") {
     if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
   }
 }
+if (release && process.platform === "win32") {
+  for (const name of ["WIN_CSC_LINK", "WIN_CSC_KEY_PASSWORD", "WIN_SIGNING_THUMBPRINT"]) {
+    if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
+  }
+}
 module.exports = {
   appId: "com.codemanufactory.code60",
   productName: "Code60",
@@ -31,7 +36,20 @@ module.exports = {
     "NOTICE",
     "TRADEMARKS.md",
   ],
-  extraResources: [{ from: "release/licenses", to: "licenses" }],
+  extraResources: [
+    { from: "release/licenses", to: "licenses" },
+    ...(process.platform === "win32"
+      ? [
+          {
+            // Directory copies run electron-builder's executable signing transformer.
+            // A single-file extraResource bypasses that transformer.
+            from: "native/win32/x64",
+            to: "native",
+            filter: ["code60-host.exe"],
+          },
+        ]
+      : []),
+  ],
   publish: null,
   // The MCP sidecar launches the bundled Electron executable in Node mode.
   electronFuses: { runAsNode: true },
@@ -45,6 +63,25 @@ module.exports = {
     ...(release ? {} : { identity: "-" }),
   },
   dmg: { sign: release },
+  win: {
+    target: [{ target: "nsis", arch: ["x64"] }],
+    executableName: "Code60",
+    forceCodeSigning: release,
+    signAndEditExecutable: true,
+    signtoolOptions: {
+      signingHashAlgorithms: ["sha256"],
+      rfc3161TimeStampServer: "https://timestamp.digicert.com",
+    },
+  },
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    allowElevation: false,
+    createDesktopShortcut: false,
+    createStartMenuShortcut: true,
+    deleteAppDataOnUninstall: false,
+    runAfterFinish: false,
+  },
   linux: {
     // DEB and AppImage map ${arch} to different aliases; use one release filename convention.
     // biome-ignore lint/suspicious/noTemplateCurlyInString: electron-builder expands these macros.

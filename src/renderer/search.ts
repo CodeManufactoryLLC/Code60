@@ -1,6 +1,7 @@
 import type { DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { messageRows } from "./messages.js";
+import { pathLabel } from "./path-label.js";
 
 export type SearchKind = "project" | "run" | "prompt" | "message" | "thought";
 export interface SearchResult {
@@ -21,7 +22,7 @@ export function searchIndex(
     {
       id: directory,
       kind: "project",
-      title: directory.split("/").filter(Boolean).at(-1) ?? directory,
+      title: pathLabel(directory),
       text: directory,
       at: "",
     },

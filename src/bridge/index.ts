@@ -488,7 +488,10 @@ const visibilitySchema = z.strictObject(
 );
 const databaseModeSchema = z.enum(["open", "create"], { error: "Invalid database mode" });
 const projectPathSchema = boundedString("project path", 4096).refine(
-  (value) => value.startsWith("/") && !value.includes("\0"),
+  (value) =>
+    !value.includes("\0") &&
+    (value.startsWith("/") ||
+      (/^[a-z]:[\\/]/i.test(value) && !/[\r\n]/.test(value) && !value.slice(2).includes(":"))),
   "Invalid project path",
 );
 
@@ -503,19 +506,38 @@ const relativeFilePathSchema = z
         path.split("/").every((part) => part !== "" && part !== "." && part !== "..")),
     "Expected a relative file path without traversal",
   );
-const fileContextSchema = z.strictObject({
-  project: projectPathSchema,
-  root: projectPathSchema,
-  directories: z
-    .array(relativeFilePathSchema)
-    .min(1)
-    .max(64)
-    .refine(
-      (paths) => paths.includes("") && new Set(paths).size === paths.length,
-      "Invalid folders",
-    ),
-  preview: relativeFilePathSchema.refine((path) => path !== "", "Expected a file").nullable(),
-});
+const fileContextSchema = z
+  .strictObject({
+    project: projectPathSchema,
+    root: projectPathSchema,
+    directories: z
+      .array(relativeFilePathSchema)
+      .min(1)
+      .max(64)
+      .refine(
+        (paths) => paths.includes("") && new Set(paths).size === paths.length,
+        "Invalid folders",
+      ),
+    preview: relativeFilePathSchema.refine((path) => path !== "", "Expected a file").nullable(),
+  })
+  .refine(
+    (context) =>
+      !/^[a-z]:[\\/]/i.test(context.root) ||
+      [...context.directories, context.preview ?? ""].every(
+        (path) =>
+          path === "" ||
+          (!/[:<>"|?*]/.test(path) &&
+            [...path].every((character) => character.charCodeAt(0) >= 32) &&
+            path
+              .split("/")
+              .every(
+                (part) =>
+                  !/[. ]$/.test(part) &&
+                  !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
+              )),
+      ),
+    "Invalid Windows file path",
+  );
 export const parseFileContext = (value: unknown) => parseValue(fileContextSchema.nullable(), value);
 
 export const parseBoolean = (value: unknown) => parseValue(booleanSchema, value);

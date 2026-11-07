@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import {
@@ -9,6 +8,7 @@ import {
   promptTemplatesSchema,
   TOOL_KINDS,
 } from "../contracts/index.js";
+import { environmentValue, userHome } from "../platform/index.js";
 import type { AgentConfig, Config, PermissionPolicy } from "./types.js";
 import { UsageError } from "./types.js";
 
@@ -47,7 +47,7 @@ export function parseDuration(text: string): number {
 }
 
 export function configPath(env: Readonly<Record<string, string | undefined>>): string {
-  const base = env.XDG_CONFIG_HOME || join(env.HOME || homedir(), ".config");
+  const base = environmentValue(env, "XDG_CONFIG_HOME") || join(userHome(env), ".config");
   return join(base, "code60", "config.json");
 }
 
