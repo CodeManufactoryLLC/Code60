@@ -147,7 +147,8 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain("Orchestrator worker, allows all");
+    expect(html).toContain("Orchestrator worker");
+    expect(html).toContain("Code60 auto-approval: On");
     expect(html).toContain('aria-label="Worker composer"');
     expect(html).not.toContain('role="dialog"');
     for (const label of ["Minimize chat", "Close chat", "full screen"])

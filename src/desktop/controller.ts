@@ -57,6 +57,7 @@ import {
   parseSearchSummaryRequestId,
   renderPrompt,
 } from "../bridge/index.js";
+import type { ModeChange } from "../core/index.js";
 import {
   ACP_PROTOCOL_VERSION,
   ACTIVE_STATUSES,
@@ -139,6 +140,7 @@ function mcpSessionMetrics(events: readonly RunEvent[], now: number) {
     if (
       event.type !== "status" &&
       event.type !== "acp" &&
+      event.type !== "sessionState" &&
       event.type !== "turnEnd" &&
       at >= bucketStart &&
       at < now
@@ -1067,6 +1069,8 @@ export class DesktopController {
   }
   orchestrationChatAction(value: OrchestrationChatAction): Promise<void> {
     const request = parseOrchestrationChatAction(value);
+    if (request.type === "set-mode")
+      return this.changeHarnessMode(request.id, request.change, true);
     if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
@@ -1850,7 +1854,36 @@ export class DesktopController {
     return ids;
   }
 
+  private async changeHarnessMode(id: string, change: ModeChange, chat: boolean): Promise<void> {
+    // Reserve the session under the controller lock, but never hold the lock across
+    // the RPC: Stop all, shutdown and other conversations must remain responsive.
+    const { completion } = await this.exclusive(async () => {
+      let owner: Orchestrator | undefined;
+      if (chat) {
+        owner = this.chats.find((session) => session.chat?.runs()[0]?.id === id)?.chat;
+      } else {
+        this.requireWorkspace();
+        if (!this.history.some((run) => run.record.id === id))
+          throw new Error("Unknown run in this workspace");
+        owner = [...this.batches.keys()].find((batch) => batch.runs().some((run) => run.id === id));
+      }
+      if (!owner) throw new Error("This session is no longer controlled by this app");
+      const completion = owner.setMode(id, change);
+      // Attach a handler before releasing the controller queue.
+      void completion.catch(() => {});
+      return { completion };
+    });
+    try {
+      await completion;
+    } finally {
+      this.scheduleUpdates();
+      this.changed();
+    }
+  }
+
   action(action: Action): Promise<ActionResult> {
+    if (action.type === "set-mode")
+      return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
     return this.exclusive(async () => {
       const workspace = this.requireWorkspace();
       const cmd = commandDeps(this.deps, workspace);
@@ -1979,7 +2012,7 @@ export class DesktopController {
     if (this.closing || session.updatesPaused || session.inbox.length === 0) return;
     const chat = session.chat;
     const run = chat?.runs()[0];
-    if (!chat || !run || run.status !== "idle" || run.stopping) return;
+    if (!chat || !run || run.status !== "idle" || run.stopping || run.modeChanging) return;
     const updates = session.inbox.slice(0, UPDATE_BATCH);
     const template = effectivePrompts(
       this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES,

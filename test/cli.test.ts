@@ -220,6 +220,30 @@ describe("code60 without a worktree", () => {
 });
 
 describe("code60 list, diff, discard, stop", () => {
+  it("keeps session metadata in records without adding it to CLI JSON", async () => {
+    const h = harness((_text, session) => {
+      session.update({
+        type: "sessionState",
+        state: {
+          model: null,
+          usage: { used: 5, size: 100, reportedAt: "2026-11-07T12:00:00.000Z" },
+          modes: null,
+        },
+      });
+      return "end_turn";
+    });
+    expect(await run(["run", "--json", "task"], h.io)).toBe(0);
+    const result = JSON.parse(h.stdout()).runs[0];
+    expect(result).not.toHaveProperty("sessionState");
+    const record = JSON.parse(
+      await fs.readFile(join(dir, "repo", ".git", "code60", "runs", result.id, "run.json"), "utf8"),
+    );
+    expect(record.sessionState.usage.used).toBe(5);
+    const listing = harness();
+    expect(await run(["list", "--json"], listing.io)).toBe(0);
+    expect(JSON.parse(listing.stdout()).runs[0]).not.toHaveProperty("sessionState");
+  });
+
   it("lists runs, diffs them, and requires --yes to discard without a terminal", async () => {
     const h = harness();
     await run(["run", "--json", "the prompt"], h.io);

@@ -1572,6 +1572,71 @@ describe("orchestrated workers over ACP", () => {
     expect((await secondCall("code60_list_agents")).status).toBe(200);
   });
 
+  it("holds automatic worker updates during mode changes and keeps other actions responsive", async () => {
+    const { call, scope } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    const primary = agents.sessions[0];
+    if (!primary) throw new Error("Missing chat");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.assign(primary, { setMode: () => gate });
+    primary.update({
+      type: "sessionState",
+      state: {
+        model: null,
+        usage: null,
+        modes: {
+          source: "config",
+          confirmed: true,
+          reportedAt: "2026-11-07T12:00:00.000Z",
+          controls: [
+            {
+              id: "permissions",
+              name: "Permissions",
+              currentValue: "ask",
+              options: [{ value: "ask", name: "Ask" }],
+            },
+          ],
+        },
+      },
+    });
+    const change = { source: "config" as const, configId: "permissions", value: "ask" };
+    const pending = controller.orchestrationChatAction({ type: "set-mode", id, change });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.modeChanging).toBe(true));
+    try {
+      const worker = await dispatch(call, scope, "Fix this while the mode RPC waits");
+      await vi.waitFor(() => expect(controller.snapshot().chat.updates.pending).toBe(1));
+      expect(chatPrompts()).toHaveLength(0);
+      await expect(
+        controller.orchestrationChatAction({ type: "send", id, text: "race" }),
+      ).rejects.toThrow(/idle/);
+      await expect(controller.action({ type: "set-mode", id, change })).rejects.toThrow(
+        /Unknown run/,
+      );
+      await expect(
+        controller.orchestrationChatAction({ type: "set-mode", id: worker, change }),
+      ).rejects.toThrow(/no longer/);
+      expect(
+        await session(worker)?.requestPermission({
+          toolCallId: "t",
+          title: "Execute",
+          kind: "execute",
+        }),
+      ).toBe("allow");
+    } finally {
+      release();
+      await pending;
+    }
+    await vi.waitFor(() => expect(chatPrompts()).toHaveLength(1));
+    expect(controller.snapshot().chat.updates.pending).toBe(0);
+    await controller.orchestrationChatAction({ type: "stop", id });
+    await expect(
+      controller.orchestrationChatAction({ type: "set-mode", id, change }),
+    ).rejects.toThrow(/idle/);
+  });
+
   it("dispatches allow-all workers, wakes the chat once per worker turn, and labels it automatic", async () => {
     const { call, scope } = await setup();
     const runId = await dispatch(call, scope, "Fix the bug");

@@ -21,7 +21,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Settings profiles, workspace trust, imported project settings, and settings export. The desktop app's saved run configurations (see [Desktop app](#desktop-app)) are the one exception: named batch settings stored in the project database, never applied to the CLI or the config file.
 - CLI orchestration services, external ACP servers, and arbitrary agent-to-agent communication. Only the desktop Orchestration Chat may dispatch and control its own workers in the open project through the scoped MCP tools described below.
 - Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and mid-run model changes. Follow-up prompts between turns are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
-- Budgets, cost tracking, and usage totals.
+- Budgets, cost tracking, and usage totals. The desktop shows only the current context occupancy reported by the harness.
 - Workspace capacity limits, retention, and Worktrunk hooks. The read-only Worktrees tab measures logical file sizes when it is opened and in the background while it is visible, but does not enforce limits.
 - File watching. The desktop app polls external state on a schedule (see [Polling](#polling)) instead.
 - Shared or remote servers, and coordination across machines.
@@ -205,12 +205,25 @@ type RunEvent = { runId: string; at: string } & (
       options?: { optionId: string; name: string; kind: string }[] }
   | { type: "turnEnd"; turn: number; stopReason: StopReason;
       completedAt?: string; outcome?: "finished" | "cancelled" | "timed_out" | "failed" | "interrupted" }
+  | { type: "sessionState"; state: SessionState } // Model, context occupancy and harness modes
   | { type: "acp"; update: string; payload: string; size: number; truncated?: true }
   | { type: "stderr"; text: string }   // Written once when the run ends: the last 64 KiB of stderr
 );
 ```
 
-Every ACP session update is recorded as a raw `acp` event, including updates that also produce typed events and updates the tool does not understand (plans, usage, modes, non-text content, tool inputs/outputs, and other provider fields). `update` is the ACP update name, `payload` is its JSON text, and `size` is its original UTF-8 byte count. Payload text is capped at 256 KiB per update, clipped at a complete UTF-8 code point with `truncated: true`; clipped payloads are not necessarily valid JSON. Unrecognized updates are never treated as errors or approvals. Raw and typed updates replayed by `session/load` are suppressed to avoid duplicating history. Each completed ACP prompt response records its turn number and stop reason as `turnEnd`; transport failures instead retain the run's failure status/reason.
+Every ACP session update is recorded as a raw `acp` event, including updates that also produce typed events and updates the tool does not understand (plans, non-text content, tool inputs/outputs, and other provider fields). `update` is the ACP update name, `payload` is its JSON text, and `size` is its original UTF-8 byte count. Payload text is capped at 256 KiB per update, clipped at a complete UTF-8 code point with `truncated: true`; clipped payloads are not necessarily valid JSON. Unrecognized updates are never treated as errors or approvals. Raw and typed transcript updates replayed by `session/load` are suppressed to avoid duplicating history. Session metadata is collected during setup/replay and published once as current state after the setup response. Each completed ACP prompt response records its turn number and stop reason as `turnEnd`; transport failures instead retain the run's failure status/reason.
+
+### Session information and harness modes
+
+Orchestrator and worker chats show the reported model, current context usage (used/total tokens and percentage), and **Harness mode** near the composer. A missing report reads **Not reported**; zero capacity has no percentage. Context usage may decrease after compaction and is never inferred from transcript length. The model label is read-only. Ended sessions retain values labeled **Last reported**, with no editable mode selector.
+
+To change a mode, wait until the session is idle and select one of the harness's advertised choices. Names, ordering and groups come from that harness; Code60 does not impose universal approval levels. **Code60 auto-approval** is a separate policy. Orchestration chats and their workers keep it on: selecting an Ask mode does not turn off Code60's automatic once-only answers to permission requests. The harness determines the effects of its modes, including any sandbox behavior; Code60 forwards the selected value.
+
+The stable ACP v1 adapter prefers categorized select `configOptions` and uses legacy `modes` only when config options are absent. It does not advertise boolean-config support or interpret provider metadata. New/load/resume responses and pushed config, mode and usage notifications feed a bounded, validated session snapshot. Updates before a new session's ID arrives are limited to 128 metadata notifications / 256 KiB and matched to the returned ID. Usage has safe nonnegative integer counts; malformed/unsupported controls cannot grant capabilities.
+
+Optional `sessionState` in `run.json` and `RunView` retains model, usage, mode controls and report timestamps. Deduplicated `sessionState` events use existing ordered writes and snapshot revisions, without polling, SQLite changes or a record-format bump. Older records remain readable. Fresh handoffs clear old values; restored connections use newly reported state without reapplying a saved mode. State events do not become conversation text, unread replies, timing activity or worker summaries. CLI JSON output omits this added record metadata.
+
+The existing worker/chat IPC action unions accept a narrow `set-mode` action with a run ID and `{source, configId, value}`. Main-process ownership and core idle-state checks apply, and values must match current advertised choices. Core exposes a pending mode-change flag, rejects overlapping prompts/changes, and automatic worker delivery waits until it clears. The controller releases its action queue while awaiting the RPC so shutdown and other sessions remain responsive. Requests time out after 15 seconds; local waits abort on shutdown. A rejected change retains reported state; a timeout labels mode unconfirmed until a subsequent report or successful retry. No failure claims to roll back the harness.
 
 ## Files
 
@@ -253,7 +266,7 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
 
 Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (exit code 2). Durations use the same grammar in CLI configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
 
-The model is part of an agent's command or of the agent's own configuration. The tool does not pick models.
+The model is part of an agent's command or of the agent's own configuration. The tool does not pick models; the desktop displays the model reported through ACP configuration.
 
 ### Prompt templates
 

@@ -3997,3 +3997,34 @@ button.file-open-link {
   flex-direction: column;
   gap: 4px;
 }
+
+/* Session properties stay beside their conversation, with approval policy separate. */
+.session-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 8px 0;
+  font-size: var(--text-size, 13px);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.session-info > span,
+.session-info label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.session-info label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.session-info select {
+  max-width: 100%;
+  min-width: 0;
+}
+.session-info .session-approval,
+.session-info .session-last-reported {
+  flex-basis: 100%;
+}

@@ -285,3 +285,36 @@ describe("ended run recovery", () => {
     await orchestrator.shutdown(true);
   });
 });
+
+describe("session information on recovery", () => {
+  const previous = {
+    model: { id: "old", name: "Old model", reportedAt: "2026-11-07T12:00:00.000Z" },
+    usage: null,
+    modes: null,
+  };
+  it("replaces saved state with the restored agent's report", async () => {
+    const record = makeRecord({ sessionState: previous });
+    const { agents, orchestrator, store } = await setup(record);
+    const restore = agents.restore.bind(agents);
+    agents.restore = async (spec, id, signal) =>
+      Object.assign(await restore(spec, id, signal), {
+        sessionState: { ...previous, model: { ...previous.model, id: "new", name: "New model" } },
+      });
+    await orchestrator.restore(record.id);
+    expect(orchestrator.runs()[0]?.sessionState?.model?.id).toBe("new");
+    expect(store.records.get(record.id)?.sessionState?.model?.id).toBe("new");
+    await orchestrator.shutdown();
+  });
+  it("clears old information when a fresh handoff has no report", async () => {
+    const record = makeRecord({ sessionState: previous });
+    const { orchestrator, store } = await setup(record);
+    await orchestrator.handoff(record.id, "summary", "continue", "restoration unavailable");
+    await flush();
+    expect(store.records.get(record.id)?.sessionState).toEqual({
+      model: null,
+      usage: null,
+      modes: null,
+    });
+    await orchestrator.shutdown();
+  });
+});

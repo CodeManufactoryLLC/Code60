@@ -7,7 +7,15 @@ import {
   type PermissionAnswer,
   type PermissionRequest,
 } from "../agents/index.js";
-import { type PromptTemplates, renderPrompt } from "../contracts/index.js";
+import {
+  emptySessionState,
+  type ModeChange,
+  modeChangeSchema,
+  type PromptTemplates,
+  parseValue,
+  renderPrompt,
+  supportsModeChange,
+} from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
@@ -100,6 +108,7 @@ export class Run {
   private resolveFinished!: () => void;
   private session: AgentSession | undefined;
   private sessionExited = false;
+  private modeChanging = false;
   private worktreeCreated = false;
   private turnActive = false;
   private turnTimer: unknown;
@@ -146,6 +155,8 @@ export class Run {
       branch: r.branch,
       worktree: r.worktree,
       ...(r.lastStopReason === undefined ? {} : { lastStopReason: r.lastStopReason }),
+      ...(r.sessionState === undefined ? {} : { sessionState: r.sessionState }),
+      modeChanging: this.modeChanging,
       pending: [...this.pending.values()].map((p) => p.view),
       stopping: this.ending && !this.isFinal(),
     };
@@ -268,11 +279,39 @@ export class Run {
     void this.runTurn(text, true, true, sent);
   }
 
+  async setMode(value: ModeChange): Promise<void> {
+    const change = parseValue(modeChangeSchema, value);
+    const session = this.session;
+    if (
+      this.settings.mode !== "interactive" ||
+      this.status !== "idle" ||
+      this.ending ||
+      this.modeChanging ||
+      this.sessionExited ||
+      !session?.setMode
+    ) {
+      throw new RefusedError(
+        "Harness mode can be changed only while the connected session is idle",
+      );
+    }
+    if (!supportsModeChange(this.record.sessionState ?? emptySessionState(), change)) {
+      throw new RefusedError("This harness mode is no longer available");
+    }
+    this.modeChanging = true;
+    this.deps.onChange();
+    try {
+      await session.setMode(change);
+    } finally {
+      this.modeChanging = false;
+      this.deps.onChange();
+    }
+  }
+
   /** Sends a follow-up prompt to an idle run (desktop app only). */
   reply(text: string, origin?: "automatic"): void {
     if (this.settings.mode !== "interactive")
       throw new Error("follow-up prompts are only available in the desktop app");
-    if (this.status !== "idle" || this.ending) {
+    if (this.status !== "idle" || this.ending || this.modeChanging) {
       throw new Error(`run ${this.id} is ${this.status}; you can reply only to an idle run`);
     }
     if (text.trim() === "") throw new Error("the reply is empty");
@@ -427,7 +466,16 @@ export class Run {
   private async installSession(session: AgentSession): Promise<void> {
     this.session = session;
     this.sessionExited = false;
-    session.onUpdate((update) => this.emit(update));
+    if (session.sessionState || this.record.sessionState) {
+      this.emit({ type: "sessionState", state: session.sessionState ?? emptySessionState() });
+    }
+    session.onUpdate((update) => {
+      if (
+        this.session === session &&
+        (update.type !== "sessionState" || (!this.sessionExited && !this.ending))
+      )
+        this.emit(update);
+    });
     session.onPermission((request, signal) => this.onPermission(request, signal));
     void session.exited.then(() => {
       this.sessionExited = true;
@@ -673,6 +721,11 @@ export class Run {
   }
 
   private emit(body: RunEventBody | AgentUpdate): void {
+    if (body.type === "sessionState") {
+      if (JSON.stringify(this.record.sessionState) === JSON.stringify(body.state)) return;
+      this.record.sessionState = body.state;
+      void this.save();
+    }
     const event = { runId: this.id, at: this.deps.clock.now().toISOString(), ...body } as RunEvent;
     this.deps.store
       .appendEvent(event)

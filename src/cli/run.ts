@@ -261,11 +261,13 @@ async function listCommand(io: CliIo, json: boolean): Promise<number> {
   const { cmd } = await repoFor(io);
   const runs = await listRuns(cmd);
   if (json) {
-    const out = runs.map(({ record, agentAlive, agentCommandLine }) => ({
-      ...record,
-      agentAlive,
-      ...(agentCommandLine === undefined ? {} : { liveAgentCommandLine: agentCommandLine }),
-    }));
+    const out = runs.map(
+      ({ record: { sessionState: _sessionState, ...record }, agentAlive, agentCommandLine }) => ({
+        ...record,
+        agentAlive,
+        ...(agentCommandLine === undefined ? {} : { liveAgentCommandLine: agentCommandLine }),
+      }),
+    );
     io.stdout.write(`${JSON.stringify({ runs: out }, null, 2)}\n`);
   } else {
     io.stdout.write(formatList(runs));

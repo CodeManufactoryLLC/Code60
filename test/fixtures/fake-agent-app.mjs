@@ -7,12 +7,40 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   /** @type {Set<() => void>} */
   let cancelWaiters = new Set();
   let cancelled = false;
+  let mode = "ask";
+  const configOptions = () => [
+    {
+      id: "model",
+      name: "Model",
+      category: "model",
+      type: "select",
+      currentValue: "fixture-model",
+      options: [{ value: "fixture-model", name: "Fixture Model" }],
+    },
+    {
+      id: "permissions",
+      name: "Permissions",
+      category: "mode",
+      type: "select",
+      currentValue: mode,
+      options: [
+        {
+          group: "standard",
+          name: "Standard",
+          options: [
+            { value: "ask", name: "Ask for approval" },
+            { value: "full", name: "Full Access" },
+          ],
+        },
+      ],
+    },
+  ];
 
   const waitForCancel = () =>
     cancelled ? Promise.resolve() : new Promise((resolve) => cancelWaiters.add(resolve));
@@ -22,11 +50,29 @@ export function createFakeAgent(options = {}) {
       protocolVersion: PROTOCOL_VERSION,
       agentCapabilities: {},
     }))
-    .onRequest(methods.agent.session.new, async ({ params }) => {
+    .onRequest(methods.agent.session.new, async ({ params, client }) => {
       if (options.authRequired) throw RequestError.authRequired();
       cwd = params.cwd;
       await options.onSessionNew?.(params);
-      return { sessionId: "fake-session" };
+      if (options.sessionInfo)
+        await client.notify(methods.client.session.update, {
+          sessionId: "fake-session",
+          update: { sessionUpdate: "usage_update", used: 53000, size: 200000 },
+        });
+      return {
+        sessionId: "fake-session",
+        ...(options.sessionInfo ? { configOptions: configOptions() } : {}),
+      };
+    })
+    .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
+      if (
+        !options.sessionInfo ||
+        params.configId !== "permissions" ||
+        !["ask", "full"].includes(params.value)
+      )
+        throw RequestError.invalidParams();
+      mode = params.value;
+      return { configOptions: configOptions() };
     })
     .onNotification(methods.agent.session.cancel, () => {
       cancelled = true;
@@ -95,6 +141,8 @@ export function createFakeAgent(options = {}) {
             sessionUpdate: "agent_message_chunk",
             content: { type: "text", text: step.message },
           });
+        } else if (step.usage !== undefined) {
+          await update({ sessionUpdate: "usage_update", ...step.usage });
         } else if (step.thought !== undefined) {
           await update({
             sessionUpdate: "agent_thought_chunk",

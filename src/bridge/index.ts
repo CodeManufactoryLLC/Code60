@@ -1,3 +1,4 @@
+import { modeChangeSchema } from "../contracts/index.js";
 import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from "./agent-setup.js";
 
 export * from "./agent-setup.js";
@@ -342,6 +343,7 @@ const objectError = (issue: { code: string }) =>
 const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
   z.strictObject({ type: z.literal("new") }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
   z.strictObject({
@@ -473,6 +475,7 @@ const savePromptTemplateSchema = z
 const actionSchema = z.discriminatedUnion(
   "type",
   [
+    z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
     z.strictObject(
       {
         type: z.enum(["reply", "continue"]),

@@ -692,3 +692,83 @@ describe("leftover commands", () => {
     expect(await stopRun(gone, "r1")).toMatchObject({ stopped: false });
   });
 });
+
+describe("harness session controls", () => {
+  it("persists initial and live state, isolates runs, and gates prompts without changing permissions", async () => {
+    const state = {
+      model: null,
+      usage: { used: 42, size: 200, reportedAt: "2026-11-07T12:00:00.000Z" },
+      modes: {
+        source: "config" as const,
+        confirmed: true,
+        reportedAt: "2026-11-07T12:00:00.000Z",
+        controls: [
+          {
+            id: "permissions",
+            name: "Permissions",
+            currentValue: "ask",
+            options: [
+              { value: "ask", name: "Ask" },
+              { value: "full", name: "Full" },
+            ],
+          },
+        ],
+      },
+    };
+    const { orch, agents, store } = await setup({
+      mode: "interactive",
+      prompt: "",
+      count: 2,
+      overrides: { allowAll: true },
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const start = agents.start.bind(agents);
+    const setter = vi.fn(async () => {
+      await gate;
+    });
+    agents.start = async (spec, signal) =>
+      Object.assign(await start(spec, signal), {
+        sessionState: state,
+        setMode: setter,
+      });
+    orch.start();
+    await flush();
+    expect(orch.runs()[0]?.sessionState).toEqual(state);
+    expect(store.records.get("r1")?.sessionState).toEqual(state);
+    const change = { source: "config" as const, configId: "permissions", value: "full" };
+    const pending = orch.setMode("r1", change);
+    expect(orch.runs()[0]?.modeChanging).toBe(true);
+    expect(orch.runs()[1]?.modeChanging).toBe(false);
+    expect(() => orch.reply("r1", "no overlap")).toThrow(/idle/);
+    expect(() => orch.reply("r1", "automatic", "automatic")).toThrow(/idle/);
+    await expect(orch.setMode("r1", change)).rejects.toThrow(/idle/);
+    release();
+    await pending;
+    expect(setter).toHaveBeenCalledTimes(1);
+    expect(orch.runs()[0]?.modeChanging).toBe(false);
+    await expect(orch.setMode("r1", { ...change, value: "invented" })).rejects.toThrow(
+      /no longer available/,
+    );
+    const updated = { ...state, usage: { ...state.usage, used: 10 } };
+    agents.sessions[0]?.update({ type: "sessionState", state: updated });
+    agents.sessions[0]?.update({ type: "sessionState", state: updated });
+    expect(store.records.get("r1")?.sessionState?.usage?.used).toBe(10);
+    expect(orch.runs()[1]?.sessionState?.usage?.used).toBe(42);
+    expect(
+      store.events.filter((event) => event.runId === "r1" && event.type === "sessionState"),
+    ).toHaveLength(2);
+    expect(
+      await agents.sessions[0]?.requestPermission({
+        toolCallId: "t1",
+        title: "Execute",
+        kind: "execute",
+      }),
+    ).toBe("allow");
+    await orch.shutdown();
+    expect(store.records.get("r1")?.sessionState?.usage?.used).toBe(10);
+    await expect(orch.setMode("r1", change)).rejects.toThrow(/idle/);
+  });
+});

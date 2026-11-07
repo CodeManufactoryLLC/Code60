@@ -2699,7 +2699,7 @@ function NewRun({
                 checked={allowAll}
                 onChange={(event) => setAllowAll(event.target.checked)}
               />
-              Allow all actions without asking
+              Code60 auto-approval
             </label>
           </details>
         </fieldset>
