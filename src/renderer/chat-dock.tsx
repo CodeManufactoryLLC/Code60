@@ -355,7 +355,7 @@ export function ChatDock({
                   </button>
                   <button
                     type="button"
-                    className="chat-drag-handle"
+                    className="icon-button chat-drag-handle"
                     aria-label={`Reorder chat ${run.record.agent} ${id.slice(-6)}`}
                     aria-describedby="chat-drag-help"
                     aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
@@ -416,7 +416,7 @@ export function ChatDock({
                   {!entry.expanded && (
                     <button
                       type="button"
-                      className="chat-head-close"
+                      className="icon-button chat-head-close"
                       aria-label="Close minimized chat"
                       data-tooltip="Close chat (agent keeps running)"
                       onClick={(event) => {
@@ -436,6 +436,7 @@ export function ChatDock({
           <div className="dock-scroll-controls">
             <button
               type="button"
+              className="icon-button"
               aria-label="Scroll chats left"
               onClick={() => viewport.current?.scrollBy({ left: -480 })}
             >
@@ -443,6 +444,7 @@ export function ChatDock({
             </button>
             <button
               type="button"
+              className="icon-button"
               aria-label="Scroll chats right"
               onClick={() => viewport.current?.scrollBy({ left: 480 })}
             >

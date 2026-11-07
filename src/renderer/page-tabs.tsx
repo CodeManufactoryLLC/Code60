@@ -330,7 +330,7 @@ function PageTabList({
         </div>
         <button
           type="button"
-          className="chat-sidebar-new"
+          className="icon-button chat-sidebar-new"
           aria-label="New chat"
           title="New chat"
           disabled={chatPending || !database}

@@ -65,10 +65,18 @@ async function expectGridHeaders(grid: Locator, expected: string[]) {
 async function selectSidebarPage(page: Page, name: string) {
   if (name === "Files") {
     await selectSidebarPage(page, "Chat");
-    const toggle = page
-      .locator("#panel-chat .orchestration-chat-page:visible")
-      .getByRole("button", { name: "File Explorer", exact: true });
-    if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    const explorer = page
+      .locator(".file-tabs")
+      .getByRole("tab", { name: "File Explorer", exact: true });
+    if (await explorer.count()) await explorer.first().click();
+    else {
+      const open = page.getByRole("button", { name: "Open Files", exact: true });
+      if (!(await open.isVisible()))
+        await page.getByRole("button", { name: "New file tab" }).click();
+      await open.click();
+    }
     return;
   }
   if (
@@ -116,6 +124,51 @@ async function expectMessageCopy(control: Locator) {
   await control.hover();
   await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(control).toHaveCSS("border-top-width", "0px");
+}
+
+async function iconHighlight(control: Locator) {
+  return control.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent)";
+    element.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+}
+
+async function expectIconAction(control: Locator) {
+  const page = control.page();
+  await page.bringToFront();
+  await control.evaluate((element) => (element as HTMLElement).blur());
+  const corner = await page.evaluate(() => ({ x: innerWidth - 2, y: innerHeight - 2 }));
+  await page.mouse.move(corner.x, corner.y);
+  await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
+  const resting = await control.evaluate((element) => getComputedStyle(element).color);
+  for (const edge of ["top", "right", "bottom", "left"])
+    await expect(control).toHaveCSS(`border-${edge}-width`, "0px");
+  await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await control.hover();
+  await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(control).toHaveCSS("background-image", "none");
+  await expect(control).toHaveCSS("box-shadow", "none");
+  if (await control.isEnabled()) {
+    await expect(async () => {
+      await page.mouse.move(corner.x, corner.y);
+      await control.hover();
+      await expect(control).not.toHaveCSS("color", resting, { timeout: 500 });
+    }).toPass({ timeout: 5_000 });
+    const highlighted = await iconHighlight(control);
+    await page.mouse.move(corner.x, corner.y);
+    await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
+    await control.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(control).toBeFocused();
+    await expect(control).toHaveCSS("color", highlighted);
+    await expect(control).toHaveCSS("outline-style", "none");
+    await expect(control).toHaveCSS("box-shadow", "none");
+  } else await expect(control).toHaveCSS("color", resting);
 }
 
 async function expectChatBorder(composer: Locator, color = "var(--focus-line)") {
@@ -378,6 +431,7 @@ async function expectTabAppearance(page: Page) {
       buttonBackgrounds: [...bar.querySelectorAll("button")].map((button) => ({
         label: button.getAttribute("aria-label") ?? button.textContent,
         background: getComputedStyle(button).backgroundColor,
+        iconOnly: button.classList.contains("icon-button"),
       })),
       activeRight: active.getBoundingClientRect().right,
       panelLeft: panel.getBoundingClientRect().left,
@@ -408,7 +462,9 @@ async function expectTabAppearance(page: Page) {
   expect(appearance.leftBorders).toEqual(["1px", "1px", "0px"]);
   expect(appearance.activeBackground).toBe(appearance.sidebarBackground);
   for (const button of appearance.buttonBackgrounds)
-    expect(button.background, button.label ?? "Sidebar button").toBe(appearance.sidebarBackground);
+    expect(button.background, button.label ?? "Sidebar button").toBe(
+      button.iconOnly ? "rgba(0, 0, 0, 0)" : appearance.sidebarBackground,
+    );
   expect(appearance.activeBackground).not.toBe(appearance.hoverBackground);
   expect(appearance.barWidth).toBe(220);
   expect(appearance.activeRight).toBeLessThan(appearance.panelLeft);
@@ -442,11 +498,16 @@ async function expectTabAppearance(page: Page) {
     }).toPass({ timeout: 5_000 });
   }
   await expectHover(inactive);
+  await expect(inactive.locator("svg").first()).toHaveCSS(
+    "color",
+    await inactive.evaluate((element) => getComputedStyle(element).color),
+  );
+  await expectIconAction(page.getByRole("button", { name: "New chat", exact: true }));
   await expect(inactive).toHaveCSS("border-color", border);
   await expect(inactive).toHaveCSS("outline-style", "none");
   await expectHover(page.locator(`#${appearance.activeId}`));
   const otherButtons = page.locator(
-    ".sidebar .project-card:enabled, .sidebar .page-group-toggle:visible, .sidebar .chat-sidebar-new:visible:enabled, .sidebar .chat-sidebar-entry[aria-current='true']:visible:enabled",
+    ".sidebar .project-card:enabled, .sidebar .page-group-toggle:visible, .sidebar .chat-sidebar-entry[aria-current='true']:visible:enabled",
   );
   for (const button of await otherButtons.all()) {
     await expectHover(button);
@@ -619,7 +680,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await page.keyboard.press("Escape");
     await page
       .locator("#panel-chat")
-      .getByRole("button", { name: "File Explorer", exact: true })
+      .getByRole("button", { name: "Toggle files panel", exact: true })
       .click();
     await page.evaluate(async () => {
       await window.desktop.connectDatabase("create");
@@ -4318,11 +4379,19 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
         await columnsButton.click();
     };
     const original = await stored();
+    await panel.getByRole("button", { name: "Search sessions", exact: true }).click();
+    await expectIconAction(page.getByRole("button", { name: "Close Search", exact: true }));
+    const previousResult = page.getByRole("button", { name: "Previous Result", exact: true });
+    await expect(previousResult).toBeDisabled();
+    await expect(previousResult).toHaveCSS("border-top-width", "0px");
+    await expect(previousResult).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await page.getByRole("button", { name: "Close Search", exact: true }).click();
     await trigger.click();
     await expect(modal).toBeVisible();
     await page.screenshot({ path: "test-results/table-settings-initial.png" });
     expect(errors).toEqual([]);
     await expect(density).toBeFocused();
+    await expectIconAction(modal.getByRole("button", { name: "Close table settings" }));
     await expect(columnsButton).toHaveAttribute("aria-expanded", "false");
     await expect(modal.getByRole("group", { name: "Visible columns", exact: true })).toBeHidden();
     await expect(modal.getByRole("heading", { name: "Preview", exact: true })).toBeVisible();
@@ -4564,6 +4633,8 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     await expect(editor).toHaveCSS("outline-width", "2px");
     // The outer editor carries the highlight, never a second ring around the textarea.
     await expect(editor.locator("textarea")).toHaveCSS("outline-width", "0px");
+    await expectIconAction(page.getByRole("button", { name: "New chat", exact: true }));
+    await editor.locator("textarea").focus();
     await page.screenshot({ path: "test-results/focus-highlight-enabled.png" });
   } finally {
     await application?.close();
@@ -4571,297 +4642,345 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
   }
 });
 
-test("desktop: Files tree and shared read-only preview", async () => {
-  test.setTimeout(60000);
+test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout", async () => {
+  test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-files-ui-"));
   const folder = join(directory, "repo");
-  const worktree = join(directory, "worker");
   await mkdir(join(folder, "src"), { recursive: true });
-  await writeFile(join(folder, "src", "main.ts"), "export const answer = 42;\n");
+  await mkdir(join(folder, "test"));
+  await writeFile(
+    join(folder, "src", "main.ts"),
+    Array.from({ length: 160 }, (_, i) => `export const row${i} = ${i};`).join("\n"),
+  );
+  await writeFile(join(folder, "test", "main.ts"), "export const other = 99;\n");
   await writeFile(join(folder, "empty.txt"), "");
   await writeFile(join(folder, ".hidden.txt"), "hidden fixture");
   await writeFile(join(folder, "binary.bin"), Buffer.from([0, 1, 2]));
-  execFileSync("git", ["init", "-b", "main", folder]);
-  execFileSync("git", ["-C", folder, "add", "."]);
-  execFileSync("git", [
-    "-C",
-    folder,
-    "-c",
-    "user.name=Test",
-    "-c",
-    "user.email=test@example.com",
-    "commit",
-    "-m",
-    "fixture",
-  ]);
-  execFileSync("git", ["-C", folder, "worktree", "add", "-b", "worker", worktree]);
-  await writeFile(join(worktree, "src", "main.ts"), "export const answer = 99;\n");
+  await writeFile(join(folder, "large.txt"), Buffer.alloc(1024 * 1024 + 1, 65));
   try {
     application = await launch(directory, folder, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
-    await page.emulateMedia({ colorScheme: "light" });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => {
-      if (message.type() === "error") errors.push(message.text());
-    });
+    await page.emulateMedia({ colorScheme: "light" });
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.evaluate(() => window.desktop.connectDatabase("create"));
-    await page.evaluate(() => window.desktop.chooseFolder());
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+      await window.desktop.setPollingPaused(true);
+    });
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(1500, 900),
     );
-    await selectSidebarPage(page, "Files");
-    const files = page.locator("#panel-chat .files-page");
-    const fileSettings = files.getByRole("button", { name: "File Explorer settings", exact: true });
-    const settingsDialog = page.getByRole("dialog", {
-      name: "File Explorer settings",
-      exact: true,
-    });
-    const hiddenFile = files.getByRole("treeitem", { name: ".hidden.txt", exact: true });
-    await expect(files.getByRole("checkbox", { name: "Show hidden files" })).toHaveCount(0);
-    await expect(hiddenFile).toHaveCount(0);
-    await fileSettings.focus();
-    await fileSettings.press("Enter");
-    await expect(settingsDialog).toBeVisible();
-    const hiddenOption = settingsDialog.getByRole("checkbox", { name: "Show hidden files" });
-    await expect(hiddenOption).toBeFocused();
-    await hiddenOption.press("Tab");
-    await expect(settingsDialog.getByRole("button", { name: "Done", exact: true })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(
-      settingsDialog.getByRole("button", { name: "Close File Explorer settings" }),
-    ).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(hiddenOption).toBeFocused();
-    await hiddenOption.press("Space");
-    await page.keyboard.press("Escape");
-    await expect(settingsDialog).toHaveCount(0);
-    await expect(fileSettings).toBeFocused();
-    await expect(hiddenFile).toBeVisible();
-    await fileSettings.press("Enter");
-    await expect(hiddenOption).toBeChecked();
-    await hiddenOption.uncheck();
-    await settingsDialog.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(fileSettings).toBeFocused();
-    await expect(hiddenFile).toHaveCount(0);
-    const explorerDivider = files.getByRole("button", {
-      name: "Resize File Explorer",
-      exact: true,
-    });
-    await expect(explorerDivider).toHaveCSS("border-left-width", "1px");
-    const initialExplorer = (await files.boundingBox())?.width ?? 0;
-    await explorerDivider.focus();
-    await explorerDivider.press("ArrowLeft");
-    await expect(explorerDivider).toHaveCSS("outline-style", "solid");
-    await expect.poll(async () => (await files.boundingBox())?.width).toBe(initialExplorer + 20);
-    const src = files.getByRole("treeitem", { name: "src", exact: true });
-    await expect(src).toBeVisible();
-    await expect(files.getByRole("treeitem", { name: "main.ts", exact: true })).toHaveCount(0);
-    await src.click();
-    const file = files.getByRole("treeitem", { name: "main.ts", exact: true });
-    await expect(file).toBeVisible();
-    await file.focus();
-    await file.press("Enter");
-    const inspector = page.getByRole("complementary", { name: "File preview" });
-    await expect(inspector).toBeVisible();
-    await expect(inspector.locator(".view-lines")).toContainText("42");
-    await expect(inspector.getByRole("button", { name: "Reveal in Files" })).toHaveCount(0);
-    const previewBeforeExplorerResize = (await inspector.boundingBox())?.width;
-    const explorerGrip = await explorerDivider.boundingBox();
-    if (!explorerGrip) throw new Error("Missing Explorer divider");
-    await page.mouse.move(
-      explorerGrip.x + explorerGrip.width / 2,
-      explorerGrip.y + explorerGrip.height / 2,
+    const toggle = page.getByRole("button", { name: "Toggle files panel" });
+    const panel = page.getByRole("complementary", { name: "Files panel", exact: true });
+    const tabs = page.getByRole("tablist", { name: "File tabs" });
+    const open = page.getByRole("button", { name: "Open Files", exact: true });
+    const add = page.getByRole("button", { name: "New file tab" });
+    const files = panel.locator(".files-page");
+    const inspector = page.getByRole("complementary", { name: "File preview", exact: true });
+    const explorers = tabs.getByRole("tab", { name: "File Explorer", exact: true });
+    const fileContext = () =>
+      page.evaluate(async () => (await window.desktop.snapshot()).files?.context ?? null);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(panel).toHaveAttribute("data-minimized", "true");
+    await expect(panel).toHaveCSS("width", "48px");
+    await toggle.click();
+    await expect(open).toBeVisible();
+    await expectIconAction(toggle);
+    await expectIconAction(add);
+    await expectIconAction(page.getByRole("button", { name: "New chat", exact: true }));
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    expect(await fileContext()).toBeNull();
+    const empty = await panel.locator(".file-panel-empty").boundingBox();
+    const link = await open.boundingBox();
+    expect(
+      Math.abs((empty?.x ?? 0) + (empty?.width ?? 0) / 2 - (link?.x ?? 0) - (link?.width ?? 0) / 2),
+    ).toBeLessThan(2);
+    await add.click();
+    await expect(tabs.getByRole("tab", { name: "New tab", exact: true })).toBeFocused();
+    await page.keyboard.press("Delete");
+    await expect(add).toBeFocused();
+    await expect(open).toBeVisible();
+    await open.click();
+    await expect(explorers).toHaveCount(1);
+    const closeExplorer = tabs.getByRole("button", { name: "Close File Explorer", exact: true });
+    await page.mouse.move(1, 1);
+    const closeColor = await closeExplorer.evaluate((element) => getComputedStyle(element).color);
+    await explorers.hover();
+    await expect(closeExplorer).toHaveCSS("color", closeColor);
+    await expect(explorers.locator("svg")).toHaveCSS(
+      "color",
+      await explorers.evaluate((element) => getComputedStyle(element).color),
     );
-    await page.mouse.down();
-    await page.mouse.move(explorerGrip.x - 37, explorerGrip.y + explorerGrip.height / 2);
-    await page.mouse.up();
-    await expect
-      .poll(async () => (await files.boundingBox())?.width ?? 0)
-      .toBeGreaterThan(initialExplorer + 40);
-    await expect
-      .poll(async () => (await inspector.boundingBox())?.width)
-      .toBe(previewBeforeExplorerResize);
-    const layout = await page.evaluate(() => {
-      const box = (selector: string) => {
-        const rect = document.querySelector(selector)?.getBoundingClientRect();
-        if (!rect) throw new Error(`Missing ${selector}`);
-        return { left: rect.left, right: rect.right };
-      };
-      return [
-        box(".sidebar"),
-        box(".chat-conversations"),
-        box(".files-page"),
-        box(".file-inspector"),
-      ];
-    });
-    for (let index = 1; index < layout.length; index++)
-      expect(layout[index]?.left).toBeGreaterThanOrEqual(layout[index - 1]?.right ?? 0);
-    expect(layout[3]?.left).toBeCloseTo(layout[2]?.right ?? 0, 0);
-    const divider = inspector.getByRole("button", { name: "Resize file preview", exact: true });
-    await expect(divider).toHaveCSS("border-left-width", "1px");
+    await expectIconAction(closeExplorer);
+    await expect(files).toBeVisible();
+    await expect(files.getByLabel("File root")).toHaveValue(await realpath(folder));
+    await expect(panel).toHaveCSS("background-color", "rgb(243, 243, 243)");
+    const divider = panel.getByRole("button", { name: "Resize files panel", exact: true });
+    const chatWidth = (await page.locator(".chat-workspace-body").boundingBox())?.width ?? 0;
+    await expect.poll(async () => (await panel.boundingBox())?.width).toBe(chatWidth / 2);
+    const initialWidth = (await panel.boundingBox())?.width ?? 0;
+    await expect(divider).toHaveCSS("border-left-width", "0px");
+    await expect(toggle).toHaveAttribute("title", "Minimize files panel");
+    const lastTab = await tabs.locator(".file-tab").last().boundingBox();
+    const plus = await add.boundingBox();
+    const drawer = await toggle.boundingBox();
+    expect(
+      Math.abs((plus?.x ?? 0) - (lastTab?.x ?? 0) - (lastTab?.width ?? 0)),
+    ).toBeLessThanOrEqual(5);
+    expect(Math.abs((plus?.y ?? 0) - (drawer?.y ?? 0))).toBeLessThan(3);
+    expect(Math.abs(initialWidth - chatWidth / 2)).toBeLessThan(2);
     await divider.focus();
-    await expect(divider).toBeFocused();
-    const initialWidth = (await inspector.boundingBox())?.width ?? 0;
-    await divider.press("ArrowRight");
-    await expect(divider).toHaveCSS("outline-style", "solid");
-    await expect.poll(async () => (await inspector.boundingBox())?.width).toBe(initialWidth - 20);
+    await divider.press("ArrowLeft");
+    await expect.poll(async () => (await panel.boundingBox())?.width).toBe(initialWidth + 20);
     const grip = await divider.boundingBox();
-    if (!grip) throw new Error("Missing preview divider");
-    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    if (!grip) throw new Error("Missing panel divider");
+    await page.mouse.move(grip.x + 3, grip.y + 100);
     await page.mouse.down();
-    await page.mouse.move(grip.x - 38, grip.y + grip.height / 2);
+    await page.mouse.move(grip.x - 47, grip.y + 100);
     await page.mouse.up();
     await expect
-      .poll(async () => (await inspector.boundingBox())?.width ?? 0)
-      .toBeGreaterThan(initialWidth);
-    await page.emulateMedia({ forcedColors: "active" });
-    await explorerDivider.focus();
-    await explorerDivider.press("ArrowRight");
-    await explorerDivider.press("ArrowLeft");
-    await expect(explorerDivider).toHaveCSS("outline-style", "solid");
-    await expect(explorerDivider).toHaveCSS("border-left-width", "1px");
-    await fileSettings.click();
-    await expect(hiddenOption).toBeFocused();
+      .poll(async () => (await panel.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(initialWidth + 60);
+    const resizedWidth = (await panel.boundingBox())?.width;
+    const settings = files.getByRole("button", { name: "File Explorer settings", exact: true });
+    const dialog = page.getByRole("dialog", { name: "File Explorer settings", exact: true });
+    await expectIconAction(settings);
+    await settings.click();
+    await expectIconAction(dialog.getByRole("button", { name: "Close File Explorer settings" }));
+    await dialog.getByRole("checkbox", { name: "Show hidden files" }).check();
+    await expect(files.getByRole("treeitem", { name: ".hidden.txt", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(fileSettings).toBeFocused();
-    await divider.focus();
-    await expect(divider).toHaveCSS("border-left-width", "1px");
-    await expect(divider).toHaveCSS("outline-style", "solid");
-    await page.emulateMedia({ forcedColors: "none" });
+    await expect(settings).toBeFocused();
+    const src = files.getByRole("treeitem", { name: "src", exact: true });
+    await src.focus();
+    await src.press("ArrowRight");
+    const main = files.getByRole("treeitem", { name: "main.ts", exact: true });
+    await expect(main).toBeVisible();
+    await main.focus();
+    await main.press("Enter");
+    const mainTab = tabs.getByRole("tab", { name: "main.ts", exact: true });
+    await expect(mainTab).toHaveAttribute("aria-selected", "true");
+    await expect(files).toHaveCount(0);
+    await expect(inspector.locator(".view-lines")).toContainText("row0");
     await expect(inspector.locator("textarea")).toHaveAttribute("readonly", "true");
-    await expect(files).toHaveCSS("border-top-width", "0px");
-    await expect(inspector).toHaveCSS("border-top-width", "0px");
-    await expect(files.getByRole("heading", { name: "File Explorer", exact: true })).toHaveCSS(
-      "font-family",
-      /D-DIN/,
-    );
+    await inspector.getByRole("textbox", { name: "Read-only file content", exact: true }).focus();
+    await page.keyboard.press("ControlOrMeta+f");
+    const findClose = inspector.locator(".find-widget .codicon-widget-close");
+    await expect(findClose).toBeVisible();
+    const pointerCorner = await page.evaluate(() => ({ x: innerWidth - 2, y: innerHeight - 2 }));
+    for (const control of [findClose, inspector.locator(".find-widget .codicon-case-sensitive")]) {
+      await expect(control).toHaveCSS("border-top-width", "0px");
+      await page.mouse.move(pointerCorner.x, pointerCorner.y);
+      await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
+      const before = await control.evaluate(
+        (element) => getComputedStyle(element, "::before").color,
+      );
+      await control.hover();
+      await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(async () => {
+        await page.mouse.move(pointerCorner.x, pointerCorner.y);
+        await control.hover();
+        await expect
+          .poll(() => control.evaluate((element) => getComputedStyle(element, "::before").color), {
+            timeout: 500,
+          })
+          .not.toBe(before);
+      }).toPass({ timeout: 5_000 });
+      const highlighted = await iconHighlight(control);
+      await page.mouse.move(pointerCorner.x, pointerCorner.y);
+      await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
+      await control.focus();
+      await expect(control).toBeFocused();
+      expect(await control.evaluate((element) => getComputedStyle(element, "::before").color)).toBe(
+        highlighted,
+      );
+      await expect(control).toHaveCSS("outline-style", "none");
+      await expect(control).toHaveCSS("border-top-width", "0px");
+      await expect(control).toHaveCSS("box-shadow", "none");
+    }
+    await findClose.click();
+    await inspector.getByRole("textbox", { name: "Read-only file content", exact: true }).focus();
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(inspector.locator(".selected-text")).toHaveCount(1);
+    await explorers.first().click();
+    await main.click();
+    await expect(inspector.locator(".selected-text")).toHaveCount(1);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(255, 255, 255)",
+      "rgb(243, 243, 243)",
     );
-    await expect(file).toHaveCSS("background-color", "rgb(237, 237, 237)");
-    await file.hover();
-    await expect(file).toHaveCSS("background-color", "rgb(237, 237, 237)");
-    await src.hover();
-    await expect(src).toHaveCSS("background-color", "rgb(226, 243, 241)");
-    await page.screenshot({ path: "test-results/files-preview-light.png" });
+    await inspector.locator(".view-lines").hover();
+    await page.mouse.wheel(0, 900);
+    await expect(inspector.locator(".view-line").first()).not.toContainText("row0 ");
+    const firstLine = await inspector.locator(".view-line").first().textContent();
+    await explorers.first().click();
+    await expect(main).toHaveAttribute("aria-selected", "true");
+    await main.click();
+    await expect(mainTab).toHaveCount(1);
+    await expect(inspector.locator(".view-line").first()).toHaveText(firstLine ?? "");
+    await add.click();
+    await expect(open).toBeVisible();
+    await expect.poll(fileContext).toBeNull();
+    await open.click();
+    await expect(explorers).toHaveCount(2);
+    await expect(main).toBeVisible();
+    await expect(files.getByRole("treeitem", { name: ".hidden.txt", exact: true })).toBeVisible();
+    const secondExplorerId = await explorers.last().getAttribute("id");
+    await explorers.last().press("Alt+ArrowLeft");
+    await expect(explorers.last()).toBeFocused();
+    await expect(tabs.getByRole("tab")).toHaveText(["File Explorer", "File Explorer", "main.ts"]);
+    // Electron's native drag loop races macOS cursor events under automation.
+    // Send the browser drag lifecycle with a real DataTransfer deterministically.
+    const transfer = await page.evaluateHandle(() => new DataTransfer());
+    try {
+      await mainTab.locator("..").dispatchEvent("dragstart", { dataTransfer: transfer });
+      await explorers.first().locator("..").dispatchEvent("dragover", { dataTransfer: transfer });
+      await explorers.first().locator("..").dispatchEvent("drop", { dataTransfer: transfer });
+      await mainTab.locator("..").dispatchEvent("dragend", { dataTransfer: transfer });
+    } finally {
+      await transfer.dispose();
+    }
+    await expect(tabs.getByRole("tab")).toHaveText(["main.ts", "File Explorer", "File Explorer"]);
+    await mainTab.focus();
+    await mainTab.press("End");
+    await expect(tabs.getByRole("tab").last()).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Home");
+    await expect(mainTab).toBeFocused();
+    await mainTab.press("ArrowRight");
+    await expect(explorers.first()).toBeFocused();
+    await explorers.first().press("Delete");
+    await expect(explorers).toHaveCount(1);
+    await expect(explorers).toHaveAttribute("id", secondExplorerId ?? "");
+    await expect(explorers).toBeFocused();
+    await files.getByRole("treeitem", { name: "test", exact: true }).click();
+    await expect(files.getByRole("treeitem", { name: "main.ts", exact: true })).toHaveCount(2);
+    await files.getByRole("treeitem", { name: "main.ts", exact: true }).last().click();
+    await expect(tabs.getByRole("tab", { name: "src/main.ts", exact: true })).toBeVisible();
+    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(inspector.locator(".view-lines")).toContainText("other = 99");
+    await toggle.click();
+    await expect(panel).toHaveAttribute("data-minimized", "true");
+    await expect(panel).toHaveCSS("width", "48px");
+    await expect.poll(fileContext).toBeNull();
+    await toggle.click();
+    await expect(panel).toHaveCSS("width", `${resizedWidth}px`);
+    await expect(panel).toHaveCSS("transition-property", "width");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(panel).toHaveCSS("transition-duration", "0s");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect(inspector.locator(".view-lines")).toContainText("other = 99");
     await selectSidebarPage(page, "Settings");
-    await expect(inspector).toHaveCount(0);
-    await selectSidebarPage(page, "Chat");
-    await expect(inspector.locator(".view-lines")).toContainText("42");
-    await writeFile(join(folder, "src", "main.ts"), "export const answer = 43;\n");
-    await page.evaluate(() => window.desktop.poll(["files"]));
-    await expect(inspector.locator(".view-lines")).toContainText("43");
-    await selectSidebarPage(page, "Files");
-    await src.click();
-    await expect(file).toHaveCount(0);
-    await selectSidebarPage(page, "Chat");
-    await src.click();
-    await expect(files).toBeVisible();
-    await expect(file).toBeVisible();
-    await expect(file).toHaveAttribute("aria-selected", "true");
-    const options = await files
-      .getByLabel("File root")
-      .locator("option")
-      .evaluateAll((elements) => elements.map((element) => (element as HTMLOptionElement).value));
-    expect(options).toEqual([await realpath(folder)]);
-    await expect(files.getByLabel("File root")).toHaveValue(await realpath(folder));
-    await expect(inspector.locator(".view-lines")).toContainText("43");
-    await selectSidebarPage(page, "Settings");
+    await expect(panel).toBeHidden();
+    await expect.poll(fileContext).toBeNull();
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
-    await selectSidebarPage(page, "Files");
+    await selectSidebarPage(page, "Chat");
+    await expect(panel).toHaveCSS("background-color", "rgb(44, 53, 63)");
+    await expectIconAction(toggle);
+    await expectIconAction(add);
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(36, 43, 51)",
+      "rgb(44, 53, 63)",
     );
-    await expect(file).toHaveCSS("background-color", "rgb(50, 60, 70)");
-    await page.screenshot({ path: "test-results/files-preview-dark.png" });
+    await page.screenshot({ path: "test-results/file-panel-dark.png" });
     await selectSidebarPage(page, "Settings");
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
-    await selectSidebarPage(page, "Files");
-    await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
-      "background-color",
-      "rgb(255, 255, 255)",
-    );
+    await selectSidebarPage(page, "Chat");
+    await expect(panel).toHaveCSS("background-color", "rgb(243, 243, 243)");
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(36, 43, 51)",
+      "rgb(44, 53, 63)",
     );
+    await expectIconAction(toggle);
+    await page.emulateMedia({ colorScheme: "light" });
+    await expectIconAction(toggle);
+    await page.screenshot({ path: "test-results/file-panel-light.png" });
+    // Explicit file switches update the existing reader even while automatic polling is paused.
+    await writeFile(join(folder, "test", "main.ts"), "export const updated = 100;\n");
+    await page.evaluate(() => window.desktop.poll(["files"]));
+    await expect(inspector.locator(".view-lines")).toContainText("updated = 100");
+    await rm(join(folder, "test", "main.ts"), { recursive: true, force: true });
+    await page.evaluate(() => window.desktop.poll(["files"]));
+    await expect(inspector.getByRole("alert")).toContainText("ENOENT");
+    await writeFile(join(folder, "test", "main.ts"), "export const updated = 100;\n");
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.getByRole("button", { name: "Chat 1", exact: true }).click();
+    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // Overflow scrolls only the tab strip; the new-tab action stays reachable.
+    for (let i = 0; i < 8; i++) await add.click();
+    const overflow = await tabs.evaluate((element) => element.scrollWidth > element.clientWidth);
+    expect(overflow).toBe(true);
+    await expect(add).toBeInViewport();
+    for (let i = 0; i < 8; i++)
+      await tabs.getByRole("button", { name: "Close New tab", exact: true }).last().click();
+
+    await selectSidebarPage(page, "Files");
+    for (const [name, error] of [
+      ["binary.bin", "binary"],
+      ["large.txt", "1 MiB"],
+    ] as const) {
+      await files.getByRole("treeitem", { name, exact: true }).click();
+      await expect(inspector.getByRole("alert")).toContainText(error);
+      await tabs.getByRole("button", { name: `Close ${name}`, exact: true }).click();
+      await explorers.click();
+    }
+    await files.getByRole("treeitem", { name: "empty.txt", exact: true }).click();
+    await expect(inspector.locator(".monaco-editor")).toBeVisible();
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
     );
-    await expect(inspector).toBeVisible();
     await page.evaluate(() => {
       for (const role of ["button", "human", "agent", "text"])
         document.documentElement.style.setProperty(`--${role}-size`, "32px");
     });
-    const stacked = await page.evaluate(() => {
-      const chat = document.querySelector(".chat-conversations")?.getBoundingClientRect();
-      const files = document.querySelector(".chat-files")?.getBoundingClientRect();
-      const composer = document
-        .querySelector(".orchestration-chat-page:not([hidden]) .composer")
-        ?.getBoundingClientRect();
-      const provider = document
-        .querySelector(".orchestration-chat-page:not([hidden]) .chat-provider")
-        ?.getBoundingClientRect();
-      return {
-        chatBottom: chat?.bottom,
-        filesTop: files?.top,
-        composerBottom: composer?.bottom,
-        providerTop: provider?.top,
-        providerBottom: provider?.bottom,
-      };
-    });
-    expect(stacked.chatBottom).toBeLessThanOrEqual(stacked.filesTop ?? 0);
-    expect(stacked.composerBottom).toBeLessThanOrEqual(stacked.providerTop ?? 0);
-    expect(stacked.providerBottom).toBeLessThanOrEqual(stacked.filesTop ?? 0);
-    await inspector.scrollIntoViewIfNeeded();
-    await expect(inspector.getByRole("button", { name: "Close file preview" })).toBeVisible();
-    await expect(files.getByLabel("File root")).toBeVisible();
-    await expect(divider).toBeVisible();
-    await expect(explorerDivider).toBeVisible();
-    await fileSettings.click();
-    await expect(settingsDialog).toBeVisible();
-    await expect(hiddenOption).toBeVisible();
-    await page.screenshot({ path: "test-results/files-settings-narrow.png" });
-    await page.keyboard.press("Escape");
-    await expect(fileSettings).toBeFocused();
-    await expect(inspector.locator(".view-lines")).toBeVisible();
-    await page.screenshot({ path: "test-results/files-preview-narrow.png" });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    const layout = await page.evaluate(() => ({
+      chat: document.querySelector(".chat-conversations")?.getBoundingClientRect().bottom,
+      panel: document.querySelector(".file-panel")?.getBoundingClientRect().top,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    }));
+    expect(layout.chat).toBeLessThanOrEqual(layout.panel ?? 0);
+    expect(layout.overflow).toBe(false);
+    await expect(divider).toBeHidden();
+    await expect(add).toBeVisible();
+    await page.screenshot({ path: "test-results/file-panel-narrow.png" });
     await page.evaluate(() => {
       for (const role of ["button", "human", "agent", "text"])
         document.documentElement.style.removeProperty(`--${role}-size`);
     });
-    await inspector.getByRole("button", { name: "Close file preview" }).click();
-    await files.getByRole("treeitem", { name: "binary.bin", exact: true }).click();
-    await expect(inspector.getByRole("alert")).toContainText("binary");
-    await inspector.getByRole("button", { name: "Close file preview" }).click();
-    await files.getByRole("treeitem", { name: "empty.txt", exact: true }).click();
-    await expect(inspector.locator(".monaco-editor")).toBeVisible();
     await page.evaluate(() => window.desktop.stopAll());
     const plain = join(directory, "plain");
     await mkdir(plain);
     await writeFile(join(plain, "note.txt"), "plain folder");
+    await selectSidebarPage(page, "Files");
+    await settings.click();
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, plain);
-    await fileSettings.click();
     await page.evaluate(() => window.desktop.chooseFolder());
-    await expect(settingsDialog).toHaveCount(0);
-    await expect(inspector).toHaveCount(0);
-    await expect(files.getByRole("treeitem", { name: "note.txt", exact: true })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    await expect(open).toBeVisible();
+    await open.click();
     await files.getByRole("treeitem", { name: "note.txt", exact: true }).click();
     await expect(inspector.locator(".view-lines")).toContainText("plain folder");
-    await page.evaluate((project) => window.desktop.openProject(project), options[0] as string);
-    await expect(inspector).toHaveCount(0);
-    await expect(files.getByRole("treeitem", { name: "src", exact: true })).toBeVisible();
+    await page.evaluate((project) => window.desktop.openProject(project), await realpath(folder));
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    await expect(open).toBeVisible();
+    await page.reload();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(errors).toEqual([]);
   } finally {
     await application?.close().catch(() => {});

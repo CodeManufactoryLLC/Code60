@@ -1181,10 +1181,6 @@ button.project-card {
   touch-action: none;
   cursor: grab;
 }
-.chat-drag-handle:hover {
-  background: var(--control-hover);
-  color: var(--text);
-}
 .chat-drag-handle:active {
   cursor: grabbing;
 }
@@ -3578,26 +3574,139 @@ dialog::backdrop {
   }
 }
 
-/* Chat owns the project-root explorer and its read-only preview. */
+/* Chat's single file workspace shares the navigation fill. */
 #panel-chat {
-  flex-direction: row;
+  flex-direction: column;
 }
-.chat-conversations {
+.chat-workspace-body {
+  display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
-.chat-files {
+.chat-conversations {
+  flex: 1;
+  min-width: 300px;
+  min-height: 0;
+  overflow: hidden;
+}
+.file-panel {
+  --control-fill: var(--chat-neutral);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: clamp(300px, var(--file-panel-width, 50%), calc(100% - 300px));
+  min-width: 0;
+  overflow: hidden;
+  transition: width 200ms ease;
+  min-height: 0;
+  padding-left: 6px;
+  background: var(--chat-neutral);
+}
+.file-panel[data-minimized="true"] {
+  width: 48px;
+  padding-left: 0;
+}
+.file-panel[data-resizing="true"] {
+  transition: none;
+}
+.file-panel[data-minimized="true"]
+  :is(.file-tab-actions, .file-panel-content, .file-column-resize) {
+  display: none;
+}
+.file-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.file-tab-actions > .icon-button {
+  flex-shrink: 0;
+}
+.file-panel-toggle {
+  margin-left: auto;
+}
+.file-panel-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.file-tabs {
   display: flex;
   flex: 0 1 auto;
-  min-width: 180px;
-  min-height: 0;
-  max-width: calc(100% - 260px);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.chat-files > :where(.files-page) {
-  flex: 0 1 auto;
-  min-width: 160px;
+.file-tab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 260px;
+  border-right: 1px solid var(--border);
+}
+.file-tab > :where([role="tab"]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-transform: none;
+}
+.file-tab > :where([role="tab"]) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-tab[data-selected="true"] {
+  background: var(--accent-bg);
+}
+.file-tab[data-selected="true"] > [role="tab"] {
+  color: var(--text);
+}
+.file-tab > .file-tab-close {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+}
+.file-panel-toolbar > .icon-button {
+  flex-shrink: 0;
+}
+.file-panel-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.file-panel-empty {
+  display: grid;
+  place-items: center;
+  flex: 1;
+}
+button.file-open-link {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+.file-panel :is(button, select):focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.file-panel button:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--hover-bg);
 }
 .chat-unread {
   display: inline-flex;
@@ -3665,9 +3774,6 @@ dialog::backdrop {
   box-shadow: none;
   color: var(--muted);
 }
-:is(.transcript .event) .message-copy button:hover {
-  color: var(--text);
-}
 .turn-timer {
   margin: 8px 0;
   color: var(--muted);
@@ -3697,11 +3803,11 @@ dialog::backdrop {
   outline-offset: -2px;
 }
 @media (max-width: 1200px) {
-  #panel-chat:has(> .chat-files) {
+  .chat-workspace-body {
     flex-direction: column;
     overflow-y: auto;
   }
-  #panel-chat:has(> .chat-files) > .chat-conversations {
+  .chat-workspace-body:has(> .file-panel[data-minimized="false"]) > .chat-conversations {
     flex: 1 0
       max(
         300px,
@@ -3712,15 +3818,25 @@ dialog::backdrop {
         )
       );
   }
-  #panel-chat > .chat-files {
-    flex: 1 0 max(300px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
+  .chat-workspace-body > .file-panel {
+    transition: flex-basis 200ms ease;
+    flex: 1 0 max(340px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
+    width: 100%;
+    min-width: 0;
     max-width: 100%;
+    padding-left: 0;
   }
-  .chat-files > :where(.files-page) {
-    flex-grow: 1;
+  .chat-workspace-body > .file-panel[data-minimized="true"] {
+    flex-basis: 44px;
+    flex-grow: 0;
+  }
+  .file-panel > .file-column-resize {
+    display: none;
   }
 }
 .files-page {
+  flex: 1;
+  min-width: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3821,14 +3937,14 @@ dialog::backdrop {
 .file-inspector {
   position: relative;
   display: flex;
-  flex-shrink: 1;
   flex-direction: column;
   min-height: 0;
-  min-width: min(300px, 50%);
-  max-width: calc(100% - 160px);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
   border: 0;
-  border-radius: 5px;
-  background: var(--surface);
+  border-radius: 0;
+  background: var(--chat-neutral);
   overflow: hidden;
 }
 .file-inspector-context {
@@ -3865,7 +3981,8 @@ dialog::backdrop {
   width: 6px;
   min-width: 0;
   padding: 0;
-  border: 1px solid var(--control-border);
+  border: 0;
+  box-shadow: none;
   border-radius: 0;
   background: var(--chat-neutral);
   z-index: 2;
@@ -3878,12 +3995,78 @@ dialog::backdrop {
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
-@media (forced-colors: active) {
-  .file-column-resize {
-    border-color: ButtonText;
+@media (prefers-reduced-motion: reduce) {
+  .chat-workspace-body > .file-panel {
+    transition: none;
   }
 }
 
 .sidebar button:hover:not(:disabled) {
   background: var(--hover-bg);
+}
+
+/* Independent icon actions highlight the glyph for hover, press and focus.
+   Decorative icons inherit the enclosing control's state. */
+:root :is(button.icon-button, .gdg-search-bar-inner button),
+:root
+  :is(button.icon-button, .gdg-search-bar-inner button):is(
+    :hover,
+    :active,
+    :focus,
+    :disabled,
+    [aria-disabled="true"],
+    [aria-pressed="true"]
+  ) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+:root
+  :is(button.icon-button, .gdg-search-bar-inner button):is(
+    :hover,
+    :active,
+    :focus,
+    [aria-pressed="true"]
+  ):not(:disabled, [aria-disabled="true"]) {
+  color: var(--accent);
+}
+@media (forced-colors: active) {
+  :root
+    :is(button.icon-button, .gdg-search-bar-inner button):is(
+      :hover,
+      :active,
+      :focus,
+      [aria-pressed="true"]
+    ):not(:disabled, [aria-disabled="true"]) {
+    color: Highlight;
+  }
+}
+
+/* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */
+:root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle),
+:root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle):focus {
+  border: 0;
+  box-shadow: none;
+  outline: 0;
+}
+:root
+  .monaco-editor
+  .find-widget
+  :is(.button, .monaco-custom-toggle):is(:hover, :focus):not(
+    .disabled,
+    [aria-disabled="true"]
+  )::before {
+  color: var(--accent);
+}
+@media (forced-colors: active) {
+  :root
+    .monaco-editor
+    .find-widget
+    :is(.button, .monaco-custom-toggle):is(:hover, :focus):not(
+      .disabled,
+      [aria-disabled="true"]
+    )::before {
+    color: Highlight;
+  }
 }

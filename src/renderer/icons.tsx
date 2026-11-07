@@ -2,6 +2,24 @@ import type { SVGProps } from "react";
 
 /** IBM Carbon 16px icon exports (Apache-2.0; see icons/carbon/LICENSE). Paths are unmodified. */
 export const carbonIcons = {
+  "side-panel--open": {
+    size: 32,
+    paths: [
+      {
+        d: "M28,4H4C2.9,4,2,4.9,2,6v20c0,1.1,0.9,2,2,2h24c1.1,0,2-0.9,2-2V6C30,4.9,29.1,4,28,4z M10,26H4V6h6V26z M28,26H12v-9h10.2l-3.6,3.6L20,22l6-6l-6-6l-1.4,1.4l3.6,3.6H12V6h16V26z",
+        transform: "translate(32 0) scale(-1 1)",
+      },
+    ],
+  },
+  "side-panel--close": {
+    size: 32,
+    paths: [
+      {
+        d: "M28,4H4C2.9,4,2,4.9,2,6v20c0,1.1,0.9,2,2,2h24c1.1,0,2-0.9,2-2V6C30,4.9,29.1,4,28,4z M10,26H4V6h6V26z M28,15H17.8l3.6-3.6L20,10l-6,6l6,6l1.4-1.4L17.8,17H28v9H12V6h16V15z",
+        transform: "translate(32 0) scale(-1 1)",
+      },
+    ],
+  },
   folder: {
     size: 32,
     paths: [

@@ -141,8 +141,6 @@ export function ChatPage({
   active,
   onDatabase,
   runs,
-  explorerOpen,
-  onExplorer,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
@@ -152,8 +150,6 @@ export function ChatPage({
   active: boolean;
   onDatabase(): void;
   runs: readonly DesktopRun[];
-  explorerOpen: boolean;
-  onExplorer(): void;
 }) {
   const id = useId();
   const run = chat?.run;
@@ -282,9 +278,6 @@ export function ChatPage({
   return (
     <main className="orchestration-chat-page" aria-labelledby={id} hidden={hidden}>
       <header className="orchestration-chat-heading">
-        <button type="button" aria-pressed={explorerOpen} onClick={onExplorer}>
-          <Icon name="folder" /> File Explorer
-        </button>
         <h1 id={id} className="sr-only">
           Chat
         </h1>
