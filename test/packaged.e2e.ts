@@ -136,7 +136,9 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
         id,
       );
     await expect.poll(status).toBe("idle");
-    await expect(page.locator(".chat-head").first()).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      page.locator('.chat-sidebar-entry[data-role="worker"]').first(),
+    ).not.toHaveAttribute("aria-current", "true");
     await page.evaluate((id) => window.desktop.action({ type: "finish", id }), id);
     await expect.poll(status).toBe("finished");
     const cancelledIds = await page.evaluate(() =>

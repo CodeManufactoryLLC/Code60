@@ -440,7 +440,6 @@ input[type="checkbox"][role="switch"]:checked::after {
     [role="menuitem"],
     [role="option"],
     .project-item,
-    .chat-header button,
     .modal-heading button,
     .page-tab [role="tab"],
     .button-group > button,
@@ -1035,7 +1034,7 @@ button.project-card {
   margin-right: 8px;
 }
 
-/* Chat footer and dock */
+/* Application footer */
 /* The application footer spans the window, below both navigation and content. */
 .app-footer {
   position: relative;
@@ -1066,282 +1065,11 @@ button.project-card {
   border-top: 1px solid var(--control-border);
   pointer-events: none;
 }
-.chat-dock-region {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  height: var(--app-footer-height);
-  align-self: flex-end;
-}
-
-.chat-heads {
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  width: max-content;
-  min-width: 100%;
-  height: 100%;
-  gap: 6px;
-}
-.chat-dock-anchor {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  height: var(--app-footer-height);
-  align-self: flex-end;
-  container-type: inline-size;
-}
-.chat-dock {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(100dvh - 8px);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  pointer-events: none;
-  z-index: 10;
-}
-.dock-scroll-controls {
-  position: absolute;
-  bottom: calc(var(--app-footer-height) + 4px);
-  left: 0;
-  z-index: 11;
-  display: flex;
-  gap: 4px;
-}
-.dock-scroll-controls button {
-  width: 36px;
-  padding: 0;
-}
-.chat-slot {
-  position: relative;
-  flex: none;
-  height: var(--app-footer-height);
-  width: min(max(220px, calc(14 * var(--text-size, 13px))), 100cqw);
-  pointer-events: auto;
-}
-.chat-slot.open {
-  width: min(400px, 100cqw);
-  /* The popup clips its reveal animation; its wrapper carries the outside shadow. */
-  filter: drop-shadow(0 3px 14px rgb(0 0 0 / 18%));
-}
-.chat-slot::before,
-.chat-slot::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  z-index: 3;
-  background: var(--control-border);
-  pointer-events: none;
-}
-.chat-slot::before {
-  left: 0;
-}
-.chat-slot::after {
-  right: 0;
-}
-.chat-slot[data-drop]::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent);
-  pointer-events: none;
-}
-.chat-slot[data-drop="before"]::after {
-  left: -4px;
-  right: auto;
-}
-.chat-slot[data-drop="after"]::after {
-  right: -4px;
-  left: auto;
-}
-.chat-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  width: 100%;
-  height: 100%;
-  font: 400 var(--text-size, 13px) var(--font);
-  --letter-spacing: normal;
-  text-transform: none;
-  text-align: left;
-  padding: 3px 10px 3px 32px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-  cursor: pointer;
-}
-.chat-head[aria-pressed="false"] {
-  padding-right: 46px;
-}
-.chat-head-summary {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.1;
-}
-.chat-head-summary > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chat-head-status {
-  display: flex;
-  gap: 4px;
-}
-.chat-head-status > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chat-approval-count {
-  flex-shrink: 0;
-}
-.chat-drag-handle {
-  position: absolute;
-  z-index: 2;
-  left: 1px;
-  bottom: 0;
-  width: 28px;
-  height: 100%;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  touch-action: none;
-  cursor: grab;
-}
-.chat-drag-handle:active {
-  cursor: grabbing;
-}
-:where(:root[data-focus-highlight="on"]) .chat-drag-handle:focus-visible {
-  outline-offset: -3px;
-  box-shadow: inset 0 0 0 5px var(--focus-band);
-}
-.chat-head[aria-pressed="true"] {
-  background: var(--accent-bg);
-  color: var(--text);
-  border-color: transparent;
-}
-.chat-slot[data-dragging="true"] > .chat-head {
-  opacity: 0.6;
-}
-.chat-head-close {
-  position: absolute;
-  right: 4px;
-  bottom: calc((var(--app-footer-height) - 36px) / 2);
-  z-index: 1;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-}
 .footer-note {
   font: 11px var(--font);
   --letter-spacing: normal;
   color: var(--warning-text);
   white-space: nowrap;
-}
-
-/* Floating chat */
-.chat-popup {
-  -webkit-app-region: no-drag;
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  /* Stay inside the page frame, 8px clear of its top border. */
-  height: min(
-    max(480px, calc(12 * var(--button-size, 13px))),
-    calc(
-      100dvh -
-      var(--app-footer-height) -
-      var(--app-titlebar-height) -
-      var(--page-margin) -
-      1px -
-      8px
-    )
-  );
-  display: flex;
-  flex-direction: column;
-  background: var(--chat-bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--overlay-shadow);
-  border-bottom: 0;
-  z-index: 10;
-  width: min(400px, 100cqw);
-  opacity: 1;
-  clip-path: inset(0);
-  transition:
-    opacity var(--motion) ease-out,
-    clip-path var(--motion) ease-out,
-    display var(--motion) allow-discrete;
-}
-.chat-popup[data-full-screen="true"] {
-  position: fixed;
-  margin: 0;
-  max-width: none;
-  max-height: none;
-  padding: 0;
-  bottom: auto;
-  right: auto;
-  border-bottom: 1px solid transparent;
-  clip-path: none;
-  transition: none;
-  /* Electron applies drag regions by layout, not stacking, so the overlay must opt out of the toolbar's. */
-  -webkit-app-region: no-drag;
-}
-.chat-popup[hidden] {
-  display: none;
-  opacity: 0;
-  clip-path: inset(100% 0 0);
-}
-@starting-style {
-  .chat-popup:not([hidden]) {
-    opacity: 0;
-    clip-path: inset(100% 0 0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-popup {
-    transition: none;
-  }
-}
-.chat-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
-  padding-right: 12px;
-  border-bottom: 1px solid var(--surface-edge);
-  background: var(--surface-band);
-  flex-shrink: 0;
-}
-.chat-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  justify-content: space-between;
-}
-.chat-title h2 {
-  font: 400 13px var(--font);
-  --letter-spacing: normal;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.chat-window-actions {
-  flex-shrink: 0;
 }
 
 /* Status label, matching the grid's canvas drawing for chat titles and palette hints. */
@@ -1516,7 +1244,7 @@ button.project-card {
   font-size: var(--text-size, 11px);
   color: var(--muted);
 }
-.chat-popup .composer-inactive {
+.worker-chat-page .composer-inactive {
   display: grid;
   min-height: 142px;
   place-items: center;
@@ -1621,23 +1349,6 @@ button.project-card {
 }
 .approvals .approval pre {
   margin-top: 6px;
-}
-
-/* Chat popup overrides follow the base transcript, banner, and approval rules. */
-.chat-title .status-label {
-  margin-right: auto;
-}
-.chat-popup .transcript {
-  padding: 16px;
-}
-.chat-popup .approvals,
-.chat-popup .turn-note {
-  padding-inline: 12px;
-}
-.chat-popup .error-banner,
-.chat-popup .warning-banner {
-  flex-shrink: 0;
-  margin: 8px 12px 0;
 }
 
 /* Dialogs: a 48px title bar and footer stay in place while the body scrolls. */
@@ -3223,6 +2934,8 @@ dialog::backdrop {
   overflow-y: auto;
 }
 .chat-sidebar-entry {
+  flex: 1;
+  min-width: 0;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -3829,21 +3542,14 @@ button.file-open-link {
 .chat-turn-content {
   display: contents;
 }
-.chat-head[data-emphasis="abnormal"] {
-  box-shadow: inset 3px 0 var(--danger);
-}
-.chat-head[data-emphasis="decision"] {
-  background: var(--warning-bg);
-}
-.chat-popup .approvals {
+.worker-chat-page .approvals {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 45%;
   overflow: auto;
 }
 .sidebar :is(button, [role="tab"]):focus-visible,
-.message-copy button:focus-visible,
-.chat-head:focus-visible {
+.message-copy button:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
@@ -4235,4 +3941,59 @@ button.file-open-link {
   text-transform: var(--title-case, none);
   white-space: normal;
   padding-block: 10px;
+}
+/* Workers use the normal conversation workspace, never a floating surface. */
+.worker-chat-heading {
+  justify-content: flex-start;
+  flex-shrink: 0;
+}
+.worker-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto 0 0;
+  font-size: var(--title-size, 18px);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.worker-chat-page > :is(.error-banner, .warning-banner) {
+  flex-shrink: 0;
+}
+.worker-chat-page .approvals {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+  overflow: auto;
+  padding-inline: 0;
+}
+.chat-sidebar-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+#chat-pages .chat-sidebar-entry > .chat-sidebar-label {
+  flex: 1;
+  min-width: 0;
+}
+.chat-sidebar-entry > .icon,
+.chat-unread,
+.chat-workers-toggle {
+  flex-shrink: 0;
+}
+.chat-workers-toggle {
+  width: 24px;
+  min-height: 28px;
+  padding: 4px;
+}
+.chat-worker-children {
+  padding-left: 16px;
+}
+.chat-worker-children[hidden] {
+  display: none;
+}
+.chat-sidebar-group,
+.chat-worker-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

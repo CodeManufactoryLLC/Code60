@@ -223,7 +223,7 @@ async function expectChatBorder(composer: Locator, color = "var(--focus-line)") 
 async function expectIndustrialSurfaces(page: Page) {
   const surfaces = await page
     .locator(
-      "button, input, select, textarea, .setup-dialog, .composer, .event.toolCall, .approval, .chat-popup, .actions-menu",
+      "button, input, select, textarea, .setup-dialog, .composer, .event.toolCall, .approval, .worker-chat-page, .actions-menu",
     )
     .evaluateAll((elements) =>
       elements
@@ -261,7 +261,7 @@ async function expectIndustrialSurfaces(page: Page) {
             ),
             corner: style.getPropertyValue("corner-top-right-shape"),
             shadow: style.boxShadow,
-            overlay: element.matches(".setup-dialog, .chat-popup, .actions-menu"),
+            overlay: element.matches(".setup-dialog, .worker-chat-page, .actions-menu"),
             baseline: element.matches(
               "input:not([type=checkbox], [type=radio]), select, textarea, .composer",
             ),
@@ -897,7 +897,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     const firstId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
     if (!firstId) throw new Error("Missing initial conversation");
     const first = page.getByRole("button", { name: "Chat 1", exact: true });
-    await expect(first.locator("svg")).toHaveCount(0);
+    await expect(first.locator(":scope > svg")).toHaveCount(1);
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(chat.locator(".chat-progress")).toHaveText("Ready");
     const second = page.getByRole("button", { name: "Chat 2", exact: true });
@@ -951,7 +951,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     await expect(first.locator(".chat-unread")).toHaveText("1");
     await selectSidebarPage(page, "Chat");
     await expect(first.locator(".chat-unread")).toHaveCount(0);
-    await expect(first.locator("svg")).toHaveCount(0);
+    await expect(first.locator(":scope > svg")).toHaveCount(1);
     await page.reload();
     await expect(first.locator(".chat-unread")).toHaveCount(0);
     const markers = await page.evaluate(() =>
@@ -1009,7 +1009,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(chat.locator(".event.message pre")).toHaveText(source);
     await expect(chat.locator(".turn-timer")).toContainText("Working for");
     await expect(age).toHaveText(/Last message \d+s ago/);
-    await expect(age).toHaveAttribute("aria-label", /selected orchestration conversation/);
+    await expect(age).toHaveAttribute("aria-label", /selected conversation/);
     await expect(page.getByRole("button", { name: "Start polling", exact: true })).toBeVisible();
     await composer.fill("untouched draft");
     await page.evaluate(() => {
@@ -1124,22 +1124,24 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       }),
     );
     if (!id) throw new Error("Missing fixture run");
-    const head = page.locator(`[data-chat-id="${id}"] > .chat-head`);
+    const head = page.locator(`#conversation-${id}`);
     await expect(head).toContainText("Approval needed");
-    await expect(head).toHaveAttribute("aria-pressed", "false");
+    await expect(head).not.toHaveAttribute("aria-current", "true");
     await expect(page.locator(".chat-popup:visible")).toHaveCount(0);
     // A manual session must not become delegated activity for the orchestrator.
     await expect(chat.locator(".chat-loader")).toHaveCount(0);
+    await selectSidebarPage(page, "Chat");
+    await page.locator("#tab-chat").press("ArrowRight");
     await head.click();
     const popup = page.locator(`#chat-${id}`);
-    await expect(popup).toHaveCSS("width", "400px");
+    await expect(popup).toBeVisible();
     await expect(popup.locator(".turn-timer")).toContainText("Working for");
     await popup.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(head).toContainText("Awaiting input");
     await expect(popup.locator(".turn-timer")).toContainText(/Worked for .+ \(finished\)/);
     const worked = await popup.locator(".turn-timer").textContent();
     await page.reload();
-    await expect(head).toHaveAttribute("aria-pressed", "false");
+    await expect(head).not.toHaveAttribute("aria-current", "true");
     await head.click();
     await expect(popup.locator(".turn-timer")).toHaveText(worked ?? "");
     const historical = popup.locator(".event.message");
@@ -1579,106 +1581,39 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(page.getByRole("checkbox", { name: "Save Run Configuration" })).not.toBeChecked();
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.poll(async () => (await menuItem("open-project"))?.enabled).toBe(false);
-    // Starting a batch expands the right-aligned chat head into a flush chat with subtle depth.
-    const chatPopup = page.getByRole("dialog", { name: /^fake \/ / });
-    await expect(page.locator(".chat-head")).toHaveAttribute("aria-pressed", "false");
-    await page.locator(".chat-head").click();
-    await expect(chatPopup).toBeVisible();
-    const chatHead = page.locator(".app-footer .chat-head");
+    // Launching a batch adds a sidebar conversation without opening it.
+    const chatPopup = page.locator(".worker-chat-page");
+    const chatHead = page.locator('.chat-sidebar-entry[data-role="worker"]');
     await expect(chatHead).toHaveCount(1);
-    await expect(chatHead).toHaveAttribute("aria-pressed", "true");
-    await expect(chatPopup).not.toHaveCSS("box-shadow", "none");
-    await expect(chatPopup).toHaveCSS("border-top-right-radius", "0px");
-    // The final footer inset is meaningful only after the slot finishes moving.
-    await page.locator(".chat-slot.open").evaluate(async (element) => {
-      await Promise.all(
-        element.getAnimations().map((animation) => animation.finished.catch(() => {})),
-      );
-    });
-    // Take all measurements in one frame, including during the dock's move animation.
-    const [popupBox, headBox, footerBox] = await page.evaluate(() =>
-      [".chat-popup:not([hidden])", ".app-footer .chat-head", ".app-footer"].map((selector) => {
-        const element = document.querySelector(selector);
-        if (!element) throw new Error(`Missing chat layout: ${selector}`);
-        return element.getBoundingClientRect().toJSON() as {
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-        };
-      }),
-    );
-    if (!popupBox || !headBox || !footerBox) throw new Error("Missing chat layout");
-    expect(popupBox.x).toBe(headBox.x);
-    expect(popupBox.width).toBe(headBox.width);
-    expect(popupBox.y + popupBox.height).toBeCloseTo(headBox.y, 1);
-    expect(headBox.height).toBe(footerBox.height);
-    expect(headBox.y).toBe(footerBox.y);
-    expect(headBox.y + headBox.height).toBe(footerBox.y + footerBox.height);
-    // Chat heads keep the application footer's 12px right inset.
-    expect(headBox.x + headBox.width).toBeCloseTo(footerBox.x + footerBox.width - 12, 1);
+    await expect(chatPopup).toHaveCount(0);
+    await selectSidebarPage(page, "Chat");
+    await chatHead.click();
+    await expect(chatPopup).toBeVisible();
+    await expect(page.locator(".app-footer .chat-head, .chat-popup")).toHaveCount(0);
     const expectChatFooterLayout = async () => {
-      const head = await chatHead.boundingBox();
-      const footer = await page.locator(".app-footer").boundingBox();
-      if (!head || !footer) throw new Error("Missing chat footer");
-      expect(head.height).toBe(footer.height);
-      expect(head.y).toBe(footer.y);
+      await expect(page.locator(".app-footer")).toBeVisible();
+      await expect(page.locator(".app-footer .chat-head, .chat-popup")).toHaveCount(0);
     };
     const expectDistinctChatSurfaces = async () => {
-      const colors = await page.evaluate(() => {
-        const style = (selector: string) => {
-          const element = document.querySelector(selector);
-          if (!element) throw new Error(`Missing ${selector}`);
-          return getComputedStyle(element);
-        };
-        const popup = style(".chat-popup");
-        const grid = style(".sessions");
-        const header = style(".chat-header");
-        const composer = style(".chat-popup .composer");
-        const footer = style(".chat-head[aria-pressed='true']");
-        return {
-          dark: getComputedStyle(document.documentElement).colorScheme === "dark",
-          headerFrame: header.borderBottomColor,
-          shadow: popup.boxShadow,
-          popup: popup.backgroundColor,
-          grid: grid.backgroundColor,
-          frame: popup.borderLeftColor,
-          frameWidth: popup.borderLeftWidth,
-          header: header.backgroundColor,
-          composer: composer.backgroundColor,
-          composerFrame: composer.borderTopColor,
-          composerFrameWidth: composer.borderTopWidth,
-          footer: footer.backgroundColor,
-          footerFrame: footer.borderLeftColor,
-          footerFrameWidth: footer.borderLeftWidth,
-          gridBorder: style("#panel-sessions .table-controls").borderBottomColor,
-        };
-      });
-      expect(colors.frame).not.toBe("rgba(0, 0, 0, 0)");
-      expect(colors.frameWidth).toBe("1px");
-      expect(colors.composerFrameWidth).toBe("1px");
-      expect(colors.footerFrameWidth).toBe("1px");
-      expect(colors.shadow).not.toBe("none");
-      for (const fill of [colors.popup, colors.grid, colors.header, colors.composer])
-        expect(fill).toBe(colors.dark ? "rgb(36, 43, 51)" : "rgb(255, 255, 255)");
-      expect(colors.footer).toBe(colors.dark ? "rgb(50, 60, 70)" : "rgb(237, 237, 237)");
-      expect(colors.composerFrame).not.toBe("rgba(0, 0, 0, 0)");
-      expect(colors.headerFrame).not.toBe("rgba(0, 0, 0, 0)");
-      expect(colors.footerFrame).toBe("rgba(0, 0, 0, 0)");
+      await chatHead.click();
+      const dark = await page.evaluate(
+        () => getComputedStyle(document.documentElement).colorScheme === "dark",
+      );
+      await expect(chatPopup.locator(".composer")).toHaveCSS(
+        "background-color",
+        dark ? "rgb(44, 53, 63)" : "rgb(243, 243, 243)",
+      );
+      await expect(chatPopup.locator(".composer")).toHaveCSS("box-shadow", "none");
+      await expect(chatPopup.locator(".composer")).toHaveCSS("border-top-width", "1px");
       for (const message of await chatPopup.locator(".event.message").all())
         await expect(message).toHaveCSS("border-top-width", "0px");
       for (const prompt of await chatPopup.locator(".event.prompt:not(.automatic)").all()) {
         await expect(prompt.locator("pre")).toHaveCSS(
           "background-color",
-          colors.dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
+          dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
         );
         await expect(prompt.locator("pre")).toHaveCSS("color", "rgb(0, 0, 0)");
-        const copy = prompt.getByRole("button", { name: "Copy message" });
-        await expectMessageCopy(copy);
-        const bubble = await prompt.locator("pre").boundingBox();
-        expect((await copy.boundingBox())?.y).toBeGreaterThanOrEqual(
-          (bubble?.y ?? 0) + (bubble?.height ?? 0),
-        );
+        await expectMessageCopy(prompt.getByRole("button", { name: "Copy message" }));
       }
     };
     await expectDistinctChatSurfaces();
@@ -1689,7 +1624,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       exact: true,
     });
     await focusHighlight.check();
-    await sessionsTab.click();
+    await chatHead.click();
     // Navigation restores tab focus on the next frame; focus the composer after it settles.
     await page.evaluate(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
@@ -1863,6 +1798,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         .locator("#panel-sessions .table-controls")
         .getByRole("button", { name: "Stop all runs" }),
     ).toBeVisible();
+    await chatHead.click();
     await expect(page.getByLabel("Message", { exact: true })).toBeEnabled();
     await page
       .getByLabel("Message", { exact: true })
@@ -1874,7 +1810,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         ]),
       );
     await page.getByRole("button", { name: "Send", exact: true }).click();
-    await expect(chatHead).toHaveAttribute("aria-label", /1 approval/);
+    await expect(chatHead).toHaveAttribute("aria-description", /1 approvals waiting/);
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
     await expectIndustrialSurfaces(page);
     await expect(chatHead).toHaveCSS("font-family", /D-DIN/);
@@ -1907,7 +1843,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(
       messagesGrid.locator("[data-testid^='glide-cell-5-']").filter({ hasText: /^ok$/ }),
     ).toHaveCount(1);
-    await sessionsTab.click();
+    await chatHead.click();
     // The chat shows no speaker, turn, or status labels, and no stop-reason note.
     await expect(chatPopup.locator(".event-label, .event.status, .status")).toHaveCount(0);
     await expect(chatPopup).not.toContainText(/Turn \d|end_turn|Reply below/);
@@ -1920,16 +1856,16 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       })
     )
       await selectSidebarPage(page, "Sessions");
-    await expect(page.locator(".event.prompt").last()).toContainText("follow up");
+    await selectSidebarPage(page, "Chat");
+    await chatHead.click();
+    await expect(chatPopup.locator(".event.prompt").last()).toContainText("follow up");
     // The splash shows once per launch, not on renderer reloads.
     await expect(page.locator(".splash")).toHaveCount(0);
     expect(await windowTitle()).toBe(`Code60 - ${version}`);
-    await expect(chatHead).toHaveAttribute("aria-pressed", "false");
     await chatHead.click();
     await expect(page.getByLabel("Message", { exact: true })).toBeEnabled();
-    await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
+    await selectSidebarPage(page, "Sessions");
     await expect(chatPopup).toBeHidden();
-    await expect(chatHead).toHaveAttribute("aria-pressed", "false");
     await expectChatFooterLayout();
     await expect(toolbar.getByRole("button", { name: /^(Changes|Discard worktree)$/ })).toHaveCount(
       0,
@@ -2009,14 +1945,19 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await sessionsTab.click();
     await expect(appearance).toBeHidden();
     await expect(settingsTab).toHaveCount(1);
+    await expect(chatPopup).toBeHidden();
+    await chatHead.click();
     await expect(chatPopup).toBeVisible();
     await expect(page.getByLabel("Message", { exact: true })).toHaveValue(
       "draft retained across tabs",
     );
+    await selectSidebarPage(page, "Sessions");
     await expect(
       page.locator("#panel-sessions .sessions-grid tbody [role='row'][aria-selected='true']"),
     ).toHaveCount(1);
+    await chatHead.click();
     await page.getByLabel("Message", { exact: true }).fill("");
+    await selectSidebarPage(page, "Sessions");
     // Keyboard navigation follows the alphabetized visual order, including wraparound.
     const alphabeticalPages = [
       "Chat",
@@ -2110,7 +2051,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expectNeutralTheme(page);
       const chatVisible = await chatPopup.isVisible();
       if (chatVisible) {
-        await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
+        await selectSidebarPage(page, "Sessions");
         await expect(chatPopup).toBeHidden();
       }
       await page.screenshot({ path: `test-results/neutral-theme-settings-${theme}.png` });
@@ -2162,9 +2103,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
-        await expect(chatHead).toHaveCSS("background-color", "rgb(50, 60, 70)");
+        await page.mouse.move(1, 1);
+        await expect(chatHead).toHaveCSS("background-color", "rgb(44, 53, 63)");
         await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
-        await expect(chatPopup).toHaveCSS("background-color", "rgb(36, 43, 51)");
+        await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(36, 43, 51)");
         // Primary buttons stay filled in dark mode.
         const primary = await page.evaluate(() => {
           const probe = document.createElement("button");
@@ -2263,8 +2205,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         () => JSON.parse(localStorage.getItem("code60.textStyles") ?? "{}").normalText.typeface,
       ),
     ).toBe("d-din");
-    // Renderer reload reconstructs the dock minimized, without covering Settings.
-    await expect(chatHead).toHaveAttribute("aria-pressed", "false");
+    // Settings never shows a worker overlay.
     await expect(chatPopup).toBeHidden();
     // Every role has independent controls; the case switches exclude one another.
     const roles = [
@@ -2313,7 +2254,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "text-transform",
       "lowercase",
     );
-    await chatPopup.getByRole("button", { name: "Minimize chat" }).click();
+    await selectSidebarPage(page, "Sessions");
     await settingsTab.click();
     await page.getByRole("button", { name: "Reset text", exact: true }).click();
     for (const name of roles) {
@@ -2343,7 +2284,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       .toBe("dark");
     await expectThemeContrast(page);
     await expectNeutralTheme(page);
-    await expect(chatHead).toHaveCSS("background-color", "rgb(50, 60, 70)");
+    await page.mouse.move(1, 1);
+    await expect(chatHead).toHaveCSS("background-color", "rgb(44, 53, 63)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
     await expect
@@ -2478,10 +2420,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await again.evaluate(
         () => JSON.parse(localStorage.getItem("code60.tableView.v1:sessions") ?? "{}").density,
       ),
-    ).toBe("low"); // An ended session does not reopen its chat on startup, so the footer has no chat heads.
-    const restoredChat = again.getByRole("dialog", { name: /^fake \/ / });
+    ).toBe("low"); // Historical sessions remain in Chat without opening on startup.
+    const restoredChat = again.locator(".worker-chat-page");
     await expect(restoredChat).toBeHidden();
-    await expect(again.locator(".chat-head")).toHaveCount(0);
+    await expect(again.locator('.chat-sidebar-entry[data-role="worker"]')).toHaveCount(1);
     await selectSidebarPage(again, "Messages");
     await expect(
       again.locator("#panel-messages [data-testid^='glide-cell-5-']").filter({
@@ -2523,18 +2465,25 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     // Clicking the row number opens the chat, like clicking any other cell in the row.
     await again.mouse.click(box.x + 20, box.y + 48);
     await expect(restoredChat).toBeVisible();
-    await restoredChat.getByRole("button", { name: "Minimize chat" }).click();
-    await again.mouse.click(box.x + 80, box.y + 48);
+    await selectSidebarPage(again, "Sessions");
+    await expect(canvas).toBeVisible();
+    const shownBox = await canvas.boundingBox();
+    if (!shownBox) throw new Error("Missing sessions grid");
+    await again.mouse.click(shownBox.x + 80, shownBox.y + 48);
     await expect(restoredChat).toBeVisible();
     await expect(restoredChat.locator(".event.prompt").last()).toContainText("follow up");
-    await expect(again.locator(".chat-head")).toHaveAttribute("aria-pressed", "true");
-    await restoredChat.getByRole("button", { name: "Minimize chat" }).click();
+    await expect(again.locator('.chat-sidebar-entry[data-role="worker"]')).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await selectSidebarPage(again, "Sessions");
     await expect(restoredChat).toBeHidden();
     await canvas.press("Enter");
     await expect(restoredChat).toBeVisible();
+    await selectSidebarPage(again, "Sessions");
     await expect(again.locator("#panel-sessions .table-add-accessible")).toBeEnabled();
     // Fit columns to width fills the grid with the columns and follows window resizes.
-    await restoredChat.getByRole("button", { name: "Minimize chat" }).click();
+    await selectSidebarPage(again, "Sessions");
     const windowSize = await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.getSize(),
     );
@@ -3005,9 +2954,9 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
       settings: { parallel: "2" },
     });
     expect(JSON.stringify(after.configurations)).not.toContain("one-time private task");
-    // Starting the batch leaves both chats minimized and table actions unobscured.
-    await expect(page.locator(".chat-head")).toHaveCount(2);
-    await expect(page.locator(".chat-head[aria-pressed=true]")).toHaveCount(0);
+    // Starting the batch leaves table actions unobscured.
+    await expect(page.locator('.chat-sidebar-entry[data-role="worker"]')).toHaveCount(2);
+    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(0);
     await configurationsTab.click();
     await expect(grid.locator("tbody [role='row']")).toHaveCount(2);
     await scrollGrid(grid, 0);
@@ -3047,8 +2996,8 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
   }
 });
 
-test("desktop: independent chats, close, minimize, scrolling, and footer ordering", async () => {
-  test.setTimeout(60_000);
+test("desktop: workers use the Chat hierarchy with independent full-page conversations", async () => {
+  test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-chats-"));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
@@ -3064,397 +3013,223 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
       agents: { fake: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] } },
     }),
   );
-  const database = join(directory, "code60.sqlite");
-  application = await launch(directory, repo, database);
+  application = await launch(directory, repo, join(directory, "code60.sqlite"));
   try {
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(1400, 800),
-    );
     const page = await application.firstWindow();
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    const settled = () =>
-      expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Sessions");
-    await clickMenu("database");
-    await page.getByRole("button", { name: "Create database…" }).click();
-    await expect.poll(async () => (await menuItem("open-project"))?.enabled).toBe(true);
-    await clickMenu("open-project");
-    await page.getByRole("button", { name: "Create new project…" }).click();
-    await appendRow(page);
-    await page.getByRole("button", { name: "Do not use a run configuration" }).click();
-    await page.getByRole("button", { name: "Start agents", exact: true }).click();
-    await page.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(page.locator(".chat-head")).toHaveCount(1);
-    const earlier = (await page.evaluate(() => window.desktop.snapshot())).liveIds[0] as string;
-    const earlierPopup = page.getByRole("dialog", {
-      name: `fake / ${earlier.slice(-6)}`,
-      exact: true,
-    });
-    await expect(page.locator(".chat-head")).toHaveAttribute("aria-pressed", "false");
-    await page.locator(".chat-head").click();
-    await expect(earlierPopup.getByLabel("Message", { exact: true })).toBeEnabled();
-    await earlierPopup.getByLabel("Message", { exact: true }).fill("draft A");
-    await expect(page.locator("#panel-sessions .table-add-accessible")).toBeEnabled();
-    await appendRow(page);
-    await page.getByRole("button", { name: "Do not use a run configuration" }).click();
-    await page.getByLabel("Parallel copies").fill("2");
-    await page.getByRole("button", { name: "Start agents", exact: true }).click();
-    await page.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(page.locator(".chat-head")).toHaveCount(3);
-    await expect
-      .poll(() =>
-        page.evaluate(async () => {
-          const snapshot = await window.desktop.snapshot();
-          return snapshot.runs.filter((run) => run.view?.status === "idle").length;
-        }),
-      )
-      .toBe(3);
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await page.evaluate(() => window.desktop.chooseFolder());
+    await expect(page.locator(".orchestration-chat-page:visible .chat-progress")).toHaveText(
+      "Ready",
+    );
+    const start = () =>
+      page.evaluate(() => window.desktop.start({ agents: ["fake"], allow: [], allowAll: false }));
+    const [a] = await start();
+    const [b] = await start();
+    if (!a || !b) throw new Error("Missing fixture runs");
     const initial = await page.evaluate(() => window.desktop.snapshot());
-    const [a, b, c] = initial.liveIds as [string, string, string];
-    expect(a).toBe(earlier);
-    const popup = (id: string) =>
-      page.getByRole("dialog", { name: `fake / ${id.slice(-6)}`, exact: true });
-    const head = (id: string) => page.locator(`[data-chat-id="${id}"] > .chat-head`);
-    const order = () =>
-      page
-        .locator(".chat-slot")
-        .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-chat-id")));
-    const reopen = async (id: string) => {
-      await expect(
-        page.locator("#panel-sessions .sessions-grid tbody [role='row']").filter({
-          hasText: id.slice(-6),
-        }),
-      ).toHaveCount(1);
-      const rows = await page
-        .locator("#panel-sessions .sessions-grid tbody [role='row']")
-        .allTextContents();
-      const row = rows.findIndex((text) => text.includes(id.slice(-6)));
-      const box = await page.getByTestId("data-grid-canvas").boundingBox();
-      if (!box || row < 0) throw new Error("Missing session row");
-      await page.mouse.click(box.x + 80, box.y + 32 + row * 24 + 12);
-      await expect(popup(id)).toBeVisible();
-    };
-    await expect(popup(a)).toBeVisible();
-    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
-    for (const tab of [
-      "Messages",
-      "Search",
-      "Configurations",
-      "Worktrees",
-      "Polling",
-      "Settings",
-      "Sessions",
-    ]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      await expect(page.locator(".app-footer")).toBeVisible();
-      await expect(popup(a)).toBeVisible();
-      await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
-      if (tab === "Messages") {
-        await popup(a).getByRole("button", { name: "Minimize chat" }).click();
-        await expect(popup(a)).toBeHidden();
-        await head(a).click();
-        await expect(popup(a)).toBeVisible();
-        await page.screenshot({ path: join(root, "test-results", "chat-dock-messages.png") });
-      }
-    }
-    // New batches never open a popup automatically.
-    await expect(head(b)).toHaveAttribute("aria-pressed", "false");
-    await expect(popup(b)).toBeHidden();
-    await head(b).click();
-    await expect(popup(b)).toBeVisible();
-    await expect(popup(b).locator(".event")).toHaveCount(0);
-    await expect(popup(a)).toBeVisible();
-    await expect(popup(b)).toBeVisible();
-    await popup(a).getByLabel("Message", { exact: true }).fill("draft A");
-    await popup(b)
+    const owner = initial.chat.run?.id;
+    if (!owner) throw new Error("Missing orchestrator");
+    const row = (id: string) => page.locator(`#conversation-${id}`);
+    const worker = (id: string) => page.locator(`#chat-${id}`);
+    await expect(row(a)).toBeVisible();
+    await expect(row(b)).toBeVisible();
+    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(0);
+    await expect(row(owner)).toHaveAttribute("aria-current", "true");
+    await expect(row(owner)).toHaveAttribute("data-role", "orchestrator");
+    await expect(row(a)).toHaveAttribute("data-role", "worker");
+    await expect(page.locator(".chat-dock, .chat-popup")).toHaveCount(0);
+
+    await row(a).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toBeEnabled();
+    await worker(a).getByLabel("Message", { exact: true }).fill("draft A");
+    await row(b).click();
+    await worker(b)
       .getByLabel("Message", { exact: true })
       .fill(JSON.stringify([{ message: "only chat B" }]));
-    await popup(b).getByRole("button", { name: "Send", exact: true }).click();
-    await expect(popup(b).locator(".event.message")).toContainText("only chat B");
-    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
-    await expect(popup(a)).not.toContainText("only chat B");
-    // Full screen uses the same chat instance, without losing drafts or transcript state.
-    const message = popup(a).getByLabel("Message", { exact: true });
-    await message.evaluate((element) => {
-      element.dataset.fullScreenIdentity = "preserved";
-    });
-    const expand = () => popup(a).getByRole("button", { name: "View chat full screen" });
-    const restore = () => popup(a).getByRole("button", { name: "Exit full screen" });
-    // The overlay follows the panel through a resize observer, so wait for layout to settle.
-    const expectFullScreenBounds = () =>
-      expect
-        .poll(async () => {
-          const panel = await page.locator("#panel-sessions").boundingBox();
-          const chat = await popup(a).boundingBox();
-          if (!panel || !chat) return "missing";
-          return [
-            chat.x - panel.x,
-            chat.y - panel.y,
-            panel.width - chat.width,
-            panel.height - chat.height,
-          ].map(Math.round);
-        })
-        .toEqual([8, 8, 16, 16]);
-    const viewport = await page.evaluate(() => [window.innerWidth, window.innerHeight]);
-    await expand().click();
-    await expect(restore()).toBeFocused();
-    await expectFullScreenBounds();
-    await expect(message).toHaveValue("draft A");
-    await expect(message).toHaveAttribute("data-full-screen-identity", "preserved");
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(1100, 700),
+    await worker(b).getByRole("button", { name: "Send", exact: true }).click();
+    await expect(worker(b).locator(".event.message")).toContainText("only chat B");
+    await row(a).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
+    await expect(worker(a)).not.toContainText("only chat B");
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(owner);
+    await selectSidebarPage(page, "Settings");
+    await expect(worker(a)).toBeHidden();
+    await selectSidebarPage(page, "Chat");
+    await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
+
+    // Pushed worker replies use the same per-turn unread markers as orchestrators.
+    await row(b).click();
+    await expect(worker(b)).toBeVisible();
+    await page.evaluate(
+      (id) =>
+        window.desktop.action({
+          type: "reply",
+          id,
+          text: JSON.stringify([
+            { message: "background reply" },
+            { thought: "between chunks" },
+            { message: "more text" },
+          ]),
+        }),
+      a,
     );
-    await expectFullScreenBounds();
-    await message.fill("full-screen draft A");
-    await page.keyboard.press("Escape");
-    await expect(expand()).toBeFocused();
-    await expect(message).toHaveValue("full-screen draft A");
-    await expand().click();
-    await restore().click();
-    await expect(expand()).toBeVisible();
-    await expand().click();
-    // Switching pages light-dismisses the overlay, leaving the chat docked on return.
-    await page.getByRole("tab", { name: "Settings", exact: true }).click();
-    await expect(page.locator(".chat-popup:popover-open")).toHaveCount(0);
-    await selectSidebarPage(page, "Sessions");
-    await expect(expand()).toBeVisible();
-    await expect(message).toHaveAttribute("data-full-screen-identity", "preserved");
-    await message.fill("draft A");
-    await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(1400, 800),
-    );
-    // Later dock overflow checks depend on the original width, so wait for the resize to land.
+    await expect(row(a).locator(".chat-unread")).toHaveText("1");
+    await row(a).click();
+    await expect(row(a).locator(".chat-unread")).toHaveCount(0);
+    const scroller = worker(a).locator(".transcript");
     await expect
-      .poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight]))
-      .toEqual(viewport);
-    // Playwright clicks bypass native drag regions, so check the overlay opts out of them.
-    await expand().click();
-    const regions = await popup(a).evaluate((element) => ({
-      overlay: getComputedStyle(element).getPropertyValue("-webkit-app-region"),
-      buttons: [...element.querySelectorAll(".chat-window-actions button")].map((button) =>
-        getComputedStyle(button).getPropertyValue("-webkit-app-region"),
-      ),
-    }));
-    expect(regions.overlay).toBe("no-drag");
-    expect(regions.buttons).toHaveLength(3);
-    for (const region of regions.buttons) expect(region).not.toBe("drag");
-    await popup(a).getByRole("button", { name: "Minimize chat" }).click();
-    await expect(head(a)).toHaveAttribute("aria-pressed", "false");
-    await expect(page.locator(".chat-popup:popover-open")).toHaveCount(0);
-    await head(a).click();
-    await expect(expand()).toBeVisible();
-    await expand().click();
-    await popup(a).getByRole("button", { name: "Close chat", exact: true }).click();
-    await expect(head(a)).toHaveCount(0);
-    await expect(page.locator(".chat-popup:popover-open")).toHaveCount(0);
-    await page.getByRole("button", { name: "Refresh project data" }).click();
-    await expect(head(a)).toHaveCount(0);
-    expect((await page.evaluate(() => window.desktop.snapshot())).liveIds).toContain(a);
-    await reopen(a);
-    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
-    await popup(a)
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+            ({ record }) => record.id === a,
+          )?.view?.status,
+      )
+      .toBe("idle");
+    await page.evaluate(
+      (id) =>
+        window.desktop.action({
+          type: "reply",
+          id,
+          text: JSON.stringify([{ message: "scrollable reply\n".repeat(120) }]),
+        }),
+      a,
+    );
+    await expect(worker(a).locator(".event.message").last()).toContainText("scrollable reply");
+    await expect(worker(a).getByLabel("Message", { exact: true })).toBeEnabled();
+    // The view follows the streamed reply to the bottom; scrolling up must then stop following.
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        scroller.evaluate(async (element) => {
+          element.scrollTop = 0;
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          );
+          return element.scrollTop;
+        }),
+      )
+      .toBe(0);
+    await row(b).click();
+    await row(a).click();
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
+    // Exercise layout ownership with real runs and a controlled snapshot projection.
+    // Controller ownership authorization is covered by the worker gateway integration tests.
+    await application.evaluate(
+      ({ BrowserWindow, ipcMain }, { owner, a, b }) => {
+        const handlers = (
+          ipcMain as unknown as {
+            _invokeHandlers: Map<string, (...args: unknown[]) => Promise<unknown>>;
+          }
+        )._invokeHandlers;
+        const original = handlers.get("desktop:snapshot");
+        const project = (value: unknown) => {
+          const snapshot = value as import("../src/bridge/index.js").Snapshot;
+          if (!snapshot?.chats) return value;
+          return {
+            ...snapshot,
+            chats: snapshot.chats.map((chat) =>
+              chat.run?.id === owner ? { ...chat, workers: [a, b] } : chat,
+            ),
+          };
+        };
+        if (!original) throw new Error("Missing snapshot handler");
+        handlers.set("desktop:snapshot", async (...args) => project(await original(...args)));
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        if (!contents) throw new Error("Missing window");
+        const send = contents.send.bind(contents);
+        contents.send = (channel, ...args) =>
+          send(
+            channel,
+            ...args.map((value) => (channel === "desktop:update" ? project(value) : value)),
+          );
+      },
+      { owner, a, b },
+    );
+    await page.reload();
+    const children = page.getByRole("group", { name: "Chat 1 workers", exact: true });
+    const toggle = page.getByRole("button", { name: "Workers for Chat 1", exact: true });
+    await expect(children).toBeVisible();
+    await expect(children.locator('[data-role="worker"]')).toHaveCount(2);
+    await children.locator(`#conversation-${a}`).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
+    await toggle.click();
+    await expect(children).toBeHidden();
+    await expect(worker(a)).toBeVisible();
+    await page.evaluate(() => window.desktop.poll(["history"]));
+    await expect(children).toBeHidden();
+    await row(owner).press("ArrowRight");
+    await expect(children).toBeVisible();
+    await row(owner).press("ArrowRight");
+    await expect(row(a)).toBeFocused();
+    await row(a).press("ArrowLeft");
+    await expect(row(owner)).toBeFocused();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Chat 2", exact: true })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await expect(children).toBeVisible();
+    await children.locator(`#conversation-${a}`).click();
+    await expect(worker(a)).toBeVisible();
+    const secondOwner = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    expect(secondOwner).not.toBe(owner);
+
+    await worker(a)
       .getByLabel("Message", { exact: true })
       .fill(
         JSON.stringify([
-          { message: "only chat A" },
-          { permission: { id: "chat-a-exec", title: "Chat A approval", kind: "execute" } },
+          { message: "before approval" },
+          { permission: { id: "approval", title: "Execute fixture", kind: "execute" } },
+          { message: "after approval" },
         ]),
       );
-    await popup(a).getByRole("button", { name: "Send", exact: true }).click();
-    await expect(popup(a).getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
-    await popup(a).getByRole("button", { name: "Close chat", exact: true }).click();
-    await expect(page.locator(".footer-note")).toHaveText("1 approval waiting");
-    await expect(popup(b).getByLabel("Message", { exact: true })).toBeEnabled();
-    await reopen(a);
-    await popup(a).getByRole("button", { name: "Allow once", exact: true }).click();
-    await expect(popup(a).getByLabel("Message", { exact: true })).toBeEnabled();
-    // The chat has no Finish control; reopening selected the session, so finish it from the palette.
-    await page.keyboard.press("ControlOrMeta+k");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("finish run");
-    await expect(page.getByRole("option", { name: /^Finish run/ })).toContainText(a.slice(-6));
-    await page.keyboard.press("Enter");
-    await expect(head(a)).toContainText("Finished");
-    await expect(popup(a).getByLabel("Message", { exact: true })).toBeEnabled();
-    await expect(popup(a)).not.toContainText("Sending a message resumes this session.");
-    // Resume is just a shortcut to the composer, not an agent-start action.
-    await page.keyboard.press("ControlOrMeta+k");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("resume");
-    await page.keyboard.press("Enter");
-    await expect(popup(a).getByLabel("Message", { exact: true })).toBeFocused();
-    await expect(head(a)).toContainText("Finished");
-    await popup(a).getByLabel("Message", { exact: true }).fill("Continue with tests");
-    await popup(a).getByRole("button", { name: "Send", exact: true }).click();
-    await expect(head(a)).toContainText("Awaiting input");
-    await expect(popup(a).getByLabel("Message", { exact: true })).toHaveValue("");
-    await expect(popup(a).getByText("Loading…", { exact: true })).toHaveCount(0);
-    await expect(popup(a).locator(".event.prompt pre").last()).toHaveText("Continue with tests");
-    const handoff = popup(a).locator(".event.note").filter({ hasText: "Started a fresh session" });
-    await expect(handoff).toContainText("could not be restored");
-    await expect(handoff.locator("details")).not.toHaveAttribute("open", "");
-    await handoff.getByText("Handoff summary", { exact: true }).click();
-    await expect(handoff.locator("details")).toHaveAttribute("open", "");
-    await expect(handoff.locator("details pre")).toContainText("Inspect the worktree");
-    await popup(a).getByRole("button", { name: "Minimize chat" }).click();
-    await expect(head(a)).toHaveAttribute("aria-pressed", "false");
-    await head(a).click();
-    await expect(popup(a).locator(".event.message").filter({ hasText: "only chat A" })).toHaveCount(
-      1,
-    );
-    await head(c).click();
-    await expect(page.getByRole("dialog", { name: /^fake \/ / })).toHaveCount(3);
-    await settled();
-    const boxes = await page.locator(".chat-slot.open").evaluateAll((elements) =>
-      elements.map((element) => {
-        const footer = element.querySelector(".chat-head")?.getBoundingClientRect();
-        const popup = element.querySelector(".chat-popup")?.getBoundingClientRect();
-        return { footer: footer?.toJSON(), popup: popup?.toJSON() };
-      }),
-    );
-    for (const box of boxes) {
-      expect(box.footer.height).toBe(40);
-      expect(box.popup.width).toBe(box.footer.width);
-      expect(box.popup.bottom).toBe(box.footer.top);
-    }
-    expect(boxes[1]?.popup.left).toBeGreaterThanOrEqual(boxes[0]?.popup.right);
-    expect(boxes[2]?.popup.left).toBeGreaterThanOrEqual(boxes[1]?.popup.right);
-    await expect(page.getByRole("button", { name: "Scroll chats left" })).toBeVisible();
-    await page.getByRole("button", { name: "Scroll chats left" }).click();
-    await expect
-      .poll(() => page.locator(".chat-dock").evaluate((element) => element.scrollLeft))
-      .toBe(0);
-    await page.getByRole("button", { name: "Scroll chats right" }).click();
-    await expect
-      .poll(() => page.locator(".chat-dock").evaluate((element) => element.scrollLeft))
-      .toBeGreaterThan(0);
-    const beforeKeyboard = await order();
-    await head(a).focus();
-    await head(a).press("Alt+ArrowLeft");
-    expect(await order()).not.toEqual(beforeKeyboard);
-    await expect(head(a)).toHaveAttribute("aria-pressed", "true");
-    await head(a).press("Alt+ArrowRight");
-    expect(await order()).toEqual(beforeKeyboard);
-    await page.getByRole("tab", { name: "Settings", exact: true }).click();
-    await selectSidebarPage(page, "Sessions");
-    await expect(page.getByRole("dialog", { name: /^fake \/ / })).toHaveCount(3);
-    for (const id of [a, b, c])
-      await popup(id).getByRole("button", { name: "Minimize chat" }).click();
-    await settled();
-    const beforeDrag = await order();
-    const source = head(beforeDrag[0] as string);
-    const last = head(beforeDrag[2] as string);
-    const grip = (id: string) => page.locator(`[data-chat-id="${id}"] > .chat-drag-handle`);
-    // Swiping the chat button itself cannot start a reorder.
-    await source.scrollIntoViewIfNeeded();
-    const headBox = await source.boundingBox();
-    const tailBox = await last.boundingBox();
-    if (!headBox || !tailBox) throw new Error("Missing chat targets");
-    await page.mouse.move(headBox.x + 60, headBox.y + 24);
-    await page.mouse.down();
-    await page.mouse.move(tailBox.x + tailBox.width - 20, tailBox.y + 24, { steps: 10 });
-    await expect(page.locator(".chat-slot[data-drop]")).toHaveCount(0);
-    await page.mouse.up();
-    expect(await order()).toEqual(beforeDrag);
-    await grip(beforeDrag[0] as string).scrollIntoViewIfNeeded();
-    await settled();
-    await page.evaluate(
-      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-    );
-    await page.screenshot({ path: "test-results/sidebar-tables-chat-drag.png" });
-    const sourceBox = await grip(beforeDrag[0] as string).boundingBox();
-    const lastBox = await last.boundingBox();
-    if (!sourceBox || !lastBox) throw new Error("Missing drag targets");
-    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(lastBox.x + lastBox.width - 20, lastBox.y + 24, { steps: 10 });
-    await expect(page.locator(".chat-slot[data-drop]")).toHaveCount(1);
-    await page.mouse.up();
-    await expect.poll(order).toEqual([beforeDrag[1], beforeDrag[2], beforeDrag[0]]);
-    await expect(page.locator(".chat-head[aria-pressed='true']")).toHaveCount(0);
-    const beforeCancel = await order();
-    await settled();
-    await grip(beforeCancel[0] as string).scrollIntoViewIfNeeded();
-    const cancelBox = await grip(beforeCancel[0] as string).boundingBox();
-    if (!cancelBox) throw new Error("Missing cancel target");
-    await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(cancelBox.x + 350, cancelBox.y + 24, { steps: 5 });
-    await page.keyboard.press("Escape");
-    await page.mouse.up();
-    expect(await order()).toEqual(beforeCancel);
-    await expect(page.locator(".chat-head[aria-pressed='true']")).toHaveCount(0);
-    await head(b).click();
-    await expect(popup(b)).toBeVisible();
-    await page.getByRole("button", { name: "Refresh project data" }).click();
-    expect(await order()).toEqual(beforeCancel);
+    await worker(a).getByRole("button", { name: "Send", exact: true }).click();
+    await expect(worker(a).getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
+    await row(b).click();
+    await expect(page.locator(".app-footer .footer-note")).toContainText("1 approvals waiting");
+    await page.locator(".app-footer .footer-note").click();
+    await expect(worker(a)).toBeVisible();
+    await worker(a).getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toBeEnabled();
+    await expect(worker(a).locator(".event.message").last()).toContainText("after approval");
+    await expect(page.locator(".app-footer .footer-note")).toHaveCount(0);
+    await expect(worker(a).getByRole("button", { name: "Copy message" }).first()).toBeVisible();
+    await expect(worker(a).locator(".turn-timer").last()).toContainText("Worked for");
 
-    // Observe running motion in the same browser task as the action, before its short duration ends.
-    const motion = async (id: string, action: "toggle" | "close" | "move") => {
-      await settled();
-      return page.evaluate(
-        async ({ id, action }) => {
-          const slot = document.querySelector<HTMLElement>(`[data-chat-id="${id}"]`);
-          const head = slot?.querySelector<HTMLButtonElement>(".chat-head");
-          if (!slot || !head) throw new Error("Missing chat motion target");
-          if (action === "toggle") head.click();
-          else if (action === "close")
-            slot.querySelector<HTMLButtonElement>("[aria-label='Close chat']")?.click();
-          else {
-            const index = [...(slot.parentElement?.children ?? [])].indexOf(slot);
-            head.dispatchEvent(
-              new KeyboardEvent("keydown", {
-                key: index > 0 ? "ArrowLeft" : "ArrowRight",
-                altKey: true,
-                bubbles: true,
-              }),
-            );
-          }
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-          return document.getAnimations().map((animation) => ({
-            duration: animation.effect?.getTiming().duration,
-            frames: (animation.effect as KeyframeEffect).getKeyframes(),
-          }));
-        },
-        { id, action },
+    // Historical sessions stay listed and continuation happens only after Send.
+    await page.evaluate((id) => window.desktop.action({ type: "finish", id }), a);
+    await row(b).click();
+    await row(a).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toBeEnabled();
+    await worker(a).getByLabel("Message", { exact: true }).fill("Continue with tests");
+    await worker(a).getByRole("button", { name: "Send", exact: true }).click();
+    await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("");
+    await expect(worker(a).locator(".event.prompt").last()).toContainText("Continue with tests");
+    await expect(
+      worker(a).locator(".event.message").filter({ hasText: "before approval" }),
+    ).toHaveCount(1);
+
+    for (const theme of ["light", "dark"]) {
+      await selectSidebarPage(page, "Settings");
+      await page.getByLabel("Theme", { exact: true }).selectOption(theme);
+      await selectSidebarPage(page, "Chat");
+      await expect(worker(a).locator(".composer")).toHaveCSS("box-shadow", "none");
+      await expect(worker(a).locator(".event.message").first()).toHaveCSS(
+        "border-top-width",
+        "0px",
       );
-    };
-    const minimize = await motion(b, "toggle");
-    expect(
-      minimize.some(
-        (animation) =>
-          animation.duration === 160 && animation.frames.some((frame) => frame.clipPath),
-      ),
-    ).toBe(true);
-    await expect(head(b)).toHaveAttribute("aria-pressed", "false");
-    const open = await motion(b, "toggle");
-    expect(open.some((animation) => animation.duration === 160)).toBe(true);
-    await expect(popup(b)).toBeVisible();
-    const rearrange = await motion(b, "move");
-    expect(
-      rearrange.some(
-        (animation) =>
-          animation.duration === 180 && animation.frames.some((frame) => frame.transform),
-      ),
-    ).toBe(true);
-    const closing = await motion(b, "close");
-    expect(closing.some((animation) => animation.duration === 140)).toBe(true);
-    await expect(head(b)).toHaveCount(0);
-    await reopen(b);
-    await settled();
-
-    // Reduced motion keeps the same actions, but applies their final states immediately.
+    }
     await page.emulateMedia({ reducedMotion: "reduce" });
-    expect(await motion(b, "toggle")).toEqual([]);
-    await expect(popup(b)).toBeHidden();
-    expect(await motion(b, "toggle")).toEqual([]);
-    await expect(popup(b)).toBeVisible();
-    const reducedOrder = await order();
-    expect(await motion(b, "move")).toEqual([]);
-    expect(await order()).not.toEqual(reducedOrder);
-    expect(await motion(b, "close")).toEqual([]);
-    await expect(head(b)).toHaveCount(0);
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 700),
+    );
+    await page.evaluate(() => document.documentElement.style.setProperty("--button-size", "24px"));
+    await expect(worker(a)).toBeVisible();
+    await expect(page.locator(".file-panel-toggle")).toBeVisible();
+    await page.screenshot({ path: join(root, "test-results", "worker-chat-hierarchy.png") });
     expect(errors).toEqual([]);
   } finally {
     await application.close().catch(() => {});
@@ -3668,7 +3443,6 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
     await selectSidebarPage(page, "Search");
     await expect(overview).toContainText("The recorded sessions report");
-    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
 
     // Simulate a provider failure once; Retry keeps the same results and then succeeds.
     await application.evaluate(({ ipcMain }) => {
@@ -3734,14 +3508,13 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     // Single-click titles and keyboard actions both open sources without a preview pane.
     await search.locator(".search-result-title").first().click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
-    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
     await selectSidebarPage(page, "Search");
     await query.focus();
     await query.press("ArrowDown");
     await page.keyboard.press("End");
     await expect(search.locator(".search-result-title").last()).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("tab", { name: "Sessions", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("tab", { name: "Chat", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -3753,7 +3526,6 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     });
     await selectSidebarPage(page, "Messages");
     await expect(page.locator("#panel-messages .sessions-grid tbody [role='row']")).toHaveCount(9);
-    await page.getByRole("button", { name: "Minimize chat", exact: true }).click();
     await selectSidebarPage(page, "Events");
     const eventPanel = page.locator("#panel-events");
     await expect(eventPanel.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
@@ -3777,7 +3549,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     const reads = await application.evaluate(
       () => (globalThis as unknown as { transcriptReads: Record<string, number> }).transcriptReads,
     );
-    expect(reads["record-b"]).toBe(2); // one shared cache read and one explicit source-chat read
+    expect(reads["record-b"]).toBe(1); // Source navigation reuses the shared cache.
     await selectSidebarPage(page, "Sessions");
     const sessions = page.locator("#panel-sessions");
     await sessions.getByRole("button", { name: "Settings", exact: true }).click();
@@ -4132,8 +3904,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const id = first.chat.run?.id as string;
     expect(dirname(first.chat.directory as string)).toBe(workspace);
     expect(first.runs).toEqual([]);
-    const chatList = () =>
-      page.getByRole("navigation", { name: "Orchestrator chats", exact: true });
+    const chatList = () => page.locator("nav.chat-sidebar");
     await page.locator("#tab-chat").press("ArrowRight");
     await expect(chatList()).toBeVisible();
     await expect(chat.locator(".chat-empty .wordmark")).toHaveText("Code60");
@@ -4489,7 +4260,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await expect
       .poll(() => page.evaluate(async () => (await window.desktop.snapshot()).active))
       .toBe(false);
-    await page.locator(".chat-head-close").click();
+    await expect(page.locator(".chat-head-close")).toHaveCount(0);
     const count = await page.evaluate(async (id) => {
       const events = await window.desktop.action({ type: "events", id });
       return Array.isArray(events) ? events.length : 0;
@@ -5309,8 +5080,7 @@ test("desktop: Browse project files from sessions and worktrees", async () => {
     await selectSidebarPage(page, "Sessions");
     const sessionCanvas = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
     const openSessionActions = async () => {
-      const minimize = page.getByRole("button", { name: "Minimize chat", exact: true });
-      if (await minimize.isVisible()) await minimize.click();
+      await selectSidebarPage(page, "Sessions");
       const box = await sessionCanvas.boundingBox();
       if (!box) throw new Error("Missing sessions grid");
       await page.mouse.click(box.x + actionsColumnX, box.y + 44);
