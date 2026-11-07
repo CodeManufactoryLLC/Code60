@@ -71,19 +71,24 @@ describe("scoped file browsing", () => {
       expect(result.preview?.error).toMatch(error);
     }
   });
-  it("reports partial directory failures and caps large directory listings", async () => {
-    for (let batch = 0; batch < 21; batch++) {
-      await Promise.all(
-        Array.from({ length: 100 }, (_, index) =>
-          writeFile(join(root, `file-${batch}-${index}`), ""),
-        ),
-      );
-    }
-    const result = await readFiles(context(null, ["", "missing"]), () => true);
-    expect(result.directories[0]?.entries).toHaveLength(2000);
-    expect(result.directories[0]?.truncated).toBe(true);
-    expect(result.directories[1]?.error).toMatch(/ENOENT/);
-  });
+  it(
+    "reports partial directory failures and caps large directory listings",
+    async () => {
+      for (let batch = 0; batch < 21; batch++) {
+        await Promise.all(
+          Array.from({ length: 100 }, (_, index) =>
+            writeFile(join(root, `file-${batch}-${index}`), ""),
+          ),
+        );
+      }
+      const result = await readFiles(context(null, ["", "missing"]), () => true);
+      expect(result.directories[0]?.entries).toHaveLength(2000);
+      expect(result.directories[0]?.truncated).toBe(true);
+      expect(result.directories[1]?.error).toMatch(/ENOENT/);
+    },
+    // Creating 2,100 real files includes Windows runner disk/antivirus latency.
+    process.platform === "win32" ? 30_000 : 5_000,
+  );
   it("refuses a root that has been replaced by a symbolic link", async () => {
     const target = join(root, "target");
     const link = join(root, "link");
