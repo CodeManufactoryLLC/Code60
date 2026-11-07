@@ -29,7 +29,9 @@ import { agentCount, ConfigurationsTable, providers } from "./configurations.js"
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { prepareFileNavigation } from "./file-navigation.js";
-import { FileInspector, FilesPage, useFiles } from "./files.js";
+import { FilePanel } from "./file-panel.js";
+import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
+import { useFiles } from "./files.js";
 import { Icon, type IconName } from "./icons.js";
 import { MessagesPage } from "./messages.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
@@ -274,7 +276,26 @@ function App() {
   const database = snapshot?.database ?? null;
   const directory = snapshot?.directory;
   const workspace = `${database}:${directory}`;
-  const fileBrowser = useFiles(api, snapshot, !splash && tabs.active === "chat" && explorerOpen);
+  const [fileTabs, setFileTabs] = useState(() => emptyFileTabs(workspace));
+  if (fileTabs.workspace !== workspace) setFileTabs(emptyFileTabs(workspace));
+  const currentFileTabs = fileTabs.workspace === workspace ? fileTabs : emptyFileTabs(workspace);
+  const fileAction = (action: FileTabAction) =>
+    setFileTabs((current) =>
+      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), action),
+    );
+  const activeFileTab = currentFileTabs.entries.find((tab) => tab.id === currentFileTabs.active);
+  const filesActive =
+    !splash &&
+    tabs.active === "chat" &&
+    explorerOpen &&
+    activeFileTab !== undefined &&
+    activeFileTab.kind !== "blank";
+  const fileBrowser = useFiles(
+    api,
+    snapshot,
+    filesActive,
+    activeFileTab?.kind === "file" ? activeFileTab.path : null,
+  );
   const transcripts = useTranscripts(
     api,
     workspace,
@@ -289,14 +310,14 @@ function App() {
         .setVisibility({
           visible: !document.hidden && !splash,
           worktrees: tabs.active === "worktrees",
-          files: tabs.active === "chat" && explorerOpen,
+          files: filesActive,
         })
         .catch((cause) => setError(message(cause)));
     };
     visibility();
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
-  }, [tabs.active, splash, explorerOpen]);
+  }, [tabs.active, splash, filesActive]);
   const loaded = snapshot !== undefined || error !== "";
   // With a connected database and no open project, the splash offers the most recent project.
   const lastProject = database && !directory ? snapshot?.projects[0] : undefined;
@@ -456,7 +477,7 @@ function App() {
       const latest = await prepareFileNavigation(api, snapshot);
       if (!latest) return;
       setState((current) => applyUpdate(current, latest));
-      fileBrowser.selectRoot();
+      fileAction({ type: "browse" });
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     } catch (cause) {
@@ -605,7 +626,7 @@ function App() {
     checked: tabs.active === id,
     run: () => {
       if (id === "files") {
-        fileBrowser.selectRoot();
+        fileAction({ type: "browse" });
         setExplorerOpen(true);
       }
       setTabs((current) => updateTabs(current, { type: "select", id }));
@@ -848,13 +869,7 @@ function App() {
         />
       )}
       {!splash && <div className="window-drag-strip" aria-hidden="true" />}
-      <div
-        className="app-workspace"
-        data-chat={!splash && tabs.active === "chat"}
-        data-inspector={
-          !splash && tabs.active === "chat" && explorerOpen && fileBrowser.preview !== null
-        }
-      >
+      <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
         {!splash && (
           <PageTabBar
             tabs={tabs}
@@ -883,38 +898,37 @@ function App() {
           aria-labelledby="tab-chat"
           hidden={tabs.active !== "chat"}
         >
-          <div className="chat-conversations">
-            {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
-              <ChatPage
-                key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
-                api={api}
-                chat={chat}
-                hidden={chat?.directory !== snapshot?.chat.directory}
-                events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
-                database={database}
-                runs={snapshot?.runs ?? []}
-                explorerOpen={explorerOpen}
-                onExplorer={() => {
-                  if (!explorerOpen) fileBrowser.selectRoot();
-                  setExplorerOpen((value) => !value);
-                }}
-                active={
-                  !splash && tabs.active === "chat" && chat?.directory === snapshot?.chat.directory
-                }
-                onDatabase={() => showPicker("database")}
-              />
-            ))}
-          </div>
-          {explorerOpen && (
-            <div className="chat-files" data-preview={fileBrowser.preview !== null}>
-              <FilesPage
-                browser={fileBrowser}
-                onOpenProject={() => showPicker("project")}
-                active={!splash && tabs.active === "chat"}
-              />
-              {!splash && tabs.active === "chat" && <FileInspector browser={fileBrowser} />}
+          <div className="chat-workspace-body">
+            <div className="chat-conversations">
+              {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
+                <ChatPage
+                  key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
+                  api={api}
+                  chat={chat}
+                  hidden={chat?.directory !== snapshot?.chat.directory}
+                  events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
+                  database={database}
+                  runs={snapshot?.runs ?? []}
+                  active={
+                    !splash &&
+                    tabs.active === "chat" &&
+                    chat?.directory === snapshot?.chat.directory
+                  }
+                  onDatabase={() => showPicker("database")}
+                />
+              ))}
             </div>
-          )}
+            <FilePanel
+              key={workspace}
+              tabs={currentFileTabs}
+              onAction={fileAction}
+              browser={fileBrowser}
+              open={explorerOpen}
+              onToggle={() => setExplorerOpen((value) => !value)}
+              active={!splash && tabs.active === "chat"}
+              onOpenProject={() => showPicker("project")}
+            />
+          </div>
         </div>
         {tabs.open.includes("settings") && (
           <div
@@ -1190,7 +1204,7 @@ function App() {
             data={transcripts}
             onOpen={(result) => {
               if (result.kind === "file" && result.path) {
-                fileBrowser.selectRoot();
+                fileAction({ type: "file", path: result.path });
                 fileBrowser.selectFile(result.path);
                 setExplorerOpen(true);
                 setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));

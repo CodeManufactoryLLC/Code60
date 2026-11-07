@@ -113,7 +113,12 @@ export function TableSettings({
     >
       <header className="modal-heading">
         <h2 id={`${id}-title`}>{title}</h2>
-        <button type="button" aria-label="Close table settings" onClick={close}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Close table settings"
+          onClick={close}
+        >
           <Icon name="close" />
         </button>
       </header>

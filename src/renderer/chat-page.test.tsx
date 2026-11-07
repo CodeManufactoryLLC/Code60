@@ -33,8 +33,6 @@ function render(status: RunStatus, workers: string[], runs: DesktopRun[], events
       active
       onDatabase={() => {}}
       runs={runs}
-      explorerOpen={false}
-      onExplorer={() => {}}
     />,
   );
 }
