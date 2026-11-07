@@ -4012,9 +4012,16 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.getByRole("alert")).toBeVisible();
     const failed = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
     await chat.getByRole("button", { name: "Retry", exact: true }).click();
+    // Windows native cleanup and startup each have a separate five-second bound.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
-      .not.toBe(failed);
+      .poll(
+        async () => {
+          const run = (await page.evaluate(() => window.desktop.snapshot())).chat.run;
+          return run !== null && run.id !== failed;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
     await page.evaluate(() => window.desktop.setOrchestrationProvider("claude"));
     await expect(chat.getByRole("status")).toHaveText("Ready");
     const prior = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id as string;
