@@ -773,9 +773,12 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(retry).toHaveCount(0);
     await expect(composer).toHaveValue("untouched draft");
     // Feedback is overlaid, not inserted into the transcript's scrolling layout.
-    expect(await chat.locator(".transcript").evaluate((element) => element.scrollTop)).toBe(
-      beforeScroll,
-    );
+    // Native focus can round the Windows scroll offset by one CSS pixel.
+    expect(
+      Math.abs(
+        (await chat.locator(".transcript").evaluate((element) => element.scrollTop)) - beforeScroll,
+      ),
+    ).toBeLessThanOrEqual(1);
     const userCopy = chat.locator(".event.prompt").getByRole("button", { name: "Copy message" });
     await expectMessageCopy(userCopy);
     const userBubble = await chat.locator(".event.prompt pre").boundingBox();
@@ -4769,36 +4772,41 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await page.keyboard.press("ControlOrMeta+f");
     const findClose = inspector.locator(".find-widget .codicon-widget-close");
     await expect(findClose).toBeVisible();
-    const pointerCorner = await page.evaluate(() => ({ x: innerWidth - 2, y: innerHeight - 2 }));
-    for (const control of [findClose, inspector.locator(".find-widget .codicon-case-sensitive")]) {
-      await expect(control).toHaveCSS("border-top-width", "0px");
-      await page.mouse.move(pointerCorner.x, pointerCorner.y);
-      await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
-      const before = await control.evaluate(
-        (element) => getComputedStyle(element, "::before").color,
-      );
-      await control.hover();
-      await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-      await expect(async () => {
-        await page.mouse.move(pointerCorner.x, pointerCorner.y);
-        await control.hover();
+    // Test the hover style independently of native window cursor updates. Electron
+    // can drop synthetic mouse moves over Monaco on both macOS and Windows.
+    const devtools = await page.context().newCDPSession(page);
+    await devtools.send("DOM.enable");
+    await devtools.send("CSS.enable");
+    try {
+      const { root } = await devtools.send("DOM.getDocument");
+      for (const icon of ["widget-close", "case-sensitive"]) {
+        const selector = `.find-widget .codicon-${icon}`;
+        const control = inspector.locator(selector);
+        const { nodeId } = await devtools.send("DOM.querySelector", {
+          nodeId: root.nodeId,
+          selector,
+        });
+        const highlighted = await iconHighlight(control);
+        await devtools.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
+        try {
+          await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+          await expect
+            .poll(() => control.evaluate((element) => getComputedStyle(element, "::before").color))
+            .toBe(highlighted);
+        } finally {
+          await devtools.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
+        }
+        await control.focus();
+        await expect(control).toBeFocused();
         await expect
-          .poll(() => control.evaluate((element) => getComputedStyle(element, "::before").color), {
-            timeout: 500,
-          })
-          .not.toBe(before);
-      }).toPass({ timeout: 5_000 });
-      const highlighted = await iconHighlight(control);
-      await page.mouse.move(pointerCorner.x, pointerCorner.y);
-      await expect.poll(() => control.evaluate((element) => element.matches(":hover"))).toBe(false);
-      await control.focus();
-      await expect(control).toBeFocused();
-      expect(await control.evaluate((element) => getComputedStyle(element, "::before").color)).toBe(
-        highlighted,
-      );
-      await expect(control).toHaveCSS("outline-style", "none");
-      await expect(control).toHaveCSS("border-top-width", "0px");
-      await expect(control).toHaveCSS("box-shadow", "none");
+          .poll(() => control.evaluate((element) => getComputedStyle(element, "::before").color))
+          .toBe(highlighted);
+        await expect(control).toHaveCSS("outline-style", "none");
+        await expect(control).toHaveCSS("border-top-width", "0px");
+        await expect(control).toHaveCSS("box-shadow", "none");
+      }
+    } finally {
+      await devtools.detach();
     }
     await findClose.click();
     await inspector.getByRole("textbox", { name: "Read-only file content", exact: true }).focus();
