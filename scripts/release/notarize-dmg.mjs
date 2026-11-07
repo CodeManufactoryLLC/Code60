@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { refreshDmgMetadata } from "./artifacts.mjs";
 import { assetNames, json, run } from "./common.mjs";
 import { staple } from "./staple.mjs";
 
@@ -34,3 +35,4 @@ if (result.status !== "Accepted") throw new Error(`DMG notarization failed: ${re
 await staple(dmg);
 run("/usr/bin/xcrun", ["stapler", "validate", dmg]);
 run("/usr/bin/codesign", ["--verify", "--strict", dmg]);
+await refreshDmgMetadata("release/build", version);

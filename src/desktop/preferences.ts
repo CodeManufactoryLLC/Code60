@@ -21,6 +21,8 @@ export interface DesktopPreferences {
 export function filePreferences(file: string): DesktopPreferences & {
   transparent(): Promise<boolean>;
   setTransparent(enabled: boolean): Promise<void>;
+  updateCheck(): Promise<boolean>;
+  setUpdateCheck(enabled: boolean): Promise<void>;
   polling(): Promise<PollSettingsPatch>;
   setPolling(settings: PollSettingsPatch): Promise<void>;
   orchestrationProvider(): Promise<string | null>;
@@ -76,6 +78,12 @@ export function filePreferences(file: string): DesktopPreferences & {
     },
     setTransparent(enabled) {
       return update({ transparent: enabled });
+    },
+    async updateCheck() {
+      return (await load()).updateCheck !== false;
+    },
+    setUpdateCheck(enabled) {
+      return update({ updateCheck: enabled });
     },
     async polling() {
       const value = (await load()).polling;

@@ -249,4 +249,7 @@ jobs:
           merge-multiple: true
           path: release-assets/
       - name: Verify tested artifacts and publish
-        run: node scripts/release/publish.mjs
+        # The verifier parses the generated updater YAML using the locked dependency.
+        run: |
+          npm ci --ignore-scripts
+          node scripts/release/publish.mjs

@@ -50,11 +50,19 @@ module.exports = {
         ]
       : []),
   ],
-  publish: null,
+  publish: {
+    provider: "github",
+    owner: "CodeManufactoryLLC",
+    repo: "code60",
+    channel: require("../package.json").version.split("-")[1]?.split(".")[0] || "latest",
+  },
   // The MCP sidecar launches the bundled Electron executable in Node mode.
   electronFuses: { runAsNode: true },
   mac: {
-    target: [{ target: "dmg", arch: ["arm64"] }],
+    target: [
+      { target: "dmg", arch: ["arm64"] },
+      { target: "zip", arch: ["arm64"] },
+    ],
     category: "public.app-category.developer-tools",
     icon: "packaging/icon.png",
     hardenedRuntime: release,

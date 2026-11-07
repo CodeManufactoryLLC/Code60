@@ -1051,6 +1051,12 @@ button.project-card {
   background: var(--footer-bg);
   -webkit-app-region: no-drag;
 }
+.update-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .app-footer::before {
   content: "";
   position: absolute;

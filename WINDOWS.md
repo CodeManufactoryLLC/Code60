@@ -11,7 +11,10 @@ per-user, without elevation or PATH changes. Electron and its Node runtime are
 bundled. Git and the chosen provider's CLI remain separate prerequisites.
 Install and authenticate providers yourself; Code60 never does this for you.
 Updating or uninstalling Code60 keeps configuration, desktop preferences,
-user-selected SQLite databases, records and worktrees. There is no auto-updater.
+user-selected SQLite databases, records and worktrees. Use Settings → Updates
+to check, download, and explicitly install and restart. The app verifies the
+download and installer signature and stops every agent before installing.
+Updates remain per-user without elevation; ordinary quitting does not install.
 
 Desktop startup reads inherited PATH, user/machine registry PATH and these
 installation locations, without running PowerShell, cmd profiles or login scripts:

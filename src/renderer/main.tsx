@@ -81,6 +81,7 @@ import {
 import { initialTabs, updateTabs } from "./tabs.js";
 import { parseChartTick } from "./ticker.js";
 import { useTranscripts } from "./transcripts.js";
+import { UpdateIndicator, UpdatesSection, useUpdateNotice, useUpdates } from "./updates.js";
 import { WorktreesPage } from "./worktrees.js";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
@@ -122,6 +123,7 @@ const folderName = pathLabel;
 const hasWorktree = (run: DesktopRun) => run.record.base !== null && !run.record.discardedAt;
 
 function App() {
+  const updates = useUpdates(api);
   const [state, setState] = useState<DesktopState>();
   const [error, setError] = useState("");
   const [transparent, setTransparent] = useState<boolean>();
@@ -247,6 +249,13 @@ function App() {
   }, [chartTickMs]);
   // Reloads can skip the splash only after the saved provider has been checked.
   const [splash, setSplash] = useState(true);
+  const updateNotice = useUpdateNotice(updates.state, !splash && !busy);
+  const openUpdates = () => {
+    setTabs((current) => updateTabs(current, { type: "select", id: "settings" }));
+    requestAnimationFrame(() =>
+      document.getElementById("app-updates")?.scrollIntoView({ block: "center" }),
+    );
+  };
   const startupChecked = useRef(false);
   const [splashReady, setSplashReady] = useState(false);
   useEffect(() => {
@@ -962,6 +971,7 @@ function App() {
             hidden={tabs.active !== "settings"}
           >
             <SettingsPage
+              updates={<UpdatesSection updates={updates} />}
               versions={snapshot?.versions}
               orchestration={snapshot && <OrchestrationSettings snapshot={snapshot} api={api} />}
               pollingControls={
@@ -1388,6 +1398,7 @@ function App() {
               }
             />
           )}
+          <UpdateIndicator state={updates.state} onOpen={openUpdates} />
           {directory && snapshot && state && (
             <ChatDock
               key={`${database}:${directory}`}
@@ -1409,6 +1420,27 @@ function App() {
           onClose={() => setPicker(undefined)}
           onChoose={connectDatabase}
         />
+      )}
+      {updateNotice.notice && (
+        <Modal title="Update available" busy={false} onClose={updateNotice.dismiss}>
+          <p>Code60 {updateNotice.notice} is available.</p>
+          <p>Download now, or keep working and download later from the footer or Settings.</p>
+          <div className="button-group">
+            <button type="button" onClick={updateNotice.dismiss}>
+              Later
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                updateNotice.dismiss();
+                openUpdates();
+                void updates.act("download");
+              }}
+            >
+              Download now
+            </button>
+          </div>
+        </Modal>
       )}
       {picker === "project" && snapshot && (
         <ProjectDialog
@@ -1646,6 +1678,7 @@ function ActionsMenu({
 }
 
 function SettingsPage({
+  updates,
   versions,
   orchestration,
   pollingControls,
@@ -1669,6 +1702,7 @@ function SettingsPage({
   charts,
   onCharts,
 }: {
+  updates: ReactNode;
   versions: Versions | undefined;
   orchestration: ReactNode;
   pollingControls: ReactNode;
@@ -1918,6 +1952,7 @@ function SettingsPage({
         })}
       </section>
       {pollingControls}
+      {updates}
       <AboutSection versions={versions} />
     </main>
   );

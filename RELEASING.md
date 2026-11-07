@@ -49,7 +49,30 @@ Install or upgrade while Code60 is closed:
   pass `--no-sandbox`; do not run it as root.
 
 Application replacement preserves existing configuration, desktop preferences,
-run records, and user-selected SQLite databases. There is no automatic updater.
+run records, and user-selected SQLite databases.
+
+Installed releases check for updates about 30 seconds after startup and every four
+hours afterward. The on-by-default **Automatically check for updates** switch in
+Settings → Updates is saved across restarts. Automatic failures stay quiet; manual
+checks show errors. A footer button opens the Updates section and shows availability,
+download progress, or readiness to install. An in-app popup offers **Download now**
+and **Later** once per version, remembered across renderer reloads and app restarts.
+It waits for other dialogs to close. Checks never start downloads.
+
+Installed releases offer **Settings → Updates**: Check for updates, Download update
+(with progress and cancellation), then Install and restart. Downloads never start
+automatically, and ordinary quitting never installs an update. Installation asks
+for confirmation and stops every agent before restarting. Stable releases stay
+on stable versions; prerelease builds can receive their prerelease channel and
+stable releases. Downgrades are disabled. Source/development builds cannot update.
+Linux DEB updates require PolicyKit (`pkexec`) and a running desktop authorization
+agent, and may ask for administrator approval. AppImages must be in a writable
+directory; the updater preserves custom filenames and keeps the old app if staging
+fails. On macOS, first copy the app out of the DMG into Applications.
+Failures are shown explicitly; install failures after agent shutdown close the
+app so it can be restarted cleanly.
+
+The first version containing this feature must still be installed manually.
 Back up project databases before a release that changes their schema. Download
 checksums are in `SHA256SUMS`; use `shasum -a 256 -c SHA256SUMS` on macOS or
 `sha256sum -c SHA256SUMS` on Linux after downloading the listed artifacts (or
@@ -140,9 +163,13 @@ SQLite and project persistence, agent execution/cancellation, the packaged MCP
 sidecar's gateway request, and shutdown. No live agents or user credentials are
 needed for tests.
 
-Each platform uploads only its tested final installers and a manifest identifying
-the tag, exact SHA, and SHA-256 hashes. The Linux publication job checks all four
-installers and three manifests, revalidates the tag, and uploads to a matching
+Each platform uploads its tested final installers, updater metadata, and a manifest identifying
+the tag, exact SHA, and SHA-256 hashes. macOS also produces a signed/notarized app
+ZIP required for in-app updates. Channel YAML (`latest` or the prerelease channel,
+with platform suffixes) is verified against the exact artifact names, versions and
+SHA-512 checksums. DMG metadata is refreshed after notarization/stapling.
+The Linux publication job checks all eight release assets and three manifests,
+revalidates the tag, and uploads to a matching
 draft before publication. It never rebuilds installers. Only that job receives
 repository write permission. Prerelease suffixes produce GitHub prereleases;
 older stable releases do not replace newer releases as latest. Publication jobs
