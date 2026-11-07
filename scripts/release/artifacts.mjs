@@ -19,18 +19,35 @@ export async function stage(
     await copyFile(join(directory, name), join(destination, name));
     assets.push({ name, sha256: await digest(join(destination, name)) });
   }
+  let signaturesVerified;
+  if (platform === "win") {
+    const report = await json("release/windows-verification.json");
+    if (
+      report.verified !== true ||
+      report.nativeX64 !== true ||
+      typeof report.certificate !== "string" ||
+      report.certificate.toUpperCase() !==
+        (process.env.WIN_SIGNING_THUMBPRINT || "").toUpperCase() ||
+      report.version !== version ||
+      report.installerSha256 !== assets[0].sha256
+    )
+      throw new Error("Windows signing and installed-app verification is missing");
+    signaturesVerified = true;
+  }
   await writeFile(
     join(destination, `manifest-${platform}.json`),
-    `${JSON.stringify({ tag, sha, platform, assets }, null, 2)}\n`,
+    `${JSON.stringify({ tag, sha, platform, assets, signaturesVerified }, null, 2)}\n`,
   );
 }
 export async function verify(directory, tag, sha) {
   const { version } = versionOf(tag);
   const assets = [];
-  for (const platform of ["linux", "mac"]) {
+  for (const platform of ["linux", "mac", "win"]) {
     const manifest = await json(join(directory, `manifest-${platform}.json`));
     if (manifest.tag !== tag || manifest.sha !== sha || manifest.platform !== platform)
       throw new Error("Artifact source identity mismatch");
+    if (platform === "win" && manifest.signaturesVerified !== true)
+      throw new Error("Windows signature verification is missing");
     const expected = assetNames(version, platform);
     if (!Array.isArray(manifest.assets) || manifest.assets.length !== expected.length)
       throw new Error("Missing or unexpected artifacts");
@@ -49,6 +66,7 @@ export async function verify(directory, tag, sha) {
     ...assets.map((asset) => asset.name),
     "manifest-linux.json",
     "manifest-mac.json",
+    "manifest-win.json",
   ].sort();
   if (JSON.stringify((await readdir(directory)).sort()) !== JSON.stringify(expectedFiles))
     throw new Error("Unexpected files in release artifact download");

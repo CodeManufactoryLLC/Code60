@@ -7,13 +7,14 @@ const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
   cli: ["core"],
-  desktop: ["core", "bridge"],
+  desktop: ["core", "bridge", "platform"],
   renderer: ["bridge", "core"],
   bridge: ["core", "contracts"],
-  core: ["agents", "git", "contracts"],
-  agents: ["contracts"],
+  core: ["agents", "git", "contracts", "platform"],
+  agents: ["contracts", "platform"],
   contracts: [],
-  git: [],
+  git: ["platform"],
+  platform: [],
 };
 
 /** Packages only one module may import, so integrations stay in their module. */
@@ -52,7 +53,7 @@ function findViolations(files: readonly SourceFile[]): string[] {
     for (const match of file.text.matchAll(IMPORT_RE)) {
       const spec = match[1] ?? match[2];
       if (spec === undefined) continue;
-      const where = `${relative(SRC, file.path)} imports "${spec}"`;
+      const where = `${relative(SRC, file.path).split(sep).join("/")} imports "${spec}"`;
       if (
         (from === "renderer" || from === "bridge" || from === "contracts") &&
         spec.startsWith("node:")
@@ -111,6 +112,27 @@ describe("module boundaries", () => {
     expect(findViolations([f('import { readFile } from "node:fs";')])).not.toEqual([]);
     expect(findViolations([f('import type { Config } from "../core/index.js";')])).not.toEqual([]);
     expect(findViolations([f('import { app } from "electron";')])).not.toEqual([]);
+  });
+
+  it("keeps native capabilities out of browser modules and platform independent", () => {
+    for (const module of ["renderer", "bridge", "contracts"]) {
+      expect(
+        findViolations([
+          {
+            path: join(SRC, module, "x.ts"),
+            text: 'import { spawnOwnedProcess } from "../platform/index.js";',
+          },
+        ]),
+      ).not.toEqual([]);
+    }
+    expect(
+      findViolations([
+        {
+          path: join(SRC, "platform", "x.ts"),
+          text: 'import { defaultDeps } from "../core/index.js";',
+        },
+      ]),
+    ).not.toEqual([]);
   });
 
   it("detects forbidden dependencies, deep imports, and owned packages", () => {

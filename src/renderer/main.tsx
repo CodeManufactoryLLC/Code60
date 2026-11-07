@@ -42,6 +42,7 @@ import {
   Tooltips,
 } from "./overlays.js";
 import { PageTabBar } from "./page-tabs.js";
+import { pathLabel } from "./path-label.js";
 import { PollingControls, PollingPage, PollingWidget, labels as pollLabels } from "./polling.js";
 import { PromptEditorPage } from "./prompt-editor.js";
 import { continueBlocker } from "./recovery.js";
@@ -112,7 +113,7 @@ const kinds = [
 const activeStatuses = new Set(["queued", "running", "waiting", "idle"]);
 const statusOf = (run: DesktopRun) => run.view?.status ?? run.record.status;
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const folderName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
+const folderName = pathLabel;
 const hasWorktree = (run: DesktopRun) => run.record.base !== null && !run.record.discardedAt;
 
 function App() {
@@ -467,7 +468,8 @@ function App() {
   };
   const connectDatabase = (mode: DatabaseMode) =>
     void attempt(async () => {
-      if (await api.connectDatabase(mode)) setPicker(undefined);
+      if (await api.connectDatabase(mode))
+        setPicker((current) => (current === "database" ? undefined : current));
     });
   const projectOpened = async () => {
     const latest = await api.snapshot();

@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
-import { launchDesktop } from "./electron-launcher.js";
+import { privateDirectory } from "../src/platform/index.js";
+import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
+import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -418,7 +420,7 @@ async function launch(directory: string, folder: string, database: string, confi
         );
         provider = config.defaultAgent ?? provider;
       } catch {}
-      await mkdir(dirname(file), { recursive: true });
+      await privateDirectory(dirname(file));
       await writeFile(file, JSON.stringify({ ...saved, orchestrationProvider: provider }));
     }
   }
@@ -641,7 +643,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
   await writeFile(join(repo, "hello.txt"), "before\n");
   execFileSync("git", ["add", "."], { cwd: repo });
   // Use the environment's configured Git identity, as with normal development.
-  execFileSync("git", ["commit", "-q", "-m", "Initial fixture"], { cwd: repo });
+  commitFixture(repo);
   await writeFile(
     join(config, "config.json"),
     JSON.stringify({
@@ -728,7 +730,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         const first = Menu.getApplicationMenu()?.items[0];
         return { label: first?.label, about: first?.submenu?.items[0]?.label };
       }),
-    ).toEqual({ label: "Code60", about: process.platform === "darwin" ? "About Code60" : "About" });
+    ).toEqual({ label: "Code60", about: process.platform === "linux" ? "About" : "About Code60" });
     // The command palette filters commands, exposes unavailable actions, and restores focus.
     const connect = page.getByRole("button", { name: "Connect to database", exact: true });
     // Let the preceding sidebar navigation finish its deferred focus before choosing
@@ -1738,7 +1740,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await clickMenu("open-project");
     await third.getByRole("button", { name: "Remove repo from history" }).click();
     await expect(third.getByText("No recent projects.")).toBeVisible();
-    await third.getByRole("button", { name: "Cancel", exact: true }).click();
+    await third
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
     await application.close();
     expect(errors).toEqual([]);
   } finally {
@@ -1786,7 +1791,8 @@ test("desktop: splash requires an orchestrator and opens provider setup", async 
     await page.screenshot({ path: "test-results/orchestration-setup-light.png" });
 
     // A failed preference write must not unlock entry.
-    const temporary = `${file}.${application.process().pid}.tmp`;
+    await privateDirectory(dirname(file));
+    const temporary = file;
     await mkdir(temporary, { recursive: true });
     await setup.getByLabel("Orchestration provider", { exact: true }).selectOption("claude");
     await expect(setup.getByRole("alert")).toBeVisible();
@@ -1843,9 +1849,7 @@ test("desktop: splash requires an orchestrator and opens provider setup", async 
     await page.keyboard.press("Escape");
     await expect(setup).toHaveCount(0);
     await expect(page.locator(".splash")).toBeVisible();
-    await expect(page.locator(".splash-prompt h2")).toHaveText(
-      `Continue ${directory.split("/").at(-1)}?`,
-    );
+    await expect(page.locator(".splash-prompt h2")).toHaveText(`Continue ${basename(directory)}?`);
     await page.keyboard.press("Escape");
     await expect(page.locator(".splash")).toHaveCount(0);
   } finally {
@@ -2001,7 +2005,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await panel.locator(".prompt-editor").evaluate((element) => {
         element.scrollTop = 0;
       });
-      await page.screenshot({ path: `/tmp/wow-prompts-${theme}.png` });
+      await page.screenshot({ path: join(tmpdir(), `wow-prompts-${theme}.png`) });
       await selectedPrompt.hover();
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
@@ -2020,7 +2024,7 @@ test("desktop: prompt template editing and persistence", async () => {
     await panel.locator(".prompt-editor").evaluate((element) => {
       element.scrollTop = 0;
     });
-    await page.screenshot({ path: "/tmp/wow-prompts-narrow.png" });
+    await page.screenshot({ path: join(tmpdir(), "wow-prompts-narrow.png") });
     expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true,
     );
@@ -2262,7 +2266,7 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   await writeFile(join(repo, "hello.txt"), "before\n");
   execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "Initial fixture"], { cwd: repo });
+  commitFixture(repo);
   await writeFile(
     join(config, "config.json"),
     JSON.stringify({
@@ -2490,6 +2494,7 @@ test("desktop: independent chats, close, minimize, scrolling, and footer orderin
     await popup(a).getByRole("button", { name: "Send", exact: true }).click();
     await expect(head(a)).toContainText("Ready");
     await expect(popup(a).getByLabel("Message")).toHaveValue("");
+    await expect(popup(a).getByText("Loading…", { exact: true })).toHaveCount(0);
     await expect(popup(a).locator(".event.prompt").last()).toHaveText("Continue with tests");
     const handoff = popup(a).locator(".event.note").filter({ hasText: "Started a fresh session" });
     await expect(handoff).toContainText("could not be restored");
@@ -3221,6 +3226,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       { message: "omega" },
     ]);
     await input().fill(script);
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await input().press("Enter");
     await expect(chat.locator(".event.permission")).toContainText("allowed by policy");
     await expect(chat.getByRole("status")).toHaveText("Ready");
@@ -3959,7 +3965,7 @@ test("desktop: Files tree and shared read-only preview", async () => {
       .getByLabel("File root")
       .locator("option")
       .evaluateAll((elements) => elements.map((element) => (element as HTMLOptionElement).value));
-    const workerRoot = options.find((path) => path.endsWith("/worker"));
+    const workerRoot = options.find((path) => /[\\/]worker$/.test(path));
     expect(workerRoot).toBeTruthy();
     await files.getByLabel("File root").selectOption(workerRoot as string);
     await expect(inspector).toHaveCount(0);
@@ -4083,10 +4089,10 @@ test("desktop: Browse files from sessions and worktrees", async () => {
     await selectSidebarPage(page, "Worktrees");
     const grid = page.locator("#panel-worktrees .sessions-grid");
     await expect(
-      grid.locator("[data-testid^='glide-cell-1-']").filter({ hasText: /\/external$/ }),
+      grid.locator("[data-testid^='glide-cell-1-']").filter({ hasText: /[\\/]external$/ }),
     ).toHaveCount(1);
     const paths = await grid.locator("[data-testid^='glide-cell-1-']").allTextContents();
-    const index = paths.findIndex((path) => path.endsWith("/external"));
+    const index = paths.findIndex((path) => /[\\/]external$/.test(path));
     expect(index).toBeGreaterThanOrEqual(0);
     const canvas = grid.getByTestId("data-grid-canvas");
     const worktreeBox = await canvas.boundingBox();
@@ -4161,6 +4167,7 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await expect(modal).toBeVisible();
     await modal.getByRole("button", { name: "Create database…", exact: true }).click();
     await expect(modal.getByText("No recent projects.")).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Close Open Project" })).toBeEnabled();
     await page.keyboard.press("Escape");
     await expect(modal).toHaveCount(0);
     await expect(card).toBeFocused();

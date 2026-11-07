@@ -1,13 +1,21 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { privateDirectory, verifyPrivateSync } from "../platform/index.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase, sqliteAvailable } from "./projects.js";
 
+async function expectPrivate(path: string, mode: number): Promise<void> {
+  if (process.platform === "win32") expect(() => verifyPrivateSync(path)).not.toThrow();
+  else expect((await stat(path)).mode & 0o777).toBe(mode);
+}
+
 let directory: string;
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "code60-projects-"));
+  directory = join(tmpdir(), `code60-projects-${randomUUID()}`);
+  await privateDirectory(directory);
 });
 afterEach(async () => {
   await rm(directory, { recursive: true, force: true });
@@ -16,6 +24,35 @@ afterEach(async () => {
 // Node.js 22.12 needs a flag for node:sqlite; the desktop app runs on Electron's newer Node.js.
 describe.skipIf(!sqliteAvailable())("project database", () => {
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+
+  it.runIf(process.platform === "win32")(
+    "bounds a real competing writer and works after the lock is released",
+    () => {
+      const path = join(directory, "contended.sqlite");
+      const db = openProjectDatabase(path, true);
+      const other = new (sqlite().DatabaseSync)(path);
+      try {
+        other.exec("BEGIN EXCLUSIVE");
+        let error: unknown;
+        const started = performance.now();
+        try {
+          db.record("C:\\project", "2026-01-01");
+        } catch (cause) {
+          error = cause;
+        }
+        const elapsed = performance.now() - started;
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(/locked/);
+        expect(elapsed).toBeLessThan(150);
+        other.exec("ROLLBACK");
+        db.record("C:\\project", "2026-01-01");
+        expect(db.list()).toEqual([{ path: "C:\\project", openedAt: "2026-01-01" }]);
+      } finally {
+        other.close();
+        db.close();
+      }
+    },
+  );
 
   it("migrates schema 1 without losing project history and persists configurations", () => {
     const path = join(directory, "old.sqlite");
@@ -115,7 +152,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     first.record("/repos/b", "2026-01-02T00:00:00.000Z");
     first.record("/repos/a", "2026-01-03T00:00:00.000Z");
     first.close();
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    await expectPrivate(path, 0o600);
     const second = openProjectDatabase(path, false);
     expect(second.list()).toEqual([
       { path: "/repos/a", openedAt: "2026-01-03T00:00:00.000Z" },
@@ -137,7 +174,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     const workspace = join(directory, ".code60_workspace");
     openProjectDatabase(path, true).close();
     expect((await stat(workspace)).isDirectory()).toBe(true);
-    expect((await stat(workspace)).mode & 0o777).toBe(0o700);
+    await expectPrivate(workspace, 0o700);
     const marker = join(workspace, "keep.txt");
     await writeFile(marker, "existing workspace data");
     openProjectDatabase(path, false).close();
@@ -227,7 +264,7 @@ describe("desktop preferences", () => {
     await again.setTransparent(false);
     expect(await again.read()).toBe("/data/other.sqlite");
     expect(await again.transparent()).toBe(false);
-    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    await expectPrivate(file, 0o600);
   });
 
   it("stores validated polling overrides beside other preferences", async () => {
@@ -262,7 +299,7 @@ describe("desktop preferences", () => {
     expect(await preferences.read()).toBeUndefined();
     await preferences.write("/data/code60.sqlite");
     expect(await preferences.read()).toBe("/data/code60.sqlite");
-    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    await expectPrivate(file, 0o600);
     await writeFile(file, "{not json");
     expect(await preferences.read()).toBeUndefined();
     await writeFile(file, JSON.stringify({ database: "relative.sqlite" }));

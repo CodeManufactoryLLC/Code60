@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { AgentStartError } from "../src/agents/index.js";
 import { diffRun, discardRun, listRuns, stopRun } from "../src/core/commands.js";
 import { DEFAULT_PERMISSIONS } from "../src/core/config.js";
@@ -17,13 +18,20 @@ import {
 const MIN = 60_000;
 
 async function setup(
-  options: Partial<OrchestratorOptions> & { script?: TurnScript; count?: number } = {},
+  options: Partial<OrchestratorOptions> & {
+    script?: TurnScript;
+    count?: number;
+    identity?: () => Promise<NonNullable<RunRecord["ownerIdentity"]> | null>;
+  } = {},
 ) {
   const clock = new FakeClock();
   const agents = new FakeAgents(options.script);
   const git = new FakeGit();
   const store = new MemoryStore();
-  const processes = new FakeProcesses();
+  const processes = Object.assign(
+    new FakeProcesses(),
+    options.identity ? { identity: options.identity } : {},
+  );
   let n = 0;
   const count = options.count ?? 1;
   const orch = await createOrchestrator(
@@ -49,17 +57,44 @@ async function setup(
 }
 
 describe("a headless run", () => {
+  it("records native owner identity before launching and reuses it for the batch", async () => {
+    const owner = { createdAt: "12345", owner: "S-1-5-21-1" };
+    const identity = vi.fn(async () => owner);
+    const { orch, store } = await setup({ identity });
+    expect(store.records.get("r1")).toMatchObject({ status: "queued", ownerIdentity: owner });
+    orch.start();
+    await orch.done;
+    expect(identity).toHaveBeenCalledTimes(1);
+    expect(store.records.get("r1")).toMatchObject({ status: "finished", ownerIdentity: owner });
+  });
+
+  it("refuses to prepare a batch when the native owner cannot be verified", async () => {
+    await expect(setup({ identity: async () => null })).rejects.toThrow(/owner/);
+    await expect(
+      setup({
+        identity: async () => {
+          throw new Error("access denied");
+        },
+      }),
+    ).rejects.toThrow(/access denied/);
+  });
+
   it("creates the worktree, runs one turn, stops the agent, and finishes", async () => {
     const { orch, agents, git, store } = await setup();
     orch.start();
     await orch.done;
     expect(git.worktrees).toEqual([
-      { repoDir: "/repo", path: "/repo.worktrees/r1", branch: "code60/r1", base: "c0ffee" },
+      {
+        repoDir: "/repo",
+        path: join("/repo.worktrees", "r1"),
+        branch: "code60/r1",
+        base: "c0ffee",
+      },
     ]);
     expect(agents.specs[0]).toMatchObject({
       name: "claude",
       command: ["agent", "--acp"],
-      cwd: "/repo.worktrees/r1",
+      cwd: join("/repo.worktrees", "r1"),
     });
     expect(agents.sessions[0]?.prompts).toEqual(["do the thing"]);
     expect(agents.sessions[0]?.stops).toEqual([5_000]);
@@ -87,7 +122,7 @@ describe("a headless run", () => {
         status: "finished",
         reason: null,
         branch: "code60/r1",
-        worktree: "/repo.worktrees/r1",
+        worktree: join("/repo.worktrees", "r1"),
         changedFiles: 0,
       },
     ]);

@@ -1,15 +1,15 @@
 import * as fsPromises from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { type AgentMcpServer, type Agents, createAgents } from "../agents/index.js";
 import type { PromptTemplates } from "../contracts/index.js";
 import { createGit, type Git } from "../git/index.js";
+import { environmentValue, privateDirectory, renameFile, userHome } from "../platform/index.js";
 import { type Clock, systemClock } from "./clock.js";
 import { type CommandDeps, markInterrupted } from "./commands.js";
 import { type ConfigFs, loadConfig, parseDuration } from "./config.js";
 import { createOrchestrator, type Orchestrator } from "./orchestrator.js";
 import { type PolicyOverrides, parseToolKinds } from "./policy.js";
-import { createProcesses, type Processes } from "./processes.js";
+import { createProcesses, type Processes, recordedAgentAlive } from "./processes.js";
 import {
   createRecordStore,
   directoryRunsDir,
@@ -63,7 +63,11 @@ export function defaultDeps(): CoreDeps {
   return {
     agents: createAgents({ clientVersion: CODE60_VERSION }),
     git: createGit(),
-    fs: fsPromises as unknown as RecordFs & ConfigFs,
+    fs: {
+      ...fsPromises,
+      mkdir: async (path: string) => privateDirectory(path),
+      rename: renameFile,
+    } as unknown as RecordFs & ConfigFs,
     clock: systemClock,
     processes: createProcesses(),
     ownerPid: process.pid,
@@ -84,6 +88,8 @@ export async function prepareOrchestrationChat(
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
   if (!agent) throw new UsageError(`Unavailable orchestration provider: ${name}`);
   await deps.fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  if (process.platform === "win32")
+    await deps.fs.mkdir(join(directory, ".code60"), { recursive: true, mode: 0o700 });
   return createOrchestrator(
     { ...deps, store: createRecordStore(deps.fs, join(directory, ".code60", "runs")) },
     {
@@ -121,9 +127,9 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 /** The base directory for state files: `$XDG_STATE_HOME`, or `~/.local/state`. */
 export function stateHome(env: Env): string {
-  const xdg = env.XDG_STATE_HOME;
+  const xdg = environmentValue(env, "XDG_STATE_HOME");
   if (xdg !== undefined && isAbsolute(xdg)) return xdg;
-  return join(env.HOME || homedir(), ".local", "state");
+  return join(userHome(env), ".local", "state");
 }
 
 /**
@@ -131,7 +137,14 @@ export function stateHome(env: Env): string {
  * in the user's state directory, keyed by `cwd`.
  */
 export async function openWorkspace(deps: CoreDeps, cwd: string, env: Env): Promise<Workspace> {
-  const dir = resolve(cwd);
+  let dir = resolve(cwd);
+  if (process.platform === "win32" && deps.fs.realpath) {
+    try {
+      dir = await deps.fs.realpath(dir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
   const repo = await deps.git.repoInfo(dir).catch(() => null);
   const store = createRecordStore(
     deps.fs,
@@ -181,7 +194,10 @@ function worktreeRoot(
   if (config.worktreeDir === null) {
     return join(dirname(mainRoot), `${basename(mainRoot)}.worktrees`);
   }
-  const dir = config.worktreeDir.replace(/^~(?=$|\/)/, env.HOME || homedir());
+  const dir = config.worktreeDir.replace(
+    process.platform === "win32" ? /^~(?=$|[\\/])/ : /^~(?=$|\/)/,
+    userHome(env),
+  );
   return isAbsolute(dir) ? dir : resolve(mainRoot, dir);
 }
 
@@ -247,6 +263,7 @@ export async function prepareRuns(deps: CoreDeps, request: RunRequest): Promise<
       noWorktree = "no_commits";
     }
   }
+  await preparePrivateRecords(deps, workspace, request.env);
   const interrupted = await markInterrupted(
     commandDeps(deps, workspace),
     await workspace.store.list(),
@@ -299,7 +316,7 @@ export async function prepareRecovery(
       `run ${record.id} is ${record.status}; only ended runs can be recovered`,
     );
   }
-  if (record.agentPid !== undefined && deps.processes.groupAlive(record.agentPid)) {
+  if (await recordedAgentAlive(deps.processes, record)) {
     throw new RefusedError(
       `the leftover agent for run ${record.id} is still alive (process group ${record.agentPid}); stop it before retrying`,
     );
@@ -307,6 +324,7 @@ export async function prepareRecovery(
   const config = await loadConfig(deps.fs, env);
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
+  await preparePrivateRecords(deps, workspace, env);
   const orchestrator = await createOrchestrator(
     { ...deps, store: workspace.store },
     {
@@ -327,3 +345,16 @@ export async function prepareRecovery(
 }
 
 export { extractEpisodicMemory, MEMORY_EVENT_LIMIT } from "./episodic-memory.js";
+
+async function preparePrivateRecords(
+  deps: CoreDeps,
+  workspace: Workspace,
+  env: Env,
+): Promise<void> {
+  if (process.platform !== "win32") return;
+  await deps.fs.mkdir(join(workspace.repo?.commonDir ?? stateHome(env), "code60"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  await deps.fs.mkdir(workspace.store.dir, { recursive: true, mode: 0o700 });
+}

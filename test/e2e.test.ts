@@ -1,5 +1,16 @@
 import { execFileSync, spawn } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +77,10 @@ beforeAll(async () => {
   ]);
   // Mirror the installed layout, including the single source of the product version.
   await copyFile(join(ROOT, "package.json"), join(OUT, "..", "package.json"));
+  if (process.platform === "win32")
+    await cp(join(ROOT, "native", "win32"), join(OUT, "..", "native", "win32"), {
+      recursive: true,
+    });
   dir = await realpath(await mkdtemp(join(tmpdir(), "code60-e2e-")));
   repo = join(dir, "repo");
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
@@ -190,6 +205,54 @@ it("serves the Code60 MCP stdio protocol from a separate process", async () => {
 }, 20_000);
 
 describe("code60 (spawned)", () => {
+  it.runIf(process.platform === "win32")(
+    "owner crash kills the agent tree, retains its worktree and permits explicit leftover inspection",
+    async () => {
+      const sentinel = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+        stdio: "ignore",
+      });
+      const pidFile = join(dir, "crash-descendant.pid");
+      const prompt = steps({ grandchild: pidFile }, { hang: "stubborn" });
+      let kill: ((signal: NodeJS.Signals) => void) | undefined;
+      const finished = cli(["run", "--json", prompt], {
+        onStderr: (_, stop) => {
+          kill = stop;
+        },
+      });
+      try {
+        await expect
+          .poll(() => readFile(pidFile, "utf8").catch(() => ""), { timeout: 10_000 })
+          .not.toBe("");
+        const descendant = Number(await readFile(pidFile, "utf8"));
+        const records = join(repo, ".git", "code60", "runs");
+        const saved = await Promise.all(
+          (await readdir(records)).map(async (id) =>
+            JSON.parse(await readFile(join(records, id, "run.json"), "utf8")),
+          ),
+        );
+        const record = saved.find((record) => record.firstPrompt === prompt);
+        expect(record.ownerIdentity).toBeDefined();
+        expect(record.agentIdentity.job).toBeTruthy();
+        kill?.("SIGKILL");
+        await finished;
+        await expect
+          .poll(() => alive(record.agentPid) || alive(descendant), { timeout: 7_000 })
+          .toBe(false);
+        expect(alive(sentinel.pid as number)).toBe(true);
+        expect((await stat(record.worktree)).isDirectory()).toBe(true);
+        const list = await cli(["list", "--json"]);
+        expect(
+          JSON.parse(list.stdout).runs.find((run: { id: string }) => run.id === record.id).status,
+        ).toBe("interrupted");
+      } finally {
+        kill?.("SIGKILL");
+        await finished;
+        sentinel.kill("SIGKILL");
+      }
+    },
+    30_000,
+  );
+
   it("runs headless, then lists, diffs, and discards the run", async () => {
     const prompt = steps({ write: { path: "hello.txt", content: "hi\n" } });
     const result = await cli(["run", "--json", prompt]);
@@ -214,7 +277,9 @@ describe("code60 (spawned)", () => {
     expect(alive(record.agentPid)).toBe(false);
 
     const list = await cli(["list", "--json"]);
-    expect(JSON.parse(list.stdout).runs[0]).toMatchObject({ id, status: "finished" });
+    expect(JSON.parse(list.stdout).runs.find((run: { id: string }) => run.id === id)).toMatchObject(
+      { id, status: "finished" },
+    );
 
     const diff = await cli(["diff", id]);
     expect(diff.code).toBe(0);
@@ -258,24 +323,28 @@ describe("code60 (spawned)", () => {
     expect(JSON.parse(result.stdout).runs[0].status).toBe("finished");
   }, 60_000);
 
-  it("exits 130 on SIGTERM, stops the agent, and writes a partial result", async () => {
-    let sent = false;
-    const result = await cli(["run", "--json", steps({ hang: "cancellable" })], {
-      onStderr: (text, kill) => {
-        if (!sent && /running/.test(text)) {
-          sent = true;
-          setTimeout(() => kill("SIGTERM"), 200);
-        }
-      },
-    });
-    expect(result.code).toBe(130);
-    const { runs } = JSON.parse(result.stdout);
-    expect(runs[0].status).toBe("cancelled");
-    const record = JSON.parse(
-      await readFile(join(repo, ".git", "code60", "runs", runs[0].id, "run.json"), "utf8"),
-    );
-    expect(alive(record.agentPid)).toBe(false);
-  }, 60_000);
+  it.skipIf(process.platform === "win32")(
+    "exits 130 on SIGTERM, stops the agent, and writes a partial result",
+    async () => {
+      let sent = false;
+      const result = await cli(["run", "--json", steps({ hang: "cancellable" })], {
+        onStderr: (text, kill) => {
+          if (!sent && /running/.test(text)) {
+            sent = true;
+            setTimeout(() => kill("SIGTERM"), 200);
+          }
+        },
+      });
+      expect(result.code).toBe(130);
+      const { runs } = JSON.parse(result.stdout);
+      expect(runs[0].status).toBe("cancelled");
+      const record = JSON.parse(
+        await readFile(join(repo, ".git", "code60", "runs", runs[0].id, "run.json"), "utf8"),
+      );
+      expect(alive(record.agentPid)).toBe(false);
+    },
+    60_000,
+  );
 
   it("fails a run whose agent requires authentication", async () => {
     env.FAKE_AGENT_AUTH = "1";

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { runIdSchema } from "../contracts/index.js";
+import { atomicReplace } from "../platform/index.js";
 import { RUN_EVENT_TYPES, runEventSchema, runRecordSchema } from "./record-schemas.js";
 import type { RunEvent, RunRecord } from "./types.js";
 import { UsageError } from "./types.js";
@@ -8,9 +9,10 @@ import { RUN_RECORD_FORMAT } from "./version.js";
 
 /** The subset of `node:fs/promises` the record store uses. */
 export interface RecordFs {
+  realpath?(path: string): Promise<string>;
   mkdir(path: string, options: { recursive: true; mode: number }): Promise<unknown>;
   writeFile(path: string, data: string, options: { mode: number; flag: "wx" }): Promise<void>;
-  rename(from: string, to: string): Promise<void>;
+  rename(from: string, to: string, timeoutMs?: number): Promise<void>;
   appendFile(path: string, data: string, options: { mode: number }): Promise<void>;
   readFile(path: string, encoding: "utf8"): Promise<string>;
   readdir(path: string): Promise<string[]>;
@@ -95,7 +97,9 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
         const tmp = join(target, `.run.json.${process.pid}.${tmpCounter++}.tmp`);
         try {
           await fs.writeFile(tmp, snapshot, { mode: 0o600, flag: "wx" });
-          await fs.rename(tmp, join(target, "run.json"));
+          await atomicReplace(tmp, join(target, "run.json"), (from, to, timeoutMs) =>
+            fs.rename(from, to, timeoutMs),
+          );
         } catch (error) {
           await fs.rm(tmp, { force: true });
           throw error;

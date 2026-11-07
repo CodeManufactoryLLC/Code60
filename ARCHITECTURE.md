@@ -26,7 +26,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - File watching. The desktop app polls external state on a schedule (see [Polling](#polling)) instead.
 - Shared or remote servers, and coordination across machines.
 - Sandboxing. A worktree is not a security boundary, and the agent runs with the user's permissions.
-- Windows, in the first version. macOS and Linux only.
+- Windows ARM64 and Windows versions older than Windows 11. Windows desktop distribution targets x64 only.
 
 ## Modules
 
@@ -40,6 +40,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 | Core | `src/core` | Runs, the parallel scheduler, permission policy, run records, and leftover detection. |
 | Agents | `src/agents` | Starting an agent process, the ACP client, translating ACP updates into run events, cancelling, and killing the process. |
 | Git | `src/git` | Creating, listing, and removing worktrees, measuring their logical file sizes, diffs, and status, using the `git` executable. |
+| Platform | `src/platform` | Node-only leaf module for executable/environment resolution, owned process trees, native identity, path identity, and private storage. Uses the first-party `native/windows` helper on Windows, never an ABI-dependent addon. |
 
 ```mermaid
 flowchart LR
@@ -56,13 +57,54 @@ flowchart LR
   Core --> Git["git"]
   Agents --> ACP["agent process (ACP over stdio)"]
   Git --> GitBin["git executable"]
+  Desktop --> Platform["platform (Node only)"]
+  Core --> Platform
+  Agents --> Platform
+  Git --> Platform
+  Platform --> Win32["Win32 helper / Job Objects"]
 ```
 
 - `cli` depends only on `core`. `core` exports the event and run types the CLI and desktop app render.
-- `desktop` depends on `core` and `bridge`. `bridge` and `renderer` may import only types from `core`; the renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
+- `desktop` depends on `core`, `bridge`, and `platform`. `bridge` and `renderer` may import only types from `core`; neither may import `platform`. The renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
 - `agents` and `git` never import each other or `core`. `core` receives them as injected interfaces, so tests can use fakes.
 - `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP.
 - Domain logic lives in `core` and runs without the desktop app.
+- `core`, `agents`, `git`, and `desktop` may import `platform` only through its index. `platform` imports no application modules, Electron, React, or provider SDKs. Bridge, renderer, and contracts remain browser-safe.
+
+### Native Windows contracts
+
+On Windows, all agent roles use a first-party helper executable outside ASAR.
+It creates agents suspended, assigns them to exclusive kill-on-close Job Objects
+with no breakaway, restricts inherited handles to ACP stdio, and then resumes
+them. A separate authenticated control pipe and an owner-process handle stop
+the job on owner/control loss. Root exit also terminates descendants. Startup
+has a five-second deadline and job exit verification a five-second deadline.
+ACP cancellation and its ten-second wait are unchanged. Windows then terminates
+the owned job, without emulating SIGTERM. POSIX retains its existing grace.
+
+Optional native identities contain creation time, owner SID, and agent job name.
+Legacy records remain readable. Windows never authorizes a leftover stop using
+command text or a PID alone. Missing, inaccessible or mismatched identities
+block continuation/discard and unsafe stops; only a verified absent owned job
+authorizes writing to its worktree again. Owner access failures are conservative.
+Recovery remains explicit and ACP once-only permission rules are unchanged.
+
+Windows desktop discovery reads inherited, user and machine PATH and documented
+installation directories, separated with semicolons. It never runs shell profiles.
+Environment names are case-insensitive on Windows; absolute executable commands
+remain authoritative. Standard npm/npx shims resolve to their CLI JavaScript and
+a matching Node executable. Other batch launchers use one rejecting adapter,
+never blanket shell mode. Prompts stay on ACP stdin.
+
+Browser-relative file paths remain slash-separated. Windows previews/listings
+hold non-delete-sharing handles for every ancestor, reject every reparse point,
+and bound reads. Local absolute drive paths are supported; device/drive-relative
+paths, alternate streams and unsupported long paths fail clearly. Filesystem
+identity uses canonical spelling, not globally lowercased paths. XDG/home config
+and state defaults remain unchanged. New private objects receive restrictive
+owner/SYSTEM ACLs at creation; existing user parent ACLs are never rewritten.
+An unsafe existing Code60-private ACL fails closed. Atomic rename retries only
+Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write.
 
 ## A run
 
@@ -371,7 +413,7 @@ Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each work
 - ACP uses the protocol version exported by its SDK. MCP negotiates its supported dated protocol versions, preferring `2025-03-26`. Neither protocol version is a Code60 release number.
 - Settings About shows the product, database schema, run-record format, ACP and MCP protocol versions, plus the running Electron, Chromium and Node.js versions from `process.versions`. Copy version info copies these values and the copyright/license line. These read-only values arrive in `snapshot.versions`; they add no IPC capability.
 
-- TypeScript, ESM, Node.js 22.12 or later, on macOS and Linux.
+- TypeScript, ESM, Node.js 22.12 or later, on macOS, Linux and native Windows 11 x64.
 - Runtime validation uses Zod as a direct dependency for configuration, IPC requests (including polling), and persisted run records/events. Types for IPC requests and records/events are inferred from schemas.
 - Dependencies: `@agentclientprotocol/sdk` (only `agents` imports it), Electron for the desktop app (only `desktop` imports it), and React with React DOM plus `@glideapps/glide-data-grid` (pinned to its React 19 beta) for its interface (only `renderer` imports them). The grid draws on a canvas with the app's theme colors and bundles its CSS file, so it needs no runtime style injection; Monaco's generated styles use the nonce described above. Vite builds the renderer; TypeScript builds everything else. The project database uses the built-in `node:sqlite` (only `desktop` uses it). Processes use `node:child_process`, with argument arrays and explicit working directories. Add libraries only when Node.js cannot reasonably do the job.
 - Renderer fonts: `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-serif`, and `@fontsource/roboto`; vendored D-DIN from [datto-d-din](https://github.com/amcchord/datto-d-din) and CMU Serif from `computer-modern@0.1.3`, with their OFL licenses in `src/renderer/fonts`; Shantell Sans from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/shantellsans) with its OFL license; and OCR-A from Matthew Skala's [OCR font package 0.3.1](https://tsukurimashou.org/files/ocr-0.3.1.zip) with its upstream notice in `src/renderer/fonts/ocr-a`. Vite emits font files rather than inline data URLs to preserve `font-src 'self'`.
@@ -392,14 +434,15 @@ The Prompt Editor groups its four system templates beneath an initially expanded
 
 ### Desktop distribution
 
-The release workflow packages the Electron desktop as an Apple Silicon macOS DMG
-and Linux x64 DEB/AppImage. The bundle ID is `com.codemanufactory.code60`; the
+The release workflow packages the Electron desktop as an Apple Silicon macOS DMG,
+Linux x64 DEB/AppImage and signed per-user Windows x64 NSIS installer.
+The bundle ID is `com.codemanufactory.code60`; the
 Linux GUI executable is `code60-desktop`, separate from the headless `code60` CLI.
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
 Installer replacement is manual; there is no automatic updater.
 
-Before restoring sessions or accepting agent launches, the desktop reads PATH
+On macOS and Linux, before restoring sessions or accepting agent launches, the desktop reads PATH
 from the user's interactive login shell once, asynchronously, with a three-second
 deadline and a 64 KiB output limit. It runs the probe in the home directory and
 stops the probe's process group on completion, failure, timeout, or shutdown.
@@ -410,6 +453,12 @@ standard system directories. Empty, relative, and duplicate entries are removed.
 Missing or failing shells use inherited PATH and the same fallbacks. This applies
 to Git, agent connection tests, orchestration chats, and workers; absolute agent
 commands remain authoritative. The CLI and configuration files are unchanged.
+Windows instead uses the bounded native discovery and owned-job contracts above;
+it never probes a shell profile. See [Windows setup and limitations](WINDOWS.md).
+Windows release promotion requires timestamped SHA-256 Authenticode signatures
+on the final installer, installed executable, helper and uninstaller, followed
+by reinstall/uninstall data-preservation checks. Native x64 checks remain a
+separate acceptance gate; ARM64 development/emulation cannot satisfy it.
 
 macOS releases use Developer ID signing and notarization. Packaging preserves
 Electron's Node mode because orchestration providers launch the bundled MCP

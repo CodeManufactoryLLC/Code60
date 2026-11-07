@@ -1,83 +1,122 @@
-import { spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { watch } from "node:fs";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+// Bootstrap only the first-party compiler and helper, with finite deadlines.
+// Once compiled, all long-lived development processes use the production owner.
+for (const args of [
+  ["scripts/build-windows-helper.mjs"],
+  ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"],
+])
+  execFileSync(process.execPath, args, {
+    cwd: root,
+    stdio: "inherit",
+    windowsHide: true,
+    timeout: 120_000,
+  });
+const { spawnOwnedProcess } = await import("../dist/platform/index.js");
 const children = new Set();
-let stopping = false;
+const restartingApps = new WeakSet();
+let stopping;
 let app;
 let timer;
+let watcher;
 let restarting = false;
 let dirty = false;
-function launch(command, args) {
-  const child = spawn(command, args, { cwd: root, stdio: "inherit" });
+const appGrace = process.platform === "win32" ? 0 : 25_000;
+
+async function launch(command, args) {
+  const child = await spawnOwnedProcess([command, ...args], root);
+  if (stopping) {
+    await child.stop(0);
+    throw new Error("Development startup cancelled");
+  }
   children.add(child);
-  child.once("error", (error) => {
-    console.error(error.message);
-    stop(1);
-  });
-  child.once("exit", () => children.delete(child));
+  child.stdout.pipe(process.stdout, { end: false });
+  child.stderr.pipe(process.stderr, { end: false });
+  child.exited
+    .then(() => {
+      children.delete(child);
+      return child.stop(0);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      void stop(1);
+    });
   return child;
 }
-function startApp() {
-  app = launch(electron, ["."]);
-  app.once("exit", (code) => {
-    if (!restarting && !stopping) stop(code ?? 0);
+async function startApp() {
+  const child = await launch(electron, ["."]);
+  app = child;
+  child.exited.then(({ code }) => {
+    if (!restartingApps.has(child) && !stopping) void stop(code ?? 0);
   });
 }
-function restart() {
+async function restart() {
   if (stopping) return;
   if (restarting) {
     dirty = true;
     return;
   }
   restarting = true;
-  app.once("exit", () => {
+  try {
+    restartingApps.add(app);
+    await app.stop(appGrace);
+    if (!stopping) await startApp();
+  } catch (error) {
+    console.error(error.message);
+    void stop(1);
+  } finally {
     restarting = false;
-    if (!stopping) {
-      startApp();
-      if (dirty) {
-        dirty = false;
-        schedule();
-      }
+    if (dirty && !stopping) {
+      dirty = false;
+      schedule();
     }
-  });
-  app.kill("SIGTERM");
+  }
 }
 function schedule() {
   clearTimeout(timer);
-  timer = setTimeout(restart, 700);
+  timer = setTimeout(() => void restart(), 700);
 }
-let watcher;
 function stop(code) {
-  if (stopping) return;
-  stopping = true;
   clearTimeout(timer);
   watcher?.close();
-  for (const child of children) child.kill("SIGTERM");
-  process.exitCode = code;
-}
-process.on("SIGINT", () => stop(130));
-process.on("SIGTERM", () => stop(130));
-const build = launch("npm", ["run", "build"]);
-build.once("exit", (code) => {
-  if (code !== 0 || stopping) {
-    stop(code ?? 1);
-    return;
+  if (stopping) {
+    for (const child of children) void child.stop(0).catch(() => {});
+    return stopping;
   }
-  startApp();
-  // Production-file loading also in development keeps renderer privileges identical.
-  watcher = watch(new URL("../dist", import.meta.url), { recursive: true }, schedule);
-  const compiler = launch(process.execPath, [
-    "node_modules/typescript/bin/tsc",
-    "-p",
-    "tsconfig.build.json",
-    "--watch",
-  ]);
-  const renderer = launch(process.execPath, ["node_modules/vite/bin/vite.js", "build", "--watch"]);
-  for (const child of [compiler, renderer])
-    child.once("exit", (result) => {
-      if (!stopping) stop(result ?? 1);
+  stopping = Promise.allSettled(
+    [...children].map((child) => child.stop(child === app ? appGrace : 5_000)),
+  ).then((results) => {
+    process.exitCode = results.some((result) => result.status === "rejected") ? 1 : code;
+  });
+  return stopping;
+}
+process.on("SIGINT", () => void stop(130));
+process.on("SIGTERM", () => void stop(130));
+try {
+  const build = await launch(process.execPath, ["node_modules/vite/bin/vite.js", "build"]);
+  if ((await build.exited).code !== 0) await stop(1);
+  else {
+    await startApp();
+    watcher = watch(new URL("../dist", import.meta.url), { recursive: true }, schedule);
+    watcher.on("error", (error) => {
+      console.error(error.message);
+      void stop(1);
     });
-});
+    for (const args of [
+      ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json", "--watch"],
+      ["node_modules/vite/bin/vite.js", "build", "--watch"],
+    ]) {
+      const child = await launch(process.execPath, args);
+      child.exited.then(({ code }) => {
+        if (!stopping) void stop(code ?? 1);
+      });
+    }
+  }
+} catch (error) {
+  console.error(error.message);
+  await stop(1);
+}

@@ -13,6 +13,15 @@ export const runStatusSchema = z.enum([
   "interrupted",
 ]);
 
+const nativeIdentitySchema = z.object({
+  createdAt: z.string().regex(/^\d{1,20}$/),
+  owner: z.string().regex(/^S-\d+(?:-\d+)+$/),
+  job: z
+    .string()
+    .regex(/^Local\\Code60-[a-f\d-]{36}$/)
+    .optional(),
+});
+
 // Stored records may contain additional metadata from a newer writer. Validate the known
 // fields and discard unknown ones; IPC and configuration objects instead reject extra fields.
 export const runRecordSchema = z
@@ -29,6 +38,8 @@ export const runRecordSchema = z
     worktree: z.string().min(1),
     ownerPid: z.number().int().positive(),
     agentPid: z.number().int().positive().optional(),
+    ownerIdentity: nativeIdentitySchema.optional(),
+    agentIdentity: nativeIdentitySchema.optional(),
     agentCommand: z.array(z.string()).readonly().optional(),
     /** Absent on records written before explicit session recovery was added. */
     acpSessionId: z.string().optional(),

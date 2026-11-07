@@ -15,8 +15,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build:helper": "node scripts/build-windows-helper.mjs",
+    "build": "node scripts/build-windows-helper.mjs && tsc -p tsconfig.build.json && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "node scripts/build-windows-helper.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
@@ -30,6 +32,7 @@
     "package:dir": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --dir --publish never",
     "package:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --linux --x64 --publish never",
     "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
+    "package:win": "node scripts/package-windows.mjs",
     "test:packaged": "playwright test --config playwright.packaged.config.ts",
     "test:installers": "node scripts/test-installers.mjs"
   },
