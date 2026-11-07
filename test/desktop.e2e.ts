@@ -457,13 +457,13 @@ async function expectTabAppearance(page: Page) {
 }
 
 async function appendRow(page: Page, table: "sessions" | "configurations" = "sessions") {
-  // Success toasts from the previous action can cover the sticky row.
-  const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
-  for (let count = 0; count < 3 && (await dismiss.count()); count++) await dismiss.first().click();
   const grid = page.locator(`#panel-${table} .sessions-grid`);
   const canvas = grid.getByTestId("data-grid-canvas");
   // The add row ignores clicks while it is disabled, such as while a project opens.
   await expect(page.locator(`#panel-${table} .table-add-accessible`)).toBeEnabled();
+  // Project success toasts can arrive during that wait and cover the sticky row.
+  const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  for (let count = 0; count < 3 && (await dismiss.count()); count++) await dismiss.first().click();
   // The canvas is resized after layout; wait until it matches the grid before aiming at it.
   await expect
     .poll(async () => {
@@ -472,10 +472,15 @@ async function appendRow(page: Page, table: "sessions" | "configurations" = "ses
     })
     .toBe(true);
   const box = await canvas.boundingBox();
-  if (!box) throw new Error("Missing table canvas");
+  // Glide receives pointer events on its transparent scroller above the canvas.
+  const scroller = grid.locator(".dvn-scroller");
+  const receiver = await scroller.boundingBox();
+  if (!box || !receiver) throw new Error("Missing table canvas");
   const row = Number(await grid.getAttribute("data-row-height"));
   // The sticky add row is pinned to the bottom of the canvas, whatever the row count.
-  await page.mouse.click(box.x + 70, box.y + box.height - row / 2);
+  await scroller.click({
+    position: { x: box.x + 70 - receiver.x, y: box.y + box.height - row / 2 - receiver.y },
+  });
 }
 
 async function launch(directory: string, folder: string, database: string, configured = true) {
