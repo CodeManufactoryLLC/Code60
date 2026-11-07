@@ -27,6 +27,27 @@ export interface PollClock {
 
 /** One scheduler for external reads. A stale flight must settle before its replacement starts. */
 export class Poller {
+  /** App-wide release checks are independent of workspace polling and its pause switch. */
+  static scheduleUpdateChecks(check: () => Promise<void>): () => void {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = (delay: number) => {
+      timer = setTimeout(() => {
+        void check()
+          .catch(() => {})
+          .finally(() => {
+            if (!stopped) schedule(4 * 60 * 60_000);
+          });
+      }, delay);
+      timer.unref();
+    };
+    schedule(30_000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }
+
   private sources = new Map<PollKey, Source>();
   private stopped = false;
   private paused = false;

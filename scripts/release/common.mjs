@@ -80,10 +80,22 @@ export function signingReady(env) {
     throw new Error("Set RELEASE_MAINTAINER to Name <email>");
 }
 export function assetNames(version, platform) {
+  const channel = versionOf(`v${version}`).prerelease
+    ? version.split("-")[1].split(".")[0]
+    : "latest";
   if (platform === "linux")
-    return [`Code60-${version}-linux-x64.deb`, `Code60-${version}-linux-x64.AppImage`];
-  if (platform === "mac") return [`Code60-${version}-mac-arm64.dmg`];
-  if (platform === "win") return [`Code60-${version}-win-x64.exe`];
+    return [
+      `Code60-${version}-linux-x64.deb`,
+      `Code60-${version}-linux-x64.AppImage`,
+      `${channel}-linux.yml`,
+    ];
+  if (platform === "mac")
+    return [
+      `Code60-${version}-mac-arm64.dmg`,
+      `Code60-${version}-mac-arm64.zip`,
+      `${channel}-mac.yml`,
+    ];
+  if (platform === "win") return [`Code60-${version}-win-x64.exe`, `${channel}.yml`];
   throw new Error("Unknown installer platform");
 }
 export async function github(path, options = {}) {

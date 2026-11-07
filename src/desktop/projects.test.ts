@@ -251,6 +251,26 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
 });
 
 describe("desktop preferences", () => {
+  it("defaults release checks on and preserves the switch across concurrent writes and restarts", async () => {
+    const file = join(directory, "desktop.json");
+    const preferences = filePreferences(file);
+    expect(await preferences.updateCheck()).toBe(true);
+    await Promise.all([
+      preferences.setUpdateCheck(false),
+      preferences.write("/data/projects.sqlite"),
+      preferences.setTransparent(true),
+    ]);
+    const again = filePreferences(file);
+    expect(await again.updateCheck()).toBe(false);
+    expect(await again.read()).toBe("/data/projects.sqlite");
+    expect(await again.transparent()).toBe(true);
+    await again.setUpdateCheck(true);
+    expect(await filePreferences(file).updateCheck()).toBe(true);
+    for (const value of [null, [], { updateCheck: "false" }, { updateCheck: 0 }]) {
+      await writeFile(file, JSON.stringify(value));
+      expect(await preferences.updateCheck()).toBe(true);
+    }
+  });
   it("preserves database and appearance settings across concurrent writes and restarts", async () => {
     const file = join(directory, "desktop.json");
     const preferences = filePreferences(file);

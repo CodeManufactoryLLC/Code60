@@ -223,6 +223,8 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  update(action: UpdateAction): Promise<UpdateState>;
+  onUpdate(listener: (state: UpdateState) => void): () => void;
   extractMemory(request: MemoryExtractionRequest): Promise<MemoryExtractionResult>;
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
@@ -262,6 +264,35 @@ export interface DesktopApi {
 }
 
 export type MenuCommand = "open-project" | "database";
+
+const updateActionSchema = z.enum([
+  "status",
+  "check",
+  "download",
+  "cancel",
+  "install",
+  "auto-on",
+  "auto-off",
+]);
+export type UpdateAction = z.infer<typeof updateActionSchema>;
+export const parseUpdateAction = (value: unknown): UpdateAction => updateActionSchema.parse(value);
+
+export interface UpdateState {
+  revision: number;
+  status:
+    | "unavailable"
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "ready"
+    | "installing"
+    | "error";
+  version: string | null;
+  percent: number;
+  message: string;
+  autoCheck: boolean;
+}
 
 export interface OrchestrationProvider {
   provider: string | null;

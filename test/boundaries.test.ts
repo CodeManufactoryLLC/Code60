@@ -21,6 +21,7 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
 const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@agentclientprotocol/sdk": "agents",
   electron: "desktop",
+  "electron-updater": "desktop",
   react: "renderer",
   "react-dom": "renderer",
   "@glideapps/glide-data-grid": "renderer",

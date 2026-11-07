@@ -9,6 +9,7 @@ import {
   Menu,
   type MenuItemConstructorOptions,
 } from "electron";
+import updaterPackage from "electron-updater";
 import {
   CODE60_COPYRIGHT,
   type MenuCommand,
@@ -29,13 +30,17 @@ import {
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseStart,
+  parseUpdateAction,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
 import { setEnvironmentPath } from "../platform/index.js";
+import { installAppImage } from "./appimage-update.js";
 import { DesktopController } from "./controller.js";
+import { installDeb } from "./deb-update.js";
 import { desktopPath } from "./environment.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
+import { DesktopUpdates } from "./updates.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const page = pathToFileURL(join(here, "../renderer/index.html")).href;
@@ -43,6 +48,7 @@ let window: BrowserWindow | undefined;
 let exiting = false;
 let quitPending = false;
 const startup = new AbortController();
+let updates: DesktopUpdates | undefined;
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const controller = new DesktopController(
@@ -85,6 +91,7 @@ async function quit(confirm: boolean): Promise<void> {
       if (result.response !== 1) return;
     }
     startup.abort();
+    updates?.close();
     await controller.shutdown();
     exiting = true;
     app.quit();
@@ -112,6 +119,8 @@ function handle(channel: string, action: (value: unknown) => unknown): void {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
     trusted(event);
     if (args.length > 1) throw new Error("Invalid request");
+    if (channel !== "desktop:app-update" && updates?.snapshot().status === "installing")
+      throw new Error("An update is being installed");
     return action(args[0]);
   });
 }
@@ -204,6 +213,81 @@ async function ready(): Promise<void> {
   let enabled = transparent;
   const clickThrough = transparent && process.platform === "darwin";
   Menu.setApplicationMenu(applicationMenu());
+  const supported =
+    (process.platform === "darwin" && process.arch === "arm64") ||
+    ((process.platform === "linux" || process.platform === "win32") && process.arch === "x64");
+  updates = new DesktopUpdates(
+    app.isPackaged && supported ? updaterPackage.autoUpdater : null,
+    (state) => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send("desktop:app-update-state", state);
+    },
+    async () => {
+      if (quitPending) return false;
+      quitPending = true;
+      try {
+        const result = await dialog.showMessageBox({
+          type: "warning",
+          message: "Install update and restart Code60?",
+          detail:
+            "Active turns will be cancelled and all agents stopped. Worktrees, settings and databases are kept. Linux DEB updates may ask for administrator authorization.",
+          buttons: ["Keep working", "Install and restart"],
+          defaultId: 0,
+          cancelId: 0,
+        });
+        if (result.response !== 1) return false;
+        return true;
+      } finally {
+        quitPending = false;
+      }
+    },
+    async (file) => {
+      quitPending = true;
+      try {
+        startup.abort();
+        await controller.shutdown();
+        exiting = true;
+        if (process.platform === "linux") {
+          if (file.endsWith(".deb")) await installDeb(file);
+          else if (file.endsWith(".AppImage") && process.env.APPIMAGE)
+            await installAppImage(file, process.env.APPIMAGE);
+          else throw new Error("Unsupported Linux installer");
+          app.relaunch(process.env.APPIMAGE ? { execPath: process.env.APPIMAGE } : {});
+          app.quit();
+        } else updaterPackage.autoUpdater.quitAndInstall(false, true);
+      } catch {
+        await dialog.showMessageBox({
+          type: "error",
+          message: "The update could not be installed.",
+          detail:
+            "Restart Code60 and try again. Check installation permissions (DEB updates need a working PolicyKit authorization agent). Your data is kept.",
+          buttons: ["Close Code60"],
+        });
+        // Shutdown may have only partly succeeded; never leave agents behind.
+        await controller.shutdown(true);
+        exiting = true;
+        app.quit();
+      } finally {
+        quitPending = false;
+      }
+    },
+    {
+      autoCheck: await preferences.updateCheck(),
+      saveAutoCheck: (enabled) => preferences.setUpdateCheck(enabled),
+    },
+  );
+  if (app.isPackaged && supported)
+    updaterPackage.autoUpdater.on("error", () => {
+      if (!exiting) return;
+      void dialog
+        .showMessageBox({
+          type: "error",
+          message: "The update could not be installed.",
+          detail: "Code60 will close. Restart it and try updating again. Your data is kept.",
+        })
+        .finally(() => app.quit());
+    });
+  handle("desktop:app-update", (value) => updates?.action(parseUpdateAction(value)));
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };

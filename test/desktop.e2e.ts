@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
+import type { UpdateState } from "../src/bridge/index.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
@@ -438,6 +439,131 @@ async function launch(directory: string, folder: string, database: string, confi
   return launchDesktop(directory, folder, database);
 }
 
+test("desktop: update footer, once-per-version popup, download and automatic-check preference", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-updates-"));
+  application = await launch(directory, directory, join(directory, "projects.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Settings");
+    const toggle = page.getByRole("switch", { name: "Automatically check for updates" });
+    await expect(toggle).toBeChecked();
+    await toggle.uncheck();
+    await expect
+      .poll(() => page.evaluate(() => window.desktop.update("status")))
+      .toMatchObject({ autoCheck: false });
+    await page.reload();
+    await selectSidebarPage(page, "Settings");
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
+    await expect
+      .poll(() => page.evaluate(() => window.desktop.update("status")))
+      .toMatchObject({ autoCheck: true });
+
+    // Inject only the updater boundary, leaving the real renderer and preload in place.
+    const publish = (
+      version: string,
+      status: UpdateState["status"] = "available",
+      revision = 100,
+    ) =>
+      application.evaluate(
+        ({ ipcMain, BrowserWindow }, next: UpdateState) => {
+          let state = next;
+          ipcMain.removeHandler("desktop:app-update");
+          ipcMain.handle("desktop:app-update", (_event, action) => {
+            if (action === "download")
+              state = {
+                ...state,
+                revision: state.revision + 1,
+                status: "downloading",
+                percent: 42,
+                message: "Downloading update…",
+              };
+            if (action === "cancel")
+              state = {
+                ...state,
+                revision: state.revision + 1,
+                status: "available",
+                percent: 0,
+                message: "Download cancelled.",
+              };
+            return state;
+          });
+          BrowserWindow.getAllWindows()[0]?.webContents.send("desktop:app-update-state", state);
+        },
+        {
+          revision,
+          status,
+          version,
+          percent: status === "ready" ? 100 : 0,
+          message: `Code60 ${version} is available.`,
+          autoCheck: true,
+        },
+      );
+
+    // An update waits for another modal to close, without interrupting it.
+    await page.locator(".sidebar-header").click();
+    const project = page.getByRole("dialog", { name: "Open Project", exact: true });
+    await expect(project).toBeVisible();
+    await publish("9.1.0");
+    const popup = page.getByRole("dialog", { name: "Update available", exact: true });
+    await expect(popup).toHaveCount(0);
+    await project.getByRole("button", { name: "Close Open Project" }).click();
+    await expect(popup).toBeVisible();
+    await expect(popup).toContainText("9.1.0");
+    await popup.getByRole("button", { name: "Later", exact: true }).click();
+    const footer = page.locator(".app-footer");
+    await expect(
+      footer.getByRole("button", { name: "Update available", exact: true }),
+    ).toBeVisible();
+    await selectSidebarPage(page, "Chat");
+    await footer.getByRole("button", { name: "Update available", exact: true }).click();
+    await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Download update", exact: true }),
+    ).toBeInViewport();
+    await page.reload();
+    await expect(
+      footer.getByRole("button", { name: "Update available", exact: true }),
+    ).toBeVisible();
+    await expect(popup).toHaveCount(0);
+
+    await publish("9.2.0", "available", 200);
+    await expect(popup).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(popup).toHaveCount(0);
+    await publish("9.2.0", "available", 201);
+    await expect(popup).toHaveCount(0);
+    await publish("9.3.0", "available", 300);
+    await expect(popup).toBeVisible();
+    await popup.getByRole("button", { name: "Download now", exact: true }).click();
+    await expect(popup).toHaveCount(0);
+    await expect(footer.getByRole("button", { name: "Downloading update 42%" })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Update download" })).toHaveAttribute(
+      "value",
+      "42",
+    );
+    await page.getByRole("button", { name: "Cancel download", exact: true }).click();
+    await expect(
+      footer.getByRole("button", { name: "Update available", exact: true }),
+    ).toBeVisible();
+    await expect(popup).toHaveCount(0);
+    await publish("9.3.0", "ready", 400);
+    await footer.getByRole("button", { name: "Ready to install", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Install and restart", exact: true }),
+    ).toBeInViewport();
+    // A stale status response cannot erase a downloaded update.
+    await publish("9.1.0", "available", 1);
+    await expect(
+      footer.getByRole("button", { name: "Ready to install", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: sidebar tabs, solid background, and restart-only transparent background", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-appearance-"));
   const database = join(directory, "projects.sqlite");
@@ -702,6 +828,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(settingsTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
     const about = page.getByRole("region", { name: "About", exact: true });
+    const updates = page.getByRole("region", { name: "Updates", exact: true });
+    await expect(updates.getByRole("status")).toContainText("installed release build");
+    await expect(updates.getByRole("button", { name: "Check for updates" })).toBeDisabled();
+    expect(await page.evaluate(() => window.desktop.update("status"))).toMatchObject({
+      status: "unavailable",
+    });
+    await expect(page.evaluate(() => window.desktop.update("execute" as never))).rejects.toThrow();
     await expect(about.getByText(version, { exact: true })).toBeVisible();
     const versions = (await page.evaluate(() => window.desktop.snapshot())).versions;
     expect(versions).toMatchObject({
@@ -1268,6 +1401,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Table defaults",
       "Text",
       "Polling",
+      "Updates",
       "About",
     ]);
     // The settings content is centered in the page, excluding the sidebar.

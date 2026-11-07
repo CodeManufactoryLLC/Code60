@@ -17,9 +17,30 @@ import {
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseStart,
+  parseUpdateAction,
 } from "./index.js";
 
 describe("desktop IPC validation", () => {
+  it("allows only fixed update actions, never URLs, paths or commands", () => {
+    for (const action of [
+      "status",
+      "check",
+      "download",
+      "cancel",
+      "install",
+      "auto-on",
+      "auto-off",
+    ])
+      expect(parseUpdateAction(action)).toBe(action);
+    for (const value of [
+      null,
+      undefined,
+      "",
+      "https://example.invalid",
+      { action: "install", path: "/tmp/file" },
+    ])
+      expect(() => parseUpdateAction(value)).toThrow();
+  });
   it("preserves POSIX file names while rejecting Windows devices, streams and ambiguous names", () => {
     const context = (root: string, preview: string) => ({
       project: root,

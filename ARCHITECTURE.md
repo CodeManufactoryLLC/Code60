@@ -398,7 +398,7 @@ Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each work
 ### Desktop security
 
 - The renderer runs with context isolation, the Chromium sandbox, no Node.js integration, and a restrictive Content Security Policy. Navigation, new windows, and `<webview>` are blocked.
-- The preload script exposes a fixed set of methods (`windowAppearance`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`), never `ipcRenderer` or raw channels.
+- The preload script exposes a fixed set of methods (`windowAppearance`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
 - The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
 - The orchestration chat receives one Code60 MCP stdio server. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive no Code60 MCP server. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No tool accepts SQL, arbitrary commands, environment settings or target directories.
 - Updates are batched about every 40 ms. Each carries a revision number, and the renderer merges snapshots and buffered updates by revision, so starting up or reloading never loses or duplicates events.
@@ -440,7 +440,34 @@ The bundle ID is `com.codemanufactory.code60`; the
 Linux GUI executable is `code60-desktop`, separate from the headless `code60` CLI.
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
-Installer replacement is manual; there is no automatic updater.
+Settings → Updates offers explicit Check for updates, Download update, cancellation,
+and Install and restart on all distributed targets. The main-process `Poller` also
+schedules app-wide release checks after 30 seconds and then four hours after each
+check completes, independently of workspace polling and its pause switch. Checks
+are single-flight, run only from idle update state, stop on shutdown, and never
+download automatically. Background failures stay quiet; manual failures are shown.
+The on-by-default automatic-check switch persists as `updateCheck` in desktop.json;
+fixed `auto-on`/`auto-off` update actions change it without affecting CLI configuration.
+A footer button opens Settings → Updates and labels availability, download progress,
+or readiness to install. A popup offers Download now / Later once per version,
+remembered in renderer local storage, and waits for other dialogs to close.
+`electron-updater` reads the
+fixed public GitHub release feed and validates downloaded SHA-512 checksums;
+macOS and Windows also retain their native signature verification. Stable builds
+stay on stable releases; prerelease builds can receive their channel and stable
+releases. Downgrades, background downloads and quit-time installation are disabled.
+No renderer request accepts a URL, path or command: `update` accepts only fixed
+actions, and `onUpdate` pushes revisioned progress, including across renderer reloads.
+Development builds report updates unavailable. Downloads cancel on quit and have
+a 30-minute deadline. Installation asks with a native dialog and shuts down all
+agents, gateways and polling before replacing the app. Config, records and databases
+are kept. macOS uses the signed ZIP update, Windows uses NSIS, Linux DEB uses an
+asynchronous, five-minute-bounded `pkexec /usr/bin/dpkg -i` authorization, and AppImage
+stages a complete executable beside the original before atomic replacement.
+Linux authorization or installation failures are shown before closing the stopped app.
+The main process rejects other renderer requests during installation.
+Release staging verifies channel metadata against the exact final artifacts.
+The macOS ZIP and platform channel YAML files are published alongside installers.
 
 Desktop packages use a viridian (`#40826d`) desktop icon with centered black
 D-DIN Regular 60 numerals. The fill reaches every edge except for the
@@ -472,4 +499,5 @@ Electron's Node mode because orchestration providers launch the bundled MCP
 sidecar with the app executable and `ELECTRON_RUN_AS_NODE=1`. Packaged tests
 exercise that path through its authenticated gateway. The renderer remains
 sandboxed; the desktop refuses `--no-sandbox` launches, including AppImage
-fallbacks. Packaging adds no bridge methods or application configuration fields.
+fallbacks. Packaging adds no CLI configuration fields; the only update bridge
+methods are the fixed-action `update` and `onUpdate` described above.

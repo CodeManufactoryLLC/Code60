@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { verify } from "../scripts/release/artifacts.mjs";
+import { refreshDmgMetadata, verify, verifyUpdateMetadata } from "../scripts/release/artifacts.mjs";
 import {
   assetNames,
   digest,
@@ -136,8 +137,20 @@ async function artifacts() {
   directories.push(directory);
   for (const platform of ["mac", "linux", "win"]) {
     const assets = [];
-    for (const name of assetNames("0.2.0", platform)) {
-      await writeFile(join(directory, name), `installer ${name}`);
+    const names = assetNames("0.2.0", platform);
+    const files = names
+      .filter((name) => !name.endsWith(".yml"))
+      .map((name) => ({
+        url: name,
+        sha512: createHash("sha512").update(`installer ${name}`).digest("base64"),
+      }));
+    for (const name of names) {
+      await writeFile(
+        join(directory, name),
+        name.endsWith(".yml")
+          ? JSON.stringify({ version: "0.2.0", files, path: files[0].url, sha512: files[0].sha512 })
+          : `installer ${name}`,
+      );
       assets.push({ name, sha256: await digest(join(directory, name)) });
     }
     await writeFile(
@@ -154,9 +167,54 @@ async function artifacts() {
   return directory;
 }
 describe("release artifact promotion", () => {
+  it("refreshes only the DMG checksum after Apple stapling", async () => {
+    const directory = await artifacts();
+    const name = assetNames("0.2.0", "mac")[0];
+    await writeFile(join(directory, name), "stapled final DMG");
+    await expect(verifyUpdateMetadata(directory, "0.2.0", "mac")).rejects.toThrow("checksum");
+    await refreshDmgMetadata(directory, "0.2.0");
+    await expect(verifyUpdateMetadata(directory, "0.2.0", "mac")).resolves.toBeUndefined();
+  });
+  it("includes stable and prerelease updater metadata on every platform", () => {
+    for (const [platform, suffix] of [
+      ["mac", "-mac"],
+      ["linux", "-linux"],
+      ["win", ""],
+    ]) {
+      expect(assetNames("0.2.0", platform).at(-1)).toBe(`latest${suffix}.yml`);
+      expect(assetNames("0.2.0-beta.5", platform).at(-1)).toBe(`beta${suffix}.yml`);
+    }
+  });
+  it("rejects stale metadata, foreign URLs and incorrect checksums", async () => {
+    const directory = await artifacts();
+    const path = join(directory, "latest-mac.yml");
+    const original = JSON.parse(await readFile(path, "utf8"));
+    for (const mutate of [
+      (data) => {
+        data.version = "0.1.0";
+      },
+      (data) => {
+        data.files[0].url = "https://example.invalid/foreign.zip";
+      },
+      (data) => {
+        data.files[0].sha512 = "bad";
+      },
+      (data) => {
+        data.files.pop();
+      },
+      (data) => {
+        data.path = "../foreign.zip";
+      },
+    ]) {
+      const data = structuredClone(original);
+      mutate(data);
+      await writeFile(path, JSON.stringify(data));
+      await expect(verifyUpdateMetadata(directory, "0.2.0", "mac")).rejects.toThrow();
+    }
+  });
   it("requires every installer from the same exact commit", async () => {
     const directory = await artifacts();
-    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(4);
+    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(8);
     await expect(verify(directory, "v0.2.0", "b".repeat(40))).rejects.toThrow("identity");
   });
   it("rejects changed bytes, missing installers, missing manifests and unexpected files", async () => {
