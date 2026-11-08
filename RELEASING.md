@@ -80,9 +80,10 @@ compare the relevant line for the installer you downloaded).
 
 ## One-time GitHub setup
 
-The repository uses standard GitHub-hosted Linux and Windows x64 runners for PRs,
-and an Apple Silicon `macos-15` runner only for explicitly requested releases. Remove
-old Mac/Node required checks from branch protection and require **CI passed**.
+The repository uses only standard GitHub-hosted Linux runners for PRs and pushes
+to main. Windows x64 and Apple Silicon `macos-15` runners run only for explicitly
+requested releases. Require **CI passed** rather than individual platform checks
+in branch protection.
 The aggregate fails on failed, cancelled, or skipped validation jobs. If merge
 queues are enabled later, add their `merge_group` trigger before using the queue.
 Apply and verify the [versioned branch ruleset](.github/rulesets/README.md).
@@ -143,9 +144,9 @@ Node 22.12 and 24. Node 24 additionally runs the Electron suite under Xvfb,
 builds both Linux installers, installs the DEB, and launches both the installed
 DEB application and the actual AppImage. An ephemeral runner-only user-namespace
 setting allows Electron to retain its Chromium sandbox on Ubuntu 24.04.
-Windows x64 / Node 24 also runs checks, desktop and CLI smoke tests, builds an
-unsigned development NSIS installer, and tests installation, reinstall and
-uninstall. All jobs are required by **CI passed**; PRs receive no signing secrets.
+These Linux jobs are required by **CI passed**; PRs receive no signing secrets.
+Windows and macOS checks are release-only, so platform-specific regressions on
+those systems are detected during release validation rather than on every PR.
 
 A release is a manual `Release installers` workflow dispatch from `main`, with
 one existing version tag. The workflow validates the exact tagged commit and
