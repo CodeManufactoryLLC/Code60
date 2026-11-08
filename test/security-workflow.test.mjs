@@ -5,9 +5,17 @@ import { parse } from "yaml";
 const workflow = parse(
   await readFile(new URL("../.github/workflows/security-review.yml", import.meta.url), "utf8"),
 );
-const { codeql, dependencies } = workflow.jobs;
+const { codeql, dependencies, secrets } = workflow.jobs;
 
 describe("automated security reviews", () => {
+  it("scans complete history and current files without a paid action or credentials", () => {
+    expect(secrets.permissions).toBeUndefined();
+    const checkout = secrets.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkout.with["fetch-depth"]).toBe(0);
+    expect(secrets.steps.some((step) => step.run === "node scripts/scan-secrets.mjs")).toBe(true);
+    expect(JSON.stringify(secrets)).not.toMatch(/GITLEAKS_LICENSE|npm ci|pull_request_target/);
+  });
+
   it("reviews every PR and main push, with scheduled and manual rescans", () => {
     expect(workflow.on.push).toEqual({ branches: ["main"] });
     expect(workflow.on).toHaveProperty("pull_request");
@@ -20,7 +28,7 @@ describe("automated security reviews", () => {
     expect(workflow.permissions).toEqual({ contents: "read" });
     expect(codeql.permissions).toEqual({ contents: "read", "security-events": "write" });
     expect(dependencies.permissions).toBeUndefined();
-    expect(JSON.stringify(workflow)).not.toContain("secrets.");
+    expect(JSON.stringify(workflow)).not.toMatch(/\$\{\{\s*secrets\./);
     for (const job of Object.values(workflow.jobs)) {
       expect(job["runs-on"]).toBe("ubuntu-24.04");
       expect(job["timeout-minutes"]).toBeGreaterThan(0);

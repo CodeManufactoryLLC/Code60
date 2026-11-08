@@ -8,6 +8,18 @@ afterEach(async () => {
 });
 
 describe("Code60 private MCP gateway", () => {
+  it("redacts credential-bearing tool errors without altering successful payloads", async () => {
+    gateway = await createMcpGateway(async () => {
+      throw new Error(`connection failed: api_key=${["synthetic", "credential"].join("-")}`);
+    });
+    const response = await fetch(gateway.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${gateway.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "code60_read_sessions", arguments: {} }),
+    });
+    expect(await response.json()).toEqual({ error: "connection failed: api_key=[REDACTED]" });
+  });
+
   it("authenticates loopback requests and forwards only validated envelopes", async () => {
     const handler = vi.fn(async () => ({ rows: [] }));
     gateway = await createMcpGateway(handler);

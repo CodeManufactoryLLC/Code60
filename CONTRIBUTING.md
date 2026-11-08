@@ -1,5 +1,9 @@
 # Contributing to Code60
 
+Read the [security policy](SECURITY.md) for agent permissions, sensitive local
+data, and safeguards and limitations. Report suspected vulnerabilities privately
+to [support@code60.dev](mailto:support@code60.dev), not through public issues.
+
 ## Issues and planning
 
 Use the [issue forms](https://github.com/CodeManufactoryLLC/code60/issues/new/choose)
@@ -63,6 +67,7 @@ Useful scripts:
 
 - `npm run check`: typecheck, Biome lint and formatting checks, and unit and integration tests.
 - `npm run format`: apply formatting and safe lint fixes.
+- `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
 - `npm run build`: compile the CLI and desktop main process and build the renderer.
 - `npm run dev`: build and start the desktop app with rebuilds on changes.
 - `npm run test:desktop`: build and run the Electron Playwright tests. A display is required.
@@ -148,6 +153,41 @@ automatically merged.
 Scheduled version updates start once the configuration is merged into `main`.
 Enable Dependabot alerts and security updates in the repository's security
 settings to receive vulnerability fixes independently of the weekly schedule.
+
+## Security triage and ownership
+
+The sole maintainer, `@matthewholliday`, owns security triage through
+[CODEOWNERS](.github/CODEOWNERS). Ownership routes review; it does not require
+an approving review or change the zero-required-approvals policy.
+
+Review the [Security review workflow](.github/workflows/security-review.yml)
+on every PR and after scheduled scans. Triage CodeQL findings in code scanning,
+dependency advisories in the job summary/artifact, and Gitleaks locations in
+workflow logs. Record the impact, decision, and fix or follow-up without copying
+credentials or private task data into issues. A passing CodeQL job means analysis
+completed, not that all findings are resolved.
+
+Run `npm run scan:secrets` before submitting changes. Exit 1 means findings;
+exit 2 means the scan failed to complete and must be repaired and rerun, not
+waived as clean. Review false positives in context rather than adding broad
+exclusions or bypass comments. The scanner checks tests and environment files
+too, so use clearly synthetic fixtures, never real credentials.
+
+If a real credential is found, revoke or rotate it first, review its use, and
+remove it from current files. Deleting the latest copy does not remove history
+exposure. Coordinate any history cleanup explicitly; do not rewrite published
+history as an automatic response. Report vulnerabilities privately to
+[support@code60.dev](mailto:support@code60.dev).
+
+GitHub's native secret scanning is optional and is not enabled by these files.
+The repository uses CI scanning, not push protection; these changes do not
+modify live GitHub settings.
+
+For a read-only protection check, use the ruleset lookup and GET requests in
+[Verify](.github/rulesets/README.md#verify), not the POST/PUT application steps.
+Confirm active enforcement, no bypass actors, required PRs and **CI passed**,
+and zero required approving reviews. Checked-in policy tests do not prove that
+live settings match.
 
 ## Architecture and changes
 

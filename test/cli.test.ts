@@ -54,6 +54,61 @@ function harness(script: TurnScript = () => "end_turn") {
 }
 
 describe("code60 run (headless)", () => {
+  it("keeps private transcript content out of progress and scrubs diagnostic stderr", async () => {
+    const privateText = "private prompt and tool input";
+    const credential = ["synthetic", "credential"].join("-");
+    const h = harness((_text, session) => {
+      session.stderrTail = () => `api_key=${credential}`;
+      session.update({
+        type: "acp",
+        update: "tool_call",
+        payload: privateText,
+        size: privateText.length,
+      });
+      session.update({ type: "message", text: privateText });
+      session.update({
+        type: "toolCall",
+        toolCallId: "private",
+        title: privateText,
+        kind: "edit",
+        status: "completed",
+      });
+      return "end_turn";
+    });
+    expect(await run(["run", "--json", privateText], h.io)).toBe(0);
+    expect(h.stderr()).not.toContain(privateText);
+    expect(h.stderr()).not.toContain(credential);
+    const result = JSON.parse(h.stdout()).runs[0];
+    const events = (
+      await fs.readFile(
+        join(dir, "repo", ".git", "code60", "runs", result.id, "events.jsonl"),
+        "utf8",
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events).toContainEqual(expect.objectContaining({ type: "prompt", text: privateText }));
+    expect(events).toContainEqual(expect.objectContaining({ type: "acp", payload: privateText }));
+    expect(events).toContainEqual(expect.objectContaining({ type: "message", text: privateText }));
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "stderr", text: "api_key=[REDACTED]" }),
+    );
+  });
+
+  it("redacts startup failure reasons without changing JSON fields or failure exit codes", async () => {
+    const h = harness();
+    h.agents.startError = new Error(
+      `connection failed: access_token=${["synthetic", "credential"].join("-")}`,
+    );
+    expect(await run(["run", "--json", "go"], h.io)).toBe(1);
+    expect(JSON.parse(h.stdout()).runs[0]).toMatchObject({
+      status: "failed",
+      reason: "connection failed: access_token=[REDACTED]",
+    });
+    expect(h.stderr()).not.toContain("synthetic-credential");
+  });
+
   it("--json writes only the result to stdout and progress to stderr", async () => {
     const h = harness((_t, s) => {
       s.update({
@@ -84,7 +139,7 @@ describe("code60 run (headless)", () => {
     });
     expect(result.runs[1].agent).toBe("codex");
     expect(h.stderr()).toMatch(/\] running/);
-    expect(h.stderr()).toMatch(/tool: Write hello.txt \(edit, pending\)/);
+    expect(h.stderr()).toMatch(/tool: \(edit, pending\)/);
     expect(h.stderr()).toMatch(/\] finished/);
     expect(h.stderr()).not.toMatch(/secret prompt/);
   });

@@ -47,6 +47,7 @@ export type {
   ReviewSnapshot,
   ReviewSnapshotFile,
 } from "../git/index.js";
+export { diagnosticMessage, diagnosticText } from "../platform/index.js";
 export type { Clock } from "./clock.js";
 export {
   type DiscardResult,

@@ -8,12 +8,12 @@ import {
   type FileSnapshot,
   parseFileContext,
 } from "../bridge/index.js";
-import { containedPath, helperOutput } from "../platform/index.js";
+import { containedPath, diagnosticMessage, helperOutput } from "../platform/index.js";
 
 export const previewByteLimit = 1024 * 1024;
 const directoryEntryLimit = 2000;
 const totalEntryLimit = 10000;
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = diagnosticMessage;
 
 /** Deliberately do not follow links, including links in intermediate directories. */
 async function checkedPath(root: string, path: string): Promise<string> {

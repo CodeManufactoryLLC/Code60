@@ -224,7 +224,7 @@ type RunEvent = { runId: string; at: string } & (
       completedAt?: string; outcome?: "finished" | "cancelled" | "timed_out" | "failed" | "interrupted" }
   | { type: "sessionState"; state: SessionState } // Model, context occupancy and harness modes
   | { type: "acp"; update: string; payload: string; size: number; truncated?: true }
-  | { type: "stderr"; text: string }   // Written once when the run ends: the last 64 KiB of stderr
+  | { type: "stderr"; text: string }   // Written once when the run ends: up to 64 KiB of scrubbed stderr
 );
 ```
 
@@ -256,7 +256,8 @@ Project run records live inside the repository's Git directory, so they travel w
 - `run.json` is replaced atomically (written to a temporary file, then renamed). `events.jsonl` is append-only.
 - Records and events are validated when read, including agreement with the requested run ID. Malformed records are omitted from listings; directly reading a malformed record or event log reports an error without including its contents. Unknown metadata fields are ignored, and older records without optional recovery fields remain readable. Event readers skip unknown string event types after checking their run ID; known types still require valid fields. Older releases reject logs containing `acp` or `turnEnd`, so this run-record change requires a major release.
 - Both files are created with mode `0600`. The event log can contain anything the agent printed, so it is treated as sensitive. It never leaves the machine.
-- Raw ACP updates preserve provider content as well as the typed display events, so logs grow faster and may contain sensitive tool inputs and outputs. The 256 KiB raw-payload cap applies per update, not per log; no total-size limit or retention policy is enforced. Stderr remains only the last 64 KiB, written when the run ends.
+- Raw ACP updates preserve provider content as well as the typed display events, so logs grow faster and may contain sensitive tool inputs and outputs. The 256 KiB raw-payload cap applies per update, not per log; no total-size limit or retention policy is enforced. Stderr retains up to 64 KiB of scrubbed text, written when the run ends; oversized lines are omitted.
+- The platform diagnostic utility redacts common credentials before clipping operational errors and stderr. ACP provider errors become generic failures instead of echoing provider text. This is best-effort protection, not PII anonymization: prompts, messages, tool payloads and raw ACP transcripts remain intact, and existing records are not rewritten. See [the security policy](SECURITY.md#local-data-and-sensitive-records) before sharing records.
 - The first prompt is stored in `run.json` so `list` can show it. `run.json` also stores the optional ACP session ID for desktop recovery; older records without it remain readable. Every prompt, including follow-ups, is a `prompt` event in `events.jsonl`. Logs on standard error never include prompts.
 - These files are records, not a recovery mechanism. If they are lost, only history is lost.
 
@@ -327,7 +328,7 @@ code60 --version
 ```
 
 - `run` is always headless and runs exactly one turn per run. It reads the prompt from the argument, `--prompt-file`, or standard input, and exactly one of them must be given. Standard input is read only when neither of the others is given and it is not a TTY. `--headless` is accepted for compatibility and changes nothing. Use the desktop app for interactive runs.
-- In headless mode, progress goes to standard error: status changes, new tool calls, and permission decisions. `--json` writes one result object to standard output, `{"runs": [...]}`, with every run's ID, agent, status, reason, branch, worktree, and changed-file count. Without `--json`, a short table goes to standard output.
+- In headless mode, progress goes to standard error: status changes, new tool calls, and permission decisions, without tool/permission titles or status reasons that may echo task content. `--json` writes one result object to standard output, `{"runs": [...]}`, with every run's ID, agent, status, reason, branch, worktree, and changed-file count. Diagnostic reasons receive best-effort credential redaction; fields and exit-code semantics stay unchanged. Without `--json`, a short table goes to standard output.
 - `discard` refuses while the run is active or its agent process is alive. It shows the files that would be lost, then removes the worktree and its `code60/<run-id>` branch. It asks for confirmation in a TTY and requires `--yes` otherwise.
 
 ### Exit codes

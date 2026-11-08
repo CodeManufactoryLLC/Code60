@@ -7,6 +7,7 @@ import {
   type PromptTemplates,
 } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
+import { diagnosticText } from "../platform/index.js";
 import type { Clock } from "./clock.js";
 import { decide, type PolicyOverrides } from "./policy.js";
 import type { Processes } from "./processes.js";
@@ -133,6 +134,7 @@ export async function createOrchestrator(
     },
     onChange: notifyChange,
     warn(message: string) {
+      message = diagnosticText(message);
       if (warned.has(message)) return;
       warned.add(message);
       for (const listener of warningListeners) listener(message);

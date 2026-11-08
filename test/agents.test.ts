@@ -211,11 +211,32 @@ describe("agent processes", () => {
   });
 
   it("keeps a bounded stderr tail", async () => {
-    const session = await start({ FAKE_AGENT_STDERR: `${"x".repeat(70 * 1024)}END` });
+    const session = await start({ FAKE_AGENT_STDERR: `${"x\n".repeat(35 * 1024)}END` });
     await session.prompt("hi");
     // stdout and stderr are separate pipes, so the turn can end before all of stderr is read.
     await vi.waitFor(() => expect(session.stderrTail().endsWith("END")).toBe(true));
     expect(session.stderrTail().length).toBe(64 * 1024);
+  });
+
+  it("drops an oversized stderr line instead of clipping away credential labels", async () => {
+    const session = await start({ FAKE_AGENT_STDERR: `api_key=${"x".repeat(70 * 1024)}END` });
+    await session.prompt("hi");
+    await vi.waitFor(() => expect(session.stderrTail()).toContain("oversized stderr line omitted"));
+    expect(session.stderrTail()).not.toContain("END");
+    expect(Buffer.byteLength(session.stderrTail())).toBeLessThanOrEqual(64 * 1024);
+  });
+
+  it("redacts credentials in actual agent stderr while preserving raw ACP text", async () => {
+    const privateText = `api_key=${["synthetic", "credential"].join("-")}`;
+    const session = await start({ FAKE_AGENT_STDERR: privateText });
+    const updates: AgentUpdate[] = [];
+    session.onUpdate((update) => updates.push(update));
+    await session.prompt(steps({ message: privateText }));
+    await vi.waitFor(() => expect(session.stderrTail()).toBe("api_key=[REDACTED]"));
+    expect(updates).toContainEqual({ type: "message", text: privateText });
+    expect(
+      updates.some((update) => update.type === "acp" && update.payload.includes(privateText)),
+    ).toBe(true);
   });
 
   it("fails the turn when the agent exits", async () => {

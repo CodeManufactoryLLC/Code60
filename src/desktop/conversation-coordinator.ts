@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { MCP_CONTROL_LIMITS, type SequencedEvent } from "../bridge/index.js";
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
+import { diagnosticMessage } from "../platform/index.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
 
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = diagnosticMessage;
 
 /** A worker run dispatched by the orchestration chat. Ownership is held only in memory. */
 export interface Worker {

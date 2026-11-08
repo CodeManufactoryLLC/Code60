@@ -13,6 +13,7 @@ import {
   parseSetupBegin,
   parseSetupSession,
 } from "../bridge/index.js";
+import { diagnosticMessage } from "../platform/index.js";
 import { commandIdentity, PROVIDERS } from "./provider-catalog.js";
 
 type Command = readonly [string, ...string[]];
@@ -122,7 +123,7 @@ export class AgentSetup {
       } catch (error) {
         if (current()) {
           session.phase = "failed";
-          session.error = error instanceof Error ? error.message : String(error);
+          session.error = diagnosticMessage(error);
         }
       } finally {
         this.running = undefined;

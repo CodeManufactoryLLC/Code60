@@ -153,7 +153,7 @@ describe("ACP session information transport", () => {
         return { configOptions: [mode("full")] };
       });
     const session = await openSession(app, options);
-    await expect(session.setMode(change)).rejects.toThrow(/Invalid params/);
+    await expect(session.setMode(change)).rejects.toThrow(/ACP request failed/);
     expect(session.sessionState.modes?.confirmed).toBe(true);
     expect(session.sessionState.modes?.controls[0]?.currentValue).toBe("ask");
     reject = false;

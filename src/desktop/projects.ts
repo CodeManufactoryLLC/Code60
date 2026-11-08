@@ -10,7 +10,11 @@ import {
   type RunConfiguration,
   validatePromptTemplate,
 } from "../bridge/index.js";
-import { createPrivateFileSync, privateDirectorySync } from "../platform/index.js";
+import {
+  createPrivateFileSync,
+  diagnosticMessage,
+  privateDirectorySync,
+} from "../platform/index.js";
 
 /** Saved template edits; rows that cannot be used are described in `skipped`, never applied. */
 export interface SavedPromptTemplates {
@@ -47,7 +51,7 @@ const PROMPT_TABLE =
   "CREATE TABLE code60_prompt_templates (" +
   "id TEXT PRIMARY KEY, template TEXT NOT NULL, updated_at TEXT NOT NULL)";
 const HISTORY_LIMIT = 200;
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = diagnosticMessage;
 
 export function sqliteAvailable(): boolean {
   try {

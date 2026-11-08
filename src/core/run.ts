@@ -17,6 +17,7 @@ import {
   supportsModeChange,
 } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
+import { diagnosticMessage, diagnosticText } from "../platform/index.js";
 import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
@@ -99,7 +100,7 @@ function outcomeOf(reason: StopReason): Outcome {
 }
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return diagnosticMessage(error);
 }
 
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
@@ -436,7 +437,7 @@ export class Run {
     } catch (error) {
       clock.clearTimeout(timer);
       if (error instanceof AgentStartError && error.stderrTail !== "") {
-        this.emit({ type: "stderr", text: error.stderrTail });
+        this.emit({ type: "stderr", text: diagnosticText(error.stderrTail, 64 * 1024) });
       }
       if (startTimedOut) {
         return this.end({
@@ -692,7 +693,7 @@ export class Run {
         };
       }
       const tail = session.stderrTail();
-      if (tail !== "") this.emit({ type: "stderr", text: tail });
+      if (tail !== "") this.emit({ type: "stderr", text: diagnosticText(tail, 64 * 1024) });
     }
     if (outcome.status === "interrupted") delete this.record.endedAt;
     else this.record.endedAt = clock.now().toISOString();
@@ -705,6 +706,7 @@ export class Run {
     reason?: string,
     timing?: { turn: number; completedAt: string },
   ): Promise<void> {
+    if (reason !== undefined) reason = diagnosticText(reason);
     this.record.status = status;
     if (reason === undefined) delete this.record.reason;
     else this.record.reason = reason;
