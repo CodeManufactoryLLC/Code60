@@ -12,6 +12,7 @@
       "test/**/*.ts",
       "test/**/*.mjs",
       "*.json",
+      ".github/rulesets/*.json",
       ".github/**/*.yml",
       "src/**/*.cts",
       "src/**/*.css",
