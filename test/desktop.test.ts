@@ -1042,6 +1042,66 @@ describe("app-wide orchestration chat", () => {
     };
   }
 
+  it("serves turn-scoped display reports without project authority and keeps them out of run records", async () => {
+    agents.script = () => "hang";
+    const id = await ready();
+    const call = tableCaller();
+    expect((await call("code60_get_activity_context")).body.result.scope).toBeNull();
+    await controller.orchestrationChatAction({ type: "send", id, text: "Inspect the results" });
+    const context = (await call("code60_get_activity_context")).body.result;
+    expect(context.scope).toBeTypeOf("string");
+    expect(context.lastSequence).toBe(0);
+    const args = {
+      scope: context.scope,
+      sequence: 1,
+      operation: "set",
+      activityType: "comparing",
+      label: "Comparing worker results",
+    };
+    const accepted = await call("code60_report_activity", args);
+    expect(accepted.status).toBe(200);
+    expect(controller.snapshot().chat.activity).toMatchObject({
+      state: "comparing",
+      source: "declared",
+    });
+    expect((await call("code60_report_activity", args)).body).toEqual(accepted.body);
+    expect((await call("code60_report_activity", { ...args, label: "Conflicting" })).status).toBe(
+      400,
+    );
+    // Invalid display requests must not fail the agent's actual turn.
+    expect(controller.snapshot().chat.run?.status).toBe("running");
+    agents.sessions[0]?.update({
+      type: "toolCall",
+      toolCallId: "command",
+      title: "Tests passed",
+      kind: "execute",
+      status: "in_progress",
+    });
+    expect(controller.snapshot().chat.activity).toMatchObject({
+      state: "executing",
+      source: "observed",
+      declaration: { label: args.label },
+    });
+    // Snapshot reload includes live state; event history has no display mutations.
+    expect(controller.snapshot(true).chat.activity).toEqual(
+      controller.snapshot(false).chat.activity,
+    );
+    expect(
+      controller
+        .snapshot()
+        .chat.events.some(({ event }) => "text" in event && event.text === args.label),
+    ).toBe(false);
+    await controller.orchestrationChatAction({ type: "cancel", id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(controller.snapshot().chat.activity).toMatchObject({
+      state: "cancelled",
+      declaration: null,
+    });
+    expect((await call("code60_report_activity", { ...args, sequence: 2 })).status).toBe(400);
+    await controller.orchestrationChatAction({ type: "send", id, text: "Continue" });
+    expect((await call("code60_get_activity_context")).body.result.scope).not.toBe(context.scope);
+  });
+
   it("injects the latest saved contract without changing recorded user prompts", async () => {
     const id = await ready();
     const send = async (text: string) => {

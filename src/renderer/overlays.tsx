@@ -244,6 +244,25 @@ export function Tooltips() {
       document.removeEventListener("scroll", hide, true);
     };
   }, [id]);
+  // Activity purposes can change while the pointer or keyboard focus stays on the status.
+  const tipTarget = tip?.target;
+  useEffect(() => {
+    if (!tipTarget) return;
+    const observer = new MutationObserver(() => {
+      if (!tipTarget.isConnected) {
+        setTip((current) => (current?.target === tipTarget ? undefined : current));
+        return;
+      }
+      const text = tipTarget.dataset.tooltip ?? tipTarget.getAttribute("aria-label");
+      setTip((current) => (current?.target === tipTarget && text ? { ...current, text } : current));
+    });
+    observer.observe(tipTarget, {
+      attributes: true,
+      attributeFilter: ["data-tooltip", "aria-label"],
+    });
+    if (tipTarget.parentElement) observer.observe(tipTarget.parentElement, { childList: true });
+    return () => observer.disconnect();
+  }, [tipTarget]);
   // Prefer above the control and flip below near the top edge; menu items get it beside the menu.
   useLayoutEffect(() => {
     const element = ref.current;

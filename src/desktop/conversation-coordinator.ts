@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { MCP_CONTROL_LIMITS, type SequencedEvent } from "../bridge/index.js";
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
 import { diagnosticMessage } from "../platform/index.js";
+import { ActivityDisplay } from "./activity-display.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
 
@@ -38,7 +39,13 @@ export class ChatSession {
   inbox: WorkerUpdate[] = [];
   updatesPaused = false;
 
-  constructor(readonly chatGeneration: number) {}
+  readonly activity: ActivityDisplay;
+  constructor(
+    readonly chatGeneration: number,
+    changed: () => void = () => {},
+  ) {
+    this.activity = new ActivityDisplay({ changed });
+  }
 }
 
 interface CoordinationDeps {
@@ -54,26 +61,29 @@ interface CoordinationDeps {
 /** In-memory conversation authority and delivery; process lifecycle stays in the controller. */
 export class ConversationCoordinator {
   private generation = 0;
-  current = new ChatSession(0);
-  sessions = [this.current];
+  current: ChatSession;
+  sessions: ChatSession[];
   private readonly registry = new Map<string, Worker>();
   private updateTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly deps: CoordinationDeps) {}
+  constructor(private readonly deps: CoordinationDeps) {
+    this.current = new ChatSession(0, deps.changed);
+    this.sessions = [this.current];
+  }
 
   get workers(): ReadonlyMap<string, Worker> {
     return this.registry;
   }
 
   create(): ChatSession {
-    const session = new ChatSession(++this.generation);
+    const session = new ChatSession(++this.generation, this.deps.changed);
     this.sessions.push(session);
     this.current = session;
     return session;
   }
 
   replace(previous?: ChatSession): ChatSession {
-    const session = new ChatSession(++this.generation);
+    const session = new ChatSession(++this.generation, this.deps.changed);
     if (previous) this.sessions.splice(this.sessions.indexOf(previous), 1, session);
     else this.sessions = [session];
     this.current = session;
@@ -161,6 +171,7 @@ export class ConversationCoordinator {
 
   pause(session: ChatSession): void {
     session.updatesPaused = true;
+    session.activity.stop();
   }
   resume(session: ChatSession): void {
     session.updatesPaused = false;
@@ -168,11 +179,15 @@ export class ConversationCoordinator {
   }
 
   rotateScopes(): void {
-    for (const session of this.sessions) session.workerScope = randomUUID();
+    for (const session of this.sessions) {
+      session.workerScope = randomUUID();
+      session.activity.invalidate();
+    }
   }
 
   revoke(session: ChatSession): void {
     session.revoked = true;
+    session.activity.invalidate();
     session.workerScope = randomUUID();
     session.inbox = [];
     session.dispatches.clear();
@@ -181,7 +196,10 @@ export class ConversationCoordinator {
   stop(): void {
     if (this.updateTimer !== undefined) clearTimeout(this.updateTimer);
     this.updateTimer = undefined;
-    for (const session of this.sessions) session.inbox = [];
+    for (const session of this.sessions) {
+      session.inbox = [];
+      session.activity.invalidate();
+    }
   }
 
   /** Queues one update per ended or failed worker turn; streamed chunks never wake the chat. */
@@ -236,6 +254,7 @@ export class ConversationCoordinator {
     const updates = session.inbox.slice(0, UPDATE_BATCH);
     try {
       this.send(session, this.deps.formatUpdates(updates), "automatic");
+      session.activity.received();
       session.inbox.splice(0, updates.length);
     } catch (error) {
       session.chatError = `Could not send worker updates: ${message(error)}`;

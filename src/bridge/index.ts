@@ -6,6 +6,7 @@ export * from "./git-setup.js";
 
 import { z } from "zod";
 import {
+  type ActivitySnapshot,
   boundedString,
   durationSchema,
   PROMPT_IDS,
@@ -23,11 +24,23 @@ import {
 import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js";
 
 export {
+  ACTIVITY_LIFETIME_MS,
+  ACTIVITY_MESSAGE_MS,
+  ACTIVITY_TOOLS,
+  ACTIVITY_TYPES,
+  type ActivityAcknowledgment,
+  type ActivityDeclaration,
+  type ActivitySnapshot,
+  type ActivityState,
+  type ActivityTool,
+  type ActivityType,
   CODE60_COPYRIGHT,
   DEFAULT_PROMPT_TEMPLATES,
   findMcpTableTool,
   findMcpTool,
+  isActivityTool,
   isMcpControlTool,
+  MCP_ACTIVITY_TOOL_DEFINITIONS,
   MCP_CONTROL_LIMITS,
   MCP_CONTROL_TOOL_DEFINITIONS,
   MCP_CONTROL_TOOLS,
@@ -48,6 +61,8 @@ export {
   type PromptFields,
   type PromptId,
   type PromptTemplates,
+  parseActivityContextArgs,
+  parseActivityReport,
   renderPrompt,
   SEARCH_EXCERPT_LIMIT,
   SEARCH_QUERY_LIMIT,
@@ -360,6 +375,8 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  /** Ephemeral live presentation, never reconstructed from transcript history. */
+  activity?: ActivitySnapshot;
   /** Current-project workers owned by this conversation, never inferred from process liveness. */
   workers?: string[];
   run: RunView | null;

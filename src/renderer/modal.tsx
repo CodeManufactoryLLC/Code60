@@ -5,12 +5,14 @@ export function Modal({
   title,
   busy,
   wide = false,
+  className = "",
   onClose,
   children,
 }: {
   title: string;
   busy: boolean;
   wide?: boolean;
+  className?: string;
   onClose(): void;
   children: ReactNode;
 }) {
@@ -24,7 +26,7 @@ export function Modal({
   return (
     <dialog
       ref={dialog}
-      className={`setup-dialog ${wide ? "changes-dialog" : "picker-dialog"}`}
+      className={`setup-dialog ${wide ? "changes-dialog" : "picker-dialog"} ${className}`}
       aria-labelledby={id}
       onCancel={(event) => {
         event.preventDefault();

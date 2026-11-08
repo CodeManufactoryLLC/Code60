@@ -205,7 +205,15 @@ export function createFakeAgent(options = {}) {
 
       for (const step of steps) {
         if (cancelled) return { stopReason: "cancelled" };
-        if (step.message !== undefined) {
+        if (step.activity !== undefined) {
+          const context = await tool("code60_get_activity_context");
+          await tool("code60_report_activity", {
+            scope: context.scope,
+            sequence: context.lastSequence + 1,
+            operation: "set",
+            ...step.activity,
+          });
+        } else if (step.message !== undefined) {
           await update({
             sessionUpdate: "agent_message_chunk",
             content: { type: "text", text: step.message },

@@ -103,7 +103,7 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     await expect(page.getByRole("note", { name: "Running Code60 version" })).toHaveText(
       `Code60 ${version}`,
     );
-    await expect(page.locator(".app-footer")).toHaveCSS("height", "40px");
+    await expect(page.locator(".app-footer")).toHaveCSS("height", "20px");
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await page.evaluate(() => window.desktop.chooseFolder());
     await page.evaluate(() => window.desktop.setOrchestrationProvider("fake"));

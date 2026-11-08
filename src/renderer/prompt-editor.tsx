@@ -223,7 +223,13 @@ export function PromptEditorPage({
               <p>{tool.description}</p>
               <details>
                 <summary>
-                  Input contract ({tool.readOnly ? "read-only" : "changes worker state"})
+                  Input contract (
+                  {tool.readOnly
+                    ? "read-only"
+                    : tool.kind === "activity"
+                      ? "updates activity display"
+                      : "changes worker state"}
+                  )
                 </summary>
                 <pre className="prompt-editor-preview">
                   {JSON.stringify(tool.inputSchema, null, 2)}

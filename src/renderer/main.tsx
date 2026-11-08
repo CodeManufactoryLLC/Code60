@@ -230,9 +230,6 @@ function App() {
     parseRowDensity(localStorage.getItem("code60.rowDensity")),
   );
   const [tabs, setTabs] = useState(initialTabs);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
-  const sidebarExpanded = sidebarOpen || sidebarHovered;
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [gitSetupProject, setGitSetupProject] = useState<string>();
   const [chartTickMs, setChartTickMs] = useState(() =>
@@ -926,24 +923,9 @@ function App() {
         />
       )}
       {!splash && <div className="window-drag-strip" aria-hidden="true" />}
-      <div
-        className="app-workspace"
-        data-chat={!splash && tabs.active === "chat"}
-        data-sidebar-minimized={!sidebarExpanded}
-      >
+      <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
         {!splash && (
           <PageTabBar
-            open={sidebarExpanded}
-            pinned={sidebarOpen}
-            onHoverChange={setSidebarHovered}
-            onExpand={() => {
-              setSidebarOpen(true);
-              setSidebarHovered(false);
-            }}
-            onToggle={() => {
-              setSidebarOpen((value) => !value);
-              setSidebarHovered(false);
-            }}
             tabs={tabs}
             api={api}
             chats={snapshot?.chats ?? []}
@@ -952,7 +934,6 @@ function App() {
             runs={snapshot?.runs ?? []}
             onWorkerSelect={selectWorker}
             database={database}
-            version={snapshot?.versions.code60}
             eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
@@ -999,7 +980,11 @@ function App() {
                   key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
                   api={api}
                   chat={chat}
-                  hidden={!!workerId || chat?.directory !== snapshot?.chat.directory}
+                  hidden={
+                    tabs.active !== "chat" ||
+                    !!workerId ||
+                    chat?.directory !== snapshot?.chat.directory
+                  }
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
                   runs={snapshot?.runs ?? []}
@@ -1488,6 +1473,9 @@ function App() {
               approvals waiting
             </button>
           )}
+          <div className="app-version" role="note" aria-label="Running Code60 version">
+            Code60 {snapshot?.versions.code60 ?? "Version unavailable"}
+          </div>
         </footer>
       )}
       {picker === "database" && (
@@ -2071,6 +2059,7 @@ function AboutSection({ versions }: { versions: Versions | undefined }) {
         </div>
       ))}
       <p>{CODE60_COPYRIGHT}</p>
+      <p>Geometry animated icons created by Magnific - Flaticon</p>
       <button type="button" disabled={!versions} onClick={() => void copy()}>
         Copy version info
       </button>

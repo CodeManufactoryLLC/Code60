@@ -1,3 +1,5 @@
+import type { ActivityTool } from "./activity.js";
+
 /** MCP protocol versions the Code60 MCP server accepts; the last one is preferred. */
 export const MCP_PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26"] as const;
 export const MCP_PROTOCOL_VERSION = "2025-03-26";
@@ -69,7 +71,14 @@ export interface McpControlToolDefinition extends McpToolBase {
   name: McpControlTool;
 }
 
-export type McpToolDefinition = McpTableToolDefinition | McpControlToolDefinition;
+export interface McpActivityToolDefinition extends McpToolBase {
+  kind: "activity";
+  name: ActivityTool;
+}
+export type McpToolDefinition =
+  | McpTableToolDefinition
+  | McpControlToolDefinition
+  | McpActivityToolDefinition;
 
 const pageInput = {
   offset: {
@@ -115,7 +124,10 @@ export const MCP_TOOL_CONTRACT_INFO =
   "the scope token from code60_get_context, which changes when the project or chat changes. Workers " +
   "require a Git repository with an initial commit and always run in isolated worktrees, receive no Code60 " +
   "tools, and allow each of their own tool calls once without asking. Live workers, including idle " +
-  "ones, count against the configured parallel limit until they are finished or stopped.";
+  "ones, count against the configured parallel limit until they are finished or stopped. " +
+  "Activity tools discover supported semantic types and set or clear a turn-scoped display declaration. " +
+  "They do not control workers or execute work, need no project authority, and expose no artwork. " +
+  "Observed execution and lifecycle states take precedence over agent-reported purpose.";
 
 const scopeInput = {
   scope: {
@@ -363,7 +375,61 @@ export const MCP_TABLE_TOOL_DEFINITIONS: readonly McpTableToolDefinition[] = MCP
   },
 );
 
+export const MCP_ACTIVITY_TOOL_DEFINITIONS: readonly McpActivityToolDefinition[] = [
+  {
+    kind: "activity",
+    name: "code60_get_activity_context",
+    title: "Get activity context",
+    description:
+      "List supported activity types and inspect this conversation's current declaration. Returns the scope and last sequence required to update activity during the current turn. No project or worker authority is required.",
+    inputSchema: object({}),
+    readOnly: true,
+    destructive: false,
+  },
+  {
+    kind: "activity",
+    name: "code60_report_activity",
+    title: "Report activity",
+    description:
+      "Set or clear your current activity description. Report meaningful changes in purpose; Code60 combines your declaration with observed execution. Updates the display only: does not start work or verify results. A set replaces the previous declaration and expires after 120 seconds or when the turn ends. Continue your task if reporting fails; do not send periodic heartbeats.",
+    inputSchema: object(
+      {
+        scope: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Current-turn scope from code60_get_activity_context.",
+        },
+        sequence: {
+          type: "integer",
+          minimum: 1,
+          maximum: Number.MAX_SAFE_INTEGER,
+          description:
+            "Increase after each accepted report. Retry the last request with identical arguments and sequence; retries do not extend expiry.",
+        },
+        operation: { type: "string", enum: ["set", "clear"] },
+        activityType: {
+          type: "string",
+          description:
+            "Required for set; use a supported type from code60_get_activity_context. Omit for clear.",
+        },
+        label: {
+          type: "string",
+          minLength: 1,
+          maxLength: 160,
+          description:
+            "Required for set: concise plain-text description of your purpose, on one line. Omit for clear.",
+        },
+      },
+      ["scope", "sequence", "operation"],
+    ),
+    readOnly: false,
+    destructive: false,
+  },
+];
+
 export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
+  ...MCP_ACTIVITY_TOOL_DEFINITIONS,
   ...MCP_TABLE_TOOL_DEFINITIONS,
   ...MCP_CONTROL_TOOL_DEFINITIONS,
 ];

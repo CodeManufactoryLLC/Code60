@@ -29,6 +29,8 @@ const state: SessionState = {
 const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
   renderToStaticMarkup(
     <SessionInfo
+      harness="droid"
+      sessionId="session-one"
       state={state}
       ended={false}
       editable
@@ -42,33 +44,53 @@ const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
 describe("session information", () => {
   it("shows separate model, context, harness mode and Code60 approval state", () => {
     const html = render();
-    expect(html).toContain("Model: Model One");
+    expect(html).toContain(">Model One</span>");
     expect(html).toContain("26.5%");
     expect(html).toContain("Harness mode");
-    expect(html).toContain('optgroup label="Standard"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain('width="20"');
+    expect(html).toContain('stroke-dasharray="26.5 100"');
     expect(html).toContain("Code60 auto-approval: On");
-    expect(html).toMatch(/<select(?![^>]*disabled)[^>]*>/);
-  });
-  it("keeps separately advertised groups with the same label distinct", () => {
-    const grouped: SessionState = structuredClone(state);
-    const options = grouped.modes?.controls[0]?.options;
-    if (!options?.[0] || !options[1]) throw new Error("Missing test options");
-    options[0].groupId = "first";
-    options[1].groupId = "second";
-    expect(render({ state: grouped }).match(/<optgroup /g)).toHaveLength(2);
+    expect(html).toContain('aria-disabled="false"');
+    expect(html).not.toContain("<select");
   });
   it("disables changes while busy and renders historical values as read-only", () => {
-    expect(render({ changing: true })).toMatch(/<select[^>]*disabled/);
-    expect(render({ editable: false })).toMatch(/<select[^>]*disabled/);
+    expect(render({ changing: true })).toContain('aria-disabled="true"');
+    expect(render({ editable: false })).toContain('aria-disabled="true"');
     const html = render({ ended: true });
     expect(html).toContain("Last reported");
     expect(html).toContain("Ask");
     expect(html).not.toContain("<select");
   });
   it("handles absent values and zero capacity without estimating", () => {
-    expect(render({ state: undefined })).toContain("Not reported");
-    expect(contextUsage(null)).toBe("Not reported");
+    expect(render({ state: undefined })).toContain("N/A");
+    expect(contextUsage(null)).toBe("N/A");
     expect(contextUsage({ used: 0, size: 0, reportedAt: at })).toBe("0 / 0 tokens");
+  });
+  it("clamps the visual fraction and falls back for unknown harnesses", () => {
+    const over = { ...state, usage: { used: 300, size: 200, reportedAt: at } };
+    expect(render({ state: over })).toContain('stroke-dasharray="100 100"');
+    const unknown = render({ harness: "custom-agent" });
+    expect(unknown).toContain("Current provider: custom-agent");
+    expect(unknown).not.toContain("<img");
+    expect(render({ state: undefined })).toContain('data-reported="false"');
+    if (!state.modes) throw new Error("Missing fixture modes");
+    const emptyModes = { ...state, modes: { ...state.modes, controls: [] } };
+    expect(render({ state: emptyModes })).toContain("Harness mode: N/A");
+  });
+  it("shows advertised controls together and preserves unconfirmed state", () => {
+    const multiple = structuredClone(state);
+    if (!multiple.modes) throw new Error("Missing fixture modes");
+    multiple.modes.controls.push({
+      id: "execution",
+      name: "Execution",
+      currentValue: "build",
+      options: [{ value: "build", name: "Build" }],
+    });
+    expect(render({ state: multiple })).toContain("Ask · Build");
+    multiple.modes.confirmed = false;
+    expect(render({ state: multiple })).toContain("Unconfirmed");
+    expect(render({ state: multiple })).toContain('aria-haspopup="menu"');
   });
   it("keeps metadata out of streamed messages and unread counts", () => {
     const events = [

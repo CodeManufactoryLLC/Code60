@@ -1,23 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, SetupBegin, Snapshot } from "../bridge/index.js";
+import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 
-const logos = import.meta.glob<string>("./agent-logos/*.svg", {
-  eager: true,
-  query: "?url",
-  import: "default",
-});
-export function AgentLogo({ id }: { id: string }) {
-  return (
-    <img
-      className={`agent-logo agent-logo-${id}`}
-      src={logos[`./agent-logos/${id}.svg`]}
-      alt=""
-      width="28"
-      height="28"
-    />
-  );
-}
+export { AgentLogo } from "./agent-logo.js";
+
 export function AgentSetupWizard({
   snapshot,
   api,

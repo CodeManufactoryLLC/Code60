@@ -67,6 +67,7 @@ export function parseValue<S extends z.ZodType>(schema: S, value: unknown): z.ou
   return result.data;
 }
 
+export * from "./activity.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./prompts.js";

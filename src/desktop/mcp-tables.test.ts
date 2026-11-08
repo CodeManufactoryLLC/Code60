@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  MCP_ACTIVITY_TOOL_DEFINITIONS,
   MCP_CONTROL_TOOL_DEFINITIONS,
   MCP_TABLE_TOOL_DEFINITIONS,
   MCP_TABLES,
@@ -13,7 +14,9 @@ describe("Code60 table tools", () => {
     expect(MCP_TABLE_TOOL_DEFINITIONS.every((tool) => tool.readOnly && !tool.destructive)).toBe(
       true,
     );
-    expect(MCP_TOOL_DEFINITIONS).toHaveLength(12 + MCP_CONTROL_TOOL_DEFINITIONS.length);
+    expect(MCP_TOOL_DEFINITIONS).toHaveLength(
+      12 + MCP_CONTROL_TOOL_DEFINITIONS.length + MCP_ACTIVITY_TOOL_DEFINITIONS.length,
+    );
     expect(new Set(MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).size).toBe(
       MCP_TOOL_DEFINITIONS.length,
     );

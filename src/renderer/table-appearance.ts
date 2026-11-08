@@ -61,6 +61,7 @@ export function useTableAppearance(textStyles: TextStyles, lines: TableLines) {
   const cellTheme = useMemo(() => ({ fontFamily: normal.family }), [normal.family]);
   const theme = useMemo<Partial<Theme>>(
     () => ({
+      roundingRadius: 0,
       accentColor: color("--accent"),
       accentLight: color("--accent-bg"),
       textDark: color("--text"),

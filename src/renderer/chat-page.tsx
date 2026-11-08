@@ -7,11 +7,18 @@ import type {
   ReviewSummary,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { ActivityDisplay } from "./activity-display.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { SessionInfo } from "./session-info.js";
 import { type Block, statusSpec, transcript } from "./state.js";
+
+function isActivityBlock(block: Block): boolean {
+  return (
+    block.automatic === true || ["thought", "toolCall", "permission", "note"].includes(block.type)
+  );
+}
 
 function feedbackAt(review: ReviewSummary, chatId: string | undefined, turn: number) {
   return (
@@ -94,8 +101,10 @@ export function ChatPage({
   const busy = pending !== null;
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(300);
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(() => new Set());
   const inFlight = useRef(false);
   const scroll = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const position = useRef(0);
   const geometry = useRef({ width: 0, height: 0 });
@@ -112,9 +121,7 @@ export function ChatPage({
   const items = useMemo(() => {
     const result: { key: string; activity: boolean; blocks: Block[] }[] = [];
     for (const block of blocks.slice(-visible)) {
-      const activity =
-        block.automatic === true ||
-        ["thought", "toolCall", "permission", "note"].includes(block.type);
+      const activity = isActivityBlock(block);
       const previous = result.at(-1);
       if (
         activity &&
@@ -127,6 +134,93 @@ export function ChatPage({
     }
     return result;
   }, [blocks, visible]);
+  const activityTurns = useMemo(() => {
+    const groups = new Map<string, Block[]>();
+    const included = new Set(blocks.slice(-visible).map((block) => block.key));
+    let current = blocks.find((block) => block.type === "prompt")?.key ?? "session";
+    for (const block of blocks) {
+      if (block.type === "prompt") current = block.key;
+      if (!included.has(block.key) || !isActivityBlock(block)) continue;
+      const group = groups.get(current) ?? [];
+      group.push(block);
+      groups.set(current, group);
+    }
+    return { groups, current };
+  }, [blocks, visible]);
+  const liveActivity = !!(
+    working ||
+    connecting ||
+    run?.stopping ||
+    (pending && ["send", "cancel", "stop", "restart"].includes(pending)) ||
+    (chat?.activity && chat.activity.state !== "idle")
+  );
+  const liveTurn = liveActivity ? activityTurns.current : null;
+  const detailsId = (turn: string) => `${id}-activity-details-${turn}`;
+  const historyId = (turn: string) => `${id}-activity-history-${turn}`;
+  const toggleActivity = (turn: string) => {
+    follow.current = false;
+    if (scroll.current) position.current = scroll.current.scrollTop;
+    setExpandedActivities((current) => {
+      const next = new Set(current);
+      if (next.has(turn)) next.delete(turn);
+      else next.add(turn);
+      return next;
+    });
+    if (!expandedActivities.has(turn)) {
+      requestAnimationFrame(() => {
+        const viewport = scroll.current;
+        const details = document.getElementById(detailsId(turn));
+        const trigger = document.getElementById(
+          liveTurn === turn ? `${id}-live-activity` : historyId(turn),
+        );
+        if (currentKey.current !== key || !viewport || !details || details.inert || !trigger)
+          return;
+        const bounds = viewport.getBoundingClientRect();
+        const height = details.querySelector(".activity-details-content")?.scrollHeight ?? 0;
+        if (height + details.getBoundingClientRect().top > bounds.bottom) {
+          const destination = viewport.scrollTop + trigger.getBoundingClientRect().top - bounds.top;
+          const started = performance.now();
+          // The scroll range grows with the dropdown. Reveal its beginning as it opens.
+          const reveal = (now: number) => {
+            if (currentKey.current !== key || !details.isConnected || details.inert) return;
+            viewport.scrollTop = destination;
+            position.current = viewport.scrollTop;
+            if (now - started < 250) requestAnimationFrame(reveal);
+          };
+          requestAnimationFrame(reveal);
+        }
+      });
+    }
+  };
+  const activityDetails = (turn: string) => (
+    <section
+      id={detailsId(turn)}
+      className="activity-details"
+      aria-label="Activity details"
+      aria-live="off"
+      data-expanded={expandedActivities.has(turn)}
+      aria-hidden={!expandedActivities.has(turn)}
+      inert={!expandedActivities.has(turn)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        setExpandedActivities((current) => new Set([...current].filter((key) => key !== turn)));
+        document
+          .getElementById(liveTurn === turn ? `${id}-live-activity` : historyId(turn))
+          ?.focus();
+      }}
+    >
+      <div className="activity-details-clip">
+        <div className="activity-details-content">
+          {activityTurns.groups
+            .get(turn)
+            ?.map((block) => <ChatMessage key={block.key} block={block} />) ?? (
+            <p>No activity yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
   const latest = events.findLast(
     (event) =>
       event.type !== "status" &&
@@ -156,6 +250,7 @@ export function ChatPage({
     setDraft(key ? (sessionStorage.getItem(key) ?? "") : "");
     setError("");
     setVisible(300);
+    setExpandedActivities(new Set());
     follow.current = true;
     position.current = 0;
   }, [key]);
@@ -174,6 +269,7 @@ export function ChatPage({
       geometry.current = { width: element.clientWidth, height: element.clientHeight };
     });
     resize.observe(element);
+    if (content.current) resize.observe(content.current);
     return () => resize.disconnect();
   }, [active]);
   function edit(text: string) {
@@ -330,130 +426,174 @@ export function ChatPage({
             position.current = element.scrollTop;
           }}
         >
-          {blocks.length === 0 && (
-            <div className="chat-empty">
-              <span className="wordmark">
-                Code<b>60</b>
-              </span>
-              <h2>New conversation</h2>
-            </div>
-          )}
-          {blocks.length > visible && (
-            <button
-              type="button"
-              onClick={() => {
-                follow.current = false;
-                setVisible((count) => count + 300);
-              }}
-            >
-              Show earlier activity
-            </button>
-          )}
-          {items.map((item) => (
-            <div className="chat-turn-content" key={item.key}>
-              {item.activity ? (
-                <details className="chat-activity" key={item.key}>
-                  <summary>
-                    <Icon name="terminal" />
-                    Activity
-                  </summary>
-                  <div className="chat-activity-content">
-                    {item.blocks.map((block) => (
-                      <ChatMessage key={block.key} block={block} />
-                    ))}
-                  </div>
-                </details>
-              ) : (
-                (() => {
-                  const block = item.blocks[0] as Block;
-                  const event = events[Number(block.key)];
-                  const feedback =
-                    event?.type === "prompt"
-                      ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
-                      : undefined;
-                  return feedback ? (
-                    <article className="event prompt" aria-label="Your review feedback">
-                      <div className="chat-message-speaker">You</div>
-                      <p>Feedback on {feedback.title}</p>
-                      <button type="button" onClick={() => onReview?.(feedback.id)}>
-                        View submitted feedback
-                      </button>
-                    </article>
-                  ) : (
-                    <ChatMessage key={item.key} block={block} />
-                  );
-                })()
-              )}
-              {item.blocks.flatMap((block) => {
-                const event = events[Number(block.key)];
-                if (event?.type !== "prompt") return [];
-                return reviews
-                  .filter((review) => reviewAt(review, run?.id, event.turn))
-                  .map((review) => (
-                    <div className="chat-review-activity" key={review.id}>
-                      <span>{review.title}</span>
-                      <span>
-                        {review.workers
-                          .map(
-                            (worker) =>
-                              `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                          )
-                          .join(" · ")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onReview?.(
-                            review.id,
-                            review.submissions.some((batch) => batch.state === "delivered"),
-                          )
-                        }
-                      >
-                        {review.submissions.some((batch) => batch.state === "delivered")
-                          ? "Review updates"
-                          : "Review changes"}
-                      </button>
-                    </div>
-                  ));
-              })}
-              {item.blocks.map((block) => {
-                const timing = timings.get(block.key);
-                return timing ? (
-                  <TurnTimer key={block.key} timing={timing} visible={active} />
-                ) : null;
-              })}
-            </div>
-          ))}
-          {reviews
-            .filter(
-              (review) =>
-                review.chatId === run?.id &&
-                review.workers.length > 0 &&
-                !events.some(
-                  (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
-                ),
-            )
-            .map((review) => (
-              <div className="chat-review-activity" key={review.id}>
-                <span>{review.title}</span>
-                <span>
-                  {review.workers
-                    .map(
-                      (worker) =>
-                        `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                    )
-                    .join(" · ")}
+          <div className="chat-transcript-content" ref={content}>
+            {blocks.length === 0 && (
+              <div className="chat-empty">
+                <span className="wordmark">
+                  Code<b>60</b>
                 </span>
-                <button type="button" onClick={() => onReview?.(review.id)}>
-                  {review.submissions.some((batch) => batch.state === "delivered")
-                    ? "Review updates"
-                    : "Review changes"}
-                </button>
+                <h2>New conversation</h2>
+              </div>
+            )}
+            {blocks.length > visible && (
+              <button
+                type="button"
+                onClick={() => {
+                  follow.current = false;
+                  setVisible((count) => count + 300);
+                }}
+              >
+                Show earlier activity
+              </button>
+            )}
+            {items.map((item) => (
+              <div className="chat-turn-content" key={item.key}>
+                {!item.activity &&
+                  (() => {
+                    const block = item.blocks[0] as Block;
+                    const event = events[Number(block.key)];
+                    const feedback =
+                      event?.type === "prompt"
+                        ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
+                        : undefined;
+                    return feedback ? (
+                      <article className="event prompt" aria-label="Your review feedback">
+                        <div className="chat-message-speaker">You</div>
+                        <p>Feedback on {feedback.title}</p>
+                        <button type="button" onClick={() => onReview?.(feedback.id)}>
+                          View submitted feedback
+                        </button>
+                      </article>
+                    ) : (
+                      <ChatMessage key={item.key} block={block} />
+                    );
+                  })()}
+                {item.blocks.flatMap((block) => {
+                  const event = events[Number(block.key)];
+                  if (event?.type !== "prompt") return [];
+                  return reviews
+                    .filter((review) => reviewAt(review, run?.id, event.turn))
+                    .map((review) => (
+                      <div className="chat-review-activity" key={review.id}>
+                        <span>{review.title}</span>
+                        <span>
+                          {review.workers
+                            .map(
+                              (worker) =>
+                                `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                            )
+                            .join(" · ")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onReview?.(
+                              review.id,
+                              review.submissions.some((batch) => batch.state === "delivered"),
+                            )
+                          }
+                        >
+                          {review.submissions.some((batch) => batch.state === "delivered")
+                            ? "Review updates"
+                            : "Review changes"}
+                        </button>
+                      </div>
+                    ));
+                })}
+                {item.blocks.map((block) => {
+                  const timing = timings.get(block.key);
+                  return timing && !timing.active ? (
+                    <div className="chat-turn-history" key={block.key}>
+                      <TurnTimer
+                        timing={timing}
+                        visible={active}
+                        disclosure={
+                          liveTurn !== block.key && activityTurns.groups.has(block.key)
+                            ? {
+                                id: historyId(block.key),
+                                controls: detailsId(block.key),
+                                expanded: expandedActivities.has(block.key),
+                                toggle: () => toggleActivity(block.key),
+                              }
+                            : undefined
+                        }
+                      />
+                      {liveTurn !== block.key &&
+                        activityTurns.groups.has(block.key) &&
+                        activityDetails(block.key)}
+                    </div>
+                  ) : null;
+                })}
               </div>
             ))}
+            {reviews
+              .filter(
+                (review) =>
+                  review.chatId === run?.id &&
+                  review.workers.length > 0 &&
+                  !events.some(
+                    (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
+                  ),
+              )
+              .map((review) => (
+                <div className="chat-review-activity" key={review.id}>
+                  <span>{review.title}</span>
+                  <span>
+                    {review.workers
+                      .map(
+                        (worker) =>
+                          `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                      )
+                      .join(" · ")}
+                  </span>
+                  <button type="button" onClick={() => onReview?.(review.id)}>
+                    {review.submissions.some((batch) => batch.state === "delivered")
+                      ? "Review updates"
+                      : "Review changes"}
+                  </button>
+                </div>
+              ))}
+            <ActivityDisplay
+              key={run?.id ?? "empty"}
+              id={`${id}-live-activity`}
+              controls={detailsId(activityTurns.current)}
+              expanded={expandedActivities.has(activityTurns.current)}
+              onToggle={() => toggleActivity(activityTurns.current)}
+              activity={chat?.activity}
+              fallback={progress || label}
+              delegated={delegated}
+              hidden={hidden}
+              override={
+                run?.stopping || pending === "cancel" || pending === "stop"
+                  ? "Stopping"
+                  : pending === "restart"
+                    ? "Connecting"
+                    : pending === "send"
+                      ? "Sending"
+                      : undefined
+              }
+            />
+            {liveTurn !== null && activityDetails(liveTurn)}
+            {liveTurn === null &&
+              activityTurns.current === "session" &&
+              activityTurns.groups.has("session") && (
+                <>
+                  <button
+                    type="button"
+                    className="activity-history-toggle"
+                    id={historyId("session")}
+                    aria-expanded={expandedActivities.has("session")}
+                    aria-controls={detailsId("session")}
+                    onClick={() => toggleActivity("session")}
+                  >
+                    Session details
+                  </button>
+                  {activityDetails("session")}
+                </>
+              )}
+          </div>
         </div>
         <section className="composer" aria-label="Chat composer">
-          {progress || delegated ? <span className="chat-loader" aria-hidden="true" /> : null}
           <label className="sr-only" htmlFor={`${id}-message`}>
             Message to orchestrator
           </label>
@@ -472,13 +612,23 @@ export function ChatPage({
               }
             }}
           />
-          <div className="composer-footer">
-            <span className="chat-progress" role="status" aria-live="polite" aria-atomic="true">
-              {[progress || label, delegated].filter(Boolean).join(" · ")}
-            </span>
+          <SessionInfo
+            harness={run?.agent ?? "N/A"}
+            sessionId={run?.id ?? ""}
+            active={active}
+            state={run?.sessionState}
+            ended={!!ended}
+            editable={ready && !busy}
+            changing={!!run?.modeChanging || pending === "set-mode"}
+            autoApproval
+            onMode={(change) => {
+              if (run) void action({ type: "set-mode", id: run.id, change });
+            }}
+          >
             {working ? (
               <button
                 type="button"
+                className="composer-send"
                 disabled={busy || !!run?.stopping}
                 onClick={() => void action({ type: "cancel", id: run?.id ?? null })}
               >
@@ -488,32 +638,15 @@ export function ChatPage({
             ) : (
               <button
                 type="button"
-                className="primary"
+                className="primary composer-send"
                 disabled={busy || !ready || !draft.trim()}
                 onClick={() => void send()}
               >
                 Send <Icon name="arrow--up" />
               </button>
             )}
-          </div>
+          </SessionInfo>
         </section>
-        {run && (
-          <div className="chat-provider" role="note" aria-label="Current provider">
-            {run.agent}
-          </div>
-        )}
-        {run && (
-          <SessionInfo
-            state={run.sessionState}
-            ended={!!ended}
-            editable={ready && !busy}
-            changing={!!run.modeChanging || pending === "set-mode"}
-            autoApproval
-            onMode={(change) => {
-              void action({ type: "set-mode", id: run.id, change });
-            }}
-          />
-        )}
       </div>
     </main>
   );
