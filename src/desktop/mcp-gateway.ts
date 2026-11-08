@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { diagnosticMessage } from "../platform/index.js";
+import { diagnosticText } from "../platform/index.js";
 
 // Worker prompts can be up to 100,000 characters, which is at most 400 KB of UTF-8 plus JSON.
 const MAX_REQUEST_BYTES = 512 * 1024;
@@ -94,8 +94,9 @@ export async function createMcpGateway(handler: McpCallHandler): Promise<McpGate
         const result = await handler(name, args);
         reply(response, 200, { result });
       } catch (error) {
+        // Only an Error's message crosses the boundary; never stringify arbitrary thrown values.
         reply(response, 400, {
-          error: diagnosticMessage(error),
+          error: error instanceof Error ? diagnosticText(error.message) : "Tool request failed",
         });
       } finally {
         inFlight--;

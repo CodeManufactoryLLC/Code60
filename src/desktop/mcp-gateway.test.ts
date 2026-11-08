@@ -20,6 +20,19 @@ describe("Code60 private MCP gateway", () => {
     expect(await response.json()).toEqual({ error: "connection failed: api_key=[REDACTED]" });
   });
 
+  it("returns a fixed error for thrown non-Error values instead of stringifying them", async () => {
+    gateway = await createMcpGateway(async () => {
+      throw { detail: "internal state", stack: "at private (/path/file.ts:1:1)" };
+    });
+    const response = await fetch(gateway.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${gateway.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "code60_read_sessions", arguments: {} }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Tool request failed" });
+  });
+
   it("authenticates loopback requests and forwards only validated envelopes", async () => {
     const handler = vi.fn(async () => ({ rows: [] }));
     gateway = await createMcpGateway(handler);
