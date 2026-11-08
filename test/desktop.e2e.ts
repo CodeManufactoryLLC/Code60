@@ -5883,12 +5883,29 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect
       .poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth))
       .toBeGreaterThan(0);
-    const composer = chat.getByRole("region", { name: "Chat composer" });
-    const position = await status.boundingBox();
-    const composerPosition = await composer.boundingBox();
-    expect(position && composerPosition && position.y + position.height <= composerPosition.y).toBe(
-      true,
-    );
+    // Sample the layout together after the opening transition. The scroll offset can round to
+    // a whole pixel while the message and composer positions have fractional coordinates.
+    await expect
+      .poll(() =>
+        chat.evaluate((element) => {
+          const activity = element.querySelector(".activity-display")?.getBoundingClientRect();
+          const composer = element.querySelector(".composer")?.getBoundingClientRect();
+          const message = Array.from(element.querySelectorAll(".event.prompt, .event.message"))
+            .at(-1)
+            ?.getBoundingClientRect();
+          return {
+            expanded: activity?.height === 48,
+            aboveComposer: !!(activity && composer && activity.bottom <= composer.top + 1),
+            belowMessage: !!(
+              activity &&
+              message &&
+              activity.top >= message.bottom &&
+              activity.top - message.bottom < 100
+            ),
+          };
+        }),
+      )
+      .toEqual({ expanded: true, aboveComposer: true, belowMessage: true });
     expect(
       await status.evaluate(
         (element) =>
@@ -5896,11 +5913,6 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
           element.nextElementSibling?.id === element.getAttribute("aria-controls"),
       ),
     ).toBe(true);
-    const lastMessage = await chat.locator(".event.prompt, .event.message").last().boundingBox();
-    expect(lastMessage && position && position.y >= lastMessage.y + lastMessage.height).toBe(true);
-    expect(lastMessage && position && position.y - lastMessage.y - lastMessage.height < 100).toBe(
-      true,
-    );
     await expect(artwork).toHaveCSS("width", "48px");
     await expect(artwork).toHaveCSS("height", "48px");
     const imageBox = await artwork.boundingBox();
