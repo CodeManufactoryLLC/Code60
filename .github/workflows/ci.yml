@@ -57,7 +57,7 @@ jobs:
       - run: xvfb-run -a npm run test:desktop
       - run: npm run package:linux
       - run: xvfb-run -a npm run test:installers
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: linux-desktop-failure
