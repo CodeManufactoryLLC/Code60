@@ -85,6 +85,7 @@ it.skipIf(process.platform === "win32")(
     expect((await gitSetup.readiness(root)).status).toBe("no_commits");
     expect(git("ls-files").trim()).toBe("file.txt");
   },
+  20_000,
 );
 
 it("does not offer Code60 private data and rejects bare repositories", async () => {
@@ -124,11 +125,20 @@ it.skipIf(process.platform === "win32")(
     const abort = new AbortController();
     const pending = gitSetup.commit(root, preview.files, author, abort.signal);
     const rejected = expect(pending).rejects.toThrow("cancelled");
+    let settled = false;
+    pending.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    // Wait for the hook itself, not a fixed delay: Git startup is slow under a loaded suite.
     let pid = 0;
-    await vi.waitFor(async () => {
-      pid = Number(await readFile(join(root, ".git", "hook-pid"), "utf8"));
-      expect(pid).toBeGreaterThan(0);
-    });
+    for (;;) {
+      const done = settled;
+      pid = Number(await readFile(join(root, ".git", "hook-pid"), "utf8").catch(() => "0"));
+      if (pid > 0) break;
+      if (done) throw new Error("The commit settled before its hook reported a PID");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     abort.abort(new Error("cancelled"));
     await rejected;
     expect(() => process.kill(pid, 0)).toThrow();
@@ -136,6 +146,7 @@ it.skipIf(process.platform === "win32")(
     expect(git("ls-files").trim()).toBe("file.txt");
     expect(await readFile(join(root, "file.txt"), "utf8")).toBe("keep");
   },
+  20_000,
 );
 
 it("reports a disappeared project as unavailable rather than missing Git", async () => {

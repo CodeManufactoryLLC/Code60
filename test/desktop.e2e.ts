@@ -103,13 +103,19 @@ async function selectSidebarPage(page: Page, name: string) {
     const explorer = page
       .locator(".file-tabs")
       .getByRole("tab", { name: "File Explorer", exact: true });
-    if (await explorer.count()) await explorer.first().click();
-    else {
-      const open = page.getByRole("button", { name: "Open Files", exact: true });
-      if (!(await open.isVisible()))
-        await page.getByRole("button", { name: "New file tab" }).click();
-      await open.click();
-    }
+    // A workspace change can reset file tabs between finding a tab and clicking it,
+    // so retry the whole choice instead of waiting on a tab that no longer exists.
+    const attempt = { timeout: 2_000 };
+    await expect(async () => {
+      if (await explorer.count()) await explorer.first().click(attempt);
+      else {
+        const open = page.getByRole("button", { name: "Open Files", exact: true });
+        if (!(await open.isVisible()))
+          await page.getByRole("button", { name: "New file tab" }).click(attempt);
+        await open.click(attempt);
+      }
+      await expect(explorer.first()).toHaveAttribute("aria-selected", "true", attempt);
+    }).toPass({ timeout: 15_000 });
     return;
   }
   if (
