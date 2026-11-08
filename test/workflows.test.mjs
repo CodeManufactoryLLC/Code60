@@ -23,7 +23,7 @@ describe("branch protection policy", () => {
     });
   });
 
-  it("requires reviewed PRs, resolved discussions, and prevents destructive branch updates", () => {
+  it("requires PRs without a second approver, resolved discussions, and prevents destructive branch updates", () => {
     expect(protection.rules.map((rule) => rule.type).sort()).toEqual([
       "deletion",
       "non_fast_forward",
@@ -32,7 +32,7 @@ describe("branch protection policy", () => {
     ]);
     const pullRequest = protection.rules.find((rule) => rule.type === "pull_request");
     expect(pullRequest.parameters).toMatchObject({
-      required_approving_review_count: 1,
+      required_approving_review_count: 0,
       dismiss_stale_reviews_on_push: true,
       required_review_thread_resolution: true,
     });

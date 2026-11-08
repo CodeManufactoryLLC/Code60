@@ -4,7 +4,9 @@
 branch, `main`, and `dev` (if created). Feature branches remain unrestricted.
 The active policy:
 
-- Requires a pull request and one approving review from another contributor.
+- Requires a pull request but no approving review, so a sole maintainer can
+  merge their own PR. GitHub never lets authors approve their own PRs; raise
+  `required_approving_review_count` once a second maintainer exists.
 - Dismisses stale approvals after new commits and requires resolved discussions.
 - Requires the branch to be up to date and **CI passed** from GitHub Actions
   (integration ID `15368`), not a same-named status from another integration.

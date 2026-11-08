@@ -118,9 +118,10 @@ environments.
   file, or run records; minor for new features; patch for fixes.
 - Releases are bumped by hand on a release-preparation branch with
   `npm version <major|minor|patch> --no-git-tag-version`. Commit the package and
-  lockfile changes and merge a reviewed PR with **CI passed**. Only then tag the
+  lockfile changes and merge a PR with **CI passed**. Only then tag the
   merged commit on `main` and push that tag, following `RELEASING.md`.
-- Protected branches require reviewed PRs. Do not push directly to `main` or
+- Protected branches require PRs (no approving review while there is one
+  maintainer). Do not push directly to `main` or
   `dev`, force-push them, or bypass the rules in `.github/rulesets/`.
 
 ## Documentation

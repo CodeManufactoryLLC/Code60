@@ -85,7 +85,8 @@ Use conventional commit messages, such as `fix: handle an unavailable agent`.
 ## Protected branches
 
 Changes to `main` (the default branch) and `dev`, if created, must go through a
-pull request with one approving review, resolved discussions, and **CI passed**.
+pull request with resolved discussions and **CI passed**. Approving reviews are
+welcome but not required while the project has a single maintainer.
 Keep the PR branch up to date with its target. New commits dismiss stale
 approvals. Direct pushes, force pushes, and branch deletion are blocked, including
 for administrators; feature branches are unaffected.

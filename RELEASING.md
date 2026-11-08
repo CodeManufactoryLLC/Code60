@@ -329,12 +329,11 @@ git diff --cached
 git commit -s -m "chore: prepare release v$version"
 git push -u origin HEAD
 gh pr create --base main --title "chore: prepare release v$version" \
-  --body "Prepare the reviewed version bump. Create the release tag on main only after approval and CI passed."
+  --body "Prepare the reviewed version bump. Create the release tag on main only after merge and CI passed."
 ```
 
 Choose the bump intentionally; use the preview commands above for the first
-installer validation release. Wait for an independent approving review, resolve
-discussions, and merge only after **CI passed** succeeds on an up-to-date branch.
+installer validation release. Review the diff, resolve discussions, and merge only after **CI passed** succeeds on an up-to-date branch.
 Do not push version commits directly to main.
 
 After the PR is merged, update main and verify that it contains the intended
