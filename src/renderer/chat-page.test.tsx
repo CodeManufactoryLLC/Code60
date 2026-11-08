@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type { DesktopApi, DesktopRun, OrchestrationChat, ReviewSummary } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatPage } from "./chat-page.js";
 import { MessageCopy } from "./message-controls.js";
@@ -17,7 +17,13 @@ const run = (id: string, status: RunStatus): RunView => ({
 });
 const worker = (id: string, status: RunStatus): DesktopRun =>
   ({ record: { id }, view: run(id, status) }) as DesktopRun;
-function render(status: RunStatus, workers: string[], runs: DesktopRun[], events: RunEvent[] = []) {
+function render(
+  status: RunStatus,
+  workers: string[],
+  runs: DesktopRun[],
+  events: RunEvent[] = [],
+  reviews: ReviewSummary[] = [],
+) {
   return renderToStaticMarkup(
     <ChatPage
       api={{} as DesktopApi}
@@ -33,11 +39,53 @@ function render(status: RunStatus, workers: string[], runs: DesktopRun[], events
       active
       onDatabase={() => {}}
       runs={runs}
+      reviews={reviews}
     />,
   );
 }
 
 describe("orchestration activity presentation", () => {
+  it("does not attach a reconnected review to coincident turn numbers in another chat", () => {
+    const review: ReviewSummary = {
+      id: "review",
+      version: 1,
+      project: "/project",
+      title: "Saved task",
+      originChatId: "old-chat",
+      chatId: "orchestrator",
+      turn: 1,
+      workers: [{ runId: "worker", label: "Worker" }],
+      revisions: [],
+      submissions: [
+        {
+          id: "batch",
+          revisionId: "revision",
+          commentIds: ["comment"],
+          state: "delivered",
+          deliveredChatId: "old-chat",
+          deliveredTurn: 1,
+        },
+      ],
+    };
+    const events: RunEvent[] = [
+      {
+        runId: "orchestrator",
+        at: "2026-11-07",
+        type: "prompt",
+        turn: 1,
+        text: "Unrelated new request",
+      },
+    ];
+    const html = render("idle", [], [], events, [review]);
+    expect(html).toContain("<pre>Unrelated new request</pre>");
+    expect(html).not.toContain('aria-label="Your review feedback"');
+    const batch = review.submissions[0];
+    if (!batch) throw new Error("Missing batch");
+    batch.deliveredChatId = "orchestrator";
+    const delivered = render("idle", [], [], events, [review]);
+    expect(delivered).toContain('aria-label="Your review feedback"');
+    expect(delivered).toContain("View submitted feedback");
+  });
   it("shows concurrent owned workers while updates are paused without changing own controls", () => {
     const html = render(
       "idle",

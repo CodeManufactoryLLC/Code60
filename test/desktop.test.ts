@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
@@ -8,7 +9,13 @@ import {
   type PromptTemplates,
   type RunConfiguration,
 } from "../src/bridge/index.js";
-import { type CoreDeps, DEFAULT_CONFIG, loadConfig } from "../src/core/index.js";
+import {
+  type CoreDeps,
+  DEFAULT_CONFIG,
+  defaultDeps,
+  loadConfig,
+  openWorkspace,
+} from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
@@ -429,21 +436,23 @@ describe("desktop orchestration", () => {
     await expect(controller.start({ ...request, configurationId: entry.id })).rejects.toThrow();
   });
 
-  it("does not count declined or invalid launches and keeps saved defaults usable without Git", async () => {
+  it("does not count Git-blocked launches and keeps saved configurations usable after setup", async () => {
+    const first = await start();
+    await controller.saveConfiguration({ name: "Saved", launchId: first });
+    const entry = controller.snapshot().configurations[0] as RunConfiguration;
+    await controller.action({ type: "finish", id: first });
+    await vi.waitFor(() => expect(controller.active).toBe(false));
+    const ready = git.repoInfo;
     git.repoInfo = async () => {
       throw new Error("no repo");
     };
     await controller.open(directory);
-    const [first] = await controller.start(request);
-    await controller.saveConfiguration({ name: "No Git", launchId: first as string });
-    const entry = controller.snapshot().configurations[0] as RunConfiguration;
-    expect(entry.settings.base).toBeUndefined();
-    confirm.mockResolvedValueOnce(false);
-    expect(await controller.start({ ...entry.settings, configurationId: entry.id })).toEqual([]);
     await expect(
-      controller.start({ ...request, agents: ["missing"], configurationId: entry.id }),
-    ).rejects.toThrow(/unknown agent/);
+      controller.start({ ...entry.settings, configurationId: entry.id }),
+    ).rejects.toThrow("Set up Git");
     expect(controller.snapshot().configurations[0]?.uses).toBe(1);
+    expect(confirm).not.toHaveBeenCalled();
+    git.repoInfo = ready;
     await controller.start({ ...entry.settings, configurationId: entry.id });
     expect(controller.snapshot().configurations[0]?.uses).toBe(2);
   });
@@ -705,29 +714,23 @@ describe("desktop orchestration", () => {
     expect(agents.sessions.every((session) => session.stops.includes(0))).toBe(true);
   });
 
-  it("warns about existing shared-directory sessions and leaves them untouched on decline", async () => {
-    git.repoInfo = async () => {
-      throw new Error("no repo");
-    };
-    const first = await start();
-    agents.sessions[0]?.update({ type: "message", text: "original" });
-    const events = controller.snapshot().events;
-    confirm.mockResolvedValueOnce(false);
-    expect(await controller.start(request)).toEqual([]);
-    expect(confirm).toHaveBeenLastCalledWith(
-      "Run without worktrees?",
-      expect.stringContaining("existing live sessions"),
+  it("blocks follow-ups to legacy unisolated runs even when Git is ready and retains stop controls", async () => {
+    const id = await start();
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    await workspace.store.save({ ...(await workspace.store.read(id)), base: null, branch: null });
+    await expect(controller.action({ type: "reply", id, text: "more work" })).rejects.toThrow(
+      "No baseline",
     );
-    expect(controller.snapshot().events).toEqual(events);
-    expect(controller.snapshot().liveIds).toEqual([first]);
-    expect(controller.active).toBe(true);
-    expect(agents.sessions[0]?.stops).toEqual([]);
-    expect(agents.sessions).toHaveLength(1);
-    const [second] = await controller.start(request);
-    expect(second).toBeTruthy();
-    await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
-    await controller.action({ type: "reply", id: first, text: "still here" });
-    await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toEqual(["still here"]));
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+    await controller.action({ type: "finish", id });
+    await vi.waitFor(() => expect(controller.active).toBe(false));
+    await workspace.store.save({ ...(await workspace.store.read(id)), base: null, branch: null });
+    await expect(controller.action({ type: "continue", id, text: "resume" })).rejects.toThrow(
+      "No baseline",
+    );
+    expect(agents.specs).toHaveLength(1);
   });
 
   it("answers only pending permissions and rejects stale approval clicks", async () => {
@@ -749,19 +752,15 @@ describe("desktop orchestration", () => {
     expect(id).toBeTruthy();
   });
 
-  it("requires confirmation before unisolated runs and never starts on denial", async () => {
+  it("requires Git before desktop launches without offering an unisolated fallback", async () => {
     git.repoInfo = async () => {
       throw new Error("no repo");
     };
-    confirm.mockResolvedValue(false);
     await controller.open(directory);
-    await controller.start({ ...request, parallel: "2" });
-    expect(confirm).toHaveBeenCalledWith(
-      "Run without worktrees?",
-      expect.stringContaining("overwrite"),
-    );
+    await expect(controller.start({ ...request, parallel: "2" })).rejects.toThrow("Set up Git");
+    expect(confirm).not.toHaveBeenCalled();
     expect(agents.sessions).toHaveLength(0);
-    expect(controller.active).toBe(false);
+    expect(controller.snapshot().runs).toEqual([]);
   });
 
   it("confirms changed files before discard and keeps the worktree on denial", async () => {
@@ -1361,18 +1360,105 @@ describe("app-wide orchestration chat", () => {
   });
 });
 
-it("includes the orchestration session when warning about a shared non-Git folder", async () => {
+it("keeps orchestration Chat available while blocking non-Git project workers", async () => {
   await setProvider("claude");
   await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
   git.repoInfo = async () => {
     throw new Error("not a repository");
   };
-  await controller.open(controller.snapshot().chat.directory as string);
-  await controller.start({ ...request });
-  expect(confirm).toHaveBeenCalledWith(
-    "Run without worktrees?",
-    expect.stringContaining("existing live sessions"),
+  await controller.open(directory);
+  await expect(controller.start(request)).rejects.toThrow("Set up Git");
+  const id = controller.snapshot().chat.run?.id as string;
+  await controller.orchestrationChatAction({ type: "send", id, text: "Discuss the project" });
+  expect(controller.snapshot().runs).toEqual([]);
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it("cancels queued and active Git setup without blocking ordinary Chat", async () => {
+  await setProvider("claude");
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  const ops = defaultDeps().git.setup;
+  if (!ops) throw new Error("Missing Git setup");
+  const preview = vi.fn(
+    async (_project: string, signal?: AbortSignal): Promise<never> =>
+      new Promise((_resolve, reject) =>
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true }),
+      ),
   );
+  Object.assign(git, {
+    setup: {
+      ...ops,
+      readiness: async () => ({ status: "not_repository", message: "Needs Git" }),
+      preview,
+    },
+  });
+  await controller.open(directory);
+  const project = controller.snapshot().directory as string;
+  const queued = controller.beginGitSetup({ project });
+  const queuedRejection = expect(queued).rejects.toThrow("cancelled");
+  await controller.cancelGitSetup({ project });
+  await queuedRejection;
+  expect(preview).not.toHaveBeenCalled();
+  const pending = controller.beginGitSetup({ project });
+  const rejected = expect(pending).rejects.toThrow("cancelled");
+  await vi.waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+  await expect(controller.beginGitSetup({ project })).rejects.toThrow("already in progress");
+  await expect(controller.start(request)).rejects.toThrow("Finish Git setup");
+  await controller.orchestrationChatAction({
+    type: "send",
+    id: controller.snapshot().chat.run?.id as string,
+    text: "Talk while preview waits",
+  });
+  await controller.cancelGitSetup({ project });
+  await rejected;
+  expect(controller.snapshot().runs).toHaveLength(0);
+});
+it("keeps Chat responsive during the post-setup readiness check", async () => {
+  await setProvider("claude");
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  await controller.open(directory);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const readiness = vi.fn(async () => {
+    await gate;
+    return { status: "not_repository" as const, message: "Needs Git" };
+  });
+  Object.assign(git, {
+    setup: {
+      ...defaultDeps().git.setup,
+      readiness,
+      preview: async () => ({
+        readiness: { status: "not_repository", message: "Needs Git" },
+        files: [],
+        excluded: [],
+        author: { name: "Test", email: "test@example.invalid" },
+      }),
+    },
+  });
+  const pending = controller.beginGitSetup({ project: controller.snapshot().directory as string });
+  try {
+    await vi.waitFor(() => expect(readiness).toHaveBeenCalled());
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: controller.snapshot().chat.run?.id as string,
+      text: "Discuss while Git settles",
+    });
+  } finally {
+    release();
+    await pending;
+  }
+});
+
+it("refuses Git setup while project workers are still owned", async () => {
+  await start();
+  const preview = vi.fn();
+  Object.assign(git, { setup: { ...defaultDeps().git.setup, preview } });
+  await expect(
+    controller.beginGitSetup({ project: controller.snapshot().directory as string }),
+  ).rejects.toThrow("Stop project workers");
+  expect(preview).not.toHaveBeenCalled();
 });
 
 describe("orchestrated workers over ACP", () => {
@@ -1439,6 +1525,162 @@ describe("orchestrated workers over ACP", () => {
     expect(result.status).toBe(200);
     return result.body.result.runId as string;
   }
+
+  it("reports readiness and rejects MCP dispatch before creating workers or reviews", async () => {
+    const { call, scope } = await setup();
+    git.repoInfo = async () => {
+      throw new Error("not a repository");
+    };
+    const context = await call("code60_get_context");
+    expect(context.body.result.gitReadiness).toMatchObject({ status: "not_repository" });
+    const result = await call("code60_dispatch_agent", {
+      scope,
+      requestId: "blocked",
+      prompt: "task",
+    });
+    expect(result.body.error).toContain("Set up Git");
+    expect(controller.snapshot().runs).toHaveLength(0);
+    expect(controller.snapshot().reviews).toHaveLength(0);
+    expect(agents.specs).toHaveLength(1);
+  });
+
+  it("rejects MCP send and resume for a worker with no baseline while keeping finish available", async () => {
+    const { call, scope } = await setup();
+    const id = await dispatch(call, scope, "task");
+    await vi.waitFor(() =>
+      expect(controller.snapshot().runs.find((run) => run.record.id === id)?.view?.status).toBe(
+        "idle",
+      ),
+    );
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    const removeBaseline = async () =>
+      workspace.store.save({ ...(await workspace.store.read(id)), base: null, branch: null });
+    await removeBaseline();
+    expect(
+      (await call("code60_send_agent", { scope, runId: id, prompt: "more" })).body.error,
+    ).toContain("No baseline");
+    expect((await call("code60_finish_agent", { scope, runId: id })).status).toBe(200);
+    await vi.waitFor(() => expect(controller.active).toBe(false));
+    await removeBaseline();
+    expect(
+      (await call("code60_resume_agent", { scope, runId: id, prompt: "resume" })).body.error,
+    ).toContain("No baseline");
+  });
+
+  it("groups workers by human request and delivers review feedback once between turns without restoring ownership", async () => {
+    const { call, scope } = await setup();
+    Object.assign(git, {
+      reviewSnapshot: async () => ({
+        files: [
+          {
+            path: "same.ts",
+            oldPath: "same.ts",
+            status: "modified",
+            original: "before\n",
+            modified: "after\n",
+            fingerprint: "version-one",
+          },
+        ],
+        truncated: false,
+      }),
+    });
+    const chatId = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatId,
+      text: "Implement validation",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const first = await dispatch(call, scope, "HANG one", "review-one");
+    const second = await dispatch(call, scope, "HANG two", "review-two");
+    await vi.waitFor(() =>
+      expect(controller.snapshot().reviews?.[0]?.revisions.length).toBeGreaterThan(0),
+    );
+    const summary = controller.snapshot().reviews?.[0];
+    if (!summary) throw new Error("Missing review");
+    expect(controller.snapshot().reviews).toHaveLength(1);
+    expect(summary.workers.map((worker) => worker.runId)).toEqual([first, second]);
+    expect(summary.title).toBe("Implement validation");
+    const project = controller.snapshot().directory as string;
+    const identity = { project, reviewId: summary.id };
+    const review = await controller.readReview({ ...identity, requestId: randomUUID() });
+    const revision = review.revisions.at(-1);
+    if (!revision) throw new Error("Missing revision");
+    const commentId = randomUUID();
+    await controller.reviewAction({
+      type: "comment",
+      ...identity,
+      id: commentId,
+      revisionId: revision.id,
+      text: "Allow optional fields",
+      anchor: {
+        revisionId: revision.id,
+        fileKey: `${first}:same.ts`,
+        side: "modified",
+        start: 1,
+        end: 1,
+      },
+    });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatId,
+      text: "HANG while reviewing",
+    });
+    expect(
+      (await call("code60_read_review", { reviewId: summary.id })).body.result.comments,
+    ).toEqual([]);
+    const batchId = randomUUID();
+    await controller.reviewAction({
+      type: "submit",
+      ...identity,
+      id: batchId,
+      revisionId: revision.id,
+    });
+    expect(controller.snapshot().reviews?.[0]?.submissions[0]?.state).toBe("pending");
+    await controller.orchestrationChatAction({ type: "cancel", id: chatId });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    expect(controller.snapshot().reviews?.[0]?.submissions[0]?.state).toBe("pending");
+    await controller.orchestrationChatAction({ type: "resume-updates", id: chatId });
+    await vi.waitFor(() =>
+      expect(controller.snapshot().reviews?.[0]?.submissions[0]?.state).toBe("delivered"),
+    );
+    await controller.reviewAction({
+      type: "submit",
+      ...identity,
+      id: batchId,
+      revisionId: revision.id,
+    });
+    expect(chatPrompts().filter((text) => text.includes(`submission ${batchId}`))).toHaveLength(1);
+    expect(
+      (
+        await call("code60_address_feedback", {
+          scope,
+          reviewId: summary.id,
+          commentId,
+          note: "Changed optional fields",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await controller.readReview({ ...identity, requestId: randomUUID() })).comments[0],
+    ).toMatchObject({ state: "sent", addressed: "Changed optional fields" });
+    await controller.orchestrationChatAction({ type: "new" });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const other = caller(3);
+    expect((await other("code60_read_review", { reviewId: summary.id })).status).not.toBe(200);
+    await controller.reviewAction({
+      type: "reconnect",
+      ...identity,
+      chatId: controller.snapshot().chat.run?.id as string,
+    });
+    const otherScope = (await other("code60_get_context")).body.result.scope;
+    expect(
+      (await other("code60_send_agent", { scope: otherScope, runId: first, prompt: "Fix it" })).body
+        .error,
+    ).toContain("No worker");
+  });
 
   it.each(["droid", "codex"])(
     "defaults workers to the selected %s provider, not the CLI default",
@@ -2075,5 +2317,104 @@ describe("search overview helpers", () => {
     expect(agents.sessions.at(-1)?.turnActive).toBe(true);
     await controller.cancelSearchSummary(input.requestId);
     await rejected;
+  });
+});
+
+describe("independent diff reads", () => {
+  function stallDiff() {
+    let started = false;
+    let completed = false;
+    git.diff = async (_worktree, _base, signal) => {
+      started = true;
+      try {
+        return await new Promise<string>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+          if (signal?.aborted) reject(signal.reason);
+        });
+      } finally {
+        completed = true;
+      }
+    };
+    return { started: () => started, completed: () => completed };
+  }
+
+  it("keeps permission, cancellation, and ordinary chat actions responsive during a stalled diff", async () => {
+    agents.script = () => "hang";
+    const id = await start();
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const stalled = stallDiff();
+    const requestId = randomUUID();
+    const diff = controller.readDiff({ requestId, id });
+    const rejected = expect(diff).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(stalled.started()).toBe(true));
+    await controller.action({ type: "reply", id, text: "work" });
+    const answer = agents.sessions[0]?.requestPermission({
+      toolCallId: "read",
+      title: "command",
+      kind: "execute",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.pending).toHaveLength(1));
+    const permission = controller.snapshot().runs[0]?.view?.pending[0];
+    await controller.action({ type: "permission", id: permission?.id as string, answer: "allow" });
+    expect(await answer).toBe("allow");
+    await controller.action({ type: "cancel", id });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: controller.snapshot().chat.run?.id as string,
+      text: "hello",
+    });
+    expect(stalled.completed()).toBe(false);
+    await controller.cancelDiff({ requestId });
+    await rejected;
+    expect(stalled.completed()).toBe(true);
+  });
+
+  it.each(["reload", "project", "database", "shutdown", "discard"] as const)(
+    "cancels and settles reads on %s",
+    async (mode) => {
+      const id = await start();
+      await controller.action({ type: "finish", id });
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      const stalled = stallDiff();
+      const diff = controller.action({ type: "diff", id });
+      const rejected = expect(diff).rejects.toThrow("cancelled");
+      await vi.waitFor(() => expect(stalled.started()).toBe(true));
+      if (mode === "reload") await controller.cancelDiffReads();
+      if (mode === "project") await controller.open(directory);
+      if (mode === "database") await controller.connect(join(directory, "second.sqlite"), true);
+      if (mode === "shutdown") await controller.shutdown();
+      if (mode === "discard") {
+        const remove = git.removeWorktree.bind(git);
+        git.removeWorktree = async (...args) => {
+          expect(stalled.completed()).toBe(true);
+          return remove(...args);
+        };
+        await controller.action({ type: "discard", id });
+      }
+      await rejected;
+      expect(stalled.completed()).toBe(true);
+    },
+  );
+
+  it("rejects unknown, discarded, and non-isolated runs", async () => {
+    const id = await start();
+    await expect(controller.readDiff({ requestId: randomUUID(), id: "unknown" })).rejects.toThrow(
+      "Unknown run",
+    );
+    await controller.action({ type: "finish", id });
+    await vi.waitFor(() => expect(controller.active).toBe(false));
+    await controller.action({ type: "discard", id });
+    await expect(controller.readDiff({ requestId: randomUUID(), id })).rejects.toThrow("discarded");
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    const original = await workspace.store.read(id);
+    const { discardedAt: _discarded, ...record } = original;
+    await workspace.store.save({ ...record, base: null, branch: null });
+    await controller.open(directory);
+    await expect(controller.readDiff({ requestId: randomUUID(), id })).rejects.toThrow(
+      "no separate diff",
+    );
   });
 });

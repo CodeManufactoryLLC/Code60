@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { samePath } from "../platform/index.js";
 import { GitError, runGit } from "./exec.js";
+import { type GitSetupOps, gitSetup } from "./setup.js";
 
 export { GitError } from "./exec.js";
+export type { GitReadiness, GitSetupFile, GitSetupOps, GitSetupPreview } from "./setup.js";
 
 export interface RepoInfo {
   /** Top-level directory of the working tree the command ran in. */
@@ -34,7 +36,22 @@ export interface ChangedFile {
   status: ChangeStatus;
 }
 
+export interface ReviewSnapshotFile {
+  path: string;
+  oldPath: string;
+  status: "added" | "modified" | "deleted" | "renamed";
+  fingerprint: string;
+  original: string;
+  modified: string;
+  limitation?: string;
+}
+export interface ReviewSnapshot {
+  files: ReviewSnapshotFile[];
+  truncated: boolean;
+}
+
 export interface Git {
+  setup?: GitSetupOps;
   repoInfo(cwd: string): Promise<RepoInfo>;
   listWorktrees(repoDir: string): Promise<GitWorktree[]>;
   /** Resolves a revision to a full commit hash. */
@@ -43,7 +60,8 @@ export interface Git {
   /** Removes the worktree, then deletes its branch. */
   removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
-  diff(worktree: string, base: string): Promise<string>;
+  diff(worktree: string, base: string, signal?: AbortSignal): Promise<string>;
+  reviewSnapshot?(worktree: string, base: string, signal?: AbortSignal): Promise<ReviewSnapshot>;
   changedFiles(worktree: string, base: string): Promise<ChangedFile[]>;
 }
 
@@ -124,12 +142,16 @@ async function summarizeWorktree(worktree: {
 async function withSnapshotIndex<T>(
   worktree: string,
   op: (env: Record<string, string>) => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  signal?.throwIfAborted();
   const dir = await mkdtemp(join(tmpdir(), "code60-index-"));
   try {
     const index = join(dir, "index");
     const own = (
-      await runGit(["rev-parse", "--path-format=absolute", "--git-path", "index"], worktree)
+      await runGit(["rev-parse", "--path-format=absolute", "--git-path", "index"], worktree, {
+        signal,
+      })
     ).trim();
     const env = { GIT_INDEX_FILE: index };
     try {
@@ -137,9 +159,11 @@ async function withSnapshotIndex<T>(
       await copyFile(own, index);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      await runGit(["read-tree", "HEAD"], worktree, { env });
+      await runGit(["read-tree", "HEAD"], worktree, { env, signal });
     }
-    await runGit(["add", "-A", "--", "."], worktree, { env });
+    signal?.throwIfAborted();
+    await runGit(["add", "-A", "--", "."], worktree, { env, signal });
+    signal?.throwIfAborted();
     return await op(env);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -180,6 +204,83 @@ export function parseNameStatus(output: string, untracked: ReadonlySet<string>):
 
 export function createGit(): Git {
   return {
+    setup: gitSetup,
+    async reviewSnapshot(worktree, base, signal) {
+      return withSnapshotIndex(
+        worktree,
+        async (env) => {
+          const tree = (await runGit(["write-tree"], worktree, { env, signal })).trim();
+          const raw = await runGit(
+            ["diff", "--raw", "--no-abbrev", "-z", "-M", base, tree, "--"],
+            worktree,
+            { env, signal },
+          );
+          const fields = raw.split("\0");
+          const files: ReviewSnapshotFile[] = [];
+          let bytes = 0;
+          let truncated = false;
+          for (let index = 0; index < fields.length && fields[index]; ) {
+            signal?.throwIfAborted();
+            const header = fields[index++]?.match(
+              /^:(\d+) (\d+) ([a-f0-9]+) ([a-f0-9]+) ([A-Z])\d*$/,
+            );
+            if (!header) throw new Error("Invalid Git review file listing");
+            const [, beforeMode, afterMode, before, after, letter] = header;
+            const oldPath = fields[index++];
+            const path = letter === "R" || letter === "C" ? fields[index++] : oldPath;
+            if (!path || !oldPath || !before || !after) throw new Error("Invalid Git review path");
+            if (files.length >= 1_000) {
+              truncated = true;
+              continue;
+            }
+            let limitation: string | undefined;
+            const content = async (oid: string, mode: string | undefined) => {
+              if (/^0+$/.test(oid)) return "";
+              if (mode !== "100644" && mode !== "100755") {
+                limitation =
+                  mode === "120000" ? "Symbolic link" : "Submodule or unsupported file type";
+                return "";
+              }
+              const size = Number(
+                (await runGit(["cat-file", "-s", oid], worktree, { signal })).trim(),
+              );
+              if (!Number.isFinite(size) || size > 1_048_576 || bytes + size > 8_388_608) {
+                limitation =
+                  size > 1_048_576 ? "File exceeds 1 MiB" : "Revision content limit reached";
+                return "";
+              }
+              bytes += size;
+              const text = await runGit(["cat-file", "blob", oid], worktree, { signal });
+              if (text.includes("\0") || text.includes("\ufffd")) {
+                limitation = "Binary or non-UTF-8 file";
+                return "";
+              }
+              return text;
+            };
+            const original = await content(before, beforeMode);
+            const modified = await content(after, afterMode);
+            files.push({
+              path,
+              oldPath,
+              status:
+                letter === "R"
+                  ? "renamed"
+                  : letter === "A"
+                    ? "added"
+                    : letter === "D"
+                      ? "deleted"
+                      : "modified",
+              fingerprint: `${beforeMode}:${before}:${afterMode}:${after}`,
+              original: limitation ? "" : original,
+              modified: limitation ? "" : modified,
+              ...(limitation ? { limitation } : {}),
+            });
+          }
+          return { files, truncated };
+        },
+        signal,
+      );
+    },
     async repoInfo(cwd) {
       let out: string;
       try {
@@ -254,12 +355,16 @@ export function createGit(): Git {
       await runGit(["branch", "-D", branch], repoDir);
     },
 
-    async diff(worktree, base) {
-      return withSnapshotIndex(worktree, (env) =>
-        runGit(["diff", "--cached", "--no-color", "--no-ext-diff", base, "--"], worktree, {
-          env,
-          timeoutMs: 120_000,
-        }),
+    async diff(worktree, base, signal) {
+      return withSnapshotIndex(
+        worktree,
+        (env) =>
+          runGit(["diff", "--cached", "--no-color", "--no-ext-diff", base, "--"], worktree, {
+            env,
+            timeoutMs: 120_000,
+            signal,
+          }),
+        signal,
       );
     },
 

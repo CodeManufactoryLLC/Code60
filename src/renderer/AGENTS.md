@@ -56,3 +56,13 @@
 - Both chat interfaces use shared turn timing and icon-only Carbon Copy controls with accessible labels. Show dispatch-to-completion timing with outcomes; incomplete history stays explicitly unavailable. Use the local ticker only in small displays, without per-tick announcements or scroll/focus changes. Copy exact message source at invocation, await clipboard success, and offer actionable retry on failure. Keep the full runtime Code60 version in the primary-sidebar footer.
 
 - Search submits only on Enter or Search. Capture results after transcript reads settle, keep them stable until resubmission, and keep AI overview failures separate from usable results. Use single-column title actions and local numeric citations; never render generated markup or links. Start an overview even without literal matches, use relevant saved context for natural-language questions, and map citations to the exact returned evidence. File sources open the read-only file tab in the Chat panel. Cancel stale requests and preserve page-switch state.
+
+- PanelShell owns only layout, tab interactions and focus; FilePanel retains file identities, reads and preview state. Keep tab descriptors stable across unrelated streamed updates. ReviewPanel/useReviewFile own revision selection, anchored feedback and cancellable saved-file reads with local loading/errors. Only successful empty captures render No changes; failures and Retry stay in the panel. Preserve pinned revisions, distinct same-path worker versions and explicit reconnection after restart. Only human actions resolve feedback or mark files reviewed.
+
+- Chat owns guided Git setup with selectable files and bounded previews. Preserve conversation/drafts, require explicit initial-commit confirmation and explicit task continuation. Show failures and partial completion honestly; never replay dispatch or suggest Refresh can recover a non-isolated run baseline.
+
+- Changes lives beside orchestrator Chat in the shared panel. Preserve revision selection and
+  view state on incoming captures. Keep worker sources distinct, including same-path files.
+  Feedback is anchored to immutable versions, saved before submission, and shows pending,
+  failed and delivered state. Only user actions mark reviewed or resolve comments. Source-aware
+  review file tabs show saved content rather than silently opening project files.

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -5,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { resolveCommand } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
+
+import { commitFixture } from "./fixtures/git-repository.js";
 
 const fixture = resolve(import.meta.dirname, "fixtures/packaged-agent.mjs");
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -16,6 +19,9 @@ for (const location of process.platform === "win32"
   test(`discovers default Droid and npx workers from ${location} PATH${windowsFallback ? " (npx inherited)" : ""}`, async () => {
     test.setTimeout(60_000);
     const directory = await mkdtemp(join(tmpdir(), "code60-discovery-"));
+    const project = join(directory, "project");
+    execFileSync("git", ["init", "-q", project]);
+    commitFixture(project);
     const home = join(directory, "home");
     const bin =
       location === "fallback" ? join(home, ".local/bin") : join(directory, "custom tools");
@@ -76,7 +82,7 @@ for (const location of process.platform === "win32"
         { mode: 0o700 },
       );
     }
-    const app = await launchDesktop(directory, directory, join(directory, "db.sqlite"), true, {
+    const app = await launchDesktop(directory, project, join(directory, "db.sqlite"), true, {
       SHELL: shell, // Missing shell deliberately exercises the fallback branch.
       CODE60_TEST_AGENT_BIN: bin,
       ...(process.platform === "win32"

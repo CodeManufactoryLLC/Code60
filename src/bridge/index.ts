@@ -2,6 +2,7 @@ import { modeChangeSchema } from "../contracts/index.js";
 import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from "./agent-setup.js";
 
 export * from "./agent-setup.js";
+export * from "./git-setup.js";
 
 import { z } from "zod";
 import {
@@ -191,6 +192,8 @@ export interface Versions {
 }
 
 export interface Snapshot {
+  gitReadiness?: import("./git-setup.js").GitReadiness;
+  reviews?: import("./reviews.js").ReviewSummary[];
   agentSetup?: AgentSetupSnapshot;
   versions: Versions;
   chat: OrchestrationChat;
@@ -234,11 +237,42 @@ export type SaveConfiguration = z.infer<typeof saveConfigurationSchema>;
 export type SavePromptTemplate = z.infer<typeof savePromptTemplateSchema>;
 export type Action = z.infer<typeof actionSchema>;
 
+const diffIdentitySchema = z.strictObject({ requestId: z.string().uuid() });
+const diffRequestSchema = diffIdentitySchema.extend({ id: runIdSchema });
+export type DiffIdentity = z.infer<typeof diffIdentitySchema>;
+export type DiffRequest = z.infer<typeof diffRequestSchema>;
+export const parseDiffIdentity = (value: unknown) => parseValue(diffIdentitySchema, value);
+export const parseDiffRequest = (value: unknown) => parseValue(diffRequestSchema, value);
+
 export type RecoveryActionResult = { type: "restored" } | { type: "handoff-started" };
 
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  checkGit(
+    request: import("./git-setup.js").GitProject,
+  ): Promise<import("./git-setup.js").GitReadiness>;
+  beginGitSetup(
+    request: import("./git-setup.js").GitProject,
+  ): Promise<import("./git-setup.js").GitSetupSession>;
+  previewGitSetupFile(
+    request: import("./git-setup.js").GitSetupFileRequest,
+  ): Promise<FilePreview | null>;
+  initializeGit(
+    request: import("./git-setup.js").GitSetupIdentity,
+  ): Promise<import("./git-setup.js").GitSetupOutcome>;
+  commitGitSetup(
+    request: import("./git-setup.js").GitSetupCommit,
+  ): Promise<import("./git-setup.js").GitSetupOutcome>;
+  cancelGitSetup(request: import("./git-setup.js").GitProject): Promise<void>;
+  readReview(request: import("./reviews.js").ReviewRead): Promise<import("./reviews.js").Review>;
+  reviewAction(request: import("./reviews.js").ReviewAction): Promise<string>;
+  captureReview(request: import("./reviews.js").ReviewRead): Promise<void>;
+  readReviewFile(
+    request: import("./reviews.js").ReviewFileRead,
+  ): Promise<import("./reviews.js").ReviewContent>;
+  readDiff(request: DiffRequest): Promise<string>;
+  cancelDiff(request: DiffIdentity): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
   cancelAgentSetup(request: SetupIdentity): Promise<void>;
@@ -707,3 +741,5 @@ export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
   parseValue(searchSummarySchema, value);
 export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
+
+export * from "./reviews.js";

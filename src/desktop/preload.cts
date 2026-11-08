@@ -2,6 +2,18 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  checkGit: (request: unknown) => ipcRenderer.invoke("desktop:git-check", request),
+  beginGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-begin", request),
+  previewGitSetupFile: (request: unknown) => ipcRenderer.invoke("desktop:git-file", request),
+  initializeGit: (request: unknown) => ipcRenderer.invoke("desktop:git-initialize", request),
+  commitGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-commit", request),
+  cancelGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-cancel", request),
+  readReview: (request: unknown) => ipcRenderer.invoke("desktop:review-read", request),
+  reviewAction: (request: unknown) => ipcRenderer.invoke("desktop:review-action", request),
+  captureReview: (request: unknown) => ipcRenderer.invoke("desktop:review-capture", request),
+  readReviewFile: (request: unknown) => ipcRenderer.invoke("desktop:review-file", request),
+  readDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-read", request),
+  cancelDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-cancel", request),
   beginAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-begin", request),
   attemptAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-attempt", request),
   cancelAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-cancel", request),

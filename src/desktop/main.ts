@@ -18,7 +18,13 @@ import {
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseDiffIdentity,
+  parseDiffRequest,
   parseFileContext,
+  parseGitProject,
+  parseGitSetupCommit,
+  parseGitSetupFile,
+  parseGitSetupIdentity,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -28,6 +34,9 @@ import {
   parsePollVisibility,
   parseProjectPath,
   parsePromptTemplateId,
+  parseReviewAction,
+  parseReviewFileRead,
+  parseReviewRead,
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseSearchSummary,
@@ -414,6 +423,20 @@ async function ready(): Promise<void> {
   handle("desktop:prompt-reset", (value) =>
     controller.resetPromptTemplate(parsePromptTemplateId(value)),
   );
+  handle("desktop:git-check", (value) => controller.checkGit(parseGitProject(value)));
+  handle("desktop:git-begin", (value) => controller.beginGitSetup(parseGitProject(value)));
+  handle("desktop:git-file", (value) => controller.previewGitSetupFile(parseGitSetupFile(value)));
+  handle("desktop:git-initialize", (value) =>
+    controller.initializeGit(parseGitSetupIdentity(value)),
+  );
+  handle("desktop:git-commit", (value) => controller.commitGitSetup(parseGitSetupCommit(value)));
+  handle("desktop:git-cancel", (value) => controller.cancelGitSetup(parseGitProject(value)));
+  handle("desktop:diff-read", (value) => controller.readDiff(parseDiffRequest(value)));
+  handle("desktop:review-action", (value) => controller.reviewAction(parseReviewAction(value)));
+  handle("desktop:review-read", (value) => controller.readReview(parseReviewRead(value)));
+  handle("desktop:review-capture", (value) => controller.captureReview(parseReviewRead(value)));
+  handle("desktop:review-file", (value) => controller.readReviewFile(parseReviewFileRead(value)));
+  handle("desktop:diff-cancel", (value) => controller.cancelDiff(parseDiffIdentity(value)));
   handle("desktop:action", (value) => controller.action(parseAction(value)));
   handle("desktop:stop-all", async () => {
     const result = await dialog.showMessageBox({
@@ -467,6 +490,8 @@ async function ready(): Promise<void> {
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
+    void controller.cancelDiffReads().catch(() => {});
+    void controller.cancelGitSetup().catch(() => {});
     void controller.cancelAgentSetup().catch(() => {});
     void controller.cancelSearchSummary().catch(() => {});
     window?.setIgnoreMouseEvents(false);

@@ -198,9 +198,9 @@ describe("desktop ended-run recovery", () => {
       expect(agents.sessions[0]?.prompts[0]).toContain("Change the implementation");
       expect(agents.sessions[0]?.prompts[0]).toContain("Add tests");
       expect(agents.sessions[0]?.prompts).toHaveLength(1);
-      expect(await workspace.store.readEvents(record.id)).toContainEqual(
-        expect.objectContaining({ type: "prompt", text: "Add tests", turn: 2 }),
-      );
+      await expect
+        .poll(() => workspace.store.readEvents(record.id))
+        .toContainEqual(expect.objectContaining({ type: "prompt", text: "Add tests", turn: 2 }));
       expect(await workspace.store.readEvents(record.id)).toContainEqual(
         expect.objectContaining({
           type: "note",

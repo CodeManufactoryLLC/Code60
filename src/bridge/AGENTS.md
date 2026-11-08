@@ -1,5 +1,9 @@
 # Bridge
 
+- Review requests accept only project identity, generated review/revision/comment IDs and
+  bounded feedback anchors. Revision file reads resolve saved file keys, never arbitrary paths.
+  Agents may report addressed feedback but never resolve it or mark files reviewed.
+
 `src/bridge` is the typed IPC contract shared by `desktop` and `renderer`.
 
 - Use the browser-safe `contracts` module for shared validation. Import only types from `core`, and nothing from Node.js, Electron, or React, so the renderer can use this module.
@@ -12,3 +16,7 @@
 - Search summary requests carry only request/project identity, a bounded query, an optional project-file inclusion flag and bounded saved-source excerpts with local addresses. Empty source lists are valid; file sources are supplied only by main-process retrieval and returned with the completed overview. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.
 
 - Setup actions accept only a strict mode, session UUID and provider ID. Never accept commands, environment values or directories. Snapshots carry the main-process setup transaction and enabled membership; persisted command identities are hashes, not credentials or live connection assertions.
+
+- Diff reads accept only a UUID request ID and validated run ID; cancellation accepts only the request ID. Reject unknown fields and paths. Keep the existing diff action as a compatibility adapter.
+
+- Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; agents have no setup mutation capability.

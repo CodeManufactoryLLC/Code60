@@ -7,9 +7,23 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
+  let gateway = {};
+  const tool = async (name, args = {}) => {
+    const response = await fetch(gateway.CODE60_MCP_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${gateway.CODE60_MCP_GATEWAY_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name, arguments: args }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    return result.result;
+  };
   /** @type {Set<() => void>} */
   let cancelWaiters = new Set();
   let cancelled = false;
@@ -53,6 +67,9 @@ export function createFakeAgent(options = {}) {
     .onRequest(methods.agent.session.new, async ({ params, client }) => {
       if (options.authRequired) throw RequestError.authRequired();
       cwd = params.cwd;
+      gateway = Object.fromEntries(
+        (params.mcpServers?.[0]?.env ?? []).map((entry) => [entry.name, entry.value]),
+      );
       await options.onSessionNew?.(params);
       if (options.sessionInfo)
         await client.notify(methods.client.session.update, {
@@ -84,6 +101,58 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (options.reviewWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split("--- User request ---\n").at(-1);
+        if (request === "Implement validation") {
+          const { scope } = await tool("code60_get_context");
+          for (const label of ["Validation", "Regression tests"])
+            await tool("code60_dispatch_agent", {
+              scope,
+              requestId: label,
+              label,
+              prompt: JSON.stringify([
+                {
+                  write: {
+                    path: "same.ts",
+                    content: `export const source = '${label}';\nexport const optional = false;\n`,
+                  },
+                },
+                { message: `${label} ready` },
+              ]),
+            });
+          steps = [
+            {
+              message:
+                "Both workers have finished their changes. Review them beside this conversation.",
+            },
+          ];
+        } else if (request?.startsWith("Review feedback:")) {
+          const reviewId = request.match(/Review ([a-f0-9-]{36});/)?.[1];
+          const review = await tool("code60_read_review", { reviewId });
+          const { scope } = await tool("code60_get_context");
+          await tool("code60_send_agent", {
+            scope,
+            runId: review.workers[0].runId,
+            prompt: JSON.stringify([
+              {
+                write: {
+                  path: "same.ts",
+                  content: "export const source = 'Validation';\nexport const optional = true;\n",
+                },
+              },
+              { message: "Optional values fixed" },
+            ]),
+          });
+          for (const comment of review.comments)
+            await tool("code60_address_feedback", {
+              scope,
+              reviewId,
+              commentId: comment.id,
+              note: "Optional values now pass validation",
+            });
+          steps = [{ message: "The worker addressed your feedback. Review the updated version." }];
+        }
+      }
       if (text.startsWith("Write a concise AI overview answering the search query")) {
         const data = JSON.parse(text.split("Search data (JSON):\n\n")[1]);
         const fileIndex = data.results.findIndex((source) => source.kind === "file");

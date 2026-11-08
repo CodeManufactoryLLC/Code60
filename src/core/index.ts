@@ -14,6 +14,7 @@ import {
 import { type Clock, systemClock } from "./clock.js";
 import { type CommandDeps, markInterrupted } from "./commands.js";
 import { type ConfigFs, loadConfig, parseDuration } from "./config.js";
+import { withDirectoryHistory } from "./desktop-history.js";
 import { createOrchestrator, type Orchestrator } from "./orchestrator.js";
 import { type PolicyOverrides, parseToolKinds } from "./policy.js";
 import { createProcesses, type Processes, recordedAgentAlive } from "./processes.js";
@@ -36,14 +37,26 @@ import { CODE60_VERSION } from "./version.js";
 
 export type { AgentMcpServer, PermissionAnswer } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
-export type { ChangedFile, GitWorktree } from "../git/index.js";
+export type {
+  ChangedFile,
+  GitReadiness,
+  GitSetupFile,
+  GitSetupOps,
+  GitSetupPreview,
+  GitWorktree,
+  ReviewSnapshot,
+  ReviewSnapshotFile,
+} from "../git/index.js";
 export type { Clock } from "./clock.js";
 export {
   type DiscardResult,
   diffRun,
   discardRun,
+  executeDiff,
   type ListedRun,
   listRuns,
+  type PreparedDiff,
+  prepareDiff,
   type StopResult,
   stopRun,
 } from "./commands.js";
@@ -145,7 +158,12 @@ export function stateHome(env: Env): string {
  * Finds where `cwd`'s run records live: inside its Git repository when there is one, otherwise
  * in the user's state directory, keyed by `cwd`.
  */
-export async function openWorkspace(deps: CoreDeps, cwd: string, env: Env): Promise<Workspace> {
+export async function openWorkspace(
+  deps: CoreDeps,
+  cwd: string,
+  env: Env,
+  includeDirectoryHistory = false,
+): Promise<Workspace> {
   let dir = resolve(cwd);
   if (process.platform === "win32" && deps.fs.realpath) {
     try {
@@ -159,7 +177,17 @@ export async function openWorkspace(deps: CoreDeps, cwd: string, env: Env): Prom
     deps.fs,
     repo === null ? directoryRunsDir(stateHome(env), dir) : runsDir(repo.commonDir),
   );
-  return { dir, repo, store };
+  return {
+    dir,
+    repo,
+    store:
+      includeDirectoryHistory && repo !== null
+        ? withDirectoryHistory(
+            store,
+            createRecordStore(deps.fs, directoryRunsDir(stateHome(env), dir)),
+          )
+        : store,
+  };
 }
 
 export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
@@ -167,6 +195,8 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 }
 
 export interface RunRequest {
+  /** Desktop workers must never fall back to editing the shared directory. */
+  requireIsolation?: boolean;
   cwd: string;
   env: Readonly<Record<string, string | undefined>>;
   mode: Mode;
@@ -276,6 +306,8 @@ export async function prepareRuns(
       noWorktree = "no_commits";
     }
   }
+  if (request.requireIsolation && noWorktree)
+    throw new RefusedError("Set up Git with an initial commit before starting desktop workers.");
   await preparePrivateRecords(deps, workspace, request.env);
   const interrupted = await markInterrupted(
     commandDeps(deps, workspace),

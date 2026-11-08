@@ -18,3 +18,7 @@
 - The search summary helper runs one evidence-only ACP turn through injected agents, with denied permission requests, bounded text and timeout, and unconditional process/listener/timer cleanup. It never creates run records or worktrees.
 
 - Run preparation/recovery may accept an already resolved configuration from desktop so it can enforce enabled-provider policy. Without that explicit argument, retain the existing headless config loading and defaults; core must not depend on desktop preferences or setup state.
+
+- Diff preparation owns run validation and interrupted-run reconciliation; diff execution accepts a prepared worktree/base and optional abort signal without mutating run records. Keep `diffRun` as the CLI-compatible composition.
+
+- The internal requireIsolation preparation option rejects direct-folder fallback before records or agents are created. CLI defaults stay unchanged. Optional desktop history composition retains both stores without migration or schema changes.

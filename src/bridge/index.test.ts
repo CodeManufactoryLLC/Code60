@@ -5,6 +5,8 @@ import {
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseDiffIdentity,
+  parseDiffRequest,
   parseFileContext,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
@@ -13,6 +15,8 @@ import {
   parsePollVisibility,
   parseProjectPath,
   parsePromptTemplateId,
+  parseReviewAction,
+  parseReviewFileRead,
   parseRunSettings,
   parseSaveConfiguration,
   parseSavePromptTemplate,
@@ -40,6 +44,39 @@ describe("desktop IPC validation", () => {
       { action: "install", path: "/tmp/file" },
     ])
       expect(() => parseUpdateAction(value)).toThrow();
+  });
+  it("validates review identities and bounded anchors without exposing path-based reads", () => {
+    const id = "a26310cc-1cbb-4e15-ae2b-23ff77923b48";
+    const read = {
+      project: "/project",
+      requestId: id,
+      reviewId: id,
+      revisionId: id,
+      fileKey: "worker:src/file.ts",
+    };
+    expect(parseReviewFileRead(read)).toEqual(read);
+    expect(() => parseReviewFileRead({ ...read, path: "/private/file" })).toThrow();
+    expect(() => parseReviewFileRead({ ...read, reviewId: "../escape" })).toThrow();
+    const comment = {
+      type: "comment",
+      project: "/project",
+      reviewId: id,
+      id,
+      revisionId: id,
+      text: "Fix this",
+      anchor: { revisionId: id, fileKey: read.fileKey, side: "modified", start: 1, end: 2 },
+    };
+    expect(parseReviewAction(comment)).toEqual(comment);
+    for (const range of [
+      { start: 0, end: 1 },
+      { start: 2, end: 1 },
+      { start: 1, end: 202 },
+    ])
+      expect(() =>
+        parseReviewAction({ ...comment, anchor: { ...comment.anchor, ...range } }),
+      ).toThrow();
+    expect(() => parseReviewAction({ ...comment, text: "x".repeat(8_001) })).toThrow();
+    expect(() => parseReviewAction({ ...comment, execute: true })).toThrow();
   });
   it("preserves POSIX file names while rejecting Windows devices, streams and ambiguous names", () => {
     const context = (root: string, preview: string) => ({
@@ -306,4 +343,16 @@ describe("harness mode IPC", () => {
         expect(() => parse(invalid)).toThrow();
     }
   });
+});
+it("validates bounded diff identities without accepting paths or unknown fields", () => {
+  const requestId = "c558e2bc-4b9e-4e52-b276-f28086c98ce6";
+  expect(parseDiffRequest({ requestId, id: "run-1" })).toEqual({ requestId, id: "run-1" });
+  expect(parseDiffIdentity({ requestId })).toEqual({ requestId });
+  for (const value of [
+    { requestId, id: "../escape" },
+    { requestId: "bad", id: "run-1" },
+    { requestId, id: "run-1", path: "/etc/passwd" },
+  ])
+    expect(() => parseDiffRequest(value)).toThrow();
+  expect(() => parseDiffIdentity({ requestId, id: "run-1" })).toThrow();
 });

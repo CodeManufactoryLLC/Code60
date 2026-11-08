@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -7,6 +7,8 @@ import type {
   Action,
   ActionResult,
   DesktopRun,
+  DiffIdentity,
+  DiffRequest,
   FileContext,
   FileSnapshot,
   McpTable,
@@ -37,11 +39,21 @@ import type {
 } from "../bridge/index.js";
 import {
   DEFAULT_PROMPT_TEMPLATES,
+  type GitProject,
+  type GitReadiness,
+  type GitSetupCommit,
+  type GitSetupFileRequest,
+  type GitSetupIdentity,
   isMcpControlTool,
-  MCP_CONTROL_LIMITS,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
+  parseDiffIdentity,
+  parseDiffRequest,
   parseFileContext,
+  parseGitProject,
+  parseGitSetupCommit,
+  parseGitSetupFile,
+  parseGitSetupIdentity,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -50,11 +62,19 @@ import {
   parsePollSettings,
   parsePollVisibility,
   parsePromptTemplateId,
+  parseReviewAction,
+  parseReviewFileRead,
+  parseReviewRead,
   parseRunSettings,
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseSearchSummary,
   parseSearchSummaryRequestId,
+  type Review,
+  type ReviewAction,
+  type ReviewContent,
+  type ReviewFileRead,
+  type ReviewRead,
   renderPrompt,
 } from "../bridge/index.js";
 import type { ModeChange } from "../core/index.js";
@@ -66,13 +86,14 @@ import {
   CODE60_VERSION,
   type CoreDeps,
   commandDeps,
-  diffRun,
   discardRun,
+  executeDiff,
   extractEpisodicMemory,
   listRuns,
   loadConfig,
   type Orchestrator,
   openWorkspace,
+  prepareDiff,
   prepareOrchestrationChat,
   prepareRecovery,
   prepareRuns,
@@ -89,22 +110,29 @@ import {
 import { privateDirectory, samePath, setEnvironmentPath } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import {
+  type ChatSession,
+  ConversationCoordinator,
+  type Worker,
+} from "./conversation-coordinator.js";
+import { DiffReads } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
+import { GitSetup } from "./git-setup.js";
 import {
   type ControlArgs,
   formatWorkerUpdate,
   parseControlArgs,
-  type WorkerUpdate,
   workerTranscript,
 } from "./mcp-control.js";
-import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
+import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { Poller } from "./poller.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
 import { desktopConfig, detectProvider } from "./provider-catalog.js";
+import { ReviewStore } from "./reviews.js";
 import { projectSearchEvidence } from "./search-evidence.js";
 
 export interface DesktopDialogs {
@@ -187,42 +215,12 @@ interface Batch {
   disposers: (() => void)[];
 }
 
-/** A worker run dispatched by the orchestration chat. Ownership is held only in memory. */
-interface Worker {
-  /** The chat generation that dispatched it; only that chat may control it. */
-  generation: number;
-  directory: string;
-  provider: string;
-  /** The last turn already reported to the chat, so each turn wakes it at most once. */
-  reportedTurn: number;
-  /** The tail of the reply in the current turn. */
-  reply: string;
-}
-
-/** Automatic updates sent to the chat in one prompt, at most. */
-const UPDATE_BATCH = 20;
 const STALE_CONTRACT = "Do not start or control agent runs";
 
-/** All mutable state and capabilities belong to one orchestration conversation. */
-class ChatSession {
-  revoked = false;
-  chat: Orchestrator | undefined;
-  chatDirectory: string | null = null;
-  chatError: string | null = null;
-  chatEvents: SequencedEvent[] = [];
-  chatPending: SequencedEvent[] = [];
-  chatDisposers: (() => void)[] = [];
-  mcpGateway: McpGateway | undefined;
-  dispatches = new Map<string, { key: string; result: Promise<unknown> }>();
-  workerScope = randomUUID();
-  inbox: WorkerUpdate[] = [];
-  updatesPaused = false;
-
-  constructor(readonly chatGeneration: number) {}
-}
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class DesktopController {
   private readonly agentSetup: AgentSetup;
+  private readonly diffReads = new DiffReads();
   private workspace: Workspace | undefined;
   private batches = new Map<Orchestrator, Batch>();
   private history: DesktopRun[] = [];
@@ -262,11 +260,427 @@ export class DesktopController {
     | undefined;
   private connectionTest: { abort: AbortController; done: Promise<void> } | undefined;
   private chatKey = "";
-  private chatGeneration = 0;
-  private currentChat = new ChatSession(0);
-  private chats = [this.currentChat];
-  private workers = new Map<string, Worker>();
-  private updateTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly conversations = new ConversationCoordinator({
+    hasPendingFeedback: (session) =>
+      this.reviews
+        ?.list()
+        .some(
+          (review) =>
+            review.chatId === session.chat?.runs()[0]?.id &&
+            review.submissions.some(
+              (batch) => batch.state === "pending" || batch.state === "delivering",
+            ),
+        ) ?? false,
+    directory: () => this.workspace?.dir,
+    view: (id) => this.liveView(id),
+    closing: () => this.closing,
+    changed: () => this.changed(),
+    formatUpdates: (updates) =>
+      renderPrompt(
+        "workerUpdates",
+        effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
+          .workerUpdates,
+        { updates: updates.map(formatWorkerUpdate).join("\n") },
+      ),
+    deliver: (session, text, origin) => {
+      const run = session.chat?.runs()[0];
+      if (!session.chat || !run) throw new Error("No orchestration session is available");
+      session.chat.reply(run.id, text, origin);
+    },
+  });
+
+  private reviews: ReviewStore | undefined;
+  private gitState: GitReadiness | undefined;
+  private gitSetup: GitSetup | undefined;
+  private gitOperation = false;
+  private gitSetupEpoch = 0;
+
+  private async probeGit(directory: string): Promise<GitReadiness> {
+    if (this.deps.git.setup) return this.deps.git.setup.readiness(directory);
+    const repo = await this.deps.git.repoInfo(directory).catch(() => null);
+    if (!repo) return { status: "not_repository", message: "This folder is not a Git repository." };
+    try {
+      await this.deps.git.resolveCommit(repo.topLevel, "HEAD");
+      return { status: "ready", root: repo.topLevel, message: "Ready for isolated workers" };
+    } catch {
+      return {
+        status: "no_commits",
+        root: repo.topLevel,
+        message: "This repository needs an initial commit.",
+      };
+    }
+  }
+  private gitProject(project: string): Workspace {
+    const workspace = this.requireWorkspace();
+    if (this.closing || workspace.dir !== project)
+      throw new Error("This Git setup project is no longer open");
+    return workspace;
+  }
+  async checkGit(value: GitProject): Promise<GitReadiness> {
+    const { project } = parseGitProject(value);
+    const workspace = this.gitProject(project);
+    const result = await this.probeGit(project);
+    if (workspace !== this.workspace) throw new Error("Project changed");
+    this.gitState = result;
+    this.changed();
+    return result;
+  }
+  private async requireGitRun(id?: string): Promise<void> {
+    if (this.gitOperation || this.gitSetup?.busy)
+      throw new Error("Finish Git setup before starting workers");
+    const workspace = this.requireWorkspace();
+    if (id && (await workspace.store.read(id)).base === null)
+      throw new Error(
+        "No baseline was captured for this run. Start a new isolated worker after setting up Git.",
+      );
+    const state = await this.checkGit({ project: workspace.dir });
+    if (state.status !== "ready")
+      throw new Error(`Set up Git to enable workers and change review. ${state.message}`);
+    if (!workspace.repo) {
+      this.workspace = await openWorkspace(this.deps, workspace.dir, this.env, true);
+      this.history = await listRuns(commandDeps(this.deps, this.workspace));
+    }
+  }
+  private async setupAllowed(project: string): Promise<GitSetup> {
+    const workspace = this.gitProject(project);
+    if (this.gitOperation || this.gitSetup?.busy)
+      throw new Error("Git setup is already in progress");
+    if (this.active)
+      throw new Error("Stop project workers before setting up Git. Chat can stay open.");
+    for (const session of this.conversations.sessions) {
+      const run = session.chat?.runs()[0];
+      if (run && ACTIVE_STATUSES.has(run.status) && (await samePath(run.worktree, project)))
+        throw new Error("This folder is in use by Chat. Open your project folder to set up Git.");
+    }
+    const history = await listRuns(commandDeps(this.deps, workspace));
+    if (history.some((run) => run.agentAlive || ACTIVE_STATUSES.has(run.record.status)))
+      throw new Error("Stop project workers and leftover agents before setting up Git.");
+    if (!this.deps.git.setup) throw new Error("Guided Git setup is unavailable");
+    if (!this.gitSetup) {
+      const database = this.database?.path;
+      this.gitSetup = new GitSetup(
+        this.deps.git.setup,
+        database ? [database, `${database}-wal`, `${database}-shm`, `${database}-journal`] : [],
+      );
+    }
+    return this.gitSetup;
+  }
+  private async gitWork<T>(project: string, work: (setup: GitSetup) => Promise<T>): Promise<T> {
+    const epoch = this.gitSetupEpoch;
+    const admitted = await this.exclusive(async () => {
+      if (epoch !== this.gitSetupEpoch) throw new Error("Git setup cancelled");
+      const setup = await this.setupAllowed(project);
+      if (epoch !== this.gitSetupEpoch) throw new Error("Git setup cancelled");
+      this.gitOperation = true;
+      return { setup, workspace: this.workspace };
+    });
+    try {
+      if (this.closing || epoch !== this.gitSetupEpoch || this.workspace !== admitted.workspace)
+        throw new Error("Git setup context changed");
+      return await work(admitted.setup);
+    } finally {
+      let state: GitReadiness | undefined;
+      let workspace: Workspace | undefined;
+      let history: DesktopRun[] | undefined;
+      try {
+        // Rechecking Git/storage can be slow too. Only publication belongs in the control queue.
+        if (!this.closing && this.workspace === admitted.workspace) {
+          state = await this.probeGit(project);
+          if (state.status === "ready" || state.status === "no_commits") {
+            workspace = await openWorkspace(this.deps, project, this.env, true);
+            history = await listRuns(commandDeps(this.deps, workspace));
+          }
+        }
+      } finally {
+        await this.exclusive(async () => {
+          if (!this.closing && this.workspace === admitted.workspace && state) {
+            this.gitState = state;
+            if (workspace && history) {
+              this.workspace = workspace;
+              this.history = history;
+              this.poller.invalidate(["history", "worktrees", "files"]);
+            }
+          }
+          this.gitOperation = false;
+          this.changed();
+        });
+      }
+    }
+  }
+  beginGitSetup(value: GitProject) {
+    const { project } = parseGitProject(value);
+    return this.gitWork(project, (setup) => setup.begin(project));
+  }
+  previewGitSetupFile(value: GitSetupFileRequest) {
+    const request = parseGitSetupFile(value);
+    this.gitProject(request.project);
+    if (!this.gitSetup) throw new Error("Open Git setup first");
+    return this.gitSetup.previewFile(request);
+  }
+  initializeGit(value: GitSetupIdentity) {
+    const request = parseGitSetupIdentity(value);
+    return this.gitWork(request.project, (setup) => setup.initialize(request));
+  }
+  commitGitSetup(value: GitSetupCommit) {
+    const request = parseGitSetupCommit(value);
+    return this.gitWork(request.project, (setup) => setup.commit(request));
+  }
+  cancelGitSetup(value?: GitProject) {
+    const request = value ? parseGitProject(value) : undefined;
+    if (request && request.project !== this.workspace?.dir) return Promise.resolve();
+    this.gitSetupEpoch++;
+    return this.gitSetup?.cancel(request?.project) ?? Promise.resolve();
+  }
+  private feedbackScheduled = false;
+  private feedbackChanged = false;
+  private reviewCaptures = new Map<string, boolean>();
+
+  private reviewStore(project: string): ReviewStore {
+    if (this.closing || !this.reviews || this.workspace?.dir !== project)
+      throw new Error("This review project is no longer open");
+    return this.reviews;
+  }
+
+  reviewAction(value: ReviewAction): Promise<string> {
+    const request = parseReviewAction(value);
+    return this.exclusive(async () => {
+      const store = this.reviewStore(request.project);
+      if (request.type === "open-run") {
+        const run = this.history.find((run) => run.record.id === request.runId);
+        if (!run) throw new Error("Unknown run in this project");
+        let review = store
+          .list()
+          .find((review) => review.workers.some((worker) => worker.runId === request.runId));
+        if (!review) {
+          review = await store.create(
+            this.conversations.current.chat?.runs()[0]?.id ?? null,
+            0,
+            `${run.record.agent} changes`,
+          );
+          await store.addWorker(review.id, request.runId, run.record.agent);
+        }
+        this.scheduleReviewCapture(review.id);
+        this.changed();
+        return review.id;
+      }
+      const review = store.get(request.reviewId);
+      const session = this.conversations.sessions.find(
+        (session) =>
+          session.chat?.runs()[0]?.id ===
+          (request.type === "reconnect" ? request.chatId : review.chatId),
+      );
+      if (["submit", "retry", "reconnect"].includes(request.type)) {
+        if (!session) throw new Error("Reconnect this review to a current conversation first");
+        this.conversations.assertCurrent(session);
+      }
+      await store.action(request);
+      this.scheduleFeedback();
+      this.changed();
+      return review.id;
+    });
+  }
+
+  captureReview(value: ReviewRead): Promise<void> {
+    const request = parseReviewRead(value);
+    const store = this.reviewStore(request.project);
+    return this.diffReads.read(
+      { requestId: request.requestId, id: request.reviewId },
+      (signal) =>
+        this.exclusive(async () => {
+          signal.throwIfAborted();
+          if (store !== this.reviewStore(request.project))
+            throw new Error("Review context changed");
+          const targets = [];
+          for (const worker of store.get(request.reviewId).workers) {
+            try {
+              targets.push({
+                runId: worker.runId,
+                target: await prepareDiff(
+                  commandDeps(this.deps, this.requireWorkspace()),
+                  worker.runId,
+                ),
+              });
+            } catch (cause) {
+              targets.push({ runId: worker.runId, error: message(cause) });
+            }
+          }
+          return targets;
+        }),
+      async (targets, signal) => {
+        const results = [];
+        let fileCount = 0;
+        let contentBytes = 0;
+        for (const target of targets) {
+          signal.throwIfAborted();
+          try {
+            if (!target.target) {
+              results.push(target);
+              continue;
+            }
+            if (!this.deps.git.reviewSnapshot) throw new Error("Structured review is unavailable");
+            const snapshot = await this.deps.git.reviewSnapshot(
+              target.target.worktree,
+              target.target.base,
+              signal,
+            );
+            const files = snapshot.files.slice(0, Math.max(0, 2_000 - fileCount)).map((file) => {
+              const size = Buffer.byteLength(file.original) + Buffer.byteLength(file.modified);
+              if (contentBytes + size > 8_388_608)
+                return {
+                  ...file,
+                  original: "",
+                  modified: "",
+                  limitation: "Review content limit reached",
+                };
+              contentBytes += size;
+              return file;
+            });
+            fileCount += files.length;
+            results.push({
+              runId: target.runId,
+              files,
+              ...(snapshot.truncated || files.length < snapshot.files.length
+                ? { error: "File listing is partial (1,000 per worker; 2,000 per review)" }
+                : {}),
+            });
+          } catch (cause) {
+            signal.throwIfAborted();
+            results.push({ runId: target.runId, error: message(cause) });
+          }
+        }
+        signal.throwIfAborted();
+        if (store !== this.reviewStore(request.project)) throw new Error("Review context changed");
+        await store.capture(request.reviewId, results);
+        signal.throwIfAborted();
+        this.changed();
+      },
+    );
+  }
+
+  readReviewFile(value: ReviewFileRead): Promise<ReviewContent> {
+    const request = parseReviewFileRead(value);
+    const store = this.reviewStore(request.project);
+    return this.diffReads.read(
+      { requestId: request.requestId, id: request.reviewId },
+      async () => store,
+      async (store, signal) => {
+        const content = await store.content(request.reviewId, request.revisionId, request.fileKey);
+        signal.throwIfAborted();
+        if (store !== this.reviewStore(request.project)) throw new Error("Review context changed");
+        return content;
+      },
+    );
+  }
+
+  async readReview(value: ReviewRead): Promise<Review> {
+    const request = parseReviewRead(value);
+    return structuredClone(this.reviewStore(request.project).get(request.reviewId));
+  }
+
+  private scheduleReviewCapture(id: string): void {
+    const store = this.reviews;
+    if (!store || this.closing) return;
+    if (this.reviewCaptures.has(id)) {
+      this.reviewCaptures.set(id, true);
+      return;
+    }
+    this.reviewCaptures.set(id, false);
+    void this.captureReview({ project: store.project, reviewId: id, requestId: randomUUID() })
+      .catch(async (cause) => {
+        if (this.reviews === store && !this.closing) await store.fail(id, cause);
+      })
+      .catch((cause) => {
+        this.warnings.push(`Could not save review: ${message(cause)}`);
+      })
+      .finally(() => {
+        const changedDuringRead = this.reviewCaptures.get(id);
+        this.reviewCaptures.delete(id);
+        if (changedDuringRead && this.reviews === store && !this.closing)
+          this.scheduleReviewCapture(id);
+        this.changed();
+      });
+  }
+
+  private scheduleFeedback(): void {
+    if (this.closing) return;
+    if (this.feedbackScheduled) {
+      this.feedbackChanged = true;
+      return;
+    }
+    this.feedbackScheduled = true;
+    void this.exclusive(async () => {
+      const store = this.reviews;
+      if (!store) return;
+      for (const review of store.list()) {
+        const batch = review.submissions.find((batch) => batch.state === "pending");
+        if (!batch) continue;
+        const session = this.conversations.sessions.find(
+          (session) => !session.revoked && session.chat?.runs()[0]?.id === review.chatId,
+        );
+        const run = session?.chat?.runs()[0];
+        if (
+          session &&
+          run &&
+          (run.status === "running" ||
+            run.status === "waiting" ||
+            run.status === "queued" ||
+            run.stopping ||
+            run.modeChanging ||
+            session.updatesPaused)
+        )
+          continue;
+        let delivered = false;
+        try {
+          if (!session || !run || run.status !== "idle")
+            throw new Error("Reconnect or restart the conversation, then retry feedback");
+          const text = await store.feedback(review.id, batch.id);
+          await store.mutate(review.id, (current) => {
+            const item = current.submissions.find((item) => item.id === batch.id);
+            if (item) item.state = "delivering";
+          });
+          this.conversations.send(session, text);
+          delivered = true;
+          session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
+          await store.mutate(review.id, (current) => {
+            const item = current.submissions.find((item) => item.id === batch.id);
+            if (item) {
+              item.state = "delivered";
+              item.deliveredTurn = session.chat?.runs()[0]?.turns ?? 1;
+              item.deliveredChatId = run.id;
+            }
+            for (const comment of current.comments)
+              if (batch.commentIds.includes(comment.id)) comment.state = "sent";
+          });
+        } catch (cause) {
+          await store.mutate(review.id, (current) => {
+            const item = current.submissions.find((item) => item.id === batch.id);
+            if (item) {
+              item.error =
+                `${delivered ? "Feedback was delivered but its receipt could not be saved. Check the conversation before retrying. " : ""}${message(cause)}`.slice(
+                  0,
+                  2_000,
+                );
+              item.state = "failed";
+            }
+          });
+        }
+      }
+      this.changed();
+    })
+      .catch((cause) => {
+        this.warnings.push(`Could not deliver review feedback: ${message(cause)}`);
+        this.changed();
+      })
+      .finally(() => {
+        this.feedbackScheduled = false;
+        // A storage failure may leave a batch pending. Do not spin or automatically
+        // retry a potentially delivered prompt; a fresh user action/idle event schedules work.
+        if (this.feedbackChanged) {
+          this.feedbackChanged = false;
+          this.scheduleFeedback();
+        }
+      });
+  }
 
   constructor(
     private readonly deps: CoreDeps,
@@ -979,29 +1393,24 @@ export class DesktopController {
     ]);
     if (!restart && key === this.chatKey) return;
     if (restart) {
-      const previous = this.currentChat;
+      const previous = this.conversations.current;
       await this.disposeChat(previous);
-      this.currentChat = new ChatSession(++this.chatGeneration);
-      this.chats.splice(this.chats.indexOf(previous), 1, this.currentChat);
+      this.conversations.replace(previous);
     } else {
-      await Promise.all(this.chats.map((session) => this.disposeChat(session)));
-      this.currentChat = new ChatSession(++this.chatGeneration);
-      this.chats = [this.currentChat];
+      await Promise.all(this.conversations.sessions.map((session) => this.disposeChat(session)));
+      this.conversations.replace();
     }
     this.chatKey = key;
-    await this.startChat(this.currentChat);
+    await this.startChat(this.conversations.current);
   }
 
   private async disposeChat(session: ChatSession): Promise<void> {
     // Revoke capabilities before stopping the process, including queued gateway requests.
-    session.revoked = true;
-    session.workerScope = randomUUID();
+    this.conversations.revoke(session);
     await this.closeMcpGateway(session);
     await session.chat?.shutdown(this.forceClosing);
     for (const dispose of session.chatDisposers) dispose();
     session.chatDisposers = [];
-    session.inbox = [];
-    session.dispatches.clear();
   }
 
   private async startChat(session: ChatSession): Promise<void> {
@@ -1052,7 +1461,10 @@ export class DesktopController {
           const entry = { revision: this.revision, event };
           session.chatEvents.push(entry);
           session.chatPending.push(entry);
-          if (event.type === "status" && event.status === "idle") this.scheduleUpdates();
+          if (event.type === "status" && event.status === "idle") {
+            this.scheduleFeedback();
+            this.conversations.scheduleUpdates();
+          }
         }),
         chat.onChange(() => this.changed()),
         chat.onWarning((warning) => {
@@ -1078,38 +1490,36 @@ export class DesktopController {
         const provider = this.orchestration.provider;
         if (!provider || !Object.hasOwn(this.config?.agents ?? {}, provider))
           throw new Error("Select an available orchestration provider");
-        const session = new ChatSession(++this.chatGeneration);
-        this.chats.push(session);
-        this.currentChat = session;
+        const session = this.conversations.create();
         await this.startChat(session);
         return;
       }
       const session =
         request.id === null
-          ? this.currentChat
-          : this.chats.find((entry) => entry.chat?.runs()[0]?.id === request.id);
+          ? this.conversations.current
+          : this.conversations.sessions.find((entry) => entry.chat?.runs()[0]?.id === request.id);
       const run = session?.chat?.runs()[0];
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
       if (request.type === "select") {
-        this.currentChat = session;
+        this.conversations.current = session;
       } else if (request.type === "resume-updates") {
-        session.updatesPaused = false;
-        this.scheduleUpdates();
+        this.conversations.resume(session);
+        this.scheduleFeedback();
       } else if (request.type === "restart") {
         if (!this.database) throw new Error("Connect to a database first");
         if (!this.orchestration.provider) throw new Error("Select an orchestration provider");
-        this.currentChat = session;
+        this.conversations.current = session;
         await this.syncOrchestrationChat(true);
       } else if (!session.chat || !run) throw new Error("No orchestration session is available");
       else if (request.type === "send") {
-        session.chat.reply(run.id, request.text);
-        session.updatesPaused = false;
+        this.conversations.send(session, request.text);
+        session.reviewTask = { title: request.text, turn: session.chat.runs()[0]?.turns ?? 0 };
       } else if (request.type === "cancel") {
-        session.updatesPaused = true;
+        this.conversations.pause(session);
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
       } else {
-        session.updatesPaused = true;
+        this.conversations.pause(session);
         await session.chat.shutdown();
       }
       this.changed();
@@ -1118,7 +1528,7 @@ export class DesktopController {
   get hasActiveWork(): boolean {
     return (
       this.active ||
-      this.chats.some((session) =>
+      this.conversations.sessions.some((session) =>
         session.chat?.runs().some((run) => ["queued", "running", "waiting"].includes(run.status)),
       )
     );
@@ -1143,9 +1553,9 @@ export class DesktopController {
         batch.runs().map((view) => [view.id, view] as const),
       ),
     );
-    const session = this.currentChat;
+    const session = this.conversations.current;
     const chatSnapshot = (session: ChatSession) => ({
-      workers: [...this.workers]
+      workers: [...this.conversations.workers]
         .filter(
           ([, worker]) =>
             worker.generation === session.chatGeneration &&
@@ -1169,9 +1579,38 @@ export class DesktopController {
         chromium: process.versions.chrome ?? null,
         node: process.versions.node,
       },
+      ...(this.gitState ? { gitReadiness: this.gitState } : {}),
+      reviews:
+        this.reviews
+          ?.list()
+          .map(
+            ({
+              id,
+              version,
+              project,
+              title,
+              chatId,
+              originChatId,
+              turn,
+              workers,
+              submissions,
+              revisions,
+            }) => ({
+              id,
+              version,
+              project,
+              title,
+              chatId,
+              originChatId,
+              turn,
+              workers,
+              submissions,
+              revisions: revisions.map(({ id, at }) => ({ id, at })),
+            }),
+          ) ?? [],
       chat: chatSnapshot(session),
-      chats: this.chats.map(chatSnapshot),
-      workers: [...this.workers.keys()],
+      chats: this.conversations.sessions.map(chatSnapshot),
+      workers: [...this.conversations.workers.keys()],
       orchestration: { ...this.orchestration },
       agentSetup: this.agentSetup.snapshot(),
       revision: this.revision,
@@ -1217,7 +1656,7 @@ export class DesktopController {
       this.timer = undefined;
       const snapshot = this.snapshot(false);
       this.pending = [];
-      for (const session of this.chats) session.chatPending = [];
+      for (const session of this.conversations.sessions) session.chatPending = [];
       for (const listener of this.listeners) listener(snapshot);
     }, 40);
   }
@@ -1293,6 +1732,8 @@ export class DesktopController {
         database.close();
         throw new Error(`Could not remember the database: ${message(error)}`);
       }
+      await this.cancelDiffReads();
+      await this.cancelGitSetup();
       const previous = this.database;
       try {
         this.attach(database);
@@ -1303,7 +1744,7 @@ export class DesktopController {
       previous?.close();
       await this.setConfig(config);
       if (previous?.path !== database.path) {
-        this.clearWorkspace();
+        await this.clearWorkspace();
         this.savedPrompts = this.readPrompts(database);
       }
       await this.syncOrchestrationChat();
@@ -1372,10 +1813,24 @@ export class DesktopController {
       throw new Error(`This folder is not available: ${directory}`);
     }
     const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
-    const workspace = await openWorkspace(this.deps, dir, this.env);
+    const workspace = await openWorkspace(this.deps, dir, this.env, true);
     const history = await listRuns(commandDeps(this.deps, workspace));
-    this.clearWorkspace();
+    await this.clearWorkspace();
     this.workspace = workspace;
+    this.gitState = await this.probeGit(workspace.dir);
+    try {
+      this.reviews = await ReviewStore.open(
+        join(
+          dirname(database.path),
+          ".code60_workspace",
+          "reviews",
+          createHash("sha256").update(database.path).digest("hex"),
+        ),
+        workspace.dir,
+      );
+    } catch (cause) {
+      this.warnings.push(`Reviews unavailable: ${message(cause)}`);
+    }
     await this.setConfig(config);
     this.history = history;
     this.poller.context(this.active);
@@ -1400,10 +1855,16 @@ export class DesktopController {
     this.poller.invalidate(["configurations"]);
   }
 
-  private clearWorkspace(): void {
+  private async clearWorkspace(): Promise<void> {
+    await this.cancelGitSetup();
+    this.gitSetup = undefined;
+    this.gitState = undefined;
+    await this.cancelDiffReads();
+    this.reviews = undefined;
+    for (const session of this.conversations.sessions) session.reviewTask = undefined;
     this.detach();
     this.workspace = undefined;
-    for (const session of this.chats) session.workerScope = randomUUID();
+    this.conversations.rotateScopes();
     this.worktrees = null;
     this.fileContext = null;
     this.files = null;
@@ -1534,7 +1995,18 @@ export class DesktopController {
     const entry = { revision: this.revision, event };
     this.events.push(entry);
     this.pending.push(entry);
-    this.trackWorker(event);
+    this.conversations.trackWorker(event);
+    if (
+      event.type === "turnEnd" ||
+      (event.type === "status" &&
+        ["idle", "failed", "timed_out", "cancelled", "finished", "interrupted"].includes(
+          event.status,
+        ))
+    ) {
+      for (const review of this.reviews?.list() ?? [])
+        if (review.workers.some((worker) => worker.runId === event.runId))
+          this.scheduleReviewCapture(review.id);
+    }
   }
 
   private publishPriorEvents(runId: string, events: readonly RunEvent[]): void {
@@ -1606,6 +2078,7 @@ export class DesktopController {
     id: string,
     text: string,
   ): Promise<RecoveryActionResult> {
+    await this.requireGitRun(id);
     const restored = await this.resumeRun(workspace, id);
     if (restored.type === "handoff-required")
       return this.handoffRun(workspace, id, text, restored.reason);
@@ -1737,6 +2210,7 @@ export class DesktopController {
     request: StartRequest,
     register?: (ids: string[], workspace: Workspace) => void,
   ): Promise<string[]> {
+    await this.requireGitRun();
     const workspace = this.requireWorkspace();
     const configuration = request.configurationId
       ? this.configurations.find((entry) => entry.id === request.configurationId)
@@ -1752,54 +2226,11 @@ export class DesktopController {
         cwd: workspace.dir,
         env: this.env,
         mode: "interactive",
+        requireIsolation: true,
       },
       enabledConfig,
     );
     const orchestrator = prepared.orchestrator;
-    let warning: string | undefined;
-    if (prepared.noWorktree !== undefined) {
-      const chatSharing = (
-        await Promise.all(
-          this.chats.map(async (session) => {
-            const chatRun = session.chat?.runs()[0];
-            return (
-              chatRun &&
-              ACTIVE_STATUSES.has(chatRun.status) &&
-              (await realpath(chatRun.worktree).catch(() => null)) === workspace.dir
-            );
-          }),
-        )
-      ).some(Boolean);
-      const sharing =
-        this.snapshot().runs.some(
-          (run) =>
-            run.record.base === null &&
-            run.record.worktree === workspace.dir &&
-            ["queued", "running", "waiting", "idle"].includes(
-              run.view?.status ?? run.record.status,
-            ),
-        ) || chatSharing === true;
-      warning = `Agents will work directly in ${workspace.dir}, without isolated worktrees. Diff and discard are unavailable. ${
-        sharing
-          ? "New runs share this directory with existing live sessions and can overwrite each other's changes."
-          : orchestrator.runs().length > 1
-            ? "All runs share this directory and can overwrite each other's changes."
-            : ""
-      }`;
-      let confirmed: boolean;
-      try {
-        confirmed = await this.dialogs.confirm("Run without worktrees?", warning);
-      } catch (error) {
-        await orchestrator.shutdown(this.forceClosing);
-        throw error;
-      }
-      if (!confirmed) {
-        await orchestrator.shutdown(this.forceClosing);
-        this.history = await listRuns(commandDeps(this.deps, workspace));
-        this.changed();
-        return [];
-      }
-    }
     // Shutdown may have begun while preparation or the native confirmation was pending.
     if (this.closing) {
       await orchestrator.shutdown(this.forceClosing);
@@ -1816,7 +2247,6 @@ export class DesktopController {
       await orchestrator.shutdown(this.forceClosing);
       throw new Error("The app is stopping");
     }
-    if (warning !== undefined) this.warnings.push(warning);
 
     this.history = history;
     this.activateBatch(orchestrator, workspace);
@@ -1860,7 +2290,9 @@ export class DesktopController {
     const { completion } = await this.exclusive(async () => {
       let owner: Orchestrator | undefined;
       if (chat) {
-        owner = this.chats.find((session) => session.chat?.runs()[0]?.id === id)?.chat;
+        owner = this.conversations.sessions.find(
+          (session) => session.chat?.runs()[0]?.id === id,
+        )?.chat;
       } else {
         this.requireWorkspace();
         if (!this.history.some((run) => run.record.id === id))
@@ -1876,12 +2308,53 @@ export class DesktopController {
     try {
       await completion;
     } finally {
-      this.scheduleUpdates();
+      this.conversations.scheduleUpdates();
+      this.scheduleFeedback();
       this.changed();
     }
   }
 
+  readDiff(value: DiffRequest): Promise<string> {
+    const request = parseDiffRequest(value);
+    const workspace = this.workspace;
+    const database = this.database;
+    const current = () => {
+      if (this.closing || workspace !== this.workspace || database !== this.database)
+        throw new Error("The diff workspace is no longer current");
+    };
+    return this.diffReads.read(
+      request,
+      (signal) =>
+        this.exclusive(async () => {
+          signal.throwIfAborted();
+          current();
+          if (!workspace) throw new Error("Choose a folder first");
+          if (!this.history.some((run) => run.record.id === request.id))
+            throw new Error("Unknown run in this workspace");
+          const target = await prepareDiff(commandDeps(this.deps, workspace), request.id);
+          signal.throwIfAborted();
+          current();
+          return target;
+        }),
+      async (target, signal) => {
+        current();
+        const result = await executeDiff(this.deps.git, target, signal);
+        current();
+        return result;
+      },
+    );
+  }
+
+  cancelDiff(value: DiffIdentity): Promise<void> {
+    return this.diffReads.cancel(parseDiffIdentity(value).requestId);
+  }
+
+  cancelDiffReads(): Promise<void> {
+    return this.diffReads.cancel();
+  }
+
   action(action: Action): Promise<ActionResult> {
+    if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
     return this.exclusive(async () => {
@@ -1911,9 +2384,8 @@ export class DesktopController {
       switch (action.type) {
         case "events":
           return workspace.store.readEvents(action.id);
-        case "diff":
-          return diffRun(cmd, action.id);
         case "discard":
+          await this.cancelDiffReads();
           await discardRun(
             cmd,
             workspace.repo?.topLevel ?? workspace.dir,
@@ -1934,6 +2406,7 @@ export class DesktopController {
           if (!orchestrator?.runs().some((run) => run.id === action.id))
             throw new Error("This run is not controlled by this app");
           if (action.type === "reply") {
+            await this.requireGitRun(action.id);
             await this.enabledConfig();
             this.requireEnabled(
               this.history.find((run) => run.record.id === action.id)?.record.agent ?? "",
@@ -1948,7 +2421,7 @@ export class DesktopController {
 
   /** Orchestrated workers keep their fixed allow-all policy through restore and handoff. */
   private workerOverrides(id: string) {
-    return this.workers.has(id) ? { allow: [], allowAll: true } : undefined;
+    return this.conversations.workers.has(id) ? { allow: [], allowAll: true } : undefined;
   }
 
   private liveBatch(id: string): Orchestrator | undefined {
@@ -1965,122 +2438,30 @@ export class DesktopController {
     return undefined;
   }
 
-  /** Queues one update per ended or failed worker turn; streamed chunks never wake the chat. */
-  private trackWorker(event: RunEvent): void {
-    const worker = this.workers.get(event.runId);
-    if (!worker) return;
-    if (event.type === "prompt") {
-      worker.reply = "";
-      return;
-    }
-    if (event.type === "message") {
-      worker.reply = `${worker.reply}${event.text}`.slice(-MCP_CONTROL_LIMITS.excerpt);
-      return;
-    }
-    const session = this.chats.find((session) => session.chatGeneration === worker.generation);
-    if (event.type !== "status" || !session) return;
-    const view = this.liveView(event.runId);
-    const turn = view?.turns ?? worker.reportedTurn;
-    const ended = !ACTIVE_STATUSES.has(event.status);
-    const turnEnded = event.status === "idle" ? event.reason?.startsWith("turn ") === true : ended;
-    const exited = ended && event.reason === "the agent exited while idle";
-    if (!(turnEnded && turn > worker.reportedTurn) && !exited) return;
-    worker.reportedTurn = turn;
-    session.inbox.push({
-      runId: event.runId,
-      provider: worker.provider,
-      status: event.status,
-      turn,
-      ...(view?.lastStopReason === undefined ? {} : { stopReason: view.lastStopReason }),
-      ...(ended && event.reason !== undefined ? { reason: event.reason } : {}),
-      excerpt: worker.reply,
-    });
-    this.scheduleUpdates();
-  }
-
-  private scheduleUpdates(): void {
-    if (this.updateTimer !== undefined || this.closing) return;
-    // A short delay coalesces several workers ending together into one prompt.
-    this.updateTimer = setTimeout(() => {
-      this.updateTimer = undefined;
-      for (const session of this.chats) this.deliverUpdates(session);
-    }, 50);
-  }
-
-  /** Sends queued worker updates only between the chat's turns, never overlapping a prompt. */
-  private deliverUpdates(session: ChatSession): void {
-    if (this.closing || session.updatesPaused || session.inbox.length === 0) return;
-    const chat = session.chat;
-    const run = chat?.runs()[0];
-    if (!chat || !run || run.status !== "idle" || run.stopping || run.modeChanging) return;
-    const updates = session.inbox.slice(0, UPDATE_BATCH);
-    const template = effectivePrompts(
-      this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES,
-      this.savedPrompts,
-    ).workerUpdates;
-    try {
-      chat.reply(
-        run.id,
-        renderPrompt("workerUpdates", template, {
-          updates: updates.map(formatWorkerUpdate).join("\n"),
-        }),
-        "automatic",
-      );
-      session.inbox.splice(0, updates.length);
-    } catch (error) {
-      session.chatError = `Could not send worker updates: ${message(error)}`;
-    }
-    this.changed();
-  }
-
   private requireScope(scope: string, session: ChatSession): Workspace {
-    const workspace = this.workspace;
-    if (!workspace) throw new Error("Open a project in Code60 before dispatching workers");
-    if (scope !== session.workerScope)
-      throw new Error("The scope token is stale; call code60_get_context again");
-    return workspace;
-  }
-
-  private ownedWorker(id: string, session: ChatSession): Worker {
-    const worker = this.workers.get(id);
-    if (
-      !worker ||
-      worker.generation !== session.chatGeneration ||
-      worker.directory !== this.workspace?.dir
-    )
-      throw new Error("No worker with this ID was dispatched by this chat in the open project");
-    return worker;
-  }
-
-  private liveWorkerCount(session: ChatSession): number {
-    let count = 0;
-    for (const [id, worker] of this.workers) {
-      const status = this.liveView(id)?.status;
-      if (worker.generation === session.chatGeneration && status && ACTIVE_STATUSES.has(status))
-        count++;
-    }
-    return count;
+    this.conversations.requireScope(scope, session);
+    return this.requireWorkspace();
   }
 
   private async assertCapacity(session: ChatSession): Promise<void> {
     const config = this.config ?? desktopConfig(await loadConfig(this.deps.fs, this.env));
-    if (this.liveWorkerCount(session) >= config.maxParallel)
-      throw new Error(
-        `All ${config.maxParallel} worker slots are in use. Finish or stop an idle worker first.`,
-      );
+    this.conversations.assertCapacity(session, config.maxParallel);
   }
 
   private workerInfo(id: string) {
-    const worker = this.workers.get(id) as Worker;
+    const worker = this.conversations.workers.get(id) as Worker;
     const listed = this.history.find((run) => run.record.id === id);
     const view = this.liveView(id);
     const status = view?.status ?? listed?.record.status ?? "queued";
     const live = view !== undefined && ACTIVE_STATUSES.has(status) && !view.stopping;
     const agentAlive = listed?.agentAlive === true;
     const discarded = listed?.record.discardedAt !== undefined;
+    const canPrompt = listed?.record.base !== null && this.gitState?.status === "ready";
     const actions = live
       ? status === "idle"
-        ? ["send", "finish", "stop"]
+        ? canPrompt
+          ? ["send", "finish", "stop"]
+          : ["finish", "stop"]
         : status === "queued"
           ? ["stop"]
           : ["cancel", "stop"]
@@ -2088,7 +2469,7 @@ export class DesktopController {
         ? []
         : agentAlive
           ? ["stop"]
-          : discarded
+          : discarded || !canPrompt
             ? []
             : ["resume"];
     const reason = view?.reason ?? listed?.record.reason;
@@ -2113,13 +2494,46 @@ export class DesktopController {
   /** Runs one worker tool for the current chat. Every change is serialized and scope-checked. */
   private chatExclusive<T>(session: ChatSession, operation: () => Promise<T>): Promise<T> {
     return this.exclusive(async () => {
-      if (session.revoked) throw new Error("This orchestration chat is no longer current");
+      this.conversations.assertCurrent(session);
       return operation();
     });
   }
 
   private controlTool(name: McpControlTool, args: unknown, session: ChatSession): Promise<unknown> {
     switch (name) {
+      case "code60_read_review":
+      case "code60_address_feedback": {
+        const request = parseControlArgs(name, args);
+        return this.chatExclusive(session, async () => {
+          const store = this.reviewStore(this.requireWorkspace().dir);
+          const review = store.get(request.reviewId);
+          if (review.chatId !== session.chat?.runs()[0]?.id)
+            throw new Error("This review is not attached to this conversation");
+          if ("scope" in request) {
+            this.requireScope(request.scope, session);
+            await store.mutate(review.id, (review) => {
+              const comment = review.comments.find(
+                (comment) => comment.id === request.commentId && comment.state === "sent",
+              );
+              if (!comment) throw new Error("Unknown sent feedback");
+              comment.addressed = request.note;
+            });
+            this.changed();
+          }
+          const current = store.get(review.id);
+          const sent = current.comments.filter((comment) => comment.state !== "draft");
+          const latest = current.revisions.at(-1);
+          return {
+            id: current.id,
+            title: current.title,
+            workers: current.workers,
+            comments: sent.slice(-100),
+            revisions: current.revisions.map(({ id, at }) => ({ id, at })),
+            latest: latest ? { ...latest, files: latest.files.slice(0, 200) } : null,
+            truncated: sent.length > 100 || (latest?.files.length ?? 0) > 200,
+          };
+        });
+      }
       case "code60_get_context":
         parseControlArgs(name, args);
         return this.chatExclusive(session, async () => {
@@ -2129,12 +2543,14 @@ export class DesktopController {
             project: workspace?.dir ?? null,
             scope: workspace ? session.workerScope : null,
             gitRepository: workspace ? workspace.repo !== null : null,
+            gitReadiness: workspace ? await this.checkGit({ project: workspace.dir }) : null,
             providers: this.agentSetup.complete ? this.agentSetup.enabled : [],
             defaultProvider: this.orchestration.provider,
             turnTimeout: config.turnTimeout,
             maxParallel: config.maxParallel,
-            liveWorkers: this.liveWorkerCount(session),
+            liveWorkers: this.conversations.liveWorkerCount(session),
             updatesPaused: session.updatesPaused,
+            activeReviewId: session.reviewTask?.reviewId ?? null,
           };
         });
       case "code60_dispatch_agent":
@@ -2145,7 +2561,7 @@ export class DesktopController {
           const directory = this.workspace?.dir;
           return {
             project: directory ?? null,
-            workers: [...this.workers]
+            workers: [...this.conversations.workers]
               .filter(
                 ([, worker]) =>
                   worker.generation === session.chatGeneration && worker.directory === directory,
@@ -2157,7 +2573,7 @@ export class DesktopController {
       case "code60_read_agent": {
         const request = parseControlArgs(name, args);
         return this.chatExclusive(session, async () => {
-          this.ownedWorker(request.runId, session);
+          this.conversations.ownedWorker(request.runId, session);
           const workspace = this.requireWorkspace();
           const entries = workerTranscript(await this.mergedEvents(workspace, request.runId));
           const limit = request.limit ?? 50;
@@ -2185,72 +2601,94 @@ export class DesktopController {
   ): Promise<unknown> {
     const { requestId, ...settings } = request;
     const key = JSON.stringify(settings);
-    const previous = session.dispatches.get(requestId);
-    if (previous) {
-      if (previous.key !== key)
-        return Promise.reject(new Error("This requestId was already used with other arguments"));
-      return previous.result;
-    }
-    const generation = session.chatGeneration;
-    const result = this.chatExclusive(session, async () => {
-      const workspace = this.requireScope(request.scope, session);
-      const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
-      const provider = request.provider ?? this.orchestration.provider;
-      await this.setConfig(config);
-      this.requireEnabled(provider ?? "");
-      if (!provider || !Object.hasOwn(config.agents, provider))
-        throw new Error(
-          `Unknown provider '${provider}' (configured: ${Object.keys(config.agents).join(", ")})`,
+    return this.conversations.deduplicate(session, requestId, key, () =>
+      this.chatExclusive(session, async () => {
+        this.requireScope(request.scope, session);
+        await this.requireGitRun();
+        const workspace = this.requireWorkspace();
+        const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
+        const provider = request.provider ?? this.orchestration.provider;
+        await this.setConfig(config);
+        this.requireEnabled(provider ?? "");
+        if (!provider || !Object.hasOwn(config.agents, provider))
+          throw new Error(
+            `Unknown provider '${provider}' (configured: ${Object.keys(config.agents).join(", ")})`,
+          );
+        await this.assertCapacity(session);
+        const reviewStore = this.reviews;
+        let review: Review | undefined;
+        if (reviewStore) {
+          const id = request.reviewId ?? session.reviewTask?.reviewId;
+          if (id) {
+            review = reviewStore.get(id);
+            if (review.chatId !== session.chat?.runs()[0]?.id)
+              throw new Error("This review belongs to another conversation");
+          } else {
+            review = await reviewStore.create(
+              session.chat?.runs()[0]?.id ?? null,
+              session.reviewTask?.turn ?? 0,
+              session.reviewTask?.title ?? request.prompt,
+            );
+          }
+          session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
+        }
+        const ids = await this.startBatch(
+          {
+            agents: [provider],
+            allow: [],
+            allowAll: true,
+            prompt: request.prompt,
+            ...(request.base === undefined ? {} : { base: request.base }),
+            ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
+          },
+          (started, target) => {
+            for (const id of started)
+              this.conversations.register(id, session, target.dir, provider);
+          },
         );
-      await this.assertCapacity(session);
-      const ids = await this.startBatch(
-        {
-          agents: [provider],
-          allow: [],
-          allowAll: true,
-          prompt: request.prompt,
-          ...(request.base === undefined ? {} : { base: request.base }),
-          ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
-        },
-        (started, target) => {
-          for (const id of started)
-            this.workers.set(id, {
-              generation,
-              directory: target.dir,
-              provider,
-              reportedTurn: -1,
-              reply: "",
-            });
-        },
-      );
-      const [runId] = ids;
-      if (runId === undefined || workspace !== this.workspace)
-        throw new Error("The user declined to run the worker without an isolated worktree");
-      return {
-        ...this.workerInfo(runId),
-        note: "The worker is running. Code60 sends an automatic update when its turn ends.",
-      };
-    });
-    session.dispatches.set(requestId, { key, result });
-    // A failed dispatch started nothing, so the same requestId may be retried.
-    result.catch(() => {
-      if (session.dispatches.get(requestId)?.result === result)
-        session.dispatches.delete(requestId);
-    });
-    return result;
+        const [runId] = ids;
+        if (runId === undefined || workspace !== this.workspace)
+          throw new Error("Worker launch did not complete in the current project");
+        if (reviewStore && review) {
+          try {
+            await reviewStore.addWorker(
+              review.id,
+              runId,
+              request.label ?? `${provider} ${review.workers.length + 1}`,
+            );
+            this.scheduleReviewCapture(review.id);
+          } catch (cause) {
+            this.warnings.push(
+              `Worker ${runId} started, but review association failed: ${message(cause)}. Open its review from Sessions; do not dispatch it again.`,
+            );
+          }
+          this.changed();
+        }
+        return {
+          ...this.workerInfo(runId),
+          reviewId: review?.id ?? null,
+          note: "The worker is running. Code60 sends an automatic update when its turn ends.",
+        };
+      }),
+    );
   }
 
   private controlWorker(
     name: Exclude<
       McpControlTool,
-      "code60_get_context" | "code60_dispatch_agent" | "code60_list_agents" | "code60_read_agent"
+      | "code60_get_context"
+      | "code60_dispatch_agent"
+      | "code60_list_agents"
+      | "code60_read_agent"
+      | "code60_read_review"
+      | "code60_address_feedback"
     >,
     request: { scope: string; runId: string; prompt?: string },
     session: ChatSession,
   ): Promise<unknown> {
     return this.chatExclusive(session, async () => {
       const workspace = this.requireScope(request.scope, session);
-      this.ownedWorker(request.runId, session);
+      this.conversations.ownedWorker(request.runId, session);
       const id = request.runId;
       const batch = this.liveBatch(id);
       const view = batch?.runs().find((run) => run.id === id);
@@ -2277,8 +2715,9 @@ export class DesktopController {
       }
       if (!batch || !live) throw new Error(`Worker ${id} has ended; resume it with a new prompt`);
       if (name === "code60_send_agent") {
+        await this.requireGitRun(id);
         await this.enabledConfig();
-        this.requireEnabled(this.workers.get(id)?.provider ?? "");
+        this.requireEnabled(this.conversations.workers.get(id)?.provider ?? "");
         batch.reply(id, request.prompt as string);
       } else if (name === "code60_finish_agent") batch.finish(id);
       else if (!batch.cancelTurn(id)) throw new Error(`Worker ${id} has no turn in progress`);
@@ -2288,7 +2727,7 @@ export class DesktopController {
   }
   stopAll(): Promise<void> {
     return this.exclusive(async () => {
-      for (const session of this.chats) session.updatesPaused = true;
+      for (const session of this.conversations.sessions) this.conversations.pause(session);
       await this.stopMemoryExtraction();
       await this.stopSearchSummary();
       await this.shutdownBatches();
@@ -2298,6 +2737,8 @@ export class DesktopController {
 
   async shutdown(force = false): Promise<void> {
     this.closing = true;
+    await this.cancelGitSetup();
+    await this.cancelDiffReads();
     await this.agentSetup.cancel();
     await this.cancelOrchestrationTest();
     await this.stopMemoryExtraction();
@@ -2309,19 +2750,19 @@ export class DesktopController {
     await this.queue;
     await this.shutdownBatches(this.forceClosing);
     this.detach();
-    for (const session of this.chats) {
+    for (const session of this.conversations.sessions) {
       for (const dispose of session.chatDisposers) dispose();
       session.chatDisposers = [];
     }
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = undefined;
-    if (this.updateTimer !== undefined) clearTimeout(this.updateTimer);
-    this.updateTimer = undefined;
-    for (const session of this.chats) session.inbox = [];
+    this.conversations.stop();
     this.listeners.clear();
     this.database?.close();
     this.database = undefined;
-    await Promise.all(this.chats.map((session) => this.closeMcpGateway(session).catch(() => {})));
+    await Promise.all(
+      this.conversations.sessions.map((session) => this.closeMcpGateway(session).catch(() => {})),
+    );
   }
 
   private requireWorkspace(): Workspace {
@@ -2340,7 +2781,7 @@ export class DesktopController {
     await Promise.all(
       [
         ...this.batches.keys(),
-        ...this.chats.flatMap((session) => (session.chat ? [session.chat] : [])),
+        ...this.conversations.sessions.flatMap((session) => (session.chat ? [session.chat] : [])),
       ].map((batch) => batch.shutdown(force)),
     );
   }

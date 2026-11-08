@@ -4028,3 +4028,274 @@ button.file-open-link {
 .session-info .session-last-reported {
   flex-basis: 100%;
 }
+
+/* Chat review shares the file panel's surfaces and responsive layout. */
+.review-panel {
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 12px;
+  background: var(--chat-neutral);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.review-heading,
+.review-file-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.review-heading :where(h2),
+.review-file-heading :where(h3),
+.review-feedback :where(h3) {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 400;
+}
+.review-heading :where(h2) {
+  flex: 1;
+}
+.review-actions,
+.review-controls,
+.review-diff-actions,
+.review-submission {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.review-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-controls select {
+  max-width: 230px;
+}
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(140px, 26%) minmax(0, 1fr);
+  gap: 12px;
+}
+.review-files {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  max-height: 460px;
+}
+.review-files :where(button) {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  text-align: left;
+  flex-shrink: 0;
+  padding: 8px;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+.review-files :where(button)[aria-current="true"] {
+  background: var(--accent-bg);
+}
+.review-files :where(button):hover {
+  background: var(--hover-bg);
+}
+.review-files :where(button) span:not(:first-child) {
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-file {
+  min-width: 0;
+}
+.review-diff-actions {
+  margin: 8px 0;
+}
+.review-diff-editor {
+  min-height: 160px;
+}
+@container (max-width: 680px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-files {
+    max-height: 140px;
+  }
+  .review-files :where(button) {
+    display: grid;
+    grid-template-columns: minmax(80px, 1fr) minmax(100px, 2fr);
+    padding: 6px 8px;
+  }
+  .review-files :where(button) > :last-child {
+    grid-column: 2;
+  }
+}
+.review-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.review-feedback form {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+}
+.review-feedback :where(textarea) {
+  width: 100%;
+  min-height: 80px;
+}
+.review-comment {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.review-comment :where(p) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.review-submission {
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+}
+.review-file-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.review-file-preview > :where(p) {
+  margin: 8px;
+}
+.review-panel[data-expanded="true"] {
+  position: fixed;
+  inset: 40px 0 40px;
+  z-index: 30;
+}
+.chat-review-activity {
+  display: flex;
+  align-items: start;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-review-activity > span:nth-child(2) {
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-reviews {
+  position: relative;
+}
+.chat-reviews > div {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 220px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  z-index: 5;
+}
+@media (max-width: 1200px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-files {
+    max-height: 150px;
+  }
+  .review-diff-editor {
+    height: 320px;
+  }
+}
+
+/* Git setup keeps project editing prerequisites visible beside the conversation. */
+.chat-conversations {
+  display: flex;
+  flex-direction: column;
+}
+.chat-conversations > .orchestration-chat-page {
+  min-height: 0;
+  flex: 1;
+}
+.git-readiness {
+  flex-shrink: 0;
+  margin: 8px 24px;
+  font-size: 13px;
+}
+.git-readiness :where(p) {
+  margin: 6px 0;
+}
+.git-setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  max-height: 75vh;
+}
+.git-setup-body > :where(button) {
+  align-self: flex-start;
+}
+.git-setup-files {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.git-setup-files :where(fieldset) {
+  min-width: 0;
+  max-height: 360px;
+  overflow: auto;
+  border: 0;
+  padding: 0;
+}
+.git-setup-file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+.git-setup-file :where(label) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.git-setup-file :where(input) {
+  flex-shrink: 0;
+}
+.git-setup-files :where(pre) {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.git-setup-author {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.git-setup-author :where(label) {
+  flex: 1 1 240px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.git-setup-author :where(input) {
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .git-setup-files {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

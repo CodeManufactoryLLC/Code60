@@ -969,6 +969,8 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
 test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle", async () => {
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-qol-"));
+  execFileSync("git", ["init", "-q", directory]);
+  commitFixture(directory);
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
   try {
     const page = await application.firstWindow();
@@ -1912,10 +1914,14 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(chatPopup).toBeHidden();
     await menu.getByRole("menuitem", { name: "Review changes" }).click();
     await expect(menu).toBeHidden();
-    const changes = page.getByRole("dialog", { name: "Changes" });
-    await expect(changes.locator(".diff")).toContainText("+after");
-    await page.keyboard.press("Escape");
+    const changes = page.locator(".review-panel");
+    await expect(changes.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "after",
+    );
+    await page.getByRole("button", { name: /^Close Changes · / }).click();
+    await selectSidebarPage(page, "Sessions");
     await expect(changes).toBeHidden();
+    cell = await actionsCell(page);
     await page.mouse.click(cell.x - actionsColumnX + 80, cell.y, { button: "right" });
     await expect(menu.getByRole("menuitem", { name: "Open chat", exact: true })).toBeFocused();
     await expect(menu.getByRole("menuitem", { name: "Delete worktree" })).toHaveAttribute(
@@ -2460,11 +2466,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await again.keyboard.press("Home");
     await again.keyboard.press("ArrowDown");
     await again.keyboard.press("Enter");
-    await expect(again.getByRole("dialog", { name: "Changes" }).locator(".diff")).toContainText(
-      "+after",
-    );
-    await again.keyboard.press("Escape");
-    await expect(again.getByRole("dialog", { name: "Changes" })).toBeHidden();
+    await expect(
+      again.locator(".review-panel .modified .view-lines:not([monaco-view-zone])"),
+    ).toContainText("after");
+    await again.getByRole("button", { name: /^Close Changes · / }).click();
+    await selectSidebarPage(again, "Sessions");
+    await expect(again.locator(".review-panel")).toBeHidden();
     // The grid's scroll layer sits above the canvas and receives pointer input.
     const box = await canvas.boundingBox();
     if (!box) throw new Error("Missing sessions grid");
@@ -2792,7 +2799,9 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(
       panel.getByRole("heading", { name: "MCP tool descriptions", exact: true }),
     ).toBeVisible();
-    await expect(panel.locator(".prompt-editor-mcp-tool")).toHaveCount(21);
+    await expect(panel.locator(".prompt-editor-mcp-tool")).toHaveCount(23);
+    await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_read_review");
+    await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_address_feedback");
     await expect(panel.locator(".prompt-editor-mcp")).toContainText("never accept SQL");
     await expect(panel.locator(".prompt-editor-mcp")).toContainText("changes worker state");
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
@@ -2853,7 +2862,8 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
   const directory = await mkdtemp(join(tmpdir(), "code60-configurations-"));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
-  await mkdir(repo);
+  execFileSync("git", ["init", "-q", repo]);
+  commitFixture(repo);
   await mkdir(config, { recursive: true });
   const command = [process.execPath, join(root, "test/fixtures/fake-agent.mjs")];
   await writeFile(
@@ -4221,7 +4231,8 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
   const project = join(directory, "project");
   const database = join(directory, "projects.sqlite");
   const config = join(directory, "config", "code60", "config.json");
-  await mkdir(project);
+  execFileSync("git", ["init", "-q", project]);
+  commitFixture(project);
   await mkdir(dirname(config), { recursive: true });
   await writeFile(
     config,
@@ -5140,16 +5151,12 @@ test("desktop: Browse project files from sessions and worktrees", async () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, plain);
     await page.evaluate(() => window.desktop.chooseFolder());
-    await page.evaluate(() =>
-      window.desktop.start({ agents: ["claude"], allow: [], allowAll: false }),
-    );
+    await expect(
+      page.evaluate(() => window.desktop.start({ agents: ["claude"], allow: [], allowAll: false })),
+    ).rejects.toThrow("Set up Git");
     const current = await page.evaluate(() => window.desktop.snapshot());
-    await expect(page.locator("#panel-sessions").getByTestId("glide-cell-6-0")).toHaveText(
-      current.runs[0]?.record.id.slice(-6) as string,
-    );
-    await openSessionActions();
-    await expect(browse).not.toHaveAttribute("aria-disabled", "true");
-    await browse.click();
+    expect(current.runs).toHaveLength(0);
+    await selectSidebarPage(page, "Files");
     await expect(files).toBeVisible();
     await expect(files.getByLabel("File root")).toHaveValue(current.directory as string);
     await expect(files.getByRole("treeitem", { name: "plain.txt", exact: true })).toBeVisible();
@@ -5164,7 +5171,8 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
   const directory = await mkdtemp(join(tmpdir(), "code60-project-card-"));
   const folder = join(directory, "project-one");
   const second = join(directory, "project-two");
-  await mkdir(folder);
+  execFileSync("git", ["init", "-q", folder]);
+  commitFixture(folder);
   await mkdir(second);
   try {
     application = await launch(directory, folder, join(directory, "projects.sqlite"));
@@ -5301,6 +5309,8 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
   const testInfo = test.info();
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-session-info-"));
+  execFileSync("git", ["init", "-q", directory]);
+  commitFixture(directory);
   const configFile = join(directory, "config", "code60", "config.json");
   await mkdir(dirname(configFile), { recursive: true });
   await writeFile(
@@ -5397,6 +5407,340 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     await expect(workerInfo).toContainText("Full Access");
   } finally {
     await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: review failures, retry, cancellation and late responses", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-diff-ui-"));
+  const repo = join(directory, "repo");
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  await writeFile(join(repo, "hello.txt"), "before\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  commitFixture(repo);
+  try {
+    application = await launch(directory, repo, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+      await window.desktop.start({ agents: ["claude"], allow: [], allowAll: false });
+    });
+    await selectSidebarPage(page, "Sessions");
+    const worktree = await page.evaluate(
+      async () => (await window.desktop.snapshot()).runs[0]?.record.worktree,
+    );
+    if (!worktree) throw new Error("Missing worktree");
+    await writeFile(join(worktree, "hello.txt"), "after review refactor\n");
+    const open = async () => {
+      await selectSidebarPage(page, "Sessions");
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Search commands" }).fill("Review changes");
+      await page.keyboard.press("Enter");
+    };
+    const close = () => page.getByRole("button", { name: /^Close Changes · / }).click();
+    const panel = page.locator(".review-panel");
+    await open();
+    await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "after review refactor",
+    );
+    const content = await page.evaluate(async () => {
+      const snapshot = await window.desktop.snapshot();
+      const summary = snapshot.reviews?.[0];
+      if (!summary || !snapshot.directory) throw new Error("Missing review");
+      const identity = {
+        project: snapshot.directory,
+        reviewId: summary.id,
+        requestId: crypto.randomUUID(),
+      };
+      const review = await window.desktop.readReview(identity);
+      const revision = review.revisions.at(-1);
+      if (!revision?.files[0]) throw new Error("Missing captured file");
+      return window.desktop.readReviewFile({
+        ...identity,
+        revisionId: revision.id,
+        fileKey: revision.files[0].key,
+      });
+    });
+    await close();
+    await application.evaluate(({ ipcMain }, content) => {
+      const state = {
+        mode: "error",
+        content,
+        requests: [] as string[],
+        cancelled: [] as string[],
+        resolve: undefined as undefined | ((value: typeof content) => void),
+      };
+      Object.assign(globalThis, { reviewTest: state });
+      ipcMain.removeHandler("desktop:review-file");
+      ipcMain.removeHandler("desktop:diff-cancel");
+      ipcMain.handle("desktop:review-file", (_event, request: { requestId: string }) => {
+        state.requests.push(request.requestId);
+        if (state.mode === "error") throw new Error("Review fixture failed");
+        if (state.mode === "slow")
+          return new Promise((resolve) => {
+            state.resolve = resolve;
+          });
+        return { ...state.content, modified: "fresh response" };
+      });
+      ipcMain.handle("desktop:diff-cancel", (_event, request: { requestId: string }) => {
+        state.cancelled.push(request.requestId);
+      });
+    }, content);
+    const mode = (value: string) =>
+      application.evaluate((_electron, value) => {
+        (globalThis as unknown as { reviewTest: { mode: string } }).reviewTest.mode = value;
+      }, value);
+    await open();
+    await expect(panel.getByRole("alert")).toContainText("Review fixture failed");
+    await expect(panel.getByText("No changes.", { exact: true })).toHaveCount(0);
+    await mode("success");
+    await panel.getByRole("button", { name: "Retry file", exact: true }).click();
+    await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "fresh response",
+    );
+    await application.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("desktop:review-capture");
+      ipcMain.handle("desktop:review-capture", () => {
+        throw new Error("Capture fixture failed");
+      });
+    });
+    await panel.getByRole("button", { name: "Refresh changes", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("Capture fixture failed");
+    await expect(panel.getByText("No changes.", { exact: true })).toHaveCount(0);
+    await close();
+    await mode("slow");
+    await open();
+    await expect(panel.getByText("Loading file…", { exact: true })).toBeVisible();
+    const lastRequest = () =>
+      application.evaluate(() =>
+        (globalThis as unknown as { reviewTest: { requests: string[] } }).reviewTest.requests.at(
+          -1,
+        ),
+      );
+    const cancelled = (id: string | undefined) =>
+      application.evaluate(
+        (_electron, id) =>
+          (
+            globalThis as unknown as { reviewTest: { cancelled: string[] } }
+          ).reviewTest.cancelled.includes(id ?? ""),
+        id,
+      );
+    const resolve = () =>
+      application.evaluate(() => {
+        const state = (
+          globalThis as unknown as {
+            reviewTest: {
+              content: { file: unknown; original: string; modified: string };
+              resolve?: (value: unknown) => void;
+            };
+          }
+        ).reviewTest;
+        state.resolve?.({ ...state.content, modified: "stale response" });
+      });
+    const request = await lastRequest();
+    await close();
+    await expect.poll(() => cancelled(request)).toBe(true);
+    await mode("success");
+    await open();
+    await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "fresh response",
+    );
+    await resolve();
+    await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "fresh response",
+    );
+    await page.evaluate(() => window.desktop.stopAll());
+    await close();
+    await mode("slow");
+    await open();
+    await expect(panel.getByText("Loading file…", { exact: true })).toBeVisible();
+    const workspaceRequest = await lastRequest();
+    const other = join(directory, "other");
+    await mkdir(other);
+    await application.evaluate(({ dialog }, folder) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
+    }, other);
+    await page.evaluate(() => window.desktop.chooseFolder());
+    await expect(panel).toBeHidden();
+    await expect.poll(() => cancelled(workspaceRequest)).toBe(true);
+    await resolve();
+    await expect(panel).toBeHidden();
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: orchestrator review spans workers, sends anchored feedback, and preserves revisions after restart", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-chat-review-"));
+  const repo = join(directory, "repo");
+  const config = join(directory, "config", "code60");
+  await mkdir(config, { recursive: true });
+  await mkdir(repo);
+  await writeFile(join(repo, "same.ts"), "export const optional = false;\n");
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      defaultAgent: "claude",
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--review"],
+        },
+      },
+    }),
+  );
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, repo, database);
+    let page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    await expect(page.locator(".chat-progress")).toHaveText("Ready");
+    await composer.fill("Draft preserved through setup");
+    await expect(page.getByRole("region", { name: "Project Git setup" })).toBeVisible();
+    await page.getByRole("button", { name: "Set up Git", exact: true }).click();
+    const setup = page.getByRole("dialog", { name: "Set up Git", exact: true });
+    await expect(setup.getByLabel("same.ts", { exact: true })).toBeChecked();
+    await setup.getByRole("button", { name: "Preview same.ts" }).click();
+    await expect(setup.getByRole("region", { name: "Git setup file preview" })).toContainText(
+      "optional = false",
+    );
+    const name = setup.getByRole("textbox", { name: "Git author name" });
+    const email = setup.getByRole("textbox", { name: "Git author email" });
+    if (await name.isEnabled()) await name.fill("Desktop Test");
+    if (await email.isEnabled()) await email.fill("desktop@example.invalid");
+    await page.screenshot({ path: "test-results/git-setup-preview.png" });
+    await setup.getByRole("button", { name: "Create initial commit", exact: true }).click();
+    await expect(setup.getByRole("status")).toHaveText("Ready for isolated workers");
+    await setup.getByRole("button", { name: "Return to Chat" }).click();
+    await expect(composer).toHaveValue("Draft preserved through setup");
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    await composer.fill("Implement validation");
+    await composer.press("Enter");
+    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          async () =>
+            (await window.desktop.snapshot()).runs.filter((run) => run.view?.status === "idle")
+              .length,
+        ),
+      )
+      .toBe(2);
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const snapshot = await window.desktop.snapshot();
+          const summary = snapshot.reviews?.[0];
+          if (!summary || !snapshot.directory) return 0;
+          const review = await window.desktop.readReview({
+            project: snapshot.directory,
+            reviewId: summary.id,
+            requestId: crypto.randomUUID(),
+          });
+          return review.revisions.at(-1)?.files.length ?? 0;
+        }),
+      )
+      .toBe(2);
+    await page.getByRole("button", { name: "Review changes", exact: true }).click();
+    let review = page.getByRole("region", { name: "Changes: Implement validation", exact: true });
+    await expect(review).toBeVisible();
+    await expect(
+      review.getByRole("navigation", { name: "Changed files" }).getByRole("button"),
+    ).toHaveCount(2);
+    await expect(review.getByRole("navigation").getByRole("button").first()).toContainText(
+      "Overlapping path",
+    );
+    await expect(review.locator(".monaco-diff-editor")).toBeVisible();
+    await review.getByRole("button", { name: "Open file", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Reviewed file version" })).toContainText(
+      "Validation",
+    );
+    await expect(page.locator(".monaco-editor .view-lines")).toContainText("Validation");
+    await page.getByRole("tab", { name: "Changes · Implement validation", exact: true }).click();
+    await expect(review.locator(".monaco-diff-editor")).toBeVisible();
+    const modified = review.getByRole("textbox", { name: "Modified review version" });
+    await modified.focus();
+    await modified.press("ControlOrMeta+Home");
+    await modified.press("ArrowDown");
+    await expect(review.getByRole("button", { name: /Comment on modified lines 2/ })).toBeVisible();
+    await review.getByRole("button", { name: /Comment on modified lines 2/ }).click();
+    await review
+      .getByRole("textbox", { name: /modified lines 2/ })
+      .fill("Allow optional fields and add a regression test.");
+    await review.getByRole("button", { name: "Add feedback", exact: true }).click();
+    await expect(review.locator(".review-comment")).toContainText("Allow optional fields");
+    await review.getByRole("button", { name: "Mark file reviewed", exact: true }).click();
+    await expect(review.getByRole("navigation").getByRole("button").first()).toContainText(
+      "Reviewed",
+    );
+    const revision = await review
+      .getByRole("combobox", { name: "Revision", exact: true })
+      .inputValue();
+    await review.getByRole("button", { name: "Send feedback", exact: true }).click();
+    await expect(review.locator(".review-submission")).toContainText("Feedback delivered");
+    await expect(
+      review.getByRole("button", { name: "New changes available · Review updates", exact: true }),
+    ).toBeVisible();
+    await expect(review.getByRole("combobox", { name: "Revision", exact: true })).toHaveValue(
+      revision,
+    );
+    await expect(review.locator(".review-comment")).toContainText("Outdated");
+    await review
+      .locator(".review-comment")
+      .getByRole("button", { name: "same.ts · modified 2–2", exact: true })
+      .click();
+    await expect(review.getByRole("textbox", { name: "Modified review version" })).toBeFocused();
+    await review
+      .getByRole("button", { name: "New changes available · Review updates", exact: true })
+      .click();
+    await review.getByRole("combobox", { name: "Compare", exact: true }).selectOption("feedback");
+    await expect(review.getByRole("navigation").getByRole("button")).toHaveCount(1);
+    await expect(review.getByRole("navigation").getByRole("button")).toContainText(
+      "Updated · unreviewed",
+    );
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "true",
+    );
+    await review.getByRole("button", { name: "Resolve", exact: true }).click();
+    await review.getByRole("button", { name: "Mark file reviewed", exact: true }).click();
+    await review
+      .getByRole("textbox", { name: "General feedback", exact: true })
+      .fill("Keep this unsent note");
+    await review.getByRole("button", { name: "Add feedback", exact: true }).click();
+    await page.evaluate(() => window.desktop.stopAll());
+    await application.close();
+    application = await launch(directory, repo, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Yes", exact: true }).click();
+    await page.locator(".chat-reviews > summary").click();
+    await page.locator(".chat-reviews details > summary").click();
+    await page
+      .locator(".chat-reviews details")
+      .getByRole("button", { name: "Implement validation", exact: true })
+      .click();
+    review = page.getByRole("region", { name: "Changes: Implement validation", exact: true });
+    await expect(
+      review.getByText("Saved review · conversation disconnected", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      review.locator(".review-comment").filter({ hasText: "Keep this unsent note" }),
+    ).toContainText("draft");
+    await expect(review.getByRole("button", { name: "Send feedback", exact: true })).toBeDisabled();
+    await review.getByRole("button", { name: "Reconnect to this chat", exact: true }).click();
+    await expect(review.getByRole("button", { name: "Send feedback", exact: true })).toBeEnabled();
+    await expect(review.locator(".review-submission")).toHaveCount(1);
+    await page.screenshot({ path: "test-results/chat-review.png" });
+  } finally {
+    await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
   }
 });

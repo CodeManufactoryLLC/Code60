@@ -55,3 +55,7 @@ describe("continuing a chat by sending a message", () => {
     expect(continueBlocker(run({}, true))).toBe("Stop the leftover agent to continue this chat");
   });
 });
+
+it("never resumes a legacy run without a baseline", () => {
+  expect(continueBlocker(run({ base: null }))).toContain("No baseline");
+});
