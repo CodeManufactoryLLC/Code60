@@ -77,6 +77,31 @@ Run `npm run check` before each commit. Run `npm run test:desktop` for desktop
 changes. Tests must not require live agents, credentials, or network services.
 Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
 
+### Investigating flaky tests
+
+Reproduce a flaky test before changing it, on an otherwise idle machine so other
+work does not distort the result. Repeat the single test, then the full suite,
+because some failures appear only under the suite's own parallel load:
+
+```sh
+for i in $(seq 1 20); do npm test >"/tmp/unit-$i.log" 2>&1 || echo "run $i failed"; done
+npm run test:desktop:container -- --grep "<test name>" --repeat-each=10 --retries=0
+```
+
+If it still does not fail, add a temporary delay at the suspected race point to
+show the failure on demand, and do not commit it. Fix the test by waiting for the
+state it depends on, not for time:
+
+- Retry the action together with its assertion, using `vi.waitFor` or Playwright
+  `expect(...).toPass()` with short per-attempt timeouts.
+- Wait for the actual state, such as a process reporting its ID or a new
+  workspace appearing, and fail as soon as the operation settles without reaching it.
+- Never add retries, and do not raise a timeout to hide a race. When a deadline
+  under test must outlast fixture startup, raise only that test's deadline and
+  explain why in a comment, as in `src/desktop/environment.test.ts`.
+
+Record the failure rate before and after the fix in the pull request.
+
 ### Desktop tests in a Linux container
 
 Install and start Docker Desktop with a Linux engine, and make sure `docker info`
@@ -153,6 +178,40 @@ automatically merged.
 Scheduled version updates start once the configuration is merged into `main`.
 Enable Dependabot alerts and security updates in the repository's security
 settings to receive vulnerability fixes independently of the weekly schedule.
+
+### Declining an update
+
+Close the Dependabot PR with a comment giving the reason and when to revisit it.
+Do not add `ignore` or `allow` rules to the configuration; `test/dependabot.test.mjs`
+rejects them, so run the full `npm run check`, not only lint. For example,
+`@types/node` majors track the minimum supported Node.js version (22.12) and are
+declined until `engines` in `package.json` changes.
+
+### Dependency overrides
+
+`overrides` in `package.json` patch vulnerable transitive copies that their parent
+packages have not updated yet. Each override is scoped to the parents that need it,
+never applied globally, and must name a fixed version; do not use one to silence an
+advisory without a fix.
+
+| Override | Parents | Reason |
+| --- | --- | --- |
+| `minimatch@>=7 <11.0.1` → `11.0.1` | `@linaria/react`, `@wyw-in-js/shared`, `@electron/universal`, `app-builder-lib` | GHSA-g3hv-75wg-m249 in the 9.x and 10.x copies. Unaffected 3.x and 5.x copies are unchanged. |
+| `dompurify` → `3.4.17` | `monaco-editor` | Monaco pins DOMPurify 3.4.15, which has a critical advisory. |
+
+An override that crosses a major version needs tests of the APIs its callers use,
+as in `test/dependency-compatibility.test.ts`. Remove an override once every listed
+parent's own dependency range resolves a fixed version. Delete it, run
+`npm install`, and confirm the result:
+
+```sh
+npm ls minimatch dompurify
+npm audit --package-lock-only --ignore-scripts --include=dev
+```
+
+Then update or remove the matching compatibility tests and run `npm run check`
+and `npm run test:desktop:container`, because electron-builder and the renderer
+build use these packages. Commit the lockfile change.
 
 ## Security triage and ownership
 
