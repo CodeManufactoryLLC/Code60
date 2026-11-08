@@ -12,6 +12,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # Types track the oldest supported Node.js (engines), not the newest release.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     # Keep major upgrades separate so breaking changes receive focused review.
     groups:
       production-minor-and-patch:
