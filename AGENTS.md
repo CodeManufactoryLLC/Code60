@@ -116,10 +116,12 @@ environments.
   the version is set. The desktop window title shows it.
 - Bump major for breaking changes to CLI flags, output, exit codes, the config
   file, or run records; minor for new features; patch for fixes.
-- Releases are bumped by hand. On an up-to-date `main`, run
-  `npm version <major|minor|patch>`, which updates `package.json` and
-  `package-lock.json`, commits, and creates a `v<version>` tag. Then run
-  `git push --follow-tags`.
+- Releases are bumped by hand on a release-preparation branch with
+  `npm version <major|minor|patch> --no-git-tag-version`. Commit the package and
+  lockfile changes and merge a reviewed PR with **CI passed**. Only then tag the
+  merged commit on `main` and push that tag, following `RELEASING.md`.
+- Protected branches require reviewed PRs. Do not push directly to `main` or
+  `dev`, force-push them, or bypass the rules in `.github/rulesets/`.
 
 ## Documentation
 

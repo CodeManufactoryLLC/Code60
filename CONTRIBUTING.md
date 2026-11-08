@@ -82,6 +82,18 @@ when the user-visible behavior changes.
 Keep pull requests focused. Explain what changed, why, and which checks you ran.
 Use conventional commit messages, such as `fix: handle an unavailable agent`.
 
+## Protected branches
+
+Changes to `main` (the default branch) and `dev`, if created, must go through a
+pull request with one approving review, resolved discussions, and **CI passed**.
+Keep the PR branch up to date with its target. New commits dismiss stale
+approvals. Direct pushes, force pushes, and branch deletion are blocked, including
+for administrators; feature branches are unaffected.
+
+The [versioned ruleset](.github/rulesets/README.md) documents the policy and its
+administrator-only application and verification. Release version changes also
+use a PR; tag the merged commit as described in [RELEASING.md](RELEASING.md).
+
 ## License and sign-off
 
 By contributing, you agree that your contributions are licensed under the

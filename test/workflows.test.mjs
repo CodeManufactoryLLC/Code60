@@ -6,6 +6,52 @@ const ci = parse(await readFile(new URL("../.github/workflows/ci.yml", import.me
 const release = parse(
   await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
 );
+const protection = JSON.parse(
+  await readFile(new URL("../.github/rulesets/protected-branches.json", import.meta.url), "utf8"),
+);
+
+describe("branch protection policy", () => {
+  it("actively protects the default, main, and dev branches without bypasses or exclusions", () => {
+    expect(protection.target).toBe("branch");
+    expect(protection.enforcement).toBe("active");
+    expect(protection.bypass_actors).toEqual([]);
+    expect(protection.conditions).toEqual({
+      ref_name: {
+        include: ["~DEFAULT_BRANCH", "refs/heads/main", "refs/heads/dev"],
+        exclude: [],
+      },
+    });
+  });
+
+  it("requires reviewed PRs, resolved discussions, and prevents destructive branch updates", () => {
+    expect(protection.rules.map((rule) => rule.type).sort()).toEqual([
+      "deletion",
+      "non_fast_forward",
+      "pull_request",
+      "required_status_checks",
+    ]);
+    const pullRequest = protection.rules.find((rule) => rule.type === "pull_request");
+    expect(pullRequest.parameters).toMatchObject({
+      required_approving_review_count: 1,
+      dismiss_stale_reviews_on_push: true,
+      required_review_thread_resolution: true,
+    });
+  });
+
+  it("requires the real aggregate CI check from GitHub Actions on an up-to-date branch", () => {
+    const checks = protection.rules.find((rule) => rule.type === "required_status_checks");
+    expect(checks.parameters).toEqual({
+      strict_required_status_checks_policy: true,
+      do_not_enforce_on_create: false,
+      required_status_checks: [{ context: ci.jobs.passed.name, integration_id: 15368 }],
+    });
+    // Every PR must emit the required check, including documentation-only PRs.
+    expect(ci.on.pull_request).toBeNull();
+    expect(ci.on.push).toEqual({ branches: ["main"] });
+    expect(ci.jobs.passed.if).toBe("always()");
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop", "windows"]);
+  });
+});
 
 describe("CI and release gates", () => {
   it("checks Linux and native Windows without signing secrets or publication rights", () => {
