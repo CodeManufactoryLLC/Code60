@@ -1,0 +1,10 @@
+title = "Code60 secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependencies, build output, and local test reports only"
+paths = [
+  '''(^|/)(node_modules|dist|build|target|release|release-assets|test-results|playwright-report|coverage|\.git)/''',
+]

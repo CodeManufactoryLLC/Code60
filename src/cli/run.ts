@@ -6,6 +6,8 @@ import {
   type CoreDeps,
   commandDeps,
   defaultDeps,
+  diagnosticMessage,
+  diagnosticText,
   diffRun,
   discardRun,
   ExitCode,
@@ -110,7 +112,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
 type Values = Record<string, string | boolean | (string | boolean)[] | undefined>;
 
 function usageError(io: CliIo, message: string): number {
-  io.stderr.write(`code60: ${message}\n\n${HELP}`);
+  io.stderr.write(`code60: ${diagnosticText(message)}\n\n${HELP}`);
   return ExitCode.usage;
 }
 
@@ -168,10 +170,10 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     }
   } catch (error) {
     if (error instanceof UsageError) {
-      io.stderr.write(`code60: ${error.message}\n`);
+      io.stderr.write(`code60: ${diagnosticMessage(error)}\n`);
       return ExitCode.usage;
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = diagnosticMessage(error);
     io.stderr.write(`code60: ${message}\n`);
     return ExitCode.failed;
   }

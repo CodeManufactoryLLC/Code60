@@ -6,6 +6,7 @@ import {
   MCP_TOOL_DEFINITIONS,
 } from "../bridge/index.js";
 import { CODE60_VERSION } from "../core/index.js";
+import { diagnosticMessage } from "../platform/index.js";
 
 const MAX_LINE_LENGTH = 1_048_576;
 
@@ -141,11 +142,7 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
       const result = await callGateway(request.params.name, request.params.arguments ?? {});
       toolResponse(request.id, result);
     } catch (error) {
-      toolResponse(
-        request.id,
-        { error: error instanceof Error ? error.message : "Code60 table request failed" },
-        true,
-      );
+      toolResponse(request.id, { error: diagnosticMessage(error) }, true);
     }
     return;
   }
@@ -208,9 +205,7 @@ if (
     gatewayConfiguration();
     serveMcpStdio();
   } catch (error) {
-    process.stderr.write(
-      `${error instanceof Error ? error.message : "Could not start Code60 MCP server"}\n`,
-    );
+    process.stderr.write(`${diagnosticMessage(error)}\n`);
     process.exitCode = 1;
   }
 }

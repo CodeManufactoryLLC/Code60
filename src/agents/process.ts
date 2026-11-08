@@ -1,5 +1,9 @@
 import { Readable, Writable } from "node:stream";
-import { type NativeProcessIdentity, spawnOwnedProcess } from "../platform/index.js";
+import {
+  DiagnosticTail,
+  type NativeProcessIdentity,
+  spawnOwnedProcess,
+} from "../platform/index.js";
 
 export const STDERR_TAIL_BYTES = 64 * 1024;
 export const KILL_GRACE_MS = 5_000;
@@ -60,7 +64,7 @@ export async function spawnAgent(
   env?: Readonly<Record<string, string>>,
 ): Promise<AgentProcess> {
   const child = await spawnOwnedProcess(command, cwd, env);
-  const tail = new TailBuffer(STDERR_TAIL_BYTES);
+  const tail = new DiagnosticTail(STDERR_TAIL_BYTES);
   child.stderr.on("data", (chunk: Buffer) => tail.push(chunk));
   // Writes after the agent exits fail with EPIPE; the exit itself is reported separately.
   child.stdin.on("error", () => {});

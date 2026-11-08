@@ -297,7 +297,7 @@ async function connectSession(
     options.terminated?.then(reject);
     connection.closed.then(
       () => reject(new AcpError("the ACP connection closed")),
-      (error: unknown) => reject(new AcpError(`ACP failed: ${String(error)}`)),
+      () => reject(new AcpError("ACP transport failed")),
     );
   });
   // Callers only see this through races below; keep it from surfacing as unhandled.
@@ -309,9 +309,13 @@ async function connectSession(
     } catch (error) {
       if (isAuthError(error)) throw new AcpError(authMessage(options.agentName), true);
       if (error instanceof AcpError) throw error;
-      throw new AcpError(
-        `ACP request failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      // Keep the SDK's fixed closure diagnostic and our own numeric process-exit context.
+      if (error instanceof Error && error.message === "ACP connection closed")
+        throw new AcpError("the ACP connection closed");
+      if (error instanceof Error && /^agent exited with code \d+$/.test(error.message))
+        throw new AcpError(error.message);
+      // Provider errors can echo private prompts, tool payloads, or credentials.
+      throw new AcpError("ACP request failed; check the agent's connection and configuration");
     }
   };
 

@@ -1,4 +1,5 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
+import { diagnosticMessage } from "../platform/index.js";
 import { AcpError, AcpRestoreUnavailableError, openSession, restoreSession } from "./acp-client.js";
 import { describeExit, spawnAgent } from "./process.js";
 import { type AgentSession, type AgentSpec, AgentStartError, type Agents } from "./types.js";
@@ -20,7 +21,7 @@ export function createAgents(options: { clientVersion: string }): Agents {
     try {
       proc = await spawnAgent(spec.command, spec.cwd, spec.env);
     } catch (error) {
-      throw new AgentStartError(error instanceof Error ? error.message : String(error), "");
+      throw new AgentStartError(diagnosticMessage(error), "");
     }
     if (signal?.aborted) {
       await proc.stop(0);
@@ -55,11 +56,7 @@ export function createAgents(options: { clientVersion: string }): Agents {
             });
     } catch (error) {
       await proc.stop();
-      const message = signal?.aborted
-        ? "agent start cancelled"
-        : error instanceof Error
-          ? error.message
-          : String(error);
+      const message = signal?.aborted ? "agent start cancelled" : diagnosticMessage(error);
       throw new AgentStartError(
         message,
         proc.stderrTail(),

@@ -48,7 +48,7 @@ import {
   parseUpdateAction,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
-import { setEnvironmentPath } from "../platform/index.js";
+import { diagnosticMessage, setEnvironmentPath } from "../platform/index.js";
 import { installAppImage } from "./appimage-update.js";
 import { DesktopController } from "./controller.js";
 import { installDeb } from "./deb-update.js";
@@ -138,12 +138,16 @@ function trusted(event: IpcMainInvokeEvent): void {
 }
 
 function handle(channel: string, action: (value: unknown) => unknown): void {
-  ipcMain.handle(channel, (event, ...args: unknown[]) => {
+  ipcMain.handle(channel, async (event, ...args: unknown[]) => {
     trusted(event);
     if (args.length > 1) throw new Error("Invalid request");
     if (channel !== "desktop:app-update" && updates?.snapshot().status === "installing")
       throw new Error("An update is being installed");
-    return action(args[0]);
+    try {
+      return await action(args[0]);
+    } catch (error) {
+      throw new Error(diagnosticMessage(error));
+    }
   });
 }
 

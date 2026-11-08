@@ -220,6 +220,17 @@ async function start(prompt?: string) {
 }
 
 describe("desktop orchestration", () => {
+  it("scrubs connection-test failures before exposing them in a desktop snapshot", async () => {
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    agents.startError = new Error(
+      `connection failed: api_key=${["synthetic", "credential"].join("-")}`,
+    );
+    await controller.testOrchestrationProvider();
+    expect(controller.snapshot().orchestration.error).toContain("api_key=[REDACTED]");
+    expect(JSON.stringify(controller.snapshot())).not.toContain("synthetic-credential");
+  });
+
   it("saves an orchestration provider with fixed allow-all and probes ACP without creating a run", async () => {
     await expect(controller.testOrchestrationProvider()).rejects.toThrow("Select an available");
     await expect(setProvider("missing")).rejects.toThrow("Unavailable provider");

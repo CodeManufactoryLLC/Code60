@@ -45,6 +45,19 @@ function setup(available: (key: PollKey) => boolean = () => true) {
 }
 
 describe("poller", () => {
+  it("redacts secrets before storing and clipping failed poll diagnostics", async () => {
+    const { read, poller, state } = setup();
+    const secret = "sensitive-value-".repeat(100);
+    read.mockRejectedValueOnce(new Error(`access_token=${secret}`));
+    try {
+      await expect(poller.poll("history")).rejects.toThrow();
+      expect(state("history").lastError).toBe("access_token=[REDACTED]");
+      expect(JSON.stringify(poller.snapshot())).not.toContain("sensitive-value");
+    } finally {
+      poller.stop();
+    }
+  });
+
   it("schedules active and idle intervals only while visible", async () => {
     const { time, poller, state, reads } = setup();
     poller.context(false);

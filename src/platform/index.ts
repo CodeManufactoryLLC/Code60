@@ -1,4 +1,5 @@
 export { batchCommand, resolveCommand } from "./command.js";
+export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
 export {
   helperOutput,

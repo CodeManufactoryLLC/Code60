@@ -107,7 +107,12 @@ import {
   summarizeSearch,
   type Workspace,
 } from "../core/index.js";
-import { privateDirectory, samePath, setEnvironmentPath } from "../platform/index.js";
+import {
+  diagnosticMessage,
+  privateDirectory,
+  samePath,
+  setEnvironmentPath,
+} from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
 import {
@@ -146,7 +151,7 @@ export interface DesktopStorage {
   refreshPath?: (signal: AbortSignal) => Promise<void>;
 }
 
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = diagnosticMessage;
 function mcpSessionMetrics(events: readonly RunEvent[], now: number) {
   const completed: number[] = [];
   let prompt: { at: number; turn: number } | undefined;

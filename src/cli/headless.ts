@@ -1,4 +1,4 @@
-import type { Orchestrator, RunEvent, RunResult } from "../core/index.js";
+import { diagnosticText, type Orchestrator, type RunEvent, type RunResult } from "../core/index.js";
 import { oneLine, table } from "./text.js";
 
 interface Writer {
@@ -10,11 +10,13 @@ export function reportProgress(orchestrator: Orchestrator, stderr: Writer): () =
   const agents = new Map(orchestrator.runs().map((r) => [r.id, r.agent]));
   const seenTools = new Set<string>();
   const lastStatus = new Map<string, string>();
-  const prefix = (e: RunEvent) => `[${e.runId} ${agents.get(e.runId) ?? "?"}]`;
+  const prefix = (e: RunEvent) =>
+    `[${e.runId} ${oneLine(diagnosticText(agents.get(e.runId) ?? "?"), 80)}]`;
   const offEvent = orchestrator.onEvent((e) => {
     switch (e.type) {
       case "status": {
-        const line = e.reason === undefined ? e.status : `${e.status}: ${oneLine(e.reason, 200)}`;
+        // Detailed reasons remain in the local result; do not echo provider text to progress.
+        const line = e.status;
         if (lastStatus.get(e.runId) === line) return;
         lastStatus.set(e.runId, line);
         stderr.write(`${prefix(e)} ${line}\n`);
@@ -24,20 +26,18 @@ export function reportProgress(orchestrator: Orchestrator, stderr: Writer): () =
         const key = `${e.runId}\0${e.toolCallId}`;
         if (seenTools.has(key) && e.status !== "failed") return;
         seenTools.add(key);
-        stderr.write(`${prefix(e)} tool: ${oneLine(e.title, 120)} (${e.kind}, ${e.status})\n`);
+        stderr.write(`${prefix(e)} tool: (${e.kind}, ${oneLine(diagnosticText(e.status), 40)})\n`);
         return;
       }
       case "permission":
-        stderr.write(
-          `${prefix(e)} permission ${e.decision} by ${e.by}: ${oneLine(e.title, 120)} (${e.kind})\n`,
-        );
+        stderr.write(`${prefix(e)} permission ${e.decision} by ${e.by}: (${e.kind})\n`);
         return;
       default:
         return;
     }
   });
   const offWarning = orchestrator.onWarning((message) => {
-    stderr.write(`code60: warning: ${message}\n`);
+    stderr.write(`code60: warning: ${oneLine(diagnosticText(message))}\n`);
   });
   return () => {
     offEvent();

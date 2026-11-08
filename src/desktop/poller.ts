@@ -10,6 +10,8 @@ import {
   pollKeys,
 } from "../bridge/index.js";
 
+import { diagnosticMessage } from "../platform/index.js";
+
 interface Source {
   state: PollState;
   generation: number;
@@ -188,7 +190,7 @@ export class Poller {
         },
         (error: unknown) => {
           if (!current()) return;
-          const detail = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+          const detail = diagnosticMessage(error, 500);
           s.state.failures++;
           s.state.lastError = detail;
           this.record(s, {

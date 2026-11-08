@@ -68,7 +68,7 @@ type Rpc = {
   result?: unknown;
 };
 
-function fakeAgent(capabilities: Record<string, unknown>) {
+function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) {
   const requests = new TransformStream<Rpc, Rpc>();
   const responses = new TransformStream<Rpc, Rpc>();
   const reader = requests.readable.getReader();
@@ -102,6 +102,14 @@ function fakeAgent(capabilities: Record<string, unknown>) {
         });
       }
       if (request.id === undefined) continue;
+      if (method === "session/prompt" && promptError !== undefined) {
+        await writer.write({
+          jsonrpc: "2.0",
+          id: request.id,
+          error: { code: -32603, message: promptError },
+        } as Rpc);
+        continue;
+      }
       const result =
         method === "initialize"
           ? { protocolVersion: 1, agentCapabilities: capabilities }
@@ -159,6 +167,20 @@ describe("toToolKind", () => {
 });
 
 describe("ACP session restoration", () => {
+  it("does not echo provider errors containing private prompts into operational failures", async () => {
+    const privatePrompt = "a private task with sensitive repository content";
+    const agent = fakeAgent({}, privatePrompt);
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    try {
+      await expect(session.prompt(privatePrompt)).rejects.toThrow(
+        "ACP request failed; check the agent's connection and configuration",
+      );
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+
   it("advertises the SDK protocol version and the supplied Code60 client version", async () => {
     const agent = fakeAgent({});
     const session = await openSession(agent.stream, {
