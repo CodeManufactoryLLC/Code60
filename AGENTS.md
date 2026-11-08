@@ -109,6 +109,13 @@ environments.
   snapshots of terminal escape sequences.
 - Run the narrowest relevant tests and checks first, using scripts defined in
   `package.json`. Report any checks that could not be run.
+- Clean up Docker after testing, including failed or interrupted runs. Stop and
+  remove containers created for the test session, and remove temporary images,
+  volumes, and networks created solely for that session. Preserve reusable test
+  images, dependency/build caches, and host test artifacts. Verify that no
+  session-owned containers remain; report any cleanup that could not finish.
+  Never use global Docker prune commands or remove resources belonging to other
+  work as part of test cleanup.
 
 ## Versioning
 

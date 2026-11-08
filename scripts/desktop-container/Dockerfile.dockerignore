@@ -1,0 +1,17 @@
+# This applies only to the desktop test image. Include working files, not git archive.
+**/.git
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+release
+release-assets
+native/win32
+media
+**/.env
+**/.env.*
+**/.npmrc
+**/.DS_Store
+**/*.log
+.code60_workspace
