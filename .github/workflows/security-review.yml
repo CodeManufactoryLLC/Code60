@@ -1,0 +1,88 @@
+name: Security review
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL / JavaScript and TypeScript
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+      - name: Analyze and publish code scanning results
+        uses: github/codeql-action/analyze@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
+        with:
+          category: /language:javascript-typescript
+          output: security-reports/codeql
+      - name: Retain CodeQL report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: codeql-security-report
+          path: security-reports/codeql/
+          retention-days: 30
+          if-no-files-found: error
+
+  dependencies:
+    name: Dependency security report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Audit locked dependencies
+        run: |
+          mkdir -p security-reports
+          npm audit --package-lock-only --ignore-scripts --include=dev --audit-level=high \
+            > security-reports/npm-audit.txt 2>&1
+      - name: Publish readable dependency review
+        if: always()
+        run: |
+          {
+            printf '## Dependency security review\n\n'
+            printf 'High or critical advisories fail this job. Download the full report from the npm-security-report artifact.\n\n'
+            printf '```text\n'
+            if [ -f security-reports/npm-audit.txt ]; then
+              cat security-reports/npm-audit.txt
+            else
+              printf 'The audit could not run. Check the preceding steps for errors.\n'
+            fi
+            printf '\n```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain dependency report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: npm-security-report
+          path: security-reports/npm-audit.txt
+          retention-days: 30
+          if-no-files-found: error
