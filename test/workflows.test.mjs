@@ -49,25 +49,26 @@ describe("branch protection policy", () => {
     expect(ci.on.pull_request).toBeNull();
     expect(ci.on.push).toEqual({ branches: ["main"] });
     expect(ci.jobs.passed.if).toBe("always()");
-    expect(ci.jobs.passed.needs).toEqual(["check", "desktop", "windows"]);
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop"]);
   });
 });
 
 describe("CI and release gates", () => {
-  it("checks Linux and native Windows without signing secrets or publication rights", () => {
+  it("checks only Linux without signing secrets or publication rights", () => {
     expect(ci.permissions).toEqual({ contents: "read" });
-    for (const [name, job] of Object.entries(ci.jobs))
-      expect(job["runs-on"]).toBe(name === "windows" ? "windows-2025" : "ubuntu-24.04");
+    expect(Object.keys(ci.jobs).sort()).toEqual(["check", "desktop", "passed"]);
+    for (const job of Object.values(ci.jobs)) expect(job["runs-on"]).toBe("ubuntu-24.04");
     expect(JSON.stringify(ci)).not.toContain("secrets.");
     expect(ci.jobs.check.strategy.matrix.node).toEqual(["22.12", "24"]);
     expect(ci.jobs.passed.name).toBe("CI passed");
     expect(ci.jobs.passed.if).toBe("always()");
-    expect(ci.jobs.passed.needs).toEqual(["check", "desktop", "windows"]);
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop"]);
+    expect(Object.keys(ci.jobs.passed.steps[0].env).sort()).toEqual(["CHECK", "DESKTOP"]);
     expect(ci.jobs.passed.steps[0].run).toBe(
-      'test "$CHECK" = success && test "$DESKTOP" = success && test "$WINDOWS" = success',
+      'test "$CHECK" = success && test "$DESKTOP" = success',
     );
   });
-  it("requires an explicit dispatch on main, then Linux success before Mac", () => {
+  it("requires an explicit dispatch on main, then Linux success before Mac and Windows", () => {
     expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs["linux-check"].needs).toBe("preflight");
