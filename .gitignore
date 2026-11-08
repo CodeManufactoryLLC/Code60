@@ -1,10 +1,31 @@
+# Local environment files may contain secrets; keep the example trackable.
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated build output
 node_modules/
 dist/
-coverage/
-*.log
-.DS_Store
-test-results/
-playwright-report/
+build/
+target/
+.gradle/
+*.class
+*.tsbuildinfo
 /release/
 /release-assets/
 /native/win32/
+
+# Test output and logs
+coverage/
+test-results/
+playwright-report/
+*.log
+
+# Local IDE settings
+.idea/
+.vscode/
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
