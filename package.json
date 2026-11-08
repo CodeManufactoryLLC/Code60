@@ -53,6 +53,18 @@
     "zod": "4.6.7"
   },
   "overrides": {
+    "@linaria/react": {
+      "minimatch@>=7 <11.0.1": "11.0.1"
+    },
+    "@wyw-in-js/shared": {
+      "minimatch@>=7 <11.0.1": "11.0.1"
+    },
+    "@electron/universal": {
+      "minimatch@>=7 <11.0.1": "11.0.1"
+    },
+    "app-builder-lib": {
+      "minimatch@>=7 <11.0.1": "11.0.1"
+    },
     "monaco-editor": {
       "dompurify": "3.4.17"
     }
