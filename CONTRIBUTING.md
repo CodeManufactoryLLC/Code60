@@ -71,6 +71,20 @@ Run `npm run check` before each commit. Run `npm run test:desktop` for desktop
 changes. Tests must not require live agents, credentials, or network services.
 Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
 
+## Dependency updates
+
+[Dependabot](.github/dependabot.yml) checks npm dependencies (including development
+tools) and GitHub Actions every Monday at 09:00 UTC. It updates the npm manifest
+and lockfile together. Minor and patch updates are grouped separately for
+production dependencies, development dependencies, and Actions; major upgrades
+remain separate PRs for focused review. Updates use the `maintenance` label and
+must pass the normal PR checks before maintainers merge them. Nothing is
+automatically merged.
+
+Scheduled version updates start once the configuration is merged into `main`.
+Enable Dependabot alerts and security updates in the repository's security
+settings to receive vulnerability fixes independently of the weekly schedule.
+
 ## Architecture and changes
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md), [AGENTS.md](AGENTS.md), and the
