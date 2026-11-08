@@ -47,7 +47,9 @@ describe("desktop container runner", () => {
     const args = ["--grep", "search; $(touch unwanted) `echo hi`", "--workers=1"];
     expect(await runDesktopContainer(args, options)).toBe(0);
     const commands = await calls();
-    expect(commands.map((args) => args[0])).toEqual(["info", "build", "create", "start", "rm"]);
+    expect(
+      commands.map((args) => (args[0] === "image" ? args.slice(0, 2).join(" ") : args[0])),
+    ).toEqual(["info", "build", "create", "start", "rm", "image ls", "image rm"]);
     const build = commands[1];
     expect(build.slice(0, 5)).toEqual([
       "build",
@@ -66,6 +68,19 @@ describe("desktop container runner", () => {
     const name = create[create.indexOf("--name") + 1];
     expect(commands[3]).toEqual(["start", "--attach", name]);
     expect(commands[4]).toEqual(["rm", "--force", name]);
+    const tag = build[build.indexOf("--tag") + 1];
+    expect(create).toContain(tag);
+    expect(build).toContain(`com.code60.test-run=${name}`);
+    expect(build).toContain("--provenance=false");
+    expect(commands[5]).toEqual([
+      "image",
+      "ls",
+      "--all",
+      "--quiet",
+      "--filter",
+      `reference=${tag}`,
+    ]);
+    expect(commands[6]).toEqual(["image", "rm", "--no-prune", tag]);
     await runDesktopContainer([], {
       ...options,
       env: { ...options.env, DOCKER_TEST_LOG: join(root, "second.jsonl") },
@@ -85,7 +100,9 @@ describe("desktop container runner", () => {
   it("bounds an unresponsive daemon without building or creating a container", async () => {
     const { options, calls } = await setup({ DOCKER_TEST_HANG: "info" });
     expect(await runDesktopContainer([], { ...options, preflightTimeout: 300 })).toBe(1);
-    expect((await calls()).map((args) => args[0])).toEqual(["info"]);
+    expect(
+      (await calls()).map((args) => (args[0] === "image" ? args.slice(0, 2).join(" ") : args[0])),
+    ).toEqual(["info"]);
     expect(options.log).toHaveBeenCalledWith(expect.stringContaining("Docker is unavailable"));
   });
 
@@ -102,20 +119,17 @@ describe("desktop container runner", () => {
     expect(
       await readFile(join(root, "test-results/container", directory, "failure.txt"), "utf8"),
     ).toBe("retained artifact\n");
-    expect((await calls()).map((args) => args[0])).toEqual([
-      "info",
-      "build",
-      "create",
-      "start",
-      "stop",
-      "rm",
-    ]);
+    expect(
+      (await calls()).map((args) => (args[0] === "image" ? args.slice(0, 2).join(" ") : args[0])),
+    ).toEqual(["info", "build", "create", "start", "stop", "rm", "image ls", "image rm"]);
   });
 
   it("does not start a container after a failed image build", async () => {
     const { options, calls } = await setup({ DOCKER_TEST_FAIL: "build" });
     expect(await runDesktopContainer([], options)).toBe(42);
-    expect((await calls()).map((args) => args[0])).toEqual(["info", "build"]);
+    expect(
+      (await calls()).map((args) => (args[0] === "image" ? args.slice(0, 2).join(" ") : args[0])),
+    ).toEqual(["info", "build", "image ls", "image rm"]);
   });
 
   it.each([
@@ -134,7 +148,7 @@ describe("desktop container runner", () => {
     expect(await running).toBe(status);
     const commands = await calls();
     const name = commands.find((args) => args[0] === "create")[2];
-    expect(commands.slice(-2)).toEqual([
+    expect(commands.slice(-4, -2)).toEqual([
       ["stop", "--time", "5", name],
       ["rm", "--force", name],
     ]);
@@ -160,13 +174,9 @@ describe("desktop container runner", () => {
       options.signals.emit("SIGINT");
     }
     expect(await running).toBe(130);
-    expect((await calls()).map((args) => args[0])).toEqual([
-      "info",
-      "build",
-      "create",
-      "stop",
-      "rm",
-    ]);
+    expect(
+      (await calls()).map((args) => (args[0] === "image" ? args.slice(0, 2).join(" ") : args[0])),
+    ).toEqual(["info", "build", "create", "stop", "rm", "image ls", "image rm"]);
   });
 
   it("uses x64 natively when the Docker engine is x64", async () => {
@@ -177,5 +187,69 @@ describe("desktop container runner", () => {
       "--platform",
       "linux/amd64",
     ]);
+  });
+
+  it("does not remove an image when a build failed before exporting one", async () => {
+    const { options, calls } = await setup({
+      DOCKER_TEST_FAIL: "build",
+      DOCKER_TEST_NO_IMAGE: "1",
+    });
+    expect(await runDesktopContainer([], options)).toBe(42);
+    expect((await calls()).filter((args) => args[0] === "image")).toHaveLength(1);
+    expect((await calls()).at(-1).slice(0, 2)).toEqual(["image", "ls"]);
+    expect(options.log.mock.calls.flat().join(" ")).not.toContain("Could not clean up");
+  });
+
+  it("removes a partially exported image after interruption during build", async () => {
+    const { options, calls } = await setup({ DOCKER_TEST_HANG: "build" });
+    const running = runDesktopContainer([], options);
+    try {
+      await vi.waitFor(async () => expect((await calls()).at(-1)?.[0]).toBe("build"), {
+        timeout: 4_000,
+      });
+    } finally {
+      options.signals.emit("SIGINT");
+    }
+    expect(await running).toBe(130);
+    const commands = await calls();
+    expect(commands.some((args) => args[0] === "create")).toBe(false);
+    expect(commands.at(-1).slice(0, 3)).toEqual(["image", "rm", "--no-prune"]);
+    await expect(readFile(`${options.env.DOCKER_TEST_LOG}.image`)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it.each([
+    [undefined, 1],
+    ["start", 42],
+  ])("reports image cleanup failure while preserving test status %s", async (failure, status) => {
+    const { options } = await setup({
+      ...(failure ? { DOCKER_TEST_FAIL: failure } : {}),
+      DOCKER_TEST_IMAGE_REMOVE_FAIL: "1",
+    });
+    expect(await runDesktopContainer([], options)).toBe(status);
+    expect(options.log).toHaveBeenCalledWith(
+      expect.stringContaining("Retry: docker image rm --no-prune code60-desktop-test:"),
+    );
+  });
+
+  it("gives concurrent runs different image tags and cleans up only their own images", async () => {
+    const first = await setup();
+    const second = await setup();
+    expect(
+      await Promise.all([
+        runDesktopContainer([], first.options),
+        runDesktopContainer([], second.options),
+      ]),
+    ).toEqual([0, 0]);
+    const tags = [];
+    for (const run of [first, second]) {
+      const commands = await run.calls();
+      const build = commands.find((args) => args[0] === "build");
+      const tag = build[build.indexOf("--tag") + 1];
+      tags.push(tag);
+      expect(commands.at(-1)).toEqual(["image", "rm", "--no-prune", tag]);
+    }
+    expect(tags[0]).not.toBe(tags[1]);
   });
 });

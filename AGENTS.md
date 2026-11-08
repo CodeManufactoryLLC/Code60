@@ -111,9 +111,11 @@ environments.
   `package.json`. Report any checks that could not be run.
 - Clean up Docker after testing, including failed or interrupted runs. Stop and
   remove containers created for the test session, and remove temporary images,
-  volumes, and networks created solely for that session. Preserve reusable test
-  images, dependency/build caches, and host test artifacts. Verify that no
-  session-owned containers remain; report any cleanup that could not finish.
+  volumes, and networks created solely for that session. Built test images must
+  be removed after each run, even if they could be reused; image retention needs
+  an explicit user request. Preserve dependency/build caches and host test
+  artifacts. Verify both containers and images, not just running containers;
+  report any cleanup that could not finish and any intentionally retained cache.
   Never use global Docker prune commands or remove resources belonging to other
   work as part of test cleanup.
 
