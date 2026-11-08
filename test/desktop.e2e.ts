@@ -3787,6 +3787,8 @@ test("desktop: project questions use files without saved sessions", async () => 
       await window.desktop.connectDatabase("create");
       await window.desktop.chooseFolder();
     });
+    // Opening a project remounts Search; wait for the renderer to apply that workspace.
+    await expect(page.locator(".sidebar-title")).toHaveText("palette-project");
     await selectSidebarPage(page, "Search");
     const search = page.locator("#panel-search");
     await search.getByLabel("Query", { exact: true }).fill("What is this project about?");
