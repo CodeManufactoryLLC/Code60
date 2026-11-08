@@ -44,9 +44,11 @@ import {
   type GitSetupCommit,
   type GitSetupFileRequest,
   type GitSetupIdentity,
+  isActivityTool,
   isMcpControlTool,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
+  parseActivityContextArgs,
   parseDiffIdentity,
   parseDiffRequest,
   parseFileContext,
@@ -1163,9 +1165,7 @@ export class DesktopController {
           ? Promise.reject(new Error("Code60 is shutting down"))
           : session.revoked
             ? Promise.reject(new Error("This orchestration chat is no longer current"))
-            : isMcpControlTool(name)
-              ? this.controlTool(name, args, session)
-              : readMcpTool(name, args, (table) => this.readMcpTable(table)),
+            : this.callChatTool(name, args, session),
       );
     }
     return [
@@ -1182,7 +1182,35 @@ export class DesktopController {
     ];
   }
 
+  private async callChatTool(name: string, args: unknown, session: ChatSession): Promise<unknown> {
+    this.conversations.assertCurrent(session);
+    if (isActivityTool(name)) {
+      const run = session.chat?.runs()[0];
+      if (!run || run.stopping || !["running", "waiting"].includes(run.status))
+        session.activity.invalidate();
+      if (name === "code60_get_activity_context") {
+        parseActivityContextArgs(args);
+        return session.activity.context();
+      }
+      return session.activity.report(args);
+    }
+    const done =
+      name === "code60_dispatch_agent"
+        ? session.activity.beginOperation("dispatching")
+        : name === "code60_send_agent"
+          ? session.activity.beginOperation("sending")
+          : () => {};
+    try {
+      return await (isMcpControlTool(name)
+        ? this.controlTool(name, args, session)
+        : readMcpTool(name, args, (table) => this.readMcpTable(table)));
+    } finally {
+      done();
+    }
+  }
+
   private async closeMcpGateway(session: ChatSession): Promise<void> {
+    session.activity.invalidate();
     const gateway = session.mcpGateway;
     session.mcpGateway = undefined;
     await gateway?.close();
@@ -1462,6 +1490,7 @@ export class DesktopController {
         .catch(() => {});
       session.chatDisposers = [
         chat.onEvent((event) => {
+          session.activity.event(event);
           this.changed();
           const entry = { revision: this.revision, event };
           session.chatEvents.push(entry);
@@ -1471,9 +1500,13 @@ export class DesktopController {
             this.conversations.scheduleUpdates();
           }
         }),
-        chat.onChange(() => this.changed()),
+        chat.onChange(() => {
+          if (chat.runs()[0]?.stopping) session.activity.invalidate();
+          this.changed();
+        }),
         chat.onWarning((warning) => {
           session.chatError = warning;
+          session.activity.invalidate();
           this.changed();
         }),
       ];
@@ -1521,8 +1554,8 @@ export class DesktopController {
         this.conversations.send(session, request.text);
         session.reviewTask = { title: request.text, turn: session.chat.runs()[0]?.turns ?? 0 };
       } else if (request.type === "cancel") {
-        this.conversations.pause(session);
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
+        this.conversations.pause(session);
       } else {
         this.conversations.pause(session);
         await session.chat.shutdown();
@@ -1572,6 +1605,16 @@ export class DesktopController {
       error: session.chatError,
       events: [...(allEvents ? session.chatEvents : session.chatPending)],
       updates: { paused: session.updatesPaused, pending: session.inbox.length },
+      activity: session.activity.snapshot(
+        session.chat?.runs()[0] ?? null,
+        session.chatError,
+        [...this.conversations.workers].filter(
+          ([id, worker]) =>
+            worker.generation === session.chatGeneration &&
+            worker.directory === this.workspace?.dir &&
+            ["queued", "running", "waiting"].includes(this.liveView(id)?.status ?? ""),
+        ).length,
+      ),
     });
     return {
       versions: {

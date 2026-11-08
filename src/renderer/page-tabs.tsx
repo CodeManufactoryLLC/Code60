@@ -42,11 +42,6 @@ const pageIcons: Record<PageId, IconName> = {
 };
 
 export function PageTabBar({
-  open,
-  pinned,
-  onHoverChange,
-  onExpand,
-  onToggle,
   tabs,
   directory,
   onSelect,
@@ -59,14 +54,8 @@ export function PageTabBar({
   selectedId,
   navigationSerial,
   database,
-  version,
   eventsByRun,
 }: {
-  open: boolean;
-  pinned: boolean;
-  onHoverChange(hovered: boolean): void;
-  onExpand(): void;
-  onToggle(): void;
   tabs: PageTabs;
   /** The open project folder, if any. */
   directory?: string | undefined;
@@ -80,55 +69,51 @@ export function PageTabBar({
   selectedId: string | undefined;
   navigationSerial: number | undefined;
   database: string | null;
-  version: string | undefined;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
 }) {
   const repository = directory ? pathLabel(directory) : directory;
   const sidebar = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("code60.sidebarWidth"));
+    return Number.isFinite(saved) && saved >= 180 && saved <= 480 ? saved : 220;
+  });
   useLayoutEffect(() => {
-    if (open || !sidebar.current?.contains(document.activeElement)) return;
-    const group = document.activeElement?.closest(".page-group-pages");
-    const target =
-      group?.id === "chat-pages"
-        ? "tab-chat"
-        : group?.id === "table-pages"
-          ? "tables-toggle"
-          : group?.id === "experiment-pages"
-            ? "experiments-toggle"
-            : undefined;
-    if (target) document.getElementById(target)?.focus();
-  }, [open]);
+    sidebar.current?.parentElement?.style.setProperty("--sidebar-width", `${width}px`);
+    localStorage.setItem("code60.sidebarWidth", String(width));
+  }, [width]);
+  const resize = (value: number) => {
+    const available = sidebar.current?.parentElement?.clientWidth ?? 840;
+    setWidth(Math.max(180, Math.min(480, available - 360, value)));
+  };
   return (
-    <nav
-      ref={sidebar}
-      className="sidebar"
-      aria-label="Sidebar"
-      data-minimized={!open}
-      data-pinned={pinned}
-      onPointerEnter={(event) => {
-        if (event.pointerType === "mouse" || event.pointerType === "pen") onHoverChange(true);
-      }}
-      onPointerLeave={() => onHoverChange(false)}
-    >
-      <div className="sidebar-toolbar">
-        <button
-          type="button"
-          className="icon-button sidebar-toggle"
-          aria-label="Toggle navigation sidebar"
-          title={
-            pinned
-              ? "Minimize navigation sidebar"
-              : open
-                ? "Keep navigation sidebar open"
-                : "Expand navigation sidebar"
-          }
-          aria-expanded={open}
-          aria-controls="navigation-sidebar-content"
-          onClick={onToggle}
-        >
-          <Icon name={open ? "side-panel--close" : "side-panel--open"} />
-        </button>
-      </div>
+    <nav ref={sidebar} className="sidebar" aria-label="Sidebar">
+      <button
+        type="button"
+        className="sidebar-resize"
+        aria-label="Resize navigation sidebar"
+        title="Resize navigation sidebar (Left/Right arrows)"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          resize(
+            (sidebar.current?.getBoundingClientRect().width ?? width) +
+              (event.key === "ArrowRight" ? 20 : -20),
+          );
+        }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId) && sidebar.current)
+            resize(event.clientX - sidebar.current.getBoundingClientRect().left);
+        }}
+        onPointerUp={(event) => {
+          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+          if (sidebar.current) resize(event.clientX - sidebar.current.getBoundingClientRect().left);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+      />
       <div id="navigation-sidebar-content" className="sidebar-content">
         <button
           type="button"
@@ -143,8 +128,6 @@ export function PageTabBar({
           <span className="sidebar-title">{repository ?? "Open a project"}</span>
         </button>
         <PageTabList
-          open={open}
-          onExpand={onExpand}
           tabs={tabs}
           onSelect={onSelect}
           api={api}
@@ -156,9 +139,6 @@ export function PageTabBar({
           database={database}
           eventsByRun={eventsByRun}
         />
-        <div className="sidebar-version" role="note" aria-label="Running Code60 version">
-          Code60 {version ?? "Version unavailable"}
-        </div>
       </div>
     </nav>
   );
@@ -178,8 +158,6 @@ const pageGroup = (id: PageId) =>
   tablePages.includes(id) ? "tables" : experimentPages.includes(id) ? "experiments" : "primary";
 
 function PageTabList({
-  open,
-  onExpand,
   tabs,
   onSelect,
   api,
@@ -191,8 +169,6 @@ function PageTabList({
   database,
   eventsByRun,
 }: {
-  open: boolean;
-  onExpand(): void;
   tabs: PageTabs;
   onSelect(id: PageId): void;
   api: DesktopApi;
@@ -230,11 +206,11 @@ function PageTabList({
     localStorage.setItem("code60.chatExpanded", String(chatExpanded));
   }, [chatExpanded]);
   useLayoutEffect(() => {
-    if (open && chatExpanded && selectedId)
+    if (chatExpanded && selectedId)
       document.querySelector("#chat-pages [aria-current='true']")?.scrollIntoView({
         block: "nearest",
       });
-  }, [open, chatExpanded, selectedId]);
+  }, [chatExpanded, selectedId]);
   const previousNavigation = useRef({ tabs, selectedId });
   useLayoutEffect(() => {
     const previous = previousNavigation.current;
@@ -286,10 +262,10 @@ function PageTabList({
     "chat",
     ...beforeExperiments,
     "experiments",
-    ...(open && experimentsExpanded ? experiments : []),
+    ...(experimentsExpanded ? experiments : []),
     ...afterExperiments,
     "tables",
-    ...(open && expanded ? tables : []),
+    ...(expanded ? tables : []),
   ];
   function navigate(event: KeyboardEvent<HTMLButtonElement>, id: (typeof visible)[number]) {
     // A delayed reveal must not undo a subsequent keyboard navigation.
@@ -297,7 +273,7 @@ function PageTabList({
       cancelAnimationFrame(navigationFrame.current);
       navigationFrame.current = undefined;
     }
-    if (id === "experiments" && event.key === "ArrowUp" && open && chatExpanded) {
+    if (id === "experiments" && event.key === "ArrowUp" && chatExpanded) {
       const children = [
         ...document.querySelectorAll<HTMLButtonElement>("#chat-pages button:not(:disabled)"),
       ].filter((button) => !button.closest("[hidden]"));
@@ -307,7 +283,7 @@ function PageTabList({
         return;
       }
     }
-    if (id === "chat" && event.key === "ArrowDown" && open && chatExpanded) {
+    if (id === "chat" && event.key === "ArrowDown" && chatExpanded) {
       const child = document.querySelector<HTMLButtonElement>("#chat-pages button:not(:disabled)");
       if (child) {
         event.preventDefault();
@@ -322,11 +298,7 @@ function PageTabList({
     }
     if (id === "chat" && event.key === "ArrowRight") {
       event.preventDefault();
-      if (!open) {
-        onExpand();
-        setChatExpanded(true);
-      } else if (chatExpanded)
-        document.querySelector<HTMLButtonElement>("#chat-pages button")?.focus();
+      if (chatExpanded) document.querySelector<HTMLButtonElement>("#chat-pages button")?.focus();
       else setChatExpanded(true);
       return;
     }
@@ -341,10 +313,7 @@ function PageTabList({
     }
     if (event.key === "ArrowRight" && id === "experiments") {
       event.preventDefault();
-      if (!open) {
-        onExpand();
-        setExperimentsExpanded(true);
-      } else if (experimentsExpanded && experiments[0]) onSelect(experiments[0]);
+      if (experimentsExpanded && experiments[0]) onSelect(experiments[0]);
       else setExperimentsExpanded(true);
       return;
     }
@@ -359,10 +328,7 @@ function PageTabList({
     }
     if (event.key === "ArrowRight" && id === "tables") {
       event.preventDefault();
-      if (!open) {
-        onExpand();
-        setExpanded(true);
-      } else if (expanded && tables[0]) onSelect(tables[0]);
+      if (expanded && tables[0]) onSelect(tables[0]);
       else setExpanded(true);
       return;
     }
@@ -423,15 +389,11 @@ function PageTabList({
             title="Chat"
             id="tab-chat"
             className="page-group-toggle"
-            aria-expanded={open && chatExpanded}
+            aria-expanded={chatExpanded}
             aria-controls="panel-chat chat-pages"
             data-active={tabs.active === "chat"}
             onClick={() => {
-              if (!open) {
-                onExpand();
-                setChatExpanded(true);
-                onSelect("chat");
-              } else if (tabs.active !== "chat") onSelect("chat");
+              if (tabs.active !== "chat") onSelect("chat");
               else setChatExpanded((value) => !value);
             }}
             onKeyDown={(event) => navigate(event, "chat")}
@@ -473,7 +435,7 @@ function PageTabList({
         role="group"
         aria-label="Chat conversations"
         className="page-group-pages"
-        hidden={!open || !chatExpanded}
+        hidden={!chatExpanded}
         onKeyDown={(event) => {
           const buttons = [
             ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
@@ -536,14 +498,11 @@ function PageTabList({
           id="experiments-toggle"
           title="Experiments"
           className="page-group-toggle"
-          aria-expanded={open && experimentsExpanded}
+          aria-expanded={experimentsExpanded}
           aria-controls="experiment-pages"
           data-active={experimentActive && !experimentsExpanded}
           onClick={() => {
-            if (!open) {
-              onExpand();
-              setExperimentsExpanded(true);
-            } else setExperimentsExpanded((value) => !value);
+            setExperimentsExpanded((value) => !value);
           }}
           onKeyDown={(event) => navigate(event, "experiments")}
         >
@@ -558,7 +517,7 @@ function PageTabList({
         aria-orientation="vertical"
         className="page-tab-list page-group-pages"
         aria-label="Experiments"
-        hidden={!open || !experimentsExpanded}
+        hidden={!experimentsExpanded}
       >
         {experiments.map((id, index) => page(id, index === 0))}
       </div>
@@ -576,14 +535,11 @@ function PageTabList({
           id="tables-toggle"
           title="Tables"
           className="page-group-toggle"
-          aria-expanded={open && expanded}
+          aria-expanded={expanded}
           aria-controls="table-pages"
           data-active={tableActive && !expanded}
           onClick={() => {
-            if (!open) {
-              onExpand();
-              setExpanded(true);
-            } else setExpanded((value) => !value);
+            setExpanded((value) => !value);
           }}
           onKeyDown={(event) => navigate(event, "tables")}
         >
@@ -598,7 +554,7 @@ function PageTabList({
         role="tablist"
         aria-label="Tables"
         aria-orientation="vertical"
-        hidden={!open || !expanded}
+        hidden={!expanded}
       >
         {tables.map((id, index) => page(id, index === 0))}
       </div>

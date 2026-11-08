@@ -11,12 +11,7 @@ export function GitReadinessNotice({
   onSetup(): void;
   onCheck(): void;
 }) {
-  if (state.status === "ready")
-    return (
-      <p className="git-readiness" role="status">
-        Ready for isolated workers
-      </p>
-    );
+  if (state.status === "ready") return null;
   return (
     <section className="git-readiness" aria-label="Project Git setup">
       <p>Set up Git to enable workers and change review</p>
@@ -165,7 +160,6 @@ export function GitSetupDialog({
         )}
         {ready ? (
           <>
-            <p role="status">Ready for isolated workers</p>
             <p>
               Return to Chat and continue your request. Previous dispatches will not run
               automatically.

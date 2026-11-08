@@ -30,6 +30,27 @@ function render(
       chat={
         {
           run: run("orchestrator", status),
+          activity: {
+            state:
+              status === "waiting"
+                ? "waiting_for_approval"
+                : status === "running"
+                  ? "working"
+                  : runs.some(
+                        (worker) =>
+                          workers.includes(worker.record.id) &&
+                          ["queued", "running", "waiting"].includes(worker.view?.status ?? "idle"),
+                      )
+                    ? "waiting_for_workers"
+                    : "idle",
+            label: "",
+            source: "host",
+            declaration: null,
+            otherOperations: 0,
+            workerCount: workers.length,
+            active: status === "running",
+            urgent: status === "waiting",
+          },
           workers,
           updates: { paused: true, pending: 1 },
         } as OrchestrationChat
@@ -45,6 +66,81 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("uses the activity indicator during a turn and retains completed turn timing", () => {
+    const events: RunEvent[] = [
+      {
+        type: "prompt",
+        runId: "orchestrator",
+        turn: 1,
+        at: "2026-11-08T12:00:00.000Z",
+        text: "Check the changes",
+      },
+    ];
+    const active = render("running", [], [], events);
+    expect(active).toContain('data-activity="working"');
+    expect(active).toContain('class="activity-timer"');
+    expect(active).not.toContain('class="turn-timer"');
+    expect(active).not.toContain("Working for");
+    const completed = render(
+      "idle",
+      [],
+      [],
+      [
+        ...events,
+        {
+          type: "turnEnd",
+          runId: "orchestrator",
+          turn: 1,
+          at: "2026-11-08T12:00:12.000Z",
+          stopReason: "end_turn",
+        },
+      ],
+    );
+    expect(completed).toContain("Worked for 12s (finished)");
+    expect(completed).not.toContain('class="activity-timer"');
+  });
+  it("uses the status as the live disclosure and timing as the historical disclosure", () => {
+    const events: RunEvent[] = [
+      {
+        type: "prompt",
+        runId: "orchestrator",
+        turn: 1,
+        at: "2026-11-08T12:00:00Z",
+        text: "Inspect",
+      },
+      {
+        type: "thought",
+        runId: "orchestrator",
+        at: "2026-11-08T12:00:01Z",
+        text: "Checking evidence",
+      },
+    ];
+    const active = render("running", [], [], events);
+    expect(active).not.toContain('class="chat-activity"');
+    expect(active).toContain('class="chat-progress activity-display" aria-expanded="false"');
+    expect(active).toContain("aria-controls=");
+    expect(active).toContain('class="activity-details"');
+    expect(active).toContain('data-expanded="false" aria-hidden="true" inert=""');
+    expect(active).toContain("Checking evidence");
+    const completed = render(
+      "idle",
+      [],
+      [],
+      [
+        ...events,
+        {
+          type: "turnEnd",
+          runId: "orchestrator",
+          turn: 1,
+          at: "2026-11-08T12:00:12Z",
+          stopReason: "end_turn",
+        },
+      ],
+    );
+    expect(completed).toContain('class="turn-timer activity-history-toggle"');
+    expect(completed).toContain("Checking evidence");
+    expect(completed).not.toContain('class="chat-progress activity-display"');
+  });
   it("does not attach a reconnected review to coincident turn numbers in another chat", () => {
     const review: ReviewSummary = {
       id: "review",
@@ -92,7 +188,7 @@ describe("orchestration activity presentation", () => {
       ["one", "two"],
       [worker("one", "running"), worker("two", "waiting"), worker("unrelated", "running")],
     );
-    expect(html).toContain('class="chat-loader"');
+    expect(html).not.toContain('class="chat-loader"');
     expect(html).toContain("2 subagents: waiting for approval");
     expect(html).toContain("Automatic worker updates are paused");
     expect(html).not.toContain(">Stop<");
@@ -107,7 +203,7 @@ describe("orchestration activity presentation", () => {
   });
   it("keeps the own approval wait active with its own Stop action", () => {
     const html = render("waiting", [], []);
-    expect(html).toContain('class="chat-loader"');
+    expect(html).not.toContain('class="chat-loader"');
     expect(html).toContain("Waiting for approval");
     expect(html).toContain("Stop</button>");
   });
@@ -139,11 +235,11 @@ describe("orchestration activity presentation", () => {
     expect(html).toContain('class="event prompt automatic"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
-  it("places the current provider after the main composer without hard-coding its name", () => {
+  it("places provider metadata inside the main composer", () => {
     const html = render("idle", [], []);
-    expect(html).toMatch(
-      /<\/section><div class="chat-provider" role="note" aria-label="Current provider">fake<\/div>/,
-    );
+    expect(html).toContain('aria-label="Current provider: fake"');
+    expect(html).toContain('class="composer-footer session-info"');
+    expect(html).not.toContain('class="chat-provider"');
     expect(html.slice(0, html.indexOf("</header>"))).not.toContain("fake");
   });
 });

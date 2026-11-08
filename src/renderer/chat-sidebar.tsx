@@ -127,7 +127,7 @@ export function ChatSidebar({
             aria-current={entry.id === selectedId ? "true" : undefined}
             disabled={pending}
             onClick={() => onSelect(entry.id)}
-            title={description}
+            title={`${entry.label}. ${description}`}
             onKeyDown={(event) => {
               if (event.key === "ArrowRight" && children.length) {
                 event.preventDefault();
@@ -146,21 +146,20 @@ export function ChatSidebar({
               }
             }}
           >
-            {view && (view.stopping || ["queued", "running", "waiting"].includes(view.status)) && (
-              <span className="chat-loader" aria-hidden="true" />
-            )}
             <Icon name={entry.role === "orchestrator" ? "branch" : "terminal"} />
             <span className="chat-sidebar-label">{entry.label}</span>
-            {unread > 0 && (
-              <span className="chat-unread" role="img" aria-label={unreadLabel}>
-                <Icon name="chat" />
-                <span>{unread}</span>
-              </span>
-            )}
-            {(error || presentation.icon !== "chat") && (
-              <Icon name={error ? "warning--alt--filled" : presentation.icon} />
-            )}
-            {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
+            <span className="chat-sidebar-indicators">
+              {unread > 0 && (
+                <span className="chat-unread" role="img" aria-label={unreadLabel}>
+                  <Icon name="chat" />
+                  <span>{unread}</span>
+                </span>
+              )}
+              {(error || presentation.icon !== "chat") && (
+                <Icon name={error ? "warning--alt--filled" : presentation.icon} />
+              )}
+              {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
+            </span>
             <span className="sr-only">{description}</span>
           </button>
           {children.length > 0 && (

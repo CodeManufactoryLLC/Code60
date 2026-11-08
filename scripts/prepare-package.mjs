@@ -22,6 +22,7 @@ async function notices(directory, base, target) {
 }
 await notices("src/renderer/fonts", "src", "vendored");
 await notices("src/renderer/icons", "src", "vendored");
+await notices("src/renderer/activity-animations", "src", "vendored");
 // Include only production dependency notices; development tooling is not shipped.
 const command = await resolveCommand(["npm", "ls", "--omit=dev", "--all", "--parseable"]);
 const dependencies = execFileSync(command.file, command.args, {

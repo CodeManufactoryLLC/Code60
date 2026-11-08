@@ -161,14 +161,19 @@ export function WorkerChat({
       hidden={!active}
     >
       <header className="orchestration-chat-heading worker-chat-heading">
-        <h2 className="worker-chat-title" id={titleId}>
-          <Icon name="terminal" />
-          {run.record.agent} / {id.slice(-6)}
-        </h2>
-        <span className="status-label" data-status={status}>
-          <Icon name={presentation.icon} />
-          {presentation.label}
-        </span>
+        <div className="worker-chat-identity">
+          <h2 className="worker-chat-title" id={titleId}>
+            <Icon name="terminal" />
+            {run.record.agent} / {id.slice(-6)}
+          </h2>
+          <span className="status-label worker-chat-subtitle" data-status={status}>
+            {run.view?.stopping
+              ? "Stopping agent…"
+              : busy && resumable
+                ? "Resuming session…"
+                : presentation.label}
+          </span>
+        </div>
         {orchestrated && (
           <span
             className="status-label chat-worker-label"
@@ -318,13 +323,23 @@ export function WorkerChat({
         )}
         {inactive ? (
           <div className="composer composer-inactive" role="status">
-            Agent is inactive. Its worktree was deleted.
+            <p>Agent is inactive. Its worktree was deleted.</p>
+            <SessionInfo
+              state={run.view?.sessionState ?? run.record.sessionState}
+              ended={ended}
+              harness={run.record.agent}
+              sessionId={id}
+              active={active}
+              editable={false}
+              changing={!!run.view?.modeChanging}
+              autoApproval={orchestrated}
+              onMode={(change) => {
+                void act({ type: "set-mode", id, change });
+              }}
+            />
           </div>
         ) : (
           <section className="composer" aria-label="Worker composer">
-            {(working || run.view?.stopping || status === "queued") && (
-              <span className="chat-loader" aria-hidden="true" />
-            )}
             <label className="sr-only" htmlFor={replyId}>
               Message
             </label>
@@ -346,17 +361,28 @@ export function WorkerChat({
                 }
               }}
             />
-            <div className="composer-footer">
+            {blocker && (
               <span className="chat-progress" role="status">
-                {run.view?.stopping
-                  ? "Stopping agent…"
-                  : busy && resumable
-                    ? "Resuming session…"
-                    : (blocker ?? presentation.label)}
+                {blocker}
               </span>
+            )}
+            <SessionInfo
+              harness={run.record.agent}
+              sessionId={id}
+              active={active}
+              state={run.view?.sessionState ?? run.record.sessionState}
+              ended={ended}
+              editable={editable && !busy}
+              changing={!!run.view?.modeChanging}
+              autoApproval={orchestrated}
+              onMode={(change) => {
+                void act({ type: "set-mode", id, change });
+              }}
+            >
               {working && run.view ? (
                 <button
                   type="button"
+                  className="composer-send"
                   disabled={busy || run.view.stopping}
                   onClick={() => void act({ type: "cancel", id })}
                 >
@@ -366,29 +392,16 @@ export function WorkerChat({
               ) : (
                 <button
                   type="button"
-                  className="primary"
+                  className="primary composer-send"
                   disabled={busy || !sendable || !draft.trim()}
                   onClick={() => void send()}
                 >
                   Send <Icon name="arrow--up" />
                 </button>
               )}
-            </div>
+            </SessionInfo>
           </section>
         )}
-        <div className="chat-provider" role="note" aria-label="Current provider">
-          {run.record.agent}
-        </div>
-        <SessionInfo
-          state={run.view?.sessionState ?? run.record.sessionState}
-          ended={ended}
-          editable={editable && !busy}
-          changing={!!run.view?.modeChanging}
-          autoApproval={orchestrated}
-          onMode={(change) => {
-            void act({ type: "set-mode", id, change });
-          }}
-        />
       </div>
     </main>
   );

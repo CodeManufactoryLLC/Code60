@@ -128,6 +128,29 @@ describe("conversation coordination", () => {
     h.coordinator.stop();
   });
 
+  it("reports receipt only after successful delivery, never while a result is queued", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    const received = vi.spyOn(h.session.activity, "received");
+    h.chat.status = "running";
+    h.end();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.session.inbox).toHaveLength(1);
+    expect(received).not.toHaveBeenCalled();
+    h.chat.status = "idle";
+    h.deliver.mockImplementationOnce(() => {
+      throw new Error("not delivered");
+    });
+    h.coordinator.scheduleUpdates();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(received).not.toHaveBeenCalled();
+    h.coordinator.scheduleUpdates();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(received).toHaveBeenCalledTimes(1);
+    expect(h.session.inbox).toHaveLength(0);
+    h.coordinator.stop();
+  });
+
   it("deduplicates dispatches and permits retry after a failed start", async () => {
     const h = harness();
     const start = vi.fn(async () => "accepted");

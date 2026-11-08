@@ -69,12 +69,27 @@ export function MessageCopy({ text }: { text: string }) {
 export function TurnTimer({
   timing,
   visible,
+  disclosure,
 }: {
   timing: TurnTiming | undefined;
   visible: boolean;
+  disclosure?: { id: string; controls: string; expanded: boolean; toggle(): void } | undefined;
 }) {
   const now = useTicker(visible && timing?.active === true);
   if (!timing) return null;
+  if (disclosure)
+    return (
+      <button
+        type="button"
+        id={disclosure.id}
+        className="turn-timer activity-history-toggle"
+        aria-expanded={disclosure.expanded}
+        aria-controls={disclosure.controls}
+        onClick={disclosure.toggle}
+      >
+        {timingText(timing, now)}
+      </button>
+    );
   return (
     <p className="turn-timer" aria-live="off">
       {timingText(timing, now)}

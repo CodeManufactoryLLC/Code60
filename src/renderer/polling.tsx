@@ -12,6 +12,7 @@ import {
 import { DataTable, type TableOptions } from "./data-table.js";
 import { drawIcon, Icon } from "./icons.js";
 import { MessageAge } from "./message-controls.js";
+import { Modal } from "./modal.js";
 import { useTicker } from "./ticker.js";
 
 export const labels: Record<PollKey, string> = {
@@ -46,6 +47,7 @@ export function PollingWidget({
   messageAt: number | null | undefined;
   messageScope: string;
 }) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const available = polling.sources.filter((source) => source.status !== "unavailable");
@@ -62,36 +64,55 @@ export function PollingWidget({
   };
   return (
     <section className="footer-polling" aria-label="Polling controls">
-      <p className="poll-timestamp">
+      <button
+        type="button"
+        className="poll-timestamp"
+        aria-label="Open polling controls"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
         <Icon name="view" />
         <MessageAge at={messageAt} scope={messageScope} />
-      </p>
-      <div className="button-group">
-        <button
-          type="button"
-          aria-label={polling.paused ? "Start polling" : "Pause polling"}
-          disabled={busy}
-          onClick={() => void attempt(() => api.setPollingPaused(!polling.paused))}
+      </button>
+      {open && (
+        <Modal
+          title="Polling controls"
+          className="polling-dialog"
+          busy={busy}
+          onClose={() => setOpen(false)}
         >
-          <Icon name={polling.paused ? "play--filled" : "pause"} />
-          {polling.paused ? "Start" : "Pause"}
-        </button>
-        <button
-          type="button"
-          aria-label="Refresh project data"
-          disabled={
-            busy || !available.length || available.some((source) => source.status === "polling")
-          }
-          onClick={() => void attempt(() => api.poll(available.map((source) => source.key)))}
-        >
-          <Icon name="renew" />
-          Refresh
-        </button>
-      </div>
-      {error && (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
+          <div className="polling-dialog-body">
+            <div className="button-group">
+              <button
+                type="button"
+                aria-label={polling.paused ? "Start polling" : "Pause polling"}
+                disabled={busy}
+                onClick={() => void attempt(() => api.setPollingPaused(!polling.paused))}
+              >
+                <Icon name={polling.paused ? "play--filled" : "pause"} />
+                {polling.paused ? "Start" : "Pause"}
+              </button>
+              <button
+                type="button"
+                aria-label="Refresh project data"
+                disabled={
+                  busy ||
+                  !available.length ||
+                  available.some((source) => source.status === "polling")
+                }
+                onClick={() => void attempt(() => api.poll(available.map((source) => source.key)))}
+              >
+                <Icon name="renew" />
+                Refresh
+              </button>
+            </div>
+          </div>
+          {error && (
+            <p className="error-banner" role="alert">
+              {error}
+            </p>
+          )}
+        </Modal>
       )}
     </section>
   );
