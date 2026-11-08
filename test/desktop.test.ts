@@ -630,9 +630,13 @@ describe("desktop orchestration", () => {
         controller.snapshot().runs.find((run) => run.record.id === second)?.record.status,
       ).toBe("failed"),
     );
-    await controller.poll(["history", "config", "configurations"]);
+    // The failed status is published before its record is saved and the batch settles;
+    // only a history refresh after that drops the batch from the live set.
+    await vi.waitFor(async () => {
+      await controller.poll(["history", "config", "configurations"]);
+      expect(controller.snapshot().liveIds).toEqual([first]);
+    });
     expect(controller.active).toBe(true);
-    expect(controller.snapshot().liveIds).toEqual([first]);
     await controller.action({ type: "reply", id: first, text: "unaffected" });
     await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toEqual(["unaffected"]));
   });
