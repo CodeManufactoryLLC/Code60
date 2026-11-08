@@ -17,6 +17,16 @@ async function shell(script: string) {
   return file;
 }
 const inherited = "/inherited:/usr/bin";
+/** Waits for a fixture's PID, failing once the probe settles without having written one. */
+async function fixturePid(file: string, settled: () => boolean): Promise<number> {
+  for (;;) {
+    const done = settled();
+    const pid = Number(await readFile(file, "utf8").catch(() => "0"));
+    if (pid > 0) return pid;
+    if (done) throw new Error("The probe settled before its fixture reported a PID");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 const unixTest = test.skipIf(process.platform === "win32");
 function fallback(platform: NodeJS.Platform = "darwin") {
   return [
@@ -114,16 +124,16 @@ unixTest.each(["timeout", "abort", "success", "failure"])(
     const result = desktopPath({
       env: { HOME: home, PATH: inherited, SHELL: executable },
       platform: "darwin",
-      timeoutMs: reason === "timeout" ? 300 : 3_000,
+      // Freshly written fixture scripts can take seconds to start under a loaded suite.
+      // Deadlines must outlast that startup, or the probe ends before there is anything to stop.
+      timeoutMs: reason === "timeout" ? 5_000 : 15_000,
       signal: controller.signal,
     });
-    let pid = 0;
-    await expect
-      .poll(async () => {
-        pid = Number(await readFile(join(home, "child-pid"), "utf8").catch(() => "0"));
-        return pid > 0;
-      })
-      .toBe(true);
+    let settled = false;
+    void result.finally(() => {
+      settled = true;
+    });
+    const pid = await fixturePid(join(home, "child-pid"), () => settled);
     if (reason === "abort") controller.abort();
     expect(await result).toBe(`${reason === "success" ? "/recovered:" : ""}${fallback()}`);
     await expect
@@ -137,6 +147,7 @@ unixTest.each(["timeout", "abort", "success", "failure"])(
       })
       .toBe(true);
   },
+  20_000,
 );
 
 test("Windows PATH preserves drive separators and never probes a shell", async () => {
