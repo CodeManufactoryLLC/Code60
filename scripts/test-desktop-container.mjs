@@ -70,8 +70,10 @@ export async function runDesktopContainer(
 ) {
   const controller = new AbortController();
   const name = `code60-desktop-${randomUUID()}`;
+  const imageTag = `code60-desktop-test:${name}`;
   let interrupted = 0;
   let created = false;
+  let buildAttempted = false;
   let temporary;
   let status = 0;
   const interrupt = (code) => {
@@ -117,6 +119,7 @@ export async function runDesktopContainer(
     temporary = await mkdtemp(join(tmpdir(), "code60-container-"));
     const imageFile = join(temporary, "image-id");
     log(`Building desktop test image for ${nativePlatform}...`);
+    buildAttempted = true;
     await command([
       "build",
       "--platform",
@@ -125,6 +128,11 @@ export async function runDesktopContainer(
       join(root, "scripts/desktop-container/Dockerfile"),
       "--iidfile",
       imageFile,
+      "--tag",
+      imageTag,
+      "--label",
+      `com.code60.test-run=${name}`,
+      "--provenance=false",
       "--load",
       root,
     ]);
@@ -158,7 +166,7 @@ export async function runDesktopContainer(
         `seccomp=${join(root, "scripts/desktop-container/seccomp.json")}`,
         "--mount",
         `type=bind,${source},target=/workspace/test-results`,
-        image,
+        imageTag,
         ...args,
       ],
       { capture: true, signal: undefined, timeout: 30_000 },
@@ -168,8 +176,8 @@ export async function runDesktopContainer(
     if (!interrupted) log(error.message);
     status = error.exitCode || 1;
   } finally {
+    const cleanup = { signal: undefined, timeout: cleanupTimeout, capture: true };
     if (created) {
-      const cleanup = { signal: undefined, timeout: cleanupTimeout, capture: true };
       if (interrupted || status) {
         await command(["stop", "--time", "5", name], cleanup).catch((error) => {
           log(`Container stop: ${error.message}`);
@@ -179,6 +187,25 @@ export async function runDesktopContainer(
         log(`Could not remove ${name}: ${error.message}. Retry: docker rm --force ${name}`);
         status ||= 1;
       });
+    }
+    if (buildAttempted) {
+      // Inspect the owned tag even after a failed/cancelled export: iidfile may be absent.
+      // A unique final-image label prevents concurrent runs from sharing that image.
+      try {
+        const exported = await command(
+          ["image", "ls", "--all", "--quiet", "--filter", `reference=${imageTag}`],
+          cleanup,
+        );
+        if (exported) {
+          await command(["image", "rm", "--no-prune", imageTag], cleanup);
+          log(`Removed test image ${imageTag}; BuildKit cache and host artifacts retained.`);
+        }
+      } catch (error) {
+        log(
+          `Could not clean up ${imageTag}: ${error.message}. Retry: docker image rm --no-prune ${imageTag}`,
+        );
+        status ||= 1;
+      }
     }
     try {
       if (temporary) await rm(temporary, { recursive: true, force: true });

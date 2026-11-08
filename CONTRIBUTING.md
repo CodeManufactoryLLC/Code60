@@ -114,20 +114,24 @@ To inspect a trace after installing host dependencies:
 npx --no-install playwright show-trace test-results/container/<run>/<test>/trace.zip
 ```
 
-Test/build failure returns a nonzero exit status. Ctrl+C stops this invocation's
-container and removes it, preserving artifacts and build caches. Docker checks
-time out after 10 seconds; image build and attached test execution each have a
-20-minute outer limit, in addition to Playwright's existing timeouts. Cleanup is
+Test/build failure returns a nonzero exit status. On success, failure, or Ctrl+C,
+the runner removes its container and exported test image, preserving host
+artifacts and BuildKit dependency/build caches. Each run owns a uniquely tagged
+and labelled image, so concurrent runs cannot delete one another's images.
+Docker checks time out after 10 seconds; image build and attached test execution
+each have a 20-minute outer limit, in addition to Playwright's existing timeouts. Cleanup is
 bounded and prints the exact removal command if the daemon cannot complete it.
 No containers belonging to other runs are stopped, and Docker settings are not
 changed automatically.
 
 After every Docker test session, including failures and interruptions, verify
-that its containers have been stopped and removed. The runner normally handles
-this automatically; if cleanup fails, use its printed removal command once the
+that both its containers and built images have been removed. The runner normally
+handles this automatically; if cleanup fails, use its printed removal command once the
 Docker engine is responsive. Also remove temporary images, volumes, and networks
-created solely for manual test or debugging runs. Preserve reusable test images,
-dependency/build caches, and host screenshots and traces. Scope cleanup to the
+created solely for manual test or debugging runs. Do not retain built test images
+as "reusable" without an explicit user request. Dependency/build caches are
+separate Docker resources and remain cached; report that retention separately
+from image cleanup. Preserve host screenshots and traces. Scope cleanup to the
 resources created by your session; never use global Docker prune commands or
 remove resources belonging to other work. Report any cleanup left incomplete.
 
