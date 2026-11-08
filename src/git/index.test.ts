@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as gitExec from "./exec.js";
 import { createGit, parseNameStatus, parseWorktrees } from "./index.js";
 
 function git(cwd: string, ...args: string[]): string {
@@ -28,6 +29,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -174,4 +176,74 @@ describe("parseNameStatus", () => {
       { path: "c", status: "added" },
     ]);
   });
+});
+
+describe("cancelled snapshot indexes", () => {
+  it.each([
+    ["diff", "add"],
+    ["diff", "diff"],
+    ["reviewSnapshot", "add"],
+    ["reviewSnapshot", "write-tree"],
+    ["reviewSnapshot", "cat-file"],
+  ] as const)("removes the temporary index after cancelling %s in %s", async (operation, stage) => {
+    const g = createGit();
+    const base = await g.resolveCommit(repo, "HEAD");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    const originalIndex = await readFile(join(repo, ".git", "index"));
+    const abort = new AbortController();
+    const execute = gitExec.runGit;
+    let temporary = "";
+    let stalled = false;
+    vi.spyOn(gitExec, "runGit").mockImplementation(async (args, cwd, options) => {
+      temporary = options?.env?.GIT_INDEX_FILE ?? temporary;
+      if (args[0] === stage) {
+        stalled = true;
+        expect(existsSync(temporary)).toBe(true);
+        // Hold this phase in flight until the test cancels it.
+        return new Promise<string>((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+            once: true,
+          });
+        });
+      }
+      return execute(args, cwd, options);
+    });
+    const pending = g[operation]?.(repo, base, abort.signal);
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(stalled).toBe(true));
+    abort.abort(new Error("cancelled"));
+    await rejected;
+    expect(existsSync(dirname(temporary))).toBe(false);
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(originalIndex);
+    expect(await readFile(join(repo, "a.txt"), "utf8")).toBe("changed\n");
+  });
+});
+
+it("captures immutable structured review files with rename, binary and size limits without changing the index", async () => {
+  const g = createGit();
+  const base = await g.resolveCommit(repo, "HEAD");
+  const index = await readFile(join(repo, ".git", "index"));
+  git(repo, "mv", "b.txt", "renamed.txt");
+  const staged = await readFile(join(repo, ".git", "index"));
+  await writeFile(join(repo, "a.txt"), "after\n");
+  await writeFile(join(repo, "binary.bin"), Buffer.from([0, 1, 2]));
+  await writeFile(join(repo, "large.txt"), "x".repeat(1_048_577));
+  const snapshot = await g.reviewSnapshot?.(repo, base);
+  expect(snapshot?.files).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        path: "a.txt",
+        original: "one\n",
+        modified: "after\n",
+        status: "modified",
+      }),
+      expect.objectContaining({ path: "renamed.txt", oldPath: "b.txt", status: "renamed" }),
+      expect.objectContaining({ path: "binary.bin", limitation: "Binary or non-UTF-8 file" }),
+      expect.objectContaining({ path: "large.txt", limitation: "File exceeds 1 MiB" }),
+    ]),
+  );
+  expect(await readFile(join(repo, ".git", "index"))).toEqual(staged);
+  expect(staged).not.toEqual(index);
+  await writeFile(join(repo, "a.txt"), "later\n");
+  expect(snapshot?.files.find((file) => file.path === "a.txt")?.modified).toBe("after\n");
 });

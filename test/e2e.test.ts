@@ -182,12 +182,17 @@ it("serves the Code60 MCP stdio protocol from a separate process", async () => {
       annotations: { readOnlyHint: boolean; destructiveHint: boolean };
     };
     const listed: Listed[] = responses.get(2).tools;
-    expect(listed).toHaveLength(21);
+    expect(listed).toHaveLength(23);
     const hint = (name: string) => listed.find((tool) => tool.name === name)?.annotations;
     expect(hint("code60_search_messages")).toMatchObject({ readOnlyHint: true });
     expect(hint("code60_read_events")).toMatchObject({ readOnlyHint: true });
     expect(hint("code60_search_events")).toMatchObject({ readOnlyHint: true });
     expect(hint("code60_list_agents")).toMatchObject({ readOnlyHint: true });
+    expect(hint("code60_read_review")).toMatchObject({ readOnlyHint: true });
+    expect(hint("code60_address_feedback")).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
     expect(hint("code60_dispatch_agent")).toMatchObject({
       readOnlyHint: false,
       destructiveHint: false,

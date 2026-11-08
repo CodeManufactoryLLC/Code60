@@ -74,3 +74,31 @@ describe("Chat file tabs", () => {
     expect(fileTabLabel(tab, state.entries)).toBe("a.txt");
   });
 });
+
+it("keeps project and immutable worker versions distinct even with the same relative path", () => {
+  let state = updateFileTabs(emptyFileTabs("project"), { type: "file", path: "same.ts" });
+  for (const worker of ["a", "b"])
+    state = updateFileTabs(state, {
+      type: "file",
+      path: "same.ts",
+      source: {
+        reviewId: "review",
+        revisionId: "one",
+        fileKey: `${worker}:same.ts`,
+        label: worker,
+      },
+    });
+  state = updateFileTabs(state, {
+    type: "file",
+    path: "same.ts",
+    source: { reviewId: "review", revisionId: "two", fileKey: "a:same.ts", label: "a" },
+  });
+  expect(state.entries).toHaveLength(4);
+  state = updateFileTabs(state, {
+    type: "file",
+    path: "same.ts",
+    source: { reviewId: "review", revisionId: "one", fileKey: "a:same.ts", label: "a" },
+  });
+  expect(state.entries).toHaveLength(4);
+  expect(state.active).toBe(2);
+});

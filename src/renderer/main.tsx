@@ -33,8 +33,10 @@ import { prepareFileNavigation } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
 import { useFiles } from "./files.js";
+import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { Icon, type IconName } from "./icons.js";
 import { MessagesPage } from "./messages.js";
+import { Modal } from "./modal.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
 import {
   type Command,
@@ -206,14 +208,11 @@ function App() {
   }>();
   const [pollMenu, setPollMenu] = useState<{ id: string; bounds: Rectangle }>();
   const [confirmation, setConfirmation] = useState<{ launchId: string; count: number }>();
-  const [changes, setChanges] = useState<string>();
   const [menu, setMenu] = useState<{
     id: string;
     bounds: Rectangle;
     contextual?: boolean | undefined;
   }>();
-  const [diff, setDiff] = useState("");
-  const [diffLoading, setDiffLoading] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
   const [textStyles, setTextStyles] = useState<TextStyles>(() =>
     parseTextStyles(localStorage.getItem("code60.textStyles")),
@@ -235,6 +234,7 @@ function App() {
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const sidebarExpanded = sidebarOpen || sidebarHovered;
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [gitSetupProject, setGitSetupProject] = useState<string>();
   const [chartTickMs, setChartTickMs] = useState(() =>
     parseChartTick(localStorage.getItem("code60.chartTickMs")),
   );
@@ -276,6 +276,10 @@ function App() {
   }, [snapshot, orchestratorConfigured]);
   const database = snapshot?.database ?? null;
   const directory = snapshot?.directory;
+  useEffect(() => {
+    if (!directory || !snapshot?.database) setGitSetupProject(undefined);
+    else setGitSetupProject((current) => (current === directory ? current : undefined));
+  }, [directory, snapshot?.database]);
   const workspace = `${database}:${directory}`;
   const [workerSelection, setWorkerSelection] = useState<{ workspace: string; id: string }>();
   const [visitedWorkers, setVisitedWorkers] = useState<{ workspace: string; ids: string[] }>({
@@ -324,12 +328,12 @@ function App() {
     tabs.active === "chat" &&
     explorerOpen &&
     activeFileTab !== undefined &&
-    activeFileTab.kind !== "blank";
+    (activeFileTab.kind === "explorer" || (activeFileTab.kind === "file" && !activeFileTab.source));
   const fileBrowser = useFiles(
     api,
     snapshot,
     filesActive,
-    activeFileTab?.kind === "file" ? activeFileTab.path : null,
+    activeFileTab?.kind === "file" && !activeFileTab.source ? activeFileTab.path : null,
   );
   const transcripts = useTranscripts(
     api,
@@ -483,26 +487,6 @@ function App() {
     }
   }, [snapshot, selected]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setDiff("");
-    if (!changes || !directory) return;
-    setDiffLoading(true);
-    void api
-      .action({ type: "diff", id: changes })
-      .then((result) => {
-        if (!cancelled && typeof result === "string") setDiff(result);
-      })
-      .catch((cause) => {
-        if (!cancelled) setError(message(cause));
-      })
-      .finally(() => {
-        if (!cancelled) setDiffLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [directory, changes]);
   async function attempt(operation: () => Promise<unknown>): Promise<boolean> {
     setBusy(true);
     setError("");
@@ -556,7 +540,33 @@ function App() {
     if (latest.directory) notify(`Opened ${folderName(latest.directory)}.`);
   };
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
-  const changesRun = snapshot?.runs.find((item) => item.record.id === changes);
+  const openReview = (id: string, updates = false) => {
+    selectWorker(undefined);
+    const review = snapshot?.reviews?.find((review) => review.id === id);
+    if (updates && review?.revisions.at(-1) && directory) {
+      sessionStorage.setItem(
+        `code60.review:${directory}:${id}:revision`,
+        review.revisions.at(-1)?.id ?? "",
+      );
+      sessionStorage.setItem(`code60.review:${directory}:${id}:compare`, "feedback");
+    }
+    fileAction({ type: "changes", reviewId: id, title: review?.title ?? "Worker changes" });
+    setExplorerOpen(true);
+    setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    if (review?.chatId && snapshot?.chats.some((chat) => chat.run?.id === review.chatId))
+      void api
+        .orchestrationChatAction({ type: "select", id: review.chatId })
+        .catch((cause) => setError(message(cause)));
+  };
+  const reviewRun = async (runId: string) => {
+    if (!directory) return;
+    try {
+      const id = await api.reviewAction({ type: "open-run", project: directory, runId });
+      openReview(id);
+    } catch (cause) {
+      setError(message(cause));
+    }
+  };
   const menuRun = snapshot?.runs.find((item) => item.record.id === menu?.id);
   const menuConfiguration = snapshot?.configurations.find(
     (entry) => entry.id === configurationMenu?.id,
@@ -622,7 +632,7 @@ function App() {
         setSelected(target.record.id);
         openChat(target.record.id);
       }),
-      entry("review", "Review changes", "compare", () => setChanges(target.record.id)),
+      entry("review", "Review changes", "compare", () => void reviewRun(target.record.id)),
       entry("browse", "Browse project files", "document", () => void browseFiles()),
       entry(
         "cancel",
@@ -965,6 +975,25 @@ function App() {
         >
           <div className="chat-workspace-body">
             <div className="chat-conversations">
+              {directory && snapshot?.gitReadiness && (
+                <GitReadinessNotice
+                  state={snapshot.gitReadiness}
+                  onSetup={() => setGitSetupProject(directory)}
+                  onCheck={() =>
+                    void api
+                      .checkGit({ project: directory })
+                      .catch((cause) => setError(message(cause)))
+                  }
+                />
+              )}
+              {gitSetupProject === directory && gitSetupProject && (
+                <GitSetupDialog
+                  api={api}
+                  project={gitSetupProject}
+                  onClose={() => setGitSetupProject(undefined)}
+                />
+              )}
+
               {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
                 <ChatPage
                   key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
@@ -974,6 +1003,8 @@ function App() {
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
                   runs={snapshot?.runs ?? []}
+                  reviews={snapshot?.reviews ?? []}
+                  onReview={openReview}
                   active={
                     !splash &&
                     tabs.active === "chat" &&
@@ -1007,6 +1038,22 @@ function App() {
               })}
             </div>
             <FilePanel
+              api={api}
+              reviews={snapshot?.reviews ?? []}
+              project={directory ?? ""}
+              currentChat={snapshot?.chat.run?.id}
+              chatIds={snapshot?.chats.flatMap((chat) => (chat.run ? [chat.run.id] : [])) ?? []}
+              unisolated={
+                snapshot?.runs
+                  .filter((run) => run.record.base === null)
+                  .map((run) => run.record.id) ?? []
+              }
+              onSetupGit={
+                directory &&
+                ["not_repository", "no_commits"].includes(snapshot?.gitReadiness?.status ?? "")
+                  ? () => setGitSetupProject(directory)
+                  : undefined
+              }
               key={workspace}
               tabs={currentFileTabs}
               onAction={fileAction}
@@ -1397,35 +1444,6 @@ function App() {
                 Connect to database
               </button>
             </section>
-          )}
-          {changes && changesRun && (
-            <Modal title="Changes" busy={false} wide onClose={() => setChanges(undefined)}>
-              <div className="run-context">
-                <span>
-                  <b>BRANCH</b> {changesRun.record.branch ?? "No isolated worktree"}
-                </span>
-                <span title={changesRun.record.worktree}>
-                  <b>DIRECTORY</b> {changesRun.record.worktree}
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={busy || diffLoading}
-                onClick={() =>
-                  void attempt(async () => {
-                    const result = await api.action({ type: "diff", id: changesRun.record.id });
-                    if (typeof result === "string") setDiff(result);
-                  })
-                }
-              >
-                <Icon name="renew" /> Refresh diff
-              </button>
-              {diffLoading ? (
-                <p className="muted">Loading…</p>
-              ) : (
-                <pre className="diff">{diff || "No changes."}</pre>
-              )}
-            </Modal>
           )}
         </div>
       </div>
@@ -2138,53 +2156,6 @@ function Splash({
         />
       )}
     </>
-  );
-}
-
-function Modal({
-  title,
-  busy,
-  wide = false,
-  onClose,
-  children,
-}: {
-  title: string;
-  busy: boolean;
-  wide?: boolean;
-  onClose(): void;
-  children: ReactNode;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const id = useId();
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog.current?.showModal();
-    return () => previous?.focus();
-  }, []);
-  return (
-    <dialog
-      ref={dialog}
-      className={`setup-dialog ${wide ? "changes-dialog" : "picker-dialog"}`}
-      aria-labelledby={id}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
-    >
-      <div className="modal-heading">
-        <h2 id={id}>{title}</h2>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={`Close ${title}`}
-          disabled={busy}
-          onClick={onClose}
-        >
-          <Icon name="close" />
-        </button>
-      </div>
-      {children}
-    </dialog>
   );
 }
 

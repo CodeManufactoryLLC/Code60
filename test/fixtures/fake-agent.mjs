@@ -7,6 +7,7 @@ import { createFakeAgent } from "./fake-agent-app.mjs";
 if (process.env.FAKE_AGENT_STDERR) process.stderr.write(process.env.FAKE_AGENT_STDERR);
 createFakeAgent({
   sessionInfo: process.argv.includes("--session-info"),
+  reviewWorkflow: process.argv.includes("--review"),
   memoryExtraction: process.argv.includes("--memory"),
   authRequired: process.env.FAKE_AGENT_AUTH === "1" || process.argv.includes("--auth"),
 }).connect(ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

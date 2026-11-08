@@ -21,8 +21,17 @@ const name = z
 const target = z.strictObject({ scope, runId });
 
 const controlSchemas = {
+  code60_read_review: z.strictObject({ reviewId: z.string().uuid() }),
+  code60_address_feedback: z.strictObject({
+    scope,
+    reviewId: z.string().uuid(),
+    commentId: z.string().uuid(),
+    note: z.string().min(1).max(2_000),
+  }),
   code60_get_context: z.strictObject({}),
   code60_dispatch_agent: z.strictObject({
+    reviewId: z.string().uuid().optional(),
+    label: name.optional(),
     scope,
     requestId: name.pipe(z.string().max(MCP_CONTROL_LIMITS.requestId)),
     provider: name.optional(),

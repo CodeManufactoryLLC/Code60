@@ -74,7 +74,13 @@ async function readRun(deps: CommandDeps, id: string): Promise<RunRecord> {
   return record;
 }
 
-export async function diffRun(deps: CommandDeps, id: string): Promise<string> {
+export interface PreparedDiff {
+  readonly worktree: string;
+  readonly base: string;
+}
+
+/** Reconciles lifecycle state before an expensive, independently cancellable read. */
+export async function prepareDiff(deps: CommandDeps, id: string): Promise<PreparedDiff> {
   const record = await readRun(deps, id);
   if (record.discardedAt !== undefined) throw new RefusedError(`run ${id} was discarded`);
   if (record.base === null) {
@@ -82,7 +88,15 @@ export async function diffRun(deps: CommandDeps, id: string): Promise<string> {
       `run ${id} ran directly in ${record.worktree} without a worktree, so there is no separate diff; review the changes in that directory`,
     );
   }
-  return deps.git.diff(record.worktree, record.base);
+  return { worktree: record.worktree, base: record.base };
+}
+
+export function executeDiff(git: Git, target: PreparedDiff, signal?: AbortSignal): Promise<string> {
+  return git.diff(target.worktree, target.base, signal);
+}
+
+export async function diffRun(deps: CommandDeps, id: string): Promise<string> {
+  return executeDiff(deps.git, await prepareDiff(deps, id));
 }
 
 export interface DiscardResult {

@@ -4,6 +4,7 @@ import type {
   DesktopRun,
   OrchestrationChat,
   OrchestrationChatAction,
+  ReviewSummary,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
@@ -11,6 +12,22 @@ import { Icon } from "./icons.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { SessionInfo } from "./session-info.js";
 import { type Block, statusSpec, transcript } from "./state.js";
+
+function feedbackAt(review: ReviewSummary, chatId: string | undefined, turn: number) {
+  return (
+    review.chatId === chatId &&
+    review.submissions.some(
+      (batch) =>
+        (batch.deliveredChatId ?? review.originChatId) === chatId && batch.deliveredTurn === turn,
+    )
+  );
+}
+function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: number) {
+  return (
+    review.chatId === chatId &&
+    ((review.originChatId === chatId && review.turn === turn) || feedbackAt(review, chatId, turn))
+  );
+}
 
 function ChatMessage({ block }: { block: Block }) {
   const speaker =
@@ -53,6 +70,8 @@ export function ChatPage({
   active,
   onDatabase,
   runs,
+  reviews = [],
+  onReview,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
@@ -62,6 +81,8 @@ export function ChatPage({
   active: boolean;
   onDatabase(): void;
   runs: readonly DesktopRun[];
+  reviews?: ReviewSummary[];
+  onReview?(id: string, updates?: boolean): void;
 }) {
   const id = useId();
   const run = chat?.run;
@@ -198,6 +219,52 @@ export function ChatPage({
           Chat
         </h1>
         <div className="orchestration-chat-status">
+          {reviews.length > 0 && (
+            <details className="chat-reviews">
+              <summary>Changes</summary>
+              <div>
+                {reviews
+                  .filter(
+                    (review) =>
+                      review.chatId === run?.id ||
+                      review.chatId === null ||
+                      !chat?.run ||
+                      review.originChatId !== review.chatId,
+                  )
+                  .map((review) => (
+                    <button
+                      type="button"
+                      key={review.id}
+                      onClick={(event) => {
+                        onReview?.(review.id);
+                        event.currentTarget
+                          .closest("details.chat-reviews")
+                          ?.removeAttribute("open");
+                      }}
+                    >
+                      {review.title}
+                    </button>
+                  ))}
+                <details>
+                  <summary>Saved reviews</summary>
+                  {reviews.map((review) => (
+                    <button
+                      type="button"
+                      key={review.id}
+                      onClick={(event) => {
+                        onReview?.(review.id);
+                        event.currentTarget
+                          .closest("details.chat-reviews")
+                          ?.removeAttribute("open");
+                      }}
+                    >
+                      {review.title}
+                    </button>
+                  ))}
+                </details>
+              </div>
+            </details>
+          )}
           {!database ? (
             <button type="button" onClick={onDatabase}>
               Connect to database
@@ -297,8 +364,58 @@ export function ChatPage({
                   </div>
                 </details>
               ) : (
-                <ChatMessage key={item.key} block={item.blocks[0] as Block} />
+                (() => {
+                  const block = item.blocks[0] as Block;
+                  const event = events[Number(block.key)];
+                  const feedback =
+                    event?.type === "prompt"
+                      ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
+                      : undefined;
+                  return feedback ? (
+                    <article className="event prompt" aria-label="Your review feedback">
+                      <div className="chat-message-speaker">You</div>
+                      <p>Feedback on {feedback.title}</p>
+                      <button type="button" onClick={() => onReview?.(feedback.id)}>
+                        View submitted feedback
+                      </button>
+                    </article>
+                  ) : (
+                    <ChatMessage key={item.key} block={block} />
+                  );
+                })()
               )}
+              {item.blocks.flatMap((block) => {
+                const event = events[Number(block.key)];
+                if (event?.type !== "prompt") return [];
+                return reviews
+                  .filter((review) => reviewAt(review, run?.id, event.turn))
+                  .map((review) => (
+                    <div className="chat-review-activity" key={review.id}>
+                      <span>{review.title}</span>
+                      <span>
+                        {review.workers
+                          .map(
+                            (worker) =>
+                              `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                          )
+                          .join(" · ")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onReview?.(
+                            review.id,
+                            review.submissions.some((batch) => batch.state === "delivered"),
+                          )
+                        }
+                      >
+                        {review.submissions.some((batch) => batch.state === "delivered")
+                          ? "Review updates"
+                          : "Review changes"}
+                      </button>
+                    </div>
+                  ));
+              })}
               {item.blocks.map((block) => {
                 const timing = timings.get(block.key);
                 return timing ? (
@@ -307,6 +424,33 @@ export function ChatPage({
               })}
             </div>
           ))}
+          {reviews
+            .filter(
+              (review) =>
+                review.chatId === run?.id &&
+                review.workers.length > 0 &&
+                !events.some(
+                  (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
+                ),
+            )
+            .map((review) => (
+              <div className="chat-review-activity" key={review.id}>
+                <span>{review.title}</span>
+                <span>
+                  {review.workers
+                    .map(
+                      (worker) =>
+                        `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                    )
+                    .join(" · ")}
+                </span>
+                <button type="button" onClick={() => onReview?.(review.id)}>
+                  {review.submissions.some((batch) => batch.state === "delivered")
+                    ? "Review updates"
+                    : "Review changes"}
+                </button>
+              </div>
+            ))}
         </div>
         <section className="composer" aria-label="Chat composer">
           {progress || delegated ? <span className="chat-loader" aria-hidden="true" /> : null}

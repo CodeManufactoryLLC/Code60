@@ -51,11 +51,16 @@ export function WorkerChat({
   const composed = useRef<number | undefined>(undefined);
   const status = run.view?.status ?? run.record.status;
   const ended = endedStatuses.has(status);
-  const blocker = ended ? continueBlocker(run) : undefined;
+  const blocker =
+    run.record.base === null
+      ? "No baseline was captured for this run. Start a new isolated worker after setting up Git."
+      : ended
+        ? continueBlocker(run)
+        : undefined;
   const inactive = ended && run.record.discardedAt !== undefined;
   const editable = run.view?.status === "idle" && !run.view.stopping && !run.view.modeChanging;
   const resumable = ended && blocker === undefined;
-  const sendable = editable || resumable;
+  const sendable = !blocker && (editable || resumable);
   const working = ["running", "waiting"].includes(status);
   const blocks = useMemo(() => transcript(events), [events]);
   const timings = useMemo(() => turnTimings(events, status), [events, status]);

@@ -203,7 +203,7 @@ export class FakeGit implements Git {
   async removeWorktree(_repo: string, path: string, branch: string) {
     this.removed.push({ path, branch });
   }
-  async diff() {
+  async diff(_worktree?: string, _base?: string, _signal?: AbortSignal) {
     return "diff --git a/x b/x\n";
   }
   async changedFiles() {

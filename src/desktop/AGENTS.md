@@ -1,5 +1,12 @@
 # Desktop
 
+- Chat review persistence belongs in the focused review store beside the private workspace,
+  never SQLite or run records. Capture Git outside the control queue through bounded reads.
+  Validate revisions and anchors in the main process. Pending review feedback uses conversation
+  delivery, pauses with Chat, and requires explicit retry after restart or failure. Reconnecting
+  a saved review does not restore worker-control authority.
+  Validate and read saved JSON through the same handle, rejecting links and bounding actual reads.
+
 `src/desktop` is the Electron main process: the window, native dialogs, IPC handlers, and the `DesktopController` that owns one workspace and multiple independent run batches. Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
 - Depend only on `core`, `bridge`, and the Node-only `platform` leaf. Only this module imports `electron`.
@@ -8,8 +15,8 @@
 - Check the sender of every IPC request and parse its arguments with `bridge` before acting. Act only on runs recorded in the open workspace.
 - Serialize user actions and completion history refreshes in the controller. Allow overlapping batches, each with its own selected parallel limit, orchestrator, and subscriptions. Route actions and approvals to the owning batch, and retain earlier transcripts when adding sessions.
 - Refuse folder and database switches until every batch has ended. Stop all and every shutdown path, including forced shutdown, must stop every batch.
-- Return only newly created session IDs from start so the renderer identifies new sidebar conversations without disturbing the selected chat or drafts. When sessions run without worktrees, warn about directory sharing with existing live sessions as well as within the new batch; declining must leave existing sessions untouched.
-- Ask with a native dialog before destructive or unisolated actions, and before quitting with active runs.
+- Return only newly created session IDs from start. Require Git readiness on every project launch and continuation, with required isolation during core preparation. Never continue legacy non-isolated workers. Keep Chat and read-only history usable before Git setup.
+- Ask with a native dialog before destructive actions and before quitting with active runs. Reject unisolated project workers; guided Git setup uses its own explicit initial-commit confirmation.
 - On quit, signals, and renderer crashes, shut down every run through `core` and wait for it before exiting. Never remove worktrees automatically.
 - Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), and validated prompt template edits. Never store user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Load `node:sqlite` lazily; Node.js 22.12 has it only behind a flag.
 - Route every repeated external read (run history, config, run configurations, worktrees) through the `Poller` in `poller.ts`. Keep reads single-flight, discard results after a workspace or database switch, keep worktree scans outside the exclusive queue, and stop the poller on shutdown. Never poll agent events or watch files. Persist only user overrides under `polling` in desktop.json.
@@ -29,3 +36,8 @@
 - Search overview helpers are the dedicated UI-requested exception to chat-gateway worker dispatch: validate current-project saved evidence, gather bounded project documentation/code through the Files reader when enabled, and use the configured provider in a generated temporary directory, with no gateway, run records, worktrees or chat entries. Deny permissions; bound input, output and total runtime. Serialize replacement, stop on scope/provider changes, renderer reload, Stop all and shutdown, and remove the temporary directory only after process cleanup. Return the exact evidence used for numbered citations; never accept arbitrary file paths through the summary endpoint.
 
 - Enforce enabled membership and unchanged verified command identities in snapshots, desktop launch/recovery, saved configurations and MCP worker tools. Headless CLI behavior stays unchanged. Settings add transactions preserve primary and live chats; primary changes require active work to finish or stop. Keep existing settings until commit.
+
+- Diff preparation is serialized with lifecycle mutations; expensive reads run through DiffReads outside the action queue, with at most two in flight. Cancel reads on context replacement, renderer reload and shutdown, and settle a run's reads before discard. Queued preparation cancellation must not deadlock the control queue.
+- ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
+
+- GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.
