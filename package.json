@@ -29,6 +29,7 @@
     "dev": "node scripts/dev.mjs",
     "start": "electron .",
     "test:desktop": "npm run build && playwright test",
+    "test:desktop:container": "node scripts/test-desktop-container.mjs",
     "package:dir": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --dir --publish never",
     "package:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --linux --x64 --publish never",
     "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
