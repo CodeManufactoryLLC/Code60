@@ -582,10 +582,9 @@ async function appendRow(page: Page, table: "sessions" | "configurations" = "ses
 async function launch(directory: string, folder: string, database: string, configured = true) {
   // Every automatic orchestration session uses the local ACP fixture, never a live provider.
   const configFile = join(directory, "config", "code60", "config.json");
+  await mkdir(dirname(configFile), { recursive: true });
   try {
-    await stat(configFile);
-  } catch {
-    await mkdir(dirname(configFile), { recursive: true });
+    // Exclusive creation keeps any config a scenario wrote, without a check-then-write race.
     await writeFile(
       configFile,
       JSON.stringify({
@@ -593,7 +592,10 @@ async function launch(directory: string, folder: string, database: string, confi
           claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
         },
       }),
+      { flag: "wx" },
     );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
   }
   // Most scenarios start with an existing provider; setup is covered without this fixture below.
   if (configured) {
@@ -603,15 +605,9 @@ async function launch(directory: string, folder: string, database: string, confi
       saved = JSON.parse(await readFile(file, "utf8"));
     } catch {}
     if (!Object.hasOwn(saved, "agentSetup")) {
-      let provider = "claude";
-      try {
-        const config = JSON.parse(
-          await readFile(join(directory, "config", "code60", "config.json"), "utf8"),
-        );
-        provider = config.defaultAgent ?? provider;
-      } catch {}
-      await privateDirectory(dirname(file));
       const config = JSON.parse(await readFile(configFile, "utf8"));
+      const provider = config.defaultAgent ?? "claude";
+      await privateDirectory(dirname(file));
       await writeFile(
         file,
         JSON.stringify({

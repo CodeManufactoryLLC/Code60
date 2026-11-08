@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -77,9 +76,8 @@ describe("private Windows objects", () => {
   it.runIf(process.platform === "win32")(
     "rejects a junction ancestor before creating a directory or file",
     async () => {
-      const root = join(tmpdir(), `code60-junction-${randomUUID()}`);
+      const root = await mkdtemp(join(tmpdir(), "code60-junction-"));
       directories.push(root);
-      await mkdir(root);
       const outside = join(root, "outside");
       await mkdir(outside);
       const junction = join(root, "junction");
@@ -100,9 +98,8 @@ describe("private Windows objects", () => {
   it.runIf(process.platform === "win32")(
     "creates real owner/SYSTEM ACLs, preserves parent ACLs and rejects unsafe existing directories",
     async () => {
-      const root = join(tmpdir(), `code60-acl-${randomUUID()}`);
+      const root = await mkdtemp(join(tmpdir(), "code60-acl-"));
       directories.push(root);
-      await mkdir(root);
       const privatePath = join(root, "private");
       await privateDirectory(privatePath);
       const file = join(privatePath, "record");
@@ -120,8 +117,9 @@ describe("private Windows objects", () => {
   it.runIf(process.platform === "win32")(
     "writes and appends private Unicode contents without replacing existing files",
     async () => {
-      const root = join(tmpdir(), `code60-private-write-${randomUUID()}`);
-      directories.push(root);
+      const parent = await mkdtemp(join(tmpdir(), "code60-private-write-"));
+      directories.push(parent);
+      const root = join(parent, "private");
       await privateDirectory(root);
       const file = join(root, "contents");
       const contents = "Unicode: \u{1f680}\n".repeat(10_000);
