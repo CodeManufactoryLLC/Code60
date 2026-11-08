@@ -36,6 +36,40 @@ describe("diagnostic redaction", () => {
       "log in through claude's own CLI",
     );
   });
+
+  it("handles empty input", () => {
+    expect(diagnosticText("")).toBe("");
+    expect(diagnosticMessage("")).toBe("");
+    expect(new DiagnosticTail(128).toString()).toBe("");
+  });
+
+  it("clips with an ellipsis within the requested limit", () => {
+    for (const limit of [1, 2, 30, 4096]) {
+      const text = diagnosticText("x".repeat(5000), limit);
+      expect(text).toBe(`${"x".repeat(limit - 1)}…`);
+      expect(text.length).toBeLessThanOrEqual(limit);
+    }
+    expect(diagnosticText("exact", 5)).toBe("exact");
+  });
+
+  it("redacts an unlabeled AWS access key across the clipping boundary", () => {
+    const key = ["AKIA", "A1B2".repeat(4)].join("");
+    const input = `failed: ${key} trailing context`;
+    expect(diagnosticText(input)).toBe("failed: [REDACTED] trailing context");
+    expect(diagnosticText(input, 15)).toBe("failed: [REDAC…");
+    expect(diagnosticText(input, 15)).not.toContain(key.slice(0, 4));
+  });
+
+  it.each([
+    ["api_key=synthetic-value", "api_key=[REDACTED]"],
+    [null, "null"],
+    [undefined, "undefined"],
+    [42, "42"],
+    [{ message: "not an Error" }, "[object Object]"],
+  ])("formats non-Error values (%j)", (value, expected) => {
+    expect(diagnosticMessage(value)).toBe(expected);
+    expect(diagnosticMessage(value, 5).length).toBeLessThanOrEqual(5);
+  });
 });
 
 describe("bounded diagnostic stderr", () => {
