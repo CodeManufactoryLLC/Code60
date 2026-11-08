@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -12,13 +11,15 @@ async function expectPrivate(path: string, mode: number): Promise<void> {
   else expect((await stat(path)).mode & 0o777).toBe(mode);
 }
 
+let root: string;
 let directory: string;
 beforeEach(async () => {
-  directory = join(tmpdir(), `code60-projects-${randomUUID()}`);
+  root = await mkdtemp(join(tmpdir(), "code60-projects-"));
+  directory = join(root, "private");
   await privateDirectory(directory);
 });
 afterEach(async () => {
-  await rm(directory, { recursive: true, force: true });
+  await rm(root, { recursive: true, force: true });
 });
 
 // Node.js 22.12 needs a flag for node:sqlite; the desktop app runs on Electron's newer Node.js.
