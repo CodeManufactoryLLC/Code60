@@ -85,6 +85,9 @@ and an Apple Silicon `macos-15` runner only for explicitly requested releases. R
 old Mac/Node required checks from branch protection and require **CI passed**.
 The aggregate fails on failed, cancelled, or skipped validation jobs. If merge
 queues are enabled later, add their `merge_group` trigger before using the queue.
+Apply and verify the [versioned branch ruleset](.github/rulesets/README.md).
+It requires reviewed PRs, up-to-date CI, and resolved discussions, and prevents
+direct pushes, force pushes, and deletion without administrator bypasses.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.
@@ -278,12 +281,12 @@ require a version bump on its own.
 
 Preview versions use a suffix such as `v0.2.0-beta.1` and are marked as prereleases
 on GitHub. To start a beta for the next minor version, use
-`npm version preminor --preid=beta --message "$release_message"`; increment an existing beta with
-`npm version prerelease --preid=beta --message "$release_message"`. Choose the intended final
+`npm version preminor --preid=beta --no-git-tag-version`; increment an existing beta with
+`npm version prerelease --preid=beta --no-git-tag-version`. Choose the intended final
 version explicitly when leaving preview, for example
-`npm version 0.2.0 --message "$release_message"`. These are alternatives to the
-stable bump below, not commands to run in sequence. Define `release_message` as
-shown below first; all version commits follow the same checks and sign-off procedure.
+`npm version 0.2.0 --no-git-tag-version`. These are alternatives to the
+stable bump below, not commands to run in sequence. All version commits follow
+the same checks, sign-off, and reviewed PR procedure.
 
 ## Release checklist
 
@@ -291,7 +294,8 @@ shown below first; all version commits follow the same checks and sign-off proce
 - Compatibility impact, database migrations, known issues, and source-build
   instructions are reviewed.
 - `npm run check`, build, and desktop tests pass before the version commit.
-- Version commit is signed off; package and lockfile versions match its tag.
+- Version commit is signed off and merged through a reviewed PR; package and
+  lockfile versions match the tag created on main after merge.
 - Signing secrets, Apple access, and maintainer metadata are configured.
 - The manually requested workflow passes all Linux, Mac and Windows validations.
 - Native Windows 11 x64 acceptance and the signed installer checks are recorded.
@@ -301,7 +305,8 @@ shown below first; all version commits follow the same checks and sign-off proce
 
 ## Prepare the version and dispatch
 
-Start with a clean, up-to-date main. Follow semantic versioning above and the
+Start with a clean, up-to-date main and create a release-preparation branch.
+Follow semantic versioning above and the
 repository's DCO sign-off policy. Review `git config user.name` and
 `git config user.email` before making the release commit.
 
@@ -309,24 +314,44 @@ repository's DCO sign-off policy. Review `git config user.name` and
 git switch main
 git pull --ff-only
 git status --short
+git switch -c release/prepare-version
 npm ci
 npm run check
 npm run build
 npm run test:desktop
-release_message=$(printf 'chore: release v%%s\n\nSigned-off-by: %s <%s>' "$(git config user.name)" "$(git config user.email)")
-npm version patch --message "$release_message"
+npm version patch --no-git-tag-version
 npm run check
 npm run build
 node dist/cli/main.js --version
-git push --follow-tags
+version=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
+git add package.json package-lock.json
+git diff --cached
+git commit -s -m "chore: prepare release v$version"
+git push -u origin HEAD
+gh pr create --base main --title "chore: prepare release v$version" \
+  --body "Prepare the reviewed version bump. Create the release tag on main only after merge and CI passed."
 ```
 
 Choose the bump intentionally; use the preview commands above for the first
-installer validation release. Do not amend a tagged commit or move a published
-tag. CI never bumps versions or creates tags.
+installer validation release. Review the diff, resolve discussions, and merge only after **CI passed** succeeds on an up-to-date branch.
+Do not push version commits directly to main.
 
-After the version commit reaches main, dispatch the existing tag, substituting
-the actual version:
+After the PR is merged, update main and verify that it contains the intended
+release version before creating the tag. Tagging after merge also works with
+squash or rebase merges. Do not amend a tagged commit or move a published tag.
+CI never bumps versions or creates tags.
+
+```sh
+git switch main
+git pull --ff-only
+git status --short
+version=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
+git log -1 --oneline
+git tag -a "v$version" -m "Release v$version"
+git push origin "refs/tags/v$version"
+```
+
+Dispatch the existing tag, substituting the actual version:
 
 ```sh
 gh workflow run release.yml --repo CodeManufactoryLLC/code60 --ref main -f tag=vX.Y.Z
