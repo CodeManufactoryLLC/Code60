@@ -94,6 +94,10 @@ Add tests for changed behavior and update CLI help and relevant documentation
 when the user-visible behavior changes.
 
 Keep pull requests focused. Explain what changed, why, and which checks you ran.
+Complete the [pull request template](.github/pull_request_template.md), including
+test results, checks not run and why, related issues, and compatibility risks.
+Mark inapplicable sections explicitly and redact sensitive information from
+supporting evidence.
 Use conventional commit messages, such as `fix: handle an unavailable agent`.
 
 ## Protected branches
