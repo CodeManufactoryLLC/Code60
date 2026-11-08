@@ -299,6 +299,9 @@ the same checks, sign-off, and reviewed PR procedure.
   lockfile versions match the tag created on main after merge.
 - Signing secrets, Apple access, and maintainer metadata are configured.
 - The manually requested workflow passes all Linux, Mac and Windows validations.
+- Steps that run only in `release.yml`, such as the publication job's
+  `actions/download-artifact`, are first exercised by a release run. After an
+  update to such an action, confirm that step succeeded before publishing.
 - Native Windows 11 x64 acceptance and the signed installer checks are recorded.
 - All four tested installers and checksums are published for the exact tag.
 - Public release links work; the first installer prerelease has been installed
