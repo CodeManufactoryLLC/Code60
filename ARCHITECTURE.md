@@ -460,7 +460,9 @@ Refresh is explicit, local and cancellable. A capture never changes the selected
 `.code60_workspace/reviews/<database-hash>/<project-hash>`. Writes use private files and atomic
 replacement. Limits are 200 reviews per project, 100 revisions per review, 1 MiB per text blob,
 8 MiB text per worker snapshot and combined review capture, 2,000 files per capture, and
-16 MiB per saved record. Binary, oversized, symlink and
+16 MiB per saved record. Saved JSON reads validate and read the same file handle,
+reject links and nonregular files, and bound actual bytes read even if the file grows.
+Binary, oversized, symlink and
 submodule content is explicitly unavailable. Missing/discarded worktrees produce per-worker
 errors; saved revisions remain readable. No persistence failure is treated as an empty diff.
 Feedback delivery records its intent before sending and its receipt afterward. An uncertain

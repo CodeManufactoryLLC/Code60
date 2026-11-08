@@ -5,6 +5,7 @@
   Validate revisions and anchors in the main process. Pending review feedback uses conversation
   delivery, pauses with Chat, and requires explicit retry after restart or failure. Reconnecting
   a saved review does not restore worker-control authority.
+  Validate and read saved JSON through the same handle, rejecting links and bounding actual reads.
 
 `src/desktop` is the Electron main process: the window, native dialogs, IPC handlers, and the `DesktopController` that owns one workspace and multiple independent run batches. Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 

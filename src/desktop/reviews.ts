@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, readdir, readFile, rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type Review,
@@ -16,10 +17,41 @@ const message = (cause: unknown) => (cause instanceof Error ? cause.message : St
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 const MAX_RECORD = 16 * 1_048_576;
 async function readJson(path: string): Promise<unknown> {
-  const info = await lstat(path);
-  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_RECORD)
-    throw new Error("Review record is unavailable or too large");
-  return JSON.parse(await readFile(path, "utf8"));
+  const file = await open(
+    path,
+    constants.O_RDONLY |
+      constants.O_NONBLOCK |
+      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
+  );
+  try {
+    // Inspect and read the same handle, even if the pathname is replaced meanwhile.
+    const info = await file.stat({ bigint: true });
+    if (!info.isFile() || info.size > BigInt(MAX_RECORD))
+      throw new Error("Review record is unavailable or too large");
+    if (process.platform === "win32") {
+      // Node does not expose O_NOFOLLOW on Windows. Reject links and verify that
+      // the opened handle names the regular file inspected here before reading it.
+      const entry = await lstat(path, { bigint: true });
+      if (
+        !entry.isFile() ||
+        entry.isSymbolicLink() ||
+        entry.dev !== info.dev ||
+        entry.ino !== info.ino
+      )
+        throw new Error("Review record changed or is a symbolic link");
+    }
+    const buffer = Buffer.alloc(MAX_RECORD + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await file.read(buffer, length, buffer.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > MAX_RECORD) throw new Error("Review record is too large");
+    return JSON.parse(buffer.subarray(0, length).toString("utf8"));
+  } finally {
+    await file.close();
+  }
 }
 async function save(path: string, value: unknown): Promise<void> {
   const data = JSON.stringify(value);
