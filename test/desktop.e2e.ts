@@ -5152,6 +5152,14 @@ test("desktop: Browse project files from sessions and worktrees", async () => {
     ).rejects.toThrow("Set up Git");
     const current = await page.evaluate(() => window.desktop.snapshot());
     expect(current.runs).toHaveLength(0);
+    expect(current.directory).toBe(await realpath(plain));
+    // chooseFolder resolves before the batched snapshot reaches the renderer.
+    // Wait for the new workspace and its tab reset, not the old Explorer tab.
+    await expect(page.locator(".project-card")).toHaveAttribute(
+      "title",
+      current.directory as string,
+    );
+    await expect(page.locator(".file-tabs").getByRole("tab")).toHaveCount(0);
     await selectSidebarPage(page, "Files");
     await expect(files).toBeVisible();
     await expect(files.getByLabel("File root")).toHaveValue(current.directory as string);
