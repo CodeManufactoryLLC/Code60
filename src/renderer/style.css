@@ -102,36 +102,36 @@
   --surface-band: var(--surface);
   --disabled-fill: var(--surface);
   --footer-bg: var(--surface);
-  --bg: #242b33;
-  --surface: #242b33;
-  --surface-hover: #242b33;
-  --row-alt: #242b33;
+  --bg: #000000;
+  --surface: #000000;
+  --surface-hover: #000000;
+  --row-alt: #000000;
   --text: #ffffff;
   --muted: #aaaaaa;
-  --border: #414b56;
+  --border: #444444;
   --control-border: #888888;
-  --accent: #d0bc83;
-  --accent-bg: #323c46;
+  --accent: #91d8d4;
+  --accent-bg: #303030;
   --hover-bg: #203e3b;
-  --primary: #c5b17d;
-  --primary-hover: #d4c18f;
-  --primary-text: #1b1d20;
+  --primary: #77ccc8;
+  --primary-hover: var(--accent);
+  --primary-text: #000000;
   --danger: #ffffff;
-  --warning-bg: #242b33;
-  --warning-text: #d0bc83;
+  --warning-bg: #000000;
+  --warning-text: var(--accent);
   --success: #aaaaaa;
-  --code: #242b33;
+  --code: #000000;
   --disabled-stripe: transparent;
-  --chat-bg: #242b33;
+  --chat-bg: #000000;
   --chat-neutral: var(--surface);
   --user-bubble: var(--primary);
   --on-user-bubble: #000000;
-  --human-text: #b5c8d3;
+  --human-text: var(--accent);
   --destructive: #df9d8f;
   --destructive-hover: #edb3a7;
   --on-destructive: #000000;
-  --focus-line: #bac9d6;
-  --focus-band: #29323b;
+  --focus-line: var(--accent);
+  --focus-band: var(--hover-bg);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
@@ -145,36 +145,36 @@
     --surface-band: var(--surface);
     --disabled-fill: var(--surface);
     --footer-bg: var(--surface);
-    --bg: #242b33;
-    --surface: #242b33;
-    --surface-hover: #242b33;
-    --row-alt: #242b33;
+    --bg: #000000;
+    --surface: #000000;
+    --surface-hover: #000000;
+    --row-alt: #000000;
     --text: #ffffff;
     --muted: #aaaaaa;
-    --border: #414b56;
+    --border: #444444;
     --control-border: #888888;
-    --accent: #d0bc83;
-    --accent-bg: #323c46;
+    --accent: #91d8d4;
+    --accent-bg: #303030;
     --hover-bg: #203e3b;
-    --primary: #c5b17d;
-    --primary-hover: #d4c18f;
-    --primary-text: #1b1d20;
+    --primary: #77ccc8;
+    --primary-hover: var(--accent);
+    --primary-text: #000000;
     --danger: #ffffff;
-    --warning-bg: #242b33;
-    --warning-text: #d0bc83;
+    --warning-bg: #000000;
+    --warning-text: var(--accent);
     --success: #aaaaaa;
-    --code: #242b33;
+    --code: #000000;
     --disabled-stripe: transparent;
-    --chat-bg: #242b33;
+    --chat-bg: #000000;
     --chat-neutral: var(--surface);
     --user-bubble: var(--primary);
     --on-user-bubble: #000000;
-    --human-text: #b5c8d3;
+    --human-text: var(--accent);
     --destructive: #df9d8f;
     --destructive-hover: #edb3a7;
     --on-destructive: #000000;
-    --focus-line: #bac9d6;
-    --focus-band: #29323b;
+    --focus-line: var(--accent);
+    --focus-band: var(--hover-bg);
   }
 }
 /* Signal colors are an opt-in setting; by default failure is neutral and carried by icon and rule. */
@@ -643,12 +643,27 @@ button.project-card {
   background: var(--hover-bg);
   color: var(--text);
 }
-/* Selection changes text contrast, not the sidebar fill. */
 .page-tab [role="tab"][aria-selected="true"],
-.page-tab .page-group-toggle[data-active="true"] {
-  background: var(--control-fill);
+.page-tab .page-group-toggle[data-active="true"],
+.sidebar-settings-heading[data-active="true"] {
+  --control-fill: var(--accent-bg);
+  background: var(--accent-bg);
   color: var(--text);
   font-weight: var(--button-weight, 400);
+}
+.sidebar-settings {
+  margin-top: auto;
+}
+.sidebar-settings-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.sidebar-settings-heading[data-active="true"] :where(.page-tab) [role="tab"] {
+  color: var(--text);
+}
+button.sidebar-settings-toggle {
+  padding-inline: 8px 12px;
+  color: inherit;
 }
 
 .page-tab-list {
@@ -672,6 +687,11 @@ button.project-card {
 }
 .chat-page-heading .page-tab-label {
   padding-right: 28px;
+}
+.page-tab :is([aria-selected="true"], [data-active="true"]) .page-tab-label,
+.sidebar-settings-heading[data-active="true"] .page-tab-label {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 /* Unframed main content alongside the navigation. */
@@ -884,7 +904,7 @@ button.project-card {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
   padding-bottom: 16px;
   border-bottom: 1px solid transparent;
 }
@@ -1013,9 +1033,6 @@ button.project-card {
 .sessions-grid {
   flex: 1;
   min-height: 0;
-}
-.configuration-empty {
-  padding: 12px var(--page-padding);
 }
 .run-context {
   display: flex;
@@ -2193,6 +2210,7 @@ dialog::backdrop {
 .table-controls {
   gap: 8px 16px;
   flex-shrink: 0;
+  margin-bottom: var(--space-1);
 }
 .table-title {
   margin: 0;
@@ -2959,6 +2977,7 @@ dialog::backdrop {
   flex-wrap: wrap;
   gap: 12px;
   padding: 16px 20px;
+  margin-bottom: var(--space-1);
 }
 .orchestration-chat-status {
   display: flex;
@@ -3013,13 +3032,7 @@ dialog::backdrop {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
   color: var(--muted);
-}
-.chat-empty .wordmark {
-  font-size: 48px;
-  line-height: 1.25;
-  color: var(--text);
 }
 .chat-empty h2 {
   font-size: var(--title-size, 20px);
@@ -3180,6 +3193,7 @@ dialog::backdrop {
   flex-wrap: wrap;
   gap: 12px;
   padding: 16px var(--page-padding);
+  margin-bottom: var(--space-1);
 }
 .memory-heading h2 {
   margin: 0;
