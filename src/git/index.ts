@@ -4,9 +4,11 @@ import { join, normalize } from "node:path";
 import { samePath } from "../platform/index.js";
 import { GitError, runGit } from "./exec.js";
 import { type GitSetupOps, gitSetup } from "./setup.js";
+import { type TaskGit, taskGit } from "./tasks.js";
 
 export { GitError } from "./exec.js";
 export type { GitReadiness, GitSetupFile, GitSetupOps, GitSetupPreview } from "./setup.js";
+export type { TaskEntry, TaskGit } from "./tasks.js";
 
 export interface RepoInfo {
   /** Top-level directory of the working tree the command ran in. */
@@ -52,6 +54,7 @@ export interface ReviewSnapshot {
 
 export interface Git {
   setup?: GitSetupOps;
+  tasks?: TaskGit;
   repoInfo(cwd: string): Promise<RepoInfo>;
   listWorktrees(repoDir: string): Promise<GitWorktree[]>;
   /** Resolves a revision to a full commit hash. */
@@ -61,7 +64,12 @@ export interface Git {
   removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
   diff(worktree: string, base: string, signal?: AbortSignal): Promise<string>;
-  reviewSnapshot?(worktree: string, base: string, signal?: AbortSignal): Promise<ReviewSnapshot>;
+  reviewSnapshot?(
+    worktree: string,
+    base: string,
+    signal?: AbortSignal,
+    captured?: string,
+  ): Promise<ReviewSnapshot>;
   changedFiles(worktree: string, base: string): Promise<ChangedFile[]>;
 }
 
@@ -205,81 +213,79 @@ export function parseNameStatus(output: string, untracked: ReadonlySet<string>):
 export function createGit(): Git {
   return {
     setup: gitSetup,
-    async reviewSnapshot(worktree, base, signal) {
-      return withSnapshotIndex(
-        worktree,
-        async (env) => {
-          const tree = (await runGit(["write-tree"], worktree, { env, signal })).trim();
-          const raw = await runGit(
-            ["diff", "--raw", "--no-abbrev", "-z", "-M", base, tree, "--"],
-            worktree,
-            { env, signal },
+    tasks: taskGit,
+    async reviewSnapshot(worktree, base, signal, captured) {
+      const read = async (env: Record<string, string>) => {
+        const tree = captured ?? (await runGit(["write-tree"], worktree, { env, signal })).trim();
+        const raw = await runGit(
+          ["diff", "--raw", "--no-abbrev", "-z", "-M", base, tree, "--"],
+          worktree,
+          { env, signal },
+        );
+        const fields = raw.split("\0");
+        const files: ReviewSnapshotFile[] = [];
+        let bytes = 0;
+        let truncated = false;
+        for (let index = 0; index < fields.length && fields[index]; ) {
+          signal?.throwIfAborted();
+          const header = fields[index++]?.match(
+            /^:(\d+) (\d+) ([a-f0-9]+) ([a-f0-9]+) ([A-Z])\d*$/,
           );
-          const fields = raw.split("\0");
-          const files: ReviewSnapshotFile[] = [];
-          let bytes = 0;
-          let truncated = false;
-          for (let index = 0; index < fields.length && fields[index]; ) {
-            signal?.throwIfAborted();
-            const header = fields[index++]?.match(
-              /^:(\d+) (\d+) ([a-f0-9]+) ([a-f0-9]+) ([A-Z])\d*$/,
-            );
-            if (!header) throw new Error("Invalid Git review file listing");
-            const [, beforeMode, afterMode, before, after, letter] = header;
-            const oldPath = fields[index++];
-            const path = letter === "R" || letter === "C" ? fields[index++] : oldPath;
-            if (!path || !oldPath || !before || !after) throw new Error("Invalid Git review path");
-            if (files.length >= 1_000) {
-              truncated = true;
-              continue;
-            }
-            let limitation: string | undefined;
-            const content = async (oid: string, mode: string | undefined) => {
-              if (/^0+$/.test(oid)) return "";
-              if (mode !== "100644" && mode !== "100755") {
-                limitation =
-                  mode === "120000" ? "Symbolic link" : "Submodule or unsupported file type";
-                return "";
-              }
-              const size = Number(
-                (await runGit(["cat-file", "-s", oid], worktree, { signal })).trim(),
-              );
-              if (!Number.isFinite(size) || size > 1_048_576 || bytes + size > 8_388_608) {
-                limitation =
-                  size > 1_048_576 ? "File exceeds 1 MiB" : "Revision content limit reached";
-                return "";
-              }
-              bytes += size;
-              const text = await runGit(["cat-file", "blob", oid], worktree, { signal });
-              if (text.includes("\0") || text.includes("\ufffd")) {
-                limitation = "Binary or non-UTF-8 file";
-                return "";
-              }
-              return text;
-            };
-            const original = await content(before, beforeMode);
-            const modified = await content(after, afterMode);
-            files.push({
-              path,
-              oldPath,
-              status:
-                letter === "R"
-                  ? "renamed"
-                  : letter === "A"
-                    ? "added"
-                    : letter === "D"
-                      ? "deleted"
-                      : "modified",
-              fingerprint: `${beforeMode}:${before}:${afterMode}:${after}`,
-              original: limitation ? "" : original,
-              modified: limitation ? "" : modified,
-              ...(limitation ? { limitation } : {}),
-            });
+          if (!header) throw new Error("Invalid Git review file listing");
+          const [, beforeMode, afterMode, before, after, letter] = header;
+          const oldPath = fields[index++];
+          const path = letter === "R" || letter === "C" ? fields[index++] : oldPath;
+          if (!path || !oldPath || !before || !after) throw new Error("Invalid Git review path");
+          if (files.length >= 1_000) {
+            truncated = true;
+            continue;
           }
-          return { files, truncated };
-        },
-        signal,
-      );
+          let limitation: string | undefined;
+          const content = async (oid: string, mode: string | undefined) => {
+            if (/^0+$/.test(oid)) return "";
+            if (mode !== "100644" && mode !== "100755") {
+              limitation =
+                mode === "120000" ? "Symbolic link" : "Submodule or unsupported file type";
+              return "";
+            }
+            const size = Number(
+              (await runGit(["cat-file", "-s", oid], worktree, { signal })).trim(),
+            );
+            if (!Number.isFinite(size) || size > 1_048_576 || bytes + size > 8_388_608) {
+              limitation =
+                size > 1_048_576 ? "File exceeds 1 MiB" : "Revision content limit reached";
+              return "";
+            }
+            bytes += size;
+            const text = await runGit(["cat-file", "blob", oid], worktree, { signal });
+            if (text.includes("\0") || text.includes("\ufffd")) {
+              limitation = "Binary or non-UTF-8 file";
+              return "";
+            }
+            return text;
+          };
+          const original = await content(before, beforeMode);
+          const modified = await content(after, afterMode);
+          files.push({
+            path,
+            oldPath,
+            status:
+              letter === "R"
+                ? "renamed"
+                : letter === "A"
+                  ? "added"
+                  : letter === "D"
+                    ? "deleted"
+                    : "modified",
+            fingerprint: `${beforeMode}:${before}:${afterMode}:${after}`,
+            original: limitation ? "" : original,
+            modified: limitation ? "" : modified,
+            ...(limitation ? { limitation } : {}),
+          });
+        }
+        return { files, truncated };
+      };
+      return captured ? read({}) : withSnapshotIndex(worktree, read, signal);
     },
     async repoInfo(cwd) {
       let out: string;

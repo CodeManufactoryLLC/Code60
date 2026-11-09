@@ -8,6 +8,7 @@ import type {
 } from "../bridge/index.js";
 import { reviewAnchorSchema } from "../bridge/index.js";
 import { type ReviewAddress, useReviewFile } from "./review-content.js";
+import { TaskActions } from "./task-actions.js";
 
 const MonacoDiff = lazy(() => import("./monaco-diff.js"));
 
@@ -243,6 +244,14 @@ export function ReviewPanel({
           New changes available · Review updates
         </button>
       )}
+      <TaskActions
+        key={`${project}:${review.id}`}
+        api={api}
+        project={project}
+        review={review}
+        revisionId={revision?.id}
+        connected={connected}
+      />
       {revision && (
         <div className="review-controls">
           <label>

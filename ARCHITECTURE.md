@@ -26,8 +26,9 @@ Exception for Chat review: desktop-only review records, immutable bounded file s
 human review decisions and editable pending feedback are persisted beneath the private
 `.code60_workspace/reviews` directory beside the project database. This is not a general
 job queue. Restart never automatically delivers saved feedback or grants worker authority.
-Users explicitly reconnect saved reviews to a current chat. Review does not apply, commit,
-merge or approve changes on the user's behalf. CLI records and database schema are unchanged.
+Users explicitly reconnect saved reviews to a current chat. A human can preview and apply a
+reviewed result to the open project and can undo an application. Agents can revise their
+isolated work through feedback. CLI records and the database schema are unchanged.
 
 Chat review groups workers by the human request that dispatched them. A Changes tab shares
 the Chat side panel with project and revision-specific file tabs. Overlapping paths in
@@ -37,11 +38,29 @@ stable as new captures arrive. Feedback anchors carry revision, worker, path, si
 changed content invalidates reviewed state and marks earlier anchors outdated. Only humans
 resolve feedback or mark files reviewed. Pending feedback is delivered through the conversation
 coordinator between turns, with explicit status, retry and withdrawal. Saved provenance never
-authorizes a worker mutation; existing ownership, scope and recovery checks still apply.
+authorizes a worker mutation. Existing ownership, scope and recovery checks still apply.
+
+New Chat tasks at the repository root share a frozen baseline of current saved files unless a
+worker uses an explicit Git base. A temporary index captures tracked changes and eligible
+untracked files while respecting Git ignores and excluding Code60 storage, common generated
+files and known untracked credential filenames. Internal snapshot commits use
+`refs/code60/tasks/` and leave HEAD, branches and staging alone. Each review revision can
+reference immutable worker captures independently of bounded display text. Older reviews
+remain readable and need a new capture before application.
+
+**Use these changes…** previews the worker changes combined with the current project. Applying
+requires confirmation and idle or ended workers. Conflicts leave the project untouched.
+**Ask workers to revise** sends a separate feedback batch to the attached conversation and
+records the conflicting context so a correction can preserve the user's edit. Apply and undo
+recheck affected files, serialize writes per checkout and record before and after contents in
+private review storage. Interrupted writes require explicit recovery, which preserves newer
+edits and reports unresolved paths. Worktrees and internal snapshots are retained. The
+application supports regular files up to 32 MiB and bounds journal content at 128 MiB. Changed
+links and submodules are refused.
 
 These are deliberately out of scope. Add one back only when a real user needs it.
 
-- Merging, committing worker changes, pushing, or deciding whether a task succeeded. The user does this with Git. Explicit guided initial commits are the sole exception described below.
+- Merging, committing worker changes to a project branch, pushing, or deciding whether a task succeeded. Exceptions for explicit initial commits and internal desktop task snapshots are described here.
 - Retries, durable task queues, and exactly-once execution. A failed run is reported, and the user starts a new one.
 - Automatic crash recovery. After a crash, the tool lists what was left behind; recovery starts only when the user sends a new message to an ended session in the desktop app.
 - Storing credentials. Agents log in through their own CLIs. The CLI passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.

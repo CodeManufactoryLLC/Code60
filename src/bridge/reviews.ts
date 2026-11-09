@@ -27,6 +27,16 @@ export const reviewRevisionSchema = z.strictObject({
   id: uuid,
   at: z.string(),
   files: z.array(reviewFileSchema).max(2_000),
+  sources: z
+    .array(
+      z.strictObject({
+        runId: run,
+        base: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+        commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+      }),
+    )
+    .max(100)
+    .optional(),
   errors: z.array(z.strictObject({ runId: run, message: z.string().max(2_000) })).max(100),
 });
 export const reviewCommentSchema = z.strictObject({
