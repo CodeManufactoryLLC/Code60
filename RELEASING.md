@@ -101,6 +101,10 @@ Electron suites on both native platforms without signing secrets or publication
 rights. It does not replace the release workflow's installer, signing, notarization,
 and installed-app checks. A failed candidate tag stays immutable; validate fixes
 before creating the next version.
+Desktop jobs install Electron explicitly before tests. An official GitHub asset
+server error gets one retry with a cache-busting query; the locked package’s
+bundled checksums still apply. Checksum, access, and repeated download failures
+stop validation.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.

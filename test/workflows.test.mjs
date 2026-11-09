@@ -64,6 +64,7 @@ describe("CI and release gates", () => {
     expect(native.jobs.native.strategy["fail-fast"]).toBe(false);
     expect(native.jobs.native.steps.filter((step) => step.run).map((step) => step.run)).toEqual([
       "npm ci",
+      "node scripts/install-electron.mjs",
       "npm run check",
       "npm run test:desktop",
     ]);
