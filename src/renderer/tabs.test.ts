@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { initialTabs, updateTabs } from "./tabs.js";
 
 describe("page tabs", () => {
-  it("starts on Chat with all eleven permanent tabs", () => {
+  it("starts on Chat with all twelve permanent tabs", () => {
     expect(initialTabs).toEqual({
       open: [
+        "contributor-tools",
         "chat",
         "episodic-memory",
         "sessions",

@@ -12,6 +12,7 @@ import { pathLabel } from "./path-label.js";
 import type { PageId, PageTabs } from "./tabs.js";
 
 const labels: Record<PageId, string> = {
+  "contributor-tools": "Contributor Tools",
   chat: "Chat",
   "episodic-memory": "Episodic Memory",
   files: "Files",
@@ -27,6 +28,7 @@ const labels: Record<PageId, string> = {
 };
 
 const pageIcons: Record<PageId, IconName> = {
+  "contributor-tools": "settings",
   chat: "chat",
   "episodic-memory": "document",
   files: "document",
@@ -34,7 +36,7 @@ const pageIcons: Record<PageId, IconName> = {
   messages: "grid",
   events: "grid",
   polling: "grid",
-  prompts: "document",
+  prompts: "prompt-template",
   search: "search",
   sessions: "grid",
   settings: "settings",
@@ -46,6 +48,7 @@ export function PageTabBar({
   directory,
   onSelect,
   onOpenProject,
+  onConnectDatabase,
   projectDisabled,
   api,
   chats,
@@ -61,6 +64,7 @@ export function PageTabBar({
   directory?: string | undefined;
   onSelect(id: PageId): void;
   onOpenProject(): void;
+  onConnectDatabase?(): void;
   projectDisabled: boolean;
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
@@ -118,14 +122,16 @@ export function PageTabBar({
         <button
           type="button"
           className="sidebar-header project-card"
-          data-empty={!directory}
+          data-empty={!database || !directory}
           disabled={projectDisabled}
-          onClick={onOpenProject}
+          onClick={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
           aria-haspopup="dialog"
-          title={directory ?? "Open a project"}
+          title={!database ? "Connect to database" : (directory ?? "Open a project")}
         >
           <Icon name="folder" />
-          <span className="sidebar-title">{repository ?? "Open a project"}</span>
+          <span className="sidebar-title">
+            {!database ? "Connect to database" : (repository ?? "Open a project")}
+          </span>
         </button>
         <PageTabList
           tabs={tabs}
@@ -156,7 +162,7 @@ const tablePages: readonly PageId[] = [
 const experimentPages: readonly PageId[] = ["episodic-memory"];
 const pageGroup = (id: PageId) => {
   if (tablePages.includes(id)) return "tables";
-  if (experimentPages.includes(id)) return "advanced";
+  if (experimentPages.includes(id) || id === "contributor-tools") return "advanced";
   if (id === "chat" || id === "settings") return id;
   return "primary";
 };
@@ -188,16 +194,19 @@ function PageTabList({
   const [chatError, setChatError] = useState("");
   const chatInFlight = useRef(false);
   async function chatAction(request: OrchestrationChatAction) {
-    if (chatInFlight.current) return;
+    if (!database || chatInFlight.current) return false;
     chatInFlight.current = true;
     setChatPending(true);
     setChatError("");
-    onSelect("chat");
+    const navigate = request.type === "new" || request.type === "select";
+    if (navigate) onSelect("chat");
     try {
       await api.orchestrationChatAction(request);
-      onWorkerSelect(undefined);
+      if (navigate) onWorkerSelect(undefined);
+      return true;
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : String(cause));
+      return false;
     } finally {
       chatInFlight.current = false;
       setChatPending(false);
@@ -230,7 +239,11 @@ function PageTabList({
     () => localStorage.getItem("code60.settingsExpanded") === "true",
   );
   const [advancedExpanded, setAdvancedExpanded] = useState(
-    // Keep the saved expansion of the former Experiments group.
+    () =>
+      (localStorage.getItem("code60.advancedExpanded") ??
+        localStorage.getItem("code60.experimentsExpanded")) === "true",
+  );
+  const [experimentsExpanded, setExperimentsExpanded] = useState(
     () => localStorage.getItem("code60.experimentsExpanded") === "true",
   );
   const [expanded, setExpanded] = useState(
@@ -238,14 +251,17 @@ function PageTabList({
   );
   const navigationFrame = useRef<number | undefined>(undefined);
   const experimentActive = experimentPages.includes(tabs.active);
+  const advancedActive = experimentActive || tabs.active === "contributor-tools";
   const tableActive = tablePages.includes(tabs.active);
   useLayoutEffect(() => {
-    if (tabs.active === "settings" || experimentPages.includes(tabs.active)) {
+    if (tabs.active === "settings" || pageGroup(tabs.active) === "advanced") {
       setSettingsExpanded(true);
     }
     if (tablePages.includes(tabs.active)) setExpanded(true);
-    else if (experimentPages.includes(tabs.active)) setAdvancedExpanded(true);
-    else return;
+    else if (pageGroup(tabs.active) === "advanced") {
+      setAdvancedExpanded(true);
+      if (experimentPages.includes(tabs.active)) setExperimentsExpanded(true);
+    } else return;
     // Expansion and modal focus restoration must finish before focusing the revealed page.
     navigationFrame.current = requestAnimationFrame(() => {
       navigationFrame.current = undefined;
@@ -262,22 +278,39 @@ function PageTabList({
     localStorage.setItem("code60.settingsExpanded", String(settingsExpanded));
   }, [settingsExpanded]);
   useEffect(() => {
-    localStorage.setItem("code60.experimentsExpanded", String(advancedExpanded));
+    localStorage.setItem("code60.advancedExpanded", String(advancedExpanded));
   }, [advancedExpanded]);
+  useEffect(() => {
+    localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
+  }, [experimentsExpanded]);
   const pages = [...tabs.open].sort((a, b) => labels[a].localeCompare(labels[b]));
   const primary = pages.filter((id) => pageGroup(id) === "primary" && id !== "files");
   const experiments = pages.filter((id) => experimentPages.includes(id));
   const tables = pages.filter((id) => tablePages.includes(id));
-  const visible: (PageId | "tables" | "advanced")[] = [
+  const destinations: (PageId | "tables" | "advanced" | "experiments")[] = [
     "chat",
     ...primary,
     "tables",
     ...(expanded ? tables : []),
     "settings",
-    ...(settingsExpanded ? (["advanced", ...(advancedExpanded ? experiments : [])] as const) : []),
+    ...(settingsExpanded
+      ? ([
+          "advanced",
+          ...(advancedExpanded
+            ? [
+                "experiments" as const,
+                ...(experimentsExpanded ? experiments : []),
+                "contributor-tools" as const,
+              ]
+            : []),
+        ] as const)
+      : []),
   ];
+  const visible = destinations.filter(
+    (id) => database || ["chat", "settings", "advanced", "contributor-tools"].includes(id),
+  );
   function moveTo(target: (typeof visible)[number] | undefined) {
-    if (target === "tables" || target === "advanced") {
+    if (target === "tables" || target === "advanced" || target === "experiments") {
       document.getElementById(`${target}-toggle`)?.focus();
     } else if (target) {
       onSelect(target);
@@ -337,8 +370,23 @@ function PageTabList({
     }
     if (
       event.key === "ArrowLeft" &&
-      (id === "advanced" || experimentPages.some((pageId) => pageId === id))
+      (id === "experiments" || experimentPages.some((pageId) => pageId === id))
     ) {
+      event.preventDefault();
+      if (id === "experiments" && !experimentsExpanded) moveTo("advanced");
+      else {
+        setExperimentsExpanded(false);
+        moveTo("experiments");
+      }
+      return;
+    }
+    if (event.key === "ArrowRight" && id === "experiments") {
+      event.preventDefault();
+      if (experimentsExpanded && experiments[0]) moveTo(experiments[0]);
+      else setExperimentsExpanded(true);
+      return;
+    }
+    if (event.key === "ArrowLeft" && (id === "advanced" || id === "contributor-tools")) {
       event.preventDefault();
       if (id === "advanced" && !advancedExpanded) {
         document.getElementById("tab-settings")?.focus();
@@ -350,7 +398,7 @@ function PageTabList({
     }
     if (event.key === "ArrowRight" && id === "advanced") {
       event.preventDefault();
-      if (advancedExpanded && experiments[0]) moveTo(experiments[0]);
+      if (advancedExpanded) moveTo(database ? "experiments" : "contributor-tools");
       else setAdvancedExpanded(true);
       return;
     }
@@ -394,6 +442,7 @@ function PageTabList({
           aria-controls={`panel-${id}`}
           aria-selected={tabs.active === id}
           title={labels[id]}
+          disabled={!database && id !== "settings" && id !== "contributor-tools"}
           tabIndex={
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
@@ -496,6 +545,7 @@ function PageTabList({
         }}
       >
         <ChatSidebar
+          onAction={chatAction}
           chats={chats}
           runs={runs}
           selectedId={selectedId}
@@ -503,7 +553,7 @@ function PageTabList({
           database={database}
           eventsByRun={eventsByRun}
           open={tabs.active === "chat"}
-          pending={chatPending}
+          pending={chatPending || !database}
           onSelect={(id) => {
             if (chats.some((chat) => chat.run?.id === id)) void chatAction({ type: "select", id });
             else {
@@ -521,6 +571,7 @@ function PageTabList({
           type="button"
           id="tables-toggle"
           title="Tables"
+          disabled={!database}
           className="page-group-toggle"
           aria-expanded={expanded}
           aria-controls="table-pages"
@@ -548,7 +599,7 @@ function PageTabList({
       <div className="page-tab-list sidebar-settings">
         <div
           className="sidebar-settings-heading"
-          data-active={tabs.active === "settings" || (experimentActive && !settingsExpanded)}
+          data-active={tabs.active === "settings" || (advancedActive && !settingsExpanded)}
         >
           <div
             className="page-tab-list"
@@ -582,7 +633,7 @@ function PageTabList({
               className="page-group-toggle"
               aria-expanded={advancedExpanded}
               aria-controls="advanced-pages"
-              data-active={experimentActive && !advancedExpanded}
+              data-active={advancedActive && !advancedExpanded}
               onClick={() => setAdvancedExpanded((value) => !value)}
               onKeyDown={(event) => navigate(event, "advanced")}
             >
@@ -593,13 +644,39 @@ function PageTabList({
           </div>
           <div
             id="advanced-pages"
-            role="tablist"
-            aria-orientation="vertical"
             className="page-tab-list page-group-pages"
-            aria-label="Advanced"
             hidden={!advancedExpanded}
           >
-            {experiments.map((id, index) => page(id, index === 0))}
+            <div className="page-tab">
+              <button
+                type="button"
+                id="experiments-toggle"
+                disabled={!database}
+                className="page-group-toggle"
+                aria-expanded={experimentsExpanded}
+                aria-controls="experiment-pages"
+                data-active={experimentActive && !experimentsExpanded}
+                onClick={() => setExperimentsExpanded((value) => !value)}
+                onKeyDown={(event) => navigate(event, "experiments")}
+              >
+                <Icon name="compare" />
+                <span className="page-tab-label">Experiments</span>
+                <Icon name={experimentsExpanded ? "chevron--down" : "chevron--right"} />
+              </button>
+            </div>
+            <div
+              id="experiment-pages"
+              role="tablist"
+              aria-label="Experiments"
+              aria-orientation="vertical"
+              className="page-tab-list page-group-pages"
+              hidden={!experimentsExpanded}
+            >
+              {experiments.map((id, index) => page(id, index === 0))}
+            </div>
+            <div role="tablist" aria-label="Contributor pages" aria-orientation="vertical">
+              {page("contributor-tools", true)}
+            </div>
           </div>
         </div>
       </div>

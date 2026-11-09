@@ -652,7 +652,21 @@ button.project-card {
   font-weight: var(--button-weight, 400);
 }
 .sidebar-settings {
-  margin-top: auto;
+  margin-top: 0;
+}
+.chat-title {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: transparent;
+  border: 0;
+}
+.actions-menu .chat-menu-label {
+  grid-column: 1 / -1;
+}
+.contributor-tools {
+  padding: 20px 16px;
 }
 .sidebar-settings-heading {
   display: grid;
@@ -1289,6 +1303,48 @@ button.sidebar-settings-toggle {
 }
 
 /* Banners: a written prefix and a 2px left rule. */
+.database-notice {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex-shrink: 0;
+  min-height: 88px;
+  margin: 0 var(--page-margin) 12px;
+  padding: 16px 20px;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid currentColor;
+  border-left-width: 4px;
+  -webkit-app-region: no-drag;
+}
+.database-notice > div {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.database-notice h2 {
+  margin: 0 0 4px;
+  font-size: var(--title-size, 18px);
+}
+.database-notice p {
+  margin: 0;
+}
+.splash > .database-notice {
+  position: absolute;
+  top: max(36px, var(--app-titlebar-height));
+  left: 24px;
+  right: 24px;
+  margin: 0;
+}
+.database-dependent-controls {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
 .error-banner,
 .warning-banner {
   padding: 10px 16px;
@@ -2973,7 +3029,7 @@ dialog::backdrop {
 .orchestration-chat-heading {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 12px;
   padding: 16px 20px;
@@ -3940,6 +3996,48 @@ button.file-open-link {
   font-size: var(--title-size, 18px);
   font-weight: 400;
   overflow-wrap: anywhere;
+}
+.chat-role-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 1em;
+  width: 1em;
+  height: 1em;
+  line-height: 0;
+}
+.chat-role-icon > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.chat-orchestrator-icon > .chat-orchestrator-icon-dark {
+  display: none;
+}
+.chat-role-dot::before {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+:root[data-theme="dark"] .chat-orchestrator-icon > .chat-orchestrator-icon-light {
+  display: none;
+}
+:root[data-theme="dark"] .chat-orchestrator-icon > .chat-orchestrator-icon-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"])
+    .chat-orchestrator-icon
+    > .chat-orchestrator-icon-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]):not([data-theme="dark"])
+    .chat-orchestrator-icon
+    > .chat-orchestrator-icon-dark {
+    display: block;
+  }
 }
 .worker-chat-page > :is(.error-banner, .warning-banner) {
   flex-shrink: 0;

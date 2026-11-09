@@ -2,9 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PanelShell } from "./panel-shell.js";
 
-const render = (open: boolean) =>
+const render = (open: boolean, disabled = false) =>
   renderToStaticMarkup(
     <PanelShell
+      disabled={disabled}
       tabs={[{ id: 1, label: "main.ts", title: "main.ts", icon: "document" }]}
       selectedId={1}
       onAction={() => 1}
@@ -20,6 +21,15 @@ const render = (open: boolean) =>
   );
 
 describe("file panel shell", () => {
+  it("disables file controls without a connected database", () => {
+    for (const open of [true, false]) {
+      const html = render(open, true);
+      const buttons = html.match(/<button[^>]*>/g) ?? [];
+      expect(buttons.length).toBeGreaterThan(0);
+      expect(buttons.every((button) => button.includes("disabled"))).toBe(true);
+      expect(html).not.toContain('draggable="true"');
+    }
+  });
   it("keeps closed content inert and the reopening action outside the panel", () => {
     const html = render(false);
     expect(html).toContain('aria-hidden="true" inert=""');

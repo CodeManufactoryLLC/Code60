@@ -28,6 +28,10 @@ const UPDATE_BATCH = 20;
 
 /** All mutable state and capabilities belong to one orchestration conversation. */
 export class ChatSession {
+  title: string | undefined;
+  archived = false;
+  titleAttempted = false;
+  titleTask: { abort: AbortController; done: Promise<void> } | undefined;
   plans: PlanStore | undefined;
   planScope: string | undefined;
   reviewTask: { title: string; turn: number; reviewId?: string } | undefined;

@@ -379,6 +379,8 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  title?: string;
+  archived?: boolean;
   plans?: import("./plans.js").PlanSummary[];
   /** Ephemeral live presentation, never reconstructed from transcript history. */
   activity?: ActivitySnapshot;
@@ -402,6 +404,19 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
   z.strictObject({ type: z.literal("new") }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
+  z.strictObject({ type: z.literal("archive"), id: configurationIdSchema }),
+  z.strictObject({
+    type: z.literal("rename"),
+    id: configurationIdSchema,
+    title: boundedString("chat title", 120).refine(
+      (title) =>
+        title.trim().length > 0 &&
+        [...title].every(
+          (character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127,
+        ),
+      "Use a nonempty, single-line title",
+    ),
+  }),
   z.strictObject({
     type: z.literal("send"),
     id: configurationIdSchema,

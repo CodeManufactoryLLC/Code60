@@ -658,6 +658,201 @@ async function launch(directory: string, folder: string, database: string, confi
   return launchDesktop(directory, folder, database);
 }
 
+test("desktop: database connection gates splash and workspace controls", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-database-gate-"));
+  const database = join(directory, "projects.sqlite");
+  const invalid = join(directory, "invalid.sqlite");
+  await writeFile(invalid, "Not a SQLite database");
+  try {
+    application = await launch(directory, directory, database);
+    const page = await application.firstWindow();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const splash = page.locator(".splash");
+    const notice = page.getByRole("status", { name: "Database connection required" });
+    await expect(splash.locator(".database-notice")).toBeVisible();
+    await expect(notice).toContainText("No database connected");
+    await expect(splash.getByRole("heading", { name: /^Continue / })).toHaveCount(0);
+    await notice.getByRole("button", { name: "Connect to database", exact: true }).click();
+    const modal = page.getByRole("dialog", { name: "Select database", exact: true });
+    await application.evaluate(({ dialog }) => {
+      dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+    });
+    await modal.getByRole("button", { name: "Open existing database…", exact: true }).click();
+    await expect(modal).toBeVisible();
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    }, invalid);
+    await modal.getByRole("button", { name: "Open existing database…", exact: true }).click();
+    await expect(modal.getByRole("alert")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(splash.locator(".database-notice")).toBeVisible();
+    await splash.getByRole("button", { name: "Start", exact: true }).click();
+    const card = page.locator(".sidebar .project-card");
+    await expect(card).toHaveText("Connect to database");
+    await expect(card).toBeEnabled();
+    await expect(notice).toBeVisible();
+    const bounds = await notice.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(88);
+    expect(bounds?.y).toBeLessThan(60);
+    for (const name of ["Prompt Editor", "Search"]) {
+      await expect(page.getByRole("tab", { name, exact: true })).toBeDisabled();
+    }
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Toggle files panel", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Open polling controls", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("textbox", { name: "Message to orchestrator", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("tab", { name: "Chat", exact: true }).focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("tab", { name: "Settings", exact: true })).toBeFocused();
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(page.getByLabel("Theme", { exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Open polling monitor", exact: true }),
+    ).toBeDisabled();
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(notice).toBeVisible();
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(620, 620),
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: test.info().outputPath("database-required.png") });
+    await card.click();
+    await expect(modal).toBeVisible();
+    await modal.getByRole("button", { name: "Create database…", exact: true }).click();
+    await expect(modal).toHaveCount(0);
+    await expect(notice).toHaveCount(0);
+    await expect(card).toHaveText("Open a project");
+    await expect(page.getByRole("tab", { name: "Prompt Editor", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeEnabled();
+    await page.getByRole("tab", { name: "Chat", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Toggle files panel", exact: true }),
+    ).toBeEnabled();
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBe(database);
+    expect(errors).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: database connection from splash restores normal entry", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-splash-database-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    const splash = page.locator(".splash");
+    await splash.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await expect(splash.locator(".database-notice")).toHaveCount(0);
+    await splash.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.locator(".sidebar .project-card")).toHaveText("Open a project");
+    await expect(page.locator(".database-notice")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeEnabled();
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: chat titles, context menus, archive and advanced navigation", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-chat-names-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    const chat = page.locator(".orchestration-chat-page:visible");
+    await chat
+      .getByRole("textbox", { name: "Message to orchestrator", exact: true })
+      .fill("Fix parser validation");
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(chat.getByRole("button", { name: "Rename chat: ok", exact: true })).toBeVisible();
+    const sidebar = page.locator("nav.chat-sidebar");
+    await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
+    const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
+    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
+    await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+    await rename.getByRole("textbox", { name: "Chat name" }).fill("Parser work");
+    await rename.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(sidebar.getByRole("button", { name: "Parser work", exact: true })).toBeVisible();
+    await chat.getByRole("button", { name: "Rename chat: Parser work", exact: true }).click();
+    await rename.getByRole("textbox", { name: "Chat name" }).fill("Header name");
+    await rename.getByRole("button", { name: "Save", exact: true }).click();
+    await sidebar
+      .getByRole("button", { name: "Header name", exact: true })
+      .click({ button: "right" });
+    await expect(menu).toBeVisible();
+    await menu.press("Escape");
+    await sidebar.getByRole("button", { name: "Header name", exact: true }).press("Shift+F10");
+    await menu.getByRole("menuitem", { name: "Open", exact: true }).click();
+    await expect(
+      chat.getByRole("button", { name: "Rename chat: Header name", exact: true }),
+    ).toBeVisible();
+    const before = await page.evaluate(() => window.desktop.snapshot());
+    await sidebar.getByRole("button", { name: "Actions for Header name", exact: true }).click();
+    await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
+    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    const archived = await page.evaluate(() => window.desktop.snapshot());
+    expect(archived.chats.find((item) => item.run?.id === before.chat.run?.id)?.archived).toBe(
+      true,
+    );
+    expect(
+      await readFile(
+        join(
+          before.chat.directory as string,
+          ".code60",
+          "runs",
+          before.chat.run?.id as string,
+          "run.json",
+        ),
+        "utf8",
+      ),
+    ).toContain(before.chat.run?.id);
+    await page.reload();
+    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    const advanced = page.getByRole("button", { name: "Advanced", exact: true });
+    await advanced.click();
+    const experiments = page.getByRole("button", { name: "Experiments", exact: true });
+    await experiments.press("ArrowRight");
+    await experiments.press("ArrowDown");
+    await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
+    await page.getByRole("tab", { name: "Contributor Tools", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Contributor Tools", exact: true }),
+    ).toBeVisible();
+    await advanced.click();
+    await expect(page.locator("#panel-contributor-tools")).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Episodic Memory");
+    await page.keyboard.press("Enter");
+    await expect(advanced).toHaveAttribute("aria-expanded", "true");
+    await expect(experiments).toHaveAttribute("aria-expanded", "true");
+    expect(errors).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: update footer, once-per-version popup, download and automatic-check preference", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-updates-"));
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
@@ -3995,8 +4190,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "aria-selected",
       "true",
     );
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
     const advanced = page.getByRole("button", { name: "Advanced", exact: true });
-    const advancedPages = page.getByRole("tablist", { name: "Advanced", exact: true });
+    const advancedPages = page.locator("#advanced-pages");
+    const experiments = page.getByRole("button", { name: "Experiments", exact: true });
     await expect(advancedPages).toBeHidden();
     await expect(page.getByRole("heading", { name: "Give Code60 a task." })).toBeVisible();
     await expect(page.locator("#panel-chat .wordmark")).toHaveCount(0);
@@ -4009,7 +4206,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await settings.press("ArrowRight");
     await expect(advanced).toBeFocused();
     await advanced.press("ArrowRight");
-    await expect(advancedPages).toHaveText("Episodic Memory");
+    await expect(advancedPages).toHaveText("ExperimentsEpisodic MemoryContributor Tools");
     await expect(advancedPages).toBeVisible();
     await expect(page.locator("#panel-chat")).toBeVisible();
     await advanced.press("ArrowLeft");
@@ -4021,11 +4218,14 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(advancedPages).toBeHidden();
     await advanced.click();
     await advanced.press("ArrowDown");
+    await expect(experiments).toBeFocused();
+    await experiments.press("ArrowRight");
+    await experiments.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(page.locator("#panel-episodic-memory")).toBeVisible();
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowUp");
-    await expect(advanced).toBeFocused();
+    await expect(experiments).toBeFocused();
     await advanced.press("Home");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await page.reload();
@@ -4066,13 +4266,14 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await page.getByRole("tab", { name: "Chat", exact: true }).click();
     await expect(tables).toHaveAttribute("aria-expanded", "false");
     let chat = page.locator("#panel-chat .orchestration-chat-page:visible");
-    await expect(
-      chat.getByRole("button", { name: "Connect to database", exact: true }),
-    ).toBeVisible();
-    await page.evaluate(() => window.desktop.connectDatabase("create"));
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     const first = await page.evaluate(() => window.desktop.snapshot());
     const id = first.chat.run?.id as string;
+    // This lifecycle scenario uses stable manual names; generated titles are covered separately.
+    await page.evaluate(
+      (id) => window.desktop.orchestrationChatAction({ type: "rename", id, title: "Chat 1" }),
+      id,
+    );
     expect(dirname(first.chat.directory as string)).toBe(workspace);
     expect(first.runs).toEqual([]);
     const chatList = () => page.locator("nav.chat-sidebar");
@@ -4175,6 +4376,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     const secondChat = await page.evaluate(() => window.desktop.snapshot());
     const secondId = secondChat.chat.run?.id as string;
+    await page.evaluate(
+      (id) => window.desktop.orchestrationChatAction({ type: "rename", id, title: "Chat 2" }),
+      secondId,
+    );
     expect(secondId).not.toBe(id);
     expect(secondChat.chat.directory).not.toBe(first.chat.directory);
     expect(secondChat.chats).toHaveLength(2);
@@ -4376,6 +4581,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.getByRole("button", { name: "Settings pages", exact: true }).click();
     await page.getByRole("button", { name: "Advanced", exact: true }).click();
+    await page.getByRole("button", { name: "Experiments", exact: true }).click();
     await page.getByRole("tab", { name: "Episodic Memory", exact: true }).click();
     const memory = page.locator("#panel-episodic-memory");
     const extract = memory.getByRole("button", { name: /^Extract from/ });
@@ -5335,6 +5541,11 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     const card = page.locator(".project-card");
     const modal = page.getByRole("dialog", { name: "Open Project", exact: true });
     const done = page.getByRole("group", { name: "Done notification", exact: true });
+    await expect(card).toHaveText("Connect to database");
+    await card.click();
+    const databaseModal = page.getByRole("dialog", { name: "Select database", exact: true });
+    await databaseModal.getByRole("button", { name: "Create database…", exact: true }).click();
+    await expect(databaseModal).toHaveCount(0);
     await expect(card).toHaveText("Open a project");
     await expect(card).toHaveCSS("border-top-width", "0px");
     await expect(card).toHaveCSS("background-image", "none");
@@ -5348,7 +5559,6 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await card.focus();
     await card.press("Enter");
     await expect(modal).toBeVisible();
-    await modal.getByRole("button", { name: "Create database…", exact: true }).click();
     await expect(modal.getByText("No recent projects.")).toBeVisible();
     await expect(modal.getByRole("button", { name: "Close Open Project" })).toBeEnabled();
     await page.keyboard.press("Escape");

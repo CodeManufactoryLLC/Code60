@@ -31,6 +31,7 @@ export function PanelShell({
   id,
   emptyLabel,
   children,
+  disabled = false,
 }: {
   tabs: readonly PanelTab[];
   selectedId: number | null;
@@ -42,6 +43,7 @@ export function PanelShell({
   id: string;
   emptyLabel: string;
   children(focusActiveTab: () => void): ReactNode;
+  disabled?: boolean;
 }) {
   const prefix = useId();
   const panel = useRef<HTMLElement>(null);
@@ -74,6 +76,7 @@ export function PanelShell({
   }, [open, active]);
 
   const act = (action: PanelAction) => {
+    if (disabled) return;
     focus.current = onAction(action) ?? "add";
   };
   const resize = (value: number) => {
@@ -89,6 +92,7 @@ export function PanelShell({
       title={`${open ? "Close" : "Open"} ${name.toLowerCase()} panel`}
       aria-expanded={open}
       aria-controls={id}
+      disabled={disabled}
       onClick={() => {
         restoreToggle.current = true;
         onToggle();
@@ -117,6 +121,7 @@ export function PanelShell({
         <button
           type="button"
           className="file-column-resize"
+          disabled={disabled}
           aria-label={`Resize ${name.toLowerCase()} panel`}
           title={`Resize ${name.toLowerCase()} panel (Left/Right arrows)`}
           onKeyDown={(event) => {
@@ -159,7 +164,7 @@ export function PanelShell({
                     key={tab.id}
                     className="file-tab"
                     data-selected={tab.id === selectedId}
-                    draggable
+                    draggable={!disabled}
                     onDragStart={(event) => {
                       drag.current = tab.id;
                       event.dataTransfer.effectAllowed = "move";
@@ -187,6 +192,7 @@ export function PanelShell({
                       }}
                       type="button"
                       role="tab"
+                      disabled={disabled}
                       id={`${prefix}-tab-${tab.id}`}
                       aria-selected={tab.id === selectedId}
                       aria-controls={`${prefix}-content`}
@@ -222,6 +228,7 @@ export function PanelShell({
                     <button
                       type="button"
                       className="icon-button file-tab-close"
+                      disabled={disabled}
                       aria-label={`Close ${label}`}
                       onClick={() => act({ type: "close", id: tab.id })}
                     >
@@ -236,6 +243,7 @@ export function PanelShell({
               type="button"
               className="icon-button"
               aria-label={`New ${name === "Files" ? "file" : name.toLowerCase()} tab`}
+              disabled={disabled}
               title="New tab"
               onClick={() => act({ type: "add" })}
             >

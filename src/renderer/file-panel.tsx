@@ -16,6 +16,7 @@ export function FilePanel({
   active,
   onOpenProject,
   onToggle,
+  disabled = false,
   api,
   reviews = [],
   plans = [],
@@ -32,6 +33,7 @@ export function FilePanel({
   active: boolean;
   onOpenProject(): void;
   onToggle(): void;
+  disabled?: boolean;
   api?: DesktopApi;
   reviews?: ReviewSummary[];
   plans?: PlanSummary[];
@@ -73,6 +75,7 @@ export function FilePanel({
   };
   return (
     <PanelShell
+      disabled={disabled}
       id="chat-file-panel"
       name="Files"
       emptyLabel="Open files"
@@ -84,7 +87,9 @@ export function FilePanel({
       onToggle={onToggle}
     >
       {(focusActiveTab) =>
-        !selected || selected.kind === "blank" ? (
+        disabled ? (
+          <p className="file-panel-empty">Connect a database to use files.</p>
+        ) : !selected || selected.kind === "blank" ? (
           <div className="file-panel-empty">
             <button
               type="button"

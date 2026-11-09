@@ -1,5 +1,5 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   type DesktopApi,
   type Polling,
@@ -43,11 +43,16 @@ export function PollingWidget({
   api,
   messageAt,
   messageScope,
+  disabled = false,
 }: Pick<PollingProps, "polling" | "api"> & {
   messageAt: number | null | undefined;
   messageScope: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const available = polling.sources.filter((source) => source.status !== "unavailable");
@@ -69,6 +74,7 @@ export function PollingWidget({
         className="poll-timestamp"
         aria-label="Open polling controls"
         aria-haspopup="dialog"
+        disabled={disabled}
         onClick={() => setOpen(true)}
       >
         <Icon name="view" />

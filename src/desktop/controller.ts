@@ -97,6 +97,7 @@ import {
   discardRun,
   executeDiff,
   extractEpisodicMemory,
+  generateChatTitle,
   listRuns,
   loadConfig,
   type Orchestrator,
@@ -1626,8 +1627,10 @@ export class DesktopController {
   }
 
   private async disposeChat(session: ChatSession): Promise<void> {
-    // Revoke capabilities before stopping the process, including queued gateway requests.
+    // Revoke capabilities before awaiting any background process cleanup.
     this.conversations.revoke(session);
+    session.titleTask?.abort.abort();
+    await session.titleTask?.done;
     await this.closeMcpGateway(session);
     await session.chat?.shutdown(this.forceClosing);
     for (const dispose of session.chatDisposers) dispose();
@@ -1698,6 +1701,7 @@ export class DesktopController {
           const entry = { revision: this.revision, event };
           session.chatEvents.push(entry);
           session.chatPending.push(entry);
+          if (event.type === "turnEnd" && event.stopReason === "end_turn") this.titleChat(session);
           if (event.type === "status" && event.status === "idle") {
             this.schedulePlans();
             this.scheduleFeedback();
@@ -1744,7 +1748,18 @@ export class DesktopController {
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
       if (request.type === "select") {
+        if (session.archived) throw new Error("This chat is archived");
         this.conversations.current = session;
+      } else if (request.type === "rename") {
+        session.title = request.title.trim();
+        session.titleTask?.abort.abort();
+      } else if (request.type === "archive") {
+        session.archived = true;
+        if (this.conversations.current === session) {
+          const next = this.conversations.sessions.find((entry) => !entry.archived);
+          if (next) this.conversations.current = next;
+          else await this.startChat(this.conversations.create());
+        }
       } else if (request.type === "resume-updates") {
         this.conversations.resume(session);
         this.schedulePlans();
@@ -1779,6 +1794,58 @@ export class DesktopController {
     );
   }
 
+  private titleChat(session: ChatSession): void {
+    if (
+      session.title ||
+      session.titleAttempted ||
+      this.closing ||
+      session.revoked ||
+      session.updatesPaused
+    )
+      return;
+    const first = session.chatEvents.find(
+      ({ event }) => event.type === "prompt" && event.origin !== "automatic",
+    )?.event;
+    if (first?.type !== "prompt") return;
+    let reply = "";
+    for (const { event } of session.chatEvents) {
+      if (event.type === "message") reply += event.text.slice(0, 8_000 - reply.length);
+      if (reply.length === 8_000) break;
+    }
+    if (!reply.trim()) return;
+    const provider = this.orchestration.provider;
+    const agent = provider ? this.config?.agents[provider] : undefined;
+    if (!provider || !agent) return;
+    session.titleAttempted = true;
+    const abort = new AbortController();
+    const done = (async () => {
+      const temporary = await mkdtemp(join(tmpdir(), "code60-title-"));
+      try {
+        const cwd = join(temporary, "private");
+        await privateDirectory(cwd);
+        const title = await generateChatTitle(
+          this.deps.agents,
+          { name: provider, command: agent.command, cwd },
+          first.text,
+          reply,
+          abort.signal,
+        );
+        if (!abort.signal.aborted && !session.revoked && !session.title) {
+          session.title = title;
+          this.changed();
+        }
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    })()
+      // A title failure must never fail the conversation.
+      .catch(() => {})
+      .finally(() => {
+        session.titleTask = undefined;
+      });
+    session.titleTask = { abort, done };
+  }
+
   get active(): boolean {
     return [...this.batches.values()].some((batch) => batch.active);
   }
@@ -1800,6 +1867,8 @@ export class DesktopController {
     );
     const session = this.conversations.current;
     const chatSnapshot = (session: ChatSession) => ({
+      ...(session.title === undefined ? {} : { title: session.title }),
+      archived: session.archived,
       plans: session.plans?.list() ?? [],
       workers: [...this.conversations.workers]
         .filter(
@@ -3056,6 +3125,9 @@ export class DesktopController {
   }
   stopAll(): Promise<void> {
     return this.exclusive(async () => {
+      for (const session of this.conversations.sessions) this.conversations.pause(session);
+      for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
+      await Promise.all(this.conversations.sessions.map((session) => session.titleTask?.done));
       for (const session of this.conversations.sessions) {
         this.conversations.pause(session);
         await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
@@ -3069,6 +3141,8 @@ export class DesktopController {
 
   async shutdown(force = false): Promise<void> {
     this.closing = true;
+    for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
+    await Promise.all(this.conversations.sessions.map((session) => session.titleTask?.done));
     await this.cancelGitSetup();
     await this.cancelDiffReads();
     await this.agentSetup.cancel();
