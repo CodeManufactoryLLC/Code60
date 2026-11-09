@@ -101,6 +101,9 @@ Electron suites on both native platforms without signing secrets or publication
 rights. It does not replace the release workflow's installer, signing, notarization,
 and installed-app checks. A failed candidate tag stays immutable; validate fixes
 before creating the next version.
+Windows runs place temporary fixtures in `RUNNER_TEMP`; the default profile temp
+path plus nested review IDs can exceed the helper's supported 247-character path
+limit. This does not change application storage paths or enable Windows long paths.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.
