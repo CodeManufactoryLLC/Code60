@@ -186,9 +186,8 @@ export class ReviewStore {
         files,
         errors,
       };
-      const directory = join(this.root, review.id);
-      await privateDirectory(directory);
-      await save(join(directory, `${revision.id}.json`), contents);
+      // Keep revision paths no longer than review metadata paths on Windows.
+      await save(join(this.root, `${revision.id}.rev`), contents);
       review.revisions.push(revision);
       delete review.error;
     });
@@ -198,7 +197,11 @@ export class ReviewStore {
       .revisions.find((revision) => revision.id === revisionId)
       ?.files.find((file) => file.key === fileKey);
     if (!file) throw new Error("Unknown file in this review revision");
-    const contents = await readJson(join(this.root, id, `${revisionId}.json`));
+    const contents = await readJson(join(this.root, `${revisionId}.rev`)).catch((cause) => {
+      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+      // Read earlier releases' nested layout without moving or rewriting saved data.
+      return readJson(join(this.root, id, `${revisionId}.json`));
+    });
     if (!Array.isArray(contents)) throw new Error("Invalid saved revision");
     const content = contents.find(
       (entry: unknown) =>

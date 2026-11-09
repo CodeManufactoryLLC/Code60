@@ -1961,8 +1961,12 @@ describe("orchestrated workers over ACP", () => {
     await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
     const first = await dispatch(call, scope, "HANG one", "review-one");
     const second = await dispatch(call, scope, "HANG two", "review-two");
-    await vi.waitFor(() =>
-      expect(controller.snapshot().reviews?.[0]?.revisions.length).toBeGreaterThan(0),
+    await vi.waitFor(
+      () => {
+        const review = controller.snapshot().reviews?.[0];
+        expect(review?.revisions.length).toBeGreaterThan(0);
+      },
+      { timeout: 5_000 },
     );
     const summary = controller.snapshot().reviews?.[0];
     if (!summary) throw new Error("Missing review");
