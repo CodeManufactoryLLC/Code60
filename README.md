@@ -51,6 +51,7 @@ Install and authenticate your chosen agent through its own CLI. See
 ## More information
 
 - [Architecture and behavior](ARCHITECTURE.md)
+- [MCP server configuration](MCP.md), including the opt-in [Playwright and Context7 starter](mcp.default.json)
 - [Contributing](CONTRIBUTING.md)
 - [Release process](RELEASING.md)
 - [Security policy](SECURITY.md)

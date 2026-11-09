@@ -219,6 +219,34 @@ async function start(prompt?: string) {
   return controller.snapshot().runs[0]?.record.id as string;
 }
 
+async function configureMcp(version = "first") {
+  const path = join(directory, "config", "code60");
+  await fs.mkdir(path, { recursive: true });
+  await fs.writeFile(
+    join(path, "config.json"),
+    JSON.stringify({
+      mcpServers: {
+        tools: {
+          type: "stdio",
+          command: "node",
+          args: [`/private/${version}.js`],
+          env: { TOKEN: `private-${version}` },
+        },
+      },
+    }),
+  );
+  await controller.poll(["config"]);
+  return [
+    {
+      name: "tools",
+      type: "stdio",
+      command: "node",
+      args: [`/private/${version}.js`],
+      env: [{ name: "TOKEN", value: `private-${version}` }],
+    },
+  ];
+}
+
 describe("desktop orchestration", () => {
   it("scrubs connection-test failures before exposing them in a desktop snapshot", async () => {
     await setProvider("claude");
@@ -1025,8 +1053,8 @@ describe("app-wide orchestration chat", () => {
   }
 
   function tableCaller(index = 0) {
-    const server = agents.specs[index]?.mcpServers?.[0];
-    if (!server) throw new Error("Expected an orchestration MCP server");
+    const server = agents.specs[index]?.mcpServers?.find((server) => server.name === "code60");
+    if (!server || !("env" in server)) throw new Error("Expected an orchestration MCP server");
     const environment = Object.fromEntries(server.env.map((entry) => [entry.name, entry.value]));
     const url = environment.CODE60_MCP_GATEWAY_URL as string;
     return async (name: string, args: unknown = {}) => {
@@ -1102,6 +1130,44 @@ describe("app-wide orchestration chat", () => {
     expect((await call("code60_get_activity_context")).body.result.scope).not.toBe(context.scope);
   });
 
+  it("keeps live chat/manual servers on reload and applies new config to new/retried chats and manual runs", async () => {
+    const first = await configureMcp();
+    const id = await ready();
+    await controller.open(directory);
+    const [manualId] = await controller.start({ ...request, prompt: "hello" });
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
+    expect(agents.specs[0]?.mcpServers).toEqual([
+      ...first,
+      expect.objectContaining({ name: "code60" }),
+    ]);
+    expect(agents.specs[1]?.mcpServers).toEqual(first);
+    const original = structuredClone(agents.specs);
+    const next = await configureMcp("next");
+    expect(controller.snapshot().chat.run?.id).toBe(id);
+    expect(agents.specs).toEqual(original);
+    expect(agents.sessions.every((session) => session.stops.length === 0)).toBe(true);
+    await controller.orchestrationChatAction({ type: "send", id, text: "same session" });
+    await controller.action({ type: "reply", id: manualId as string, text: "same manual session" });
+    expect(agents.specs).toHaveLength(2);
+    await controller.start({ ...request, prompt: "new manual" });
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(3));
+    expect(agents.specs[2]?.mcpServers).toEqual(next);
+    await controller.orchestrationChatAction({ type: "new" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.specs[3]?.mcpServers).toEqual([
+      ...next,
+      expect.objectContaining({ name: "code60" }),
+    ]);
+    await controller.orchestrationChatAction({ type: "restart", id });
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(5));
+    expect(agents.specs[4]?.mcpServers).toEqual([
+      ...next,
+      expect.objectContaining({ name: "code60" }),
+    ]);
+    expect(JSON.stringify(controller.snapshot())).not.toContain("private-next");
+    expect(JSON.stringify(controller.snapshot())).not.toContain("/private/first.js");
+  });
+
   it("injects the latest saved contract without changing recorded user prompts", async () => {
     const id = await ready();
     const send = async (text: string) => {
@@ -1136,7 +1202,9 @@ describe("app-wide orchestration chat", () => {
   it("provides read/search for every UI table, with current-project scope and no mutation tools", async () => {
     await ready();
     const call = tableCaller();
-    expect(agents.specs[0]?.mcpServers?.[0]?.command).toBe(process.execPath);
+    expect(agents.specs[0]?.mcpServers).toContainEqual(
+      expect.objectContaining({ name: "code60", command: process.execPath }),
+    );
     expect((await call("code60_read_sessions")).body.result.rows).toEqual([]);
     await controller.open(directory);
     await controller.saveConfiguration({ name: "Team Alpha", settings: request });
@@ -1554,8 +1622,8 @@ describe("orchestrated workers over ACP", () => {
     };
   }>;
   function caller(index = 0): Call {
-    const server = agents.specs[index]?.mcpServers?.[0];
-    if (!server) throw new Error("Expected an orchestration MCP server");
+    const server = agents.specs[index]?.mcpServers?.find((server) => server.name === "code60");
+    if (!server || !("env" in server)) throw new Error("Expected an orchestration MCP server");
     const environment = Object.fromEntries(server.env.map((entry) => [entry.name, entry.value]));
     return async (name, args = {}) => {
       const response = await fetch(environment.CODE60_MCP_GATEWAY_URL as string, {
@@ -1755,6 +1823,46 @@ describe("orchestrated workers over ACP", () => {
       (await other("code60_send_agent", { scope: otherScope, runId: first, prompt: "Fix it" })).body
         .error,
     ).toContain("No worker");
+  });
+
+  it("gives dispatched and explicitly recovered workers current configured servers, never the chat gateway", async () => {
+    const first = await configureMcp();
+    const { call, scope } = await setup();
+    const runId = await dispatch(call, scope, "first worker");
+    await vi.waitFor(() => expect(session(runId)?.prompts).toEqual(["first worker"]));
+    expect(agents.specs.find((spec) => spec.cwd.endsWith(runId))?.mcpServers).toEqual(first);
+    const next = await configureMcp("next");
+    expect(agents.specs[0]?.mcpServers).toEqual([
+      ...first,
+      expect.objectContaining({ name: "code60" }),
+    ]);
+    await call("code60_finish_agent", { scope, runId });
+    await vi.waitFor(() =>
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.record.status).toBe(
+        "finished",
+      ),
+    );
+    expect((await call("code60_resume_agent", { scope, runId, prompt: "continue" })).status).toBe(
+      200,
+    );
+    expect(agents.restores.at(-1)?.spec.mcpServers).toEqual(next);
+    await vi.waitFor(() =>
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.view?.status).toBe(
+        "idle",
+      ),
+    );
+    expect((await call("code60_finish_agent", { scope, runId })).status).toBe(200);
+    await vi.waitFor(() =>
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.record.status).toBe(
+        "finished",
+      ),
+    );
+    agents.restoreUnavailable = true;
+    expect((await call("code60_resume_agent", { scope, runId, prompt: "handoff" })).status).toBe(
+      200,
+    );
+    expect(agents.specs.at(-1)?.mcpServers).toEqual(next);
+    expect(JSON.stringify(controller.snapshot())).not.toContain("private-next");
   });
 
   it.each(["droid", "codex"])(
@@ -2175,6 +2283,7 @@ describe("episodic memory controller", () => {
   }
 
   it("uses the selected event snapshot and a temporary directory, leaving chat and runs unchanged", async () => {
+    await configureMcp();
     const request = await prepare();
     expect(request.runs[0]?.count).toBeGreaterThan(2);
     request.runs = request.runs.map((run) => ({ ...run, count: 2 }));
@@ -2268,7 +2377,8 @@ describe("search overview helpers", () => {
   }
 
   it("uses the orchestration provider in a disposable directory without records or worktrees", async () => {
-    const input = await summaryRequest();
+    await configureMcp();
+    const input = { ...(await summaryRequest()), includeFiles: false };
     const initial = controller.snapshot();
     const count = agents.sessions.length;
     agents.script = (_, session) => {

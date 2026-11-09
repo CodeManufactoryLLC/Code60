@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACP_PROTOCOL_VERSION,
   AcpRestoreUnavailableError,
+  mapUpdate,
   openSession,
   RAW_UPDATE_LIMIT,
   rawUpdate,
@@ -125,6 +126,13 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
     stream,
     seen,
     received,
+    async toolUpdate(update: SessionUpdate) {
+      await writer.write({
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: { sessionId: "new-session", update },
+      });
+    },
     async update(text: string) {
       await writer.write({
         jsonrpc: "2.0",
@@ -145,6 +153,92 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
     serve,
   };
 }
+
+describe("MCP tool attribution", () => {
+  const call = (extra: Record<string, unknown> = {}): SessionUpdate => ({
+    sessionUpdate: "tool_call",
+    toolCallId: "m1",
+    title: "Provider title",
+    ...extra,
+  });
+
+  // Claude ACP emits these fields in src/tool-calls/renderer.ts:
+  // https://github.com/agentclientprotocol/claude-agent-acp
+  it.each([
+    [{ name: "mcp__playwright__browser_snapshot" }, { server: "playwright" }],
+    [{ _meta: { claudeCode: { toolName: "mcp__context7__query-docs" } } }, { server: "context7" }],
+    [
+      { _meta: { jetbrains: { air: { mcp: { server: "docs", tool: "query" } } } } },
+      { server: "docs" },
+    ],
+    [{ _meta: { is_mcp_tool_call: true } }, {}],
+    [{ _meta: { is_mcp_tool_call: true, server: "not-a-supported-field" } }, {}],
+    [{ name: "mcp__https://private.invalid/token__query" }, {}],
+  ])("normalizes documented metadata %#", (extra, expected) => {
+    expect(mapUpdate(call(extra), new Map())).toMatchObject({ mcp: expected });
+  });
+
+  it.each([
+    { title: "mcp__context7__query-docs", kind: "fetch" },
+    { rawInput: { server: "playwright", name: "mcp__playwright__browser_snapshot" } },
+    { _meta: { claudeCode: "mcp__context7__query-docs" } },
+    { _meta: { is_mcp_tool_call: "true", server: "context7" } },
+    { name: "mcp__context7__" },
+    { name: 123 },
+  ])("does not infer MCP from titles, arguments or malformed metadata %#", (extra) => {
+    expect(mapUpdate(call(extra), new Map())).not.toHaveProperty("mcp");
+  });
+
+  it("merges partial updates independently and allows corrected programmatic names", () => {
+    const calls = new Map();
+    mapUpdate(call({ name: "mcp__context7__query-docs" }), calls);
+    mapUpdate(call({ toolCallId: "native", name: "Read" }), calls);
+    const update = { sessionUpdate: "tool_call_update" as const, toolCallId: "m1" };
+    expect(mapUpdate({ ...update, status: "completed" }, calls)).toMatchObject({
+      mcp: { server: "context7" },
+      status: "completed",
+    });
+    expect(mapUpdate({ ...update, toolCallId: "native", status: "completed" }, calls)?.type).toBe(
+      "toolCall",
+    );
+    expect(calls.get("native").mcp).toBeUndefined();
+    expect(mapUpdate({ ...update, name: "Read" }, calls)).not.toHaveProperty("mcp");
+    expect(mapUpdate({ ...update, status: "completed" }, calls)?.type).toBe("toolCall");
+    expect(calls.get("m1").mcp).toBeUndefined();
+  });
+
+  it("carries structured attribution through the real ACP transport", async () => {
+    const agent = fakeAgent({});
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    const updates: AgentUpdate[] = [];
+    session.onUpdate((update) => updates.push(update));
+    try {
+      await agent.toolUpdate(
+        call({
+          _meta: { claudeCode: { toolName: "mcp__context7__query-docs" } },
+          rawInput: { apiKey: "not-for-normalized-events" },
+        }),
+      );
+      await agent.toolUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "m1",
+        status: "completed",
+      });
+      await expect
+        .poll(() => updates.filter((update) => update.type === "toolCall").length)
+        .toBe(2);
+      const tools = updates.filter((update) => update.type === "toolCall");
+      expect(tools.map((update) => update.mcp)).toEqual([
+        { server: "context7" },
+        { server: "context7" },
+      ]);
+      expect(JSON.stringify(tools)).not.toContain("not-for-normalized-events");
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+});
 
 describe("TailBuffer", () => {
   it("keeps only the last bytes", () => {
@@ -239,6 +333,103 @@ describe("ACP session restoration", () => {
       fake.close();
     }
   });
+
+  it.each(["new", "load", "resume"] as const)(
+    "sends exact MCP wire definitions through session/%s",
+    async (method) => {
+      const mcpServers = [
+        {
+          type: "stdio",
+          name: "local",
+          command: "node",
+          args: ["/server.js"],
+          env: [{ name: "TOKEN", value: "example" }],
+        },
+        {
+          type: "http",
+          name: "remote",
+          url: "https://example.com/mcp",
+          headers: [{ name: "Authorization", value: "Bearer example" }],
+        },
+        { type: "sse", name: "legacy", url: "http://localhost/sse", headers: [] },
+      ] as const;
+      const agent = fakeAgent({
+        mcpCapabilities: { http: true, sse: true },
+        loadSession: method === "load",
+        ...(method === "resume" ? { sessionCapabilities: { resume: {} } } : {}),
+      });
+      const options = { cwd: "/work", agentName: "fake", mcpServers };
+      const session =
+        method === "new"
+          ? await openSession(agent.stream, options)
+          : await restoreSession(agent.stream, { ...options, sessionId: "saved-session" });
+      try {
+        expect(
+          agent.received.find((request) => request.method === `session/${method}`)?.params,
+        ).toEqual({
+          cwd: "/work",
+          ...(method === "new" ? {} : { sessionId: "saved-session" }),
+          mcpServers: [
+            {
+              name: "local",
+              command: "node",
+              args: ["/server.js"],
+              env: [{ name: "TOKEN", value: "example" }],
+            },
+            {
+              type: "http",
+              name: "remote",
+              url: "https://example.com/mcp",
+              headers: [{ name: "Authorization", value: "Bearer example" }],
+            },
+            { type: "sse", name: "legacy", url: "http://localhost/sse", headers: [] },
+          ],
+        });
+      } finally {
+        session.close();
+        agent.close();
+      }
+    },
+  );
+
+  it.each(["http", "sse"] as const)(
+    "rejects unadvertised %s before new/load/resume",
+    async (type) => {
+      for (const capabilities of [
+        {},
+        { mcpCapabilities: { [type]: false } },
+        { mcpCapabilities: { [type === "http" ? "sse" : "http"]: true } },
+      ]) {
+        for (const method of ["new", "load", "resume"]) {
+          const agent = fakeAgent({
+            ...capabilities,
+            loadSession: method === "load",
+            ...(method === "resume" ? { sessionCapabilities: { resume: {} } } : {}),
+          });
+          const options = {
+            cwd: "/work",
+            agentName: "fake",
+            mcpServers: [
+              {
+                type,
+                name: "tools",
+                url: "https://example.com/private",
+                headers: [{ name: "Authorization", value: "secret" }],
+              },
+            ],
+          };
+          await expect(
+            method === "new"
+              ? openSession(agent.stream, options)
+              : restoreSession(agent.stream, { ...options, sessionId: "saved-session" }),
+          ).rejects.toThrow(`does not advertise support for ${type.toUpperCase()} MCP servers`);
+          expect(agent.seen).toEqual(["initialize"]);
+          agent.close();
+          await agent.serve;
+        }
+      }
+    },
+  );
 
   it("prefers resume, then load, and detects unsupported agents", () => {
     expect(restoreMethod({ loadSession: true, sessionCapabilities: { resume: {} } })).toBe(

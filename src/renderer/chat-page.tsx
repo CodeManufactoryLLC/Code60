@@ -10,6 +10,7 @@ import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
+import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { SessionInfo } from "./session-info.js";
 import { type Block, statusSpec, transcript } from "./state.js";
@@ -59,6 +60,7 @@ function ChatMessage({ block }: { block: Block }) {
       aria-label={speaker}
     >
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
+      <McpBadge mcp={block.mcp} />
       <pre>{block.text}</pre>
       {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
         <MessageCopy text={block.text} />

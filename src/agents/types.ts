@@ -19,7 +19,15 @@ export interface RawAcpUpdate {
 export type AgentUpdate =
   | { type: "message"; text: string }
   | { type: "thought"; text: string }
-  | { type: "toolCall"; toolCallId: string; title: string; kind: ToolKind; status: string }
+  | {
+      type: "toolCall";
+      toolCallId: string;
+      title: string;
+      kind: ToolKind;
+      status: string;
+      /** Provider-reported attribution, never a server definition or permission grant. */
+      mcp?: { server?: string } | undefined;
+    }
   | { type: "sessionState"; state: SessionState }
   | RawAcpUpdate;
 
@@ -46,13 +54,21 @@ export type PermissionHandler = (
   signal: AbortSignal,
 ) => Promise<PermissionAnswer>;
 
-/** One client-provided ACP stdio MCP server. Environment entries match the ACP wire format. */
-export interface AgentMcpServer {
-  name: string;
-  command: string;
-  args: readonly string[];
-  env: readonly { name: string; value: string }[];
-}
+/** Client-provided MCP servers. An omitted type retains the built-in stdio contract. */
+export type AgentMcpServer =
+  | {
+      type?: "stdio";
+      name: string;
+      command: string;
+      args: readonly string[];
+      env: readonly { name: string; value: string }[];
+    }
+  | {
+      type: "http" | "sse";
+      name: string;
+      url: string;
+      headers: readonly { name: string; value: string }[];
+    };
 
 export interface AgentSpec {
   /** Agent name from the config, used in error messages. */

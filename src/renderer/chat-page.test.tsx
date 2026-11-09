@@ -66,6 +66,31 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("labels only identified MCP tools in historical activity", () => {
+    const tool = {
+      runId: "orchestrator",
+      at: "2026-01-01",
+      type: "toolCall" as const,
+      toolCallId: "t1",
+      title: "Docs",
+      kind: "fetch" as const,
+      status: "completed",
+    };
+    const html = render(
+      "idle",
+      [],
+      [],
+      [
+        { ...tool, mcp: { server: "context7" } },
+        { ...tool, toolCallId: "t2", mcp: {} },
+        { ...tool, toolCallId: "t3", title: "MCP playwright" },
+      ],
+    );
+    expect(html.match(/class="mcp-badge"/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="MCP server: context7"');
+    expect(html).toContain('aria-label="MCP server: Unknown"');
+    expect(html).not.toContain('aria-label="MCP server: playwright"');
+  });
   it("uses the activity indicator during a turn and retains completed turn timing", () => {
     const events: RunEvent[] = [
       {

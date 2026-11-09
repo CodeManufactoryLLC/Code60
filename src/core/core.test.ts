@@ -181,6 +181,23 @@ describe("record store", () => {
     );
   });
 
+  it("round-trips optional MCP attribution and keeps legacy tool events readable", async () => {
+    const store = createRecordStore(fs as unknown as RecordFs, runsDir(dir));
+    await store.save(record("r1", "2026-01-01"));
+    const tool = {
+      runId: "r1",
+      at: "t",
+      type: "toolCall" as const,
+      toolCallId: "t1",
+      title: "Docs",
+      kind: "other" as const,
+      status: "completed",
+    };
+    const events = [tool, { ...tool, mcp: {} }, { ...tool, mcp: { server: "context7" } }];
+    for (const event of events) await store.appendEvent(event);
+    expect(await store.readEvents("r1")).toEqual(events);
+  });
+
   it("keys records outside a repository by directory", () => {
     expect(directoryRunsDir("/state", "/a")).toBe(directoryRunsDir("/state", "/a"));
     expect(directoryRunsDir("/state", "/a")).not.toBe(directoryRunsDir("/state", "/b"));

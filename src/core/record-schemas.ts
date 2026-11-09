@@ -86,6 +86,14 @@ export const runEventBodySchema = z.discriminatedUnion("type", [
     title: z.string(),
     kind: toolKindSchema,
     status: z.string(),
+    mcp: z
+      .object({
+        server: z
+          .string()
+          .regex(/^[a-zA-Z0-9_.-]{1,128}$/)
+          .optional(),
+      })
+      .optional(),
   }),
   z.object({
     type: z.literal("permission"),

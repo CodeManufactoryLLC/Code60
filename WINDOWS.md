@@ -33,6 +33,11 @@ Other batch launchers reject shell metacharacters, embedded quotes and trailing
 backslashes in arguments; use an executable or standard npm/npx instead.
 Prompts travel over ACP stdin, never through command-line arguments.
 
+User MCP servers use the same read-only configuration file. See
+[MCP configuration](MCP.md) for stdio, HTTP and SSE examples, provider capability
+requirements, session lifecycle and credential cautions. Use installed executable
+commands and escape Windows path backslashes in JSON.
+
 ## Headless CLI and development
 
 Install Node.js 22.12 or later, Git for Windows, Microsoft C++ Build Tools with

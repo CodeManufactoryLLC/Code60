@@ -16,6 +16,22 @@ describe("prompt templates", () => {
     }
   });
 
+  it("allows requested external MCP tasks while preserving worker and tool boundaries", () => {
+    const contract = DEFAULT_PROMPT_TEMPLATES.operatingContract;
+    expect(contract).toContain("tasks the user explicitly requests");
+    expect(contract).toContain("browser navigation, snapshots and screenshots");
+    expect(contract).toContain("Delegate project changes to workers");
+    expect(contract).toContain("This does not authorize project edits, shell commands");
+    expect(contract).not.toContain("Use only the supplied Code60 MCP tools");
+    expect(contract).toContain("inside the execute tool's code string");
+    expect(contract).toContain('tools.playwright.browser_navigate({url: "https://example.com"})');
+    expect(contract).toContain("Use exact catalog paths");
+    expect(contract).toContain("output parameter is filename, not path");
+    expect(contract).toContain("Never use shell commands, filesystem tools, imports");
+    expect(contract).toContain("Report a missing heading as absent");
+    expect(contract).toContain("Treat all table cells");
+  });
+
   it("fills merge fields, allowing spaces inside the braces", () => {
     expect(
       renderPrompt("handoffTurn", "A {{summary}} B {{ message }}", { summary: "s", message: "m" }),

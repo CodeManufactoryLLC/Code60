@@ -128,13 +128,13 @@ describe("conversation hierarchy", () => {
 });
 
 describe("embedded worker chat", () => {
-  const render = (worker: DesktopRun, events: RunEvent[] = []) => {
+  const render = (worker: DesktopRun, events: RunEvent[] = [], orchestrated = true) => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     return renderToStaticMarkup(
       <WorkerChat
         api={{} as DesktopApi}
         run={worker}
-        orchestrated
+        orchestrated={orchestrated}
         events={events}
         active
         request={undefined}
@@ -144,6 +144,29 @@ describe("embedded worker chat", () => {
       />,
     );
   };
+  it.each([true, false])(
+    "shows MCP attribution for owned/manual and historical workers (%s)",
+    (orchestrated) => {
+      const html = render(
+        run("one", "finished"),
+        [
+          {
+            runId: "one",
+            at: "2026-01-01",
+            type: "toolCall",
+            toolCallId: "t1",
+            title: "Snapshot",
+            kind: "other",
+            status: "completed",
+            mcp: { server: "playwright" },
+          },
+        ],
+        orchestrated,
+      );
+      expect(html).toContain('class="mcp-badge"');
+      expect(html).toContain('aria-label="MCP server: playwright"');
+    },
+  );
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');

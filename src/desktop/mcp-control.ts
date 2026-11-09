@@ -133,8 +133,9 @@ export function workerTranscript(events: readonly RunEvent[]): WorkerEntry[] {
       raw.push({ ...permission });
       continue;
     }
-    const { runId: _runId, ...body } = event;
     if (event.type === "toolCall") {
+      const { runId: _runId, mcp, ...call } = event;
+      const body = { ...call, mcp: mcp ? true : undefined, server: mcp?.server };
       const existing = tools.get(event.toolCallId);
       if (existing) {
         Object.assign(existing, body);
@@ -145,6 +146,7 @@ export function workerTranscript(events: readonly RunEvent[]): WorkerEntry[] {
       raw.push(entry);
       continue;
     }
+    const { runId: _runId, ...body } = event;
     raw.push({ ...body });
   }
   return raw.map((entry, index) => {

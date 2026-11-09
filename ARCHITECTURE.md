@@ -41,7 +41,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Budgets, cost tracking, and usage totals. The desktop shows only the current context occupancy reported by the harness.
 - Workspace capacity limits, retention, and Worktrunk hooks. The read-only Worktrees tab measures logical file sizes when it is opened and in the background while it is visible, but does not enforce limits.
 - File watching. The desktop app polls external state on a schedule (see [Polling](#polling)) instead.
-- Shared or remote servers, and coordination across machines.
+- Shared or remote Code60 servers, and coordination across machines. User-configured remote MCP tool servers are supported as described below.
 - Sandboxing. A worktree is not a security boundary, and the agent runs with the user's permissions.
 - Windows ARM64 and Windows versions older than Windows 11. Windows desktop distribution targets x64 only.
 
@@ -269,6 +269,7 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
   "maxParallel": 4,
   "turnTimeout": "30m",
   "worktreeDir": null,
+  "mcpServers": {},
   "permissions": { "read": "allow", "search": "allow", "think": "allow", "edit": "allow", "default": "ask" },
   "agents": {
     "claude":   { "command": ["npx", "-y", "@agentclientprotocol/claude-agent-acp"] },
@@ -285,6 +286,69 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
 Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (exit code 2). Durations use the same grammar in CLI configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
 
 The model is part of an agent's command or of the agent's own configuration. The tool does not pick models; the desktop displays the model reported through ACP configuration.
+
+### User MCP servers
+
+The optional top-level `mcpServers` map defaults to empty. See [MCP configuration](MCP.md)
+for stdio, HTTP and SSE examples. Each definition has an explicit `type`: stdio
+accepts only `command`, `args` and `env`; HTTP/SSE accept only `url` and `headers`.
+Names and commands must be nonempty, arguments and environment/header values must
+be strings, and URLs must use HTTP(S). Omitted `args`, `env` and `headers` become
+empty collections. Unknown fields and the reserved server name `code60` are usage
+errors (exit code 2). MCP validation and malformed-JSON errors never echo values.
+
+The distributed `mcp.default.json` is an opt-in starter containing pinned stdio
+Playwright MCP (isolated/headless) and Context7 definitions without credentials.
+It ships in the CLI package root and desktop resources, but is never loaded
+automatically or copied over user configuration. Users explicitly merge selected
+entries into `config.json`; runtime defaults remain empty.
+
+The default orchestration contract permits explicitly requested tasks through
+user-configured MCP tools, while project edits still go to workers. It follows
+the provider's tool catalog, including OpenCode's Code Mode `execute` wrapper;
+inner MCP tool names are not assumed to be direct top-level tools. This guidance
+grants no new main-process authority and does not authorize shell commands.
+
+Tool-call events may include optional `mcp: { server?: string }` attribution.
+The agents adapter recognizes documented structured programmatic MCP tool names
+and Claude ACP metadata, never free-text titles, arguments or configured-server
+presence. Partial updates retain attribution; corrected names may replace it.
+Only the marker and bounded server label enter typed history and snapshots.
+Legacy history remains readable without attribution. Both chat renderers show a
+shared MCP badge and server label; Events adds a category-filterable Server column.
+Unknown explicit MCP calls say Unknown; ordinary tools remain unlabelled.
+Attribution is presentation metadata, never authority or evidence of success.
+The built-in worker transcript projection flattens attribution to `mcp` and
+`server` fields, keeping its scalar-only contract.
+
+Core resolves a detached server list when preparing headless CLI runs, desktop
+manual runs, dispatched workers, orchestration chats and explicit ended-run
+recovery. Only chats also receive their own built-in Code60 stdio gateway.
+Workers, CLI and manual sessions receive configured servers without that gateway.
+Setup/connection probes, episodic-memory extraction and search-summary helpers
+receive neither user servers nor the gateway.
+
+The ACP adapter sends definitions on `session/new`, `session/load` and
+`session/resume`, translating maps to ACP environment/header entries and omitting
+the stdio `type` on the wire. After initialization it requires the provider's
+`agentCapabilities.mcpCapabilities.http` or `.sse` to be `true` for every configured
+remote transport. Missing support fails session startup explicitly and follows
+normal connection/process cleanup; servers are never silently dropped.
+Stdio requires no optional capability.
+
+Config reloads do not restart or alter active sessions, including idle sessions.
+Later runs/workers, new/retried chats and explicit recovery use the newly resolved
+configuration. Restoration and fresh handoffs do not use saved server definitions.
+Definitions stay in main-process memory and ACP setup requests, not run records,
+transcripts, renderer snapshots or CLI results. The agent owns MCP connections and
+stdio children; Code60 retains its existing agent process-tree cleanup and
+once-only permission policies. This is not a new sandbox or a permission grant.
+
+Configuration stays user-managed and read-only, without a Settings editor,
+credential writes, OAuth implementation or environment-variable interpolation.
+Users must trust their providers and servers: configured environment/header values
+are sent to the selected provider, and agent/tool output can still contain sensitive
+content in ordinary transcripts. Keep the config private and out of source control.
 
 ### Prompt templates
 
@@ -495,7 +559,7 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - The renderer runs with context isolation, the Chromium sandbox, no Node.js integration, and a restrictive Content Security Policy. Navigation, new windows, and `<webview>` are blocked.
 - The preload script exposes a fixed set of methods (`windowAppearance`, `setWindowTheme`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `readDiff`, `cancelDiff`, `readReview`, `readReviewFile`, `captureReview`, `reviewAction`, `checkGit`, `beginGitSetup`, `previewGitSetupFile`, `initializeGit`, `commitGitSetup`, `cancelGitSetup`, `beginAgentSetup`, `attemptAgentSetup`, `cancelAgentSetup`, `finishAgentSetup`, `abandonAgentSetup`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
 - The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
-- The orchestration chat receives one Code60 MCP stdio server. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive no Code60 MCP server. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No tool accepts SQL, arbitrary commands, environment settings or target directories.
+- The orchestration chat receives one built-in Code60 MCP stdio server, in addition to user-configured MCP servers. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive configured servers but no Code60 MCP server. User servers cannot replace the reserved `code60` entry or inherit its gateway credentials. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No built-in tool accepts SQL, arbitrary commands, environment settings or target directories.
 - Updates are batched about every 40 ms. Each carries a revision number, and the renderer merges snapshots and buffered updates by revision, so starting up or reloading never loses or duplicates events.
 
 

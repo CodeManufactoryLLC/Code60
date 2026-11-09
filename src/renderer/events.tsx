@@ -12,6 +12,7 @@ export interface EventRow {
   status: string;
   update: string;
   kind: string;
+  server: string;
   toolCallId: string;
   details: string;
 }
@@ -24,6 +25,7 @@ const columns = [
   { key: "status", title: "Status / outcome", width: 150, filter: "category" },
   { key: "update", title: "ACP update", width: 170, filter: "category" },
   { key: "kind", title: "Tool kind", width: 110, filter: "category" },
+  { key: "server", title: "Server", width: 150, filter: "category" },
   { key: "toolCallId", title: "Tool call ID", width: 160, filter: "text" },
   { key: "details", title: "Details", width: 540, filter: "text" },
 ] satisfies {
@@ -65,6 +67,7 @@ export function eventRows(
         status: eventOutcome(event),
         update: event.type === "acp" ? event.update : "",
         kind: "kind" in event ? event.kind : "",
+        server: event.type === "toolCall" && event.mcp ? (event.mcp.server ?? "Unknown") : "",
         toolCallId: "toolCallId" in event ? event.toolCallId : "",
         details: event.type === "acp" ? rawDetails(event) : JSON.stringify(details),
       };

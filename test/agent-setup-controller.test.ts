@@ -59,8 +59,16 @@ it("requires setup for legacy installations and cannot bypass the gate through o
   expect(openDatabase).not.toHaveBeenCalled();
 });
 it("sets up primary and two additions before a database, persists identities and restores transient connection state", async () => {
-  const { controller, agents, preferences, create, identity, attempt, openDatabase } =
+  const { dir, controller, agents, preferences, create, identity, attempt, openDatabase } =
     await fixture();
+  await fs.mkdir(join(dir, "config", "code60"), { recursive: true });
+  await fs.writeFile(
+    join(dir, "config", "code60", "config.json"),
+    JSON.stringify({
+      mcpServers: { tools: { type: "stdio", command: "node" } },
+    }),
+  );
+  await controller.poll(["config"]);
   await controller.beginAgentSetup({ mode: "primary" });
   await attempt("claude");
   await attempt("codex");
@@ -74,6 +82,7 @@ it("sets up primary and two additions before a database, persists identities and
   await controller.finishAgentSetup(identity());
   expect(controller.snapshot().agents).toEqual(["claude", "codex", "droid"]);
   expect(agents.specs).toHaveLength(3);
+  expect(agents.specs.every((spec) => spec.mcpServers === undefined)).toBe(true);
   expect(agents.sessions.every((s) => s.prompts.length === 0 && s.stops.length === 1)).toBe(true);
   const restarted = create();
   await restarted.restore();
@@ -148,7 +157,7 @@ it.runIf(sqliteAvailable())(
     ).rejects.toThrow("not enabled");
     expect(controller.snapshot().runs).toEqual([]);
     const server = agents.specs.find((spec) => spec.mcpServers)?.mcpServers?.[0];
-    if (!server) throw new Error("Missing chat gateway");
+    if (!server || !("env" in server)) throw new Error("Missing chat gateway");
     const env = Object.fromEntries(server.env.map((item) => [item.name, item.value]));
     const call = async (name: string, args = {}) => {
       const response = await fetch(env.CODE60_MCP_GATEWAY_URL as string, {

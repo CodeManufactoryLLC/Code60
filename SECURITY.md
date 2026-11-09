@@ -115,6 +115,15 @@ Local record storage does not mean that your task data stays on your machine:
   on that agent's tools, provider, and configuration, prompts, repository
   content, and tool output may be transmitted to external services. Review
   the provider's privacy, retention, and training policies separately.
+- Optional user-managed `mcpServers` definitions are also sent to the selected
+  provider through ACP, including any configured environment/header values.
+  The agent owns stdio processes and HTTP/SSE connections. Only configure
+  trusted providers and servers; Code60 does not sandbox MCP tools, implement
+  OAuth, or write credentials. Definitions are not added to run records,
+  transcripts, renderer snapshots or CLI results, but arbitrary agent/tool
+  output can still disclose sensitive content. Keep the config private.
+  User servers cannot replace or inherit the built-in `code60` gateway.
+  See [MCP configuration](MCP.md) for transport support and session lifecycle.
 - Desktop continuation may restore a provider session or send a handoff
   summary built from saved prompts, messages, and tool-call summaries.
   Search overviews and memory extraction also send selected evidence to

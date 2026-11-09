@@ -1,5 +1,6 @@
 import type { StopReason, ToolKind } from "../agents/index.js";
 import type { PermissionRule, PromptTemplates } from "../contracts/index.js";
+import type { McpServerConfig } from "./config.js";
 import type { RunStatus } from "./record-schemas.js";
 
 export type { ModeChange, ModeControl, PermissionRule, SessionState } from "../contracts/index.js";
@@ -37,6 +38,7 @@ export interface Config {
   worktreeDir: string | null;
   permissions: PermissionPolicy;
   agents: Readonly<Record<string, AgentConfig>>;
+  mcpServers: Readonly<Record<string, McpServerConfig>>;
   /** Built-in prompt templates with the user's overrides applied. */
   prompts: Readonly<PromptTemplates>;
 }

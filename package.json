@@ -12,7 +12,8 @@
     "code60": "dist/cli/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "mcp.default.json"
   ],
   "scripts": {
     "build:helper": "node scripts/build-windows-helper.mjs",

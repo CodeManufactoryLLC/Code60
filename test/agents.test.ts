@@ -248,6 +248,28 @@ describe("agent processes", () => {
     await expect(start({ FAKE_AGENT_AUTH: "1" })).rejects.toThrow(/log in through fake's own CLI/);
   });
 
+  it.each(["http", "sse"] as const)(
+    "stops the agent after rejecting unsupported %s MCP on new and restore",
+    async (type) => {
+      const agents = createAgents({ clientVersion: "0.0.0-test" });
+      for (const method of ["new", "restore"]) {
+        const path = join(dir, `${method}.pid`);
+        const spec = {
+          name: "fake",
+          command: [process.execPath, FAKE_AGENT, "--pid-file", path] as [string, ...string[]],
+          cwd: dir,
+          mcpServers: [{ type, name: "tools", url: "https://example.com/mcp", headers: [] }],
+        };
+        await expect(
+          method === "new" ? agents.start(spec) : agents.restore?.(spec, "saved-session"),
+        ).rejects.toThrow(`does not advertise support for ${type.toUpperCase()} MCP servers`);
+        const pid = Number(await readFile(path, "utf8"));
+        expect(pid).toBeGreaterThan(0);
+        expect(alive(pid)).toBe(false);
+      }
+    },
+  );
+
   it("fails clearly when the command does not exist", async () => {
     await expect(
       createAgents({ clientVersion: "0.0.0-test" }).start({
