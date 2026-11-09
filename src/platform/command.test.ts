@@ -1,4 +1,4 @@
-import { link, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -22,7 +22,7 @@ describe("command resolution", () => {
         script,
         `require('node:fs').writeFileSync(${JSON.stringify(output)},JSON.stringify(process.argv.slice(2)))`,
       );
-      await link(process.execPath, join(directory, "node.exe"));
+      await copyFile(process.execPath, join(directory, "node.exe"));
       await writeFile(file, '@echo off\r\n"%~dp0node.exe" "%~dp0argv.cjs" %*\r\n');
       const args = ["", "space here", "雪", "middle\\slash"];
       const child = await spawnOwnedProcess([file, ...args], directory);
@@ -82,7 +82,7 @@ describe("command resolution", () => {
       directories.push(directory);
       const bin = join(directory, "node_modules", "npm", "bin");
       await mkdir(bin, { recursive: true });
-      await link(process.execPath, join(directory, "node.exe"));
+      await copyFile(process.execPath, join(directory, "node.exe"));
       const args = ["", "a b", "雪", '"', "end\\", "%", "!", "&", "|", "^", "()", "<", ">"];
       for (const name of ["npm", "npx"]) {
         const entry = join(bin, `${name}-cli.js`);

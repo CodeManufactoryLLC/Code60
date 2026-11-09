@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import type { ReviewSnapshotFile } from "../core/index.js";
+import { privateDirectory } from "../platform/index.js";
 import { ReviewStore } from "./reviews.js";
 
 let root: string;
@@ -141,15 +142,28 @@ it("rejects corrupt records rather than silently presenting an empty review", as
 });
 
 it("persists review revisions near the Windows path limit", async () => {
-  // Keep the final record supported while an appended UUID temporary name would exceed 247.
-  const nested = join(root, "x".repeat(Math.max(1, 90 - root.length - 1)));
+  // Metadata fits, but the older nested revision layout exceeds the native helper's limit.
+  const nested = join(root, "x".repeat(Math.max(1, 130 - root.length - 1)));
   store = await ReviewStore.open(nested, "/project");
   const { review, revision, identity } = await fixture();
-  const path = join(store.root, review.id, `${revision.id}.json`);
+  const path = join(store.root, `${revision.id}.rev`);
   expect(path.length).toBeLessThan(248);
-  expect(path.length + 41).toBeGreaterThan(247);
+  expect(join(store.root, review.id, `${revision.id}.json`).length).toBeGreaterThan(247);
   store = await ReviewStore.open(nested, identity.project);
   expect((await store.content(review.id, revision.id, "worker-a:same.ts")).modified).toBe(
     "first\n",
   );
+});
+
+it("reads legacy nested revisions and never falls back from corrupt new content", async () => {
+  const { review, revision } = await fixture();
+  const flat = join(store.root, `${revision.id}.rev`);
+  await privateDirectory(join(store.root, review.id));
+  await rename(flat, join(store.root, review.id, `${revision.id}.json`));
+  store = await ReviewStore.open(root, "/project");
+  expect((await store.content(review.id, revision.id, "worker-a:same.ts")).modified).toBe(
+    "first\n",
+  );
+  await writeFile(flat, "invalid JSON");
+  await expect(store.content(review.id, revision.id, "worker-a:same.ts")).rejects.toThrow();
 });

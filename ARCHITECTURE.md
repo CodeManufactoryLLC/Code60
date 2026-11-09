@@ -533,7 +533,10 @@ Refresh is explicit, local and cancellable. A capture never changes the selected
 
 `ReviewStore` persists versioned JSON metadata and immutable file content below
 `.code60_workspace/reviews/<database-hash>/<project-hash>`. Writes use private files and atomic
-replacement. Limits are 200 reviews per project, 100 revisions per review, 1 MiB per text blob,
+replacement. New immutable content uses `<revision-id>.rev` beside review metadata to stay
+within the same Windows path limit; reads retain compatibility with the older
+`<review-id>/<revision-id>.json` layout. Existing data is not migrated or rewritten.
+Limits are 200 reviews per project, 100 revisions per review, 1 MiB per text blob,
 8 MiB text per worker snapshot and combined review capture, 2,000 files per capture, and
 16 MiB per saved record. Saved JSON reads validate and read the same file handle,
 reject links and nonregular files, and bound actual bytes read even if the file grows.
