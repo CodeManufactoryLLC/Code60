@@ -57,6 +57,8 @@ export class LogViewer {
   }
   setFollowing(following: boolean): void {
     this.following = following;
+    if (!this.state.pending && this.state.newRecords && !this.state.paused && this.canFollow())
+      void this.refresh();
   }
   setContext(context: string): void {
     if (this.context === context) return;

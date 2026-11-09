@@ -281,6 +281,7 @@ export interface DesktopApi {
   ): Promise<import("./git-setup.js").GitSetupOutcome>;
   cancelGitSetup(request: import("./git-setup.js").GitProject): Promise<void>;
   readReview(request: import("./reviews.js").ReviewRead): Promise<import("./reviews.js").Review>;
+  taskAction(request: import("./tasks.js").TaskAction): Promise<import("./tasks.js").TaskView>;
   reviewAction(request: import("./reviews.js").ReviewAction): Promise<string>;
   captureReview(request: import("./reviews.js").ReviewRead): Promise<void>;
   readReviewFile(
@@ -776,3 +777,4 @@ export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
 export * from "./reviews.js";
+export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";

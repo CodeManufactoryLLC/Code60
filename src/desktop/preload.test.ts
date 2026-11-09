@@ -57,6 +57,7 @@ describe("sandboxed diagnostic preload", () => {
       readPlan: "plan-read",
       planAction: "plan-action",
       readReview: "review-read",
+      taskAction: "task-action",
       reviewAction: "review-action",
       captureReview: "review-capture",
       readReviewFile: "review-file",

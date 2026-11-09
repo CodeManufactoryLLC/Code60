@@ -58,8 +58,8 @@ export {
 export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
 export { ExitCode, exitCodeFor } from "./exit-code.js";
 export type { Orchestrator } from "./orchestrator.js";
-
 export { buildHandoffPrompt } from "./recovery.js";
+export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
 export { CODE60_VERSION, RUN_RECORD_FORMAT } from "./version.js";

@@ -706,6 +706,139 @@ async function launch(directory: string, folder: string, database: string, confi
   return launchDesktop(directory, folder, database);
 }
 
+test("desktop: task revisions preserve project edits through apply and undo", async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-task-loop-ui-")));
+  const repo = join(directory, "repo");
+  const config = join(directory, "config", "code60");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  const git = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
+  git(["init", "-q"]);
+  await writeFile(join(repo, "task.txt"), "initial project\n");
+  git(["add", "task.txt"]);
+  commitFixture(repo);
+  const initialHead = git(["rev-parse", "HEAD"]);
+  await writeFile(join(repo, "staged.txt"), "staged user file\n");
+  git(["add", "staged.txt"]);
+  const originalIndex = git(["diff", "--cached", "--binary"]);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      defaultAgent: "claude",
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--review"],
+        },
+      },
+    }),
+  );
+  try {
+    application = await launch(directory, repo, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    const waitForCapture = (title: string, path: string) =>
+      expect
+        .poll(() =>
+          page.evaluate(
+            async ({ title, path }) => {
+              const snapshot = await window.desktop.snapshot();
+              const summary = snapshot.reviews?.find((review) => review.title === title);
+              if (!summary) return "Waiting for review";
+              const review = await window.desktop.readReview({
+                project: summary.project,
+                reviewId: summary.id,
+                requestId: crypto.randomUUID(),
+              });
+              const latest = review.revisions.at(-1);
+              if (!latest?.files.some((file) => file.path === path))
+                return review.error ?? latest?.errors[0]?.message ?? "Waiting for capture";
+              const worker = snapshot.runs.find(
+                (run) => run.record.id === review.workers[0]?.runId,
+              );
+              return worker?.view?.status ?? worker?.record.status;
+            },
+            { title, path },
+          ),
+        )
+        .toBe("idle");
+    await expect(composer).toBeEditable();
+    await composer.fill("Implement task loop");
+    await composer.press("Enter");
+    await waitForCapture("Implement task loop", "task.txt");
+    await page.getByRole("button", { name: "Review changes", exact: true }).click();
+    const review = page.getByRole("region", { name: "Changes: Implement task loop", exact: true });
+    await expect(
+      review.getByRole("button", { name: "Use these changes…", exact: true }),
+    ).toBeEnabled();
+    await review.getByRole("button", { name: "Use these changes…", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Use these changes", exact: true });
+    await expect(confirmation.locator(".monaco-diff-editor")).toBeVisible();
+    await page.screenshot({ path: "test-results/task-revision-preview.png" });
+    await confirmation.getByRole("button", { name: "Use these changes", exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect
+      .poll(() => readFile(join(repo, "task.txt"), "utf8"))
+      .toBe("accepted task result\n");
+    expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
+    await expect(composer).toBeEditable();
+    await composer.fill("Implement second task loop");
+    await composer.press("Enter");
+    await waitForCapture("Implement second task loop", "second.txt");
+    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(2);
+    await page.getByRole("button", { name: "Review changes", exact: true }).last().click();
+    const secondReview = page.getByRole("region", {
+      name: "Changes: Implement second task loop",
+      exact: true,
+    });
+    await expect(
+      secondReview.getByRole("button", { name: "Use these changes…", exact: true }),
+    ).toBeEnabled();
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    const next = snapshot.runs.find((run) => run.record.firstPrompt.includes("second.txt"));
+    if (!next) throw new Error("Missing second task");
+    expect(await readFile(join(next.record.worktree, "task.txt"), "utf8")).toBe(
+      "accepted task result\n",
+    );
+    await writeFile(join(repo, "second.txt"), "user edit\n");
+    await secondReview.getByRole("button", { name: "Use these changes…", exact: true }).click();
+    await expect(
+      confirmation.getByText("Conflicts need revision. Project files have not changed.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\n");
+    await expect(
+      confirmation.getByRole("button", { name: "Use these changes", exact: true }),
+    ).toHaveCount(0);
+    await confirmation.getByRole("button", { name: "Ask workers to revise", exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await secondReview.getByRole("button", { name: /Review updates/ }).click();
+    await expect(secondReview.locator(".monaco-diff-editor")).toContainText("worker correction");
+    await secondReview.getByRole("button", { name: "Use these changes…", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Use these changes", exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect
+      .poll(() => readFile(join(repo, "second.txt"), "utf8"))
+      .toBe("user edit\nworker correction\n");
+    await secondReview.getByRole("button", { name: "Undo application", exact: true }).click();
+    await expect.poll(() => readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\n");
+    await page.getByRole("button", { name: "Review changes", exact: true }).first().click();
+    await review.getByRole("button", { name: "Undo application", exact: true }).click();
+    await expect.poll(() => readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
+    expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: database connection gates splash and workspace controls", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-database-gate-"));
   const database = join(directory, "projects.sqlite");

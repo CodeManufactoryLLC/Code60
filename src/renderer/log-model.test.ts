@@ -32,6 +32,7 @@ describe("diagnostic viewer request lifetime", () => {
     expect(model.snapshot().page).toBe(expected);
     model.activate(false);
     model.notice();
+    model.setFollowing(true);
     expect(queryLogs).toHaveBeenCalledTimes(2);
   });
   it("does not move a paused, selected, paged or scrolled reader on live notices", async () => {
@@ -41,18 +42,20 @@ describe("diagnostic viewer request lifetime", () => {
     await vi.waitFor(() => expect(model.snapshot().pending).toBe(false));
     model.pause(true);
     model.notice();
+    model.setFollowing(true);
     expect(queryLogs).toHaveBeenCalledTimes(1);
     expect(model.snapshot().newRecords).toBe(true);
     model.setFollowing(false);
     model.pause(false);
     expect(queryLogs).toHaveBeenCalledTimes(1);
-    model.setFollowing(true);
     model.select({ id: "selected" } as LogRecord);
+    model.setFollowing(true);
     model.notice();
     expect(queryLogs).toHaveBeenCalledTimes(1);
     model.select(undefined);
     await model.next();
     expect(model.snapshot().newRecords).toBe(true);
+    model.setFollowing(true);
     model.notice();
     expect(queryLogs).toHaveBeenCalledTimes(2);
     expect(model.snapshot().pageNumber).toBe(2);
@@ -60,6 +63,30 @@ describe("diagnostic viewer request lifetime", () => {
     expect(model.snapshot().pageNumber).toBe(1);
     model.notice();
     await vi.waitFor(() => expect(queryLogs).toHaveBeenCalledTimes(4));
+  });
+  it("catches up notices received during an explicit latest read before scrolling finishes", async () => {
+    const latest = deferred<LogPage>();
+    const queryLogs = vi.fn().mockResolvedValue(page());
+    const model = new LogViewer({ queryLogs });
+    model.activate(true);
+    await vi.waitFor(() => expect(model.snapshot().pending).toBe(false));
+    model.setFollowing(false);
+    model.pause(true);
+    model.notice();
+    model.pause(false);
+    queryLogs.mockReturnValueOnce(latest.promise);
+    const refresh = model.refresh();
+    model.notice();
+    model.notice();
+    latest.resolve(page());
+    await refresh;
+    expect(queryLogs).toHaveBeenCalledTimes(2);
+    expect(model.snapshot().newRecords).toBe(true);
+    model.setFollowing(true);
+    model.setFollowing(true);
+    await vi.waitFor(() => expect(queryLogs).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(model.snapshot().pending).toBe(false));
+    expect(model.snapshot().newRecords).toBe(false);
   });
   it("coalesces notices during a read and retries explicit failures", async () => {
     const first = deferred<LogPage>();

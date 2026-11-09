@@ -167,3 +167,44 @@ it("reads legacy nested revisions and never falls back from corrupt new content"
   await writeFile(flat, "invalid JSON");
   await expect(store.content(review.id, revision.id, "worker-a:same.ts")).rejects.toThrow();
 });
+
+it("captures full worker provenance separately from display text and queues only conflict feedback", async () => {
+  const { review, revision: legacy, identity } = await fixture();
+  const results = [
+    { runId: "worker-a", files: [file("first\n")] },
+    { runId: "worker-b", files: [file("second\n")] },
+  ];
+  const sources = results.map(({ runId }) => ({
+    runId,
+    base: "a".repeat(40),
+    commit: "b".repeat(40),
+  }));
+  await store.capture(review.id, results, sources);
+  const revision = store.get(review.id).revisions.at(-1);
+  if (!revision) throw new Error("Missing captured revision");
+  expect(revision.id).not.toBe(legacy.id);
+  await store.capture(review.id, results, sources);
+  const draftId = randomUUID();
+  await store.action({
+    ...identity,
+    type: "comment",
+    id: draftId,
+    revisionId: revision.id,
+    text: "Keep this draft",
+  });
+  await store.requestRevision(review.id, revision.id, "Please preserve the project edit");
+  const saved = store.get(review.id);
+  expect(saved.revisions).toHaveLength(2);
+  expect(saved.comments.find(({ id }) => id === draftId)?.state).toBe("draft");
+  const submission = saved.submissions[0];
+  if (!submission) throw new Error("Missing revision request");
+  const feedback = await store.feedback(review.id, submission.id);
+  expect(feedback).toContain("Please preserve the project edit");
+  expect(feedback).not.toContain("Keep this draft");
+
+  store = await ReviewStore.open(root, "/project");
+  expect(store.get(review.id).revisions.map(({ sources }) => sources)).toEqual([
+    undefined,
+    sources,
+  ]);
+});

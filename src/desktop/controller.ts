@@ -35,6 +35,8 @@ import type {
   SetupIdentity,
   Snapshot,
   StartRequest,
+  TaskAction,
+  TaskView,
   WorktreeListing,
 } from "../bridge/index.js";
 import {
@@ -78,6 +80,7 @@ import {
   parseSavePromptTemplate,
   parseSearchSummary,
   parseSearchSummaryRequestId,
+  parseTaskAction,
   planMarkdown,
   type Review,
   type ReviewAction,
@@ -115,6 +118,9 @@ import {
   listWorktrees as readWorktrees,
   stopRun,
   summarizeSearch,
+  TaskLoop,
+  type TaskProposal,
+  type TaskSource,
   type Workspace,
 } from "../core/index.js";
 import {
@@ -309,6 +315,25 @@ export class DesktopController {
   });
 
   private reviews: ReviewStore | undefined;
+  private tasks: TaskLoop | undefined;
+  private taskOperation:
+    | { reviewId: string; abort: AbortController; done: Promise<void> }
+    | undefined;
+
+  private taskLoop(store: ReviewStore): TaskLoop | undefined {
+    const git = this.deps.git.tasks;
+    if (!git || !this.workspace?.repo) return undefined;
+    const database = this.database?.path;
+    this.tasks ??= new TaskLoop(
+      store.project,
+      store.root,
+      git,
+      undefined,
+      database ? [database, `${database}-wal`, `${database}-shm`, `${database}-journal`] : [],
+    );
+    return this.tasks;
+  }
+
   private gitState: GitReadiness | undefined;
   private gitSetup: GitSetup | undefined;
   private gitOperation = false;
@@ -345,6 +370,7 @@ export class DesktopController {
     return result;
   }
   private async requireGitRun(id?: string): Promise<void> {
+    if (this.taskOperation) throw new Error("Wait for the task operation to finish");
     if (this.gitOperation || this.gitSetup?.busy)
       throw new Error("Finish Git setup before starting workers");
     const workspace = this.requireWorkspace();
@@ -362,6 +388,7 @@ export class DesktopController {
   }
   private async setupAllowed(project: string): Promise<GitSetup> {
     const workspace = this.gitProject(project);
+    if (this.taskOperation) throw new Error("Wait for the task operation to finish");
     if (this.gitOperation || this.gitSetup?.busy)
       throw new Error("Git setup is already in progress");
     if (this.active)
@@ -639,6 +666,196 @@ export class DesktopController {
     return this.reviews;
   }
 
+  async taskAction(value: TaskAction): Promise<TaskView> {
+    const request = parseTaskAction(value);
+    const store = this.reviewStore(request.project);
+    const loop = this.taskLoop(store);
+    const git = this.deps.git.tasks;
+    if (!loop || !git) {
+      if (request.type === "status")
+        return { available: false, canPrepare: false, source: "Selected Git revision" };
+      throw new Error("Task application is unavailable");
+    }
+    let review = store.get(request.reviewId);
+    const view = async (proposal?: TaskProposal | null): Promise<TaskView> => {
+      const state = await loop.state(review.id);
+      const pending = await loop.pendingOperation(review.id);
+      const operation = pending ?? proposal ?? (await loop.latest(review.id));
+      const undo = await loop.lastApplied(review.id);
+      const current = store.get(request.reviewId);
+      const sources = current.revisions.at(-1)?.sources;
+      return {
+        available: true,
+        canPrepare:
+          !current.error &&
+          !!sources?.length &&
+          current.workers.every((worker) =>
+            sources.some((source) => source.runId === worker.runId),
+          ),
+        source: state.baseline ? "Current saved files" : "Selected Git revision",
+        ...(undo ? { undoId: undo.id } : {}),
+        ...(operation
+          ? {
+              operation: {
+                id: operation.id,
+                revisionId: operation.revisionId,
+                status: pending ? "recovery" : operation.status,
+                changes: operation.changes.map(({ id, path }) => ({ id, path })),
+                conflicts: operation.conflicts,
+                ...(operation.error ? { error: operation.error } : {}),
+              },
+            }
+          : {}),
+      };
+    };
+    if (request.type === "cancel") {
+      const active = this.taskOperation;
+      if (active?.reviewId === review.id) {
+        active.abort.abort(new Error("Task operation cancelled"));
+        await active.done;
+      }
+      return view();
+    }
+    if (request.type === "status") return view();
+    if (request.type === "file") {
+      const proposal = await loop.proposal(review.id, request.operationId);
+      const file = proposal.changes.find((file) => file.id === request.fileId);
+      if (!file) throw new Error("Unknown proposal file");
+      const before = Buffer.from(file.before?.data ?? "", "base64");
+      const after = Buffer.from(file.after?.data ?? "", "base64");
+      const limited = [before, after].some(
+        (data) =>
+          data.length > 1_048_576 ||
+          data.includes(0) ||
+          !Buffer.from(data.toString("utf8")).equals(data),
+      );
+      return {
+        ...(await view(proposal)),
+        file: {
+          path: file.path,
+          original: limited ? "" : before.toString("utf8"),
+          modified: limited ? "" : after.toString("utf8"),
+          ...(limited
+            ? { limitation: "Binary or large file; complete contents will be applied" }
+            : {}),
+        },
+      };
+    }
+    let finish = () => {};
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const abort = new AbortController();
+    await this.exclusive(async () => {
+      if (store !== this.reviewStore(request.project)) throw new Error("Task project changed");
+      if (this.taskOperation || this.gitOperation || this.gitSetup?.busy)
+        throw new Error("Wait for the current task operation");
+      const workspace = this.requireWorkspace();
+      if (!workspace.repo || !(await samePath(workspace.dir, workspace.repo.topLevel)))
+        throw new Error("Open the repository root to apply task changes");
+      review = store.get(request.reviewId);
+      const history = await listRuns(commandDeps(this.deps, this.requireWorkspace()));
+      for (const worker of review.workers) {
+        const run = history.find((run) => run.record.id === worker.runId);
+        const status = this.liveView(worker.runId)?.status ?? run?.record.status;
+        if (!run && !status && ["undo", "recover"].includes(request.type)) continue;
+        if (
+          !run ||
+          !status ||
+          ["queued", "running", "waiting"].includes(status) ||
+          this.liveView(worker.runId)?.stopping ||
+          (run.agentAlive && status !== "idle")
+        )
+          throw new Error("Wait for task workers to finish their turns and stop leftover agents");
+      }
+      if (this.closing) throw new Error("The app is stopping");
+      this.taskOperation = { reviewId: review.id, abort, done };
+      this.changed();
+    });
+    try {
+      await this.diffReads.cancel(undefined, `capture:${review.id}`);
+      abort.signal.throwIfAborted();
+      review = store.get(request.reviewId);
+      if (request.type === "prepare") {
+        if (review.revisions.at(-1)?.id !== request.revisionId)
+          throw new Error("Review the latest changes before applying");
+        const sources = review.revisions.at(-1)?.sources;
+        if (
+          !sources?.length ||
+          review.error ||
+          !review.workers.every((worker) =>
+            sources?.some((source) => source.runId === worker.runId),
+          )
+        )
+          throw new Error("Refresh the incomplete review before applying");
+        return view(await loop.prepare(review.id, request.revisionId, sources, abort.signal));
+      }
+      const proposal = await loop.proposal(review.id, request.operationId);
+      if (request.type === "revise") {
+        if (
+          proposal.status !== "prepared" ||
+          !proposal.conflicts.length ||
+          review.revisions.at(-1)?.id !== proposal.revisionId
+        )
+          throw new Error("Refresh the conflict preview before asking for a revision");
+        const session = this.conversations.sessions.find(
+          (session) => session.chat?.runs()[0]?.id === review.chatId && !session.revoked,
+        );
+        if (!session) throw new Error("Reconnect this review to a current conversation first");
+        for (const source of proposal.sources)
+          this.conversations.ownedWorker(source.runId, session);
+        const conflicts = proposal.conflicts.map(
+          ({ path, reason }) => `${JSON.stringify(path)}: ${reason}`,
+        );
+        const feedback = `Revise this task so it can be applied to the current project. Preserve the user's current project edits. Read the current project files before revising your worker copies. Conflicting paths and reasons:\n${conflicts.join("\n")}\nProject: ${JSON.stringify(request.project)}\nUse owned workers and return a new review. Do not modify the project directly.`;
+        if (feedback.length > 8_000)
+          throw new Error("Too many conflicts for one request. Send feedback in smaller groups.");
+        await loop.requestRevision(review.id, proposal.id);
+        abort.signal.throwIfAborted();
+        await this.chatExclusive(session, () => {
+          abort.signal.throwIfAborted();
+          return store.requestRevision(review.id, proposal.revisionId, feedback);
+        });
+        return view(proposal);
+      }
+      if (request.type === "apply" && proposal.status !== "applied") {
+        if (
+          review.error ||
+          review.revisions.at(-1)?.id !== proposal.revisionId ||
+          !review.workers.every((worker) =>
+            proposal.sources.some((source) => source.runId === worker.runId),
+          )
+        )
+          throw new Error("New changes are available. Refresh the application preview.");
+        for (const source of proposal.sources) {
+          const target = await prepareDiff(
+            commandDeps(this.deps, this.requireWorkspace()),
+            source.runId,
+          );
+          const current = await git.snapshot(target.worktree, undefined, abort.signal);
+          if (current !== source.commit)
+            throw new Error("Worker files changed. Refresh changes before applying.");
+        }
+      }
+      if (
+        request.type === "undo" &&
+        (await loop.lastApplied(review.id))?.id !== proposal.id &&
+        proposal.status !== "undone"
+      )
+        throw new Error("Undo the most recent application first");
+      const result = await loop.execute(review.id, proposal.id, request.type, abort.signal);
+      this.poller.invalidate(["files", "history", "worktrees"]);
+      return view(result);
+    } finally {
+      this.taskOperation = undefined;
+      finish();
+      this.changed();
+      this.scheduleReviewCapture(review.id);
+      if (request.type === "revise") this.scheduleFeedback();
+      this.changed();
+    }
+  }
+
   reviewAction(value: ReviewAction): Promise<string> {
     const request = parseReviewAction(value);
     return this.exclusive(async () => {
@@ -661,6 +878,8 @@ export class DesktopController {
         this.changed();
         return review.id;
       }
+      if (request.type === "reconnect" && this.taskOperation)
+        throw new Error("Wait for the task operation to finish");
       const review = store.get(request.reviewId);
       const session = this.conversations.sessions.find(
         (session) =>
@@ -679,13 +898,16 @@ export class DesktopController {
   }
 
   captureReview(value: ReviewRead): Promise<void> {
+    if (this.taskOperation)
+      return Promise.reject(new Error("Wait for the task operation to finish"));
     const request = parseReviewRead(value);
     const store = this.reviewStore(request.project);
     return this.diffReads.read(
-      { requestId: request.requestId, id: request.reviewId },
+      { requestId: request.requestId, id: `capture:${request.reviewId}` },
       (signal) =>
         this.exclusive(async () => {
           signal.throwIfAborted();
+          if (this.taskOperation) throw new Error("Wait for the task operation to finish");
           if (store !== this.reviewStore(request.project))
             throw new Error("Review context changed");
           const targets = [];
@@ -706,6 +928,10 @@ export class DesktopController {
         }),
       async (targets, signal) => {
         const results = [];
+        const loop = this.taskLoop(store);
+        const git = loop ? this.deps.git.tasks : undefined;
+        const sources: TaskSource[] = [];
+        const applied = loop ? (await loop.state(request.reviewId)).appliedSources : [];
         let fileCount = 0;
         let contentBytes = 0;
         for (const target of targets) {
@@ -716,11 +942,17 @@ export class DesktopController {
               continue;
             }
             if (!this.deps.git.reviewSnapshot) throw new Error("Structured review is unavailable");
+            const captured = git
+              ? await git.snapshot(target.target.worktree, undefined, signal)
+              : undefined;
             const snapshot = await this.deps.git.reviewSnapshot(
               target.target.worktree,
-              target.target.base,
+              applied.find((source) => source.runId === target.runId)?.commit ?? target.target.base,
               signal,
+              captured,
             );
+            if (captured)
+              sources.push({ runId: target.runId, base: target.target.base, commit: captured });
             const files = snapshot.files.slice(0, Math.max(0, 2_000 - fileCount)).map((file) => {
               const size = Buffer.byteLength(file.original) + Buffer.byteLength(file.modified);
               if (contentBytes + size > 8_388_608)
@@ -748,7 +980,7 @@ export class DesktopController {
         }
         signal.throwIfAborted();
         if (store !== this.reviewStore(request.project)) throw new Error("Review context changed");
-        await store.capture(request.reviewId, results);
+        await store.capture(request.reviewId, results, sources.length ? sources : undefined);
         signal.throwIfAborted();
         this.changed();
       },
@@ -778,6 +1010,12 @@ export class DesktopController {
   private scheduleReviewCapture(id: string): void {
     const store = this.reviews;
     if (!store || this.closing) return;
+    if (this.taskOperation) {
+      void this.taskOperation.done.then(() => {
+        if (this.reviews === store) this.scheduleReviewCapture(id);
+      });
+      return;
+    }
     if (this.reviewCaptures.has(id)) {
       this.reviewCaptures.set(id, true);
       return;
@@ -785,7 +1023,8 @@ export class DesktopController {
     this.reviewCaptures.set(id, false);
     void this.captureReview({ project: store.project, reviewId: id, requestId: randomUUID() })
       .catch(async (cause) => {
-        if (this.reviews === store && !this.closing) await store.fail(id, cause);
+        if (this.reviews === store && !this.closing && !this.taskOperation)
+          await store.fail(id, cause);
       })
       .catch((cause) => {
         this.warnings.push(`Could not save review: ${message(cause)}`);
@@ -2059,6 +2298,7 @@ export class DesktopController {
     const operationId = randomUUID();
     const began = Date.now();
     return this.exclusive(async () => {
+      if (this.taskOperation) throw new Error("Wait for the task operation to finish");
       if (this.active) throw new Error("Finish or stop all runs before switching databases");
       await this.cancelOrchestrationTest();
       await this.stopMemoryExtraction();
@@ -2215,11 +2455,13 @@ export class DesktopController {
   }
 
   private async clearWorkspace(): Promise<void> {
+    if (this.taskOperation) throw new Error("Wait for the task operation to finish");
     await this.cancelGitSetup();
     this.gitSetup = undefined;
     this.gitState = undefined;
     await this.cancelDiffReads();
     this.reviews = undefined;
+    this.tasks = undefined;
     for (const session of this.conversations.sessions) session.reviewTask = undefined;
     this.detach();
     this.workspace = undefined;
@@ -2769,6 +3011,7 @@ export class DesktopController {
         case "events":
           return workspace.store.readEvents(action.id);
         case "discard": {
+          if (this.taskOperation) throw new Error("Wait for the task operation to finish");
           await this.cancelDiffReads();
           const operationId = randomUUID();
           const began = Date.now();
@@ -2967,7 +3210,14 @@ export class DesktopController {
             workers: current.workers,
             comments: sent.slice(-100),
             revisions: current.revisions.map(({ id, at }) => ({ id, at })),
-            latest: latest ? { ...latest, files: latest.files.slice(0, 200) } : null,
+            latest: latest
+              ? {
+                  id: latest.id,
+                  at: latest.at,
+                  errors: latest.errors,
+                  files: latest.files.slice(0, 200),
+                }
+              : null,
             truncated: sent.length > 100 || (latest?.files.length ?? 0) > 200,
           };
         });
@@ -3072,13 +3322,22 @@ export class DesktopController {
           }
           session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
         }
+        const loop = reviewStore && this.taskLoop(reviewStore);
+        const base =
+          request.base ??
+          (review &&
+          loop &&
+          workspace.repo &&
+          (await samePath(workspace.dir, workspace.repo.topLevel))
+            ? await loop.baseline(review.id)
+            : undefined);
         const ids = await this.startBatch(
           {
             agents: [provider],
             allow: [],
             allowAll: true,
             prompt: request.prompt,
-            ...(request.base === undefined ? {} : { base: request.base }),
+            ...(base === undefined ? {} : { base }),
             ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
           },
           (started, target) => {
@@ -3178,7 +3437,10 @@ export class DesktopController {
       return this.workerInfo(id);
     });
   }
-  stopAll(): Promise<void> {
+  async stopAll(): Promise<void> {
+    const active = this.taskOperation;
+    active?.abort.abort(new Error("Task operation cancelled"));
+    await active?.done;
     return this.exclusive(async () => {
       for (const session of this.conversations.sessions) this.conversations.pause(session);
       for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
@@ -3196,6 +3458,9 @@ export class DesktopController {
 
   async shutdown(force = false): Promise<void> {
     this.closing = true;
+    const active = this.taskOperation;
+    active?.abort.abort(new Error("Application is stopping"));
+    await active?.done;
     for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
     await Promise.all(this.conversations.sessions.map((session) => session.titleTask?.done));
     await this.cancelGitSetup();

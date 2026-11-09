@@ -167,7 +167,25 @@ export function createFakeAgent(options = {}) {
       }
       if (options.reviewWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request === "Implement validation") {
+        if (request === "Implement task loop" || request === "Implement second task loop") {
+          const second = request === "Implement second task loop";
+          const { scope } = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope,
+            requestId: second ? "task-loop-second" : "task-loop-first",
+            label: "Implementation",
+            prompt: JSON.stringify([
+              {
+                write: {
+                  path: second ? "second.txt" : "task.txt",
+                  content: "accepted task result\n",
+                },
+              },
+              { message: "Task result ready" },
+            ]),
+          });
+          steps = [{ message: "Review the task result" }];
+        } else if (request === "Implement validation") {
           const { scope } = await tool("code60_get_context");
           for (const label of ["Validation", "Regression tests"])
             await tool("code60_dispatch_agent", {
@@ -200,8 +218,11 @@ export function createFakeAgent(options = {}) {
             prompt: JSON.stringify([
               {
                 write: {
-                  path: "same.ts",
-                  content: "export const source = 'Validation';\nexport const optional = true;\n",
+                  path: review.title === "Implement second task loop" ? "second.txt" : "same.ts",
+                  content:
+                    review.title === "Implement second task loop"
+                      ? "user edit\nworker correction\n"
+                      : "export const source = 'Validation';\nexport const optional = true;\n",
                 },
               },
               { message: "Optional values fixed" },

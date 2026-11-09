@@ -51,6 +51,7 @@ import {
   parseSetupBegin,
   parseSetupSession,
   parseStart,
+  parseTaskAction,
   parseUpdateAction,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
@@ -507,6 +508,7 @@ async function ready(): Promise<void> {
   handle("desktop:diff-read", (value) => controller.readDiff(parseDiffRequest(value)));
   handle("desktop:plan-read", (value) => controller.readPlan(parsePlanRead(value)));
   handle("desktop:plan-action", (value) => controller.planAction(parsePlanAction(value)));
+  handle("desktop:task-action", (value) => controller.taskAction(parseTaskAction(value)));
   handle("desktop:review-action", (value) => controller.reviewAction(parseReviewAction(value)));
   handle("desktop:review-read", (value) => controller.readReview(parseReviewRead(value)));
   handle("desktop:review-capture", (value) => controller.captureReview(parseReviewRead(value)));
