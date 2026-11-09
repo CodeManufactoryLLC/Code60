@@ -54,6 +54,7 @@ jobs:
           package-manager-cache: false
       - uses: ./.github/actions/setup-linux-desktop
       - run: npm ci
+      - run: node scripts/install-electron.mjs
       - run: xvfb-run -a npm run test:desktop
       - run: npm run package:linux
       - run: xvfb-run -a npm run test:installers

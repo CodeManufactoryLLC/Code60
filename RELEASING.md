@@ -87,13 +87,27 @@ compare the relevant line for the installer you downloaded).
 
 The repository uses only standard GitHub-hosted Linux runners for PRs and pushes
 to main. Windows x64 and Apple Silicon `macos-15` runners run only for explicitly
-requested releases. Require **CI passed** rather than individual platform checks
+requested releases or manual native validation. Require **CI passed** rather than individual platform checks
 in branch protection.
 The aggregate fails on failed, cancelled, or skipped validation jobs. If merge
 queues are enabled later, add their `merge_group` trigger before using the queue.
 Apply and verify the [versioned branch ruleset](.github/rulesets/README.md).
 It requires reviewed PRs, up-to-date CI, and resolved discussions, and prevents
 direct pushes, force pushes, and deletion without administrator bypasses.
+
+Before tagging a candidate, run **Native release validation** on its branch with
+`gh workflow run native-validation.yml --ref <branch>`. This runs the unit and
+Electron suites on both native platforms without signing secrets or publication
+rights. It does not replace the release workflow's installer, signing, notarization,
+and installed-app checks. A failed candidate tag stays immutable; validate fixes
+before creating the next version.
+Desktop jobs install Electron explicitly before tests. An official GitHub asset
+server error gets one retry with a cache-busting query; the locked package’s
+bundled checksums still apply. Checksum, access, and repeated download failures
+stop validation.
+Windows runs place temporary fixtures in `RUNNER_TEMP`; the default profile temp
+path plus nested review IDs can exceed the helper's supported 247-character path
+limit. This does not change application storage paths or enable Windows long paths.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.
