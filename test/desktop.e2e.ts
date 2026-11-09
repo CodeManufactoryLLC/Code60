@@ -5952,6 +5952,15 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     const status = chat.locator(".activity-display");
     await expect(status).toHaveCount(0);
     const input = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
+    const tooltip = page.getByRole("tooltip");
+    const focusActivityTooltip = async (text: string) => {
+      // Focus can scroll the live row into view, dismissing its first tooltip.
+      await expect(async () => {
+        await input.focus();
+        await status.focus();
+        await expect(tooltip).toContainText(text, { timeout: 200 });
+      }).toPass({ timeout: 1000 });
+    };
     const waitForFadeOut = () =>
       status.evaluate(
         (element) =>
@@ -6096,7 +6105,6 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect
       .poll(() => closedDetails.evaluate((element) => element.getBoundingClientRect().height))
       .toBe(0);
-    const tooltip = page.getByRole("tooltip");
     await expect(async () => {
       await input.hover();
       await status.locator(".activity-name").hover();
@@ -6108,9 +6116,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(tooltip.locator("script")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(tooltip).toHaveCount(0);
-    await input.focus();
-    await status.focus();
-    await expect(tooltip).toContainText("Agent-reported purpose:");
+    await focusActivityTooltip("Agent-reported purpose:");
     await page.keyboard.press("Escape");
     await input.focus();
     await page.screenshot({ path: test.info().outputPath("activity-light.png") });
@@ -6164,8 +6170,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       "data-tooltip",
       /Agent-reported purpose: Checking cancellation/,
     );
-    await status.focus();
-    await expect(tooltip).toContainText("Observed activity: Executing");
+    await focusActivityTooltip("Observed activity: Executing");
     await expect(status).not.toContainText("Tests passed");
     expect((await waitForFadeOut()).state).toBe("executing");
     await expect(status).toHaveAttribute("data-activity", "searching");
@@ -6176,10 +6181,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     ).toBe(labelLeft);
     await expect(activityTimer).toHaveText("0s");
     await expect(status).not.toHaveAttribute("data-tooltip", /other operation/);
-    // A layout/scroll change may dismiss the old tooltip; inspect the new activity via focus.
-    await input.focus();
-    await status.focus();
-    await expect(tooltip).toContainText("Observed activity: Searching");
+    await focusActivityTooltip("Observed activity: Searching");
     await expect(tooltip).not.toContainText("other operation");
     await page.reload();
     await expect(status).toHaveAttribute("data-activity", "searching");
@@ -6198,8 +6200,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(status.locator("img")).toHaveAttribute("src", /waiting_for_workers.*\.gif$/);
     await expect(status).toHaveCSS("opacity", "1");
     await page.screenshot({ path: test.info().outputPath("monitoring-subagents.png") });
-    await status.focus();
-    await expect(tooltip).toContainText("Monitoring worker replies");
+    await focusActivityTooltip("Monitoring worker replies");
     const closing = await waitForFadeOut();
     expect(closing.state).toBe("waiting_for_workers");
     expect(closing.collapsing).toBe(true);

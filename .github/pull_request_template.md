@@ -13,7 +13,9 @@ For a bug fix, describe the original problem and how this change resolves it. --
 
 <!-- Record exact commands and results, not just "tested".
 Run `npm run check` before each commit. For desktop changes, also run
-`npm run test:desktop` (requires a display). Include regression coverage for
+`npm run test:desktop:container` (Docker, no host UI). Host UI testing requires
+the user's explicit approval for that run; never fall back to it when Docker fails.
+Record any approved native-platform checks separately. Include regression coverage for
 behavior changes and manual reproduction steps where relevant. -->
 
 - Automated checks and results:
@@ -39,7 +41,7 @@ Testing done or Relevant context section rather than implying it was tested. -->
 
 - [ ] `npm run check` passes.
 - [ ] Tests cover changed behavior, including a regression test for bug fixes.
-- [ ] Desktop changes have been verified with `npm run test:desktop`.
+- [ ] Desktop changes have been verified with `npm run test:desktop:container`; any host UI testing had explicit approval.
 - [ ] CLI help and relevant documentation reflect user-visible changes.
 - [ ] Changes follow `ARCHITECTURE.md` and the applicable `AGENTS.md` instructions.
 - [ ] Each commit includes the Developer Certificate of Origin sign-off required by `CONTRIBUTING.md`.

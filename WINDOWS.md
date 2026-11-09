@@ -50,9 +50,15 @@ npm run build
 node dist/cli/main.js --help
 node dist/cli/main.js --version
 npm run check
-npm run test:desktop
+npm run test:desktop:container
 npm run package:win
 ```
+
+Automated desktop tests default to Docker Desktop's Linux engine, without host
+UI windows. They validate Linux behavior, not native Windows acceptance.
+`npm run test:desktop` opens host UI and requires the user's explicit approval
+before an agent runs it. Do not fall back to host UI testing if Docker fails.
+See [desktop test isolation](CONTRIBUTING.md#do-not-run-ui-tests-on-the-users-desktop-by-default).
 
 The existing `npm run install:global` workflow installs the CLI separately.
 The desktop installer never installs that command. CLI stdout, JSON, flags and

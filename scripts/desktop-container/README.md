@@ -3,6 +3,11 @@
 Run from the repository with `npm run test:desktop:container`. See
 [Contributing](../../CONTRIBUTING.md#desktop-tests-in-a-linux-container) for usage.
 
+**This is the default for automated desktop tests, including focused and repeated
+runs.** Do not fall back to tests that open windows on the user's desktop if
+Docker or a build fails. Report the blocker; host UI testing requires the user's
+explicit approval for that run.
+
 `seccomp.json` is based on Microsoft Playwright commit
 `ae935a43d9e376e4759548f6b3c6905c7b282333`:
 https://github.com/microsoft/playwright/blob/ae935a43d9e376e4759548f6b3c6905c7b282333/utils/docker/seccomp_profile.json

@@ -70,12 +70,27 @@ Useful scripts:
 - `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
 - `npm run build`: compile the CLI and desktop main process and build the renderer.
 - `npm run dev`: build and start the desktop app with rebuilds on changes.
-- `npm run test:desktop`: build and run the Electron Playwright tests. A display is required.
-- `npm run test:desktop:container`: build and run the same desktop suite in Linux with Xvfb, without opening windows on your Mac.
+- `npm run test:desktop:container`: **default for automated desktop testing.** Build and run the Electron Playwright suite in Linux with Xvfb, without opening host desktop windows.
+- `npm run test:desktop`: host-only alternative requiring explicit approval before an agent runs it on the user's desktop. A display is required.
 
-Run `npm run check` before each commit. Run `npm run test:desktop` for desktop
+Run `npm run check` before each commit. Run `npm run test:desktop:container` for desktop
 changes. Tests must not require live agents, credentials, or network services.
 Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
+
+### Do not run UI tests on the user's desktop by default
+
+**Agents must use Docker for automated desktop tests, including focused tests,
+repeated runs, and the full suite.** Do not run `npm run test:desktop`, direct
+`npx playwright test`, custom Electron/browser test scripts, or start the app
+with `npm start` / `npm run dev` for verification on the user's desktop without
+their explicit approval for that host UI run. A general request to test, verify,
+or merge a change does not grant that approval.
+
+If Docker is unavailable or a container build/test fails, report the blocker.
+**Never silently fall back to host UI testing.** Native-platform or live-provider
+checks that need the host require explicit approval first. Dedicated CI runners
+may use the commands in their workflows. `npm run check` may run on the host;
+it does not launch the desktop suite.
 
 ### Investigating flaky tests
 
@@ -103,6 +118,9 @@ state it depends on, not for time:
 Record the failure rate before and after the fix in the pull request.
 
 ### Desktop tests in a Linux container
+
+This is the default local desktop test environment, not an optional alternative
+to opening windows on the user's desktop.
 
 Install and start Docker Desktop with a Linux engine, and make sure `docker info`
 responds in your selected Docker context. You need Node.js and npm on the host,

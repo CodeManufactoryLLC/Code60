@@ -191,7 +191,7 @@ pending run; rerun a release that was cancelled while waiting.
 ```sh
 npm ci
 npm run check
-npm run test:desktop
+npm run test:desktop:container
 npm run package:dir
 # On the appropriate target host:
 npm run package:mac
@@ -200,7 +200,14 @@ npm run package:win
 npm run test:installers
 ```
 
-On Linux, use `xvfb-run -a` around desktop/installer tests when no display is
+Automated desktop tests default to Docker, without opening host UI windows.
+Agents must obtain the user's explicit approval before native host UI checks,
+including `npm run test:desktop` and installer tests that launch the app.
+Do not fall back to host UI testing if Docker fails. Container tests validate
+Linux behavior only; record approved native-platform acceptance separately.
+Dedicated CI runners may use their workflow's native commands.
+
+On an approved Linux test host, use `xvfb-run -a` around desktop/installer tests when no display is
 available. Installer tests install the DEB with `sudo apt-get` and require a
 usable FUSE runtime for AppImage. Run them on a disposable test machine. The
 Mac installer test mounts the DMG read-only and copies the app to a temporary
@@ -322,7 +329,7 @@ git switch -c release/prepare-version
 npm ci
 npm run check
 npm run build
-npm run test:desktop
+npm run test:desktop:container
 npm version patch --no-git-tag-version
 npm run check
 npm run build
