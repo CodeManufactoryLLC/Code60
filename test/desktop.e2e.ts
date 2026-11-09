@@ -5627,6 +5627,12 @@ test("desktop: review failures, retry, cancellation and late responses", async (
       await window.desktop.start({ agents: ["claude"], allow: [], allowAll: false });
     });
     await selectSidebarPage(page, "Sessions");
+    // The queued record contains its future path before Git creates the worktree.
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await window.desktop.snapshot()).runs[0]?.view?.status),
+      )
+      .toBe("idle");
     const worktree = await page.evaluate(
       async () => (await window.desktop.snapshot()).runs[0]?.record.worktree,
     );
