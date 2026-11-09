@@ -6065,6 +6065,35 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
         await page.screenshot({ path: test.info().outputPath("activity-layout-failure.png") });
         throw error;
       });
+    // An older programmatic scroll event may arrive after streamed content grows but before
+    // ResizeObserver runs. It must keep following, while a deliberate scroll still pauses it.
+    const viewport = chat.locator(".transcript");
+    const race = await viewport.evaluate((element) => {
+      const content = element.querySelector(".chat-transcript-content") as HTMLElement;
+      const grow = () => {
+        const spacer = document.createElement("div");
+        spacer.style.height = "300px";
+        content.append(spacer);
+        return spacer;
+      };
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+      const first = grow();
+      element.dispatchEvent(new Event("scroll"));
+      const followedGrowth = element.scrollHeight - element.scrollTop - element.clientHeight;
+      element.scrollTop = 0;
+      element.dispatchEvent(new Event("scroll"));
+      const second = grow();
+      element.dispatchEvent(new Event("scroll"));
+      const preservedReadingPosition = element.scrollTop;
+      first.remove();
+      second.remove();
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+      return { followedGrowth, preservedReadingPosition };
+    });
+    expect(race.followedGrowth).toBeLessThanOrEqual(1);
+    expect(race.preservedReadingPosition).toBe(0);
     expect(
       await status.evaluate(
         (element) =>
