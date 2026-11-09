@@ -5,6 +5,7 @@ import { basename, join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PROMPT_TEMPLATES,
+  type Plan,
   type PollSettingsPatch,
   type PromptTemplates,
   type RunConfiguration,
@@ -1662,6 +1663,220 @@ describe("orchestrated workers over ACP", () => {
     });
     return { call, scope: context.body.result.scope as string };
   }
+
+  it("gates a revised plan, accepts once and persists verified progress", async () => {
+    const { call, scope } = await setup();
+    const chatId = controller.snapshot().chat.run?.id as string;
+    const created = await call("code60_create_plan", {
+      requestId: "plan",
+      title: "Build",
+      description: "Details",
+      tasks: [{ text: "Implement" }, { text: "Test" }],
+    });
+    expect(created.status).toBe(200);
+    let plan = created.body.result as unknown as Plan;
+    expect(controller.snapshot().chat.plans?.[0]).toMatchObject({
+      state: "draft",
+      total: 2,
+      completed: 0,
+    });
+    expect(
+      (await call("code60_dispatch_agent", { scope, requestId: "early", prompt: "Work" })).body
+        .error,
+    ).toContain("Accept");
+    const revised = await call("code60_update_plan", {
+      operation: "revise",
+      planId: plan.id,
+      revision: plan.revision,
+      draft: {
+        title: "Revised",
+        description: "More detail",
+        tasks: [{ id: plan.tasks[0]?.id, text: "Implement" }],
+      },
+    });
+    expect(revised.status).toBe(200);
+    await expect(
+      controller.planAction({ type: "accept", chatId, planId: plan.id, revision: plan.revision }),
+    ).rejects.toThrow("changed");
+    plan = revised.body.result as unknown as Plan;
+    const action = { type: "accept" as const, chatId, planId: plan.id, revision: plan.revision };
+    const before = chatPrompts().length;
+    await Promise.all([controller.planAction(action), controller.planAction(action)]);
+    await vi.waitFor(() => expect(chatPrompts()).toHaveLength(before + 1));
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    expect(
+      (await call("code60_dispatch_agent", { scope, requestId: "no-task", prompt: "Work" })).body
+        .error,
+    ).toContain("planTaskId");
+    const worker = await call("code60_dispatch_agent", {
+      scope,
+      requestId: "planned",
+      prompt: "Work",
+      planTaskId: plan.tasks[0]?.id,
+    });
+    expect(worker.status).toBe(200);
+    await vi.waitFor(() => expect(session(worker.body.result.runId)?.prompts).toHaveLength(1));
+    plan = await controller.readPlan({ chatId, planId: plan.id });
+    expect(plan.tasks[0]?.workerIds).toContain(worker.body.result.runId);
+    const progress = await call("code60_update_plan", {
+      operation: "progress",
+      planId: plan.id,
+      revision: plan.revision,
+      taskId: plan.tasks[0]?.id,
+      state: "completed",
+      note: "Inspected worker output and passing tests",
+      workerIds: [worker.body.result.runId],
+    });
+    expect(progress.status).toBe(200);
+    expect(controller.snapshot().chat.plans?.[0]).toMatchObject({
+      state: "completed",
+      completed: 1,
+      total: 1,
+    });
+    const markdown = await fs.readFile(
+      join(controller.snapshot().chat.directory as string, "plans", `${plan.id}.md`),
+      "utf8",
+    );
+    expect(markdown).toContain("- [x] Implement");
+    expect(markdown).not.toContain("out of");
+    await controller.orchestrationChatAction({ type: "new" });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const other = caller(
+      agents.specs.findIndex((spec) => spec.cwd === controller.snapshot().chat.directory),
+    );
+    expect((await other("code60_read_plan", { planId: plan.id })).body.error).toContain(
+      "Unknown plan",
+    );
+  });
+
+  it("queues acceptance behind a busy chat, pauses on Stop and resumes only explicitly", async () => {
+    const { call } = await setup();
+    const chatId = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id: chatId, text: "HANG while busy" });
+    await vi.waitFor(() => expect(chatStatus()).toBe("running"));
+    const created = await call("code60_create_plan", {
+      requestId: "busy-plan",
+      title: "Later",
+      description: "",
+      tasks: [{ text: "Work" }],
+    });
+    let plan = created.body.result as unknown as Plan;
+    const before = chatPrompts().length;
+    await controller.planAction({
+      type: "accept",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    expect(controller.snapshot().chat.plans?.[0]?.state).toBe("queued");
+    expect(chatPrompts()).toHaveLength(before);
+    await controller.orchestrationChatAction({ type: "cancel", id: chatId });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    expect(controller.snapshot().chat.plans?.[0]?.state).toBe("paused");
+    await controller.orchestrationChatAction({ type: "resume-updates", id: chatId });
+    expect(chatPrompts()).toHaveLength(before);
+    plan = await controller.readPlan({ chatId, planId: plan.id });
+    await controller.planAction({
+      type: "resume",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    await vi.waitFor(() => expect(chatPrompts()).toHaveLength(before + 1));
+  });
+
+  it("pauses accepted plans on project changes and releases draft gates only on dismissal", async () => {
+    const { call } = await setup();
+    const chatId = controller.snapshot().chat.run?.id as string;
+    let result = await call("code60_create_plan", {
+      requestId: "scope-plan",
+      title: "Scoped",
+      description: "",
+      tasks: [{ text: "Work" }],
+    });
+    let plan = result.body.result as unknown as Plan;
+    await controller.planAction({
+      type: "accept",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.plans?.[0]?.state).toBe("running"));
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const other = join(directory, "another-project");
+    await fs.mkdir(other);
+    await controller.open(other);
+    plan = await controller.readPlan({ chatId, planId: plan.id });
+    expect(plan.state).toBe("paused");
+    await expect(
+      controller.planAction({ type: "resume", chatId, planId: plan.id, revision: plan.revision }),
+    ).rejects.toThrow("project");
+    await controller.planAction({
+      type: "dismiss",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    result = await call("code60_create_plan", {
+      requestId: "new-scope-plan",
+      title: "New",
+      description: "",
+      tasks: [{ text: "Work" }],
+    });
+    expect(result.status).toBe(200);
+    plan = result.body.result as unknown as Plan;
+    await controller.planAction({
+      type: "dismiss",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    const context = await call("code60_get_context");
+    expect(
+      (
+        await call("code60_dispatch_agent", {
+          scope: context.body.result.scope,
+          requestId: "direct",
+          prompt: "Direct work",
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it("pauses when a planned worker turn fails instead of automatically retrying", async () => {
+    const { call, scope } = await setup();
+    const chatId = controller.snapshot().chat.run?.id as string;
+    const created = await call("code60_create_plan", {
+      requestId: "failure-plan",
+      title: "Failure",
+      description: "",
+      tasks: [{ text: "Work" }],
+    });
+    const plan = created.body.result as unknown as Plan;
+    await controller.planAction({
+      type: "accept",
+      chatId,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.plans?.[0]?.state).toBe("running"));
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    agents.script = () => "max_tokens";
+    const worker = await call("code60_dispatch_agent", {
+      scope,
+      requestId: "failed-worker",
+      prompt: "Work",
+      planTaskId: plan.tasks[0]?.id,
+    });
+    expect(worker.status).toBe(200);
+    await vi.waitFor(() => expect(controller.snapshot().chat.plans?.[0]?.state).toBe("paused"));
+    expect(controller.snapshot().chat.plans?.[0]?.completed).toBe(0);
+    expect(controller.snapshot().chat.updates.paused).toBe(true);
+    expect(
+      (await call("code60_send_agent", { scope, runId: worker.body.result.runId, prompt: "Retry" }))
+        .body.error,
+    ).toContain("resume");
+  });
 
   async function dispatch(call: Call, scope: string, prompt: string, requestId = prompt) {
     const result = await call("code60_dispatch_agent", { scope, requestId, prompt });

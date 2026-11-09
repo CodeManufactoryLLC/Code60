@@ -228,7 +228,9 @@ export function PromptEditorPage({
                     ? "read-only"
                     : tool.kind === "activity"
                       ? "updates activity display"
-                      : "changes worker state"}
+                      : tool.name.includes("plan")
+                        ? "updates plan documents"
+                        : "changes worker state"}
                   )
                 </summary>
                 <pre className="prompt-editor-preview">

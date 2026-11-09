@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopApi, ReviewSummary } from "../bridge/index.js";
+import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { PanelShell } from "./panel-shell.js";
+import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
 
@@ -17,6 +18,7 @@ export function FilePanel({
   onToggle,
   api,
   reviews = [],
+  plans = [],
   project = "",
   currentChat,
   chatIds = [],
@@ -32,6 +34,7 @@ export function FilePanel({
   onToggle(): void;
   api?: DesktopApi;
   reviews?: ReviewSummary[];
+  plans?: PlanSummary[];
   project?: string;
   currentChat?: string | undefined;
   chatIds?: string[];
@@ -94,6 +97,18 @@ export function FilePanel({
               Open Files
             </button>
           </div>
+        ) : selected.kind === "plan" ? (
+          api && active && open && plans.some((plan) => plan.id === selected.planId) ? (
+            <PlanPanelLoader
+              key={selected.planId}
+              api={api}
+              summary={plans.find((plan) => plan.id === selected.planId) as PlanSummary}
+              currentChat={currentChat}
+              project={project || null}
+            />
+          ) : (
+            <p role="status">Plan conversation unavailable.</p>
+          )
         ) : selected.kind === "changes" ? (
           api && active && open && reviews.find((review) => review.id === selected.reviewId) ? (
             <ReviewPanelLoader

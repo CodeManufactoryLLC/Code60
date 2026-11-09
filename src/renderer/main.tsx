@@ -536,6 +536,32 @@ function App() {
     setPicker(undefined);
     if (latest.directory) notify(`Opened ${folderName(latest.directory)}.`);
   };
+  const plans = snapshot?.chats.flatMap((chat) => chat.plans ?? []) ?? [];
+  const openPlan = (id: string) => {
+    const plan = plans.find((item) => item.id === id);
+    if (!plan) return;
+    fileAction({ type: "plan", planId: id, title: plan.title });
+    setExplorerOpen(true);
+    setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+  };
+  const openedPlans = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (splash || workerId) return;
+    for (const plan of snapshot?.chat.plans ?? []) {
+      if (plan.state !== "draft" || openedPlans.current.get(plan.id) === plan.proposalRevision)
+        continue;
+      openedPlans.current.set(plan.id, plan.proposalRevision);
+      setFileTabs((current) =>
+        updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
+          type: "plan",
+          planId: plan.id,
+          title: plan.title,
+        }),
+      );
+      setExplorerOpen(true);
+      setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    }
+  }, [snapshot?.chat.plans, splash, workerId, workspace]);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
   const openReview = (id: string, updates = false) => {
     selectWorker(undefined);
@@ -990,6 +1016,8 @@ function App() {
                   runs={snapshot?.runs ?? []}
                   reviews={snapshot?.reviews ?? []}
                   onReview={openReview}
+                  plans={chat?.plans ?? []}
+                  onPlan={openPlan}
                   active={
                     !splash &&
                     tabs.active === "chat" &&
@@ -1023,6 +1051,7 @@ function App() {
               })}
             </div>
             <FilePanel
+              plans={plans}
               api={api}
               reviews={snapshot?.reviews ?? []}
               project={directory ?? ""}

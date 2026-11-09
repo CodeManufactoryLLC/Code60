@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("desktop", {
   initializeGit: (request: unknown) => ipcRenderer.invoke("desktop:git-initialize", request),
   commitGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-commit", request),
   cancelGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-cancel", request),
+  readPlan: (request: unknown) => ipcRenderer.invoke("desktop:plan-read", request),
+  planAction: (request: unknown) => ipcRenderer.invoke("desktop:plan-action", request),
   readReview: (request: unknown) => ipcRenderer.invoke("desktop:review-read", request),
   reviewAction: (request: unknown) => ipcRenderer.invoke("desktop:review-action", request),
   captureReview: (request: unknown) => ipcRenderer.invoke("desktop:review-capture", request),

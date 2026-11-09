@@ -12,6 +12,16 @@ That is the whole product. The tool talks to agents over the [Agent Client Proto
 
 ## Non-goals
 
+Exception for orchestrator plans: a conversation may save Markdown task lists in
+`<chat working directory>/plans`, with versioned private records in `.code60/plans`.
+Only a human Accept action authorizes the displayed revision. The orchestrator reports
+completion with evidence notes; this does not approve or merge worker changes. Drafts
+block new worker work in that conversation. Plans use existing between-turn delivery,
+not a durable job queue; restart never restores execution authority. Failed or paused
+execution requires explicit continuation. Plan tabs share the Chat side panel and show
+an equally weighted completed/total progress bar and “X out of Y” outside the document.
+
+
 Exception for Chat review: desktop-only review records, immutable bounded file snapshots,
 human review decisions and editable pending feedback are persisted beneath the private
 `.code60_workspace/reviews` directory beside the project database. This is not a general

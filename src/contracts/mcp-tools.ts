@@ -19,6 +19,9 @@ export type McpTableAction = "read" | "search";
 
 /** Worker tools: the orchestration chat dispatches and controls only workers it created. */
 export const MCP_CONTROL_TOOLS = [
+  "code60_create_plan",
+  "code60_read_plan",
+  "code60_update_plan",
   "code60_get_context",
   "code60_dispatch_agent",
   "code60_list_agents",
@@ -125,6 +128,7 @@ export const MCP_TOOL_CONTRACT_INFO =
   "require a Git repository with an initial commit and always run in isolated worktrees, receive no Code60 " +
   "tools, and allow each of their own tool calls once without asking. Live workers, including idle " +
   "ones, count against the configured parallel limit until they are finished or stopped. " +
+  "Plan tools save conversation-owned documents; only the human Accept button starts execution. Drafts block new worker work. " +
   "Activity tools discover supported semantic types and set or clear a turn-scoped display declaration. " +
   "They do not control workers or execute work, need no project authority, and expose no artwork. " +
   "Observed execution and lifecycle states take precedence over agent-reported purpose.";
@@ -175,7 +179,90 @@ const control = (
   destructive,
 });
 
+const planIdInput = {
+  type: "string",
+  format: "uuid",
+  description: "Plan ID returned by create or context.",
+};
+const planDraftInput = {
+  title: { type: "string", minLength: 1, maxLength: 160 },
+  description: { type: "string", maxLength: 16_000 },
+  tasks: {
+    type: "array",
+    minItems: 1,
+    maxItems: 100,
+    items: {
+      type: "object",
+      additionalProperties: false,
+      required: ["text"],
+      properties: {
+        id: {
+          type: "string",
+          format: "uuid",
+          description: "On revision, retain an existing task ID. Omit for a new task.",
+        },
+        text: { type: "string", minLength: 1, maxLength: 2_000 },
+      },
+    },
+  },
+};
+
 export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] = [
+  control(
+    "code60_create_plan",
+    "Create a plan",
+    "Save a Markdown task list in this conversation's plans folder and open its review tab. Returns the draft with task IDs and revision. Wait for the human Accept action before executing. Reuse requestId only for an identical request; revise or dismiss an unfinished plan before creating another.",
+    object({ ...planDraftInput, requestId: { type: "string", minLength: 1, maxLength: 128 } }, [
+      "requestId",
+      "title",
+      "description",
+      "tasks",
+    ]),
+    false,
+  ),
+  control(
+    "code60_read_plan",
+    "Read a plan",
+    "Read this conversation's saved plan, current revision, task states and Markdown. Use before revising or reporting progress after a conflict.",
+    object({ planId: planIdInput }, ["planId"]),
+    true,
+  ),
+  control(
+    "code60_update_plan",
+    "Update a plan",
+    "Revise an unaccepted draft or report one task's progress during accepted execution. Returns the saved plan and new revision. For revise supply draft; for progress supply taskId, state and an evidence note. Completed means verified work, not merely an ended worker turn. A blocked task pauses execution until the user resumes. Cannot accept a plan.",
+    object(
+      {
+        planId: planIdInput,
+        revision: {
+          type: "integer",
+          minimum: 1,
+          description: "Latest revision returned by read or update.",
+        },
+        operation: { type: "string", enum: ["revise", "progress"] },
+        draft: {
+          ...object(planDraftInput, ["title", "description", "tasks"]),
+          description: "Complete replacement draft for revise.",
+        },
+        taskId: { type: "string", format: "uuid" },
+        state: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
+        note: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2_000,
+          description: "Inspected evidence or the reason work is blocked.",
+        },
+        workerIds: {
+          type: "array",
+          maxItems: 100,
+          items: { type: "string" },
+          description: "Owned workers responsible for this task.",
+        },
+      },
+      ["planId", "revision", "operation"],
+    ),
+    false,
+  ),
   control(
     "code60_read_review",
     "Read review feedback",
@@ -190,6 +277,12 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
     object(
       {
         ...scopeInput,
+        planTaskId: {
+          type: "string",
+          format: "uuid",
+          description:
+            "Required during plan execution: the unfinished task this worker will perform.",
+        },
         reviewId: { type: "string", format: "uuid" },
         commentId: { type: "string", format: "uuid" },
         note: { type: "string", minLength: 1, maxLength: 2000 },
@@ -290,11 +383,19 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
     "code60_send_agent",
     "Send to a worker",
     "Sends a follow-up prompt to an idle worker, which keeps its ACP session and context. Fails while the worker is busy.",
-    object({ ...scopeInput, ...runIdInput, ...promptInput("The follow-up message.") }, [
-      "scope",
-      "runId",
-      "prompt",
-    ]),
+    object(
+      {
+        planTaskId: {
+          type: "string",
+          format: "uuid",
+          description: "Task for accepted plan work; defaults to this worker’s assigned task.",
+        },
+        ...scopeInput,
+        ...runIdInput,
+        ...promptInput("The follow-up message."),
+      },
+      ["scope", "runId", "prompt"],
+    ),
     false,
   ),
   control(
@@ -324,11 +425,19 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
     "code60_resume_agent",
     "Resume a worker",
     "Continues an ended worker with a new prompt in its existing worktree. Code60 restores its ACP session when the agent supports that, and otherwise starts a fresh session with a summary of the earlier work.",
-    object({ ...scopeInput, ...runIdInput, ...promptInput("The new message for the worker.") }, [
-      "scope",
-      "runId",
-      "prompt",
-    ]),
+    object(
+      {
+        planTaskId: {
+          type: "string",
+          format: "uuid",
+          description: "Task for accepted plan work; defaults to this worker’s assigned task.",
+        },
+        ...scopeInput,
+        ...runIdInput,
+        ...promptInput("The new message for the worker."),
+      },
+      ["scope", "runId", "prompt"],
+    ),
     false,
   ),
 ];
