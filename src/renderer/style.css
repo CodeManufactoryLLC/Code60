@@ -649,7 +649,8 @@ button.project-card {
   background: var(--hover-bg);
   color: var(--text);
 }
-.page-tab [role="tab"][aria-selected="true"]:not(.page-group-toggle),
+/* :where keeps this below `.sidebar button:hover`, so the selected tab still shows hover. */
+.page-tab [role="tab"][aria-selected="true"]:where(:not(.page-group-toggle)),
 .page-tab .page-group-toggle[data-active="true"],
 .sidebar-settings-heading[data-active="true"] {
   --control-fill: var(--accent-bg);
