@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("desktop", {
   readPlan: (request: unknown) => ipcRenderer.invoke("desktop:plan-read", request),
   planAction: (request: unknown) => ipcRenderer.invoke("desktop:plan-action", request),
   readReview: (request: unknown) => ipcRenderer.invoke("desktop:review-read", request),
+  taskAction: (request: unknown) => ipcRenderer.invoke("desktop:task-action", request),
   reviewAction: (request: unknown) => ipcRenderer.invoke("desktop:review-action", request),
   captureReview: (request: unknown) => ipcRenderer.invoke("desktop:review-capture", request),
   readReviewFile: (request: unknown) => ipcRenderer.invoke("desktop:review-file", request),

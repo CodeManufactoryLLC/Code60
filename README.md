@@ -5,6 +5,11 @@ in parallel. In a Git repository with a commit, each run gets its own worktree
 so you can review its changes independently. Outside one, agents work directly
 in the selected directory.
 
+In desktop Chat, open **Review changes** to inspect a task revision. **Use these changes…**
+opens a preview before applying the worker's result to your project. **Ask workers to revise**
+sends application conflicts back through Chat. **Undo application** restores the previous
+contents if the applied files still match. Applying and undoing preserve Git staging.
+
 ## Security and privacy
 
 **Worktrees isolate changes, not permissions. Code60 does not sandbox agents.**

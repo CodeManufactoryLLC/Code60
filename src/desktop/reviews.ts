@@ -10,7 +10,7 @@ import {
   type ReviewRevision,
   reviewSchema,
 } from "../bridge/index.js";
-import type { ReviewSnapshotFile } from "../core/index.js";
+import type { ReviewSnapshotFile, TaskSource } from "../core/index.js";
 import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -152,6 +152,7 @@ export class ReviewStore {
   async capture(
     id: string,
     results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[],
+    sources?: TaskSource[],
   ): Promise<void> {
     const contents = results.flatMap((result) =>
       (result.files ?? []).map((file) => ({
@@ -173,7 +174,8 @@ export class ReviewStore {
       const previous = review.revisions.at(-1);
       if (
         previous &&
-        JSON.stringify([previous.files, previous.errors]) === JSON.stringify([files, errors])
+        JSON.stringify([previous.files, previous.errors, previous.sources]) ===
+          JSON.stringify([files, errors, sources])
       ) {
         delete review.error;
         return;
@@ -185,6 +187,7 @@ export class ReviewStore {
         at: new Date().toISOString(),
         files,
         errors,
+        ...(sources ? { sources } : {}),
       };
       // Keep revision paths no longer than review metadata paths on Windows.
       await save(join(this.root, `${revision.id}.rev`), contents);
@@ -314,6 +317,20 @@ export class ReviewStore {
         throw new Error("This submission can no longer be changed");
       batch.state = action.type === "withdraw" ? "withdrawn" : "pending";
       delete batch.error;
+    });
+  }
+  async requestRevision(id: string, revisionId: string, text: string): Promise<void> {
+    await this.mutate(id, (review) => {
+      if (review.revisions.at(-1)?.id !== revisionId)
+        throw new Error("Refresh the conflict preview before asking for a revision");
+      const commentId = randomUUID();
+      review.comments.push({ id: commentId, revisionId, text, state: "draft" });
+      review.submissions.push({
+        id: randomUUID(),
+        revisionId,
+        commentIds: [commentId],
+        state: "pending",
+      });
     });
   }
   async feedback(id: string, submissionId: string): Promise<string> {

@@ -66,6 +66,7 @@ export { ExitCode, type ExitCodeValue, type ExitContext, exitCodeFor } from "./e
 export type { Orchestrator } from "./orchestrator.js";
 export { decide, parseToolKinds } from "./policy.js";
 export { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "./recovery.js";
+export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
 export { CODE60_VERSION, RUN_RECORD_FORMAT } from "./version.js";
