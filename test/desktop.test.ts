@@ -763,6 +763,9 @@ describe("desktop orchestration", () => {
     const workspace = await openWorkspace(controllerDeps(), directory, {
       XDG_STATE_HOME: join(directory, "state"),
     });
+    // The live status changes before its atomic save. Wait before replacing the record
+    // with a legacy fixture, otherwise the pending save can overwrite our fixture.
+    await vi.waitFor(async () => expect((await workspace.store.read(id)).status).toBe("idle"));
     await workspace.store.save({ ...(await workspace.store.read(id)), base: null, branch: null });
     await expect(controller.action({ type: "reply", id, text: "more work" })).rejects.toThrow(
       "No baseline",
