@@ -9,6 +9,9 @@ const release = parse(
 const protection = JSON.parse(
   await readFile(new URL("../.github/rulesets/protected-branches.json", import.meta.url), "utf8"),
 );
+const native = parse(
+  await readFile(new URL("../.github/workflows/native-validation.yml", import.meta.url), "utf8"),
+);
 
 describe("branch protection policy", () => {
   it("actively protects the default, main, and dev branches without bypasses or exclusions", () => {
@@ -54,6 +57,19 @@ describe("branch protection policy", () => {
 });
 
 describe("CI and release gates", () => {
+  it("allows explicit native checks without signing secrets or publication rights", () => {
+    expect(Object.keys(native.on)).toEqual(["workflow_dispatch"]);
+    expect(native.permissions).toEqual({ contents: "read" });
+    expect(native.jobs.native.strategy.matrix.os).toEqual(["windows-2025", "macos-15"]);
+    expect(native.jobs.native.strategy["fail-fast"]).toBe(false);
+    expect(native.jobs.native.steps.filter((step) => step.run).map((step) => step.run)).toEqual([
+      "npm ci",
+      "npm run check",
+      "npm run test:desktop",
+    ]);
+    expect(JSON.stringify(native)).not.toContain("secrets.");
+    expect(Object.keys(native.jobs)).toEqual(["native"]);
+  });
   it("checks only Linux without signing secrets or publication rights", () => {
     expect(ci.permissions).toEqual({ contents: "read" });
     expect(Object.keys(ci.jobs).sort()).toEqual(["check", "desktop", "passed"]);

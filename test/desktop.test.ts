@@ -1147,6 +1147,11 @@ describe("app-wide orchestration chat", () => {
     expect(controller.snapshot().chat.run?.id).toBe(id);
     expect(agents.specs).toEqual(original);
     expect(agents.sessions.every((session) => session.stops.length === 0)).toBe(true);
+    await vi.waitFor(() =>
+      expect(
+        controller.snapshot().runs.find((run) => run.record.id === manualId)?.view?.status,
+      ).toBe("idle"),
+    );
     await controller.orchestrationChatAction({ type: "send", id, text: "same session" });
     await controller.action({ type: "reply", id: manualId as string, text: "same manual session" });
     expect(agents.specs).toHaveLength(2);
@@ -1880,7 +1885,7 @@ describe("orchestrated workers over ACP", () => {
 
   async function dispatch(call: Call, scope: string, prompt: string, requestId = prompt) {
     const result = await call("code60_dispatch_agent", { scope, requestId, prompt });
-    expect(result.status).toBe(200);
+    expect(result.status, result.body.error).toBe(200);
     return result.body.result.runId as string;
   }
 
