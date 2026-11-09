@@ -1,5 +1,8 @@
 # Planning and releasing Code60
 
+See [the roadmap](ROADMAP.md) for the planned version sequence and links to the
+GitHub issues and milestones that own implementation scope and progress.
+
 Issues describe individual changes. Milestones define planned versions. GitHub
 Releases identify shipped versions and provide notes and any downloadable builds.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for issue triage and labels.
