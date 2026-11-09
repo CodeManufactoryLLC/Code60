@@ -5,6 +5,25 @@ Electron and React desktop app and a headless command-line interface. Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
+## Desktop test isolation (mandatory)
+
+- **Run automated desktop tests in Docker by default:** use
+  `npm run test:desktop:container`, including for focused tests and repeated runs.
+  This runs Electron under Xvfb inside Linux, without opening host desktop windows.
+- **Do not launch tests on the user's desktop without their explicit approval
+  for that host UI run.** This includes `npm run test:desktop`, direct
+  `npx playwright test`, custom Electron/browser test scripts, and launching the
+  app with `npm start` or `npm run dev` for verification. A request to implement,
+  test, verify, or merge a change is not permission to open host windows.
+- If Docker is unavailable or its build/test fails, report the blocker. Do not
+  fall back to host UI tests. Ask for explicit approval only if a host run is
+  necessary, such as native-platform or live-provider verification.
+- Dedicated CI runners may use their workflow's native desktop test commands.
+  Linux container results do not replace explicitly approved native-platform
+  acceptance testing.
+- `npm run check` does not launch desktop tests and may run on the host.
+  Follow the Docker cleanup requirements below after every container run.
+
 ## Architecture and Module Rules
 
 - Read `ARCHITECTURE.md` before changing behavior. It defines the modules
@@ -28,8 +47,9 @@ environments.
   Run the CLI locally with `node dist/cli/main.js`.
 - `npm run dev` builds and starts the desktop app, rebuilding and restarting it
   on changes. `npm start` starts the built app.
-- `npm run test:desktop` builds and runs the Playwright Electron smoke test
-  (`test/desktop.e2e.ts`). It needs a display; `npm run check` does not run it.
+- `npm run test:desktop:container` builds and runs the Playwright Electron tests
+  (`test/desktop.e2e.ts`) in Docker. This is the default for local desktop checks.
+  `npm run test:desktop` runs on the host and requires explicit approval as above.
 - `npm run install:global` installs dependencies, builds, and links the
   `code60` command globally with `npm link`. `npm run uninstall:global`
   removes the link.
