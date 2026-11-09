@@ -114,7 +114,7 @@ export function ChatPage({
   const content = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const position = useRef(0);
-  const geometry = useRef({ width: 0, height: 0 });
+  const geometry = useRef({ width: 0, height: 0, contentHeight: 0 });
   const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
   const ready = run?.status === "idle" && !run.stopping && !run.modeChanging;
@@ -266,14 +266,22 @@ export function ChatPage({
     const element = scroll.current;
     if (!active || !element) return;
     element.scrollTop = follow.current ? element.scrollHeight : position.current;
-    geometry.current = { width: element.clientWidth, height: element.clientHeight };
+    geometry.current = {
+      width: element.clientWidth,
+      height: element.clientHeight,
+      contentHeight: element.scrollHeight,
+    };
   }, [active, events, visible, progress]);
   useEffect(() => {
     const element = scroll.current;
     if (!active || !element) return;
     const resize = new ResizeObserver(() => {
       if (follow.current) element.scrollTop = element.scrollHeight;
-      geometry.current = { width: element.clientWidth, height: element.clientHeight };
+      geometry.current = {
+        width: element.clientWidth,
+        height: element.clientHeight,
+        contentHeight: element.scrollHeight,
+      };
     });
     resize.observe(element);
     if (content.current) resize.observe(content.current);
@@ -434,11 +442,16 @@ export function ChatPage({
             const element = scroll.current;
             const resized =
               geometry.current.width !== element.clientWidth ||
-              geometry.current.height !== element.clientHeight;
+              geometry.current.height !== element.clientHeight ||
+              geometry.current.contentHeight !== element.scrollHeight;
             if (resized && follow.current) element.scrollTop = element.scrollHeight;
             else
               follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-            geometry.current = { width: element.clientWidth, height: element.clientHeight };
+            geometry.current = {
+              width: element.clientWidth,
+              height: element.clientHeight,
+              contentHeight: element.scrollHeight,
+            };
             position.current = element.scrollTop;
           }}
         >

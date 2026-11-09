@@ -60,16 +60,27 @@ export function safeFindings(findings, source) {
   });
 }
 
+/** Retry a cached GitHub server failure once, still requiring the exact pinned bytes. */
+export async function downloadArchive(asset, request = fetch) {
+  const url = `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_${asset[0]}`;
+  for (const suffix of ["", "?download=1"]) {
+    const response = await request(`${url}${suffix}`, { signal: AbortSignal.timeout(60_000) });
+    if (response.ok) {
+      const bytes = Buffer.from(await response.arrayBuffer());
+      verifyArchive(bytes, asset[1]);
+      return bytes;
+    }
+    await response.body?.cancel();
+    if (response.status < 500 || suffix)
+      throw new Error(`Gitleaks download failed (HTTP ${response.status})`);
+  }
+  throw new Error("Gitleaks download failed");
+}
+
 export async function installScanner(directory) {
   const asset = ARCHIVES[`${process.platform}-${process.arch}`];
   if (!asset) throw new Error("No pinned Gitleaks binary for this platform");
-  const response = await fetch(
-    `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_${asset[0]}`,
-    { signal: AbortSignal.timeout(60_000) },
-  );
-  if (!response.ok) throw new Error(`Gitleaks download failed (HTTP ${response.status})`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  verifyArchive(bytes, asset[1]);
+  const bytes = await downloadArchive(asset);
   const archive = join(directory, `scanner.${asset[0].endsWith(".zip") ? "zip" : "tar.gz"}`);
   await writeFile(archive, bytes, { mode: 0o600, flag: "wx" });
   const name = process.platform === "win32" ? "gitleaks.exe" : "gitleaks";
