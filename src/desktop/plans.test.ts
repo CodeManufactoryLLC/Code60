@@ -11,8 +11,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function setup() {
-  const root = await mkdtemp(join(tmpdir(), "code60-plan-"));
-  roots.push(root);
+  const parent = await mkdtemp(join(tmpdir(), "code60-plan-"));
+  roots.push(parent);
+  const root = join(parent, "chat");
   return { root, store: await PlanStore.open(root, "chat") };
 }
 const draft = {

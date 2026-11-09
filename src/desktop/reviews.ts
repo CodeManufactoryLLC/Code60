@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type Review,
   type ReviewAction,
@@ -56,7 +56,7 @@ async function readJson(path: string): Promise<unknown> {
 async function save(path: string, value: unknown): Promise<void> {
   const data = JSON.stringify(value);
   if (Buffer.byteLength(data) > MAX_RECORD) throw new Error("Review storage limit reached");
-  const temp = `${path}.${randomUUID()}.tmp`;
+  const temp = join(dirname(path), `${randomUUID()}.tmp`);
   try {
     await writePrivateFile(temp, data, { mode: 0o600, flag: "wx" });
     await atomicReplace(temp, path);

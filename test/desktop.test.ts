@@ -144,7 +144,7 @@ const controllerDeps = (): CoreDeps => {
     agents,
     git,
     fs: {
-      ...(fs as unknown as CoreDeps["fs"]),
+      ...defaultDeps().fs,
       readdir: async (path) => {
         const ids = await fs.readdir(path);
         await listGate?.();

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type Plan,
   type PlanAction,
@@ -61,7 +61,7 @@ async function read(path: string): Promise<unknown> {
 async function write(path: string, data: string) {
   if (Buffer.byteLength(data) > MAX_BYTES) throw new Error("Plan storage limit reached");
   await regular(path);
-  const temporary = `${path}.${randomUUID()}.tmp`;
+  const temporary = join(dirname(path), `${randomUUID()}.tmp`);
   try {
     await writePrivateFile(temporary, data, { flag: "wx", mode: 0o600 });
     await atomicReplace(temporary, path);

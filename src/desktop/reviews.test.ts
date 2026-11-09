@@ -139,3 +139,17 @@ it("rejects corrupt records rather than silently presenting an empty review", as
   await writeFile(join(store.root, `${review.id}.json`), "{}");
   await expect(ReviewStore.open(root, "/project")).rejects.toThrow();
 });
+
+it("persists review revisions near the Windows path limit", async () => {
+  // Keep the final record supported while an appended UUID temporary name would exceed 247.
+  const nested = join(root, "x".repeat(Math.max(1, 90 - root.length - 1)));
+  store = await ReviewStore.open(nested, "/project");
+  const { review, revision, identity } = await fixture();
+  const path = join(store.root, review.id, `${revision.id}.json`);
+  expect(path.length).toBeLessThan(248);
+  expect(path.length + 41).toBeGreaterThan(247);
+  store = await ReviewStore.open(nested, identity.project);
+  expect((await store.content(review.id, revision.id, "worker-a:same.ts")).modified).toBe(
+    "first\n",
+  );
+});

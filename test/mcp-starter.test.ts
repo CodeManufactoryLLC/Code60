@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConfig } from "../src/core/index.js";
 
 const starterUrl = new URL("../mcp.default.json", import.meta.url);
 const require = createRequire(import.meta.url);
+afterEach(() => vi.unstubAllEnvs());
 
 describe("bundled MCP starter", () => {
   it("is valid opt-in config with pinned stdio packages and isolated headless browsing", async () => {
@@ -28,6 +29,7 @@ describe("bundled MCP starter", () => {
   });
 
   it("ships as a readable resource in desktop and CLI distributions", async () => {
+    vi.stubEnv("CODE60_RELEASE", "0");
     const packaging = require("../scripts/packaging-config.cjs");
     expect(packaging.extraResources).toContainEqual({
       from: "mcp.default.json",
