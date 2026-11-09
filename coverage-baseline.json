@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "measurement": {
+    "vitest": "5.1.0",
+    "provider": "@vitest/coverage-v8@5.1.0",
+    "runtimes": ["22.12.0", "24.22.0"],
+    "host": "macOS arm64",
+    "policy": "Floors use the lower measured supported-runtime result. Native Windows/Linux validation remains required; simulated process protocol tests do not establish native ACL or installer correctness."
+  },
+  "overall": { "statements": 59.8, "branches": 52.6, "functions": 51.4, "lines": 61.6 },
+  "files": {
+    "src/agents/index.ts": { "statements": 81.1, "branches": 80.7, "functions": 66.6, "lines": 82 },
+    "src/agents/process.ts": { "statements": 96, "branches": 75, "functions": 80, "lines": 95.8 },
+    "src/bridge/logs.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
+    "src/contracts/logs.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
+    "src/core/orchestrator.ts": {
+      "statements": 95.9,
+      "branches": 92,
+      "functions": 97.5,
+      "lines": 98.7
+    },
+    "src/core/policy.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
+    "src/core/processes.ts": {
+      "statements": 100,
+      "branches": 96.7,
+      "functions": 100,
+      "lines": 100
+    },
+    "src/core/recovery.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
+    "src/core/run.ts": { "statements": 92.2, "branches": 86.7, "functions": 89.2, "lines": 92.9 },
+    "src/desktop/controller.ts": {
+      "statements": 87.9,
+      "branches": 79.7,
+      "functions": 89.6,
+      "lines": 90.7
+    },
+    "src/desktop/conversation-coordinator.ts": {
+      "statements": 98.4,
+      "branches": 95,
+      "functions": 96.1,
+      "lines": 99.1
+    },
+    "src/desktop/log-store.ts": {
+      "statements": 90,
+      "branches": 84,
+      "functions": 94.5,
+      "lines": 93
+    },
+    "src/desktop/preload.cts": {
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    "src/platform/process.ts": {
+      "statements": 95,
+      "branches": 86.3,
+      "functions": 86.4,
+      "lines": 95.3
+    },
+    "src/renderer/log-model.ts": {
+      "statements": 96.2,
+      "branches": 86.5,
+      "functions": 100,
+      "lines": 100
+    }
+  }
+}

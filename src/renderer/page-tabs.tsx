@@ -12,6 +12,7 @@ import { pathLabel } from "./path-label.js";
 import type { PageId, PageTabs } from "./tabs.js";
 
 const labels: Record<PageId, string> = {
+  logs: "Logs",
   "contributor-tools": "Contributor Tools",
   chat: "Chat",
   "episodic-memory": "Episodic Memory",
@@ -28,6 +29,7 @@ const labels: Record<PageId, string> = {
 };
 
 const pageIcons: Record<PageId, IconName> = {
+  logs: "document",
   "contributor-tools": "settings",
   chat: "chat",
   "episodic-memory": "document",
@@ -153,6 +155,7 @@ export function PageTabBar({
 const tablePages: readonly PageId[] = [
   "configurations",
   "events",
+  "logs",
   "messages",
   "polling",
   "sessions",
@@ -310,7 +313,9 @@ function PageTabList({
       : []),
   ];
   const visible = destinations.filter(
-    (id) => database || ["chat", "settings", "advanced", "contributor-tools"].includes(id),
+    (id) =>
+      database ||
+      ["chat", "tables", "logs", "settings", "advanced", "contributor-tools"].includes(id),
   );
   function moveTo(target: (typeof visible)[number] | undefined) {
     if (target === "tables" || target === "advanced" || target === "experiments") {
@@ -450,7 +455,7 @@ function PageTabList({
           aria-controls={`panel-${id}`}
           aria-selected={tabs.active === id}
           title={labels[id]}
-          disabled={!database && id !== "settings" && id !== "contributor-tools"}
+          disabled={!database && id !== "settings" && id !== "contributor-tools" && id !== "logs"}
           tabIndex={
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
@@ -583,7 +588,6 @@ function PageTabList({
           type="button"
           id="tables-toggle"
           title="Tables"
-          disabled={!database}
           className="page-group-toggle"
           aria-expanded={expanded}
           aria-controls="table-pages"

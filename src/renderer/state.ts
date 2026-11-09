@@ -256,7 +256,7 @@ export const fontWeights = [
   { value: 600, label: "Semibold" },
   { value: 700, label: "Bold" },
 ] as const;
-export type FontWeight = (typeof fontWeights)[number]["value"];
+type FontWeight = (typeof fontWeights)[number]["value"];
 export const fontSizes = { min: 8, max: 48 } as const;
 /** A role's choices; anything left out keeps the built-in default. */
 export type TextStyle = {

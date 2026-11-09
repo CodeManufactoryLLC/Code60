@@ -2,7 +2,7 @@ import { realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 /** Resolve real filesystem spelling without assuming all Windows folders ignore case. */
-export async function canonicalPath(path: string): Promise<string> {
+async function canonicalPath(path: string): Promise<string> {
   return realpath(resolve(path));
 }
 

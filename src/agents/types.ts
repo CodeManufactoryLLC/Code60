@@ -1,6 +1,12 @@
 export { TOOL_KINDS } from "../contracts/index.js";
 
-import type { ModeChange, SessionState, StopReason, ToolKind } from "../contracts/index.js";
+import type {
+  LogInput,
+  ModeChange,
+  SessionState,
+  StopReason,
+  ToolKind,
+} from "../contracts/index.js";
 import type { NativeProcessIdentity } from "../platform/index.js";
 
 export type { StopReason, ToolKind };
@@ -32,7 +38,7 @@ export type AgentUpdate =
   | RawAcpUpdate;
 
 /** One choice the agent offered for a permission request. */
-export interface PermissionOption {
+interface PermissionOption {
   optionId: string;
   name: string;
   kind: string;
@@ -71,6 +77,8 @@ export type AgentMcpServer =
     };
 
 export interface AgentSpec {
+  /** Internal desktop-only correlation. Never transmitted to the provider. */
+  diagnostic?: Pick<LogInput, "operationId" | "runId" | "projectId">;
   /** Agent name from the config, used in error messages. */
   name: string;
   command: readonly [string, ...string[]];

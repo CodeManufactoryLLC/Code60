@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { ndJsonStream } from "@agentclientprotocol/sdk";
+import { emitLog, type LogSink, logInputSchema } from "../contracts/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { AcpError, AcpRestoreUnavailableError, openSession, restoreSession } from "./acp-client.js";
 import { describeExit, spawnAgent } from "./process.js";
@@ -10,7 +12,7 @@ export { AgentStartError, TOOL_KINDS } from "./types.js";
 /** How long to wait for buffered agent output after the process exits. */
 const DRAIN_MS = 1_000;
 
-export function createAgents(options: { clientVersion: string }): Agents {
+export function createAgents(options: { clientVersion: string; log?: LogSink }): Agents {
   const launch = async (
     spec: AgentSpec,
     signal: AbortSignal | undefined,
@@ -93,10 +95,41 @@ export function createAgents(options: { clientVersion: string }): Agents {
     };
   };
 
+  const observed = async (spec: AgentSpec, signal?: AbortSignal, sessionId?: string) => {
+    const operationId = spec.diagnostic?.operationId ?? randomUUID();
+    const provider = logInputSchema.shape.provider.safeParse(spec.name);
+    const metadata = {
+      ...spec.diagnostic,
+      operationId,
+      ...(provider.success && provider.data ? { provider: provider.data } : {}),
+    };
+    const started = Date.now();
+    emitLog(options.log, { ...metadata, event: "provider.connect", outcome: "started" });
+    try {
+      const session = await launch(spec, signal, sessionId);
+      emitLog(options.log, {
+        ...metadata,
+        event: "provider.connected",
+        outcome: "succeeded",
+        durationMs: Date.now() - started,
+      });
+      return session;
+    } catch (error) {
+      emitLog(options.log, {
+        ...metadata,
+        event: "provider.connected",
+        outcome: signal?.aborted ? "cancelled" : "failed",
+        durationMs: Date.now() - started,
+        errorCategory: "transport",
+        errorCode: "UNKNOWN",
+      });
+      throw error;
+    }
+  };
   return {
-    start: (spec, signal) => launch(spec, signal),
-    restore: (spec, sessionId, signal) => launch(spec, signal, sessionId),
+    start: (spec, signal) => observed(spec, signal),
+    restore: (spec, sessionId, signal) => observed(spec, signal, sessionId),
   };
 }
 
-export { ACP_PROTOCOL_VERSION, openSession, restoreSession } from "./acp-client.js";
+export { ACP_PROTOCOL_VERSION, openSession } from "./acp-client.js";

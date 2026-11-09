@@ -18,12 +18,14 @@ export function FilterControls({
   error,
   onChange,
   preview,
+  retained = false,
 }: {
   fields: FilterField[];
   library: FilterLibrary;
   error: string;
   onChange(value: FilterLibrary): void;
   preview(filter: SavedFilter, now: number): number;
+  retained?: boolean;
 }) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
@@ -186,7 +188,11 @@ export function FilterControls({
                             </li>
                           ))}
                         </ul>
-                        <p role="status">{preview(value, now)} matching rows</p>
+                        <p role="status">
+                          {retained
+                            ? "Apply to search all retained history."
+                            : `${preview(value, now)} matching rows`}
+                        </p>
                       </>
                     )}
                     <div className="button-group">
@@ -364,7 +370,12 @@ export function FilterControls({
                 >
                   Add condition
                 </button>
-                <p role="status">{problem || `${preview(draft, now)} matching rows`}</p>
+                <p role="status">
+                  {problem ||
+                    (retained
+                      ? "Apply to search all retained history."
+                      : `${preview(draft, now)} matching rows`)}
+                </p>
                 <div className="button-group">
                   <button type="submit" className="primary" disabled={!!problem || !!error}>
                     Save filter

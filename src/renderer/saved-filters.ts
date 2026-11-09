@@ -6,7 +6,7 @@ export interface FilterField {
   title: string;
   kind: FilterKind;
 }
-export interface FilterCondition extends ColumnFilter {
+interface FilterCondition extends ColumnFilter {
   id: string;
   column: string;
   kind: FilterKind;
@@ -25,7 +25,7 @@ export interface FilterLibrary {
 }
 export const filterKey = (table: TableId, scope: string) =>
   `code60.filters.v1:${table}:${encodeURIComponent(scope)}`;
-export const emptyLibrary = (): FilterLibrary => ({ version: 1, definitions: [], active: null });
+const emptyLibrary = (): FilterLibrary => ({ version: 1, definitions: [], active: null });
 export function parseFilterLibrary(raw: string | null): { library: FilterLibrary; error: string } {
   if (raw === null) return { library: emptyLibrary(), error: "" };
   try {

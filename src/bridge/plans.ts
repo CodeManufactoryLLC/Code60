@@ -5,7 +5,7 @@ const uuid = z.string().uuid();
 const revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const title = z.string().trim().min(1).max(160);
 const taskText = z.string().trim().min(1).max(2_000);
-export const planDraftSchema = z.strictObject({
+const planDraftSchema = z.strictObject({
   title,
   description: z.string().max(16_000),
   tasks: z
@@ -67,8 +67,8 @@ export type PlanSummary = Pick<
   Plan,
   "id" | "chatId" | "project" | "revision" | "proposalRevision" | "title" | "state"
 > & { completed: number; total: number };
-export const planReadSchema = z.strictObject({ chatId: runIdSchema, planId: uuid });
-export const planActionSchema = planReadSchema.extend({
+const planReadSchema = z.strictObject({ chatId: runIdSchema, planId: uuid });
+const planActionSchema = planReadSchema.extend({
   revision,
   type: z.enum(["accept", "dismiss", "resume"]),
 });

@@ -65,7 +65,10 @@ npm run check
 
 Useful scripts:
 
-- `npm run check`: typecheck, Biome lint and formatting checks, and unit and integration tests.
+- `npm run check`: typecheck, Biome checks, Knip, and one coverage-enabled unit/integration suite.
+- `npm run test:coverage`: prepare Windows helpers, run Vitest once, write JSON summary/HTML to `coverage/`, and enforce all four coverage metrics.
+- `npm run check:unused`: check unused files, exports, types and dependencies with Knip.
+- `npm run test:logs:performance`: build, then measure production logging in a fresh process against an exact 20 MiB fixture, including first query, 24 saved plus 24 column conditions, 200-row pages, event-loop delay, memory and dirty shutdown. Run `node scripts/benchmark-logs.mjs --fragmented` afterward for a seven-day, 10,066-segment worst case.
 - `npm run format`: apply formatting and safe lint fixes.
 - `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
 - `npm run build`: compile the CLI and desktop main process and build the renderer.
@@ -76,6 +79,44 @@ Useful scripts:
 Run `npm run check` before each commit. Run `npm run test:desktop` for desktop
 changes. Tests must not require live agents, credentials, or network services.
 Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
+
+### Coverage and unused-code gates
+
+`coverage-baseline.json` versions overall and critical-file floors for statements,
+branches, functions and lines. The checker never rewrites it. Add meaningful tests
+before raising a floor; lowering a floor requires an explicit reviewed baseline
+change with a reason. Do not exclude executable code to improve coverage. The
+matching Vitest V8 provider includes unimported production files, including the
+CommonJS preload. Only tests and declarations are excluded. Keep the coverage
+provider exactly aligned with Vitest when changing either dependency.
+
+`npm test` and `npm run test:watch` remain available without coverage. `check`
+runs the suite only once. CI retains HTML and machine-readable summaries for
+seven days on Linux Node 22.12/24 and in native Windows/macOS Node 24 validation.
+Native runs remain required evidence for platform claims; local POSIX runs do not
+substitute for Windows helper/ACL or installer validation.
+
+Knip follows the CLI, desktop main/preload, renderer/Vite workers, MCP sidecar,
+tests, dynamically launched fake agents/Docker fixtures and manual icon generator.
+Vite's configured renderer root and HTML script provide its renderer entry and
+worker imports; the redundant global renderer entry is intentionally omitted.
+Its project patterns include source and tooling, not generated builds, coverage,
+packaged output or native binaries. Native helper source, bundled fonts/icons and
+worker assets remain discoverable through build/Vite/packaging entry points.
+`test/unused-gates.test.mjs` also runs Knip on a fixture containing deliberate
+unused files, exports and a dependency, without suppressing categories.
+
+The only dependency exceptions are `@wyw-in-js/shared` and `app-builder-lib`:
+`test/dependency-compatibility.test.ts` intentionally inspects these installed
+transitive dependencies to verify security overrides without adding them as
+runtime dependencies. `mkfifo` is an OS binary used by POSIX file-safety tests.
+Document any new exception narrowly. Remove code only after verifying it is not
+an entry point or dynamic asset.
+
+Desktop operational logs use fixed, allowlisted metadata only. Do not add prompts,
+provider/tool payloads, paths, commands, environment values or raw error objects.
+See [diagnostic logging](ARCHITECTURE.md#desktop-diagnostic-logging) and
+[the security policy](SECURITY.md#desktop-diagnostic-logs) before instrumentation.
 
 ### Investigating flaky tests
 

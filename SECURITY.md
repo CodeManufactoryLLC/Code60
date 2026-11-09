@@ -107,6 +107,41 @@ source code, and personal information. Avoid putting credentials into
 prompts or configured command arguments; agents authenticate through their
 own CLIs.
 
+## Desktop diagnostic logs
+
+Tables → Logs is a desktop-only operational history, available without a project
+database. It is separate from the Events table and `events.jsonl` transcripts.
+Local JSONL files live under `$XDG_STATE_HOME/code60/logs` (default
+`~/.local/state/code60/logs`) and persist across app restarts.
+
+**Only diagnostic logs** have a seven-day, 20 MiB total retention cap, including
+active files. Reads and writes prune retained data and queries hide expired
+records. Clear logs requires native confirmation and deletes diagnostic logs
+only. Existing transcripts, run records, reviews and SQLite data are not expired,
+scrubbed or deleted by either policy.
+
+Diagnostic records use fixed messages and allowlisted identifiers, event names,
+severity, outcomes, durations and error categories/codes. They do not contain
+prompts, transcripts, raw ACP/tool payloads, environment values, command arguments,
+absolute paths or arbitrary exception text. Project IDs are hashes, not a promise
+of anonymity. No free-form diagnostic text is currently accepted. Any future
+approved diagnostic text must receive existing credential redaction before bounded
+UTF-8 truncation. Redaction is best effort, not a secret detector or PII anonymizer.
+
+Private POSIX modes/ownership and Windows owner/SYSTEM ACL checks reject unsafe
+storage and links. Cross-process locking protects concurrent rotation and quota
+enforcement. Queues, records, queries and shutdown flushing are bounded; failed
+persistence and dropped records are visible, and malformed/truncated records are
+skipped with a partial-history notice. Diagnostic capture can lose data after a
+crash, storage failure or queue overflow; it is not an audit or recovery authority.
+Counts of write failures/drops describe this app launch, not a durable audit total.
+Logs are unencrypted and readable by processes running as you. Inspect copied
+records and screenshots before sharing.
+
+Only narrow, validated preload query/detail/clear methods can access logs.
+There is no generic path/filesystem method and no agent/MCP log access. The CLI
+does not enable capture and gains no flags, output or recording changes.
+
 ## Providers and network access
 
 Local record storage does not mean that your task data stays on your machine:

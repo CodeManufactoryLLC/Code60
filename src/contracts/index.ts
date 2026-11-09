@@ -1,4 +1,7 @@
 import { z } from "zod";
+
+export * from "./logs.js";
+
 import { type PromptId, validatePromptTemplate } from "./prompts.js";
 
 // Disable code generation before constructing objects: even the eval capability probe

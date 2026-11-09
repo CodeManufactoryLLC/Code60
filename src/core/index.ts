@@ -1,7 +1,7 @@
 import * as fsPromises from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { type AgentMcpServer, type Agents, createAgents } from "../agents/index.js";
-import type { PromptTemplates } from "../contracts/index.js";
+import type { LogSink, PromptTemplates } from "../contracts/index.js";
 import { createGit, type Git } from "../git/index.js";
 import {
   appendPrivateFile,
@@ -35,43 +35,37 @@ import {
 } from "./types.js";
 import { CODE60_VERSION } from "./version.js";
 
-export type { AgentMcpServer, PermissionAnswer } from "../agents/index.js";
+export type { AgentMcpServer } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
 export type {
-  ChangedFile,
   GitReadiness,
   GitSetupFile,
   GitSetupOps,
-  GitSetupPreview,
   GitWorktree,
-  ReviewSnapshot,
   ReviewSnapshotFile,
 } from "../git/index.js";
 export { diagnosticMessage, diagnosticText } from "../platform/index.js";
-export type { Clock } from "./clock.js";
+
 export {
-  type DiscardResult,
   diffRun,
   discardRun,
   executeDiff,
   type ListedRun,
   listRuns,
-  type PreparedDiff,
   prepareDiff,
-  type StopResult,
   stopRun,
 } from "./commands.js";
-export { configPath, DEFAULT_CONFIG, loadConfig, parseConfig, parseDuration } from "./config.js";
-export { ExitCode, type ExitCodeValue, type ExitContext, exitCodeFor } from "./exit-code.js";
+export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
+export { ExitCode, exitCodeFor } from "./exit-code.js";
 export type { Orchestrator } from "./orchestrator.js";
-export { decide, parseToolKinds } from "./policy.js";
-export { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "./recovery.js";
+export { buildHandoffPrompt } from "./recovery.js";
 export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
 export { CODE60_VERSION, RUN_RECORD_FORMAT } from "./version.js";
 
 export interface CoreDeps {
+  log?: LogSink;
   agents: Agents;
   git: Git;
   fs: RecordFs & ConfigFs;
@@ -81,9 +75,10 @@ export interface CoreDeps {
   ownerPid: number;
 }
 
-export function defaultDeps(): CoreDeps {
+export function defaultDeps(log?: LogSink): CoreDeps {
   return {
-    agents: createAgents({ clientVersion: CODE60_VERSION }),
+    ...(log ? { log } : {}),
+    agents: createAgents({ clientVersion: CODE60_VERSION, ...(log ? { log } : {}) }),
     git: createGit(),
     fs: {
       ...fsPromises,
@@ -243,7 +238,7 @@ function worktreeRoot(
 }
 
 /** Upper bound on the runs `--parallel` starts for a single agent, to catch typos. */
-export const MAX_COPIES = 32;
+const MAX_COPIES = 32;
 
 /**
  * Validates a `run` request, then creates the queued runs. Invalid input throws `UsageError`.
@@ -397,7 +392,7 @@ export async function prepareRecovery(
 }
 
 export { generateChatTitle } from "./chat-title.js";
-export { extractEpisodicMemory, MEMORY_EVENT_LIMIT } from "./episodic-memory.js";
+export { extractEpisodicMemory } from "./episodic-memory.js";
 export { summarizeSearch } from "./search-summary.js";
 
 async function preparePrivateRecords(

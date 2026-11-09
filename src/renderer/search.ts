@@ -61,7 +61,7 @@ export function searchIndex(
     }),
   ];
 }
-export function queryTerms(query: string): string[] {
+function queryTerms(query: string): string[] {
   return [...new Set(query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean))];
 }
 export function searchResults(

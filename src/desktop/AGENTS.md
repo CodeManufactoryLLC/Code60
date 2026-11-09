@@ -21,6 +21,14 @@
 - Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), and validated prompt template edits. Never store user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Load `node:sqlite` lazily; Node.js 22.12 has it only behind a flag.
 - Route every repeated external read (run history, config, run configurations, worktrees) through the `Poller` in `poller.ts`. Keep reads single-flight, discard results after a workspace or database switch, keep worktree scans outside the exclusive queue, and stop the poller on shutdown. Never poll agent events or watch files. Persist only user overrides under `polling` in desktop.json.
 - Do not use top-level `await` in `main.ts`; Electron automation needs the module to finish loading.
+- Own private desktop-only diagnostic JSONL storage separately from transcripts
+  and SQLite. Enforce total active-file quota, expiry and cross-process locking.
+  Bound capture, streaming reads, cursor state, notices and shutdown flushing.
+  Never throw logging failures into lifecycle operations or recursively log them.
+- Validate query/detail/clear IPC, accept no paths, batch payload-free notices,
+  and confirm clear natively. Logs remains usable without a database. Clear and
+  retention affect diagnostic segments only. Keep every shutdown path on the
+  same idempotent diagnostic flush. Never expose logs to agents or MCP.
 
 - On successful database open or startup reconnection, ensure `.code60_workspace` exists beside the SQLite file, with mode `0700` for a newly created directory. Preserve existing directory contents. Validate the database before creating the directory and surface filesystem conflicts through the database connection error path.
 

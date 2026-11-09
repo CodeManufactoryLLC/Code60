@@ -21,7 +21,7 @@ export const DEFAULT_PERMISSIONS: PermissionPolicy = {
   default: "ask",
 };
 
-export const DEFAULT_AGENTS: Readonly<Record<string, AgentConfig>> = {
+const DEFAULT_AGENTS: Readonly<Record<string, AgentConfig>> = {
   claude: { command: ["npx", "-y", "@agentclientprotocol/claude-agent-acp"] },
   codex: { command: ["npx", "-y", "@agentclientprotocol/codex-acp"] },
   opencode: { command: ["opencode", "acp"] },

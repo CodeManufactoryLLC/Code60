@@ -14,7 +14,7 @@ export const reviewAnchorSchema = z
     end: z.number().int().min(1).max(1_000_000),
   })
   .refine((value) => value.end >= value.start && value.end - value.start <= 200);
-export const reviewFileSchema = z.strictObject({
+const reviewFileSchema = z.strictObject({
   key,
   runId: run,
   path: key,
@@ -23,7 +23,7 @@ export const reviewFileSchema = z.strictObject({
   fingerprint: z.string().max(160),
   limitation: z.string().max(200).optional(),
 });
-export const reviewRevisionSchema = z.strictObject({
+const reviewRevisionSchema = z.strictObject({
   id: uuid,
   at: z.string(),
   files: z.array(reviewFileSchema).max(2_000),
@@ -39,7 +39,7 @@ export const reviewRevisionSchema = z.strictObject({
     .optional(),
   errors: z.array(z.strictObject({ runId: run, message: z.string().max(2_000) })).max(100),
 });
-export const reviewCommentSchema = z.strictObject({
+const reviewCommentSchema = z.strictObject({
   id: uuid,
   text,
   anchor: reviewAnchorSchema.optional(),
@@ -47,7 +47,7 @@ export const reviewCommentSchema = z.strictObject({
   state: z.enum(["draft", "sent", "resolved"]),
   addressed: z.string().max(2_000).optional(),
 });
-export const reviewSubmissionSchema = z.strictObject({
+const reviewSubmissionSchema = z.strictObject({
   deliveredTurn: z.number().int().min(1).optional(),
   deliveredChatId: run.optional(),
   id: uuid,
@@ -95,7 +95,7 @@ export interface ReviewContent {
 }
 
 const identity = { project, reviewId: uuid };
-export const reviewActionSchema = z.discriminatedUnion("type", [
+const reviewActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("open-run"), project, runId: run }),
   z.strictObject({ type: z.literal("reconnect"), ...identity, chatId: run }),
   z.strictObject({
@@ -119,8 +119,8 @@ export const reviewActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("withdraw"), ...identity, id: uuid }),
   z.strictObject({ type: z.literal("retry"), ...identity, id: uuid }),
 ]);
-export const reviewReadSchema = z.strictObject({ ...identity, requestId: uuid });
-export const reviewFileReadSchema = z.strictObject({
+const reviewReadSchema = z.strictObject({ ...identity, requestId: uuid });
+const reviewFileReadSchema = z.strictObject({
   ...identity,
   requestId: uuid,
   revisionId: uuid,

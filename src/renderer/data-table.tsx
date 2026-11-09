@@ -53,6 +53,7 @@ export { useCssColors } from "./table-appearance.js";
 
 const markerWidth = 40;
 const tableTitles: Record<TableId, string> = {
+  logs: "Logs",
   sessions: "Sessions",
   messages: "Messages",
   events: "Events",
@@ -83,6 +84,12 @@ export interface TableOptions {
   textStyles: TextStyles;
   selected: string | undefined;
   onSelect(id: string): void;
+}
+export interface RetainedTableQuery {
+  search: string;
+  conditions: { column: string; op: ColumnFilter["op"]; value: string }[];
+  columnConditions: { column: string; op: ColumnFilter["op"]; value: string }[];
+  match: "all" | "any";
 }
 
 type Paint = (
@@ -116,6 +123,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   addDisabled,
   viewState,
   actions: toolbarActions,
+  onRetainedQuery,
 }: {
   rows: Row[];
   columns: { key: Key; title: string; width: number; filter?: FilterKind }[];
@@ -137,6 +145,8 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   parent?(row: Row): string | undefined;
   /** Whether a row's Actions cell opens its menu; defaults to every row. */
   hasActions?(row: Row): boolean;
+  /** Server-backed tables apply search and filters to retained history, not this page. */
+  onRetainedQuery?(query: RetainedTableQuery): void;
 } & TableOptions) {
   const ownView = useTableView(
     tableId,
@@ -200,6 +210,27 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
     [display, now],
   );
   const [showSearch, setShowSearch] = useState(false);
+  const [retainedSearch, setRetainedSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const retainedHandler = useRef(onRetainedQuery);
+  const focusRetainedSearch = useCallback(
+    (element: HTMLInputElement | null) => element?.focus(),
+    [],
+  );
+  retainedHandler.current = onRetainedQuery;
+  const retainedQuery = JSON.stringify({
+    search: submittedSearch,
+    match: activeFilter?.mode ?? "all",
+    conditions:
+      activeFilter?.conditions.map(({ column, op, value }) => ({ column, op, value })) ?? [],
+    columnConditions: Object.entries(filters).map(([column, rule]) => ({
+      column,
+      ...(rule as ColumnFilter),
+    })),
+  });
+  useEffect(() => {
+    retainedHandler.current?.(JSON.parse(retainedQuery) as RetainedTableQuery);
+  }, [retainedQuery]);
   const [settings, setSettings] = useState<string>();
   const settingsScope = JSON.stringify([tableId, workspace]);
   const settingsTrigger = useRef<HTMLButtonElement>(null);
@@ -267,7 +298,9 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
     const direction = sort.desc ? -1 : 1;
     const top = rows.filter(
       (row) =>
-        !parent?.(row) && matchesColumns(row) && (!activeFilter || matchesNamed(row, activeFilter)),
+        !parent?.(row) &&
+        (onRetainedQuery ||
+          (matchesColumns(row) && (!activeFilter || matchesNamed(row, activeFilter)))),
     );
     top.sort((a, b) => direction * compare(a, b, sort.key));
     if (!parent) return top;
@@ -277,7 +310,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
       if (id) children.set(id, [...(children.get(id) ?? []), row]);
     }
     return top.flatMap((row) => [row, ...(children.get(row.id) ?? [])]);
-  }, [rows, sort, parent, matchesColumns, activeFilter, matchesNamed]);
+  }, [rows, sort, parent, matchesColumns, activeFilter, matchesNamed, onRetainedQuery]);
   const actionable = (row: Row | undefined) => !!row && (hasActions?.(row) ?? true);
 
   const gridColumns = useMemo(() => {
@@ -454,6 +487,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
                 (row) => !parent?.(row) && matchesColumns(row) && matchesNamed(row, filter, at),
               ).length
             }
+            retained={!!onRetainedQuery}
           />
           <select
             aria-label="Column menu"
@@ -519,6 +553,37 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
         <p role="alert">Saved filter is incompatible and has not been applied: {incompatibility}</p>
       )}
       {storageError && <p role="status">{storageError}</p>}
+      {onRetainedQuery && showSearch && (
+        <form
+          className="table-filter-bar"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSubmittedSearch(retainedSearch);
+          }}
+        >
+          <label>
+            Search retained logs
+            <input
+              ref={focusRetainedSearch}
+              maxLength={200}
+              value={retainedSearch}
+              onChange={(event) => setRetainedSearch(event.target.value)}
+            />
+          </label>
+          <button type="submit">Search history</button>
+          <button
+            type="button"
+            onClick={() => {
+              setRetainedSearch("");
+              setSubmittedSearch("");
+              setShowSearch(false);
+              grid.current?.focus();
+            }}
+          >
+            Close search
+          </button>
+        </form>
+      )}
       {settings === settingsScope &&
         createPortal(
           <TableSettings
@@ -614,7 +679,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
           columns={gridColumns}
           rows={sorted.length}
           getCellsForSelection
-          showSearch={showSearch}
+          showSearch={!onRetainedQuery && showSearch}
           onSearchClose={() => {
             setShowSearch(false);
             grid.current?.focus();

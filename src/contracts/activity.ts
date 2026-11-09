@@ -23,7 +23,7 @@ export const ACTIVITY_TYPES = {
 export type ActivityType = keyof typeof ACTIVITY_TYPES;
 export const ACTIVITY_LIFETIME_MS = 120_000;
 export const ACTIVITY_MESSAGE_MS = 2_000;
-export const ACTIVITY_TOOLS = ["code60_get_activity_context", "code60_report_activity"] as const;
+const ACTIVITY_TOOLS = ["code60_get_activity_context", "code60_report_activity"] as const;
 export type ActivityTool = (typeof ACTIVITY_TOOLS)[number];
 export function isActivityTool(name: string): name is ActivityTool {
   return (ACTIVITY_TOOLS as readonly string[]).includes(name);

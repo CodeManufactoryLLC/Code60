@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const identity = { project: z.string().min(1).max(4096), reviewId: z.string().uuid() };
-export const taskActionSchema = z.discriminatedUnion("type", [
+const taskActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...identity, type: z.literal("status") }),
   z.strictObject({ ...identity, type: z.literal("cancel") }),
   z.strictObject({ ...identity, type: z.literal("prepare"), revisionId: z.string().uuid() }),

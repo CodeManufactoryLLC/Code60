@@ -41,6 +41,7 @@ import type {
 } from "../bridge/index.js";
 import {
   DEFAULT_PROMPT_TEMPLATES,
+  emitLog,
   type GitProject,
   type GitReadiness,
   type GitSetupCommit,
@@ -139,6 +140,7 @@ import { DiffReads } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import { GitSetup } from "./git-setup.js";
+import { logProjectId } from "./log-store.js";
 import {
   type ControlArgs,
   formatWorkerUpdate,
@@ -2270,7 +2272,18 @@ export class DesktopController {
         try {
           const database = this.storage.openDatabase(path, false);
           this.attach(database);
+          emitLog(this.deps.log, {
+            event: "database.connect",
+            operationId: randomUUID(),
+            outcome: "succeeded",
+          });
         } catch (error) {
+          emitLog(this.deps.log, {
+            event: "database.connect",
+            operationId: randomUUID(),
+            outcome: "failed",
+            errorCategory: "storage",
+          });
           this.databaseError = `Could not reconnect to the saved database. ${message(error)}`;
         }
       }
@@ -2282,6 +2295,8 @@ export class DesktopController {
 
   /** Connects to another database. On failure the current connection stays in use. */
   connect(path: string, create: boolean): Promise<void> {
+    const operationId = randomUUID();
+    const began = Date.now();
     return this.exclusive(async () => {
       if (this.taskOperation) throw new Error("Wait for the task operation to finish");
       if (this.active) throw new Error("Finish or stop all runs before switching databases");
@@ -2314,7 +2329,26 @@ export class DesktopController {
       }
       await this.syncOrchestrationChat();
       this.changed();
-    });
+    }).then(
+      () => {
+        emitLog(this.deps.log, {
+          event: "database.connect",
+          operationId,
+          outcome: "succeeded",
+          durationMs: Date.now() - began,
+        });
+      },
+      (error: unknown) => {
+        emitLog(this.deps.log, {
+          event: "database.connect",
+          operationId,
+          outcome: "failed",
+          durationMs: Date.now() - began,
+          errorCategory: "storage",
+        });
+        throw error;
+      },
+    );
   }
 
   /** Opens a folder chosen by the user and adds it to the project history. */
@@ -2976,10 +3010,12 @@ export class DesktopController {
       switch (action.type) {
         case "events":
           return workspace.store.readEvents(action.id);
-        case "discard":
+        case "discard": {
           if (this.taskOperation) throw new Error("Wait for the task operation to finish");
           await this.cancelDiffReads();
-          await discardRun(
+          const operationId = randomUUID();
+          const began = Date.now();
+          const result = await discardRun(
             cmd,
             workspace.repo?.topLevel ?? workspace.dir,
             action.id,
@@ -2988,9 +3024,28 @@ export class DesktopController {
                 "Discard this worktree?",
                 `This permanently removes ${record.worktree} and ${record.branch}.\n\nFiles that will be lost:\n${files.map((file) => `${file.status} ${file.path}`).join("\n") || "(no changed files)"}`,
               ),
-          );
+          ).catch((error: unknown) => {
+            emitLog(this.deps.log, {
+              event: "worktree.remove",
+              operationId,
+              runId: action.id,
+              projectId: logProjectId(workspace.dir),
+              outcome: "failed",
+              durationMs: Date.now() - began,
+            });
+            throw error;
+          });
+          emitLog(this.deps.log, {
+            event: "worktree.remove",
+            operationId,
+            runId: action.id,
+            projectId: logProjectId(workspace.dir),
+            outcome: result.discarded ? "succeeded" : "cancelled",
+            durationMs: Date.now() - began,
+          });
           this.history = await listRuns(cmd);
           break;
+        }
         case "stop":
           await stopRun(cmd, action.id);
           this.history = await listRuns(cmd);

@@ -16,10 +16,12 @@ import {
   defaultDeps,
   loadConfig,
   openWorkspace,
+  TaskLoop,
 } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
+import type { TaskGit } from "../src/git/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -2016,6 +2018,254 @@ describe("orchestrated workers over ACP", () => {
     expect(
       (await call("code60_resume_agent", { scope, runId: id, prompt: "resume" })).body.error,
     ).toContain("No baseline");
+  });
+
+  describe("desktop task application boundaries", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    async function taskFixture(content = Buffer.from("after\n")) {
+      const project = await realOf(directory);
+      const base = "a".repeat(40);
+      const commit = "b".repeat(40);
+      const before = "1".repeat(40);
+      const after = "2".repeat(40);
+      await fs.mkdir(join(project, ".git"), { recursive: true });
+      await fs.writeFile(join(project, "task.txt"), "before\n");
+      const tasks = {
+        snapshot: vi.fn(async (path: string) => (path === project ? base : commit)),
+        tree: vi.fn(async (_path: string, revision: string) => ({
+          "task.txt": { mode: "100644", oid: revision === base ? before : after },
+        })),
+        blob: vi.fn(async (_path: string, oid: string) =>
+          oid === before ? Buffer.from("before\n") : content,
+        ),
+        merge: vi.fn<TaskGit["merge"]>(async (_base, _current, proposed) => proposed),
+        identity: vi.fn(async () => "unchanged-head-and-index"),
+        lockPath: async () => join(project, ".git", "task.lock"),
+      } satisfies TaskGit;
+      Object.assign(git, {
+        tasks,
+        resolveCommit: async () => base,
+        reviewSnapshot: async () => ({
+          files: [
+            {
+              path: "task.txt",
+              oldPath: "task.txt",
+              status: "modified",
+              original: "before\n",
+              modified: "after\n",
+              fingerprint: commit,
+            },
+          ],
+          truncated: false,
+        }),
+      });
+      const { call, scope } = await setup();
+      const worker = await dispatch(call, scope, "task worker");
+      await vi.waitFor(() =>
+        expect(
+          controller.snapshot().runs.find((run) => run.record.id === worker)?.view?.status,
+        ).toBe("idle"),
+      );
+      const reviewId = controller.snapshot().reviews?.[0]?.id;
+      if (!reviewId) throw new Error("Missing task review");
+      const identity = { project, reviewId };
+      await controller.captureReview({ ...identity, requestId: randomUUID() });
+      const review = await controller.readReview({ ...identity, requestId: randomUUID() });
+      const revisionId = review.revisions.at(-1)?.id;
+      if (!revisionId) throw new Error("Missing task revision");
+      return { identity, revisionId, tasks, call, scope, worker };
+    }
+
+    it("prepares, previews, applies and undoes through the real controller and task store", async () => {
+      const { identity, revisionId, tasks } = await taskFixture();
+      expect(await controller.taskAction({ ...identity, type: "status" })).toMatchObject({
+        available: true,
+        canPrepare: true,
+        source: "Current saved files",
+      });
+      const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
+      const operationId = prepared.operation?.id;
+      const fileId = prepared.operation?.changes[0]?.id;
+      if (!operationId || !fileId) throw new Error("Missing application preview");
+      expect(
+        await controller.taskAction({ ...identity, type: "file", operationId, fileId }),
+      ).toMatchObject({ file: { path: "task.txt", original: "before\n", modified: "after\n" } });
+      await expect(
+        controller.taskAction({
+          ...identity,
+          type: "file",
+          operationId,
+          fileId: randomUUID(),
+        }),
+      ).rejects.toThrow("Unknown proposal file");
+      await expect(
+        controller.taskAction({
+          ...identity,
+          type: "revise",
+          operationId,
+        }),
+      ).rejects.toThrow("Refresh the conflict preview");
+      const applied = await controller.taskAction({ ...identity, type: "apply", operationId });
+      expect(applied).toMatchObject({ undoId: operationId, operation: { status: "applied" } });
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n");
+      expect(
+        (await controller.taskAction({ ...identity, type: "apply", operationId })).operation
+          ?.status,
+      ).toBe("applied");
+      expect(
+        (await controller.taskAction({ ...identity, type: "undo", operationId })).operation?.status,
+      ).toBe("undone");
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      expect(
+        (await controller.taskAction({ ...identity, type: "undo", operationId })).operation?.status,
+      ).toBe("undone");
+      await expect(
+        controller.taskAction({
+          ...identity,
+          type: "recover",
+          operationId,
+        }),
+      ).rejects.toThrow("No interrupted operation");
+      expect(tasks.snapshot).toHaveBeenCalledWith(identity.project, {
+        exclude: expect.arrayContaining([join(directory, "first.sqlite")]),
+      });
+    });
+
+    it.each([Buffer.from([0]), Buffer.from([255]), Buffer.alloc(1_048_577, 65)])(
+      "marks binary, invalid UTF-8 and oversized application previews as limited",
+      async (content) => {
+        const { identity, revisionId } = await taskFixture(content);
+        const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
+        const operationId = prepared.operation?.id;
+        const fileId = prepared.operation?.changes[0]?.id;
+        if (!operationId || !fileId) throw new Error("Missing binary preview");
+        expect(
+          await controller.taskAction({ ...identity, type: "file", operationId, fileId }),
+        ).toMatchObject({ file: { original: "", modified: "", limitation: expect.any(String) } });
+      },
+    );
+
+    it("rejects stale revisions, changed worker snapshots and incomplete captures", async () => {
+      const { identity, revisionId, tasks } = await taskFixture();
+      await expect(
+        controller.taskAction({
+          ...identity,
+          type: "prepare",
+          revisionId: randomUUID(),
+        }),
+      ).rejects.toThrow("Review the latest changes");
+      const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
+      const operationId = prepared.operation?.id;
+      if (!operationId) throw new Error("Missing application");
+      tasks.snapshot.mockResolvedValue("c".repeat(40));
+      await expect(
+        controller.taskAction({ ...identity, type: "apply", operationId }),
+      ).rejects.toThrow("Worker files changed");
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      await controller.captureReview({ ...identity, requestId: randomUUID() });
+      await expect(
+        controller.taskAction({ ...identity, type: "apply", operationId }),
+      ).rejects.toThrow("New changes are available");
+      tasks.snapshot.mockRejectedValue(new Error("Worker snapshot unavailable"));
+      await controller.captureReview({ ...identity, requestId: randomUUID() });
+      const incomplete = await controller.readReview({ ...identity, requestId: randomUUID() });
+      const latest = incomplete.revisions.at(-1)?.id;
+      if (!latest) throw new Error("Missing incomplete revision");
+      expect((await controller.taskAction({ ...identity, type: "status" })).canPrepare).toBe(false);
+      await expect(
+        controller.taskAction({ ...identity, type: "prepare", revisionId: latest }),
+      ).rejects.toThrow("Refresh the incomplete review");
+    });
+
+    it.each(["cancel", "stopAll", "shutdown"] as const)(
+      "keeps lifecycle guards effective during a task and settles %s cancellation",
+      async (method) => {
+        const { identity, revisionId, tasks, worker } = await taskFixture();
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let entered = false;
+        tasks.identity.mockImplementationOnce(async () => {
+          entered = true;
+          await gate;
+          return "unchanged-head-and-index";
+        });
+        const pending = controller.taskAction({ ...identity, type: "prepare", revisionId });
+        const settled = pending.then(
+          () => ({ error: undefined }),
+          (error: unknown) => ({ error }),
+        );
+        try {
+          await vi.waitFor(() => expect(entered).toBe(true));
+          await expect(
+            controller.captureReview({ ...identity, requestId: randomUUID() }),
+          ).rejects.toThrow("Wait for the task operation");
+          await expect(
+            controller.taskAction({ ...identity, type: "prepare", revisionId }),
+          ).rejects.toThrow("Wait for the current task operation");
+          await expect(controller.connect(join(directory, "other.sqlite"), true)).rejects.toThrow(
+            "Wait for the task operation",
+          );
+          await expect(controller.open(directory)).rejects.toThrow(
+            "Finish or stop all runs before switching folders",
+          );
+          await expect(controller.start(request)).rejects.toThrow("Wait for the task operation");
+          await expect(controller.beginGitSetup({ project: identity.project })).rejects.toThrow(
+            "Wait for the task operation",
+          );
+          await expect(controller.action({ type: "discard", id: worker })).rejects.toThrow(
+            "Wait for the task operation",
+          );
+          await expect(
+            controller.reviewAction({
+              ...identity,
+              type: "reconnect",
+              chatId: controller.snapshot().chat.run?.id as string,
+            }),
+          ).rejects.toThrow("Wait for the task operation");
+          const stopping =
+            method === "cancel"
+              ? controller.taskAction({ ...identity, type: "cancel" })
+              : controller[method]();
+          release();
+          await expect(settled).resolves.toMatchObject({
+            error: expect.objectContaining({
+              message: expect.stringMatching(/cancelled|stopping/),
+            }),
+          });
+          await stopping;
+          if (method !== "shutdown")
+            expect((await controller.taskAction({ ...identity, type: "cancel" })).available).toBe(
+              true,
+            );
+        } finally {
+          release();
+          await settled;
+        }
+      },
+    );
+
+    it("routes conflict revision requests only through the owning conversation", async () => {
+      const { identity, revisionId, tasks } = await taskFixture();
+      await fs.writeFile(join(identity.project, "task.txt"), "human edit\n");
+      tasks.merge.mockResolvedValue(null);
+      const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
+      const operationId = prepared.operation?.id;
+      if (!operationId) throw new Error("Missing conflict preview");
+      expect(prepared.operation?.conflicts).toHaveLength(1);
+      await controller.taskAction({ ...identity, type: "revise", operationId });
+      const review = await controller.readReview({ ...identity, requestId: randomUUID() });
+      expect(review.comments.at(-1)?.text).toContain("Preserve the user's current project edits.");
+      expect(review.submissions.at(-1)?.revisionId).toBe(revisionId);
+      const oldChat = controller.snapshot().chat.run?.id as string;
+      await controller.orchestrationChatAction({ type: "restart", id: oldChat });
+      await expect(
+        controller.taskAction({ ...identity, type: "revise", operationId }),
+      ).rejects.toThrow("Reconnect this review");
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("human edit\n");
+    });
   });
 
   it("groups workers by human request and delivers review feedback once between turns without restoring ownership", async () => {

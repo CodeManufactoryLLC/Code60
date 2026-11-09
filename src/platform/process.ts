@@ -10,7 +10,7 @@ import {
   windowsHelper,
 } from "./helper.js";
 
-export interface ProcessExit {
+interface ProcessExit {
   code: number | null;
   signal: NodeJS.Signals | null;
 }

@@ -10,7 +10,7 @@ export interface TaskEntry {
   oid: string;
   mode: string;
 }
-export interface TaskSnapshotOptions {
+interface TaskSnapshotOptions {
   exclude?: string[];
 }
 export interface TaskGit {

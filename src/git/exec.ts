@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { spawnOwnedProcess } from "../platform/index.js";
 
-export const DEFAULT_GIT_TIMEOUT_MS = 60_000;
+const DEFAULT_GIT_TIMEOUT_MS = 60_000;
 const MAX_BUFFER = 256 * 1024 * 1024;
 
 export class GitError extends Error {

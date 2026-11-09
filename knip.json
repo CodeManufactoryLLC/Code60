@@ -1,0 +1,23 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "entry": [
+    "src/cli/main.ts",
+    "src/desktop/main.ts",
+    "src/desktop/preload.cts",
+    "src/desktop/mcp-server.ts",
+    "scripts/generate-icon.mjs",
+    "src/**/*.test.{ts,tsx}",
+    "test/**/*.{test,e2e}.{ts,mjs}",
+    "test/fixtures/fake-agent.mjs",
+    "test/fixtures/packaged-agent.mjs",
+    "test/fixtures/fake-docker.mjs"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,cts}",
+    "scripts/**/*.{mjs,cjs}",
+    "test/**/*.{ts,mjs}",
+    "*config*.ts"
+  ],
+  "ignoreDependencies": ["@wyw-in-js/shared", "app-builder-lib"],
+  "ignoreBinaries": ["mkfifo"]
+}

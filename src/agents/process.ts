@@ -5,8 +5,7 @@ import {
   spawnOwnedProcess,
 } from "../platform/index.js";
 
-export const STDERR_TAIL_BYTES = 64 * 1024;
-export const KILL_GRACE_MS = 5_000;
+const STDERR_TAIL_BYTES = 64 * 1024;
 
 export interface ExitInfo {
   code: number | null;

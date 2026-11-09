@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RowDensity, TableLines } from "./state.js";
 
 export type TableId =
+  | "logs"
   | "sessions"
   | "messages"
   | "events"

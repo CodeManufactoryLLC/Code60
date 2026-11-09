@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import {
   type AgentMcpServer,
   type AgentSession,
@@ -8,7 +9,11 @@ import {
   type PermissionRequest,
 } from "../agents/index.js";
 import {
+  emitLog,
   emptySessionState,
+  type LogInput,
+  type LogSink,
+  logInputSchema,
   type ModeChange,
   modeChangeSchema,
   type PromptTemplates,
@@ -39,6 +44,7 @@ import type {
 import { ACTIVE_STATUSES, RefusedError } from "./types.js";
 
 export interface RunDeps {
+  log?: LogSink;
   agents: Agents;
   git: Git;
   store: RecordStore;
@@ -81,7 +87,7 @@ interface Pending {
   resolve(answer: PermissionAnswer): void;
 }
 
-export function formatDuration(ms: number): string {
+function formatDuration(ms: number): string {
   if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
   if (ms % 60_000 === 0) return `${ms / 60_000}m`;
   if (ms % 1_000 === 0) return `${ms / 1_000}s`;
@@ -105,6 +111,10 @@ function message(error: unknown): string {
 
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
 export class Run {
+  private readonly lifecycleOperation = randomUUID();
+  private turnOperation = this.lifecycleOperation;
+  private turnStarted = 0;
+  private persistenceReported = false;
   readonly finished: Promise<void>;
   private resolveFinished!: () => void;
   private session: AgentSession | undefined;
@@ -137,6 +147,47 @@ export class Run {
     return this.record.id;
   }
 
+  private log(event: LogInput["event"], outcome: LogInput["outcome"], durationMs?: number): void {
+    if (!this.deps.log) return;
+    const provider = logInputSchema.shape.provider.safeParse(this.record.agent);
+    emitLog(this.deps.log, {
+      event,
+      outcome,
+      operationId: this.turnOperation,
+      runId: this.id,
+      ...(provider.success && provider.data ? { provider: provider.data } : {}),
+      ...(this.record.branch
+        ? {
+            projectId: createHash("sha256")
+              .update(this.settings.repoDir)
+              .digest("hex")
+              .slice(0, 16),
+          }
+        : {}),
+      ...(durationMs === undefined ? {} : { durationMs: Math.max(0, durationMs) }),
+      ...(outcome === "failed" ? { errorCategory: "unknown" as const } : {}),
+    });
+  }
+
+  private diagnostic() {
+    return this.deps.log
+      ? {
+          diagnostic: {
+            operationId: this.turnOperation,
+            runId: this.id,
+            ...(this.record.branch
+              ? {
+                  projectId: createHash("sha256")
+                    .update(this.settings.repoDir)
+                    .digest("hex")
+                    .slice(0, 16),
+                }
+              : {}),
+          },
+        }
+      : {};
+  }
+
   get status(): RunStatus {
     return this.record.status;
   }
@@ -165,6 +216,7 @@ export class Run {
 
   /** Announces the queued run. */
   queue(): Promise<void> {
+    this.log("dispatch.accepted", "succeeded");
     return this.setStatus("queued");
   }
 
@@ -180,16 +232,20 @@ export class Run {
   /** Restores a saved ACP session without replaying a previous prompt. */
   async restore(): Promise<RecoveryResult> {
     await this.assertRecoverableAndSafe();
+    this.turnOperation = randomUUID();
+    this.log("recovery.start", "started");
     const previousStatus = this.status;
     const previousReason = this.record.reason;
     const sessionId = this.record.acpSessionId;
     if (!sessionId) {
+      this.log("recovery.end", "failed");
       return {
         type: "handoff-required",
         reason: "This run has no saved ACP session ID to restore.",
       };
     }
     if (!this.deps.agents.restore) {
+      this.log("recovery.end", "failed");
       return {
         type: "handoff-required",
         reason: "The configured agent launcher does not support ACP session restore.",
@@ -201,6 +257,7 @@ export class Run {
         (this.deps.agents.restore as NonNullable<Agents["restore"]>)(
           {
             name: this.record.agent,
+            ...this.diagnostic(),
             command: this.settings.command,
             cwd: this.record.worktree,
             ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
@@ -213,6 +270,7 @@ export class Run {
         ),
       );
     } catch (error) {
+      this.log("recovery.end", "failed");
       return { type: "handoff-required", reason: message(error) };
     }
     await this.installSession(session);
@@ -231,6 +289,7 @@ export class Run {
     if (this.sessionExited && !this.ending) {
       void this.end({ status: "failed", reason: "the agent exited while idle" });
     }
+    this.log("recovery.end", "succeeded");
     return { type: "restored" };
   }
 
@@ -248,12 +307,14 @@ export class Run {
       summary,
       message: text,
     });
+    this.log("recovery.start", "started");
     let session: AgentSession;
     try {
       session = await this.startRecoveryAgent((signal) =>
         this.deps.agents.start(
           {
             name: this.record.agent,
+            ...this.diagnostic(),
             command: this.settings.command,
             cwd: this.record.worktree,
             ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
@@ -265,9 +326,11 @@ export class Run {
         ),
       );
     } catch (error) {
+      this.log("recovery.end", "failed");
       throw new Error(`could not start a fresh agent session: ${message(error)}`);
     }
     await this.installSession(session);
+    this.log("recovery.end", "succeeded");
     this.record.ownerPid = this.deps.ownerPid ?? process.pid;
     delete this.record.endedAt;
     this.lastOutcome = { status: "finished" };
@@ -341,11 +404,17 @@ export class Run {
     if (!this.turnActive || session === undefined) return false;
     if (this.cancelCause !== undefined) return true;
     this.cancelCause = cause;
+    this.log("cancel.requested", cause === "timeout" ? "timed_out" : "cancelled");
     this.withdrawPending();
     if (this.status === "waiting") void this.setStatus("running");
     session.cancel().catch(() => {});
     this.graceTimer = this.deps.clock.setTimeout(
-      () => void session.stop(this.forced ? 0 : this.settings.killGraceMs),
+      () => {
+        this.log("cancel.escalated", "cancelled");
+        void session.stop(this.forced ? 0 : this.settings.killGraceMs).catch(() => {
+          this.log("cancel.escalation_failed", "failed");
+        });
+      },
       this.forced ? 0 : this.settings.cancelGraceMs,
     );
     return true;
@@ -406,7 +475,9 @@ export class Run {
           base: record.base,
         });
         this.worktreeCreated = true;
+        this.log("worktree.create", "succeeded");
       } catch (error) {
+        this.log("worktree.create", "failed");
         return this.end({
           status: "failed",
           reason: `could not create the worktree: ${message(error)}`,
@@ -427,6 +498,7 @@ export class Run {
       session = await agents.start(
         {
           name: record.agent,
+          ...this.diagnostic(),
           command: settings.command,
           cwd: record.worktree,
           ...(settings.env === undefined ? {} : { env: settings.env }),
@@ -554,6 +626,9 @@ export class Run {
     const { clock } = this.deps;
     const { settings } = this;
     this.record.turns += 1;
+    this.turnOperation = randomUUID();
+    this.turnStarted = clock.now().getTime();
+    this.log("turn.start", "started");
     const turn = this.record.turns;
     if (setInitialPrompt && this.record.firstPrompt === "") this.record.firstPrompt = text;
     this.cancelCause = undefined;
@@ -589,6 +664,11 @@ export class Run {
           };
 
     if (stopReason === undefined) {
+      this.log(
+        "turn.end",
+        cause === "timeout" ? "timed_out" : cause ? "cancelled" : "failed",
+        clock.now().getTime() - this.turnStarted,
+      );
       if (preserveInterruptedOnFailure) {
         return this.end(
           {
@@ -608,6 +688,11 @@ export class Run {
       cause !== undefined && (cause === "timeout" || stopReason === "cancelled")
         ? causeOutcome(cause)
         : outcomeOf(stopReason);
+    this.log(
+      "turn.end",
+      outcome.status === "finished" ? "succeeded" : outcome.status,
+      clock.now().getTime() - this.turnStarted,
+    );
     this.emit({ type: "turnEnd", turn, stopReason, completedAt, outcome: outcome.status });
     if (settings.mode === "headless" || this.shutdownRequested) return this.end(outcome);
 
@@ -656,6 +741,7 @@ export class Run {
     answer: PermissionAnswer,
     by: "policy" | "user",
   ): void {
+    this.log("permission.decided", answer === "allow" ? "allowed" : "denied");
     this.emit({
       type: "permission",
       toolCallId: request.toolCallId,
@@ -684,7 +770,9 @@ export class Run {
     if (session !== undefined) {
       try {
         await session.stop(this.forced ? 0 : this.settings.killGraceMs);
+        this.log("process.stopped", "succeeded");
       } catch (error) {
+        this.log("process.stopped", "failed");
         const reason = `could not verify agent cleanup: ${message(error)}`;
         this.deps.warn(reason);
         outcome = {
@@ -715,11 +803,16 @@ export class Run {
   }
 
   private save(): Promise<void> {
-    return this.deps.store
-      .save({ ...this.record })
-      .catch((error) =>
-        this.deps.warn(`could not write the record for run ${this.id}: ${message(error)}`),
-      );
+    return this.deps.store.save({ ...this.record }).catch((error) => {
+      this.persistenceFailure();
+      this.deps.warn(`could not write the record for run ${this.id}: ${message(error)}`);
+    });
+  }
+
+  private persistenceFailure(): void {
+    if (this.persistenceReported) return;
+    this.persistenceReported = true;
+    this.log("persistence.failed", "failed");
   }
 
   private emit(body: RunEventBody | AgentUpdate): void {
@@ -729,11 +822,10 @@ export class Run {
       void this.save();
     }
     const event = { runId: this.id, at: this.deps.clock.now().toISOString(), ...body } as RunEvent;
-    this.deps.store
-      .appendEvent(event)
-      .catch((error) =>
-        this.deps.warn(`could not write events for run ${this.id}: ${message(error)}`),
-      );
+    this.deps.store.appendEvent(event).catch((error) => {
+      this.persistenceFailure();
+      this.deps.warn(`could not write events for run ${this.id}: ${message(error)}`);
+    });
     this.deps.onEvent(event);
   }
 }

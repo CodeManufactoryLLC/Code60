@@ -90,7 +90,7 @@ export function activityAnimation(state: ActivityState): string | undefined {
   return animations[state];
 }
 
-export function activityLabel(state: ActivityState): string {
+function activityLabel(state: ActivityState): string {
   if (state === "waiting_for_workers") return "Monitoring subagents";
   const words = state.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);

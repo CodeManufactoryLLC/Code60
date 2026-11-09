@@ -1,3 +1,4 @@
+export * from "./logs.js";
 export * from "./plans.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
@@ -28,24 +29,19 @@ import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js
 export {
   ACTIVITY_LIFETIME_MS,
   ACTIVITY_MESSAGE_MS,
-  ACTIVITY_TOOLS,
   ACTIVITY_TYPES,
   type ActivityAcknowledgment,
   type ActivityDeclaration,
   type ActivitySnapshot,
   type ActivityState,
-  type ActivityTool,
-  type ActivityType,
   CODE60_COPYRIGHT,
   DEFAULT_PROMPT_TEMPLATES,
   findMcpTableTool,
-  findMcpTool,
   isActivityTool,
   isMcpControlTool,
   MCP_ACTIVITY_TOOL_DEFINITIONS,
   MCP_CONTROL_LIMITS,
   MCP_CONTROL_TOOL_DEFINITIONS,
-  MCP_CONTROL_TOOLS,
   MCP_PROTOCOL_VERSION,
   MCP_PROTOCOL_VERSIONS,
   MCP_TABLE_TOOL_DEFINITIONS,
@@ -53,10 +49,7 @@ export {
   MCP_TOOL_CONTRACT_INFO,
   MCP_TOOL_DEFINITIONS,
   type McpControlTool,
-  type McpControlToolDefinition,
   type McpTable,
-  type McpTableToolDefinition,
-  type McpToolDefinition,
   PROMPT_FIELDS,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
@@ -66,7 +59,6 @@ export {
   parseActivityContextArgs,
   parseActivityReport,
   renderPrompt,
-  SEARCH_EXCERPT_LIMIT,
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
@@ -266,6 +258,10 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  queryLogs(request: import("./logs.js").LogQuery): Promise<import("./logs.js").LogPage>;
+  logDetail(request: { id: string }): Promise<import("./logs.js").LogRecord | null>;
+  clearLogs(request: { confirm: true }): Promise<boolean>;
+  onLogsChanged(listener: () => void): () => void;
   readPlan(request: import("./plans.js").PlanRead): Promise<import("./plans.js").Plan>;
   planAction(request: import("./plans.js").PlanAction): Promise<void>;
   checkGit(
