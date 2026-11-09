@@ -6042,7 +6042,29 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
           };
         }),
       )
-      .toEqual({ expanded: true, aboveComposer: true, belowMessage: true });
+      .toEqual({ expanded: true, aboveComposer: true, belowMessage: true })
+      .catch(async (error) => {
+        const geometry = await chat.evaluate((element) => {
+          const box = (selector: string) =>
+            element.querySelector(selector)?.getBoundingClientRect().toJSON();
+          const viewport = element.querySelector(".transcript");
+          return {
+            activity: box(".activity-display"),
+            composer: box(".composer"),
+            transcript: box(".transcript"),
+            content: box(".chat-transcript-content"),
+            scrollTop: viewport?.scrollTop,
+            scrollHeight: viewport?.scrollHeight,
+            clientHeight: viewport?.clientHeight,
+          };
+        });
+        await test.info().attach("activity-layout", {
+          body: JSON.stringify(geometry, null, 2),
+          contentType: "application/json",
+        });
+        await page.screenshot({ path: test.info().outputPath("activity-layout-failure.png") });
+        throw error;
+      });
     expect(
       await status.evaluate(
         (element) =>
