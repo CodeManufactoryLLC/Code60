@@ -7,6 +7,22 @@ describe("consolidated event rows", () => {
   const at = "2026-01-01T10:00:00.000Z";
   const runs = [{ record: { id: runId, agent: "codex" } }];
 
+  it("distinguishes identified, unknown and ordinary tool servers", () => {
+    const tool = {
+      runId,
+      at,
+      type: "toolCall" as const,
+      toolCallId: "t",
+      title: "MCP playwright",
+      kind: "other" as const,
+      status: "completed",
+    };
+    const rows = eventRows(runs, {
+      [runId]: [{ ...tool, mcp: { server: "playwright" } }, { ...tool, mcp: {} }, tool],
+    });
+    expect(rows.map((row) => row.server)).toEqual(["playwright", "Unknown", ""]);
+  });
+
   it("preserves every event, chunk, intermediate tool state, and optional detail", () => {
     const events: RunEvent[] = [
       { runId, at, type: "status", status: "running", reason: "Starting" },

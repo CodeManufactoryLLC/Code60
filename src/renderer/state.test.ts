@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DesktopRun, Snapshot } from "../bridge/index.js";
+import type { RunEvent } from "../core/index.js";
 import {
   applyCase,
   applyUpdate,
@@ -67,6 +68,28 @@ const snapshot = (revision: number, directory = "/repo"): Snapshot => ({
 const entry = (revision: number, text: string) => ({
   revision,
   event: { runId: "r1", at: "t", type: "message" as const, text },
+});
+
+it("updates tool attribution without duplicating blocks and accepts corrected metadata", () => {
+  const tool = {
+    runId: "r",
+    at: "t",
+    type: "toolCall" as const,
+    toolCallId: "m1",
+    title: "Docs",
+    kind: "fetch" as const,
+    status: "pending",
+  };
+  const events: RunEvent[] = [
+    { ...tool, mcp: { server: "context7" } },
+    { ...tool, toolCallId: "native" },
+    { ...tool, status: "completed", mcp: { server: "context7" } },
+  ];
+  const blocks = transcript(events);
+  expect(blocks).toHaveLength(2);
+  expect(blocks[0]).toMatchObject({ mcp: { server: "context7" }, text: "Docs\nfetch / completed" });
+  expect(blocks[1]?.mcp).toBeUndefined();
+  expect(transcript([...events, { ...tool, status: "completed" }])[0]?.mcp).toBeUndefined();
 });
 
 describe("desktop stream state", () => {

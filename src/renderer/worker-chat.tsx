@@ -4,6 +4,7 @@ import type { RunEvent } from "../core/index.js";
 import { sessionStatus, turnTimings } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
+import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { continueBlocker } from "./recovery.js";
 import { SessionInfo } from "./session-info.js";
@@ -255,6 +256,7 @@ export function WorkerChat({
                     {block.automatic && (
                       <div className="chat-message-speaker">Automatic worker update</div>
                     )}
+                    <McpBadge mcp={block.mcp} />
                     {block.text && <pre>{block.text}</pre>}
                     {(block.type === "message" ||
                       (block.type === "prompt" && !block.automatic)) && (

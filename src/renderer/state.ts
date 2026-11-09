@@ -67,6 +67,7 @@ export interface Block {
   detail?: string;
   /** Set on prompts Code60 generated instead of the user. */
   automatic?: boolean;
+  mcp?: Extract<RunEvent, { type: "toolCall" }>["mcp"];
 }
 
 /** Chat blocks: the text of each event, without speaker, turn, or status labels. */
@@ -106,9 +107,15 @@ export function transcript(events: readonly RunEvent[]): Block[] {
         text = `${event.title}\n${event.kind} / ${event.status}`;
         if (existing) {
           existing.text = text;
+          existing.mcp = event.mcp;
           continue;
         }
-        const block: Block = { key: String(index), type: event.type, text };
+        const block: Block = {
+          key: String(index),
+          type: event.type,
+          text,
+          ...(event.mcp === undefined ? {} : { mcp: event.mcp }),
+        };
         tools.set(event.toolCallId, block);
         blocks.push(block);
         continue;

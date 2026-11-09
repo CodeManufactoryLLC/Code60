@@ -88,6 +88,38 @@ interface KnownToolCall {
   title: string;
   kind: ToolKind;
   status: string;
+  mcp?: { server?: string } | undefined;
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** Only documented adapter metadata/programmatic names, never titles or tool arguments. */
+function mcpAttribution(update: {
+  name?: unknown;
+  _meta?: unknown;
+}): { mcp: { server?: string } | undefined } | undefined {
+  const meta = object(update._meta);
+  const airMcp = object(object(object(meta.jetbrains).air).mcp);
+  const claude = object(meta.claudeCode);
+  const name = update.name ?? claude.toolName;
+  const match = typeof name === "string" ? /^mcp__([^\r\n]+?)__([^\r\n]+)$/.exec(name) : null;
+  const reported = airMcp.server ?? match?.[1];
+  const identified =
+    meta.is_mcp_tool_call === true || typeof airMcp.tool === "string" || match !== null;
+  if (identified) {
+    // Names are display labels, not URLs, credentials or arbitrary payloads.
+    const server =
+      typeof reported === "string" && /^[a-zA-Z0-9_.-]{1,128}$/.test(reported)
+        ? reported
+        : undefined;
+    return { mcp: server === undefined ? {} : { server } };
+  }
+  // A corrected programmatic name can explicitly replace earlier attribution.
+  return typeof name === "string" ? { mcp: undefined } : undefined;
 }
 
 /** Upper bound on one raw update's stored JSON text, in UTF-8 bytes. */
@@ -126,7 +158,9 @@ export function mapUpdate(
         title: update.title,
         kind: toToolKind(update.kind),
         status: update.status ?? "pending",
+        ...mcpAttribution(update),
       };
+      if (call.mcp === undefined) delete call.mcp;
       toolCalls.set(update.toolCallId, call);
       return { type: "toolCall", toolCallId: update.toolCallId, ...call };
     }
@@ -136,7 +170,10 @@ export function mapUpdate(
         title: update.title ?? known?.title ?? update.toolCallId,
         kind: update.kind != null ? toToolKind(update.kind) : (known?.kind ?? "other"),
         status: update.status ?? known?.status ?? "pending",
+        ...(known?.mcp === undefined ? {} : { mcp: known.mcp }),
+        ...mcpAttribution(update),
       };
+      if (call.mcp === undefined) delete call.mcp;
       toolCalls.set(update.toolCallId, call);
       return { type: "toolCall", toolCallId: update.toolCallId, ...call };
     }
@@ -158,12 +195,21 @@ const CANCELLED = { outcome: { outcome: "cancelled" as const } };
 function acpMcpServers(
   servers: readonly AgentMcpServer[] | undefined,
 ): NewSessionRequest["mcpServers"] {
-  return (servers ?? []).map((server) => ({
-    name: server.name,
-    command: server.command,
-    args: [...server.args],
-    env: server.env.map(({ name, value }) => ({ name, value })),
-  })) satisfies McpServer[];
+  return (servers ?? []).map((server) =>
+    "command" in server
+      ? {
+          name: server.name,
+          command: server.command,
+          args: [...server.args],
+          env: server.env.map(({ name, value }) => ({ name, value })),
+        }
+      : {
+          name: server.name,
+          type: server.type,
+          url: server.url,
+          headers: server.headers.map(({ name, value }) => ({ name, value })),
+        },
+  ) satisfies McpServer[];
 }
 
 export const ACP_PROTOCOL_VERSION: number = PROTOCOL_VERSION;
@@ -331,6 +377,16 @@ async function connectSession(
     );
     if (init.protocolVersion !== PROTOCOL_VERSION) {
       throw new AcpError(`agent uses unsupported ACP protocol version ${init.protocolVersion}`);
+    }
+    for (const server of options.mcpServers ?? []) {
+      if (
+        (server.type === "http" || server.type === "sse") &&
+        init.agentCapabilities?.mcpCapabilities?.[server.type] !== true
+      ) {
+        throw new AcpError(
+          `agent '${options.agentName}' does not advertise support for ${server.type.toUpperCase()} MCP servers; use a provider that advertises this transport or change mcpServers in config.json`,
+        );
+      }
     }
     if (restoreId === undefined) {
       const session = await call(

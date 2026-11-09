@@ -13,7 +13,7 @@ import {
 } from "../platform/index.js";
 import { type Clock, systemClock } from "./clock.js";
 import { type CommandDeps, markInterrupted } from "./commands.js";
-import { type ConfigFs, loadConfig, parseDuration } from "./config.js";
+import { type ConfigFs, configuredMcpServers, loadConfig, parseDuration } from "./config.js";
 import { withDirectoryHistory } from "./desktop-history.js";
 import { createOrchestrator, type Orchestrator } from "./orchestrator.js";
 import { type PolicyOverrides, parseToolKinds } from "./policy.js";
@@ -127,7 +127,7 @@ export async function prepareOrchestrationChat(
       policy: config.permissions,
       overrides: { allow: [], allowAll: true },
       prompts: config.prompts,
-      ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+      mcpServers: [...configuredMcpServers(config), ...(options.mcpServers ?? [])],
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
     },
   );
@@ -255,6 +255,7 @@ export async function prepareRuns(
   configuration?: Config,
 ): Promise<PreparedRuns> {
   const config = configuration ?? (await loadConfig(deps.fs, request.env));
+  const mcpServers = configuredMcpServers(config);
   let maxParallel = config.maxParallel;
   if (request.parallel !== undefined) {
     if (!/^[1-9]\d*$/.test(request.parallel)) {
@@ -330,6 +331,7 @@ export async function prepareRuns(
       policy: config.permissions,
       overrides: { allow, allowAll: request.allowAll === true },
       prompts: config.prompts,
+      ...(mcpServers.length ? { mcpServers } : {}),
     },
   );
   return {
@@ -369,6 +371,7 @@ export async function prepareRecovery(
     );
   }
   const config = configuration ?? (await loadConfig(deps.fs, env));
+  const mcpServers = configuredMcpServers(config);
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
   await preparePrivateRecords(deps, workspace, env);
@@ -386,6 +389,7 @@ export async function prepareRecovery(
       policy: config.permissions,
       ...(overrides === undefined ? {} : { overrides }),
       prompts: { ...config.prompts, ...prompts },
+      ...(mcpServers.length ? { mcpServers } : {}),
     },
   );
   return { orchestrator, config };

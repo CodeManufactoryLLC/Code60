@@ -3862,6 +3862,105 @@ test("desktop: project questions use files without saved sessions", async () => 
   }
 });
 
+test("desktop: MCP badges, saved attribution and Server table controls", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-mcp-ui-"));
+  const repo = join(directory, "repo");
+  const config = join(directory, "config", "code60");
+  await mkdir(config, { recursive: true });
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  await writeFile(join(repo, "hello.txt"), "fixture\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  commitFixture(repo);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
+      },
+    }),
+  );
+  try {
+    application = await launch(directory, repo, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await page.evaluate(() => window.desktop.chooseFolder());
+    const [id] = await page.evaluate(() =>
+      window.desktop.start({
+        agents: ["claude"],
+        allow: [],
+        allowAll: false,
+        prompt: JSON.stringify([
+          {
+            tool: {
+              id: "docs",
+              title: "Query docs",
+              kind: "fetch",
+              _meta: { claudeCode: { toolName: "mcp__context7__query-docs" } },
+            },
+          },
+          { toolUpdate: { id: "docs", status: "completed" } },
+          {
+            tool: {
+              id: "browser",
+              title: "Snapshot",
+              kind: "other",
+              _meta: { claudeCode: { toolName: "mcp__playwright__browser_snapshot" } },
+            },
+          },
+          { toolUpdate: { id: "browser", status: "completed" } },
+          { tool: { id: "ordinary", title: "MCP playwright", kind: "read" } },
+          { message: "done" },
+        ]),
+      }),
+    );
+    if (!id) throw new Error("Missing MCP fixture run");
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await window.desktop.snapshot()).runs[0]?.view?.status),
+      )
+      .toBe("idle");
+    await selectSidebarPage(page, "Chat");
+    await page.locator("#tab-chat").press("ArrowRight");
+    await page.locator(`#conversation-${id}`).click();
+    const chat = page.locator(".worker-chat-page:visible");
+    for (const disclosure of await chat.locator(".chat-activity > summary").all())
+      await disclosure.click();
+    await expect(chat.locator(".mcp-badge")).toHaveCount(2);
+    await expect(
+      chat.getByRole("note", { name: "MCP server: context7", exact: true }),
+    ).toBeVisible();
+    await chat.screenshot({ path: test.info().outputPath("mcp-attribution.png") });
+    await page.evaluate((id) => window.desktop.action({ type: "finish", id }), id);
+    await page.reload();
+    await selectSidebarPage(page, "Chat");
+    await page.locator("#tab-chat").press("ArrowRight");
+    await page.locator(`#conversation-${id}`).click();
+    await expect(page.locator(".worker-chat-page:visible .mcp-badge")).toHaveCount(2);
+    await selectSidebarPage(page, "Events");
+    const events = page.locator("#panel-events");
+    await events.getByLabel("Column menu").selectOption("server");
+    const column = page.getByRole("dialog", { name: "Server", exact: true });
+    await column.getByLabel("Value").selectOption("context7");
+    await column.getByRole("button", { name: "Apply filter", exact: true }).click();
+    await expect(events.locator(".sessions-grid tbody [role='row']")).toHaveCount(2);
+    await events.getByRole("button", { name: "Clear Server filter" }).click();
+    await events.getByLabel("Column menu").selectOption("server");
+    await column.getByRole("button", { name: "Sort descending", exact: true }).click();
+    await expect(events.locator(".sessions-grid tbody [role='row']").first()).toContainText(
+      "playwright",
+    );
+    await events.getByLabel("Column menu").selectOption("server");
+    await column.getByLabel("Value").selectOption("playwright");
+    await column.getByRole("button", { name: "Apply filter", exact: true }).click();
+    await expect(events.locator(".sessions-grid tbody [role='row']")).toHaveCount(2);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: Chat landing, automatic ACP conversation, navigation, cancellation, and fresh startup", async () => {
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-chat-page-"));
@@ -4022,6 +4121,15 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       { message: "alpha" },
       { sleep: 100 },
       { thought: "checking" },
+      {
+        tool: {
+          id: "mcp-docs",
+          title: "Query documentation",
+          kind: "fetch",
+          _meta: { claudeCode: { toolName: "mcp__context7__query-docs" } },
+        },
+      },
+      { toolUpdate: { id: "mcp-docs", status: "completed" } },
       { permission: { id: "edit-1", title: "Edit workspace", kind: "edit" } },
       { write: { path: "marker.txt", content: "kept across launches" } },
       { message: "omega" },
@@ -4035,6 +4143,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await chat.locator(".activity-history-toggle").last().click();
     await expect(chat.locator(".event.thought pre")).toBeVisible();
     await expect(chat.locator(".event.thought pre")).toHaveText("checking");
+    await expect(
+      chat.getByRole("note", { name: "MCP server: context7", exact: true }),
+    ).toBeVisible();
+    await expect(chat.locator(".mcp-badge")).toHaveText("MCP");
     await chat.locator(".activity-history-toggle").last().click();
     expect(await readFile(join(first.chat.directory as string, "marker.txt"), "utf8")).toBe(
       "kept across launches",
@@ -5887,6 +5999,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       ]),
     );
     await input.press("Enter");
+    await expect(input).toHaveValue("");
     await expect(status).toHaveAttribute("data-source", "declared");
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     const activityTimer = status.getByRole("timer");
@@ -5979,12 +6092,19 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await status.press("Enter");
     await expect(status).toHaveAttribute("aria-expanded", "true");
     await status.press("Escape");
-    await input.hover();
-    await status.hover();
+    // The collapse scrolls the transcript, which dismisses tooltips. Hover only after it settles.
+    await expect
+      .poll(() => closedDetails.evaluate((element) => element.getBoundingClientRect().height))
+      .toBe(0);
     const tooltip = page.getByRole("tooltip");
-    await expect(tooltip).toContainText(
-      "Agent-reported purpose: Checking cancellation <script>plain text</script>",
-    );
+    await expect(async () => {
+      await input.hover();
+      await status.locator(".activity-name").hover();
+      await expect(tooltip).toContainText(
+        "Agent-reported purpose: Checking cancellation <script>plain text</script>",
+        { timeout: 1000 },
+      );
+    }).toPass({ timeout: 5000 });
     await expect(tooltip.locator("script")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(tooltip).toHaveCount(0);
@@ -6056,6 +6176,9 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     ).toBe(labelLeft);
     await expect(activityTimer).toHaveText("0s");
     await expect(status).not.toHaveAttribute("data-tooltip", /other operation/);
+    // A layout/scroll change may dismiss the old tooltip; inspect the new activity via focus.
+    await input.focus();
+    await status.focus();
     await expect(tooltip).toContainText("Observed activity: Searching");
     await expect(tooltip).not.toContainText("other operation");
     await page.reload();
@@ -6096,12 +6219,15 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     );
     await input.press("Enter");
     await expect(status).toHaveAttribute("data-activity", "waiting_for_workers");
+    // Send completion resets follow-bottom; start the reading scenario after that settles.
+    await expect(input).toHaveValue("");
     await expect(status).toBeInViewport();
     const transcript = chat.getByRole("log", { name: "Orchestration conversation" });
     expect(await transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-    await transcript.evaluate((element) => {
-      element.scrollTop = 0;
-    });
+    // Real wheel input waits for the scroll handler to leave follow-bottom mode.
+    await transcript.hover();
+    await page.mouse.wheel(0, -10000);
+    await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBe(0);
     await expect(status).toHaveAttribute("data-activity", "reading");
     expect(await transcript.evaluate((element) => element.scrollTop)).toBe(0);
     await expect(status).toHaveCount(0);

@@ -37,6 +37,7 @@ module.exports = {
     "TRADEMARKS.md",
   ],
   extraResources: [
+    { from: "mcp.default.json", to: "mcp.default.json" },
     { from: "release/licenses", to: "licenses" },
     ...(process.platform === "win32"
       ? [
