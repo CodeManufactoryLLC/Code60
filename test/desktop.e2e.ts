@@ -5999,6 +5999,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       ]),
     );
     await input.press("Enter");
+    await expect(input).toHaveValue("");
     await expect(status).toHaveAttribute("data-source", "declared");
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     const activityTimer = status.getByRole("timer");
@@ -6218,6 +6219,8 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     );
     await input.press("Enter");
     await expect(status).toHaveAttribute("data-activity", "waiting_for_workers");
+    // Send completion resets follow-bottom; start the reading scenario after that settles.
+    await expect(input).toHaveValue("");
     await expect(status).toBeInViewport();
     const transcript = chat.getByRole("log", { name: "Orchestration conversation" });
     expect(await transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
