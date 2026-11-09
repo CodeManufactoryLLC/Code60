@@ -1285,6 +1285,84 @@ describe("app-wide orchestration chat", () => {
     await expect(call("code60_read_sessions")).rejects.toThrow();
   });
 
+  it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
+    agents.script = (_text, session) => {
+      session.update({ type: "message", text: "Parser validation" });
+      return "end_turn";
+    };
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Parser validation"));
+    const count = agents.sessions.length;
+    await controller.orchestrationChatAction({ type: "rename", id, title: "My parser work" });
+    await controller.orchestrationChatAction({ type: "send", id, text: "Next step" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.sessions).toHaveLength(count);
+    const directory = controller.snapshot().chat.directory as string;
+    await controller.orchestrationChatAction({ type: "archive", id });
+    expect(controller.snapshot().chat.run?.id).not.toBe(id);
+    expect(controller.snapshot().chats.find((chat) => chat.run?.id === id)).toMatchObject({
+      title: "My parser work",
+      archived: true,
+      directory,
+    });
+    expect(await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8")).toContain(
+      id,
+    );
+    await expect(controller.orchestrationChatAction({ type: "select", id })).rejects.toThrow(
+      "archived",
+    );
+  });
+
+  it("a manual rename wins over pending agent title generation", async () => {
+    agents.script = (text, session) => {
+      if (text.startsWith("Write a descriptive chat title")) return "hang";
+      session.update({ type: "message", text: "Done" });
+      return "end_turn";
+    };
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "First exchange" });
+    await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
+    await controller.orchestrationChatAction({ type: "rename", id, title: "Human title" });
+    await vi.waitFor(() => expect(agents.sessions[1]?.stops).toEqual([1_000]));
+    expect(controller.snapshot().chat.title).toBe("Human title");
+  });
+
+  it.each(["provider", "stop all", "shutdown"])(
+    "cleans up pending title generation on %s",
+    async (action) => {
+      agents.script = (text, session) => {
+        if (text.startsWith("Write a descriptive chat title")) return "hang";
+        session.update({ type: "message", text: "Done" });
+        return "end_turn";
+      };
+      const id = await ready();
+      await controller.orchestrationChatAction({ type: "send", id, text: "First exchange" });
+      await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
+      const helperDirectory = agents.specs[1]?.cwd as string;
+      if (action === "provider") await setProvider("codex");
+      else if (action === "stop all") await controller.stopAll();
+      else await controller.shutdown();
+      expect(agents.sessions[1]?.stops).toEqual([1_000]);
+      await expect(fs.stat(helperDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+    },
+  );
+
+  it("archiving a background chat leaves its work running and selection unchanged", async () => {
+    agents.script = () => "hang";
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "new" });
+    const selected = controller.snapshot().chat.run?.id;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Keep working" });
+    await controller.orchestrationChatAction({ type: "archive", id });
+    expect(controller.snapshot().chat.run?.id).toBe(selected);
+    expect(controller.snapshot().chats.find((chat) => chat.run?.id === id)).toMatchObject({
+      archived: true,
+      run: { status: "running" },
+    });
+    expect(agents.sessions[0]?.stops).toEqual([]);
+  });
+
   it("creates private chat folders, routes background turns, and retains independent transcripts", async () => {
     agents.script = () => "hang";
     const firstId = await ready();
@@ -1336,7 +1414,12 @@ describe("app-wide orchestration chat", () => {
     expect(controller.snapshot().chats.every((chat) => chat.run?.status === "cancelled")).toBe(
       true,
     );
-    expect(agents.sessions.map((session) => session.stops.length)).toEqual([1, 1]);
+    expect(
+      agents.sessions
+        .filter((_, index) => agents.specs[index]?.mcpServers?.length)
+        .map((session) => session.stops.length),
+    ).toEqual([1, 1]);
+    expect(agents.sessions.every((session) => session.stops.length === 1)).toBe(true);
     for (const chat of controller.snapshot().chats) {
       const record = JSON.parse(
         await fs.readFile(
@@ -1414,7 +1497,7 @@ describe("app-wide orchestration chat", () => {
     await controller.open(directory);
     await controller.open(second);
     expect(controller.snapshot().chat.run?.id).toBe(id);
-    expect(agents.specs).toHaveLength(1);
+    expect(agents.specs.filter((spec) => spec.mcpServers?.length)).toHaveLength(1);
     expect(controller.snapshot().chat.events.some((entry) => entry.event.type === "message")).toBe(
       true,
     );

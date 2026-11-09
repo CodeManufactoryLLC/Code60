@@ -27,6 +27,7 @@ import { ChatPage } from "./chat-page.js";
 import { newestMessage } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { agentCount, ConfigurationsTable, providers } from "./configurations.js";
+import { DatabaseNotice } from "./database-notice.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { prepareFileNavigation } from "./file-navigation.js";
@@ -148,7 +149,7 @@ function App() {
           const nativeControls = event.clientY < 28 && event.clientX < 80;
           const element = document.elementFromPoint(event.clientX, event.clientY);
           const content = element?.closest(
-            ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
+            ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .database-notice, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
           const next = !nativeControls && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;
@@ -272,6 +273,21 @@ function App() {
     if (orchestratorConfigured && sessionStorage.getItem("code60.splashShown")) setSplash(false);
   }, [snapshot, orchestratorConfigured]);
   const database = snapshot?.database ?? null;
+  const databaseLoaded = snapshot !== undefined;
+  useEffect(() => {
+    if (!databaseLoaded || database) return;
+    setTabs((current) =>
+      ["chat", "settings", "contributor-tools"].includes(current.active)
+        ? current
+        : updateTabs(current, { type: "select", id: "chat" }),
+    );
+    setSetup(false);
+    setConfigurationEditor(undefined);
+    setMenu(undefined);
+    setConfigurationMenu(undefined);
+    setWorktreeMenu(undefined);
+    setPollMenu(undefined);
+  }, [database, databaseLoaded]);
   const directory = snapshot?.directory;
   useEffect(() => {
     if (!directory || !snapshot?.database) setGitSetupProject(undefined);
@@ -420,9 +436,9 @@ function App() {
     () =>
       api.onMenu((command: MenuCommand) => {
         setError("");
-        setPicker(command === "database" ? "database" : "project");
+        setPicker(command === "database" || !database ? "database" : "project");
       }),
-    [],
+    [database],
   );
 
   useLayoutEffect(() => {
@@ -523,7 +539,7 @@ function App() {
   };
   const showPicker = (kind: "database" | "project") => {
     setError("");
-    setPicker(kind);
+    setPicker(kind === "project" && !database ? "database" : kind);
   };
   const connectDatabase = (mode: DatabaseMode) =>
     void attempt(async () => {
@@ -686,6 +702,7 @@ function App() {
   };
   const page = (
     id:
+      | "contributor-tools"
       | "episodic-memory"
       | "chat"
       | "files"
@@ -704,6 +721,8 @@ function App() {
     group: "Pages",
     icon: "document",
     checked: tabs.active === id,
+    disabled: !database && id !== "chat" && id !== "contributor-tools",
+    ...(!database ? { reason: "Connect to a database first" } : {}),
     run: () => {
       if (id === "files") {
         fileAction({ type: "browse" });
@@ -715,6 +734,7 @@ function App() {
   const commands: Command[] = [
     page("chat", "Chat"),
     page("episodic-memory", "Episodic Memory"),
+    page("contributor-tools", "Contributor Tools"),
     page("files", "File Explorer"),
     page("sessions", "Sessions"),
     page("configurations", "Configurations"),
@@ -738,7 +758,7 @@ function App() {
       label: "New agent session",
       group: "Project",
       icon: "add",
-      disabled: busy || !directory,
+      disabled: busy || !database || !directory,
       run: () => setSetup(true),
     },
     {
@@ -762,7 +782,7 @@ function App() {
       label: "Poll project data",
       group: "Project",
       icon: "renew",
-      disabled: busy || !directory,
+      disabled: busy || !database || !directory,
       run: () =>
         void attempt(async () => {
           await api.poll(["history", "config", "configurations"]);
@@ -940,6 +960,8 @@ function App() {
           snapshot={snapshot}
           api={api}
           project={lastProject}
+          busy={busy}
+          onConnectDatabase={() => showPicker("database")}
           onAnswer={(open) => {
             if (!orchestratorConfigured) return;
             sessionStorage.setItem("code60.splashShown", "1");
@@ -949,6 +971,13 @@ function App() {
         />
       )}
       {!splash && <div className="window-drag-strip" aria-hidden="true" />}
+      {!splash && snapshot && !database && (
+        <DatabaseNotice
+          busy={busy}
+          error={snapshot.databaseError}
+          onConnect={() => showPicker("database")}
+        />
+      )}
       <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
         {!splash && (
           <PageTabBar
@@ -963,6 +992,7 @@ function App() {
             eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
+            onConnectDatabase={() => showPicker("database")}
             projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
             onSelect={(id) => {
               setMenu(undefined);
@@ -1001,11 +1031,11 @@ function App() {
                 />
               )}
 
-              {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat) => (
+              {(snapshot?.chats.length ? snapshot.chats : [snapshot?.chat]).map((chat, index) => (
                 <ChatPage
                   key={chat?.run?.id ?? chat?.directory ?? "disconnected"}
                   api={api}
-                  chat={chat}
+                  chat={chat ? { ...chat, title: chat.title ?? `Chat ${index + 1}` } : undefined}
                   hidden={
                     tabs.active !== "chat" ||
                     !!workerId ||
@@ -1051,6 +1081,7 @@ function App() {
               })}
             </div>
             <FilePanel
+              disabled={!database}
               plans={plans}
               api={api}
               reviews={snapshot?.reviews ?? []}
@@ -1093,7 +1124,8 @@ function App() {
               orchestration={snapshot && <OrchestrationSettings snapshot={snapshot} api={api} />}
               pollingControls={
                 snapshot && (
-                  <>
+                  <fieldset disabled={!database} className="database-dependent-controls">
+                    <legend className="sr-only">Project polling</legend>
                     <PollingControls
                       polling={snapshot.polling}
                       api={api}
@@ -1108,7 +1140,7 @@ function App() {
                     >
                       Open polling monitor
                     </button>
-                  </>
+                  </fieldset>
                 )
               }
               transparent={transparent}
@@ -1297,6 +1329,18 @@ function App() {
         <div
           className="page-panel"
           role="tabpanel"
+          id="panel-contributor-tools"
+          aria-labelledby="tab-contributor-tools"
+          hidden={tabs.active !== "contributor-tools"}
+        >
+          <main className="contributor-tools">
+            <h1>Contributor Tools</h1>
+            <p>No contributor tools yet.</p>
+          </main>
+        </div>
+        <div
+          className="page-panel"
+          role="tabpanel"
           id="panel-episodic-memory"
           aria-labelledby="tab-episodic-memory"
           hidden={tabs.active !== "episodic-memory"}
@@ -1460,6 +1504,7 @@ function App() {
         <footer className="app-footer">
           {snapshot && (
             <PollingWidget
+              disabled={!database}
               key={database ?? "none"}
               polling={snapshot.polling}
               api={api}
@@ -2098,12 +2143,16 @@ function Splash({
   api,
   project,
   onAnswer,
+  busy,
+  onConnectDatabase,
 }: {
   ready: boolean;
   snapshot: Snapshot | undefined;
   api: DesktopApi;
   project: ProjectEntry | undefined;
   onAnswer(open: boolean): void;
+  busy: boolean;
+  onConnectDatabase(): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const yes = useRef<HTMLButtonElement>(null);
@@ -2116,8 +2165,11 @@ function Splash({
     dialog.current?.showModal();
   }, []);
   useEffect(() => {
-    if (ready) yes.current?.focus();
-  }, [ready]);
+    if (!ready) return;
+    if (configured && !snapshot?.database)
+      dialog.current?.querySelector<HTMLButtonElement>(".database-notice button")?.focus();
+    else yes.current?.focus();
+  }, [ready, configured, snapshot?.database]);
   useEffect(() => {
     if (ready && !configured && providerLoaded) setSetup(true);
   }, [ready, configured, providerLoaded]);
@@ -2139,6 +2191,13 @@ function Splash({
           if (configured) answer(false);
         }}
       >
+        {ready && snapshot && !snapshot.database && (
+          <DatabaseNotice
+            busy={busy}
+            error={snapshot.databaseError}
+            onConnect={onConnectDatabase}
+          />
+        )}
         <span id={`${id}-title`} className="wordmark splash-title">
           Code<b>60</b>
         </span>
@@ -2244,7 +2303,7 @@ function ProjectDialog({
   onClear(): void;
 }) {
   return (
-    <Modal title="Open Project" busy={busy} onClose={onClose}>
+    <Modal title="Open Project" busy={busy} className="project-dialog" onClose={onClose}>
       {!database ? (
         <>
           <p className="muted">No database connected.</p>
@@ -2273,6 +2332,7 @@ function ProjectDialog({
               </button>
               <button
                 type="button"
+                className="project-remove"
                 aria-label={`Remove ${folderName(project.path)} from history`}
                 title={`Remove ${project.path} from history`}
                 disabled={busy}
@@ -2306,7 +2366,7 @@ function ProjectDialog({
           Cancel
         </button>
         <button type="button" className="primary" disabled={busy || !database} onClick={onCreate}>
-          Create new project…
+          Open Folder
         </button>
       </div>
     </Modal>

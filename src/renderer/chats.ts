@@ -16,8 +16,12 @@ export function conversations(
   const owned = new Set<string>();
   const available = new Map(runs.map((run) => [run.record.id, run]));
   for (const [index, chat] of chats.entries()) {
-    if (!chat.run) continue;
-    result.push({ id: chat.run.id, label: `Chat ${index + 1}`, role: "orchestrator" });
+    if (!chat.run || chat.archived) continue;
+    result.push({
+      id: chat.run.id,
+      label: chat.title ?? `Chat ${index + 1}`,
+      role: "orchestrator",
+    });
     for (const id of chat.workers ?? []) {
       if (!available.has(id) || owned.has(id)) continue;
       const run = available.get(id);

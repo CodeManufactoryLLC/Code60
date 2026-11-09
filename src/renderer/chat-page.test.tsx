@@ -23,6 +23,7 @@ function render(
   runs: DesktopRun[],
   events: RunEvent[] = [],
   reviews: ReviewSummary[] = [],
+  database: string | null = "/db",
 ) {
   return renderToStaticMarkup(
     <ChatPage
@@ -56,7 +57,7 @@ function render(
         } as OrchestrationChat
       }
       events={events}
-      database="/db"
+      database={database}
       active
       onDatabase={() => {}}
       runs={runs}
@@ -66,6 +67,16 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("disables chat controls without a database even when a run is still reported", () => {
+    for (const status of ["idle", "running"] as const) {
+      const html = render(status, [], [], [], [], null);
+      expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
+      expect(html.match(/<button[^>]*class="chat-title"[^>]*>/)?.[0]).toContain("disabled");
+      const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
+      expect(action).toContain("disabled");
+      expect(html).toContain("Connect to database");
+    }
+  });
   it("labels only identified MCP tools in historical activity", () => {
     const tool = {
       runId: "orchestrator",

@@ -1,4 +1,5 @@
 export type PageId =
+  | "contributor-tools"
   | "episodic-memory"
   | "files"
   | "chat"
@@ -19,6 +20,7 @@ export interface PageTabs {
 
 export const initialTabs: PageTabs = {
   open: [
+    "contributor-tools",
     "chat",
     "episodic-memory",
     "sessions",

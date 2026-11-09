@@ -164,7 +164,7 @@ export function WorkerChat({
       <header className="orchestration-chat-heading worker-chat-heading">
         <div className="worker-chat-identity">
           <h2 className="worker-chat-title" id={titleId}>
-            <Icon name="terminal" />
+            <span className="chat-role-icon chat-role-dot" aria-hidden="true" />
             {run.record.agent} / {id.slice(-6)}
           </h2>
           <span className="status-label worker-chat-subtitle" data-status={status}>

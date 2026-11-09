@@ -9,6 +9,7 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import { RenameChat } from "./chat-name.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { McpBadge } from "./mcp-badge.js";
@@ -98,6 +99,7 @@ export function ChatPage({
   onPlan?: (id: string) => void;
   onReview?(id: string, updates?: boolean): void;
 }) {
+  const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
   const key = run ? `code60.orchestrationDraft:${run.id}` : "";
@@ -117,7 +119,7 @@ export function ChatPage({
   const geometry = useRef({ width: 0, height: 0, contentHeight: 0 });
   const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
-  const ready = run?.status === "idle" && !run.stopping && !run.modeChanging;
+  const ready = !!database && run?.status === "idle" && !run.stopping && !run.modeChanging;
   const ended = run && !["queued", "running", "waiting", "idle"].includes(run.status);
   const blocks = useMemo(() => transcript(events), [events]);
   const timings = useMemo(
@@ -292,7 +294,7 @@ export function ChatPage({
     if (key) sessionStorage.setItem(key, text);
   }
   async function action(request: OrchestrationChatAction) {
-    if (inFlight.current) return false;
+    if (!database || inFlight.current) return false;
     inFlight.current = true;
     setPending(request.type);
     setError("");
@@ -326,9 +328,24 @@ export function ChatPage({
   return (
     <main className="orchestration-chat-page" aria-labelledby={id} hidden={hidden}>
       <header className="orchestration-chat-heading">
-        <h1 id={id} className="sr-only">
-          Chat
+        <h1 id={id}>
+          <button
+            type="button"
+            className="chat-title"
+            aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
+            disabled={!database || !run}
+            onClick={() => setRenaming(true)}
+          >
+            {chat?.title ?? "Chat"}
+          </button>
         </h1>
+        {renaming && run && (
+          <RenameChat
+            title={chat?.title ?? "Chat"}
+            onClose={() => setRenaming(false)}
+            onSave={(title) => action({ type: "rename", id: run.id, title })}
+          />
+        )}
         <div className="orchestration-chat-status">
           {plans.length > 0 && (
             <nav className="chat-plans" aria-label="Plans">
@@ -424,7 +441,7 @@ export function ChatPage({
           </span>
           <button
             type="button"
-            disabled={busy}
+            disabled={!database || busy}
             onClick={() => void action({ type: "resume-updates", id: run.id })}
           >
             Resume updates
@@ -628,7 +645,7 @@ export function ChatPage({
             placeholder="Message…"
             rows={2}
             value={draft}
-            disabled={!run || !!ended || connecting}
+            disabled={!database || !run || !!ended || connecting}
             maxLength={1_000_000}
             onChange={(event) => edit(event.target.value)}
             onKeyDown={(event) => {
@@ -655,7 +672,7 @@ export function ChatPage({
               <button
                 type="button"
                 className="composer-send"
-                disabled={busy || !!run?.stopping}
+                disabled={!database || busy || !!run?.stopping}
                 onClick={() => void action({ type: "cancel", id: run?.id ?? null })}
               >
                 <Icon name="stop" />

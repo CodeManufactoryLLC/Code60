@@ -395,6 +395,7 @@ export async function prepareRecovery(
   return { orchestrator, config };
 }
 
+export { generateChatTitle } from "./chat-title.js";
 export { extractEpisodicMemory, MEMORY_EVENT_LIMIT } from "./episodic-memory.js";
 export { summarizeSearch } from "./search-summary.js";
 

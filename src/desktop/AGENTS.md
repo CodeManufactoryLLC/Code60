@@ -39,5 +39,6 @@
 
 - Diff preparation is serialized with lifecycle mutations; expensive reads run through DiffReads outside the action queue, with at most two in flight. Cancel reads on context replacement, renderer reload and shutdown, and settle a run's reads before discard. Queued preparation cancellation must not deadlock the control queue.
 - ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
+- Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Keep title/archive state with the in-memory conversation; archive only hides navigation and never deletes records or stops work.
 
 - GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.

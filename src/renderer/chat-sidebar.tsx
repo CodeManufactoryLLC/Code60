@@ -1,8 +1,12 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { ChatMenu } from "./chat-menu.js";
+import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
 import { type Conversation, conversations, reconcileDisclosure } from "./chats.js";
+import clientDeliveryNetworkLight from "./icons/app-icons/ClientDeliveryNetworkPrimary.svg?url&no-inline";
+import clientDeliveryNetworkDark from "./icons/app-icons/ClientDeliveryNetworkPrimary-dark.svg?url&no-inline";
 import { Icon } from "./icons.js";
 import { statusSpec } from "./state.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
@@ -17,6 +21,7 @@ export function ChatSidebar({
   open,
   pending,
   onSelect,
+  onAction,
 }: {
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -27,8 +32,22 @@ export function ChatSidebar({
   open: boolean;
   pending: boolean;
   onSelect(id: string): void;
+  onAction?(request: OrchestrationChatAction): Promise<boolean>;
 }) {
+  const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
+    null,
+  );
+  const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null);
   const entries = useMemo(() => conversations(chats, runs), [chats, runs]);
+  const archivedFocus = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!archivedFocus.current || entries.some((entry) => entry.id === archivedFocus.current))
+      return;
+    archivedFocus.current = null;
+    (
+      document.getElementById(`conversation-${selectedId}`) ?? document.getElementById("tab-chat")
+    )?.focus();
+  }, [entries, selectedId]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const previous = useRef<Record<string, string[]>>({});
   const markers = useRef(new Map<string, number>());
@@ -116,7 +135,7 @@ export function ChatSidebar({
     const expanded = !collapsed.has(entry.id);
     return (
       <div className="chat-sidebar-group" key={entry.id} data-conversation-id={entry.id}>
-        <div className="chat-sidebar-row">
+        <div className="chat-sidebar-row" data-nav-active={open && entry.id === selectedId}>
           <button
             type="button"
             id={`conversation-${entry.id}`}
@@ -124,11 +143,27 @@ export function ChatSidebar({
             data-role={entry.role}
             aria-label={entry.label}
             aria-description={description}
-            aria-current={entry.id === selectedId ? "true" : undefined}
+            aria-current={open && entry.id === selectedId ? "true" : undefined}
             disabled={pending}
             onClick={() => onSelect(entry.id)}
+            onContextMenu={(event) => {
+              if (entry.role !== "orchestrator" || pending) return;
+              event.preventDefault();
+              event.currentTarget.focus();
+              setMenu({ ...entry, x: event.clientX, y: event.clientY });
+            }}
             title={`${entry.label}. ${description}`}
             onKeyDown={(event) => {
+              if (
+                entry.role === "orchestrator" &&
+                (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                const rect = event.currentTarget.getBoundingClientRect();
+                setMenu({ ...entry, x: rect.left, y: rect.bottom });
+                return;
+              }
               if (event.key === "ArrowRight" && children.length) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -146,7 +181,26 @@ export function ChatSidebar({
               }
             }}
           >
-            <Icon name={entry.role === "orchestrator" ? "branch" : "terminal"} />
+            {entry.role === "orchestrator" ? (
+              <span className="chat-role-icon chat-orchestrator-icon" aria-hidden="true">
+                <img
+                  className="chat-orchestrator-icon-light"
+                  src={clientDeliveryNetworkLight}
+                  alt=""
+                  width={32}
+                  height={32}
+                />
+                <img
+                  className="chat-orchestrator-icon-dark"
+                  src={clientDeliveryNetworkDark}
+                  alt=""
+                  width={32}
+                  height={32}
+                />
+              </span>
+            ) : (
+              <span className="chat-role-icon chat-role-dot" aria-hidden="true" />
+            )}
             <span className="chat-sidebar-label">{entry.label}</span>
             <span className="chat-sidebar-indicators">
               {unread > 0 && (
@@ -162,6 +216,22 @@ export function ChatSidebar({
             </span>
             <span className="sr-only">{description}</span>
           </button>
+          {entry.role === "orchestrator" && (
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={`Actions for ${entry.label}`}
+              aria-haspopup="menu"
+              aria-expanded={menu?.id === entry.id}
+              disabled={pending}
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setMenu({ ...entry, x: rect.left, y: rect.bottom });
+              }}
+            >
+              <Icon name="overflow-menu--horizontal" />
+            </button>
+          )}
           {children.length > 0 && (
             <button
               type="button"
@@ -214,6 +284,32 @@ export function ChatSidebar({
       <div className="chat-sidebar-list">
         {entries.filter(({ parentId }) => !parentId).map(row)}
       </div>
+      {menu && (
+        <ChatMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onAction={(action) => {
+            if (action === "open") onSelect(menu.id);
+            else if (action === "rename") setRenaming(menu);
+            else {
+              archivedFocus.current = menu.id;
+              void onAction?.({ type: "archive", id: menu.id }).then((saved) => {
+                if (!saved) archivedFocus.current = null;
+              });
+            }
+          }}
+        />
+      )}
+      {renaming && (
+        <RenameChat
+          title={renaming.label}
+          onClose={() => setRenaming(null)}
+          onSave={(title) =>
+            onAction?.({ type: "rename", id: renaming.id, title }) ?? Promise.resolve(false)
+          }
+        />
+      )}
     </nav>
   );
 }

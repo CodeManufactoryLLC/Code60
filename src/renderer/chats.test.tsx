@@ -32,6 +32,38 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it.each([true, false])("marks only the opened conversation current (Chat open: %s)", (open) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    for (const selectedId of ["a", "one", "manual"]) {
+      const html = renderToStaticMarkup(
+        <ChatSidebar
+          chats={[chat("a", ["one"])]}
+          runs={[run("one"), run("manual")]}
+          navigationSerial={undefined}
+          selectedId={selectedId}
+          database="/db"
+          eventsByRun={{}}
+          open={open}
+          pending={false}
+          onSelect={() => {}}
+        />,
+      );
+      expect(html.match(/aria-current="true"/g) ?? []).toHaveLength(open ? 1 : 0);
+      expect(html.match(/data-nav-active="true"/g) ?? []).toHaveLength(open ? 1 : 0);
+      const selected = html.match(
+        new RegExp(`<button[^>]*id="conversation-${selectedId}"[^>]*>`),
+      )?.[0];
+      expect(selected?.includes('aria-current="true"')).toBe(open);
+    }
+  });
+  it("uses titles and hides archived chats without hiding their recorded workers", () => {
+    const archived = { ...chat("a", ["one"]), title: "Old work", archived: true };
+    expect(conversations([archived, { ...chat("b"), title: "Fix parser" }], [run("one")])).toEqual([
+      { id: "b", label: "Fix parser", role: "orchestrator" },
+      { id: "one", label: "fake / one", role: "worker" },
+    ]);
+    expect(archived.run?.id).toBe("a");
+  });
   it("nests only known owned workers and includes manual and historical runs once", () => {
     expect(
       conversations(
@@ -89,17 +121,21 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('data-role="orchestrator"');
+    expect(html).toContain('aria-label="Actions for Chat 1"');
+    expect(html).not.toContain('aria-label="Actions for fake');
     expect(html).toContain('data-role="worker"');
     expect(html).toContain('aria-label="Workers for Chat 1"');
     expect(html).toContain('aria-label="Chat 1 workers"');
     expect(html).toContain('aria-label="1 unread reply"');
     expect(html).toContain("Worker. Failed");
     expect(html).toMatch(
-      /data-role="orchestrator".*?<svg.*?<span class="chat-sidebar-label">Chat 1/,
+      /data-role="orchestrator".*?<span class="chat-role-icon chat-orchestrator-icon" aria-hidden="true">/,
     );
     expect(html).toMatch(
-      /data-role="worker".*?<svg.*?<span class="chat-sidebar-label">fake \/ one/,
+      /data-role="worker".*?<span class="chat-role-icon chat-role-dot" aria-hidden="true"><\/span><span class="chat-sidebar-label">fake \/ one/,
     );
+    expect(html).toContain("ClientDeliveryNetworkPrimary.svg");
+    expect(html).toContain("ClientDeliveryNetworkPrimary-dark.svg");
     expect(html).not.toContain('role="dialog"');
   });
   it("clears unread for the selected worker without clearing its siblings", () => {
@@ -170,6 +206,7 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
+    expect(html).toContain('<span class="chat-role-icon chat-role-dot" aria-hidden="true"></span>');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain("Code60 auto-approval: On");
     expect(html).toContain('aria-label="Worker composer"');
