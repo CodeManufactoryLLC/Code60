@@ -28,6 +28,12 @@ jobs:
           node-version: "24"
           cache: npm
           package-manager-cache: false
+      - name: Use runner temp for Windows fixtures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - run: npm ci
       - run: node scripts/install-electron.mjs
       - run: npm run check

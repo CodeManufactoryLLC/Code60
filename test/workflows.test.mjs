@@ -62,7 +62,22 @@ describe("CI and release gates", () => {
     expect(native.permissions).toEqual({ contents: "read" });
     expect(native.jobs.native.strategy.matrix.os).toEqual(["windows-2025", "macos-15"]);
     expect(native.jobs.native.strategy["fail-fast"]).toBe(false);
-    expect(native.jobs.native.steps.filter((step) => step.run).map((step) => step.run)).toEqual([
+    const temp = native.jobs.native.steps.find(
+      (step) => step.name === "Use runner temp for Windows fixtures",
+    );
+    expect(temp.if).toBe("runner.os == 'Windows'");
+    expect(temp.shell).toBe("pwsh");
+    expect(temp.run).toBe(
+      '"TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV\n"TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV\n',
+    );
+    expect(release.jobs.windows.steps.find((step) => step.name === temp.name)).toEqual({
+      name: temp.name,
+      shell: temp.shell,
+      run: temp.run,
+    });
+    expect(
+      native.jobs.native.steps.filter((step) => step.run && step !== temp).map((step) => step.run),
+    ).toEqual([
       "npm ci",
       "node scripts/install-electron.mjs",
       "npm run check",

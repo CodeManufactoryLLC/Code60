@@ -105,6 +105,9 @@ Desktop jobs install Electron explicitly before tests. An official GitHub asset
 server error gets one retry with a cache-busting query; the locked package’s
 bundled checksums still apply. Checksum, access, and repeated download failures
 stop validation.
+Windows runs place temporary fixtures in `RUNNER_TEMP`; the default profile temp
+path plus nested review IDs can exceed the helper's supported 247-character path
+limit. This does not change application storage paths or enable Windows long paths.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.

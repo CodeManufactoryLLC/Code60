@@ -3883,6 +3883,7 @@ test("desktop: MCP badges, saved attribution and Server table controls", async (
   try {
     application = await launch(directory, repo, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
+    await page.setViewportSize({ width: 1000, height: 650 });
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await page.evaluate(() => window.desktop.chooseFolder());
@@ -3948,6 +3949,9 @@ test("desktop: MCP badges, saved attribution and Server table controls", async (
     await events.getByRole("button", { name: "Clear Server filter" }).click();
     await events.getByLabel("Column menu").selectOption("server");
     await column.getByRole("button", { name: "Sort descending", exact: true }).click();
+    // Glide omits offscreen columns from its accessibility tree on small native CI displays.
+    await scrollGrid(events, 850);
+    await expect(events.locator(".sessions-grid thead")).toContainText("Server");
     await expect(events.locator(".sessions-grid tbody [role='row']").first()).toContainText(
       "playwright",
     );
@@ -5946,6 +5950,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
+    await page.setViewportSize({ width: 1000, height: 650 });
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     const chat = page.locator("#panel-chat .orchestration-chat-page:visible");
@@ -5967,7 +5972,11 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
               const collapsing = element.getAttribute("data-collapsing") === "true";
               const sample = () => {
                 const height = element.getBoundingClientRect().height;
-                if (collapsing && height >= 48) {
+                if (
+                  collapsing &&
+                  height >=
+                    Number.parseFloat(getComputedStyle(element).getPropertyValue("--activity-size"))
+                ) {
                   requestAnimationFrame(sample);
                   return;
                 }
@@ -6031,7 +6040,8 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
             .at(-1)
             ?.getBoundingClientRect();
           return {
-            expanded: activity?.height === 48,
+            expanded:
+              activity?.height === (window.matchMedia("(max-height: 700px)").matches ? 32 : 48),
             aboveComposer: !!(activity && composer && activity.bottom <= composer.top + 1),
             belowMessage: !!(
               activity &&
@@ -6101,8 +6111,11 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
           element.nextElementSibling?.id === element.getAttribute("aria-controls"),
       ),
     ).toBe(true);
-    await expect(artwork).toHaveCSS("width", "48px");
-    await expect(artwork).toHaveCSS("height", "48px");
+    const activitySize = await page.evaluate(() =>
+      window.matchMedia("(max-height: 700px)").matches ? 32 : 48,
+    );
+    await expect(artwork).toHaveCSS("width", `${activitySize}px`);
+    await expect(artwork).toHaveCSS("height", `${activitySize}px`);
     const imageBox = await artwork.boundingBox();
     const textBox = await status.locator(".activity-name").boundingBox();
     const replyBox = await chat.locator(".event.message pre").last().boundingBox();
@@ -6255,7 +6268,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     expect(closing.state).toBe("waiting_for_workers");
     expect(closing.collapsing).toBe(true);
     expect(closing.height).toBeGreaterThan(0);
-    expect(closing.height).toBeLessThan(48);
+    expect(closing.height).toBeLessThan(activitySize);
     await expect(status).toHaveCount(0);
     await expect(tooltip).toHaveCount(0);
     // Expansion follows the latest message without pulling readers out of older history.
