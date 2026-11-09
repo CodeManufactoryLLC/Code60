@@ -429,10 +429,7 @@ export function ChatPage({
           <div className="chat-transcript-content" ref={content}>
             {blocks.length === 0 && (
               <div className="chat-empty">
-                <span className="wordmark">
-                  Code<b>60</b>
-                </span>
-                <h2>New conversation</h2>
+                <h2>Give Code60 a task.</h2>
               </div>
             )}
             {blocks.length > visible && (

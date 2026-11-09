@@ -1122,11 +1122,6 @@ function App() {
               aria-label="Configurations"
               data-heading-lines={lines.heading}
             >
-              {snapshot.configurations.length === 0 && (
-                <p className="muted configuration-empty">
-                  No run configurations yet. Create one here or save settings after starting agents.
-                </p>
-              )}
               <ConfigurationsTable
                 tableId="configurations"
                 workspace={`${database}:${directory}`}

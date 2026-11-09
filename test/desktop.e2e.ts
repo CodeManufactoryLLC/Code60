@@ -147,7 +147,7 @@ async function expectSplashLayout(page: Page) {
   const dark = await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches);
   await expect(page.locator(".splash .primary")).toHaveCSS(
     "background-color",
-    dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
+    dark ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
   );
   await expect(page.locator(".splash-card, .project-preview")).toHaveCount(0);
 }
@@ -422,20 +422,20 @@ async function expectNeutralTheme(page: Page) {
     return { dark, fills, colors };
   });
   for (const [token, fill] of Object.entries(palette.fills))
-    expect(fill, token).toBe(palette.dark ? "rgb(36, 43, 51)" : "rgb(255, 255, 255)");
+    expect(fill, token).toBe(palette.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
   expect(palette.colors).toEqual(
     palette.dark
       ? {
           "--text": "rgb(255, 255, 255)",
           "--muted": "rgb(170, 170, 170)",
-          "--border": "rgb(65, 75, 86)",
+          "--border": "rgb(68, 68, 68)",
           "--control-border": "rgb(136, 136, 136)",
-          "--accent-bg": "rgb(50, 60, 70)",
-          "--surface-edge": "rgb(65, 75, 86)",
+          "--accent-bg": "rgb(48, 48, 48)",
+          "--surface-edge": "rgb(68, 68, 68)",
           "--disabled-stripe": "rgba(0, 0, 0, 0)",
-          "--primary": "rgb(197, 177, 125)",
+          "--primary": "rgb(119, 204, 200)",
           "--hover-bg": "rgb(32, 62, 59)",
-          "--human-text": "rgb(181, 200, 211)",
+          "--human-text": "rgb(145, 216, 212)",
         }
       : {
           "--text": "rgb(0, 0, 0)",
@@ -468,6 +468,8 @@ async function expectTabAppearance(page: Page) {
     return {
       activeId: active.id,
       activeBackground: getComputedStyle(active).backgroundColor,
+      activeDecoration: getComputedStyle(active.querySelector(".page-tab-label") as Element)
+        .textDecorationLine,
       panelBackground: getComputedStyle(panel).backgroundColor,
       leftBorders: [active, inactive, document.querySelector(".sidebar-header")].map((element) =>
         element ? getComputedStyle(element).borderLeftWidth : "",
@@ -485,6 +487,9 @@ async function expectTabAppearance(page: Page) {
         label: button.getAttribute("aria-label") ?? button.textContent,
         background: getComputedStyle(button).backgroundColor,
         iconOnly: button.classList.contains("icon-button"),
+        highlighted: button.matches(
+          '[aria-selected="true"], [data-active="true"], .sidebar-settings-heading[data-active="true"] button',
+        ),
       })),
       activeRight: active.getBoundingClientRect().right,
       panelLeft: panel.getBoundingClientRect().left,
@@ -513,12 +518,16 @@ async function expectTabAppearance(page: Page) {
       inactiveBackground: getComputedStyle(inactive).backgroundColor,
     };
   });
-  // Every resting control, including selection and the project card, matches the sidebar.
   expect(appearance.leftBorders).toEqual(["1px", "1px", "0px"]);
-  expect(appearance.activeBackground).toBe(appearance.sidebarBackground);
+  expect(appearance.activeBackground).not.toBe(appearance.sidebarBackground);
+  expect(appearance.activeDecoration).toBe("underline");
   for (const button of appearance.buttonBackgrounds)
     expect(button.background, button.label ?? "Sidebar button").toBe(
-      button.iconOnly ? "rgba(0, 0, 0, 0)" : appearance.sidebarBackground,
+      button.iconOnly
+        ? "rgba(0, 0, 0, 0)"
+        : button.highlighted
+          ? appearance.activeBackground
+          : appearance.sidebarBackground,
     );
   expect(appearance.activeBackground).not.toBe(appearance.hoverBackground);
   expect(appearance.barWidth).toBe(220);
@@ -540,7 +549,7 @@ async function expectTabAppearance(page: Page) {
     "aria-orientation",
     "vertical",
   );
-  expect(appearance.inactiveBackground).toBe(appearance.activeBackground);
+  expect(appearance.inactiveBackground).toBe(appearance.sidebarBackground);
   await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px 1px 0px 0px");
   const inactive = page.locator('[role="tab"][aria-selected="false"]:visible').first();
   const border = await inactive.evaluate((element) => getComputedStyle(element).borderColor);
@@ -1219,7 +1228,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     const tabCorners = await tabs.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
-        return [style.borderTopRightRadius, style.getPropertyValue("corner-shape")];
+        return [style.borderTopLeftRadius, style.getPropertyValue("corner-shape")];
       }),
     );
     for (const [radius, shape] of tabCorners) {
@@ -1252,6 +1261,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       "border-top-right-radius",
       "0px",
     );
+    await expectIconAction(page.getByRole("button", { name: "Settings pages", exact: true }));
     await expectTabAppearance(page);
     await expect(page.getByLabel("Theme", { exact: true }).locator("option")).toHaveText([
       "Light",
@@ -1317,9 +1327,9 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Sessions");
     await expectNeutralTheme(page);
-    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgb(36, 43, 51)");
+    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgb(0, 0, 0)");
     for (const selector of ["#panel-sessions", ".app-footer"])
-      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(36, 43, 51)");
+      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(0, 0, 0)");
     for (const selector of ["html", "body", ".app", ".page-tabs"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
@@ -1621,7 +1631,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       );
       await expect(chatPopup.locator(".composer")).toHaveCSS(
         "background-color",
-        dark ? "rgb(36, 43, 51)" : "rgb(255, 255, 255)",
+        dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
       );
       await expect(chatPopup.locator(".composer")).toHaveCSS("box-shadow", "none");
       await expect(chatPopup.locator(".composer")).toHaveCSS("border-top-width", "1px");
@@ -1630,7 +1640,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       for (const prompt of await chatPopup.locator(".event.prompt:not(.automatic)").all()) {
         await expect(prompt.locator("pre")).toHaveCSS(
           "background-color",
-          dark ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
+          dark ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
         );
         await expect(prompt.locator("pre")).toHaveCSS("color", "rgb(0, 0, 0)");
         await expectMessageCopy(prompt.getByRole("button", { name: "Copy message" }));
@@ -1986,13 +1996,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await chatHead.click();
     await page.getByLabel("Message", { exact: true }).fill("");
     await selectSidebarPage(page, "Sessions");
-    // Keyboard navigation follows the alphabetized visual order, including wraparound.
-    const alphabeticalPages = [
+    // Keyboard navigation follows the visual order, including wraparound.
+    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    const sidebarPages = [
       "Chat",
-      "Experiments",
       "Prompt Editor",
       "Search",
-      "Settings",
       "Tables",
       "Configurations",
       "Events",
@@ -2000,30 +2009,33 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Polling",
       "Sessions",
       "Worktrees",
+      "Settings",
     ] as const;
     await expect(page.getByRole("tab")).toHaveText(
-      alphabeticalPages.filter((name) => name !== "Tables" && name !== "Experiments"),
+      sidebarPages.filter((name) => name !== "Tables"),
     );
     await sessionsTab.focus();
     await page.keyboard.press("Home");
     await page.keyboard.press("ArrowLeft");
-    await expect(page.getByRole("tab", { name: alphabeticalPages[0], exact: true })).toBeFocused();
-    for (const name of alphabeticalPages.slice(1)) {
+    await expect(page.getByRole("tab", { name: sidebarPages[0], exact: true })).toBeFocused();
+    for (const name of sidebarPages.slice(1)) {
       await page.keyboard.press("ArrowDown");
       await expect(
-        page.getByRole(name === "Tables" || name === "Experiments" ? "button" : "tab", {
+        page.getByRole(name === "Tables" ? "button" : "tab", {
           name,
           exact: true,
         }),
       ).toBeFocused();
     }
     await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await page.keyboard.press("End");
-    await expect(worktreesTab).toBeFocused();
+    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toBeFocused();
     await page.keyboard.press("Home");
     await page.keyboard.press("ArrowUp");
-    await expect(worktreesTab).toBeFocused();
+    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await settingsTab.click();
@@ -2126,15 +2138,15 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       // Solid human bubbles keep contrasting text and no side rule.
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "background-color",
-        darkTheme ? "rgb(197, 177, 125)" : "rgb(67, 179, 174)",
+        darkTheme ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
       );
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
         await page.mouse.move(1, 1);
-        await expect(chatHead).toHaveCSS("background-color", "rgb(36, 43, 51)");
+        await expect(chatHead).toHaveCSS("background-color", "rgb(0, 0, 0)");
         await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
-        await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(36, 43, 51)");
+        await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(0, 0, 0)");
         // Primary buttons stay filled in dark mode.
         const primary = await page.evaluate(() => {
           const probe = document.createElement("button");
@@ -2144,8 +2156,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
           probe.remove();
           return color;
         });
-        expect(primary).toBe("rgb(197, 177, 125)");
-        await page.screenshot({ path: "test-results/steel-gray-theme-sessions-chat.png" });
+        expect(primary).toBe("rgb(119, 204, 200)");
+        await page.screenshot({ path: "test-results/dark-theme-sessions-chat.png" });
       }
       await settingsTab.click();
     }
@@ -2313,7 +2325,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectThemeContrast(page);
     await expectNeutralTheme(page);
     await page.mouse.move(1, 1);
-    await expect(chatHead).toHaveCSS("background-color", "rgb(36, 43, 51)");
+    await expect(chatHead).toHaveCSS("background-color", "rgb(0, 0, 0)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
     await expect
@@ -2767,7 +2779,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await expect(otherPrompt).toHaveCSS("outline-style", "none");
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(50, 60, 70)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)",
       );
       await panel.locator(".prompt-editor").evaluate((element) => {
         element.scrollTop = 0;
@@ -2776,7 +2788,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await selectedPrompt.hover();
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(50, 60, 70)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)",
       );
       await expect(selectedPrompt).toHaveCSS("border-top-width", "0px");
     }
@@ -2909,7 +2921,8 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await page.getByRole("button", { name: "Connect to database" }).click();
     await page.getByRole("button", { name: "Create database…" }).click();
     const panel = page.locator("#panel-configurations");
-    await expect(panel.getByText(/No run configurations yet/)).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Configurations", exact: true })).toBeVisible();
+    await expect(panel.getByText(/No run configurations yet/)).toHaveCount(0);
     await appendRow(page, "configurations");
     const editor = page.getByRole("dialog", { name: "Run configuration", exact: true });
     await expect(editor.getByLabel("Task prompt")).toHaveCount(0);
@@ -3879,37 +3892,45 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "aria-selected",
       "true",
     );
-    const experiments = page.getByRole("button", { name: "Experiments", exact: true });
-    const experimentPages = page.getByRole("tablist", { name: "Experiments", exact: true });
-    await expect(experiments).toHaveAttribute("aria-expanded", "false");
-    await expect(experimentPages).toBeHidden();
-    await page.getByRole("tab", { name: "Chat", exact: true }).press("ArrowLeft");
-    await page.getByRole("tab", { name: "Chat", exact: true }).press("ArrowDown");
-    await expect(experiments).toBeFocused();
-    await experiments.press("ArrowRight");
-    await expect(experimentPages).toHaveText("Episodic Memory");
-    await expect(experimentPages).toBeVisible();
+    const advanced = page.getByRole("button", { name: "Advanced", exact: true });
+    const advancedPages = page.getByRole("tablist", { name: "Advanced", exact: true });
+    await expect(advancedPages).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Give Code60 a task." })).toBeVisible();
+    await expect(page.locator("#panel-chat .wordmark")).toHaveCount(0);
+    const settings = page.getByRole("tab", { name: "Settings", exact: true });
+    const settingsPages = page.getByRole("button", { name: "Settings pages", exact: true });
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
+    await expect(advanced).toBeHidden();
+    await settings.press("ArrowRight");
+    await expect(advanced).toHaveAttribute("aria-expanded", "false");
+    await settings.press("ArrowRight");
+    await expect(advanced).toBeFocused();
+    await advanced.press("ArrowRight");
+    await expect(advancedPages).toHaveText("Episodic Memory");
+    await expect(advancedPages).toBeVisible();
     await expect(page.locator("#panel-chat")).toBeVisible();
-    await experiments.press("ArrowLeft");
-    await expect(experimentPages).toBeHidden();
-    await expect(experiments).toBeFocused();
-    await experiments.press("Enter");
-    await expect(experimentPages).toBeVisible();
-    await experiments.press("Space");
-    await expect(experimentPages).toBeHidden();
-    await experiments.click();
-    await experiments.press("ArrowDown");
+    await advanced.press("ArrowLeft");
+    await expect(advancedPages).toBeHidden();
+    await expect(advanced).toBeFocused();
+    await advanced.press("Enter");
+    await expect(advancedPages).toBeVisible();
+    await advanced.press("Space");
+    await expect(advancedPages).toBeHidden();
+    await advanced.click();
+    await advanced.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(page.locator("#panel-episodic-memory")).toBeVisible();
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowUp");
-    await expect(experiments).toBeFocused();
-    await experiments.press("Home");
+    await expect(advanced).toBeFocused();
+    await advanced.press("Home");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await page.reload();
-    await expect(experiments).toHaveAttribute("aria-expanded", "true");
-    await expect(experimentPages).toBeVisible();
-    await experiments.click();
+    await expect(advanced).toHaveAttribute("aria-expanded", "true");
+    await expect(advancedPages).toBeVisible();
+    await advanced.click();
+    await settingsPages.click();
+    await expect(advanced).toBeHidden();
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     await expect(tables).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("tab")).toHaveText(["Chat", "Prompt Editor", "Search", "Settings"]);
@@ -3919,13 +3940,13 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Chat",
       "Prompt Editor",
       "Search",
-      "Settings",
       "Configurations",
       "Events",
       "Messages",
       "Polling",
       "Sessions",
       "Worktrees",
+      "Settings",
     ]);
     await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await page.keyboard.press("ArrowLeft");
@@ -3954,9 +3975,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const chatList = () => page.locator("nav.chat-sidebar");
     await page.locator("#tab-chat").press("ArrowRight");
     await expect(chatList()).toBeVisible();
-    await expect(chat.locator(".chat-empty .wordmark")).toHaveText("Code60");
-    await expect(chat.locator(".chat-empty .wordmark")).toHaveCSS("font-size", "48px");
-    await expect(chat.locator(".chat-empty .wordmark")).toHaveCSS("font-family", /^"?D-DIN"?/);
+    await expect(chat.getByRole("heading", { name: "Give Code60 a task." })).toBeVisible();
     expect(
       await page
         .locator("body *")
@@ -3970,8 +3989,8 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
             .map((element) => element.tagName),
         ),
     ).toEqual([]);
-    await expect(chat.locator(".orchestration-chat-heading .wordmark")).toHaveCount(0);
-    await page.screenshot({ path: "test-results/chat-empty-wordmark.png" });
+    await expect(chat.locator(".wordmark")).toHaveCount(0);
+    await page.screenshot({ path: "test-results/chat-empty.png" });
     await expect(chat.getByRole("combobox", { name: "Orchestrator chat" })).toHaveCount(0);
     const columns = await page.evaluate(() => {
       const rect = (selector: string) => {
@@ -4112,9 +4131,9 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
 
     for (const [theme, neutral, bubble] of [
       ["light", "rgb(255, 255, 255)", "rgb(67, 179, 174)"],
-      ["dark", "rgb(36, 43, 51)", "rgb(197, 177, 125)"],
+      ["dark", "rgb(0, 0, 0)", "rgb(119, 204, 200)"],
       ["system", "rgb(255, 255, 255)", "rgb(67, 179, 174)"],
-      ["system", "rgb(36, 43, 51)", "rgb(197, 177, 125)"],
+      ["system", "rgb(0, 0, 0)", "rgb(119, 204, 200)"],
     ] as const) {
       await page.emulateMedia({ colorScheme: neutral === "rgb(255, 255, 255)" ? "light" : "dark" });
       await selectSidebarPage(page, "Settings");
@@ -4239,7 +4258,8 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    await page.getByRole("button", { name: "Advanced", exact: true }).click();
     await page.getByRole("tab", { name: "Episodic Memory", exact: true }).click();
     const memory = page.locator("#panel-episodic-memory");
     const extract = memory.getByRole("button", { name: /^Extract from/ });
@@ -4338,9 +4358,13 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
       "aria-selected",
       "true",
     );
+    const settingsPages = page.getByRole("button", { name: "Settings pages", exact: true });
+    await settingsPages.press("Space");
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("combobox", { name: "Search commands" }).fill("Episodic Memory");
     await page.keyboard.press("Enter");
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(memory).toBeVisible();
     await memory.getByRole("button", { name: "Edit prompt", exact: true }).click();
@@ -4547,7 +4571,7 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await columnsButton.click();
     await page.emulateMedia({ colorScheme: "dark" });
     await expectNeutralTheme(page);
-    await expect(modal).toHaveCSS("background-color", "rgb(36, 43, 51)");
+    await expect(modal).toHaveCSS("background-color", "rgb(0, 0, 0)");
     await page.screenshot({ path: "test-results/table-settings-dark.png" });
     await application.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];
@@ -4943,14 +4967,14 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect.poll(fileContext).toBeNull();
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Chat");
-    await expect(panel).toHaveCSS("background-color", "rgb(36, 43, 51)");
-    await expect(panel).toHaveCSS("border-color", "rgb(65, 75, 86)");
+    await expect(panel).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(panel).toHaveCSS("border-color", "rgb(68, 68, 68)");
     await expectIconAction(toggle);
     await expectIconAction(add);
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(36, 43, 51)",
+      "rgb(0, 0, 0)",
     );
     await page.screenshot({ path: "test-results/file-panel-dark.png" });
     await selectSidebarPage(page, "Settings");
@@ -4959,10 +4983,10 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
     await expect(panel).toHaveCSS("border-color", "rgb(208, 208, 208)");
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(panel).toHaveCSS("border-color", "rgb(65, 75, 86)");
+    await expect(panel).toHaveCSS("border-color", "rgb(68, 68, 68)");
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(36, 43, 51)",
+      "rgb(0, 0, 0)",
     );
     await expectIconAction(toggle);
     await page.emulateMedia({ colorScheme: "light" });

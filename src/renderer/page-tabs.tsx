@@ -154,8 +154,12 @@ const tablePages: readonly PageId[] = [
 ];
 
 const experimentPages: readonly PageId[] = ["episodic-memory"];
-const pageGroup = (id: PageId) =>
-  tablePages.includes(id) ? "tables" : experimentPages.includes(id) ? "experiments" : "primary";
+const pageGroup = (id: PageId) => {
+  if (tablePages.includes(id)) return "tables";
+  if (experimentPages.includes(id)) return "advanced";
+  if (id === "chat" || id === "settings") return id;
+  return "primary";
+};
 
 function PageTabList({
   tabs,
@@ -222,7 +226,11 @@ function PageTabList({
       setChatExpanded(true);
     previousNavigation.current = { tabs, selectedId };
   }, [tabs, selectedId]);
-  const [experimentsExpanded, setExperimentsExpanded] = useState(
+  const [settingsExpanded, setSettingsExpanded] = useState(
+    () => localStorage.getItem("code60.settingsExpanded") === "true",
+  );
+  const [advancedExpanded, setAdvancedExpanded] = useState(
+    // Keep the saved expansion of the former Experiments group.
     () => localStorage.getItem("code60.experimentsExpanded") === "true",
   );
   const [expanded, setExpanded] = useState(
@@ -232,8 +240,11 @@ function PageTabList({
   const experimentActive = experimentPages.includes(tabs.active);
   const tableActive = tablePages.includes(tabs.active);
   useLayoutEffect(() => {
+    if (tabs.active === "settings" || experimentPages.includes(tabs.active)) {
+      setSettingsExpanded(true);
+    }
     if (tablePages.includes(tabs.active)) setExpanded(true);
-    else if (experimentPages.includes(tabs.active)) setExperimentsExpanded(true);
+    else if (experimentPages.includes(tabs.active)) setAdvancedExpanded(true);
     else return;
     // Expansion and modal focus restoration must finish before focusing the revealed page.
     navigationFrame.current = requestAnimationFrame(() => {
@@ -248,32 +259,38 @@ function PageTabList({
     localStorage.setItem("code60.tablesExpanded", String(expanded));
   }, [expanded]);
   useEffect(() => {
-    localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
-  }, [experimentsExpanded]);
+    localStorage.setItem("code60.settingsExpanded", String(settingsExpanded));
+  }, [settingsExpanded]);
+  useEffect(() => {
+    localStorage.setItem("code60.experimentsExpanded", String(advancedExpanded));
+  }, [advancedExpanded]);
   const pages = [...tabs.open].sort((a, b) => labels[a].localeCompare(labels[b]));
-  const primary = pages.filter(
-    (id) => pageGroup(id) === "primary" && id !== "chat" && id !== "files",
-  );
+  const primary = pages.filter((id) => pageGroup(id) === "primary" && id !== "files");
   const experiments = pages.filter((id) => experimentPages.includes(id));
   const tables = pages.filter((id) => tablePages.includes(id));
-  const beforeExperiments = primary.filter((id) => labels[id].localeCompare("Experiments") < 0);
-  const afterExperiments = primary.filter((id) => labels[id].localeCompare("Experiments") > 0);
-  const visible: (PageId | "tables" | "experiments")[] = [
+  const visible: (PageId | "tables" | "advanced")[] = [
     "chat",
-    ...beforeExperiments,
-    "experiments",
-    ...(experimentsExpanded ? experiments : []),
-    ...afterExperiments,
+    ...primary,
     "tables",
     ...(expanded ? tables : []),
+    "settings",
+    ...(settingsExpanded ? (["advanced", ...(advancedExpanded ? experiments : [])] as const) : []),
   ];
+  function moveTo(target: (typeof visible)[number] | undefined) {
+    if (target === "tables" || target === "advanced") {
+      document.getElementById(`${target}-toggle`)?.focus();
+    } else if (target) {
+      onSelect(target);
+      document.getElementById(`tab-${target}`)?.focus();
+    }
+  }
   function navigate(event: KeyboardEvent<HTMLButtonElement>, id: (typeof visible)[number]) {
     // A delayed reveal must not undo a subsequent keyboard navigation.
     if (navigationFrame.current !== undefined) {
       cancelAnimationFrame(navigationFrame.current);
       navigationFrame.current = undefined;
     }
-    if (id === "experiments" && event.key === "ArrowUp" && chatExpanded) {
+    if (id === visible[1] && event.key === "ArrowUp" && chatExpanded) {
       const children = [
         ...document.querySelectorAll<HTMLButtonElement>("#chat-pages button:not(:disabled)"),
       ].filter((button) => !button.closest("[hidden]"));
@@ -302,19 +319,39 @@ function PageTabList({
       else setChatExpanded(true);
       return;
     }
-    if (
-      event.key === "ArrowLeft" &&
-      (id === "experiments" || experimentPages.some((pageId) => pageId === id))
-    ) {
+    if (id === "settings" && event.key === "ArrowLeft") {
       event.preventDefault();
-      setExperimentsExpanded(false);
-      document.getElementById("experiments-toggle")?.focus();
+      setSettingsExpanded(false);
       return;
     }
-    if (event.key === "ArrowRight" && id === "experiments") {
+    if (id === "settings" && event.key === "ArrowRight") {
       event.preventDefault();
-      if (experimentsExpanded && experiments[0]) onSelect(experiments[0]);
-      else setExperimentsExpanded(true);
+      if (settingsExpanded) moveTo("advanced");
+      else setSettingsExpanded(true);
+      return;
+    }
+    if (id === "advanced" && event.key === "ArrowUp") {
+      event.preventDefault();
+      document.getElementById("tab-settings")?.focus();
+      return;
+    }
+    if (
+      event.key === "ArrowLeft" &&
+      (id === "advanced" || experimentPages.some((pageId) => pageId === id))
+    ) {
+      event.preventDefault();
+      if (id === "advanced" && !advancedExpanded) {
+        document.getElementById("tab-settings")?.focus();
+      } else {
+        setAdvancedExpanded(false);
+        moveTo("advanced");
+      }
+      return;
+    }
+    if (event.key === "ArrowRight" && id === "advanced") {
+      event.preventDefault();
+      if (advancedExpanded && experiments[0]) moveTo(experiments[0]);
+      else setAdvancedExpanded(true);
       return;
     }
     if (
@@ -345,16 +382,7 @@ function PageTabList({
               : undefined;
     if (next === undefined) return;
     event.preventDefault();
-    const target = visible[next];
-    if (target === "chat") {
-      onSelect("chat");
-      document.getElementById("tab-chat")?.focus();
-    } else if (target === "tables" || target === "experiments")
-      document.getElementById(`${target}-toggle`)?.focus();
-    else if (target) {
-      onSelect(target);
-      document.getElementById(`tab-${target}`)?.focus();
-    }
+    moveTo(visible[next]);
   }
   function page(id: PageId, first: boolean) {
     return (
@@ -454,19 +482,15 @@ function PageTabList({
           ) {
             event.preventDefault();
             if (event.key === "Home") {
-              onSelect("chat");
-              document.getElementById("tab-chat")?.focus();
+              moveTo("chat");
               return;
             }
             if (event.key === "End") {
-              const last = visible[visible.length - 1];
-              if (last === "tables" || last === "experiments")
-                document.getElementById(`${last}-toggle`)?.focus();
-              else if (last) onSelect(last);
+              moveTo(visible.at(-1));
               return;
             }
             const next = index + (event.key === "ArrowDown" ? 1 : -1);
-            if (next >= buttons.length) document.getElementById("experiments-toggle")?.focus();
+            if (next >= buttons.length) moveTo(visible[1]);
             else buttons[next]?.focus();
           }
         }}
@@ -490,44 +514,7 @@ function PageTabList({
         />
       </div>
       <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">
-        {beforeExperiments.map((id) => page(id, id === primary[0]))}
-      </div>
-      <div className="page-tab">
-        <button
-          type="button"
-          id="experiments-toggle"
-          title="Experiments"
-          className="page-group-toggle"
-          aria-expanded={experimentsExpanded}
-          aria-controls="experiment-pages"
-          data-active={experimentActive && !experimentsExpanded}
-          onClick={() => {
-            setExperimentsExpanded((value) => !value);
-          }}
-          onKeyDown={(event) => navigate(event, "experiments")}
-        >
-          <Icon name="compare" />
-          <span className="page-tab-label">Experiments</span>
-          <Icon name={experimentsExpanded ? "chevron--down" : "chevron--right"} />
-        </button>
-      </div>
-      <div
-        id="experiment-pages"
-        role="tablist"
-        aria-orientation="vertical"
-        className="page-tab-list page-group-pages"
-        aria-label="Experiments"
-        hidden={!experimentsExpanded}
-      >
-        {experiments.map((id, index) => page(id, index === 0))}
-      </div>
-      <div
-        className="page-tab-list"
-        role="tablist"
-        aria-label="More pages"
-        aria-orientation="vertical"
-      >
-        {afterExperiments.map((id) => page(id, id === primary[0]))}
+        {primary.map((id, index) => page(id, index === 0))}
       </div>
       <div className="page-tab">
         <button
@@ -557,6 +544,64 @@ function PageTabList({
         hidden={!expanded}
       >
         {tables.map((id, index) => page(id, index === 0))}
+      </div>
+      <div className="page-tab-list sidebar-settings">
+        <div
+          className="sidebar-settings-heading"
+          data-active={tabs.active === "settings" || (experimentActive && !settingsExpanded)}
+        >
+          <div
+            className="page-tab-list"
+            role="tablist"
+            aria-label="Settings page"
+            aria-orientation="vertical"
+          >
+            {page("settings", true)}
+          </div>
+          <button
+            type="button"
+            className="icon-button sidebar-settings-toggle"
+            aria-label="Settings pages"
+            aria-controls="settings-pages"
+            aria-expanded={settingsExpanded}
+            onClick={() => setSettingsExpanded((value) => !value)}
+            onKeyDown={(event) => navigate(event, "settings")}
+          >
+            <Icon name={settingsExpanded ? "chevron--down" : "chevron--right"} />
+          </button>
+        </div>
+        <div
+          id="settings-pages"
+          className="page-tab-list page-group-pages"
+          hidden={!settingsExpanded}
+        >
+          <div className="page-tab">
+            <button
+              type="button"
+              id="advanced-toggle"
+              className="page-group-toggle"
+              aria-expanded={advancedExpanded}
+              aria-controls="advanced-pages"
+              data-active={experimentActive && !advancedExpanded}
+              onClick={() => setAdvancedExpanded((value) => !value)}
+              onKeyDown={(event) => navigate(event, "advanced")}
+            >
+              <Icon name="compare" />
+              <span className="page-tab-label">Advanced</span>
+              <Icon name={advancedExpanded ? "chevron--down" : "chevron--right"} />
+            </button>
+          </div>
+          <div
+            id="advanced-pages"
+            role="tablist"
+            aria-orientation="vertical"
+            className="page-tab-list page-group-pages"
+            aria-label="Advanced"
+            hidden={!advancedExpanded}
+          >
+            {experiments.map((id, index) => page(id, index === 0))}
+          </div>
+        </div>
       </div>
     </div>
   );
