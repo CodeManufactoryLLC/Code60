@@ -68,14 +68,14 @@ describe("CI and release gates", () => {
       'test "$CHECK" = success && test "$DESKTOP" = success',
     );
   });
-  it("requires an explicit dispatch on main, then Linux success before Mac and Windows", () => {
+  it("requires an explicit dispatch on main, then Linux checks before parallel installer jobs", () => {
     expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs["linux-check"].needs).toBe("preflight");
     expect(release.jobs["linux-installers"].needs).toEqual(["preflight", "linux-check"]);
-    expect(release.jobs.mac.needs).toEqual(["preflight", "linux-installers"]);
+    expect(release.jobs.mac.needs).toEqual(["preflight", "linux-check"]);
     expect(release.jobs.mac["runs-on"]).toBe("macos-15");
-    expect(release.jobs.windows.needs).toEqual(["preflight", "linux-installers"]);
+    expect(release.jobs.windows.needs).toEqual(["preflight", "linux-check"]);
     expect(release.jobs.windows["runs-on"]).toBe("windows-2025");
     expect(release.concurrency["cancel-in-progress"]).toBe(false);
   });

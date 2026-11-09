@@ -1,3 +1,6 @@
+import windowsPolicy from "./windows-policy.cjs";
+export const unsignedWindowsBeta = windowsPolicy.unsignedWindowsBeta;
+
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -70,9 +73,9 @@ export function signingReady(env) {
     "HAS_APPLE_API_KEY",
     "HAS_APPLE_API_KEY_ID",
     "HAS_APPLE_API_ISSUER",
-    "HAS_WIN_CSC_LINK",
-    "HAS_WIN_CSC_KEY_PASSWORD",
-    "HAS_WIN_SIGNING_THUMBPRINT",
+    ...(unsignedWindowsBeta((env.RELEASE_TAG || "").replace(/^v/, ""), env)
+      ? []
+      : ["HAS_WIN_CSC_LINK", "HAS_WIN_CSC_KEY_PASSWORD", "HAS_WIN_SIGNING_THUMBPRINT"]),
   ];
   if (required.some((key) => env[key] !== "true"))
     throw new Error("Missing signing configuration; see RELEASING.md");

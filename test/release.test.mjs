@@ -11,6 +11,7 @@ import {
   newerStable,
   run,
   signingReady,
+  unsignedWindowsBeta,
   validateCandidate,
   versionOf,
 } from "../scripts/release/common.mjs";
@@ -132,12 +133,12 @@ describe("release validation", () => {
   });
 });
 
-async function artifacts() {
+async function artifacts(version = "0.2.0", unsigned = false) {
   const directory = await mkdtemp(join(tmpdir(), "code60-artifacts-"));
   directories.push(directory);
   for (const platform of ["mac", "linux", "win"]) {
     const assets = [];
-    const names = assetNames("0.2.0", platform);
+    const names = assetNames(version, platform);
     const files = names
       .filter((name) => !name.endsWith(".yml"))
       .map((name) => ({
@@ -148,7 +149,7 @@ async function artifacts() {
       await writeFile(
         join(directory, name),
         name.endsWith(".yml")
-          ? JSON.stringify({ version: "0.2.0", files, path: files[0].url, sha512: files[0].sha512 })
+          ? JSON.stringify({ version, files, path: files[0].url, sha512: files[0].sha512 })
           : `installer ${name}`,
       );
       assets.push({ name, sha256: await digest(join(directory, name)) });
@@ -156,11 +157,23 @@ async function artifacts() {
     await writeFile(
       join(directory, `manifest-${platform}.json`),
       JSON.stringify({
-        tag: "v0.2.0",
+        tag: `v${version}`,
         sha,
         platform,
         assets,
-        ...(platform === "win" ? { signaturesVerified: true } : {}),
+        ...(platform === "win"
+          ? {
+              signaturesVerified: !unsigned,
+              ...(unsigned
+                ? {
+                    signing: "unsigned-beta",
+                    nativeX64: true,
+                    installedAppVerified: true,
+                    verifiedOn: { platform: "win32", arch: "x64", release: "10.0.26100" },
+                  }
+                : {}),
+            }
+          : {}),
       }),
     );
   }
@@ -214,8 +227,8 @@ describe("release artifact promotion", () => {
   });
   it("requires every installer from the same exact commit", async () => {
     const directory = await artifacts();
-    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(8);
-    await expect(verify(directory, "v0.2.0", "b".repeat(40))).rejects.toThrow("identity");
+    expect(await verify(directory, "v0.2.0", sha, {})).toHaveLength(8);
+    await expect(verify(directory, "v0.2.0", "b".repeat(40), {})).rejects.toThrow("identity");
   });
   it("rejects changed bytes, missing installers, missing manifests and unexpected files", async () => {
     for (const change of ["modified", "missing", "manifest", "extra"]) {
@@ -225,7 +238,7 @@ describe("release artifact promotion", () => {
       if (change === "missing") await rm(file);
       if (change === "manifest") await rm(join(directory, "manifest-mac.json"));
       if (change === "extra") await writeFile(join(directory, "unexpected"), "extra");
-      await expect(verify(directory, "v0.2.0", sha)).rejects.toThrow();
+      await expect(verify(directory, "v0.2.0", sha, {})).rejects.toThrow();
     }
   });
   it("rejects duplicate entries instead of accepting a missing target", async () => {
@@ -234,6 +247,49 @@ describe("release artifact promotion", () => {
     const manifest = JSON.parse(await readFile(path, "utf8"));
     manifest.assets[1] = manifest.assets[0];
     await writeFile(path, JSON.stringify(manifest));
-    await expect(verify(directory, "v0.2.0", sha)).rejects.toThrow();
+    await expect(verify(directory, "v0.2.0", sha, {})).rejects.toThrow();
+  });
+});
+
+describe("explicit unsigned Windows betas", () => {
+  const unsigned = { CODE60_UNSIGNED_WINDOWS_BETA: "1" };
+  it("requires opt-in and a beta tag, retaining all Apple requirements", () => {
+    expect(unsignedWindowsBeta("0.2.0-beta.5", {})).toBe(false);
+    expect(unsignedWindowsBeta("0.2.0-beta.5", unsigned)).toBe(true);
+    for (const version of ["0.2.0", "0.2.0-rc.1", "0.2.0-alpha.1", "bad"])
+      expect(() => unsignedWindowsBeta(version, unsigned)).toThrow();
+    expect(() =>
+      unsignedWindowsBeta("0.2.0-beta.5", { CODE60_UNSIGNED_WINDOWS_BETA: "true" }),
+    ).toThrow();
+    const env = {
+      ...ready,
+      ...unsigned,
+      RELEASE_TAG: "v0.2.0-beta.5",
+      HAS_WIN_CSC_LINK: "",
+      HAS_WIN_CSC_KEY_PASSWORD: "",
+      HAS_WIN_SIGNING_THUMBPRINT: "",
+    };
+    expect(() => signingReady(env)).not.toThrow();
+    expect(() => signingReady({ ...env, HAS_APPLE_API_KEY: "" })).toThrow();
+    expect(() => signingReady({ ...env, CODE60_UNSIGNED_WINDOWS_BETA: "0" })).toThrow();
+    expect(() => signingReady({ ...env, RELEASE_TAG: "v0.2.0" })).toThrow();
+  });
+  it("promotes only the explicit signing mode with native installer verification", async () => {
+    const directory = await artifacts("0.2.0-beta.5", true);
+    await expect(verify(directory, "v0.2.0-beta.5", sha, unsigned)).resolves.toHaveLength(8);
+    await expect(verify(directory, "v0.2.0-beta.5", sha, {})).rejects.toThrow("signature");
+    const path = join(directory, "manifest-win.json");
+    const original = JSON.parse(await readFile(path, "utf8"));
+    for (const change of [
+      { nativeX64: false },
+      { installedAppVerified: false },
+      { signing: "authenticode" },
+      { signaturesVerified: true },
+    ]) {
+      await writeFile(path, JSON.stringify({ ...original, ...change }));
+      await expect(verify(directory, "v0.2.0-beta.5", sha, unsigned)).rejects.toThrow("signature");
+    }
+    const signed = await artifacts("0.2.0-beta.5");
+    await expect(verify(signed, "v0.2.0-beta.5", sha, unsigned)).rejects.toThrow("signature");
   });
 });

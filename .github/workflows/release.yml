@@ -7,6 +7,11 @@ on:
         description: Existing version tag on main, for example v0.2.0-beta.1
         required: true
         type: string
+      unsigned_windows_beta:
+        description: "Publish an explicitly labeled unsigned Windows beta (beta tags only)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,6 +22,7 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ inputs.tag }}
+  CODE60_UNSIGNED_WINDOWS_BETA: ${{ inputs.unsigned_windows_beta && '1' || '0' }}
   RELEASE_MAINTAINER: ${{ vars.RELEASE_MAINTAINER }}
 
 jobs:
@@ -111,7 +117,7 @@ jobs:
           if-no-files-found: ignore
 
   mac:
-    needs: [preflight, linux-installers]
+    needs: [preflight, linux-check]
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -171,7 +177,7 @@ jobs:
           if-no-files-found: ignore
 
   windows:
-    needs: [preflight, linux-installers]
+    needs: [preflight, linux-check]
     runs-on: windows-2025
     timeout-minutes: 45
     env:
@@ -199,7 +205,7 @@ jobs:
           node dist/cli/main.js --help
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node dist/cli/main.js --version
-      - name: Build and sign Windows installer
+      - name: Build Windows installer in the selected signing mode
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}

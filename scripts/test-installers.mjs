@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import { machine, tmpdir } from "node:os";
+import { machine, release as osRelease, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { assetNames, digest, json, run } from "./release/common.mjs";
+import { assetNames, digest, json, run, unsignedWindowsBeta } from "./release/common.mjs";
 import { verifyWindowsSignature } from "./verify-windows-signatures.mjs";
 
 const { version } = await json("package.json");
@@ -68,8 +68,10 @@ try {
     await chmod(image, 0o755);
     test(image); // Exercise AppRun and FUSE, not an extracted replacement executable.
   } else if (process.platform === "win32") {
-    const signed = process.env.CODE60_RELEASE === "1";
-    if (signed && (process.arch !== "x64" || machine() !== "x86_64"))
+    const release = process.env.CODE60_RELEASE === "1";
+    const unsigned = unsignedWindowsBeta(version);
+    const signed = release && !unsigned;
+    if (release && (process.arch !== "x64" || machine() !== "x86_64"))
       throw new Error("Release verification requires native Windows x64, not emulation");
     run(
       "powershell.exe",
@@ -139,7 +141,7 @@ try {
       await unchanged(files);
       if (existsSync(executable))
         throw new Error("Windows uninstall retained the application executable");
-      if (signed) {
+      if (release) {
         await mkdir("release", { recursive: true });
         await writeFile(
           "release/windows-verification.json",
@@ -148,7 +150,10 @@ try {
             installerSha256: await digest(installer),
             version,
             nativeX64: true,
-            certificate: process.env.WIN_SIGNING_THUMBPRINT,
+            verifiedOn: { platform: process.platform, release: osRelease(), arch: process.arch },
+            signing: signed ? "authenticode" : "unsigned-beta",
+            signaturesVerified: signed,
+            certificate: signed ? process.env.WIN_SIGNING_THUMBPRINT : null,
           }),
         );
       }

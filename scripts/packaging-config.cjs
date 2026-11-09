@@ -1,5 +1,15 @@
 // Stable electron-builder 26 configuration. Publication belongs to release.yml.
 const release = process.env.CODE60_RELEASE === "1";
+const { unsignedWindowsBeta } = require("./release/windows-policy.cjs");
+const unsignedWindows = unsignedWindowsBeta(require("../package.json").version);
+if (unsignedWindows && process.platform === "win32") {
+  // Prevent local certificate discovery or ambient credentials from changing the chosen mode.
+  process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  delete process.env.WIN_CSC_LINK;
+  delete process.env.WIN_CSC_KEY_PASSWORD;
+  delete process.env.CSC_LINK;
+  delete process.env.CSC_KEY_PASSWORD;
+}
 const maintainer = process.env.RELEASE_MAINTAINER;
 if (release && !/^.+ <[^<>\s]+@[^<>\s]+>$/.test(maintainer || "")) {
   throw new Error("Set RELEASE_MAINTAINER to Name <email> for release packages");
@@ -15,7 +25,7 @@ if (release && process.platform === "darwin") {
     if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
   }
 }
-if (release && process.platform === "win32") {
+if (release && process.platform === "win32" && !unsignedWindows) {
   for (const name of ["WIN_CSC_LINK", "WIN_CSC_KEY_PASSWORD", "WIN_SIGNING_THUMBPRINT"]) {
     if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
   }
@@ -75,7 +85,7 @@ module.exports = {
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
     executableName: "Code60",
-    forceCodeSigning: release,
+    forceCodeSigning: release && !unsignedWindows,
     signAndEditExecutable: true,
     signtoolOptions: {
       signingHashAlgorithms: ["sha256"],

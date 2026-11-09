@@ -3,7 +3,7 @@ import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
-import { assetNames, digest, git, json, versionOf } from "./common.mjs";
+import { assetNames, digest, git, json, unsignedWindowsBeta, versionOf } from "./common.mjs";
 
 // Stapling the DMG changes its bytes after electron-builder wrote the YAML.
 export async function refreshDmgMetadata(directory, version) {
@@ -63,34 +63,58 @@ export async function stage(
   }
   await verifyUpdateMetadata(destination, version, platform);
   let signaturesVerified;
+  let signing;
+  let verifiedOn;
+  let nativeX64;
+  let installedAppVerified;
   if (platform === "win") {
     const report = await json("release/windows-verification.json");
+    const unsigned = unsignedWindowsBeta(version);
     if (
       report.verified !== true ||
       report.nativeX64 !== true ||
-      typeof report.certificate !== "string" ||
-      report.certificate.toUpperCase() !==
-        (process.env.WIN_SIGNING_THUMBPRINT || "").toUpperCase() ||
       report.version !== version ||
-      report.installerSha256 !== assets[0].sha256
+      report.installerSha256 !== assets[0].sha256 ||
+      (unsigned
+        ? report.signing !== "unsigned-beta" || report.signaturesVerified !== false
+        : report.signaturesVerified !== true ||
+          typeof report.certificate !== "string" ||
+          report.certificate.toUpperCase() !==
+            (process.env.WIN_SIGNING_THUMBPRINT || "").toUpperCase())
     )
-      throw new Error("Windows signing and installed-app verification is missing");
-    signaturesVerified = true;
+      throw new Error("Windows signing mode and installed-app verification is missing");
+    signaturesVerified = !unsigned;
+    signing = unsigned ? "unsigned-beta" : "authenticode";
+    verifiedOn = report.verifiedOn;
+    nativeX64 = report.nativeX64;
+    installedAppVerified = report.verified;
   }
   await writeFile(
     join(destination, `manifest-${platform}.json`),
-    `${JSON.stringify({ tag, sha, platform, assets, signaturesVerified }, null, 2)}\n`,
+    `${JSON.stringify({ tag, sha, platform, assets, signaturesVerified, signing, verifiedOn, nativeX64, installedAppVerified }, null, 2)}\n`,
   );
 }
-export async function verify(directory, tag, sha) {
+export async function verify(directory, tag, sha, env = process.env) {
   const { version } = versionOf(tag);
   const assets = [];
   for (const platform of ["linux", "mac", "win"]) {
     const manifest = await json(join(directory, `manifest-${platform}.json`));
     if (manifest.tag !== tag || manifest.sha !== sha || manifest.platform !== platform)
       throw new Error("Artifact source identity mismatch");
-    if (platform === "win" && manifest.signaturesVerified !== true)
-      throw new Error("Windows signature verification is missing");
+    if (platform === "win") {
+      const unsigned = unsignedWindowsBeta(version, env);
+      if (
+        unsigned
+          ? manifest.signing !== "unsigned-beta" ||
+            manifest.signaturesVerified !== false ||
+            manifest.nativeX64 !== true ||
+            manifest.installedAppVerified !== true ||
+            manifest.verifiedOn?.platform !== "win32" ||
+            manifest.verifiedOn?.arch !== "x64"
+          : manifest.signaturesVerified !== true
+      )
+        throw new Error("Windows signature verification does not match the release mode");
+    }
     const expected = assetNames(version, platform);
     if (!Array.isArray(manifest.assets) || manifest.assets.length !== expected.length)
       throw new Error("Missing or unexpected artifacts");
