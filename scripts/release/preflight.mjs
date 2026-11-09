@@ -12,4 +12,6 @@ await appendFile(
   process.env.GITHUB_OUTPUT,
   `sha=${sha}\nversion=${version}\nprerelease=${prerelease}\n`,
 );
-console.log(`Validated ${tag} at ${sha}. Linux validation must pass before macOS starts.`);
+console.log(
+  `Validated ${tag} at ${sha}. Linux checks must pass before platform installer validation starts.`,
+);

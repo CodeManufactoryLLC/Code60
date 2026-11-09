@@ -11,6 +11,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for issue triage and labels.
 
 The pipeline builds a signed, notarized Apple Silicon macOS DMG and Linux x64
 DEB/AppImage installers, plus a signed per-user NSIS installer for Windows 11 x64.
+The explicitly opted-in [unsigned beta mode](#explicit-unsigned-windows-betas) is
+the Windows-only exception.
 CI uses macOS 15, Ubuntu 24.04 and Windows Server 2025 x64; Windows 11 desktop
 acceptance must also be recorded on native x64 hardware. ARM64 development or
 x64 emulation is not that acceptance. Older Windows, Windows ARM64 and Intel
@@ -154,13 +156,13 @@ those systems are detected during release validation rather than on every PR.
 A release is a manual `Release installers` workflow dispatch from `main`, with
 one existing version tag. The workflow validates the exact tagged commit and
 both package versions; tags outside main, missing tags, published releases, and
-conflicting drafts fail. It runs Linux validation and installer tests first.
-Only successful Linux validation starts macOS and Windows validation. macOS runs
+conflicting drafts fail. It runs Linux checks first.
+After Linux checks pass, the macOS, Windows and Linux installer jobs run in parallel. macOS runs
 checks, desktop tests, packaging,
 Developer ID signing, app and DMG notarization/stapling, and verification of the
 application copied from the final mounted DMG.
 Windows repeats checks and desktop tests, then builds and verifies the signed
-installer. Installer tests retain real application profiles, configuration,
+installer (or the explicitly selected unsigned beta). Installer tests retain real application profiles, configuration,
 SQLite databases, records and worktrees and compare their hashes after reinstall
 and uninstall. Staging requires a verification report bound to the installer hash.
 
@@ -188,6 +190,26 @@ traces can upload. Artifacts and failure diagnostics expire after seven days.
 New PR commits cancel superseded runs; release runs do not cancel an active run
 for the same tag. GitHub can replace a pending concurrency-group run with a newer
 pending run; rerun a release that was cancelled while waiting.
+
+## Explicit unsigned Windows betas
+
+A maintainer may dispatch a `-beta.N` release with `unsigned_windows_beta=true`
+when Windows signing credentials are unavailable. This is an explicit choice, never
+a fallback. Stable and other prerelease channels reject the option. macOS signing
+and notarization remain mandatory; all platform build and installer tests still run.
+
+The Windows installer, application, helper and uninstaller have no verified Code60
+Authenticode signature in this mode. Windows may show unknown-publisher/SmartScreen
+warnings. Release notes label the Windows download **UNSIGNED**, and its manifest
+records `signing: "unsigned-beta"` and `signaturesVerified: false`. Native Windows x64
+installer execution, reinstall/uninstall data preservation and artifact hashes remain
+required. The manifest records the exact test OS; CI's Windows Server 2025 verification
+does not claim manual Windows 11 acceptance. That acceptance remains pending for this
+beta and is required before advertising a supported stable Windows release.
+
+Use `gh workflow run release.yml --ref main -f tag=vX.Y.Z-beta.N -f unsigned_windows_beta=true`
+only for an intentional unsigned Windows beta. Omit the option for signed releases.
+Do not describe an unsigned artifact as signed or replace published assets later.
 
 ## Local packaging and checks
 
@@ -305,7 +327,8 @@ the same checks, sign-off, and reviewed PR procedure.
 - Steps that run only in `release.yml`, such as the publication job's
   `actions/download-artifact`, are first exercised by a release run. After an
   update to such an action, confirm that step succeeded before publishing.
-- Native Windows 11 x64 acceptance and the signed installer checks are recorded.
+- Native Windows 11 x64 acceptance and the signed installer checks are recorded,
+  or an explicit unsigned beta records the pending acceptance and signing limitations.
 - All four tested installers and checksums are published for the exact tag.
 - Public release links work; the first installer prerelease has been installed
   and exercised before declaring the pipeline operational.
