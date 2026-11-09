@@ -3,7 +3,7 @@ import type { PermissionRule, PromptTemplates } from "../contracts/index.js";
 import type { McpServerConfig } from "./config.js";
 import type { RunStatus } from "./record-schemas.js";
 
-export type { ModeChange, ModeControl, PermissionRule, SessionState } from "../contracts/index.js";
+export type { ModeChange, PermissionRule, SessionState } from "../contracts/index.js";
 export type { RunEvent, RunEventBody, RunRecord, RunStatus } from "./record-schemas.js";
 export type { StopReason, ToolKind };
 

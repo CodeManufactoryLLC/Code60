@@ -13,7 +13,7 @@ export interface GitSetupFile {
   fingerprint: string;
   size: number;
 }
-export interface GitSetupPreview {
+interface GitSetupPreview {
   readiness: GitReadiness;
   files: GitSetupFile[];
   author: { name: string; email: string };

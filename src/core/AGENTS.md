@@ -4,6 +4,10 @@
 
 - Receive `agents`, `git`, the filesystem, the clock, and process checks as injected interfaces, so tests run without real agents or repositories.
 - Keep core usable without the desktop app.
+- Optional desktop diagnostic sinks must be inert when absent or throwing.
+  Correlate turns with generated operation IDs and emit fixed metadata once per
+  meaningful boundary, never prompts, event payloads, paths, commands or errors.
+  Keep diagnostic retention independent of authoritative run/transcript stores.
 - In headless mode, never wait for input. Treat `ask` as deny unless a flag allows the kind.
 - Never pick an ACP "always" permission option.
 - Headless runs are exactly one turn. Only the desktop app (`interactive` mode) sends follow-up prompts, and only after the previous turn ended.

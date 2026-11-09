@@ -18,8 +18,10 @@ environments.
 ## Development
 
 - Use npm. Install with `npm ci`, and commit `package-lock.json` changes.
-- `npm run check` runs the typecheck, Biome lint and format checks, and the
-  tests. Run it before every commit. CI for PRs and pushes to main runs only on
+- `npm run check` runs typecheck, Biome, Knip unused-code checks, and one
+  coverage-enabled test suite with versioned four-metric gates. Run it before
+  every commit. Never lower coverage floors or broaden Knip exclusions to hide
+  findings; document explicitly reviewed exceptions. CI for PRs and pushes to main runs only on
   Linux with Node.js 22.12 and 24. Windows x64 and macOS checks run with Node.js 24 only
   in the manually requested release workflow.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
@@ -96,6 +98,11 @@ environments.
 - Do not log credentials, tokens, private prompts, or other sensitive data.
   Avoid putting secrets in command-line arguments, which may be visible to
   other processes.
+- Desktop diagnostics use only strict typed metadata and fixed messages through
+  the optional sink. Never capture raw errors, prompts, transcripts, payloads,
+  paths or command/environment values. The CLI must not enable capture.
+- Diagnostic retention (seven days / 20 MiB) applies only to private desktop
+  JSONL segments, never existing transcripts, run records or databases.
 - Write files only to intended locations, and avoid overwriting user data
   without clear confirmation or an existing explicit overwrite option.
 

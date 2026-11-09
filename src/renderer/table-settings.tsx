@@ -19,14 +19,11 @@ export interface SettingsColumn {
 }
 
 /** Keep a data column visible when turning off the chart columns. */
-export function settingsColumnsFor(columns: readonly SettingsColumn[], view: TableView) {
+function settingsColumnsFor(columns: readonly SettingsColumn[], view: TableView) {
   return columns.filter((column) => !column.chart || view.charts);
 }
 
-export function visibleSettingsView(
-  columns: readonly SettingsColumn[],
-  view: TableView,
-): TableView {
+function visibleSettingsView(columns: readonly SettingsColumn[], view: TableView): TableView {
   const available = settingsColumnsFor(columns, view);
   if (!available.length || available.some((column) => !view.hidden.includes(column.key)))
     return view;

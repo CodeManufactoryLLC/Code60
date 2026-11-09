@@ -17,7 +17,7 @@ import {
 } from "../platform/index.js";
 
 /** Saved template edits; rows that cannot be used are described in `skipped`, never applied. */
-export interface SavedPromptTemplates {
+interface SavedPromptTemplates {
   templates: Partial<PromptTemplates>;
   skipped: string[];
 }

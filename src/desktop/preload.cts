@@ -2,6 +2,14 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  queryLogs: (request: unknown) => ipcRenderer.invoke("desktop:logs-query", request),
+  logDetail: (request: unknown) => ipcRenderer.invoke("desktop:logs-detail", request),
+  clearLogs: (request: unknown) => ipcRenderer.invoke("desktop:logs-clear", request),
+  onLogsChanged: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("desktop:logs-changed", handler);
+    return () => ipcRenderer.removeListener("desktop:logs-changed", handler);
+  },
   checkGit: (request: unknown) => ipcRenderer.invoke("desktop:git-check", request),
   beginGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-begin", request),
   previewGitSetupFile: (request: unknown) => ipcRenderer.invoke("desktop:git-file", request),

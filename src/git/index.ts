@@ -5,10 +5,9 @@ import { samePath } from "../platform/index.js";
 import { GitError, runGit } from "./exec.js";
 import { type GitSetupOps, gitSetup } from "./setup.js";
 
-export { GitError } from "./exec.js";
-export type { GitReadiness, GitSetupFile, GitSetupOps, GitSetupPreview } from "./setup.js";
+export type { GitReadiness, GitSetupFile, GitSetupOps } from "./setup.js";
 
-export interface RepoInfo {
+interface RepoInfo {
   /** Top-level directory of the working tree the command ran in. */
   topLevel: string;
   /** Absolute path of the common Git directory shared by all worktrees. */
@@ -29,7 +28,7 @@ export interface GitWorktree {
   sizeBytes: number | null;
 }
 
-export type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
+type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface ChangedFile {
   path: string;
@@ -45,7 +44,7 @@ export interface ReviewSnapshotFile {
   modified: string;
   limitation?: string;
 }
-export interface ReviewSnapshot {
+interface ReviewSnapshot {
   files: ReviewSnapshotFile[];
   truncated: boolean;
 }

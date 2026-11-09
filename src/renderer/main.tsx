@@ -36,6 +36,7 @@ import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.j
 import { useFiles } from "./files.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { Icon, type IconName } from "./icons.js";
+import { LogsPage } from "./logs.js";
 import { MessagesPage } from "./messages.js";
 import { Modal } from "./modal.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
@@ -277,7 +278,7 @@ function App() {
   useEffect(() => {
     if (!databaseLoaded || database) return;
     setTabs((current) =>
-      ["chat", "settings", "contributor-tools"].includes(current.active)
+      ["chat", "settings", "contributor-tools", "logs"].includes(current.active)
         ? current
         : updateTabs(current, { type: "select", id: "chat" }),
     );
@@ -710,6 +711,7 @@ function App() {
       | "configurations"
       | "messages"
       | "events"
+      | "logs"
       | "worktrees"
       | "polling"
       | "search"
@@ -721,7 +723,7 @@ function App() {
     group: "Pages",
     icon: "document",
     checked: tabs.active === id,
-    disabled: !database && id !== "chat" && id !== "contributor-tools",
+    disabled: !database && id !== "chat" && id !== "contributor-tools" && id !== "logs",
     ...(!database ? { reason: "Connect to a database first" } : {}),
     run: () => {
       if (id === "files") {
@@ -740,6 +742,7 @@ function App() {
     page("configurations", "Configurations"),
     page("messages", "Messages"),
     page("events", "Events"),
+    page("logs", "Logs"),
     page("search", "Search"),
     page("worktrees", "Worktrees"),
     page("polling", "Polling"),
@@ -1262,6 +1265,23 @@ function App() {
               </button>
             </section>
           )}
+        </div>
+        <div
+          className="page-panel"
+          role="tabpanel"
+          id="panel-logs"
+          aria-labelledby="tab-logs"
+          hidden={tabs.active !== "logs"}
+        >
+          <LogsPage
+            api={window.desktop}
+            active={tabs.active === "logs"}
+            project={directory ?? null}
+            lines={lines}
+            density={density}
+            fit={fit}
+            textStyles={textStyles}
+          />
         </div>
         <div
           className="page-panel"

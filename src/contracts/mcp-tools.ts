@@ -15,10 +15,10 @@ export const MCP_TABLES = [
 ] as const;
 
 export type McpTable = (typeof MCP_TABLES)[number];
-export type McpTableAction = "read" | "search";
+type McpTableAction = "read" | "search";
 
 /** Worker tools: the orchestration chat dispatches and controls only workers it created. */
-export const MCP_CONTROL_TOOLS = [
+const MCP_CONTROL_TOOLS = [
   "code60_create_plan",
   "code60_read_plan",
   "code60_update_plan",
@@ -542,10 +542,6 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
   ...MCP_TABLE_TOOL_DEFINITIONS,
   ...MCP_CONTROL_TOOL_DEFINITIONS,
 ];
-
-export function findMcpTool(name: string): McpToolDefinition | undefined {
-  return MCP_TOOL_DEFINITIONS.find((tool) => tool.name === name);
-}
 
 export function findMcpTableTool(name: string): McpTableToolDefinition | undefined {
   return MCP_TABLE_TOOL_DEFINITIONS.find((tool) => tool.name === name);

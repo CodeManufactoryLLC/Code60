@@ -47,7 +47,7 @@ const sampleSummaryFields: PromptFields<"handoffSummary"> = {
  * Fixed example values for previews; they never come from real runs. The handoff turn's summary
  * is rendered from the given summary template, so it follows edits to that template.
  */
-export function sampleFields(summaryTemplate: string): { [Id in PromptId]: PromptFields<Id> } {
+function sampleFields(summaryTemplate: string): { [Id in PromptId]: PromptFields<Id> } {
   const usable = validatePromptTemplate("handoffSummary", summaryTemplate) === undefined;
   return {
     operatingContract: {},

@@ -23,7 +23,7 @@ export const labels: Record<PollKey, string> = {
   files: "Files",
 };
 const time = (at: number | null) => (at === null ? "Never" : new Date(at).toLocaleTimeString());
-export const intervalText = (ms: number | null) => (ms === null ? "Off" : `${ms / 1000}s`);
+const intervalText = (ms: number | null) => (ms === null ? "Off" : `${ms / 1000}s`);
 const triggerLabels: Record<PollResult["trigger"], string> = {
   manual: "Manual",
   timer: "Timer",

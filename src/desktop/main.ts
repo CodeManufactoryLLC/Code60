@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -25,6 +26,9 @@ import {
   parseGitSetupCommit,
   parseGitSetupFile,
   parseGitSetupIdentity,
+  parseLogClear,
+  parseLogDetail,
+  parseLogQuery,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -55,6 +59,7 @@ import { installAppImage } from "./appimage-update.js";
 import { DesktopController } from "./controller.js";
 import { installDeb } from "./deb-update.js";
 import { desktopPath } from "./environment.js";
+import { DesktopLogStore, logProjectId } from "./log-store.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
@@ -68,12 +73,19 @@ const startup = new AbortController();
 let updates: DesktopUpdates | undefined;
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
+const logs = new DesktopLogStore(join(stateHome(process.env), "code60", "logs"));
+const launchOperation = randomUUID();
+logs.sink({ event: "app.start", operationId: launchOperation, outcome: "started" });
+logs.subscribe(() => {
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+    window.webContents.send("desktop:logs-changed");
+});
 const windowControlColors = (dark: boolean) => ({
   color: dark ? "#242b33" : "#ffffff",
   symbolColor: dark ? "#ffffff" : "#000000",
 });
 const controller = new DesktopController(
-  defaultDeps(),
+  defaultDeps(logs.sink),
   process.env,
   {
     async confirm(title, detail) {
@@ -98,6 +110,31 @@ const controller = new DesktopController(
     },
   },
 );
+let shutdownTask: Promise<void> | undefined;
+function shutdownDesktop(force = false): Promise<void> {
+  if (shutdownTask) {
+    if (force) void controller.shutdown(true).catch(() => {});
+    return shutdownTask;
+  }
+  logs.sink({ event: "app.stop", operationId: launchOperation, outcome: "started" });
+  shutdownTask = controller
+    .shutdown(force)
+    .then(async () => {
+      logs.sink({ event: "app.stopped", operationId: launchOperation, outcome: "succeeded" });
+      await logs.close();
+    })
+    .catch((error: unknown) => {
+      shutdownTask = undefined;
+      logs.sink({
+        event: "app.stopped",
+        operationId: launchOperation,
+        outcome: "failed",
+        errorCategory: "process",
+      });
+      throw error;
+    });
+  return shutdownTask;
+}
 
 async function quit(confirm: boolean): Promise<void> {
   if (quitPending) return;
@@ -116,7 +153,7 @@ async function quit(confirm: boolean): Promise<void> {
     }
     startup.abort();
     updates?.close();
-    await controller.shutdown();
+    await shutdownDesktop();
     exiting = true;
     app.quit();
   } catch {
@@ -219,7 +256,7 @@ app.on("before-quit", (event) => {
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    if (quitPending) void controller.shutdown(true);
+    if (quitPending) void shutdownDesktop(true).catch(() => {});
     else void quit(false);
   });
 }
@@ -273,7 +310,7 @@ async function ready(): Promise<void> {
       quitPending = true;
       try {
         startup.abort();
-        await controller.shutdown();
+        await shutdownDesktop();
         exiting = true;
         if (process.platform === "linux") {
           if (file.endsWith(".deb")) await installDeb(file);
@@ -292,7 +329,7 @@ async function ready(): Promise<void> {
           buttons: ["Close Code60"],
         });
         // Shutdown may have only partly succeeded; never leave agents behind.
-        await controller.shutdown(true);
+        await shutdownDesktop(true);
         exiting = true;
         app.quit();
       } finally {
@@ -333,6 +370,36 @@ async function ready(): Promise<void> {
   handle("desktop:background-hit-test", (value) => {
     const ignore = parseBoolean(value);
     if (clickThrough) window?.setIgnoreMouseEvents(ignore, { forward: true });
+  });
+  handle("desktop:logs-query", (value) => {
+    const query = parseLogQuery(value);
+    const directory = controller.snapshot().directory;
+    return logs.query(
+      query.scope === "current"
+        ? {
+            ...query,
+            projectId: directory ? logProjectId(directory) : "0000000000000000",
+          }
+        : query,
+    );
+  });
+  handle("desktop:logs-detail", (value) => logs.detail(parseLogDetail(value).id));
+  handle("desktop:logs-clear", async (value) => {
+    parseLogClear(value);
+    const confirmation = await dialog.showMessageBox({
+      type: "warning",
+      title: "Clear logs?",
+      message: "Clear all retained diagnostic logs?",
+      detail:
+        "This affects local diagnostic logs only, across all projects and app launches. Events, transcripts, run records and databases are kept.",
+      buttons: ["Cancel", "Clear logs"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (confirmation.response !== 1) return false;
+    await logs.clear();
+    return true;
   });
   handle("desktop:snapshot", () => controller.snapshot());
   handle("desktop:database", async (value) => {
@@ -515,17 +582,27 @@ async function ready(): Promise<void> {
       startup.abort();
       // Do not veto sign-out. The owned jobs also close if Windows terminates us
       // before these best-effort final record writes finish.
-      void controller.shutdown(true).catch(() => {});
+      void shutdownDesktop(true).catch(() => {});
     });
     window.on("session-end", () => {
       startup.abort();
-      void controller.shutdown(true).catch(() => {});
+      void shutdownDesktop(true).catch(() => {});
     });
   }
+  logs.sink({ event: "app.ready", operationId: launchOperation, outcome: "succeeded" });
   window.loadURL(page).catch(() => void quit(false));
 }
 
 app
   .whenReady()
   .then(ready)
-  .catch(() => app.exit(1));
+  .catch(async () => {
+    logs.sink({
+      event: "app.ready",
+      operationId: launchOperation,
+      outcome: "failed",
+      errorCategory: "unknown",
+    });
+    await shutdownDesktop(true).catch(() => {});
+    app.exit(1);
+  });

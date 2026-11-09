@@ -6,7 +6,7 @@ import {
   toolKindSchema,
 } from "../contracts/index.js";
 
-export const runStatusSchema = z.enum([
+const runStatusSchema = z.enum([
   "queued",
   "running",
   "waiting",
@@ -62,7 +62,7 @@ export const runRecordSchema = z
     "Inconsistent worktree metadata",
   );
 
-export const runEventBodySchema = z.discriminatedUnion("type", [
+const runEventBodySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sessionState"), state: sessionStateSchema }),
   z.object({
     type: z.literal("status"),

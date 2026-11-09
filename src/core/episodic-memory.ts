@@ -2,8 +2,8 @@ import type { AgentSpec, Agents } from "../agents/index.js";
 import { renderEpisodicMemoryPrompt } from "../contracts/index.js";
 import type { RunEvent } from "./types.js";
 
-export const MEMORY_EVENT_LIMIT = 10_000;
-export const MEMORY_INPUT_LIMIT = 1_000_000;
+const MEMORY_EVENT_LIMIT = 10_000;
+const MEMORY_INPUT_LIMIT = 1_000_000;
 const CHUNK_SIZE = 32_000;
 const OUTPUT_LIMIT = 64_000;
 

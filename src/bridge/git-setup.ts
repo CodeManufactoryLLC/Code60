@@ -5,10 +5,10 @@ export type { GitReadiness } from "../core/index.js";
 
 const project = z.string().min(1).max(4096);
 const identity = { project, sessionId: z.string().uuid() };
-export const gitProjectSchema = z.strictObject({ project });
-export const gitSetupIdentitySchema = z.strictObject(identity);
-export const gitSetupFileSchema = z.strictObject({ ...identity, fileId: z.string().uuid() });
-export const gitSetupCommitSchema = z.strictObject({
+const gitProjectSchema = z.strictObject({ project });
+const gitSetupIdentitySchema = z.strictObject(identity);
+const gitSetupFileSchema = z.strictObject({ ...identity, fileId: z.string().uuid() });
+const gitSetupCommitSchema = z.strictObject({
   ...identity,
   fileIds: z.array(z.string().uuid()).max(10_000),
   name: z

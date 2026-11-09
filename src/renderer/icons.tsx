@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 
 /** IBM Carbon 16px icon exports (Apache-2.0; see icons/carbon/LICENSE). Paths are unmodified. */
-export const carbonIcons = {
+const carbonIcons = {
   "overflow-menu--horizontal": {
     size: 16,
     paths: [

@@ -125,7 +125,11 @@ async function selectSidebarPage(page: Page, name: string) {
     await page.locator("#tab-chat").focus();
     return;
   }
-  if (["Configurations", "Events", "Messages", "Polling", "Sessions", "Worktrees"].includes(name)) {
+  if (
+    ["Configurations", "Events", "Logs", "Messages", "Polling", "Sessions", "Worktrees"].includes(
+      name,
+    )
+  ) {
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
   }
@@ -743,7 +747,7 @@ test("desktop: database connection gates splash and workspace controls", async (
     for (const name of ["Prompt Editor", "Search"]) {
       await expect(page.getByRole("tab", { name, exact: true })).toBeDisabled();
     }
-    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "Toggle files panel", exact: true }),
@@ -756,7 +760,7 @@ test("desktop: database connection gates splash and workspace controls", async (
     ).toBeDisabled();
     await page.getByRole("tab", { name: "Chat", exact: true }).focus();
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("tab", { name: "Settings", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeFocused();
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await expect(page.getByLabel("Theme", { exact: true })).toBeEnabled();
     await expect(
@@ -1479,7 +1483,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-top-right-radius", "0px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(12);
+    await expect(tabs).toHaveCount(13);
     const tabCorners = await tabs.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -1497,7 +1501,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         return element.getBoundingClientRect().top - previous.getBoundingClientRect().bottom;
       }),
     );
-    expect(tabGaps).toEqual(Array(5).fill(4));
+    expect(tabGaps).toEqual(Array(6).fill(4));
     await expect(page.locator(".page-tabs")).toHaveCSS("gap", "4px");
     const nativeTitlebarHeight = await page.evaluate(() => {
       const overlay = (
@@ -1719,7 +1723,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(splash).toHaveCount(0);
     // Workspace pages stay unavailable until a database is connected.
     await expect(page.locator(".topbar")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeEnabled();
     const sessionsTab = page.getByRole("tab", { name: "Sessions", exact: true });
     const messagesTab = page.getByRole("tab", { name: "Messages", exact: true });
     const worktreesTab = page.getByRole("tab", { name: "Worktrees", exact: true });
@@ -1820,7 +1824,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(10);
+    await expect(page.getByRole("tab")).toHaveCount(11);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -2231,7 +2235,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(10);
+    await expect(page.getByRole("tab")).toHaveCount(11);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await settingsPage.evaluate((element) => {
@@ -2264,6 +2268,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Tables",
       "Configurations",
       "Events",
+      "Logs",
       "Messages",
       "Polling",
       "Sessions",
@@ -2298,7 +2303,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(10);
+    await expect(page.getByRole("tab")).toHaveCount(11);
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -3178,7 +3183,7 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeEnabled();
     await page
       .locator(".database-notice")
       .getByRole("button", { name: "Connect to database" })
@@ -4371,6 +4376,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Search",
       "Configurations",
       "Events",
+      "Logs",
       "Messages",
       "Polling",
       "Sessions",
@@ -5072,7 +5078,7 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await selectSidebarPage(page, "Sessions");
     await expect(actual).toHaveAttribute("data-row-height", "44");
     // Every table uses the same dialog, without leaking the Sessions override or chart controls.
-    for (const name of ["Messages", "Events", "Configurations", "Worktrees", "Polling"]) {
+    for (const name of ["Messages", "Events", "Logs", "Configurations", "Worktrees", "Polling"]) {
       await selectSidebarPage(page, name);
       await page
         .locator(`#panel-${name.toLowerCase()}`)

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { AgentMcpServer, Agents, PermissionAnswer } from "../agents/index.js";
 import {
   DEFAULT_PROMPT_TEMPLATES,
+  type LogSink,
   type ModeChange,
   type PromptTemplates,
 } from "../contracts/index.js";
@@ -25,10 +26,11 @@ import type {
   RunView,
 } from "./types.js";
 
-export const CANCEL_GRACE_MS = 10_000;
-export const KILL_GRACE_MS = 5_000;
+const CANCEL_GRACE_MS = 10_000;
+const KILL_GRACE_MS = 5_000;
 
 export interface OrchestratorDeps {
+  log?: LogSink;
   agents: Agents;
   git: Git;
   store: RecordStore;
@@ -101,7 +103,7 @@ export interface Orchestrator {
   results(): Promise<RunResult[]>;
 }
 
-export function newRunId(clock: Clock): string {
+function newRunId(clock: Clock): string {
   const iso = clock.now().toISOString();
   const stamp = `${iso.slice(0, 10).replaceAll("-", "")}-${iso.slice(11, 19).replaceAll(":", "")}`;
   return `${stamp}-${randomBytes(3).toString("hex")}`;
@@ -121,6 +123,7 @@ export async function createOrchestrator(
     for (const listener of changeListeners) listener();
   };
   const runDeps = {
+    ...(deps.log ? { log: deps.log } : {}),
     agents: deps.agents,
     git: deps.git,
     store: deps.store,

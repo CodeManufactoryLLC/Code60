@@ -241,7 +241,7 @@ async function runCommand(io: CliIo, values: Values, arg: string | undefined): P
   }
 }
 
-export function noWorktreeNotice(reason: NoWorktreeReason, dir: string, runs: number): string {
+function noWorktreeNotice(reason: NoWorktreeReason, dir: string, runs: number): string {
   const where =
     reason === "not_a_repository"
       ? "is not in a Git repository"

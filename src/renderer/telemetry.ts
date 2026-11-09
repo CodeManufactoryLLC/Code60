@@ -2,12 +2,12 @@ import type { RunEvent, RunStatus } from "../core/index.js";
 import { statusSpec } from "./state.js";
 
 /** Inline chart data for a session row, derived only from its recorded events. */
-export const turnSamples = 6;
+const turnSamples = 6;
 export const bucketCount = 10;
-export const bucketSeconds = 30;
+const bucketSeconds = 30;
 export const historySeconds = 120;
 
-export interface HistorySpan {
+interface HistorySpan {
   status: RunStatus;
   /** Seconds from the start of the two-minute window. */
   start: number;

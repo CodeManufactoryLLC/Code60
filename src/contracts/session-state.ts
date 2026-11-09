@@ -57,7 +57,6 @@ export const sessionStateSchema = z.object({
     .nullable(),
 });
 export type SessionState = z.infer<typeof sessionStateSchema>;
-export type ModeControl = z.infer<typeof modeControlSchema>;
 
 export function emptySessionState(): SessionState {
   return { model: null, usage: null, modes: null };
