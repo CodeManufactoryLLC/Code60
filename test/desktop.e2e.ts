@@ -452,6 +452,46 @@ async function expectNeutralTheme(page: Page) {
   );
 }
 
+async function expectNavigationHighlight(page: Page, row: Locator) {
+  await expect(row).toHaveAttribute("data-nav-active", "true");
+  const highlight = await row.evaluate((element) => {
+    const sidebar = element.closest(".sidebar");
+    if (!sidebar) throw new Error("Missing navigation sidebar");
+    const bounds = element.getBoundingClientRect();
+    const bar = sidebar.getBoundingClientRect();
+    const line = getComputedStyle(element, "::after");
+    const probe = document.createElement("span");
+    probe.style.color = "var(--primary)";
+    element.append(probe);
+    const primary = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      edge: bar.right - 1,
+      lineWidth: Number.parseFloat(line.width),
+      width: bounds.width,
+      border: line.borderBottomWidth,
+      color: line.borderBottomColor,
+      primary,
+      decoration: getComputedStyle(
+        element.querySelector(".page-tab-label, .chat-sidebar-label") ?? element,
+      ).textDecorationLine,
+      // The resize grip overlays the row's right edge and must not hide its highlight.
+      grip: getComputedStyle(sidebar.querySelector(".sidebar-resize:not(:hover)") ?? sidebar)
+        .backgroundColor,
+    };
+  });
+  expect(highlight.left).toBe(0);
+  expect(highlight.right).toBe(highlight.edge);
+  expect(highlight.lineWidth).toBe(highlight.width);
+  expect(highlight.border).toBe("2px");
+  expect(highlight.color).toBe(highlight.primary);
+  expect(highlight.decoration).toBe("none");
+  expect(highlight.grip).toBe("rgba(0, 0, 0, 0)");
+  await expect(page.locator(".sidebar [data-nav-active='true']:visible")).toHaveCount(1);
+}
+
 async function expectTabAppearance(page: Page) {
   // The native drag strip can retain stale hover. Clear into the non-draggable footer instead.
   await page.bringToFront();
@@ -488,7 +528,7 @@ async function expectTabAppearance(page: Page) {
         background: getComputedStyle(button).backgroundColor,
         iconOnly: button.classList.contains("icon-button"),
         highlighted: button.matches(
-          '[aria-selected="true"], [data-active="true"], .sidebar-settings-heading[data-active="true"] button',
+          '[aria-selected="true"]:not(.page-group-toggle), [data-active="true"], [data-nav-active="true"] button',
         ),
       })),
       activeRight: active.getBoundingClientRect().right,
@@ -520,7 +560,8 @@ async function expectTabAppearance(page: Page) {
   });
   expect(appearance.leftBorders).toEqual(["1px", "1px", "0px"]);
   expect(appearance.activeBackground).not.toBe(appearance.sidebarBackground);
-  expect(appearance.activeDecoration).toBe("underline");
+  expect(appearance.activeDecoration).toBe("none");
+  await expectNavigationHighlight(page, page.locator(".sidebar [data-nav-active='true']:visible"));
   for (const button of appearance.buttonBackgrounds)
     expect(button.background, button.label ?? "Sidebar button").toBe(
       button.iconOnly
@@ -534,7 +575,7 @@ async function expectTabAppearance(page: Page) {
   expect(appearance.activeRight).toBeLessThan(appearance.panelLeft);
   expect(appearance.barTop).toBe(appearance.panelTop);
   expect(appearance.barTop).toBe(appearance.dragBottom);
-  expect(appearance.barLeft).toBe(12);
+  expect(appearance.barLeft).toBe(0);
   expect(appearance.barBottom).toBe(appearance.panelBottom);
   expect((appearance.footerTop ?? 0) - appearance.barBottom).toBe(12);
   // The version's text stays clear of the footer's floating message-age row.
@@ -1016,14 +1057,18 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
     await expect(page.getByRole("button", { name: "Toggle navigation sidebar" })).toHaveCount(0);
     await expect(sidebar).toHaveCSS("width", "220px");
     await expectFullHeightDivider();
+    const selectedRow = sidebar.locator(".chat-sidebar-row[data-nav-active='true']");
+    await expectNavigationHighlight(page, selectedRow);
     await grip.focus();
     await grip.press("ArrowRight");
     await expect(sidebar).toHaveCSS("width", "240px");
+    await expectNavigationHighlight(page, selectedRow);
     await grip.press("ArrowLeft");
     await expect(sidebar).toHaveCSS("width", "220px");
     await expectFullHeightDivider();
     const bounds = await grip.boundingBox();
     if (!bounds) throw new Error("Missing sidebar resize handle");
+    await page.bringToFront();
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 100);
     await page.mouse.down();
     await page.mouse.move(bounds.x + 100, bounds.y + 100, { steps: 8 });
@@ -1039,6 +1084,7 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
     for (let i = 0; i < 20; i++) await grip.press("ArrowLeft");
     await expect(sidebar).toHaveCSS("width", "180px");
     await expectFullHeightDivider();
+    await expectNavigationHighlight(page, selectedRow);
     await expect(sidebar.getByRole("note", { name: "Running Code60 version" })).toHaveCount(0);
     const versionNote = page
       .locator(".app-footer")
@@ -1058,6 +1104,7 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
     await expectFullHeightDivider();
     for (let i = 0; i < 20; i++) await grip.press("ArrowRight");
     await expect(sidebar).toHaveCSS("width", "480px");
+    await expectNavigationHighlight(page, selectedRow);
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 650),
     );
@@ -1068,6 +1115,7 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
       true,
     );
     await expectFullHeightDivider();
+    await expectNavigationHighlight(page, selectedRow);
     await page.screenshot({ path: test.info().outputPath("resizable-sidebar.png") });
     await expect(page.getByRole("button", { name: "Toggle files panel" })).toBeVisible();
   } finally {
@@ -1373,6 +1421,10 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(historical).toHaveCSS("border-top-width", "0px");
     await expect(popup.locator(".event.prompt pre")).toHaveCSS(
       "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await expect(popup.locator(".event.prompt pre")).toHaveCSS(
+      "border-top-color",
       "rgb(67, 179, 174)",
     );
     await expect(popup.locator(".event.prompt pre")).toHaveCSS("color", "rgb(0, 0, 0)");
@@ -1773,7 +1825,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Open Project" })).toBeHidden();
     await clickMenu("open-project");
-    await page.getByRole("button", { name: "Create new project…" }).click();
+    await page.getByRole("button", { name: "Open Folder" }).click();
     await expect(newSession).toBeEnabled();
     await page.getByRole("button", { name: "Dismiss notification" }).click();
     await page.keyboard.press("ControlOrMeta+k");
@@ -1833,11 +1885,15 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       for (const message of await chatPopup.locator(".event.message").all())
         await expect(message).toHaveCSS("border-top-width", "0px");
       for (const prompt of await chatPopup.locator(".event.prompt:not(.automatic)").all()) {
+        await expect(prompt.locator("pre")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
         await expect(prompt.locator("pre")).toHaveCSS(
-          "background-color",
+          "border-top-color",
           dark ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
         );
-        await expect(prompt.locator("pre")).toHaveCSS("color", "rgb(0, 0, 0)");
+        await expect(prompt.locator("pre")).toHaveCSS(
+          "color",
+          dark ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)",
+        );
         await expectMessageCopy(prompt.getByRole("button", { name: "Copy message" }));
       }
     };
@@ -2330,12 +2386,19 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         "font-family",
         /^"?D-DIN"?/,
       );
-      // Solid human bubbles keep contrasting text and no side rule.
+      // Outlined human messages keep contrasting text and no side rule.
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "background-color",
+        "rgba(0, 0, 0, 0)",
+      );
+      await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
+        "border-top-color",
         darkTheme ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
       );
-      await expect(page.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
+      await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
+        "color",
+        darkTheme ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)",
+      );
       await expect(page.locator(".event.prompt").first()).toHaveCSS("border-left-width", "0px");
       if (theme === "dark") {
         await page.mouse.move(1, 1);
@@ -3149,7 +3212,7 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await expect(panel.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
     await clickMenu("open-project");
-    await page.getByRole("button", { name: "Create new project…" }).click();
+    await page.getByRole("button", { name: "Open Folder" }).click();
     await page
       .getByRole("group", { name: "Done notification", exact: true })
       .filter({ hasText: "Opened repo." })
@@ -3283,13 +3346,16 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
 
     await row(a).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toBeEnabled();
+    await expectNavigationHighlight(page, row(a).locator(".."));
+    await expect(row(owner)).not.toHaveAttribute("aria-current", "true");
+    await expect(page.locator(".chat-page-heading")).toHaveAttribute("data-nav-active", "false");
     const nameBounds = await worker(a).locator(".worker-chat-title").boundingBox();
     const statusBounds = await worker(a).locator(".worker-chat-subtitle").boundingBox();
     expect(nameBounds && statusBounds && statusBounds.y >= nameBounds.y + nameBounds.height).toBe(
       true,
     );
     const iconRatio = await worker(a)
-      .locator(".worker-chat-title > svg")
+      .locator(".worker-chat-title > .chat-role-icon")
       .evaluate(
         (element) =>
           element.getBoundingClientRect().width /
@@ -3310,8 +3376,11 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(owner);
     await selectSidebarPage(page, "Settings");
     await expect(worker(a)).toBeHidden();
+    await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
+    await expectNavigationHighlight(page, page.locator(".sidebar-settings-heading"));
     await selectSidebarPage(page, "Chat");
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
+    await expectNavigationHighlight(page, row(a).locator(".."));
 
     // Pushed worker replies use the same per-turn unread markers as orchestrators.
     await row(b).click();
@@ -3408,6 +3477,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(children.locator('[data-role="worker"]')).toHaveCount(2);
     await children.locator(`#conversation-${a}`).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
+    await expectNavigationHighlight(page, row(a).locator(".."));
     await toggle.click();
     await expect(children).toBeHidden();
     await expect(worker(a)).toBeVisible();
@@ -4201,6 +4271,52 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const settingsPages = page.getByRole("button", { name: "Settings pages", exact: true });
     await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
     await expect(advanced).toBeHidden();
+    const settingsHeading = page.locator(".sidebar-settings-heading");
+    const settingsFills = await settings.evaluate((element) => {
+      const probe = document.createElement("span");
+      element.append(probe);
+      probe.style.backgroundColor = "var(--hover-bg)";
+      const hover = getComputedStyle(probe).backgroundColor;
+      probe.style.backgroundColor = "var(--accent-bg)";
+      const active = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return { hover, active };
+    });
+    // The drag strip can retain stale native hover, so reset the pointer into the footer.
+    const resetPointer = async () => {
+      const corner = await page.evaluate(() => ({ x: innerWidth - 2, y: innerHeight - 2 }));
+      await page.mouse.move(corner.x, corner.y);
+    };
+    const expectSettingsHover = async (control: Locator) => {
+      await expect(async () => {
+        await page.bringToFront();
+        await resetPointer();
+        await control.hover();
+        await expect(settingsHeading).toHaveCSS("background-color", settingsFills.hover, {
+          timeout: 500,
+        });
+        await expect(settings).toHaveCSS("background-color", settingsFills.hover, {
+          timeout: 500,
+        });
+      }).toPass({ timeout: 5_000 });
+      await expect(settingsPages).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    };
+    await expectSettingsHover(settings);
+    await expectSettingsHover(settingsPages);
+    await settings.click();
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "true");
+    await expect(settings).toHaveAttribute("aria-selected", "true");
+    await expectNavigationHighlight(page, settingsHeading);
+    await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
+    await resetPointer();
+    await expect(settingsHeading).toHaveCSS("background-color", settingsFills.active);
+    await expect(settings).toHaveCSS("background-color", settingsFills.active);
+    await expect(settingsPages).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expectSettingsHover(settingsPages);
+    await settings.click();
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
+    await expect(advanced).toBeHidden();
+    await page.getByRole("tab", { name: "Chat", exact: true }).click();
     await settings.press("ArrowRight");
     await expect(advanced).toHaveAttribute("aria-expanded", "false");
     await settings.press("ArrowRight");
@@ -4223,6 +4339,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await experiments.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(page.locator("#panel-episodic-memory")).toBeVisible();
+    await expectNavigationHighlight(page, page.locator("#tab-episodic-memory").locator(".."));
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(experiments).toBeFocused();
@@ -4256,6 +4373,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(tables).toBeFocused();
     await expect(tables).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("#panel-sessions")).toBeVisible();
+    await expectNavigationHighlight(page, tables.locator(".."));
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("combobox", { name: "Search commands" }).fill("Sessions");
     await page.keyboard.press("Enter");
@@ -4310,6 +4428,11 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "aria-current",
       "true",
     );
+    await expectNavigationHighlight(
+      page,
+      chatList().getByRole("button", { name: "Chat 1", exact: true }).locator(".."),
+    );
+    await expect(page.locator(".chat-page-heading")).toHaveAttribute("data-nav-active", "false");
     const input = () => chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await input().fill("hello from Chat");
     await input().press("Enter");
@@ -4450,11 +4573,11 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await activeCard.click();
     await expect(activityName).toBeVisible();
 
-    for (const [theme, neutral, bubble] of [
-      ["light", "rgb(255, 255, 255)", "rgb(67, 179, 174)"],
-      ["dark", "rgb(0, 0, 0)", "rgb(119, 204, 200)"],
-      ["system", "rgb(255, 255, 255)", "rgb(67, 179, 174)"],
-      ["system", "rgb(0, 0, 0)", "rgb(119, 204, 200)"],
+    for (const [theme, neutral, bubble, text] of [
+      ["light", "rgb(255, 255, 255)", "rgb(67, 179, 174)", "rgb(0, 0, 0)"],
+      ["dark", "rgb(0, 0, 0)", "rgb(119, 204, 200)", "rgb(255, 255, 255)"],
+      ["system", "rgb(255, 255, 255)", "rgb(67, 179, 174)", "rgb(0, 0, 0)"],
+      ["system", "rgb(0, 0, 0)", "rgb(119, 204, 200)", "rgb(255, 255, 255)"],
     ] as const) {
       await page.emulateMedia({ colorScheme: neutral === "rgb(255, 255, 255)" ? "light" : "dark" });
       await selectSidebarPage(page, "Settings");
@@ -4465,8 +4588,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       await expect(composer).toHaveCSS("background-color", neutral);
       await expect(page.locator(".sidebar")).toHaveCSS("background-color", neutral);
       await expect(composer).toHaveCSS("box-shadow", "none");
-      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("background-color", bubble);
-      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("color", "rgb(0, 0, 0)");
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS(
+        "background-color",
+        "rgba(0, 0, 0, 0)",
+      );
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("border-top-color", bubble);
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("color", text);
       await expect(chat.locator(".event.message").first()).toHaveCSS("border-top-width", "0px");
       const beforeFocus = await composer.boundingBox();
       await input().focus();
@@ -5568,14 +5695,14 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await application.evaluate(({ dialog }) => {
       dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
     });
-    await modal.getByRole("button", { name: "Create new project…", exact: true }).click();
+    await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toBeVisible();
     await expect(card).toHaveText("Open a project");
     await expect(done).toHaveCount(0);
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, folder);
-    await modal.getByRole("button", { name: "Create new project…", exact: true }).click();
+    await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveText("project-one");
     await expect(card).toHaveCSS("border-top-width", "0px");
@@ -5589,7 +5716,7 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, second);
-    await modal.getByRole("button", { name: "Create new project…", exact: true }).click();
+    await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(card).toHaveText("project-two");
     await done.getByRole("button", { name: "Dismiss notification" }).click();
     await card.click();

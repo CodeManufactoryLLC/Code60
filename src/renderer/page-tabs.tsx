@@ -250,11 +250,14 @@ function PageTabList({
     () => localStorage.getItem("code60.tablesExpanded") === "true",
   );
   const navigationFrame = useRef<number | undefined>(undefined);
+  const previousActivePage = useRef<PageId | undefined>(undefined);
   const experimentActive = experimentPages.includes(tabs.active);
   const advancedActive = experimentActive || tabs.active === "contributor-tools";
   const tableActive = tablePages.includes(tabs.active);
   useLayoutEffect(() => {
-    if (tabs.active === "settings" || pageGroup(tabs.active) === "advanced") {
+    const activeChanged = previousActivePage.current !== tabs.active;
+    previousActivePage.current = tabs.active;
+    if (activeChanged && (tabs.active === "settings" || pageGroup(tabs.active) === "advanced")) {
       setSettingsExpanded(true);
     }
     if (tablePages.includes(tabs.active)) setExpanded(true);
@@ -434,7 +437,12 @@ function PageTabList({
   }
   function page(id: PageId, first: boolean) {
     return (
-      <div className="page-tab" role="presentation" key={id}>
+      <div
+        className="page-tab"
+        role="presentation"
+        key={id}
+        data-nav-active={id !== "settings" && tabs.active === id}
+      >
         <button
           type="button"
           role="tab"
@@ -446,7 +454,11 @@ function PageTabList({
           tabIndex={
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
-          onClick={() => onSelect(id)}
+          onClick={() => {
+            if (id === "settings" && tabs.active === "settings")
+              setSettingsExpanded((value) => !value);
+            onSelect(id);
+          }}
           onKeyDown={(event) => navigate(event, id)}
         >
           <Icon name={pageIcons[id]} />
@@ -457,7 +469,7 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
-      <div className="chat-page-heading">
+      <div className="chat-page-heading" data-nav-active={tabs.active === "chat" && !selectedId}>
         <div className="page-tab" role="tablist" aria-label="Chat page" aria-orientation="vertical">
           <button
             type="button"
@@ -468,7 +480,7 @@ function PageTabList({
             className="page-group-toggle"
             aria-expanded={chatExpanded}
             aria-controls="panel-chat chat-pages"
-            data-active={tabs.active === "chat"}
+            data-active={tabs.active === "chat" && !selectedId}
             onClick={() => {
               if (tabs.active !== "chat") onSelect("chat");
               else setChatExpanded((value) => !value);
@@ -566,7 +578,7 @@ function PageTabList({
       <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">
         {primary.map((id, index) => page(id, index === 0))}
       </div>
-      <div className="page-tab">
+      <div className="page-tab" data-nav-active={tableActive && !expanded}>
         <button
           type="button"
           id="tables-toggle"
@@ -600,6 +612,7 @@ function PageTabList({
         <div
           className="sidebar-settings-heading"
           data-active={tabs.active === "settings" || (advancedActive && !settingsExpanded)}
+          data-nav-active={tabs.active === "settings" || (advancedActive && !settingsExpanded)}
         >
           <div
             className="page-tab-list"
@@ -626,7 +639,7 @@ function PageTabList({
           className="page-tab-list page-group-pages"
           hidden={!settingsExpanded}
         >
-          <div className="page-tab">
+          <div className="page-tab" data-nav-active={advancedActive && !advancedExpanded}>
             <button
               type="button"
               id="advanced-toggle"
@@ -647,7 +660,7 @@ function PageTabList({
             className="page-tab-list page-group-pages"
             hidden={!advancedExpanded}
           >
-            <div className="page-tab">
+            <div className="page-tab" data-nav-active={experimentActive && !experimentsExpanded}>
               <button
                 type="button"
                 id="experiments-toggle"

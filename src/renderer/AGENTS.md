@@ -70,7 +70,7 @@
 
 - Worker headers place status as a subtitle beneath the agent name. Scale sidebar branch/terminal icons and worker heading icons to 1em of the associated text; composer harness logos retain their dedicated size.
 
-- Sidebar container padding is left-only (6px) for navigation; the right file panel has no top, bottom or left container padding. Preserve individual controls and file-row spacing.
+- Sidebar navigation rows extend from the window's left edge to the sidebar's right divider, without container or group padding. Apply hierarchy indentation inside labeled buttons instead, so nested page and conversation highlights remain full width. Selected rows use the neutral selection fill and a 2px theme-green bottom border, never a text underline. When Chat is open, highlight the selected conversation rather than the parent Chat disclosure; clear conversation current state on other pages. Keep navigation rows and their adjacent action buttons fixed at 30px. Settings and orchestrator action controls share their row's highlight. The right file panel has no top, bottom or left container padding.
 
 - Chat bodies have no bottom padding beneath the composer, in both wide and narrow layouts.
 

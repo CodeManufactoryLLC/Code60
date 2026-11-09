@@ -2303,7 +2303,7 @@ function ProjectDialog({
   onClear(): void;
 }) {
   return (
-    <Modal title="Open Project" busy={busy} onClose={onClose}>
+    <Modal title="Open Project" busy={busy} className="project-dialog" onClose={onClose}>
       {!database ? (
         <>
           <p className="muted">No database connected.</p>
@@ -2332,6 +2332,7 @@ function ProjectDialog({
               </button>
               <button
                 type="button"
+                className="project-remove"
                 aria-label={`Remove ${folderName(project.path)} from history`}
                 title={`Remove ${project.path} from history`}
                 disabled={busy}
@@ -2365,7 +2366,7 @@ function ProjectDialog({
           Cancel
         </button>
         <button type="button" className="primary" disabled={busy || !database} onClick={onCreate}>
-          Create new project…
+          Open Folder
         </button>
       </div>
     </Modal>

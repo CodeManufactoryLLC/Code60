@@ -125,7 +125,7 @@
   --chat-bg: #000000;
   --chat-neutral: var(--surface);
   --user-bubble: var(--primary);
-  --on-user-bubble: #000000;
+  --on-user-bubble: #ffffff;
   --human-text: var(--accent);
   --destructive: #df9d8f;
   --destructive-hover: #edb3a7;
@@ -168,7 +168,7 @@
     --chat-bg: #000000;
     --chat-neutral: var(--surface);
     --user-bubble: var(--primary);
-    --on-user-bubble: #000000;
+    --on-user-bubble: #ffffff;
     --human-text: var(--accent);
     --destructive: #df9d8f;
     --destructive-hover: #edb3a7;
@@ -511,7 +511,7 @@ kbd {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--page-margin);
+  margin: 0 var(--page-margin) 0 0;
 }
 
 .app-workspace:has(> .sidebar)::before {
@@ -547,11 +547,12 @@ kbd {
   min-height: 0;
 }
 .sidebar-content {
+  --nav-indent: 0px;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 0 0 6px;
+  padding: 0;
   min-width: 0;
   min-height: 0;
 }
@@ -561,7 +562,7 @@ kbd {
   flex-direction: column;
   gap: 2px;
   flex-shrink: 0;
-  padding: 4px 12px;
+  padding: 4px 12px 4px 30px;
   border: 0;
   background: transparent;
 }
@@ -620,20 +621,25 @@ button.project-card {
 .page-tab [role="tab"],
 .page-tab .page-group-toggle {
   width: 100%;
-  min-height: 28px;
-  padding: 4px 12px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 4px 12px 4px calc(30px + var(--nav-indent));
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
   font-weight: var(--button-weight, 400);
   text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
   justify-content: flex-start;
   gap: 8px;
 }
 .page-tab-label {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .page-tab[data-closable="true"] [role="tab"] {
   padding-right: 30px;
@@ -643,7 +649,7 @@ button.project-card {
   background: var(--hover-bg);
   color: var(--text);
 }
-.page-tab [role="tab"][aria-selected="true"],
+.page-tab [role="tab"][aria-selected="true"]:not(.page-group-toggle),
 .page-tab .page-group-toggle[data-active="true"],
 .sidebar-settings-heading[data-active="true"] {
   --control-fill: var(--accent-bg);
@@ -656,6 +662,9 @@ button.project-card {
 }
 .chat-title {
   font: inherit;
+  /* Buttons otherwise apply the button text role's case and spacing. */
+  text-transform: inherit;
+  --letter-spacing: inherit;
   color: inherit;
   text-align: left;
   overflow-wrap: anywhere;
@@ -666,7 +675,10 @@ button.project-card {
   grid-column: 1 / -1;
 }
 .contributor-tools {
-  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 20px;
 }
 .sidebar-settings-heading {
   display: grid;
@@ -676,6 +688,10 @@ button.project-card {
   color: var(--text);
 }
 button.sidebar-settings-toggle {
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  align-self: stretch;
   padding-inline: 8px 12px;
   color: inherit;
 }
@@ -687,7 +703,13 @@ button.sidebar-settings-toggle {
   flex-shrink: 0;
 }
 .page-group-pages {
-  padding-left: 16px;
+  --nav-indent: 16px;
+}
+#advanced-pages {
+  --nav-indent: 32px;
+}
+#experiment-pages {
+  --nav-indent: 48px;
 }
 .page-group-pages[hidden] {
   display: none;
@@ -702,10 +724,24 @@ button.sidebar-settings-toggle {
 .chat-page-heading .page-tab-label {
   padding-right: 28px;
 }
-.page-tab :is([aria-selected="true"], [data-active="true"]) .page-tab-label,
-.sidebar-settings-heading[data-active="true"] .page-tab-label {
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
+.sidebar [data-nav-active="true"] {
+  position: relative;
+  --control-fill: var(--accent-bg);
+  background: var(--accent-bg);
+  color: var(--text);
+}
+.sidebar [data-nav-active="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-bottom: 2px solid var(--primary);
+  pointer-events: none;
+  z-index: 1;
+}
+@media (forced-colors: active) {
+  .sidebar [data-nav-active="true"]::after {
+    border-bottom-color: Highlight;
+  }
 }
 
 /* Unframed main content alongside the navigation. */
@@ -910,7 +946,7 @@ button.sidebar-settings-toggle {
   min-height: 0;
   overflow: auto;
   /* Padding, not a narrower box, centers the content so the scrollbar stays at the page edge. */
-  margin-block: var(--page-padding);
+  margin-block: 0 var(--page-padding);
   padding: 0 max(var(--page-padding), calc((100% - 640px) / 2));
 }
 .settings-page-heading {
@@ -924,6 +960,11 @@ button.sidebar-settings-toggle {
 }
 .settings-page-heading h1,
 .orchestration-chat-heading h1,
+.worker-chat-title,
+.chat-empty h2,
+.contributor-tools h1,
+.memory-heading h2,
+.workspace-heading h1,
 .modal-heading h2 {
   margin: 0;
   font-family: var(--title-font, var(--font));
@@ -934,6 +975,28 @@ button.sidebar-settings-toggle {
   text-transform: var(--title-case, none);
   line-height: 1.25;
   font-synthesis: none;
+}
+.settings-page-heading h1,
+.orchestration-chat-heading h1,
+.worker-chat-title,
+.chat-empty h2,
+.contributor-tools h1,
+.memory-heading h2,
+.workspace-heading h1,
+.table-title,
+.files-title h2 {
+  opacity: 0.65;
+}
+.settings-page-heading h1:where(:hover),
+.orchestration-chat-heading h1:where(:hover),
+.worker-chat-title:where(:hover),
+.chat-empty h2:where(:hover),
+.contributor-tools h1:where(:hover),
+.memory-heading h2:where(:hover),
+.workspace-heading h1:where(:hover),
+.table-title:where(:hover),
+.files-title h2:where(:hover) {
+  opacity: 1;
 }
 .settings-row {
   display: flex;
@@ -1174,7 +1237,9 @@ button.sidebar-settings-toggle {
 .event.prompt:where(:not(.automatic)) pre {
   padding: 12px 18px;
   border-radius: 0;
-  background: var(--user-bubble);
+  border: 1px solid var(--user-bubble);
+  box-shadow: 1px 1px 1px var(--border);
+  background: transparent;
   color: var(--on-user-bubble);
 }
 .event.toolCall {
@@ -1432,6 +1497,13 @@ button.sidebar-settings-toggle {
 .picker-dialog {
   width: min(520px, calc(100vw - 32px));
 }
+.project-dialog {
+  height: min(600px, calc(100dvh - 32px));
+}
+.project-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
 .changes-dialog {
   width: min(960px, 92vw);
 }
@@ -1479,6 +1551,13 @@ button.sidebar-settings-toggle {
   ) {
   background: var(--hover-bg);
 }
+:where(.project-dialog) .modal-heading > button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: -8px -16px 0 0;
+  --icon-size: 18px;
+}
 .agent-setup-dialog .modal-heading {
   margin-bottom: 0;
 }
@@ -1502,6 +1581,9 @@ button.sidebar-settings-toggle {
   padding: 10px 16px;
   border-top: 1px solid transparent;
   background: var(--surface);
+}
+.project-dialog > .modal-footer {
+  margin-top: auto;
 }
 .footer-start {
   margin-right: auto;
@@ -1650,10 +1732,25 @@ label.check-label {
   max-height: 50vh;
   overflow: auto;
 }
+.project-dialog .project-list {
+  margin: 0 -16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.project-remove {
+  font-size: 10px;
+  opacity: 0.5;
+  transition: opacity 120ms ease;
+}
+.project-remove:hover,
+.project-remove:focus-visible {
+  opacity: 1;
+}
 .project-row {
   display: flex;
   gap: 0;
-  margin-bottom: -1px;
+  margin-bottom: 0;
 }
 .project-item {
   flex: 1;
@@ -1843,6 +1940,9 @@ dialog::backdrop {
 }
 .project-row > button + button {
   border-left: 0;
+}
+.project-dialog .project-row > button {
+  border: 0;
 }
 .button-group
   > button:hover:not(
@@ -2264,6 +2364,7 @@ dialog::backdrop {
   background: var(--surface);
 }
 .table-controls {
+  padding-top: 0;
   gap: 8px 16px;
   flex-shrink: 0;
   margin-bottom: var(--space-1);
@@ -2606,10 +2707,6 @@ dialog::backdrop {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px 24px;
-}
-.workspace-heading h1 {
-  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
-  text-transform: var(--title-case, none);
 }
 .workspace-heading span {
   overflow-wrap: anywhere;
@@ -2999,8 +3096,10 @@ dialog::backdrop {
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  min-height: 28px;
-  padding: 5px 8px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 4px 8px 4px calc(26px + var(--nav-indent));
   margin: 0;
   border: 0;
   text-align: left;
@@ -3032,7 +3131,7 @@ dialog::backdrop {
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 0 20px 16px;
   margin-bottom: var(--space-1);
 }
 .orchestration-chat-status {
@@ -3091,8 +3190,6 @@ dialog::backdrop {
   color: var(--muted);
 }
 .chat-empty h2 {
-  font-size: var(--title-size, 20px);
-  font-weight: 400;
   margin: 0;
 }
 .orchestration-chat-body .chat-activity {
@@ -3248,7 +3345,7 @@ dialog::backdrop {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 16px var(--page-padding);
+  padding: 0 var(--page-padding) 16px;
   margin-bottom: var(--space-1);
 }
 .memory-heading h2 {
@@ -3509,9 +3606,10 @@ button.file-open-link {
 }
 .chat-unread > span {
   min-width: 1.5em;
-  padding: 1px 4px;
+  padding: 0 4px;
   border-radius: 0;
-  background: var(--accent-bg);
+  background: var(--primary);
+  color: var(--primary-text);
   text-align: center;
 }
 .app-version {
@@ -3835,6 +3933,10 @@ button.file-open-link {
     color: Highlight;
   }
 }
+.sidebar .sidebar-settings-heading:hover,
+.sidebar .sidebar-settings-heading:hover .page-tab [role="tab"] {
+  background: var(--hover-bg);
+}
 
 /* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */
 :root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle),
@@ -3993,8 +4095,6 @@ button.file-open-link {
   align-items: center;
   gap: 8px;
   margin: 0 auto 0 0;
-  font-size: var(--title-size, 18px);
-  font-weight: 400;
   overflow-wrap: anywhere;
 }
 .chat-role-icon {
@@ -4054,6 +4154,16 @@ button.file-open-link {
   align-items: center;
   min-width: 0;
 }
+.chat-sidebar-row > .icon-button {
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  align-self: stretch;
+}
+#chat-pages .chat-sidebar-row:hover > .chat-sidebar-entry[data-role="orchestrator"],
+#chat-pages .chat-sidebar-row:hover > .icon-button[aria-haspopup="menu"] {
+  background: var(--hover-bg);
+}
 #chat-pages .chat-sidebar-entry > .chat-sidebar-label {
   display: block;
   min-width: 0;
@@ -4074,11 +4184,11 @@ button.file-open-link {
 }
 .chat-workers-toggle {
   width: 24px;
-  min-height: 28px;
+  min-height: 30px;
   padding: 4px;
 }
 .chat-worker-children {
-  padding-left: 16px;
+  --nav-indent: 32px;
 }
 .chat-worker-children[hidden] {
   display: none;
@@ -4703,7 +4813,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: var(--chat-neutral);
+  background: transparent;
   box-shadow: none;
   cursor: col-resize;
   touch-action: none;

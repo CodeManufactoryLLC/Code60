@@ -135,7 +135,7 @@ export function ChatSidebar({
     const expanded = !collapsed.has(entry.id);
     return (
       <div className="chat-sidebar-group" key={entry.id} data-conversation-id={entry.id}>
-        <div className="chat-sidebar-row">
+        <div className="chat-sidebar-row" data-nav-active={open && entry.id === selectedId}>
           <button
             type="button"
             id={`conversation-${entry.id}`}
@@ -143,7 +143,7 @@ export function ChatSidebar({
             data-role={entry.role}
             aria-label={entry.label}
             aria-description={description}
-            aria-current={entry.id === selectedId ? "true" : undefined}
+            aria-current={open && entry.id === selectedId ? "true" : undefined}
             disabled={pending}
             onClick={() => onSelect(entry.id)}
             onContextMenu={(event) => {

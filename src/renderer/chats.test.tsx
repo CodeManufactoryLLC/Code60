@@ -32,6 +32,30 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it.each([true, false])("marks only the opened conversation current (Chat open: %s)", (open) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    for (const selectedId of ["a", "one", "manual"]) {
+      const html = renderToStaticMarkup(
+        <ChatSidebar
+          chats={[chat("a", ["one"])]}
+          runs={[run("one"), run("manual")]}
+          navigationSerial={undefined}
+          selectedId={selectedId}
+          database="/db"
+          eventsByRun={{}}
+          open={open}
+          pending={false}
+          onSelect={() => {}}
+        />,
+      );
+      expect(html.match(/aria-current="true"/g) ?? []).toHaveLength(open ? 1 : 0);
+      expect(html.match(/data-nav-active="true"/g) ?? []).toHaveLength(open ? 1 : 0);
+      const selected = html.match(
+        new RegExp(`<button[^>]*id="conversation-${selectedId}"[^>]*>`),
+      )?.[0];
+      expect(selected?.includes('aria-current="true"')).toBe(open);
+    }
+  });
   it("uses titles and hides archived chats without hiding their recorded workers", () => {
     const archived = { ...chat("a", ["one"]), title: "Old work", archived: true };
     expect(conversations([archived, { ...chat("b"), title: "Fix parser" }], [run("one")])).toEqual([
