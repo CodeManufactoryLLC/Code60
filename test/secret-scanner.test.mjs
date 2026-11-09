@@ -3,7 +3,14 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ARCHIVES, safeFindings, scan, VERSION, verifyArchive } from "../scripts/scan-secrets.mjs";
+import {
+  ARCHIVES,
+  downloadArchive,
+  safeFindings,
+  scan,
+  VERSION,
+  verifyArchive,
+} from "../scripts/scan-secrets.mjs";
 
 let directory;
 beforeEach(async () => {
@@ -24,6 +31,36 @@ describe("pinned secret scanner", () => {
     const digest = createHash("sha256").update(bytes).digest("hex");
     expect(() => verifyArchive(bytes, digest)).not.toThrow();
     expect(() => verifyArchive(Buffer.from("tampered"), digest)).toThrow(/checksum mismatch/);
+  });
+
+  it("retries a server failure once through the same official asset and verifies its checksum", async () => {
+    const bytes = Buffer.from("synthetic archive");
+    const asset = ["linux_x64.tar.gz", createHash("sha256").update(bytes).digest("hex")];
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 504 }))
+      .mockResolvedValueOnce(new Response(bytes));
+    expect(await downloadArchive(asset, request)).toEqual(bytes);
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz`,
+      `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz?download=1`,
+    ]);
+    for (const [, options] of request.mock.calls)
+      expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
+  it("never accepts changed bytes or retries indefinitely or on missing assets", async () => {
+    const asset = ["linux_x64.tar.gz", createHash("sha256").update("expected").digest("hex")];
+    const tampered = vi.fn().mockResolvedValue(new Response("changed"));
+    await expect(downloadArchive(asset, tampered)).rejects.toThrow("checksum mismatch");
+    expect(tampered).toHaveBeenCalledTimes(1);
+    for (const [status, count] of [
+      [404, 1],
+      [504, 2],
+    ]) {
+      const failed = vi.fn(async () => new Response("unavailable", { status }));
+      await expect(downloadArchive(asset, failed)).rejects.toThrow(`HTTP ${status}`);
+      expect(failed).toHaveBeenCalledTimes(count);
+    }
   });
 
   it("scans all history and current files without inline or fingerprint bypasses", async () => {
