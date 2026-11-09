@@ -5,11 +5,14 @@ import { diagnosticMessage } from "../platform/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
+import type { PlanStore } from "./plans.js";
 
 const message = diagnosticMessage;
 
 /** A worker run dispatched by the orchestration chat. Ownership is held only in memory. */
 export interface Worker {
+  planId?: string;
+  planTaskId?: string;
   /** The chat generation that dispatched it; only that chat may control it. */
   generation: number;
   directory: string;
@@ -25,6 +28,8 @@ const UPDATE_BATCH = 20;
 
 /** All mutable state and capabilities belong to one orchestration conversation. */
 export class ChatSession {
+  plans: PlanStore | undefined;
+  planScope: string | undefined;
   reviewTask: { title: string; turn: number; reviewId?: string } | undefined;
   revoked = false;
   chat: Orchestrator | undefined;

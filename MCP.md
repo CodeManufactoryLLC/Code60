@@ -156,3 +156,29 @@ This display metadata does not grant permission or prove that a server connected
 or a task succeeded. Only the marker and server name are added to typed events,
 not server definitions. Raw ACP events retain the provider's original payload
 under the existing transcript rules.
+
+## Orchestrator plans
+
+The desktop orchestrator can use `code60_create_plan` to save an optional task list.
+Its tab opens in Chat's right panel. Ask for revisions in chat, then select **Accept**
+to start the displayed revision. The progress bar and **X out of Y** count above the
+document give each task equal weight; only completed tasks count. They are not part
+of the saved Markdown.
+
+Documents live in `plans/<id>.md` under the conversation's private working directory
+beside the connected database. Code60 owns these files and their private sidecar records;
+use chat for revisions rather than editing the files externally. Closing a tab does not
+delete its plan: reopen it from the plan link in the conversation.
+
+`code60_read_plan` returns the latest revision. `code60_update_plan` revises a draft
+or reports task progress with an evidence note after acceptance. These tools are limited
+to their owning conversation and cannot accept plans. Drafts block that conversation's
+new worker work until accepted or dismissed. During execution, `planTaskId` associates
+worker dispatch and follow-ups with an unfinished task. Existing ownership, Git readiness,
+parallelism, and review rules still apply.
+
+Stop pauses plan continuation; running workers retain their own stop controls. A blocked
+task or failed worker leaves tasks unchecked and requires **Resume plan** after inspecting
+previous work. Resuming a plan may continue existing work, so inspect any delivery error
+before retrying. Project changes pause accepted plans. Restarting or replacing a conversation
+retains its documents on disk but never restores execution authority or resumes work.

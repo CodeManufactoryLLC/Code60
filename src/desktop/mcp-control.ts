@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MCP_CONTROL_LIMITS, type McpControlTool } from "../bridge/index.js";
+import {
+  MCP_CONTROL_LIMITS,
+  type McpControlTool,
+  planCreateSchema,
+  planUpdateSchema,
+} from "../bridge/index.js";
 import type { RunEvent, RunStatus, StopReason } from "../core/index.js";
 
 const TEXT_LIMIT = 8_000;
@@ -21,6 +26,9 @@ const name = z
 const target = z.strictObject({ scope, runId });
 
 const controlSchemas = {
+  code60_create_plan: planCreateSchema,
+  code60_read_plan: z.strictObject({ planId: z.string().uuid() }),
+  code60_update_plan: planUpdateSchema,
   code60_read_review: z.strictObject({ reviewId: z.string().uuid() }),
   code60_address_feedback: z.strictObject({
     scope,
@@ -30,6 +38,7 @@ const controlSchemas = {
   }),
   code60_get_context: z.strictObject({}),
   code60_dispatch_agent: z.strictObject({
+    planTaskId: z.string().uuid().optional(),
     reviewId: z.string().uuid().optional(),
     label: name.optional(),
     scope,
@@ -51,11 +60,21 @@ const controlSchemas = {
     limit: z.number().int().min(1).max(MCP_CONTROL_LIMITS.readLimit).optional(),
     tail: z.boolean().optional(),
   }),
-  code60_send_agent: z.strictObject({ scope, runId, prompt }),
+  code60_send_agent: z.strictObject({
+    scope,
+    runId,
+    prompt,
+    planTaskId: z.string().uuid().optional(),
+  }),
   code60_cancel_agent: target,
   code60_finish_agent: target,
   code60_stop_agent: target,
-  code60_resume_agent: z.strictObject({ scope, runId, prompt }),
+  code60_resume_agent: z.strictObject({
+    scope,
+    runId,
+    prompt,
+    planTaskId: z.string().uuid().optional(),
+  }),
 } satisfies Record<McpControlTool, z.ZodType>;
 
 export type ControlArgs<T extends McpControlTool> = z.output<(typeof controlSchemas)[T]>;

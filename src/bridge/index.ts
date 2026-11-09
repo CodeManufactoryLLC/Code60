@@ -1,3 +1,5 @@
+export * from "./plans.js";
+
 import { modeChangeSchema } from "../contracts/index.js";
 import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from "./agent-setup.js";
 
@@ -264,6 +266,8 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  readPlan(request: import("./plans.js").PlanRead): Promise<import("./plans.js").Plan>;
+  planAction(request: import("./plans.js").PlanAction): Promise<void>;
   checkGit(
     request: import("./git-setup.js").GitProject,
   ): Promise<import("./git-setup.js").GitReadiness>;
@@ -375,6 +379,7 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  plans?: import("./plans.js").PlanSummary[];
   /** Ephemeral live presentation, never reconstructed from transcript history. */
   activity?: ActivitySnapshot;
   /** Current-project workers owned by this conversation, never inferred from process liveness. */

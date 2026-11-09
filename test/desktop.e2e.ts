@@ -2827,7 +2827,7 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(
       panel.getByRole("heading", { name: "MCP tool descriptions", exact: true }),
     ).toBeVisible();
-    await expect(panel.locator(".prompt-editor-mcp-tool")).toHaveCount(25);
+    await expect(panel.locator(".prompt-editor-mcp-tool")).toHaveCount(28);
     await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_read_review");
     await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_address_feedback");
     await expect(panel.locator(".prompt-editor-mcp")).toContainText("never accept SQL");
@@ -6234,6 +6234,121 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     expect(await transcript.evaluate((element) => element.scrollTop)).toBe(0);
   } finally {
     await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: accepted plans show task progress outside their Markdown document", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-planning-"));
+  const repo = join(directory, "repo");
+  const config = join(directory, "config", "code60");
+  await mkdir(config, { recursive: true });
+  await mkdir(repo);
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  commitFixture(repo);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      defaultAgent: "claude",
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--plan"],
+        },
+      },
+    }),
+  );
+  try {
+    application = await launch(directory, repo, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    await composer.fill("Plan a change");
+    await composer.press("Enter");
+    const panel = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(
+      page.getByRole("tab", { name: "Plan · Planned change", exact: true }),
+    ).toBeVisible();
+    await expect(panel.getByRole("progressbar", { name: "Tasks completed" })).toHaveAttribute(
+      "value",
+      "0",
+    );
+    await expect(panel.getByText("0 out of 2", { exact: true })).toBeVisible();
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    await expect(composer).toBeEnabled();
+    const originalChat = (await page.evaluate(() => window.desktop.snapshot())).chat.run
+      ?.id as string;
+    await page.getByRole("tab", { name: "Plan · Planned change", exact: true }).focus();
+    await page.keyboard.press("Delete");
+    await page.evaluate(() => window.desktop.orchestrationChatAction({ type: "new" }));
+    const backgroundChat = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await page.evaluate(
+      (id) => window.desktop.orchestrationChatAction({ type: "send", id, text: "Revise the plan" }),
+      originalChat,
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          async (id) =>
+            (await window.desktop.snapshot()).chats.find((chat) => chat.run?.id === id)?.plans?.[0]
+              ?.proposalRevision,
+          originalChat,
+        ),
+      )
+      .toBe(2);
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(
+      backgroundChat,
+    );
+    await expect(page.getByRole("tab", { name: "Plan · Revised change", exact: true })).toHaveCount(
+      0,
+    );
+    await page.evaluate(
+      (id) => window.desktop.orchestrationChatAction({ type: "select", id }),
+      originalChat,
+    );
+    await expect(
+      page.getByRole("tab", { name: "Plan · Revised change", exact: true }),
+    ).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Revised change" })).toBeVisible();
+    await panel.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByRole("progressbar")).toHaveAttribute("value", "2");
+    await expect(panel.getByRole("progressbar")).toHaveAttribute("max", "2");
+    await expect(panel.locator(".plan-document input:checked")).toHaveCount(2);
+    await expect(panel.locator(".plan-document")).not.toContainText("out of");
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    const plan = snapshot.chat.plans?.[0];
+    expect(plan?.state).toBe("completed");
+    const markdown = await readFile(
+      join(snapshot.chat.directory as string, "plans", `${plan?.id}.md`),
+      "utf8",
+    );
+    expect(markdown).toContain("- [x] Create result");
+    expect(markdown).toContain("- [x] Verify result");
+    expect(markdown).not.toContain("out of");
+    await page.screenshot({ path: "test-results/orchestrator-plan.png" });
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "dark";
+    });
+    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "test-results/orchestrator-plan-dark.png" });
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(panel.getByRole("progressbar")).toBeVisible();
+    await page.emulateMedia({ forcedColors: "none" });
+    await page.getByRole("tab", { name: "Plan · Revised change", exact: true }).focus();
+    await page.keyboard.press("Delete");
+    await expect(panel).toHaveCount(0);
+    await page
+      .locator(".chat-plans")
+      .getByRole("button", { name: "Plan · Revised change", exact: true })
+      .click();
+    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+  } finally {
+    await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
   }
 });

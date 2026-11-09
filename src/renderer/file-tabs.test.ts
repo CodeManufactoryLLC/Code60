@@ -102,3 +102,16 @@ it("keeps project and immutable worker versions distinct even with the same rela
   expect(state.entries).toHaveLength(4);
   expect(state.active).toBe(2);
 });
+
+it("deduplicates plan tabs by identity and keeps their revised titles", () => {
+  let state = updateFileTabs(emptyFileTabs("project"), {
+    type: "plan",
+    planId: "plan",
+    title: "First",
+  });
+  state = updateFileTabs(state, { type: "file", path: "README.md" });
+  state = updateFileTabs(state, { type: "plan", planId: "plan", title: "Revised" });
+  expect(state.entries).toHaveLength(2);
+  expect(state.entries[0]).toMatchObject({ kind: "plan", title: "Revised" });
+  expect(state.active).toBe(state.entries[0]?.id);
+});

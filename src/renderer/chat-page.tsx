@@ -4,6 +4,7 @@ import type {
   DesktopRun,
   OrchestrationChat,
   OrchestrationChatAction,
+  PlanSummary,
   ReviewSummary,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
@@ -80,6 +81,8 @@ export function ChatPage({
   onDatabase,
   runs,
   reviews = [],
+  plans = [],
+  onPlan,
   onReview,
 }: {
   api: DesktopApi;
@@ -91,6 +94,8 @@ export function ChatPage({
   onDatabase(): void;
   runs: readonly DesktopRun[];
   reviews?: ReviewSummary[];
+  plans?: PlanSummary[];
+  onPlan?: (id: string) => void;
   onReview?(id: string, updates?: boolean): void;
 }) {
   const id = useId();
@@ -317,6 +322,15 @@ export function ChatPage({
           Chat
         </h1>
         <div className="orchestration-chat-status">
+          {plans.length > 0 && (
+            <nav className="chat-plans" aria-label="Plans">
+              {plans.map((plan) => (
+                <button type="button" key={plan.id} onClick={() => onPlan?.(plan.id)}>
+                  Plan · {plan.title}
+                </button>
+              ))}
+            </nav>
+          )}
           {reviews.length > 0 && (
             <details className="chat-reviews">
               <summary>Changes</summary>

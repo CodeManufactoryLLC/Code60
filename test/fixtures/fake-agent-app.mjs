@@ -7,10 +7,11 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
+  let planId;
   const tool = async (name, args = {}) => {
     const response = await fetch(gateway.CODE60_MCP_GATEWAY_URL, {
       method: "POST",
@@ -101,6 +102,69 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (options.planWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split("--- User request ---\n").at(-1);
+        if (request === "Plan a change") {
+          const plan = await tool("code60_create_plan", {
+            requestId: "fixture-plan",
+            title: "Planned change",
+            description: "Create and verify a file.",
+            tasks: [{ text: "Create result" }, { text: "Verify result" }],
+          });
+          planId = plan.id;
+          steps = [{ message: "Plan ready for acceptance." }];
+        } else if (request === "Revise the plan") {
+          const plan = await tool("code60_read_plan", { planId });
+          await tool("code60_update_plan", {
+            operation: "revise",
+            planId,
+            revision: plan.revision,
+            draft: {
+              title: "Revised change",
+              description: "Create and verify the revised result.",
+              tasks: plan.tasks.map(({ id, text }) => ({ id, text })),
+            },
+          });
+          steps = [{ message: "Plan revised." }];
+        } else if (text.includes("Code60: the user accepted plan")) {
+          const plan = await tool("code60_read_plan", { planId });
+          const { scope } = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope,
+            requestId: "planned-worker",
+            planTaskId: plan.tasks[0].id,
+            prompt: JSON.stringify([
+              { write: { path: "result.txt", content: "planned result\n" } },
+              { message: "Created and verified result.txt" },
+            ]),
+          });
+          steps = [{ message: "Executing the accepted plan." }];
+        } else if (planId && text.includes("Code60 generated this message automatically")) {
+          let plan = await tool("code60_read_plan", { planId });
+          const { workers } = await tool("code60_list_agents");
+          const worker = workers.find((worker) => worker.status === "idle");
+          if (worker && plan.state === "running") {
+            const result = await tool("code60_read_agent", { runId: worker.runId });
+            if (!JSON.stringify(result).includes("Created and verified result.txt"))
+              throw new Error("Worker result missing");
+            for (const task of plan.tasks) {
+              plan = await tool("code60_update_plan", {
+                operation: "progress",
+                planId,
+                revision: plan.revision,
+                taskId: task.id,
+                state: "completed",
+                note: "Inspected worker result: created and verified result.txt",
+                workerIds: [worker.runId],
+              });
+              await sleep(200);
+            }
+            const { scope } = await tool("code60_get_context");
+            await tool("code60_finish_agent", { scope, runId: worker.runId });
+          }
+          steps = [{ message: "Plan complete." }];
+        }
+      }
       if (options.reviewWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
         if (request === "Implement validation") {

@@ -29,6 +29,8 @@ import {
   parseMemoryRequestId,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
+  parsePlanAction,
+  parsePlanRead,
   parsePollKeys,
   parsePollSettings,
   parsePollVisibility,
@@ -436,6 +438,8 @@ async function ready(): Promise<void> {
   handle("desktop:git-commit", (value) => controller.commitGitSetup(parseGitSetupCommit(value)));
   handle("desktop:git-cancel", (value) => controller.cancelGitSetup(parseGitProject(value)));
   handle("desktop:diff-read", (value) => controller.readDiff(parseDiffRequest(value)));
+  handle("desktop:plan-read", (value) => controller.readPlan(parsePlanRead(value)));
+  handle("desktop:plan-action", (value) => controller.planAction(parsePlanAction(value)));
   handle("desktop:review-action", (value) => controller.reviewAction(parseReviewAction(value)));
   handle("desktop:review-read", (value) => controller.readReview(parseReviewRead(value)));
   handle("desktop:review-capture", (value) => controller.captureReview(parseReviewRead(value)));

@@ -48,6 +48,9 @@ import {
   isMcpControlTool,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
+  type Plan,
+  type PlanAction,
+  type PlanRead,
   parseActivityContextArgs,
   parseDiffIdentity,
   parseDiffRequest,
@@ -60,6 +63,8 @@ import {
   parseMemoryRequestId,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
+  parsePlanAction,
+  parsePlanRead,
   parsePollKeys,
   parsePollSettings,
   parsePollVisibility,
@@ -72,6 +77,7 @@ import {
   parseSavePromptTemplate,
   parseSearchSummary,
   parseSearchSummaryRequestId,
+  planMarkdown,
   type Review,
   type ReviewAction,
   type ReviewContent,
@@ -134,6 +140,7 @@ import {
 } from "./mcp-control.js";
 import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
+import { PlanStore } from "./plans.js";
 import { Poller } from "./poller.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
@@ -269,7 +276,8 @@ export class DesktopController {
   private chatKey = "";
   private readonly conversations = new ConversationCoordinator({
     hasPendingFeedback: (session) =>
-      this.reviews
+      (!!session.plans?.active() && session.plans.active()?.state !== "running") ||
+      (this.reviews
         ?.list()
         .some(
           (review) =>
@@ -277,7 +285,8 @@ export class DesktopController {
             review.submissions.some(
               (batch) => batch.state === "pending" || batch.state === "delivering",
             ),
-        ) ?? false,
+        ) ??
+        false),
     directory: () => this.workspace?.dir,
     view: (id) => this.liveView(id),
     closing: () => this.closing,
@@ -440,6 +449,185 @@ export class DesktopController {
   }
   private feedbackScheduled = false;
   private feedbackChanged = false;
+  private planDeliveryScheduled = false;
+  private planDeliveryChanged = false;
+
+  private async plans(session: ChatSession): Promise<PlanStore> {
+    this.conversations.assertCurrent(session);
+    const id = session.chat?.runs()[0]?.id;
+    if (!id || !session.chatDirectory) throw new Error("No orchestration session is available");
+    session.plans ??= await PlanStore.open(session.chatDirectory, id);
+    return session.plans;
+  }
+
+  readPlan(value: PlanRead): Promise<Plan> {
+    const request = parsePlanRead(value);
+    return this.exclusive(async () => {
+      const session = this.conversations.sessions.find(
+        (item) => item.chat?.runs()[0]?.id === request.chatId,
+      );
+      if (!session) throw new Error("This plan conversation is no longer available");
+      return (await this.plans(session)).get(request.planId);
+    });
+  }
+
+  planAction(value: PlanAction): Promise<void> {
+    const request = parsePlanAction(value);
+    return this.exclusive(async () => {
+      const session = this.conversations.sessions.find(
+        (item) => item.chat?.runs()[0]?.id === request.chatId,
+      );
+      if (!session) throw new Error("This plan conversation is no longer available");
+      const store = await this.plans(session);
+      const plan = store.get(request.planId);
+      if (request.type === "accept" && plan.acceptedRevision === request.revision) return;
+      if (request.type !== "dismiss") {
+        if (plan.project !== (this.workspace?.dir ?? null))
+          throw new Error("Open this plan's project before continuing");
+        const run = session.chat?.runs()[0];
+        if (!run || !ACTIVE_STATUSES.has(run.status) || run.stopping)
+          throw new Error("This plan's conversation has ended");
+      }
+      await store.action(request);
+      if (request.type !== "dismiss") {
+        session.planScope = session.workerScope;
+        this.conversations.resume(session);
+        this.schedulePlans();
+      } else {
+        this.conversations.scheduleUpdates();
+        this.scheduleFeedback();
+      }
+      this.changed();
+    });
+  }
+
+  private assertPlanWork(session: ChatSession): void {
+    const plan = session.plans?.active();
+    if (!plan) return;
+    if (plan.state !== "running")
+      throw new Error("Accept or resume the plan before starting worker work");
+    if (
+      session.updatesPaused ||
+      session.planScope !== session.workerScope ||
+      plan.project !== (this.workspace?.dir ?? null)
+    )
+      throw new Error("Plan execution is paused or its project changed");
+  }
+
+  private planTask(session: ChatSession, requested?: string, workerId?: string) {
+    this.assertPlanWork(session);
+    const plan = session.plans?.active();
+    if (!plan) {
+      if (requested) throw new Error("No accepted plan is active");
+      return undefined;
+    }
+    const worker = workerId ? this.conversations.workers.get(workerId) : undefined;
+    const id = requested ?? (worker?.planId === plan.id ? worker.planTaskId : undefined);
+    const task = plan.tasks.find((task) => task.id === id && task.state !== "completed");
+    if (!task) throw new Error("Supply planTaskId for an unfinished task in the accepted plan");
+    return { planId: plan.id, planTaskId: task.id };
+  }
+
+  private async associatePlanWorker(
+    session: ChatSession,
+    runId: string,
+    assignment: { planId: string; planTaskId: string } | undefined,
+  ) {
+    if (!assignment) return;
+    const worker = this.conversations.workers.get(runId);
+    if (worker) Object.assign(worker, assignment);
+    try {
+      await session.plans?.mutate(assignment.planId, (plan) => {
+        const task = plan.tasks.find((task) => task.id === assignment.planTaskId);
+        if (task && !task.workerIds.includes(runId)) task.workerIds.push(runId);
+      });
+    } catch (cause) {
+      this.warnings.push(
+        `Worker started but plan association could not be saved: ${message(cause)}. Inspect the worker before retrying.`,
+      );
+    }
+    this.changed();
+  }
+
+  private async pausePlan(session: ChatSession, reason: string): Promise<void> {
+    const plan = session.plans?.active();
+    if (!plan || !["queued", "running"].includes(plan.state)) return;
+    await session.plans?.mutate(plan.id, (current) => {
+      current.state = "paused";
+      current.error = reason;
+    });
+  }
+
+  private schedulePlans(): void {
+    if (this.closing) return;
+    if (this.planDeliveryScheduled) {
+      this.planDeliveryChanged = true;
+      return;
+    }
+    this.planDeliveryScheduled = true;
+    void this.exclusive(async () => {
+      for (const session of this.conversations.sessions) {
+        const store = session.plans;
+        const plan = store?.active();
+        if (!store || !plan || plan.state !== "queued" || session.revoked || session.updatesPaused)
+          continue;
+        if (
+          session.planScope !== session.workerScope ||
+          plan.project !== (this.workspace?.dir ?? null)
+        ) {
+          await this.pausePlan(session, "Project changed. Inspect previous work before resuming.");
+          continue;
+        }
+        const run = session.chat?.runs()[0];
+        if (
+          run &&
+          (["queued", "running", "waiting"].includes(run.status) ||
+            run.stopping ||
+            run.modeChanging)
+        )
+          continue;
+        let deliveryAttempted = false;
+        try {
+          if (run?.status !== "idle") throw new Error("The plan conversation is unavailable");
+          // Persist before dispatch. A crash cannot replay this message on reopening.
+          await store.mutate(plan.id, (current) => {
+            current.state = "running";
+            delete current.error;
+          });
+          deliveryAttempted = true;
+          this.conversations.send(
+            session,
+            `Code60: the user accepted plan ${plan.id}. Read it with code60_read_plan, inspect any previous work, and execute the remaining tasks. Report each task's progress with evidence and responsible workerIds. Do not repeat completed work.`,
+            "automatic",
+          );
+        } catch (cause) {
+          this.conversations.pause(session);
+          session.planScope = undefined;
+          await store.mutate(plan.id, (current) => {
+            current.state = "failed";
+            current.error =
+              `${deliveryAttempted ? "Delivery may have completed. Inspect the conversation before resuming. " : ""}${message(cause)}`.slice(
+                0,
+                2_000,
+              );
+          });
+        }
+      }
+      this.changed();
+    })
+      .catch((cause: unknown) => {
+        this.warnings.push(`Could not deliver plan: ${message(cause)}`);
+        this.changed();
+      })
+      .finally(() => {
+        this.planDeliveryScheduled = false;
+        if (this.planDeliveryChanged) {
+          this.planDeliveryChanged = false;
+          this.schedulePlans();
+        }
+      });
+  }
+
   private reviewCaptures = new Map<string, boolean>();
 
   private reviewStore(project: string): ReviewStore {
@@ -1491,11 +1679,27 @@ export class DesktopController {
       session.chatDisposers = [
         chat.onEvent((event) => {
           session.activity.event(event);
+          if (
+            session.plans?.active() &&
+            ((event.type === "status" &&
+              ["failed", "timed_out", "cancelled", "interrupted"].includes(event.status)) ||
+              (event.type === "turnEnd" && event.stopReason !== "end_turn"))
+          ) {
+            this.conversations.pause(session);
+            void this.exclusive(async () => {
+              await this.pausePlan(session, "The plan conversation stopped or failed.");
+              this.changed();
+            }).catch((cause: unknown) => {
+              session.chatError = message(cause);
+              this.changed();
+            });
+          }
           this.changed();
           const entry = { revision: this.revision, event };
           session.chatEvents.push(entry);
           session.chatPending.push(entry);
           if (event.type === "status" && event.status === "idle") {
+            this.schedulePlans();
             this.scheduleFeedback();
             this.conversations.scheduleUpdates();
           }
@@ -1543,6 +1747,7 @@ export class DesktopController {
         this.conversations.current = session;
       } else if (request.type === "resume-updates") {
         this.conversations.resume(session);
+        this.schedulePlans();
         this.scheduleFeedback();
       } else if (request.type === "restart") {
         if (!this.database) throw new Error("Connect to a database first");
@@ -1556,8 +1761,10 @@ export class DesktopController {
       } else if (request.type === "cancel") {
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
         this.conversations.pause(session);
+        await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
       } else {
         this.conversations.pause(session);
+        await this.pausePlan(session, "Conversation stopped.");
         await session.chat.shutdown();
       }
       this.changed();
@@ -1593,6 +1800,7 @@ export class DesktopController {
     );
     const session = this.conversations.current;
     const chatSnapshot = (session: ChatSession) => ({
+      plans: session.plans?.list() ?? [],
       workers: [...this.conversations.workers]
         .filter(
           ([, worker]) =>
@@ -1913,6 +2121,8 @@ export class DesktopController {
     this.detach();
     this.workspace = undefined;
     this.conversations.rotateScopes();
+    for (const session of this.conversations.sessions)
+      await this.pausePlan(session, "Project changed. Inspect previous work before resuming.");
     this.worktrees = null;
     this.fileContext = null;
     this.files = null;
@@ -2043,6 +2253,29 @@ export class DesktopController {
     const entry = { revision: this.revision, event };
     this.events.push(entry);
     this.pending.push(entry);
+    if (
+      (event.type === "status" &&
+        ["failed", "timed_out", "cancelled", "interrupted"].includes(event.status)) ||
+      (event.type === "turnEnd" && event.stopReason !== "end_turn")
+    ) {
+      const worker = this.conversations.workers.get(event.runId);
+      const session = this.conversations.sessions.find(
+        (item) => item.chatGeneration === worker?.generation,
+      );
+      if (session && worker?.planId === session.plans?.active()?.id && worker?.planId) {
+        this.conversations.pause(session);
+        void this.exclusive(async () => {
+          await this.pausePlan(
+            session,
+            "A plan worker stopped or failed. Inspect its result before resuming.",
+          );
+          this.changed();
+        }).catch((cause: unknown) => {
+          session.chatError = message(cause);
+          this.changed();
+        });
+      }
+    }
     this.conversations.trackWorker(event);
     if (
       event.type === "turnEnd" ||
@@ -2549,6 +2782,39 @@ export class DesktopController {
 
   private controlTool(name: McpControlTool, args: unknown, session: ChatSession): Promise<unknown> {
     switch (name) {
+      case "code60_create_plan": {
+        const request = parseControlArgs(name, args);
+        return this.chatExclusive(session, async () => {
+          const plan = await (await this.plans(session)).create(
+            request,
+            this.workspace?.dir ?? null,
+          );
+          this.changed();
+          return { ...plan, markdown: planMarkdown(plan) };
+        });
+      }
+      case "code60_read_plan": {
+        const request = parseControlArgs(name, args);
+        return this.chatExclusive(session, async () => {
+          const plan = (await this.plans(session)).get(request.planId);
+          return { ...plan, markdown: planMarkdown(plan) };
+        });
+      }
+      case "code60_update_plan": {
+        const request = parseControlArgs(name, args);
+        return this.chatExclusive(session, async () => {
+          const store = await this.plans(session);
+          if (store.get(request.planId).project !== (this.workspace?.dir ?? null))
+            throw new Error("This plan belongs to another project");
+          if (request.operation === "progress") {
+            this.assertPlanWork(session);
+            for (const id of request.workerIds ?? []) this.conversations.ownedWorker(id, session);
+          }
+          const plan = await store.update(request);
+          this.changed();
+          return { ...plan, markdown: planMarkdown(plan) };
+        });
+      }
       case "code60_read_review":
       case "code60_address_feedback": {
         const request = parseControlArgs(name, args);
@@ -2599,6 +2865,7 @@ export class DesktopController {
             liveWorkers: this.conversations.liveWorkerCount(session),
             updatesPaused: session.updatesPaused,
             activeReviewId: session.reviewTask?.reviewId ?? null,
+            plans: session.plans?.list() ?? [],
           };
         });
       case "code60_dispatch_agent":
@@ -2652,6 +2919,7 @@ export class DesktopController {
     return this.conversations.deduplicate(session, requestId, key, () =>
       this.chatExclusive(session, async () => {
         this.requireScope(request.scope, session);
+        const assignment = this.planTask(session, request.planTaskId);
         await this.requireGitRun();
         const workspace = this.requireWorkspace();
         const config = desktopConfig(await loadConfig(this.deps.fs, this.env));
@@ -2690,13 +2958,17 @@ export class DesktopController {
             ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
           },
           (started, target) => {
-            for (const id of started)
+            for (const id of started) {
               this.conversations.register(id, session, target.dir, provider);
+              if (assignment)
+                Object.assign(this.conversations.workers.get(id) as Worker, assignment);
+            }
           },
         );
         const [runId] = ids;
         if (runId === undefined || workspace !== this.workspace)
           throw new Error("Worker launch did not complete in the current project");
+        await this.associatePlanWorker(session, runId, assignment);
         if (reviewStore && review) {
           try {
             await reviewStore.addWorker(
@@ -2724,6 +2996,9 @@ export class DesktopController {
   private controlWorker(
     name: Exclude<
       McpControlTool,
+      | "code60_create_plan"
+      | "code60_read_plan"
+      | "code60_update_plan"
       | "code60_get_context"
       | "code60_dispatch_agent"
       | "code60_list_agents"
@@ -2731,12 +3006,16 @@ export class DesktopController {
       | "code60_read_review"
       | "code60_address_feedback"
     >,
-    request: { scope: string; runId: string; prompt?: string },
+    request: { scope: string; runId: string; prompt?: string; planTaskId?: string | undefined },
     session: ChatSession,
   ): Promise<unknown> {
     return this.chatExclusive(session, async () => {
       const workspace = this.requireScope(request.scope, session);
       this.conversations.ownedWorker(request.runId, session);
+      const assignment =
+        name === "code60_send_agent" || name === "code60_resume_agent"
+          ? this.planTask(session, request.planTaskId, request.runId)
+          : undefined;
       const id = request.runId;
       const batch = this.liveBatch(id);
       const view = batch?.runs().find((run) => run.id === id);
@@ -2745,6 +3024,7 @@ export class DesktopController {
         if (live) throw new Error(`Worker ${id} is ${view.status}; resume only ended workers`);
         await this.assertCapacity(session);
         const result = await this.continueRun(workspace, id, request.prompt as string);
+        await this.associatePlanWorker(session, id, assignment);
         return { ...this.workerInfo(id), recovery: result.type };
       }
       if (name === "code60_stop_agent") {
@@ -2767,6 +3047,7 @@ export class DesktopController {
         await this.enabledConfig();
         this.requireEnabled(this.conversations.workers.get(id)?.provider ?? "");
         batch.reply(id, request.prompt as string);
+        await this.associatePlanWorker(session, id, assignment);
       } else if (name === "code60_finish_agent") batch.finish(id);
       else if (!batch.cancelTurn(id)) throw new Error(`Worker ${id} has no turn in progress`);
       this.changed();
@@ -2775,7 +3056,10 @@ export class DesktopController {
   }
   stopAll(): Promise<void> {
     return this.exclusive(async () => {
-      for (const session of this.conversations.sessions) this.conversations.pause(session);
+      for (const session of this.conversations.sessions) {
+        this.conversations.pause(session);
+        await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
+      }
       await this.stopMemoryExtraction();
       await this.stopSearchSummary();
       await this.shutdownBatches();
