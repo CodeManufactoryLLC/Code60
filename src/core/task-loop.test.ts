@@ -229,6 +229,36 @@ it("rejects changed symlinks and symlinked project targets", async () => {
   expect(await fs.readFile(outside, "utf8")).toBe("preserve\n");
 });
 
+it("rejects a project file replaced after its handle opens", async () => {
+  const w = await worker("swapped-target");
+  await fs.writeFile(join(w.path, "file.txt"), "worker result\n");
+  const target = join(project, "file.txt");
+  const original = join(project, "original.txt");
+  loop = new TaskLoop(project, join(root, "tasks"), tasks, {
+    ...fs,
+    open: async (...args) => {
+      const handle = await fs.open(...args);
+      if (args[0] === target) {
+        try {
+          await fs.rename(target, original);
+          await fs.writeFile(target, "replacement\n");
+        } catch (cause) {
+          await handle.close();
+          throw cause;
+        }
+      }
+      return handle;
+    },
+  });
+  const proposal = await capture([w]);
+  expect(proposal.changes).toEqual([]);
+  expect(proposal.conflicts).toEqual([
+    { path: "file.txt", reason: "Project file changed while opening" },
+  ]);
+  expect(await fs.readFile(target, "utf8")).toBe("replacement\n");
+  expect(await fs.readFile(original, "utf8")).toContain("first\n");
+});
+
 it("serializes competing applications with a checkout lock", async () => {
   const w = await worker("concurrent");
   await fs.writeFile(join(w.path, "file.txt"), "result\n");

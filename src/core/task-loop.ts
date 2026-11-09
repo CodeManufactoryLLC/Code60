@@ -67,6 +67,23 @@ const dead = (pid: number) => {
   }
 };
 
+const readFlags =
+  constants.O_RDONLY |
+  constants.O_NONBLOCK |
+  (process.platform === "win32" ? 0 : constants.O_NOFOLLOW);
+
+async function readExact(file: fs.FileHandle, size: number): Promise<Buffer> {
+  const buffer = Buffer.alloc(size + 1);
+  let length = 0;
+  while (length < buffer.length) {
+    const { bytesRead } = await file.read(buffer, length, buffer.length - length, length);
+    if (!bytesRead) break;
+    length += bytesRead;
+  }
+  if (length !== size) throw new Error("File size changed while reading");
+  return buffer.subarray(0, length);
+}
+
 /** Desktop task data and recoverable file application; no agent or UI authority is stored. */
 export class TaskLoop {
   constructor(
@@ -77,12 +94,7 @@ export class TaskLoop {
     private excludedPaths: string[] = [],
   ) {}
   private async read<T>(path: string, schema: z.ZodType<T>): Promise<T> {
-    const handle = await this.io.open(
-      path,
-      constants.O_RDONLY |
-        constants.O_NONBLOCK |
-        (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
-    );
+    const handle = await this.io.open(path, readFlags);
     try {
       const info = await handle.stat({ bigint: true });
       if (!info.isFile() || info.size > 192n * 1024n * 1024n)
@@ -92,17 +104,8 @@ export class TaskLoop {
         if (entry.isSymbolicLink() || entry.dev !== info.dev || entry.ino !== info.ino)
           throw new Error("Task storage changed or is a symbolic link");
       }
-      const buffer = Buffer.alloc(Number(info.size) + 1);
-      let length = 0;
-      while (length < buffer.length) {
-        const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
-        if (!bytesRead) break;
-        length += bytesRead;
-      }
-      if (length !== Number(info.size)) throw new Error("Task storage changed");
-      return schema.parse(JSON.parse(buffer.subarray(0, length).toString("utf8")), {
-        jitless: true,
-      });
+      const data = await readExact(handle, Number(info.size));
+      return schema.parse(JSON.parse(data.toString("utf8")), { jitless: true });
     } finally {
       await handle.close();
     }
@@ -261,20 +264,40 @@ export class TaskLoop {
   }
   private async disk(path: string): Promise<Content> {
     const target = await this.safePath(path);
+    let handle: fs.FileHandle;
     try {
-      const info = await this.io.lstat(target);
-      if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1)
-        throw new Error("Only regular, non-linked files can be applied");
-      if (info.size > 32 * 1024 * 1024)
-        throw new Error("Task file exceeds the 32 MiB application limit");
-      return {
-        data: (await this.io.readFile(target)).toString("base64"),
-        mode: process.platform !== "win32" && info.mode & 0o111 ? "100755" : "100644",
-        permissions: info.mode & 0o777,
-      };
+      handle = await this.io.open(target, readFlags);
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw cause;
+      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+      // Windows can return ENOENT when opening a dangling link. Check that
+      // the entry itself is absent before treating this as a new file.
+      try {
+        await this.io.lstat(target);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+      throw new Error("Project file changed while opening");
+    }
+    try {
+      const info = await handle.stat({ bigint: true });
+      if (!info.isFile() || info.nlink !== 1n)
+        throw new Error("Only regular, non-linked files can be applied");
+      if (info.size > 32n * 1024n * 1024n)
+        throw new Error("Task file exceeds the 32 MiB application limit");
+      // Recheck containment and pathname identity after opening. Windows can
+      // follow a final symlink on open, so check the directory entry too.
+      await this.safePath(path);
+      const entry = await this.io.lstat(target, { bigint: true });
+      if (entry.isSymbolicLink() || entry.dev !== info.dev || entry.ino !== info.ino)
+        throw new Error("Project file changed while opening");
+      return {
+        data: (await readExact(handle, Number(info.size))).toString("base64"),
+        mode: process.platform !== "win32" && info.mode & 0o111n ? "100755" : "100644",
+        permissions: Number(info.mode & 0o777n),
+      };
+    } finally {
+      await handle.close();
     }
   }
   private async content(entry: TaskEntry | undefined, path: string): Promise<Content> {
