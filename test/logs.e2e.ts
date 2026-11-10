@@ -81,6 +81,8 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await expect(logs.getByText("No diagnostic logs match these filters.")).toHaveCount(0);
     await search.fill("retained-139");
     await search.press("Enter");
+    // The canvas grid mirrors its rows in an accessibility table; wait for the new result.
+    await expect(logs.locator("tbody [role='row']")).toHaveCount(1);
     const canvas = logs.getByTestId("data-grid-canvas");
     await canvas.focus();
     await canvas.press("ArrowDown");

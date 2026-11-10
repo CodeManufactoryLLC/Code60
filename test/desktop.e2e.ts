@@ -734,6 +734,7 @@ test("desktop: read-only task revisions preserve project files and switch review
   await mkdir(config, { recursive: true });
   const git = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
   git(["init", "-q"]);
+  git(["config", "core.autocrlf", "false"]);
   await writeFile(join(repo, "task.txt"), "initial project\n");
   git(["add", "task.txt"]);
   commitFixture(repo);
@@ -3389,6 +3390,10 @@ test("desktop: prompt template editing and persistence", async () => {
     );
     await fields.selectOption("agent");
     await expect(template).toHaveValue("Agent: {{agent}}");
+    // Let the insertion's frame-delayed focus restoration finish before moving focus.
+    await template.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     await showPreview.focus();
     await page.keyboard.press("Enter");
     await expect(preview).toHaveText("Agent: claude");
@@ -4826,6 +4831,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await newChat.click();
     await expect(chatList()).toBeVisible();
     await expect(chat.locator(".activity-display")).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const snapshot = await page.evaluate(() => window.desktop.snapshot());
+        return Boolean(snapshot.chat.run?.id && snapshot.chat.run.id !== id);
+      })
+      .toBe(true);
     const secondChat = await page.evaluate(() => window.desktop.snapshot());
     const secondId = secondChat.chat.run?.id as string;
     await page.evaluate(
@@ -7695,6 +7706,7 @@ test("desktop: Commands drafts, keyboard picker and send-time expansion", async 
       chat.getByText("No matching command. This message will be sent as plain text."),
     ).toBeVisible();
     await expect(composer).toHaveAttribute("aria-expanded", "false");
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.press("Enter");
     await expect(chat.locator(".event.prompt pre").last()).toHaveText("/tmp is full");
     await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText("ok");
