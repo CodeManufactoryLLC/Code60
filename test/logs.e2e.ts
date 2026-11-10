@@ -140,6 +140,13 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     expect(id).toBeTruthy();
     for (const theme of ["dark", "light", "system"]) {
       await page.getByRole("tab", { name: "Settings", exact: true }).click();
+      const settingsPages = page.getByRole("button", { name: "Settings pages", exact: true });
+      if ((await settingsPages.getAttribute("aria-expanded")) === "false")
+        await settingsPages.click();
+      await page
+        .locator("#settings-pages")
+        .getByRole("tab", { name: "Appearance", exact: true })
+        .click();
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await openLogs(page);
       await expect(logs.getByRole("button", { name: "Search logs", exact: true })).toBeVisible();
