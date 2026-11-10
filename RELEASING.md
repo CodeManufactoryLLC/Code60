@@ -119,8 +119,45 @@ Actions**. Never commit their values or put them in release inputs/logs.
 | `APPLE_API_KEY_P8` | Full PEM contents of an App Store Connect **team** API key `.p8` file. |
 | `APPLE_API_KEY_ID` | That API key's key ID. |
 | `APPLE_API_ISSUER` | That API key's issuer ID. |
-| `WIN_CSC_LINK` | Password-protected Authenticode `.p12`/`.pfx` certificate with its private key, in electron-builder's supported format. |
-| `WIN_CSC_KEY_PASSWORD` | Password for the Windows signing certificate. |
+
+Windows releases are signed by [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart).
+No Windows certificate, private key or client secret is stored in GitHub. The Windows
+release job runs in the `windows-signing` environment, which only `main` may deploy to,
+and signs in to Azure with GitHub OIDC immediately before packaging. Set these
+non-secret repository **variables**:
+
+| Variable | Value |
+| --- | --- |
+| `AZURE_CLIENT_ID` | Application (client) ID of the signing app registration. |
+| `AZURE_TENANT_ID` | Microsoft Entra tenant ID. |
+| `AZURE_SUBSCRIPTION_ID` | Subscription containing the signing account. |
+| `AZURE_SIGNING_ENDPOINT` | The signing account's regional endpoint, for example `https://eus.codesigning.azure.net/`. |
+| `AZURE_SIGNING_ACCOUNT_NAME` | Artifact Signing account name. |
+| `AZURE_SIGNING_CERTIFICATE_PROFILE_NAME` | Public Trust certificate profile name. |
+| `WIN_SIGNING_PUBLISHER` | The certificate subject common name, exactly the validated legal publisher name. |
+
+One-time Azure setup with the Azure CLI (identity validation is portal-only):
+
+1. Use a paid subscription; Artifact Signing rejects free, trial and sponsored ones.
+2. `az provider register --namespace Microsoft.CodeSigning`, then create the account
+   (Basic SKU) in a supported region.
+3. In the portal, complete a **Public Trust** identity validation for the legal
+   publisher. Approval takes 1–20 business days. Then create a Public Trust
+   certificate profile using that validation.
+4. Create a single-tenant app registration and service principal. Add a federated
+   credential with issuer `https://token.actions.githubusercontent.com`, audience
+   `api://AzureADTokenExchange` and the repository's environment subject. This
+   repository uses immutable OIDC subjects, so read the prefix with
+   `gh api repos/CodeManufactoryLLC/code60/actions/oidc/customization/sub` and append
+   `:environment:windows-signing`.
+5. Assign the service principal **Artifact Signing Certificate Profile Signer** on the
+   signing account or profile. Never grant broader roles.
+
+Each signing session receives a new short-lived Microsoft certificate, and Microsoft
+rotates its intermediate CAs, so verification pins the validated publisher name and
+the `Microsoft Identity Verification Root Certificate Authority 2020` root rather than
+a certificate thumbprint. The same publisher name is embedded for in-app update
+signature verification; changing it requires a release that existing installs trust.
 
 Create the team API key through App Store Connect's Users and Access / Integrations
 settings with access suitable for notarization. The API key authorizes Apple's
@@ -140,8 +177,7 @@ gh secret set APPLE_API_ISSUER --repo CodeManufactoryLLC/code60
 
 The commands without redirected files prompt for their value. Also set repository
 variable `RELEASE_MAINTAINER` to a public package contact in `Name <email>` form.
-Set repository variable `WIN_SIGNING_THUMBPRINT` to the expected Windows signing
-certificate's 40-hex thumbprint. Configuration is a maintainer action, not an
+Configuration is a maintainer action, not an
 automatic part of implementing Windows support.
 This address is included in the DEB metadata. PR packages use
 `Code60 CI <ci@example.invalid>` and are not published.
@@ -152,7 +188,7 @@ keychain are temporary and removed even after failure. Apple authorization and
 certificate validity are checked by signing/notarization. Missing credentials or
 maintainer metadata stop the workflow before platform packaging.
 Windows release signing uses SHA-256 and RFC 3161 timestamps. Installer tests
-require valid Authenticode signatures, timestamps and the expected certificate
+require valid Authenticode signatures, timestamps, the expected publisher and root
 on the final installer, installed application, native helper and uninstaller,
 including after reinstall. A missing or invalid signature blocks staging.
 

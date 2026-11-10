@@ -122,9 +122,25 @@ describe("CI and release gates", () => {
     expect(publish.permissions).toEqual({ contents: "write" });
     expect(publish.concurrency.group).toBe("code60-release-publication");
     for (const [name, job] of Object.entries(release.jobs)) {
-      if (name !== "publish")
+      if (name !== "publish" && name !== "windows")
         expect(job.permissions ?? release.permissions).toEqual({ contents: "read" });
     }
+    // Only Windows signing may request an OIDC token, and only inside its environment.
+    expect(release.jobs.windows.permissions).toEqual({ contents: "read", "id-token": "write" });
+    expect(release.jobs.windows.environment).toBe("windows-signing");
+    expect(JSON.stringify(release)).not.toContain("WIN_CSC");
+    const login = release.jobs.windows.steps.findIndex((step) =>
+      step.uses?.startsWith("azure/login@"),
+    );
+    const build = release.jobs.windows.steps.findIndex(
+      (step) => step.run === "npm run package:win",
+    );
+    expect(release.jobs.windows.steps[login].if).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      "${{ !inputs.unsigned_windows_beta }}",
+    );
+    // Sign in only after checks and tests, immediately before packaging.
+    expect(build).toBe(login + 1);
   });
   it("builds the validated SHA and downloads only this run's tested artifacts", () => {
     for (const name of ["linux-check", "linux-installers", "mac", "windows"]) {

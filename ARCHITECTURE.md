@@ -897,7 +897,8 @@ commands remain authoritative. The CLI and configuration files are unchanged.
 Windows instead uses the bounded native discovery and owned-job contracts above;
 it never probes a shell profile. See [Windows setup and limitations](WINDOWS.md).
 Windows release promotion requires timestamped SHA-256 Authenticode signatures
-on the final installer, installed executable, helper and uninstaller, followed
+from Azure Artifact Signing (GitHub OIDC, no stored key), verified against the
+validated publisher name and Microsoft's identity-verification root, on the final installer, installed executable, helper and uninstaller, followed
 by reinstall/uninstall data-preservation checks. Native x64 checks remain a
 separate acceptance gate; ARM64 development/emulation cannot satisfy it.
 

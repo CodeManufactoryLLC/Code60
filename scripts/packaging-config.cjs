@@ -2,6 +2,13 @@
 const release = process.env.CODE60_RELEASE === "1";
 const { unsignedWindowsBeta } = require("./release/windows-policy.cjs");
 const unsignedWindows = unsignedWindowsBeta(require("../package.json").version);
+// Azure Artifact Signing settings; authentication comes from the GitHub OIDC Azure login.
+const azureSigningSettings = [
+  "AZURE_SIGNING_ENDPOINT",
+  "AZURE_SIGNING_ACCOUNT_NAME",
+  "AZURE_SIGNING_CERTIFICATE_PROFILE_NAME",
+  "WIN_SIGNING_PUBLISHER",
+];
 if (unsignedWindows && process.platform === "win32") {
   // Prevent local certificate discovery or ambient credentials from changing the chosen mode.
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
@@ -9,6 +16,7 @@ if (unsignedWindows && process.platform === "win32") {
   delete process.env.WIN_CSC_KEY_PASSWORD;
   delete process.env.CSC_LINK;
   delete process.env.CSC_KEY_PASSWORD;
+  for (const name of azureSigningSettings) delete process.env[name];
 }
 const maintainer = process.env.RELEASE_MAINTAINER;
 if (release && !/^.+ <[^<>\s]+@[^<>\s]+>$/.test(maintainer || "")) {
@@ -26,10 +34,18 @@ if (release && process.platform === "darwin") {
   }
 }
 if (release && process.platform === "win32" && !unsignedWindows) {
-  for (const name of ["WIN_CSC_LINK", "WIN_CSC_KEY_PASSWORD", "WIN_SIGNING_THUMBPRINT"]) {
+  for (const name of azureSigningSettings) {
     if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
   }
 }
+const azureSignOptions = azureSigningSettings.every((name) => process.env[name])
+  ? {
+      publisherName: process.env.WIN_SIGNING_PUBLISHER,
+      endpoint: process.env.AZURE_SIGNING_ENDPOINT,
+      codeSigningAccountName: process.env.AZURE_SIGNING_ACCOUNT_NAME,
+      certificateProfileName: process.env.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME,
+    }
+  : null;
 module.exports = {
   appId: "com.codemanufactory.code60",
   productName: "Code60",
@@ -87,10 +103,15 @@ module.exports = {
     executableName: "Code60",
     forceCodeSigning: release && !unsignedWindows,
     signAndEditExecutable: true,
-    signtoolOptions: {
-      signingHashAlgorithms: ["sha256"],
-      rfc3161TimeStampServer: "https://timestamp.digicert.com",
-    },
+    // Azure defaults to SHA-256 file digests and RFC 3161 SHA-256 timestamps.
+    ...(azureSignOptions
+      ? { azureSignOptions }
+      : {
+          signtoolOptions: {
+            signingHashAlgorithms: ["sha256"],
+            rfc3161TimeStampServer: "https://timestamp.digicert.com",
+          },
+        }),
   },
   nsis: {
     oneClick: true,

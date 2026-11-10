@@ -14,8 +14,10 @@ import {
   unsignedWindowsBeta,
   validateCandidate,
   versionOf,
+  windowsSigningSettings,
 } from "../scripts/release/common.mjs";
 import { staple } from "../scripts/release/staple.mjs";
+import { validPublisher } from "../scripts/verify-windows-signatures.mjs";
 
 const sha = "a".repeat(40);
 
@@ -40,6 +42,48 @@ it.runIf(process.platform === "win32")(
   },
 );
 
+const config = (env) =>
+  JSON.parse(
+    run(process.execPath, ["-p", "JSON.stringify(require('./scripts/packaging-config.cjs').win)"], {
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([name]) => !/^(AZURE_|WIN_SIGNING_|CODE60_UNSIGNED)/.test(name),
+          ),
+        ),
+        CODE60_RELEASE: "0",
+        ...env,
+      },
+    }),
+  );
+const azure = {
+  AZURE_SIGNING_ENDPOINT: "https://eus.codesigning.azure.net/",
+  AZURE_SIGNING_ACCOUNT_NAME: "account",
+  AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: "profile",
+  WIN_SIGNING_PUBLISHER: "Example Publisher LLC",
+};
+describe("Windows Azure Artifact Signing configuration", () => {
+  it("signs through Azure only when every non-secret setting is present", () => {
+    expect(config(azure)).toMatchObject({
+      azureSignOptions: {
+        publisherName: "Example Publisher LLC",
+        endpoint: "https://eus.codesigning.azure.net/",
+        codeSigningAccountName: "account",
+        certificateProfileName: "profile",
+      },
+    });
+    expect(config(azure).signtoolOptions).toBeUndefined();
+    const partial = config({ ...azure, AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: "" });
+    expect(partial.azureSignOptions).toBeUndefined();
+    expect(partial.signtoolOptions.signingHashAlgorithms).toEqual(["sha256"]);
+  });
+  it("accepts only single-line publisher names", () => {
+    expect(validPublisher("Example Publisher LLC")).toBe(true);
+    for (const name of ["", " padded", "line\nbreak", "tab\tname", "x".repeat(201), undefined])
+      expect(validPublisher(name)).toBe(false);
+  });
+});
 describe("Apple ticket delivery", () => {
   it("retries temporary service failures and stops after success", async () => {
     const error = Object.assign(new Error("connection lost"), { status: 68 });
@@ -83,9 +127,7 @@ const ready = {
   HAS_APPLE_API_KEY: "true",
   HAS_APPLE_API_KEY_ID: "true",
   HAS_APPLE_API_ISSUER: "true",
-  HAS_WIN_CSC_LINK: "true",
-  HAS_WIN_CSC_KEY_PASSWORD: "true",
-  HAS_WIN_SIGNING_THUMBPRINT: "true",
+  ...Object.fromEntries(windowsSigningSettings.map((name) => [`HAS_${name}`, "true"])),
   RELEASE_MAINTAINER: "Code60 Test <ci@example.invalid>",
 };
 const directories = [];
@@ -265,9 +307,7 @@ describe("explicit unsigned Windows betas", () => {
       ...ready,
       ...unsigned,
       RELEASE_TAG: "v0.2.0-beta.5",
-      HAS_WIN_CSC_LINK: "",
-      HAS_WIN_CSC_KEY_PASSWORD: "",
-      HAS_WIN_SIGNING_THUMBPRINT: "",
+      ...Object.fromEntries(windowsSigningSettings.map((name) => [`HAS_${name}`, ""])),
     };
     expect(() => signingReady(env)).not.toThrow();
     expect(() => signingReady({ ...env, HAS_APPLE_API_KEY: "" })).toThrow();
