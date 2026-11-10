@@ -156,4 +156,87 @@ describe("Windows owned-process control protocol (simulated transport)", () => {
     expect(child.stdout.destroyed).toBe(true);
     expect(mocks.status).not.toHaveBeenCalled();
   });
+  function posix(kill: (pid: number, signal: NodeJS.Signals | 0) => true) {
+    vi.stubGlobal("process", { ...process, platform: "linux", kill: vi.fn(kill) });
+    mocks.spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+  }
+  const missing = () => {
+    throw Object.assign(new Error("gone"), { code: "ESRCH" });
+  };
+  it("waits out the grace period, then for group members that outlive the root", async () => {
+    let killed = false;
+    let probes = 0;
+    posix((_pid, signal) => {
+      if (signal === "SIGKILL") {
+        killed = true;
+        child.emit("exit", null, "SIGKILL");
+      }
+      if (signal !== 0) return true;
+      // SIGTERM is ignored. An inaccessible (EPERM) group counts as alive.
+      if (!killed) throw Object.assign(new Error("denied"), { code: "EPERM" });
+      if (++probes > 2) missing();
+      return true;
+    });
+    const owned = await spawnOwnedProcess(["agent"], "workspace", {});
+    owned.stdin.emit("error", new Error("EPIPE"));
+    child.emit("error", new Error("late"));
+    let done = false;
+    const stopped = owned.stop(100).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(owned.hasExited()).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    await stopped;
+    expect(done).toBe(true);
+    expect(owned.hasExited()).toBe(true);
+    expect(probes).toBe(3);
+    expect(process.kill).toHaveBeenCalledWith(-101, "SIGTERM");
+    expect(process.kill).toHaveBeenCalledWith(-101, "SIGKILL");
+  });
+  it("fails when the POSIX group outlives the cleanup deadline", async () => {
+    posix((_pid, signal) => {
+      if (signal === "SIGKILL") child.emit("exit", null, "SIGKILL");
+      return true;
+    });
+    const owned = await spawnOwnedProcess(["agent"], "workspace", {});
+    const failed = expect(owned.stop(0)).rejects.toThrow(/Process group cleanup exceeded/);
+    await vi.advanceTimersByTimeAsync(7100);
+    await failed;
+    expect(child.stdout.destroyed).toBe(false);
+  });
+  it("reports POSIX and Windows helper spawn errors as start failures", async () => {
+    vi.stubGlobal("process", { ...process, platform: "linux", kill: vi.fn() });
+    mocks.spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("error", new Error("ENOENT")));
+      return child;
+    });
+    await expect(spawnOwnedProcess(["agent"], "workspace", {})).rejects.toThrow(
+      "could not start 'agent.exe': ENOENT",
+    );
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    mocks.spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("error", new Error("EACCES")));
+      return child;
+    });
+    await expect(spawnOwnedProcess(["agent"], "workspace", {})).rejects.toThrow(
+      "could not start 'agent.exe': EACCES",
+    );
+  });
+  it("accepts only exit frames from the authenticated control pipe", async () => {
+    const owned = await spawnOwnedProcess(["agent"], "workspace", {});
+    const late = new Control();
+    server.emit("connection", late);
+    late.emit("data", Buffer.from('{"stopped":true,"exit":9}\n'));
+    expect(late.destroyed).toBe(true);
+    control.emit("data", Buffer.from('{"stopped":"yes"}\n'));
+    expect(control.destroyed).toBe(true);
+    expect(owned.hasExited()).toBe(false);
+    child.emit("exit", 0, null);
+    await vi.advanceTimersByTimeAsync(25);
+    expect(await owned.exited).toEqual({ code: null, signal: null });
+  });
 });

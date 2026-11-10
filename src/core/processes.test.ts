@@ -17,6 +17,7 @@ const platform = (name: string, kill = vi.fn()) =>
 
 describe("leftover ownership checks", () => {
   it("uses groups only for legacy POSIX records and handles absent PIDs", async () => {
+    platform("linux");
     const processes = createProcesses();
     const group = vi.spyOn(processes, "groupAlive").mockReturnValue(true);
     expect(await recordedAgentAlive(processes, {})).toBe(false);

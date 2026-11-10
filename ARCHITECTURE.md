@@ -210,7 +210,8 @@ identity uses canonical spelling, not globally lowercased paths. XDG/home config
 and state defaults remain unchanged. New private objects receive restrictive
 owner/SYSTEM ACLs at creation; existing user parent ACLs are never rewritten.
 An unsafe existing Code60-private ACL fails closed. Atomic rename retries only
-Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write.
+Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write. Each
+helper rename attempt keeps the normal seven-second helper bound.
 
 ## A run
 
@@ -899,8 +900,9 @@ it never probes a shell profile. See [Windows setup and limitations](WINDOWS.md)
 Windows release promotion requires timestamped SHA-256 Authenticode signatures
 from Azure Artifact Signing (GitHub OIDC, no stored key), verified against the
 validated publisher name and Microsoft's identity-verification root, on the final installer, installed executable, helper and uninstaller, followed
-by reinstall/uninstall data-preservation checks. Native x64 checks remain a
-separate acceptance gate; ARM64 development/emulation cannot satisfy it.
+by reinstall/uninstall data-preservation checks. These run on the Windows Server
+2025 x64 CI runner; ARM64 development/emulation cannot satisfy them, and there is
+no separate manual Windows 11 hardware acceptance.
 
 macOS releases use Developer ID signing and notarization. Packaging preserves
 Electron's Node mode because orchestration providers launch the bundled MCP

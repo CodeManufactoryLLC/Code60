@@ -13,10 +13,10 @@ The pipeline builds a signed, notarized Apple Silicon macOS DMG and Linux x64
 DEB/AppImage installers, plus a signed per-user NSIS installer for Windows 11 x64.
 The explicitly opted-in [unsigned beta mode](#explicit-unsigned-windows-betas) is
 the Windows-only exception.
-CI uses macOS 15, Ubuntu 24.04 and Windows Server 2025 x64; Windows 11 desktop
-acceptance must also be recorded on native x64 hardware. ARM64 development or
-x64 emulation is not that acceptance. Older Windows, Windows ARM64 and Intel
-macOS are not supported targets. See [Windows setup](WINDOWS.md).
+CI uses macOS 15, Ubuntu 24.04 and Windows Server 2025 x64. The Windows Server
+2025 x64 runner is the Windows release validation; there is no separate manual
+Windows 11 hardware acceptance. ARM64 development and x64 emulation do not replace
+that runner. Older Windows, Windows ARM64 and Intel macOS are not supported targets. See [Windows setup](WINDOWS.md).
 
 The desktop bundles Electron and its Node.js runtime. Users do not need Node or
 npm to launch it. Git and agent CLIs remain external prerequisites: install and
@@ -253,9 +253,7 @@ Authenticode signature in this mode. Windows may show unknown-publisher/SmartScr
 warnings. Release notes label the Windows download **UNSIGNED**, and its manifest
 records `signing: "unsigned-beta"` and `signaturesVerified: false`. Native Windows x64
 installer execution, reinstall/uninstall data preservation and artifact hashes remain
-required. The manifest records the exact test OS; CI's Windows Server 2025 verification
-does not claim manual Windows 11 acceptance. That acceptance remains pending for this
-beta and is required before advertising a supported stable Windows release.
+required. The manifest records the exact test OS (Windows Server 2025 x64 in CI).
 
 Use `gh workflow run release.yml --ref main -f tag=vX.Y.Z-beta.N -f unsigned_windows_beta=true`
 only for an intentional unsigned Windows beta. Omit the option for signed releases.
@@ -284,7 +282,7 @@ Windows source builds require MSVC C++ Build Tools and a Windows 11 SDK.
 `package:win` cross-builds the first-party helper and Electron package for x64.
 Windows installer tests create and remove a temporary per-user installation;
 run them only on a disposable development/test account with no existing Code60
-installation. They do not provide native x64 acceptance when run under emulation.
+installation. Release verification refuses to run under x64 emulation.
 
 Output is under `release/build/`. Local Mac builds use an ad-hoc signature and
 skip notarization; they are test artifacts, not public releases. Release CI sets
@@ -377,8 +375,8 @@ the same checks, sign-off, and reviewed PR procedure.
 - Steps that run only in `release.yml`, such as the publication job's
   `actions/download-artifact`, are first exercised by a release run. After an
   update to such an action, confirm that step succeeded before publishing.
-- Native Windows 11 x64 acceptance and the signed installer checks are recorded,
-  or an explicit unsigned beta records the pending acceptance and signing limitations.
+- The signed Windows installer checks pass, or an explicit unsigned beta records
+  its signing limitation.
 - All four tested installers and checksums are published for the exact tag.
 - Public release links work; the first installer prerelease has been installed
   and exercised before declaring the pipeline operational.

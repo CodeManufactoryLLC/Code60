@@ -7,6 +7,13 @@ export async function privateDirectory(path: string): Promise<void> {
   else await mkdir(path, { recursive: true, mode: 0o700 });
 }
 
+/** Creates one private directory exclusively, failing with EEXIST when it already exists.
+ * Windows sets the owner explicitly: elevated tokens otherwise default it to Administrators. */
+export async function createPrivateDirectory(path: string): Promise<void> {
+  if (process.platform === "win32") await helperOutput(["mkdir-private-new", path]);
+  else await mkdir(path, { mode: 0o700 });
+}
+
 export function privateDirectorySync(path: string): void {
   if (process.platform === "win32") helperSync(["mkdir-private", path]);
   else mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -40,7 +47,15 @@ export async function appendPrivateFile(
   else await appendFile(path, data, options);
 }
 
-export async function renameFile(from: string, to: string, timeoutMs = 500): Promise<void> {
+// Each helper launch needs its own budget; a loaded Windows host can take
+// longer than the EBUSY retry window just to start the process.
+const REPLACE_ATTEMPT_TIMEOUT_MS = 7_000;
+
+export async function renameFile(
+  from: string,
+  to: string,
+  timeoutMs = REPLACE_ATTEMPT_TIMEOUT_MS,
+): Promise<void> {
   if (process.platform === "win32")
     await helperOutput(["replace", from, to], 1024, Math.max(1, timeoutMs));
   else await rename(from, to);
@@ -58,10 +73,10 @@ export async function atomicReplace(
   let delay = 10;
   let busy: unknown;
   for (;;) {
-    const remaining = deadline - Date.now();
-    if (busy && remaining <= 0) throw busy;
+    if (busy && deadline - Date.now() <= 0) throw busy;
     try {
-      await replace(from, to, Math.max(1, remaining));
+      // The deadline bounds when a retry may start, not how long one rename attempt runs.
+      await replace(from, to, REPLACE_ATTEMPT_TIMEOUT_MS);
       return;
     } catch (error) {
       if (busy && (error as NodeJS.ErrnoException).code === "ETIMEDOUT" && Date.now() >= deadline)

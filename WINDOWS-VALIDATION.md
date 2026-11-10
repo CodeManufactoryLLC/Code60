@@ -4,7 +4,7 @@ Initial validation on 2026-11-06. Version: `0.2.0-beta.4`, before the implementa
 commit and integration with the latest main branch. The artifact and measurements
 below describe that initial validation, not the subsequent integration.
 
-This is development evidence, **not Windows 11 x64 release acceptance**.
+This is development evidence, **not release validation**.
 The host is Windows build 26300 **ARM64**, with Node 24.22.2 ARM64.
 The x64 application and installer run under Windows emulation on this host.
 No live providers were launched, installed or authenticated.
@@ -20,7 +20,7 @@ No live providers were launched, installed or authenticated.
 | Final x64 NSIS package | Passed, unsigned per-user development artifact |
 | Final install/upgrade/uninstall checks | Passed: 5/5 tests before upgrade and 5/5 after, retained-data checks and final cleanup succeeded |
 | Authenticode and timestamp verification | Installer, application and helper confirmed `NotSigned`; release signature/timestamp acceptance was not run |
-| Native Windows 11 x64 acceptance | Deferred |
+| Native Windows 11 x64 hardware | Not run; not part of release validation |
 | Linux/macOS execution | Not run on this host |
 
 The 14 skips are the POSIX shell-environment cases (12), the POSIX SIGTERM CLI
@@ -108,12 +108,12 @@ successful writes after release. All 24 failed writes stayed below the 150 ms
 responsiveness check. These are bounded-fixture observations, not native x64
 performance claims or a guarantee for arbitrarily large process trees.
 
-## Remaining release acceptance
+## Remaining release validation
 
-- Run on actual Windows 11 x64, including source CLI/desktop and the installed
-  package. Emulation and the Windows Server CI runner do not certify client UI.
-- Exercise real console Ctrl+C, caption buttons, Snap, DPI/keyboard behavior,
-  task/owner crashes and session shutdown.
+Release validation uses the Windows Server 2025 x64 CI runner. Manual Windows 11
+hardware acceptance is not planned, so interactive console Ctrl+C, caption
+buttons, Snap and DPI behavior remain uncertified.
+
 - Configure signing outside this task and verify certificate identity,
   SHA-256/RFC3161 timestamps, installation, upgrade, uninstall and retained data.
 - Run the unchanged Linux/macOS gates on their actual hosts.

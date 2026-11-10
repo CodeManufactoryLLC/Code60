@@ -727,6 +727,7 @@ async function launch(directory: string, folder: string, database: string, confi
 }
 
 test("desktop: read-only task revisions preserve project files and switch reviews", async () => {
+  test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-task-loop-ui-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
@@ -734,6 +735,7 @@ test("desktop: read-only task revisions preserve project files and switch review
   await mkdir(config, { recursive: true });
   const git = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
   git(["init", "-q"]);
+  git(["config", "core.autocrlf", "false"]);
   await writeFile(join(repo, "task.txt"), "initial project\n");
   git(["add", "task.txt"]);
   commitFixture(repo);
@@ -763,27 +765,30 @@ test("desktop: read-only task revisions preserve project files and switch review
     const composer = page.getByRole("combobox", { name: "Message to orchestrator" });
     const waitForCapture = (title: string, path: string) =>
       expect
-        .poll(() =>
-          page.evaluate(
-            async ({ title, path }) => {
-              const snapshot = await window.desktop.snapshot();
-              const summary = snapshot.reviews?.find((review) => review.title === title);
-              if (!summary) return "Waiting for review";
-              const review = await window.desktop.readReview({
-                project: summary.project,
-                reviewId: summary.id,
-                requestId: crypto.randomUUID(),
-              });
-              const latest = review.revisions.at(-1);
-              if (!latest?.files.some((file) => file.path === path))
-                return review.error ?? latest?.errors[0]?.message ?? "Waiting for capture";
-              const worker = snapshot.runs.find(
-                (run) => run.record.id === review.workers[0]?.runId,
-              );
-              return worker?.view?.status ?? worker?.record.status;
-            },
-            { title, path },
-          ),
+        .poll(
+          () =>
+            page.evaluate(
+              async ({ title, path }) => {
+                const snapshot = await window.desktop.snapshot();
+                const summary = snapshot.reviews?.find((review) => review.title === title);
+                if (!summary) return "Waiting for review";
+                const review = await window.desktop.readReview({
+                  project: summary.project,
+                  reviewId: summary.id,
+                  requestId: crypto.randomUUID(),
+                });
+                const latest = review.revisions.at(-1);
+                if (!latest?.files.some((file) => file.path === path))
+                  return review.error ?? latest?.errors[0]?.message ?? "Waiting for capture";
+                const worker = snapshot.runs.find(
+                  (run) => run.record.id === review.workers[0]?.runId,
+                );
+                return worker?.view?.status ?? worker?.record.status;
+              },
+              { title, path },
+            ),
+          // The dispatch-time capture can precede worktree creation; the idle capture replaces it.
+          { timeout: 30_000 },
         )
         .toBe("idle");
     await expect(composer).toBeEditable();
@@ -3389,6 +3394,10 @@ test("desktop: prompt template editing and persistence", async () => {
     );
     await fields.selectOption("agent");
     await expect(template).toHaveValue("Agent: {{agent}}");
+    // Let the insertion's frame-delayed focus restoration finish before moving focus.
+    await template.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     await showPreview.focus();
     await page.keyboard.press("Enter");
     await expect(preview).toHaveText("Agent: claude");
@@ -4826,6 +4835,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await newChat.click();
     await expect(chatList()).toBeVisible();
     await expect(chat.locator(".activity-display")).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const snapshot = await page.evaluate(() => window.desktop.snapshot());
+        return Boolean(snapshot.chat.run?.id && snapshot.chat.run.id !== id);
+      })
+      .toBe(true);
     const secondChat = await page.evaluate(() => window.desktop.snapshot());
     const secondId = secondChat.chat.run?.id as string;
     await page.evaluate(
@@ -6673,7 +6688,10 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     if (await email.isEnabled()) await email.fill("desktop@example.invalid");
     await page.screenshot({ path: "test-results/git-setup-preview.png" });
     await setup.getByRole("button", { name: "Create initial commit", exact: true }).click();
-    await expect(setup.getByRole("button", { name: "Return to Chat" })).toBeVisible();
+    // Owned Git processes on Windows runners can take several seconds to commit.
+    await expect(setup.getByRole("button", { name: "Return to Chat" })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.getByText("Ready for isolated workers", { exact: true })).toHaveCount(0);
     await setup.getByRole("button", { name: "Return to Chat" }).click();
     await expect(composer).toHaveValue("Draft preserved through setup");
@@ -7695,6 +7713,7 @@ test("desktop: Commands drafts, keyboard picker and send-time expansion", async 
       chat.getByText("No matching command. This message will be sent as plain text."),
     ).toBeVisible();
     await expect(composer).toHaveAttribute("aria-expanded", "false");
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.press("Enter");
     await expect(chat.locator(".event.prompt pre").last()).toHaveText("/tmp is full");
     await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText("ok");

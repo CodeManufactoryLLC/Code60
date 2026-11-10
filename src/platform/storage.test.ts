@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendPrivateFile,
   atomicReplace,
+  createPrivateDirectory,
   createPrivateFileSync,
   privateDirectory,
   verifyPrivateSync,
@@ -24,6 +25,25 @@ describe("atomic replacement", () => {
       ["temporary", "record"],
       ["temporary", "record"],
     ]);
+  });
+  it("gives every attempt the full helper timeout, even late in the retry window", async () => {
+    vi.useFakeTimers();
+    try {
+      const busy = Object.assign(new Error("sharing violation"), { code: "EBUSY" });
+      const replace = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          throw busy;
+        })
+        .mockResolvedValueOnce(undefined);
+      const done = atomicReplace("temporary", "record", replace, "win32");
+      await vi.runAllTimersAsync();
+      await done;
+      expect(replace.mock.calls.map((args) => args[2])).toEqual([7_000, 7_000]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it.each(["EACCES", "EPERM", "ENOSPC", "ENOENT"])("never retries %s", async (code) => {
     const error = Object.assign(new Error("denied"), { code });
@@ -71,6 +91,22 @@ describe("atomic replacement", () => {
       }
     },
   );
+});
+describe("exclusive private directories", () => {
+  it("creates one private directory and reports EEXIST without touching an existing one", async () => {
+    const root = await mkdtemp(join(tmpdir(), "code60-exclusive-"));
+    directories.push(root);
+    const lock = join(root, "lock");
+    await createPrivateDirectory(lock);
+    await writeFile(join(lock, "owner"), "first");
+    await expect(createPrivateDirectory(lock)).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await readFile(join(lock, "owner"), "utf8")).toBe("first");
+    await expect(createPrivateDirectory(join(root, "missing", "lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    if (process.platform === "win32") expect(() => verifyPrivateSync(lock)).not.toThrow();
+    else expect((await stat(lock)).mode & 0o077).toBe(0);
+  });
 });
 describe("private Windows objects", () => {
   it.runIf(process.platform === "win32")(
