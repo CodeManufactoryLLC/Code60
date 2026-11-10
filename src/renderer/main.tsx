@@ -43,6 +43,7 @@ import { OrchestrationSettings } from "./orchestration-settings.js";
 import {
   type Command,
   CommandPalette,
+  InfoTip,
   maxToasts,
   type ToastMessage,
   Toasts,
@@ -56,6 +57,7 @@ import { PromptEditorPage } from "./prompt-editor.js";
 import { continueBlocker } from "./recovery.js";
 import { SearchPage } from "./search-page.js";
 import { SessionsTable } from "./sessions.js";
+import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 import {
   applyUpdate,
   type DesktopState,
@@ -76,6 +78,7 @@ import {
   rowDensities,
   sessionRows,
   type TableLines,
+  type TextRole,
   type TextStyle,
   type TextStyles,
   type Theme,
@@ -83,7 +86,7 @@ import {
   textStyleProperties,
   typefaces,
 } from "./state.js";
-import { initialTabs, updateTabs } from "./tabs.js";
+import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
 import { parseChartTick } from "./ticker.js";
 import { useTranscripts } from "./transcripts.js";
 import { UpdateIndicator, UpdatesSection, useUpdateNotice, useUpdates } from "./updates.js";
@@ -232,6 +235,7 @@ function App() {
     parseRowDensity(localStorage.getItem("code60.rowDensity")),
   );
   const [tabs, setTabs] = useState(initialTabs);
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("agents");
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [gitSetupProject, setGitSetupProject] = useState<string>();
   const [chartTickMs, setChartTickMs] = useState(() =>
@@ -244,6 +248,7 @@ function App() {
   const [splash, setSplash] = useState(true);
   const updateNotice = useUpdateNotice(updates.state, !splash && !busy);
   const openUpdates = () => {
+    setSettingsSection("updates");
     setTabs((current) => updateTabs(current, { type: "select", id: "settings" }));
     requestAnimationFrame(() =>
       document.getElementById("app-updates")?.scrollIntoView({ block: "center" }),
@@ -444,7 +449,11 @@ function App() {
 
   useLayoutEffect(() => {
     // Finish navigation focus before another interaction can focus a control or open a modal.
-    if (!splash) document.getElementById(`tab-${tabs.active}`)?.focus();
+    if (
+      !splash &&
+      !(tabs.active === "settings" && document.activeElement?.id.startsWith("tab-settings-"))
+    )
+      document.getElementById(`tab-${tabs.active}`)?.focus();
   }, [tabs.active, splash]);
 
   useEffect(() => {
@@ -554,6 +563,18 @@ function App() {
     if (latest.directory) notify(`Opened ${folderName(latest.directory)}.`);
   };
   const plans = snapshot?.chats.flatMap((chat) => chat.plans ?? []) ?? [];
+  const reviewSummaries = snapshot?.reviews ?? [];
+  const ensuredChangesReview = useRef(new Map<string, string>());
+  useEffect(() => {
+    const latest = reviewSummaries.at(-1);
+    if (!latest || ensuredChangesReview.current.get(workspace) === latest.id) return;
+    ensuredChangesReview.current.set(workspace, latest.id);
+    setFileTabs((current) =>
+      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
+        type: "ensure-changes",
+      }),
+    );
+  }, [reviewSummaries, workspace]);
   const openPlan = (id: string) => {
     const plan = plans.find((item) => item.id === id);
     if (!plan) return;
@@ -580,17 +601,20 @@ function App() {
     }
   }, [snapshot?.chat.plans, splash, workerId, workspace]);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
-  const openReview = (id: string, updates = false) => {
+  const openReview = (id: string) => {
     selectWorker(undefined);
     const review = snapshot?.reviews?.find((review) => review.id === id);
-    if (updates && review?.revisions.at(-1) && directory) {
-      sessionStorage.setItem(
-        `code60.review:${directory}:${id}:revision`,
-        review.revisions.at(-1)?.id ?? "",
-      );
-      sessionStorage.setItem(`code60.review:${directory}:${id}:compare`, "feedback");
-    }
-    fileAction({ type: "changes", reviewId: id, title: review?.title ?? "Worker changes" });
+    const revision = review?.revisions.at(-1);
+    fileAction(
+      review && revision
+        ? {
+            type: "revision",
+            reviewId: id,
+            revisionId: revision.id,
+            title: `Revision ${review.revisions.length} · ${review.title}`,
+          }
+        : { type: "changes" },
+    );
     setExplorerOpen(true);
     setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     if (review?.chatId && snapshot?.chats.some((chat) => chat.run?.id === review.chatId))
@@ -672,7 +696,7 @@ function App() {
         setSelected(target.record.id);
         openChat(target.record.id);
       }),
-      entry("review", "Review changes", "compare", () => void reviewRun(target.record.id)),
+      entry("review", "Review changes", "task--tools", () => void reviewRun(target.record.id)),
       entry("browse", "Browse project files", "document", () => void browseFiles()),
       entry(
         "cancel",
@@ -924,8 +948,10 @@ function App() {
                 label: "Polling settings",
                 icon: "settings",
                 disabled: false,
-                run: () =>
-                  setTabs((current) => updateTabs(current, { type: "open", id: "settings" })),
+                run: () => {
+                  setSettingsSection("polling-settings");
+                  setTabs((current) => updateTabs(current, { type: "open", id: "settings" }));
+                },
               },
             ],
           ]}
@@ -985,6 +1011,7 @@ function App() {
         {!splash && (
           <PageTabBar
             tabs={tabs}
+            settingsSection={settingsSection}
             api={api}
             chats={snapshot?.chats ?? []}
             selectedId={workerId ?? snapshot?.chat.run?.id}
@@ -996,6 +1023,7 @@ function App() {
             directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
             onConnectDatabase={() => showPicker("database")}
+            onSettingsSectionSelect={setSettingsSection}
             projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
             onSelect={(id) => {
               setMenu(undefined);
@@ -1047,7 +1075,7 @@ function App() {
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
                   runs={snapshot?.runs ?? []}
-                  reviews={snapshot?.reviews ?? []}
+                  reviews={reviewSummaries}
                   onReview={openReview}
                   plans={chat?.plans ?? []}
                   onPlan={openPlan}
@@ -1087,21 +1115,9 @@ function App() {
               disabled={!database}
               plans={plans}
               api={api}
-              reviews={snapshot?.reviews ?? []}
+              reviews={reviewSummaries}
               project={directory ?? ""}
               currentChat={snapshot?.chat.run?.id}
-              chatIds={snapshot?.chats.flatMap((chat) => (chat.run ? [chat.run.id] : [])) ?? []}
-              unisolated={
-                snapshot?.runs
-                  .filter((run) => run.record.base === null)
-                  .map((run) => run.record.id) ?? []
-              }
-              onSetupGit={
-                directory &&
-                ["not_repository", "no_commits"].includes(snapshot?.gitReadiness?.status ?? "")
-                  ? () => setGitSetupProject(directory)
-                  : undefined
-              }
               key={workspace}
               tabs={currentFileTabs}
               onAction={fileAction}
@@ -1122,6 +1138,7 @@ function App() {
             hidden={tabs.active !== "settings"}
           >
             <SettingsPage
+              section={settingsSection}
               updates={<UpdatesSection updates={updates} />}
               versions={snapshot?.versions}
               orchestration={snapshot && <OrchestrationSettings snapshot={snapshot} api={api} />}
@@ -1134,15 +1151,10 @@ function App() {
                       api={api}
                       chartTickMs={chartTickMs}
                       onChartTick={setChartTickMs}
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
+                      onOpenMonitor={() =>
                         setTabs((current) => updateTabs(current, { type: "select", id: "polling" }))
                       }
-                    >
-                      Open polling monitor
-                    </button>
+                    />
                   </fieldset>
                 )
               }
@@ -1833,6 +1845,7 @@ function ActionsMenu({
 }
 
 function SettingsPage({
+  section,
   updates,
   versions,
   orchestration,
@@ -1857,6 +1870,7 @@ function SettingsPage({
   charts,
   onCharts,
 }: {
+  section: SettingsSectionId;
   updates: ReactNode;
   versions: Versions | undefined;
   orchestration: ReactNode;
@@ -1882,151 +1896,255 @@ function SettingsPage({
   onFit(fit: boolean): void;
 }) {
   const id = useId();
+  const settingsPanel = (page: SettingsSectionId, children: ReactNode) => (
+    <div
+      role="tabpanel"
+      id={`panel-settings-${page}`}
+      aria-labelledby={`tab-settings-${page}`}
+      hidden={section !== page}
+    >
+      {children}
+    </div>
+  );
   return (
     <main className="settings-page" aria-labelledby={id}>
       <div className="settings-page-heading">
         <h1 id={id}>Settings</h1>
       </div>
-      {orchestration}
-      <section className="settings-section" aria-labelledby={`${id}-appearance`}>
-        <h2 id={`${id}-appearance`}>Appearance</h2>
-        <label className="settings-row">
-          Theme
-          <select
-            aria-label="Theme"
-            value={theme}
-            onChange={(event) => onTheme(parseTheme(event.target.value))}
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">System</option>
-          </select>
-        </label>
-        <label className="settings-row">
-          Transparent background
-          <input
-            type="checkbox"
-            role="switch"
-            checked={transparent ?? false}
-            aria-checked={transparent ?? false}
-            aria-describedby={`${id}-transparent`}
-            disabled={transparent === undefined || savingAppearance}
-            onChange={(event) => onTransparent(event.target.checked)}
+      {settingsPanel("agents", orchestration)}
+      {settingsPanel(
+        "appearance",
+        <section className="settings-section" aria-labelledby={`${id}-appearance`}>
+          <SettingsHeader id={`${id}-appearance`} title="Appearance" />
+          <SettingsCard title="Window">
+            <label className="settings-row">
+              Theme
+              <select
+                aria-label="Theme"
+                value={theme}
+                onChange={(event) => onTheme(parseTheme(event.target.value))}
+              >
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="system">System</option>
+              </select>
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">
+                <span id={`${id}-transparent-label`}>Transparent background</span>
+                <InfoTip label="Transparent background" id={`${id}-transparent`}>
+                  Applies after restart. Makes the area outside the content frame and tabs fully
+                  transparent. On macOS, clicks in that area pass through to the desktop; on Linux,
+                  the window stays clickable.
+                </InfoTip>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={transparent ?? false}
+                aria-checked={transparent ?? false}
+                aria-labelledby={`${id}-transparent-label`}
+                aria-describedby={`${id}-transparent`}
+                disabled={transparent === undefined || savingAppearance}
+                onChange={(event) => onTransparent(event.target.checked)}
+              />
+            </label>
+          </SettingsCard>
+          <SettingsCard title="Accessibility">
+            <label className="settings-row">
+              Focus highlight border
+              <input
+                type="checkbox"
+                role="switch"
+                checked={focusHighlight}
+                aria-checked={focusHighlight}
+                onChange={(event) => onFocusHighlight(event.target.checked)}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">
+                <span id={`${id}-signals-label`}>Signal colors</span>
+                <InfoTip label="Signal colors" id={`${id}-signals`}>
+                  Adds color to status labels, banners, and toasts. Every state keeps its icon and
+                  written label, so nothing depends on color alone.
+                </InfoTip>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={signals}
+                aria-checked={signals}
+                aria-labelledby={`${id}-signals-label`}
+                aria-describedby={`${id}-signals`}
+                onChange={(event) => onSignals(event.target.checked)}
+              />
+            </label>
+          </SettingsCard>
+        </section>,
+      )}
+      {settingsPanel(
+        "table-defaults",
+        <section className="settings-section" aria-labelledby={`${id}-table`}>
+          <SettingsHeader
+            id={`${id}-table`}
+            title="Table defaults"
+            tip="Defaults for tables without local overrides. Use each table’s Settings to customize it."
           />
-        </label>
-        <p id={`${id}-transparent`}>
-          Applies after restart. Makes the area outside the content frame and tabs fully
-          transparent. On macOS, clicks in that area pass through to the desktop; on Linux, the
-          window stays clickable.
-        </p>
-        <label className="settings-row">
-          Focus highlight border
-          <input
-            type="checkbox"
-            role="switch"
-            checked={focusHighlight}
-            aria-checked={focusHighlight}
-            onChange={(event) => onFocusHighlight(event.target.checked)}
-          />
-        </label>
-        <label className="settings-row">
-          Signal colors
-          <input
-            type="checkbox"
-            role="switch"
-            checked={signals}
-            aria-checked={signals}
-            aria-describedby={`${id}-signals`}
-            onChange={(event) => onSignals(event.target.checked)}
-          />
-        </label>
-        <p id={`${id}-signals`}>
-          Adds color to status labels, banners, and toasts. Every state keeps its icon and written
-          label, so nothing depends on color alone.
-        </p>
-      </section>
-      <section className="settings-section" aria-labelledby={`${id}-table`}>
-        <h2 id={`${id}-table`}>Table defaults</h2>
-        <p>
-          Defaults for tables without local overrides. Use each table’s Settings to customize it.
-        </p>
-        {(
-          [
-            ["horizontal", "Row lines"],
-            ["vertical", "Column lines"],
-            ["heading", "Heading lines"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="settings-row">
-            {label}
-            <input
-              type="checkbox"
-              role="switch"
-              aria-checked={lines[key]}
-              checked={lines[key]}
-              onChange={(event) => onLines({ ...lines, [key]: event.target.checked })}
-            />
-          </label>
-        ))}
-        <label className="settings-row">
-          Inline charts
-          <input
-            type="checkbox"
-            role="switch"
-            aria-checked={charts}
-            checked={charts}
-            aria-describedby={`${id}-charts`}
-            onChange={(event) => onCharts(event.target.checked)}
-          />
-        </label>
-        <p id={`${id}-charts`}>
-          Shows turn time, event activity, and the last two minutes of state for each session.
-        </p>
-        <label className="settings-row">
-          Fit columns to width
-          <input
-            type="checkbox"
-            role="switch"
-            aria-checked={fit}
-            checked={fit}
-            onChange={(event) => onFit(event.target.checked)}
-          />
-        </label>
-        <div className="settings-row" role="radiogroup" aria-labelledby={`${id}-density`}>
-          <span id={`${id}-density`}>Row density</span>
-          <span className="settings-options">
-            {rowDensities.map((entry) => (
-              <label key={entry.id} className="check-label">
+          <SettingsCard title="Lines">
+            {(
+              [
+                ["horizontal", "Row lines"],
+                ["vertical", "Column lines"],
+                ["heading", "Heading lines"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="settings-row">
+                {label}
                 <input
-                  type="radio"
-                  name="row-density"
-                  value={entry.id}
-                  checked={density === entry.id}
-                  onChange={() => onDensity(entry.id)}
+                  type="checkbox"
+                  role="switch"
+                  aria-checked={lines[key]}
+                  checked={lines[key]}
+                  onChange={(event) => onLines({ ...lines, [key]: event.target.checked })}
                 />
-                {entry.label}
               </label>
             ))}
-          </span>
-        </div>
-      </section>
-      <section className="settings-section" aria-labelledby={`${id}-text`}>
-        <div className="text-section-heading">
-          <h2 id={`${id}-text`}>Text</h2>
-          <button type="button" onClick={() => onTextStyles(structuredClone(defaultTextStyles))}>
-            Reset text
-          </button>
-        </div>
+          </SettingsCard>
+          <SettingsCard title="Layout">
+            <div className="settings-row">
+              <span id={`${id}-density`}>Row density</span>
+              <div className="segmented" role="radiogroup" aria-labelledby={`${id}-density`}>
+                {rowDensities.map((entry) => (
+                  <label key={entry.id} className="segmented-option">
+                    <input
+                      type="radio"
+                      name="row-density"
+                      value={entry.id}
+                      checked={density === entry.id}
+                      onChange={() => onDensity(entry.id)}
+                    />
+                    {entry.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="settings-row">
+              Fit columns to width
+              <input
+                type="checkbox"
+                role="switch"
+                aria-checked={fit}
+                checked={fit}
+                onChange={(event) => onFit(event.target.checked)}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">
+                <span id={`${id}-charts-label`}>Inline charts</span>
+                <InfoTip label="Inline charts" id={`${id}-charts`}>
+                  Shows turn time, event activity, and the last two minutes of state for each
+                  session.
+                </InfoTip>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-checked={charts}
+                checked={charts}
+                aria-labelledby={`${id}-charts-label`}
+                aria-describedby={`${id}-charts`}
+                onChange={(event) => onCharts(event.target.checked)}
+              />
+            </label>
+          </SettingsCard>
+        </section>,
+      )}
+      {settingsPanel("text", <TextSettings textStyles={textStyles} onTextStyles={onTextStyles} />)}
+      {settingsPanel("polling-settings", pollingControls)}
+      {settingsPanel("updates", updates)}
+      {settingsPanel("about", <AboutSection versions={versions} />)}
+    </main>
+  );
+}
+
+const textSamples: Record<TextRole, string> = {
+  tableHeadings: "Session|Status|Created",
+  buttons: "Send message",
+  agentMessages: "I updated the parser and added two regression tests.",
+  humanMessages: "Can you add tests for the parser?",
+  pageTitles: "Sessions",
+  normalText: "Code60 runs coding agents in parallel on one repository.",
+};
+
+const textCases = [
+  { value: "none", label: "As written", glyph: "Aa" },
+  { value: "upper", label: "Uppercase", glyph: "AA" },
+  { value: "lower", label: "Lowercase", glyph: "aa" },
+] as const;
+
+const isCustomized = (style: TextStyle) =>
+  Object.entries(style).some(
+    ([key, value]) => value !== undefined && !(key === "case" && value === "none"),
+  );
+
+function TextSettings({
+  textStyles,
+  onTextStyles,
+}: {
+  textStyles: TextStyles;
+  onTextStyles(styles: TextStyles): void;
+}) {
+  const id = useId();
+  return (
+    <section className="settings-section text-settings" aria-labelledby={`${id}-text`}>
+      <SettingsHeader id={`${id}-text`} title="Text">
+        <button type="button" onClick={() => onTextStyles(structuredClone(defaultTextStyles))}>
+          Reset text
+        </button>
+      </SettingsHeader>
+      <div className="text-styles">
         {textRoles.map((role) => {
           const style = textStyles[role.id];
           const resolved = resolveText(textStyles, role.id);
           const update = (patch: TextStyle) =>
             onTextStyles({ ...textStyles, [role.id]: { ...style, ...patch } });
+          const caseName = `${id}-${role.id}-case`;
           return (
-            <fieldset className="text-style" key={role.id}>
-              <legend>{role.label}</legend>
-              <div className="text-style-controls">
-                <label>
+            <fieldset className="settings-group text-style" key={role.id}>
+              <legend className="settings-group-title">{role.label}</legend>
+              {isCustomized(style) && (
+                <button
+                  type="button"
+                  className="settings-group-reset"
+                  aria-label={`Reset ${role.label}`}
+                  onClick={() => onTextStyles({ ...textStyles, [role.id]: {} })}
+                >
+                  Reset
+                </button>
+              )}
+              <div
+                className="text-style-preview"
+                data-role={role.css}
+                aria-hidden="true"
+                style={{
+                  fontFamily: resolved.family,
+                  fontSize: `${resolved.size}px`,
+                  fontWeight: resolved.weight,
+                  letterSpacing: resolved.spacing,
+                  textTransform:
+                    resolved.case === "upper"
+                      ? "uppercase"
+                      : resolved.case === "lower"
+                        ? "lowercase"
+                        : "none",
+                }}
+              >
+                {textSamples[role.id].split("|").map((part) => (
+                  <span key={part}>{part}</span>
+                ))}
+              </div>
+              <div className="settings-controls">
+                <label className="settings-field text-style-typeface">
                   Typeface
                   <select
                     value={style.typeface ?? ""}
@@ -2046,28 +2164,31 @@ function SettingsPage({
                     ))}
                   </select>
                 </label>
-                <label>
+                <label className="settings-field text-style-size">
                   Font size
-                  <input
-                    type="number"
-                    min={fontSizes.min}
-                    max={fontSizes.max}
-                    step="1"
-                    value={style.size ?? ""}
-                    placeholder={String(resolved.size)}
-                    onChange={(event) => {
-                      const value = event.target.valueAsNumber;
-                      if (!event.target.value) update({ size: undefined });
-                      else if (
-                        Number.isInteger(value) &&
-                        value >= fontSizes.min &&
-                        value <= fontSizes.max
-                      )
-                        update({ size: value });
-                    }}
-                  />
+                  <span className="settings-unit">
+                    <input
+                      type="number"
+                      min={fontSizes.min}
+                      max={fontSizes.max}
+                      step="1"
+                      value={style.size ?? ""}
+                      placeholder={String(resolved.size)}
+                      onChange={(event) => {
+                        const value = event.target.valueAsNumber;
+                        if (!event.target.value) update({ size: undefined });
+                        else if (
+                          Number.isInteger(value) &&
+                          value >= fontSizes.min &&
+                          value <= fontSizes.max
+                        )
+                          update({ size: value });
+                      }}
+                    />
+                    <span aria-hidden="true">px</span>
+                  </span>
                 </label>
-                <label>
+                <label className="settings-field text-style-weight">
                   Font weight
                   <select
                     value={style.weight ?? ""}
@@ -2079,7 +2200,7 @@ function SettingsPage({
                       })
                     }
                   >
-                    <option value="">Default</option>
+                    <option value="">Default (Regular)</option>
                     {fontWeights.map((entry) => (
                       <option key={entry.value} value={entry.value}>
                         {entry.label}
@@ -2087,29 +2208,30 @@ function SettingsPage({
                     ))}
                   </select>
                 </label>
-                {(["upper", "lower"] as const).map((textCase) => (
-                  <label className="check-label" key={textCase}>
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      checked={resolved.case === textCase}
-                      aria-checked={resolved.case === textCase}
-                      onChange={(event) =>
-                        update({ case: event.target.checked ? textCase : "none" })
-                      }
-                    />
-                    {textCase === "upper" ? "Uppercase" : "Lowercase"}
-                  </label>
-                ))}
+                <div className="settings-field">
+                  <span id={caseName}>Case</span>
+                  <div className="segmented" role="radiogroup" aria-labelledby={caseName}>
+                    {textCases.map((entry) => (
+                      <label key={entry.value} className="segmented-option" title={entry.label}>
+                        <input
+                          type="radio"
+                          name={caseName}
+                          value={entry.value}
+                          aria-label={entry.label}
+                          checked={(resolved.case ?? "none") === entry.value}
+                          onChange={() => update({ case: entry.value })}
+                        />
+                        <span aria-hidden="true">{entry.glyph}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </fieldset>
           );
         })}
-      </section>
-      {pollingControls}
-      {updates}
-      <AboutSection versions={versions} />
-    </main>
+      </div>
+    </section>
   );
 }
 
@@ -2140,19 +2262,26 @@ function AboutSection({ versions }: { versions: Versions | undefined }) {
   };
   return (
     <section className="settings-section" aria-labelledby={id}>
-      <h2 id={id}>About</h2>
-      {rows.map(([label, value]) => (
-        <div className="settings-row" key={label}>
-          <span>{label}</span>
-          <span>{value}</span>
-        </div>
-      ))}
-      <p>{CODE60_COPYRIGHT}</p>
-      <p>Geometry animated icons created by Magnific - Flaticon</p>
-      <button type="button" disabled={!versions} onClick={() => void copy()}>
-        Copy version info
-      </button>
-      <p role="status">{copyStatus}</p>
+      <SettingsHeader id={id} title="About">
+        <span className="settings-status" role="status">
+          {copyStatus}
+        </span>
+        <button type="button" disabled={!versions} onClick={() => void copy()}>
+          Copy version info
+        </button>
+      </SettingsHeader>
+      <dl className="settings-card version-list">
+        {rows.map(([label, value]) => (
+          <div className="settings-row" key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="settings-note">
+        <p>{CODE60_COPYRIGHT}</p>
+        <p>Geometry animated icons created by Magnific - Flaticon</p>
+      </div>
     </section>
   );
 }

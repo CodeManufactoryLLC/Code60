@@ -97,7 +97,7 @@ export function ChatPage({
   reviews?: ReviewSummary[];
   plans?: PlanSummary[];
   onPlan?: (id: string) => void;
-  onReview?(id: string, updates?: boolean): void;
+  onReview?(id: string): void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const id = useId();
@@ -356,52 +356,6 @@ export function ChatPage({
               ))}
             </nav>
           )}
-          {reviews.length > 0 && (
-            <details className="chat-reviews">
-              <summary>Changes</summary>
-              <div>
-                {reviews
-                  .filter(
-                    (review) =>
-                      review.chatId === run?.id ||
-                      review.chatId === null ||
-                      !chat?.run ||
-                      review.originChatId !== review.chatId,
-                  )
-                  .map((review) => (
-                    <button
-                      type="button"
-                      key={review.id}
-                      onClick={(event) => {
-                        onReview?.(review.id);
-                        event.currentTarget
-                          .closest("details.chat-reviews")
-                          ?.removeAttribute("open");
-                      }}
-                    >
-                      {review.title}
-                    </button>
-                  ))}
-                <details>
-                  <summary>Saved reviews</summary>
-                  {reviews.map((review) => (
-                    <button
-                      type="button"
-                      key={review.id}
-                      onClick={(event) => {
-                        onReview?.(review.id);
-                        event.currentTarget
-                          .closest("details.chat-reviews")
-                          ?.removeAttribute("open");
-                      }}
-                    >
-                      {review.title}
-                    </button>
-                  ))}
-                </details>
-              </div>
-            </details>
-          )}
           {!database ? (
             <button type="button" onClick={onDatabase}>
               Connect to database
@@ -527,15 +481,7 @@ export function ChatPage({
                             )
                             .join(" · ")}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onReview?.(
-                              review.id,
-                              review.submissions.some((batch) => batch.state === "delivered"),
-                            )
-                          }
-                        >
+                        <button type="button" onClick={() => onReview?.(review.id)}>
                           {review.submissions.some((batch) => batch.state === "delivered")
                             ? "Review updates"
                             : "Review changes"}

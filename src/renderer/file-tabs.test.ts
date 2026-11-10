@@ -115,3 +115,56 @@ it("deduplicates plan tabs by identity and keeps their revised titles", () => {
   expect(state.entries[0]).toMatchObject({ kind: "plan", title: "Revised" });
   expect(state.active).toBe(state.entries[0]?.id);
 });
+
+it("keeps one Changes list tab without stealing focus on new captures", () => {
+  let state = updateFileTabs(emptyFileTabs("project"), {
+    type: "file",
+    path: "README.md",
+  });
+  const fileTabId = state.active;
+  state = updateFileTabs(state, { type: "ensure-changes" });
+  expect(state.active).toBe(fileTabId);
+  expect(state.entries.filter((tab) => tab.kind === "changes")).toHaveLength(1);
+  const changes = state.entries.find((tab) => tab.kind === "changes");
+  if (!changes) throw new Error("Missing Changes tab");
+
+  state = updateFileTabs(state, { type: "changes" });
+  expect(state.entries.filter((tab) => tab.kind === "changes")).toHaveLength(1);
+  expect(state.active).toBe(changes.id);
+  expect(state.entries.find((tab) => tab.kind === "changes")).toEqual({
+    id: changes.id,
+    kind: "changes",
+  });
+  const selected = state.entries.find((tab) => tab.id === state.active);
+  if (!selected) throw new Error("Missing selected tab");
+  expect(fileTabLabel(selected, state.entries)).toBe("Changes");
+  expect(updateFileTabs(state, { type: "ensure-changes" })).toBe(state);
+});
+
+it("opens separate pinned revision tabs, deduplicates by review and revision, and supports closing/reopening", () => {
+  let state = updateFileTabs(emptyFileTabs("project"), { type: "changes" });
+  const revision = {
+    type: "revision" as const,
+    reviewId: "task-a",
+    revisionId: "one",
+    title: "Revision 1 · Task A",
+  };
+  state = updateFileTabs(state, revision);
+  const first = state.active;
+  const firstTab = state.entries.find((tab) => tab.id === first);
+  if (first === null || !firstTab) throw new Error("Missing revision tab");
+  state = updateFileTabs(state, { ...revision, revisionId: "two", title: "Revision 2 · Task A" });
+  state = updateFileTabs(state, { ...revision, reviewId: "task-b" });
+  expect(state.entries).toHaveLength(4);
+  state = updateFileTabs(state, revision);
+  expect(state.entries).toHaveLength(4);
+  expect(state.active).toBe(first);
+  expect(fileTabLabel(firstTab, state.entries)).toBe(revision.title);
+  state = updateFileTabs(state, { type: "changes" });
+  expect(state.entries).toHaveLength(4);
+  expect(state.active).toBe(1);
+  state = updateFileTabs(state, { type: "close", id: first });
+  state = updateFileTabs(state, revision);
+  expect(state.active).not.toBe(first);
+  expect(state.entries).toHaveLength(4);
+});

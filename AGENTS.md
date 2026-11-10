@@ -30,8 +30,14 @@ environments.
   Run the CLI locally with `node dist/cli/main.js`.
 - `npm run dev` builds and starts the desktop app, rebuilding and restarting it
   on changes. `npm start` starts the built app.
-- `npm run test:desktop` builds and runs the Playwright Electron smoke test
-  (`test/desktop.e2e.ts`). It needs a display; `npm run check` does not run it.
+- Run desktop (Electron/Playwright, `test/desktop.e2e.ts`) tests locally only in
+  the Linux container: `npm run test:desktop:container` (add
+  `-- --grep "<name>"` to narrow). Do not run `npm run test:desktop` on the
+  host; it opens windows on the user's machine. CI and native-platform
+  validation (macOS, Windows, packaged and installer tests) are the only places
+  it runs directly. If Docker is unavailable, stop and report it rather than
+  falling back to the host. Unit tests and `npm run check` run on the host;
+  `npm run check` does not run the desktop tests.
 - `npm run install:global` installs dependencies, builds, and links the
   `code60` command globally with `npm link`. `npm run uninstall:global`
   removes the link.

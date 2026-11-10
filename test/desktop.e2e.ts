@@ -132,8 +132,16 @@ async function selectSidebarPage(page: Page, name: string) {
   ) {
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
+    await page.locator("#table-pages").getByRole("tab", { name, exact: true }).click();
+    return;
   }
   await page.getByRole("tab", { name, exact: true }).click();
+}
+
+async function selectSettingsPage(page: Page, name: string) {
+  const disclosure = page.getByRole("button", { name: "Settings pages", exact: true });
+  if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
+  await page.locator("#settings-pages").getByRole("tab", { name, exact: true }).click();
 }
 
 async function expectSplashLayout(page: Page) {
@@ -304,7 +312,9 @@ async function expectIndustrialSurfaces(page: Page) {
                 ? 0
                 : grouped
                   ? 28
-                  : element.matches("[role='tab'], .message-copy button, .sidebar button")
+                  : element.matches(
+                        "[role='tab'], .message-copy button, .sidebar button, .info-tip",
+                      )
                     ? 24
                     : 36,
           };
@@ -510,7 +520,9 @@ async function expectTabAppearance(page: Page) {
     const active = document.querySelector<HTMLElement>("[role='tab'][aria-selected='true']");
     const inactive = document.querySelector<HTMLElement>("[role='tab'][aria-selected='false']");
     const bar = document.querySelector(".sidebar");
-    const panel = document.getElementById(active?.getAttribute("aria-controls") ?? "");
+    const controlled = document.getElementById(active?.getAttribute("aria-controls") ?? "");
+    // Settings pages are nested inside the Settings page panel, which aligns with the sidebar.
+    const panel = controlled?.closest(".page-panel") ?? controlled;
     if (!active || !inactive || !bar || !panel) throw new Error("Missing page tabs");
     return {
       activeId: active.id,
@@ -706,7 +718,7 @@ async function launch(directory: string, folder: string, database: string, confi
   return launchDesktop(directory, folder, database);
 }
 
-test("desktop: task revisions preserve project edits through apply and undo", async () => {
+test("desktop: read-only task revisions preserve project files and switch reviews", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-task-loop-ui-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
@@ -771,66 +783,65 @@ test("desktop: task revisions preserve project edits through apply and undo", as
     await composer.press("Enter");
     await waitForCapture("Implement task loop", "task.txt");
     await page.getByRole("button", { name: "Review changes", exact: true }).click();
-    const review = page.getByRole("region", { name: "Changes: Implement task loop", exact: true });
+    const review = page.getByRole("region", { name: "Revision diff", exact: true });
+    await expect(review.locator(".monaco-diff-editor")).toBeVisible();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "accepted task result",
+    );
+    await expect(review.getByRole("combobox")).toHaveCount(0);
+    await expect(review.locator(".review-diff-actions")).toHaveCount(0);
+    await expect(review.getByRole("checkbox", { name: "Side by side" })).toHaveCount(0);
     await expect(
-      review.getByRole("button", { name: "Use these changes…", exact: true }),
-    ).toBeEnabled();
-    await review.getByRole("button", { name: "Use these changes…", exact: true }).click();
-    const confirmation = page.getByRole("dialog", { name: "Use these changes", exact: true });
-    await expect(confirmation.locator(".monaco-diff-editor")).toBeVisible();
-    await page.screenshot({ path: "test-results/task-revision-preview.png" });
-    await confirmation.getByRole("button", { name: "Use these changes", exact: true }).click();
-    await expect(confirmation).toBeHidden();
-    await expect
-      .poll(() => readFile(join(repo, "task.txt"), "utf8"))
-      .toBe("accepted task result\n");
+      review.getByRole("button", { name: /Previous change|Next change|Find/ }),
+    ).toHaveCount(0);
+    await expect(review.locator("form, .task-actions, .review-feedback")).toHaveCount(0);
+    await expect(
+      review.getByRole("button", {
+        name: /Use these changes|Undo application|Refresh changes|Mark file/,
+      }),
+    ).toHaveCount(0);
+    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
     expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
     expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     await expect(composer).toBeEditable();
     await composer.fill("Implement second task loop");
     await composer.press("Enter");
     await waitForCapture("Implement second task loop", "second.txt");
-    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(2);
     await page.getByRole("button", { name: "Review changes", exact: true }).last().click();
-    const secondReview = page.getByRole("region", {
-      name: "Changes: Implement second task loop",
+    await expect(page.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(1);
+    await expect(review.locator(".review-files")).toContainText("second.txt");
+    const secondTab = await page
+      .getByRole("tab", { name: /Revision \d+ · Implement second task loop/ })
+      .getAttribute("aria-selected");
+    expect(secondTab).toBe("true");
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    const revisionList = page.getByRole("navigation", { name: "Task revisions" });
+    await expect(
+      revisionList.getByRole("heading", { name: "Implement task loop", exact: true }),
+    ).toBeVisible();
+    await expect(
+      revisionList.getByRole("heading", { name: "Implement second task loop", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Select changes review" })).toHaveCount(0);
+    await expect(review).toHaveCount(0);
+    await page.screenshot({ path: "test-results/task-revisions.png" });
+    const firstTask = revisionList.getByRole("region", {
+      name: "Implement task loop",
       exact: true,
     });
+    await firstTask.getByRole("button").last().focus();
+    await page.keyboard.press("Enter");
+    await expect(review.locator(".review-files")).toContainText("task.txt");
     await expect(
-      secondReview.getByRole("button", { name: "Use these changes…", exact: true }),
-    ).toBeEnabled();
+      page.getByRole("tab", { name: /Revision \d+ · Implement task loop$/ }),
+    ).toHaveCount(1);
     const snapshot = await page.evaluate(() => window.desktop.snapshot());
     const next = snapshot.runs.find((run) => run.record.firstPrompt.includes("second.txt"));
     if (!next) throw new Error("Missing second task");
     expect(await readFile(join(next.record.worktree, "task.txt"), "utf8")).toBe(
-      "accepted task result\n",
+      "initial project\n",
     );
-    await writeFile(join(repo, "second.txt"), "user edit\n");
-    await secondReview.getByRole("button", { name: "Use these changes…", exact: true }).click();
-    await expect(
-      confirmation.getByText("Conflicts need revision. Project files have not changed.", {
-        exact: true,
-      }),
-    ).toBeVisible();
-    expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\n");
-    await expect(
-      confirmation.getByRole("button", { name: "Use these changes", exact: true }),
-    ).toHaveCount(0);
-    await confirmation.getByRole("button", { name: "Ask workers to revise", exact: true }).click();
-    await expect(confirmation).toBeHidden();
-    await secondReview.getByRole("button", { name: /Review updates/ }).click();
-    await expect(secondReview.locator(".monaco-diff-editor")).toContainText("worker correction");
-    await secondReview.getByRole("button", { name: "Use these changes…", exact: true }).click();
-    await confirmation.getByRole("button", { name: "Use these changes", exact: true }).click();
-    await expect(confirmation).toBeHidden();
-    await expect
-      .poll(() => readFile(join(repo, "second.txt"), "utf8"))
-      .toBe("user edit\nworker correction\n");
-    await secondReview.getByRole("button", { name: "Undo application", exact: true }).click();
-    await expect.poll(() => readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\n");
-    await page.getByRole("button", { name: "Review changes", exact: true }).first().click();
-    await review.getByRole("button", { name: "Undo application", exact: true }).click();
-    await expect.poll(() => readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
+    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
     expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
     expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
   } finally {
@@ -895,7 +906,9 @@ test("desktop: database connection gates splash and workspace controls", async (
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeFocused();
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme", { exact: true })).toBeEnabled();
+    await selectSettingsPage(page, "Polling");
     await expect(
       page.getByRole("button", { name: "Open polling monitor", exact: true }),
     ).toBeDisabled();
@@ -1040,7 +1053,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
   try {
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Updates");
     const toggle = page.getByRole("switch", { name: "Automatically check for updates" });
     await expect(toggle).toBeChecked();
     await toggle.uncheck();
@@ -1048,7 +1061,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
       .poll(() => page.evaluate(() => window.desktop.update("status")))
       .toMatchObject({ autoCheck: false });
     await page.reload();
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Updates");
     await expect(toggle).not.toBeChecked();
     await toggle.check();
     await expect
@@ -1616,7 +1629,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-top-right-radius", "0px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(13);
+    await expect(tabs).toHaveCount(20);
     const tabCorners = await tabs.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -1655,6 +1668,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     );
     await expectIconAction(page.getByRole("button", { name: "Settings pages", exact: true }));
     await expectTabAppearance(page);
+    await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme", { exact: true }).locator("option")).toHaveText([
       "Light",
       "Dark",
@@ -1674,6 +1688,13 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       .poll(() => page.evaluate(() => localStorage.getItem("code60.theme")))
       .toBe("light");
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
+    // Collapse Tables so the expanded Settings pages fit without a navigation scrollbar.
+    await page.getByRole("button", { name: "Tables", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Tables", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     // The sidebar stays fixed while the page shrinks, without overflowing the window.
     const originalSize = await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.getSize(),
@@ -1708,6 +1729,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     )
       await selectSidebarPage(page, "Sessions");
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await expect(toggle()).toBeChecked();
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
     await application.close();
@@ -1716,6 +1738,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     page = await enter();
     await expect(page.locator("html")).toHaveAttribute("data-transparent", "true");
     await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Sessions");
     await expectNeutralTheme(page);
@@ -1798,6 +1821,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect.poll(ignored).toBe(false);
 
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await toggle().uncheck();
     await expect(toggle()).toBeEnabled();
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
@@ -1862,16 +1886,18 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const worktreesTab = page.getByRole("tab", { name: "Worktrees", exact: true });
     const settingsTab = page.getByRole("tab", { name: "Settings", exact: true });
     await settingsTab.click();
-    await expect(settingsTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#tab-settings-agents")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
     const about = page.getByRole("region", { name: "About", exact: true });
     const updates = page.getByRole("region", { name: "Updates", exact: true });
+    await selectSettingsPage(page, "Updates");
     await expect(updates.getByRole("status")).toContainText("installed release build");
     await expect(updates.getByRole("button", { name: "Check for updates" })).toBeDisabled();
     expect(await page.evaluate(() => window.desktop.update("status"))).toMatchObject({
       status: "unavailable",
     });
     await expect(page.evaluate(() => window.desktop.update("execute" as never))).rejects.toThrow();
+    await selectSettingsPage(page, "About");
     await expect(about.getByText(version, { exact: true })).toBeVisible();
     const versions = (await page.evaluate(() => window.desktop.snapshot())).versions;
     expect(versions).toMatchObject({
@@ -1957,7 +1983,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(18);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -2045,6 +2071,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectDistinctChatSurfaces();
     await expect(chatPopup.getByLabel("Message", { exact: true })).toBeEnabled();
     await settingsTab.click();
+    await selectSettingsPage(page, "Appearance");
     const focusHighlight = page.getByRole("switch", {
       name: "Focus highlight border",
       exact: true,
@@ -2336,11 +2363,17 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(chatPopup).toBeHidden();
     await menu.getByRole("menuitem", { name: "Review changes" }).click();
     await expect(menu).toBeHidden();
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .last()
+      .click();
     const changes = page.locator(".review-panel");
     await expect(changes.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
       "after",
     );
-    await page.getByRole("button", { name: /^Close Changes · / }).click();
+    await page.getByRole("button", { name: /^Close Revision \d+ ·/ }).click();
     await selectSidebarPage(page, "Sessions");
     await expect(changes).toBeHidden();
     cell = await actionsCell(page);
@@ -2368,9 +2401,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(18);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
+    await selectSettingsPage(page, "Text");
     await settingsPage.evaluate((element) => {
       element.scrollTop = 180;
     });
@@ -2393,7 +2427,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.getByLabel("Message", { exact: true }).fill("");
     await selectSidebarPage(page, "Sessions");
     // Keyboard navigation follows the visual order, including wraparound.
-    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    const settingsDisclosure = page.getByRole("button", { name: "Settings pages", exact: true });
+    if ((await settingsDisclosure.getAttribute("aria-expanded")) === "false")
+      await settingsDisclosure.click();
     const sidebarPages = [
       "Chat",
       "Prompt Editor",
@@ -2407,6 +2443,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Sessions",
       "Worktrees",
       "Settings",
+      "Agents",
+      "Appearance",
+      "Table defaults",
+      "Text",
+      "Polling",
+      "Updates",
+      "About",
     ] as const;
     await expect(page.getByRole("tab")).toHaveText(
       sidebarPages.filter((name) => name !== "Tables"),
@@ -2415,13 +2458,16 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("Home");
     await page.keyboard.press("ArrowLeft");
     await expect(page.getByRole("tab", { name: sidebarPages[0], exact: true })).toBeFocused();
-    for (const name of sidebarPages.slice(1)) {
+    for (const [index, name] of sidebarPages.entries()) {
+      if (index === 0) continue;
       await page.keyboard.press("ArrowDown");
       await expect(
-        page.getByRole(name === "Tables" ? "button" : "tab", {
-          name,
-          exact: true,
-        }),
+        page
+          .locator(index >= 12 ? "#settings-pages" : index === 8 ? "#table-pages" : ".page-tabs")
+          .getByRole(name === "Tables" ? "button" : "tab", {
+            name,
+            exact: true,
+          }),
       ).toBeFocused();
     }
     await page.keyboard.press("ArrowDown");
@@ -2436,7 +2482,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(11);
+    await expect(page.getByRole("tab")).toHaveCount(18);
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -2449,7 +2495,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         }),
       ),
     ).toEqual(["none", "drag"]);
-    await expect(page.locator("#panel-settings").getByRole("heading", { level: 2 })).toHaveText([
+    for (const name of [
       "Agents",
       "Appearance",
       "Table defaults",
@@ -2457,7 +2503,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Polling",
       "Updates",
       "About",
-    ]);
+    ]) {
+      await selectSettingsPage(page, name);
+      await expect(page.locator("#panel-settings").getByRole("heading", { level: 2 })).toHaveText([
+        name,
+      ]);
+    }
+    await selectSettingsPage(page, "Appearance");
     // The settings content is centered in the page, excluding the sidebar.
     const centered = await page.evaluate(() => {
       const box = document.querySelector(".settings-page-heading")?.getBoundingClientRect();
@@ -2566,20 +2618,24 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       }
       await settingsTab.click();
     }
+    await selectSettingsPage(page, "Text");
     const typeface = page
       .getByRole("group", { name: "Normal Text", exact: true })
       .getByLabel("Typeface");
     await expect(typeface).toHaveValue("");
     const headingCase = page
       .getByRole("group", { name: "Table Headings", exact: true })
-      .getByRole("switch", { name: "Uppercase", exact: true });
+      .getByRole("radio", { name: "Uppercase", exact: true });
     await expect(headingCase).not.toBeChecked();
     await expect(headingCase).toBeEnabled();
     await page
       .getByRole("group", { name: "Table Headings", exact: true })
       .getByLabel("Typeface")
       .selectOption("d-din");
-    await headingCase.uncheck();
+    await page
+      .getByRole("group", { name: "Table Headings", exact: true })
+      .getByRole("radio", { name: "As written", exact: true })
+      .check();
     await page.reload();
     if (
       await page.evaluate(async () => {
@@ -2591,6 +2647,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
     await expect(settingsTab).toHaveCount(1);
     await settingsTab.click();
+    await selectSettingsPage(page, "Text");
     await expect(headingCase).not.toBeChecked();
     await headingCase.check();
     await expect(typeface.locator("option")).toHaveText([
@@ -2666,9 +2723,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await group.getByLabel("Typeface").selectOption("georgia");
       await group.getByLabel("Font size").fill(String(16 + index));
       await group.getByLabel("Font weight").selectOption("700");
-      await group.getByRole("switch", { name: "Uppercase", exact: true }).check();
-      await group.getByRole("switch", { name: "Lowercase", exact: true }).check();
-      await expect(group.getByRole("switch", { name: "Uppercase", exact: true })).not.toBeChecked();
+      await group.getByRole("radio", { name: "Uppercase", exact: true }).check();
+      await group.getByRole("radio", { name: "Lowercase", exact: true }).check();
+      await expect(group.getByRole("radio", { name: "Uppercase", exact: true })).not.toBeChecked();
     }
     await expect(page.locator(".settings-page-heading h1")).toHaveCSS("font-size", "20px");
     await expect(page.locator(".settings-page-heading h1")).toHaveCSS(
@@ -2684,11 +2741,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     )
       await selectSidebarPage(page, "Sessions");
     await settingsTab.click();
+    await selectSettingsPage(page, "Text");
     for (const [index, name] of roles.entries()) {
       const group = page.getByRole("group", { name, exact: true });
       await expect(group.getByLabel("Font size")).toHaveValue(String(16 + index));
       await expect(group.getByLabel("Typeface")).toHaveValue("georgia");
-      await expect(group.getByRole("switch", { name: "Lowercase", exact: true })).toBeChecked();
+      await expect(group.getByRole("radio", { name: "Lowercase", exact: true })).toBeChecked();
     }
     await sessionsTab.click();
     if (!(await chatPopup.isVisible())) await chatHead.click();
@@ -2706,9 +2764,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       const group = page.getByRole("group", { name, exact: true });
       await expect(group.getByLabel("Font size")).toHaveValue("");
       await expect(group.getByLabel("Typeface")).toHaveValue("");
-      await expect(group.getByRole("switch", { name: "Lowercase", exact: true })).not.toBeChecked();
+      await expect(group.getByRole("radio", { name: "As written", exact: true })).toBeChecked();
     }
     await expect(page.locator(".settings-page-heading h1")).toHaveCSS("text-transform", "none");
+    await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme")).toHaveValue("system");
     await expect(page.locator(".settings-page pre, .settings-page code")).toHaveCount(0);
     await page.keyboard.press("Escape");
@@ -2899,10 +2958,16 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await again.keyboard.press("Home");
     await again.keyboard.press("ArrowDown");
     await again.keyboard.press("Enter");
+    await again.getByRole("tab", { name: "Changes", exact: true }).click();
+    await again
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .last()
+      .click();
     await expect(
       again.locator(".review-panel .modified .view-lines:not([monaco-view-zone])"),
     ).toContainText("after");
-    await again.getByRole("button", { name: /^Close Changes · / }).click();
+    await again.getByRole("button", { name: /^Close Revision \d+ ·/ }).click();
     await selectSidebarPage(again, "Sessions");
     await expect(again.locator(".review-panel")).toBeHidden();
     // The grid's scroll layer sits above the canvas and receives pointer input.
@@ -3524,7 +3589,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await selectSidebarPage(page, "Settings");
     await expect(worker(a)).toBeHidden();
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
-    await expectNavigationHighlight(page, page.locator(".sidebar-settings-heading"));
+    await expectNavigationHighlight(page, page.locator("#tab-settings-agents").locator(".."));
     await selectSidebarPage(page, "Chat");
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
@@ -3683,7 +3748,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     ).toHaveCount(1);
 
     for (const theme of ["light", "dark"]) {
-      await selectSidebarPage(page, "Settings");
+      await selectSettingsPage(page, "Appearance");
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await selectSidebarPage(page, "Chat");
       await expect(worker(a).locator(".composer")).toHaveCSS("box-shadow", "none");
@@ -4452,12 +4517,14 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expectSettingsHover(settingsPages);
     await settings.click();
     await expect(settingsPages).toHaveAttribute("aria-expanded", "true");
-    await expect(settings).toHaveAttribute("aria-selected", "true");
-    await expectNavigationHighlight(page, settingsHeading);
+    await expect(page.locator("#tab-settings-agents")).toHaveAttribute("aria-selected", "true");
+    await expectNavigationHighlight(page, page.locator("#tab-settings-agents").locator(".."));
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
     await resetPointer();
-    await expect(settingsHeading).toHaveCSS("background-color", settingsFills.active);
-    await expect(settings).toHaveCSS("background-color", settingsFills.active);
+    await expect(page.locator("#tab-settings-agents")).toHaveCSS(
+      "background-color",
+      settingsFills.active,
+    );
     await expect(settingsPages).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expectSettingsHover(settingsPages);
     await settings.click();
@@ -4467,11 +4534,16 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await settings.press("ArrowRight");
     await expect(advanced).toHaveAttribute("aria-expanded", "false");
     await settings.press("ArrowRight");
-    await expect(advanced).toBeFocused();
+    await expect(page.locator("#tab-settings-agents")).toBeFocused();
+    await page.locator("#tab-settings-agents").press("ArrowLeft");
+    await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#panel-settings-agents")).toBeVisible();
+    await settings.press("ArrowRight");
+    await advanced.focus();
     await advanced.press("ArrowRight");
     await expect(advancedPages).toHaveText("ExperimentsEpisodic MemoryContributor Tools");
     await expect(advancedPages).toBeVisible();
-    await expect(page.locator("#panel-chat")).toBeVisible();
+    await expect(page.locator("#panel-settings-agents")).toBeVisible();
     await advanced.press("ArrowLeft");
     await expect(advancedPages).toBeHidden();
     await expect(advanced).toBeFocused();
@@ -4728,7 +4800,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       ["system", "rgb(0, 0, 0)", "rgb(119, 204, 200)", "rgb(255, 255, 255)"],
     ] as const) {
       await page.emulateMedia({ colorScheme: neutral === "rgb(255, 255, 255)" ? "light" : "dark" });
-      await selectSidebarPage(page, "Settings");
+      await selectSettingsPage(page, "Appearance");
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await selectSidebarPage(page, "Chat");
       await expect(composer).toHaveCSS("border-top-width", "1px");
@@ -4777,10 +4849,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     await expect(chat.locator(".event.prompt")).toHaveCount(4);
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("light");
     await page.getByRole("tab", { name: "Chat", exact: true }).click();
     await page.screenshot({ path: "test-results/orchestration-chat-light.png" });
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await page.getByRole("tab", { name: "Chat", exact: true }).click();
     await application.evaluate(({ BrowserWindow }) =>
@@ -5251,7 +5325,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     application = await launch(directory, directory, database);
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     const toggle = page.getByRole("switch", { name: "Focus highlight border", exact: true });
     const keyboardFocus = async () => {
       await toggle.focus();
@@ -5274,7 +5348,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
       await expect(toggle).toHaveCSS("outline-width", "2px");
     }
     await page.reload();
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await expect(toggle).toBeChecked();
     await keyboardFocus();
     await expect(toggle).toHaveCSS("outline-width", "2px");
@@ -5283,7 +5357,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     await expect(toggle).toHaveCSS("outline-width", "0px");
     await expect(toggle).toHaveCSS("box-shadow", "none");
     await page.reload();
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await expect(toggle).not.toBeChecked();
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await page.evaluate(() => window.desktop.chooseFolder());
@@ -5291,7 +5365,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     const editor = page.locator(".prompt-editor-input");
     await editor.locator("textarea").focus();
     await expect(editor).toHaveCSS("outline-style", "none");
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await toggle.check();
     await selectSidebarPage(page, "Prompt Editor");
     await editor.locator("textarea").focus();
@@ -5301,6 +5375,188 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     await expectIconAction(page.getByRole("button", { name: "New chat", exact: true }));
     await editor.locator("textarea").focus();
     await page.screenshot({ path: "test-results/focus-highlight-enabled.png" });
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Text settings preview each role, switch case and reset per role", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-text-settings-"));
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, directory, database);
+    const page = await application.firstWindow();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSettingsPage(page, "Text");
+    const panel = page.locator("#panel-settings-text");
+    await expect(panel.locator(".text-style")).toHaveCount(6);
+    await expect(panel.locator(".settings-group-reset")).toHaveCount(0);
+    const group = panel.getByRole("group", { name: "Agent Chat Messages", exact: true });
+    const preview = group.locator(".text-style-preview");
+    await expect(preview).toHaveCSS("font-size", "14px");
+    await expect(group.getByRole("button", { name: "Reset Agent Chat Messages" })).toHaveCount(0);
+    await group.getByLabel("Font size").fill("22");
+    await expect(preview).toHaveCSS("font-size", "22px");
+    await group.getByLabel("Typeface").selectOption("georgia");
+    await expect(preview).toHaveCSS("font-family", /^Georgia/);
+    const asWritten = group.getByRole("radio", { name: "As written", exact: true });
+    await expect(asWritten).toBeChecked();
+    await asWritten.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(group.getByRole("radio", { name: "Uppercase", exact: true })).toBeChecked();
+    await expect(preview).toHaveCSS("text-transform", "uppercase");
+    await page.keyboard.press("ArrowRight");
+    await expect(group.getByRole("radio", { name: "Lowercase", exact: true })).toBeChecked();
+    await expect(preview).toHaveCSS("text-transform", "lowercase");
+    // Other roles keep their own settings.
+    await expect(
+      panel.getByRole("group", { name: "Normal Text", exact: true }).locator(".text-style-preview"),
+    ).toHaveCSS("font-size", "13px");
+    await expect(panel.locator(".settings-group-reset")).toHaveCount(1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    const heights = await group.evaluate((element) =>
+      [".text-style-typeface select", ".segmented"].map(
+        (selector) => element.querySelector(selector)?.getBoundingClientRect().bottom,
+      ),
+    );
+    expect(heights[0]).toBe(heights[1]);
+    await page.screenshot({ path: "test-results/text-settings-light.png" });
+    await selectSettingsPage(page, "Appearance");
+    await page.getByLabel("Theme", { exact: true }).selectOption("dark");
+    await selectSettingsPage(page, "Text");
+    await page.screenshot({ path: "test-results/text-settings-dark.png" });
+    await group.getByRole("button", { name: "Reset Agent Chat Messages" }).click();
+    await expect(preview).toHaveCSS("font-size", "14px");
+    await expect(asWritten).toBeChecked();
+    await expect(group.getByLabel("Font size")).toHaveValue("");
+    await expect(panel.locator(".settings-group-reset")).toHaveCount(0);
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(620, 620),
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: "test-results/text-settings-narrow.png" });
+    expect(errors).toEqual([]);
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Settings explanations sit behind information tooltips", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-settings-tips-"));
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, directory, database);
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
+    const panel = page.locator("#panel-settings-appearance");
+    await expect(panel.locator("p")).toHaveCount(0);
+    const signals = panel.getByRole("switch", { name: "Signal colors", exact: true });
+    await expect(signals).toHaveAccessibleDescription(/^Adds color to status labels/);
+    const about = panel.getByRole("button", { name: "About Signal colors", exact: true });
+    await about.focus();
+    await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await about.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
+    // The information button sits inside the row's label without toggling its switch.
+    await about.click();
+    await expect(signals).not.toBeChecked();
+    await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
+    await page.screenshot({ path: "test-results/settings-tooltip.png" });
+    for (const [name, button] of [
+      ["Table defaults", "About Table defaults"],
+      ["Polling", "About Chart ticker"],
+      ["Updates", "About Updates"],
+    ] as const) {
+      await selectSettingsPage(page, name);
+      await expect(page.getByRole("button", { name: button, exact: true })).toBeVisible();
+    }
+    await selectSettingsPage(page, "Polling");
+    await expect(
+      page.getByRole("spinbutton", { name: "Chart ticker seconds", exact: true }),
+    ).toBeVisible();
+    for (const name of ["Table defaults", "Text", "Polling", "Updates"] as const) {
+      await selectSettingsPage(page, name);
+      const visible = page.locator(
+        '[id^="panel-settings-"]:visible .settings-section > p:not([role])',
+      );
+      await expect(visible).toHaveCount(0);
+    }
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Settings pages share one card layout", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-settings-layout-"));
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, directory, database);
+    const page = await application.firstWindow();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const pages = [
+      "Agents",
+      "Appearance",
+      "Table defaults",
+      "Text",
+      "Polling",
+      "Updates",
+      "About",
+    ] as const;
+    const capture = async (suffix: string) => {
+      for (const name of pages) {
+        await selectSettingsPage(page, name);
+        const panel = page.locator('[id^="panel-settings-"]:visible');
+        await expect(panel.locator(".settings-section-header h2")).toHaveText(name);
+        // Every row and field group sits in a bordered card.
+        await expect(panel.locator(".settings-row:not(.settings-card .settings-row)")).toHaveCount(
+          0,
+        );
+        expect(await panel.locator(".settings-card, .settings-group").count()).toBeGreaterThan(0);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await page.screenshot({
+          path: `test-results/settings-${name.toLowerCase().replace(" ", "-")}-${suffix}.png`,
+          fullPage: true,
+        });
+      }
+    };
+    await selectSettingsPage(page, "Agents");
+    await expect(page.getByRole("group", { name: "Permissions", exact: true })).toBeVisible();
+    await selectSettingsPage(page, "Table defaults");
+    const low = page.getByRole("radio", { name: "Low", exact: true });
+    await low.check();
+    await expect(low).toBeChecked();
+    await page.getByRole("radio", { name: "High", exact: true }).check();
+    await selectSettingsPage(page, "Polling");
+    const history = page.getByRole("group", { name: "Run history", exact: true });
+    await expect(
+      history.getByRole("button", { name: "Reset run history", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("spinbutton", { name: "Chart ticker seconds" })).toHaveValue("5");
+    await capture("light");
+    await selectSettingsPage(page, "Appearance");
+    await page.getByLabel("Theme", { exact: true }).selectOption("dark");
+    await capture("dark");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(620, 620),
+    );
+    await capture("narrow");
+    expect(errors).toEqual([]);
   } finally {
     await application?.close();
     await rm(directory, { recursive: true, force: true });
@@ -5559,7 +5815,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("transition-duration", "0s");
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(inspector.locator(".view-lines")).toContainText("other = 99");
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await expect(panel).toBeHidden();
     await expect.poll(fileContext).toBeNull();
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
@@ -5574,7 +5830,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       "rgb(0, 0, 0)",
     );
     await page.screenshot({ path: "test-results/file-panel-dark.png" });
-    await selectSidebarPage(page, "Settings");
+    await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
     await selectSidebarPage(page, "Chat");
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -6128,8 +6384,14 @@ test("desktop: review failures, retry, cancellation and late responses", async (
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "Search commands" }).fill("Review changes");
       await page.keyboard.press("Enter");
+      await page.getByRole("tab", { name: "Changes", exact: true }).click();
+      await page
+        .getByRole("navigation", { name: "Task revisions" })
+        .getByRole("button")
+        .last()
+        .click();
     };
-    const close = () => page.getByRole("button", { name: /^Close Changes · / }).click();
+    const close = () => page.getByRole("button", { name: /^Close Revision \d+ ·/ }).click();
     const panel = page.locator(".review-panel");
     await open();
     await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
@@ -6190,15 +6452,9 @@ test("desktop: review failures, retry, cancellation and late responses", async (
     await expect(panel.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
       "fresh response",
     );
-    await application.evaluate(({ ipcMain }) => {
-      ipcMain.removeHandler("desktop:review-capture");
-      ipcMain.handle("desktop:review-capture", () => {
-        throw new Error("Capture fixture failed");
-      });
-    });
-    await panel.getByRole("button", { name: "Refresh changes", exact: true }).click();
-    await expect(panel.getByRole("alert")).toContainText("Capture fixture failed");
-    await expect(panel.getByText("No changes.", { exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Refresh changes", exact: true })).toHaveCount(
+      0,
+    );
     await close();
     await mode("slow");
     await open();
@@ -6263,7 +6519,7 @@ test("desktop: review failures, retry, cancellation and late responses", async (
   }
 });
 
-test("desktop: orchestrator review spans workers, sends anchored feedback, and preserves revisions after restart", async () => {
+test("desktop: read-only revisions span workers and preserve saved diffs after restart", async () => {
   test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-chat-review-"));
   const repo = join(directory, "repo");
@@ -6341,94 +6597,177 @@ test("desktop: orchestrator review spans workers, sends anchored feedback, and p
       )
       .toBe(2);
     await page.getByRole("button", { name: "Review changes", exact: true }).click();
-    let review = page.getByRole("region", { name: "Changes: Implement validation", exact: true });
+    let review = page.getByRole("region", { name: "Revision diff", exact: true });
     await expect(review).toBeVisible();
-    await expect(
-      review.getByRole("navigation", { name: "Changed files" }).getByRole("button"),
-    ).toHaveCount(2);
-    await expect(review.getByRole("navigation").getByRole("button").first()).toContainText(
-      "Overlapping path",
-    );
+    const files = review.getByRole("navigation", { name: "Changed files" }).getByRole("button");
+    await expect(files).toHaveCount(2);
     await expect(review.locator(".monaco-diff-editor")).toBeVisible();
-    await review.getByRole("button", { name: "Open file", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Reviewed file version" })).toContainText(
-      "Validation",
+    const pinned = await page.getByRole("tab", { name: /^Revision \d+ ·/ }).textContent();
+    if (!pinned) throw new Error("Missing pinned revision tab");
+    const saved = await page.evaluate(async () => {
+      const snapshot = await window.desktop.snapshot();
+      const summary = snapshot.reviews?.[0];
+      if (!summary || !snapshot.directory) throw new Error("Missing review");
+      const identity = { project: snapshot.directory, reviewId: summary.id };
+      const review = await window.desktop.readReview({
+        ...identity,
+        requestId: crypto.randomUUID(),
+      });
+      const revision = review.revisions.at(-1);
+      if (!revision) throw new Error("Missing revision");
+      for (const file of revision.files)
+        await window.desktop.reviewAction({
+          ...identity,
+          type: "reviewed",
+          revisionId: revision.id,
+          fileKey: file.key,
+          reviewed: true,
+        });
+      const file = revision.files[0];
+      if (!file) throw new Error("Missing revision file");
+      return {
+        identity,
+        revisionId: revision.id,
+        fileKey: file.key,
+        worktree: snapshot.runs.find((run) => run.record.id === file.runId)?.record.worktree,
+      };
+    });
+    // Existing reviewed state must never hide saved file versions in this read-only browser.
+    await expect(files).toHaveCount(2);
+    await files.last().click();
+    await expect(files.last()).toHaveAttribute("aria-current", "true");
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "Regression",
     );
-    await expect(page.locator(".monaco-editor .view-lines")).toContainText("Validation");
-    await page.getByRole("tab", { name: "Changes · Implement validation", exact: true }).click();
-    await expect(review.locator(".monaco-diff-editor")).toBeVisible();
     const modified = review.getByRole("textbox", { name: "Modified review version" });
+    const beforeTyping = await review
+      .locator(".modified .view-lines:not([monaco-view-zone])")
+      .textContent();
     await modified.focus();
     await modified.press("ControlOrMeta+Home");
-    await modified.press("ArrowDown");
-    await expect(review.getByRole("button", { name: /Comment on modified lines 2/ })).toBeVisible();
-    await review.getByRole("button", { name: /Comment on modified lines 2/ }).click();
-    await review
-      .getByRole("textbox", { name: /modified lines 2/ })
-      .fill("Allow optional fields and add a regression test.");
-    await review.getByRole("button", { name: "Add feedback", exact: true }).click();
-    await expect(review.locator(".review-comment")).toContainText("Allow optional fields");
-    await review.getByRole("button", { name: "Mark file reviewed", exact: true }).click();
-    await expect(review.getByRole("navigation").getByRole("button").first()).toContainText(
-      "Reviewed",
+    await modified.press("x");
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
+      beforeTyping ?? "",
     );
-    const revision = await review
-      .getByRole("combobox", { name: "Revision", exact: true })
-      .inputValue();
-    await review.getByRole("button", { name: "Send feedback", exact: true }).click();
-    await expect(review.locator(".review-submission")).toContainText("Feedback delivered");
     await expect(
-      review.getByRole("button", { name: "New changes available · Review updates", exact: true }),
-    ).toBeVisible();
-    await expect(review.getByRole("combobox", { name: "Revision", exact: true })).toHaveValue(
-      revision,
+      review.locator("form, .review-feedback, .task-actions, .review-heading"),
+    ).toHaveCount(0);
+    await expect(
+      review.getByRole("button", {
+        name: /Refresh|Expand review|Use these changes|Undo|Mark file|feedback|Reconnect/i,
+      }),
+    ).toHaveCount(0);
+    await expect(review.getByRole("combobox")).toHaveCount(0);
+    await expect(review.locator(".review-diff-actions")).toHaveCount(0);
+    await expect(
+      review.getByRole("button", { name: /Previous change|Next change|Find/ }),
+    ).toHaveCount(0);
+    await expect(review.getByRole("checkbox", { name: "Side by side" })).toHaveCount(0);
+    await expect(review.getByRole("checkbox", { name: "Hide Reviewed" })).toHaveCount(0);
+    if (!saved.worktree) throw new Error("Missing worker worktree");
+    await writeFile(join(saved.worktree, "same.ts"), "export const readonlyMarker = true;\n");
+    await page.evaluate(
+      (identity) => window.desktop.captureReview({ ...identity, requestId: crypto.randomUUID() }),
+      saved.identity,
     );
-    await expect(review.locator(".review-comment")).toContainText("Outdated");
-    await review
-      .locator(".review-comment")
-      .getByRole("button", { name: "same.ts · modified 2–2", exact: true })
-      .click();
-    await expect(review.getByRole("textbox", { name: "Modified review version" })).toBeFocused();
-    await review
-      .getByRole("button", { name: "New changes available · Review updates", exact: true })
-      .click();
-    await review.getByRole("combobox", { name: "Compare", exact: true }).selectOption("feedback");
-    await expect(review.getByRole("navigation").getByRole("button")).toHaveCount(1);
-    await expect(review.getByRole("navigation").getByRole("button")).toContainText(
-      "Updated · unreviewed",
+    const captured = await page.evaluate(
+      (identity) => window.desktop.readReview({ ...identity, requestId: crypto.randomUUID() }),
+      saved.identity,
     );
-    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+    await expect(page.getByRole("tab", { name: pinned, exact: true })).toHaveAttribute(
+      "aria-selected",
       "true",
     );
-    await review.getByRole("button", { name: "Resolve", exact: true }).click();
-    await review.getByRole("button", { name: "Mark file reviewed", exact: true }).click();
-    await review
-      .getByRole("textbox", { name: "General feedback", exact: true })
-      .fill("Keep this unsent note");
-    await review.getByRole("button", { name: "Add feedback", exact: true }).click();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
+      beforeTyping ?? "",
+    );
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    const revisions = page.getByRole("navigation", { name: "Task revisions" }).getByRole("button");
+    await expect(revisions).toHaveCount(captured.revisions.length);
+    await revisions.last().click();
+    const latest = captured.revisions.at(-1)?.id;
+    if (!latest || latest === saved.revisionId) throw new Error("Missing new revision");
+    const latestTab = `Revision ${captured.revisions.length} · Implement validation`;
+    await expect(page.getByRole("tab", { name: /^Revision \d+ ·/ })).toHaveCount(2);
+    const changedFile = captured.revisions
+      .at(-1)
+      ?.files.findIndex((file) => file.key === saved.fileKey);
+    if (changedFile === undefined || changedFile < 0) throw new Error("Missing changed file");
+    await files.nth(changedFile).click();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "readonlyMarker",
+    );
+    await page.getByRole("tab", { name: pinned, exact: true }).click();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
+      beforeTyping ?? "",
+    );
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await revisions.last().click();
+    await expect(page.getByRole("tab", { name: /^Revision \d+ ·/ })).toHaveCount(2);
+    await page.getByRole("tab", { name: latestTab, exact: true }).focus();
+    await page.keyboard.press("Delete");
+    await expect(page.getByRole("tab", { name: latestTab, exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await revisions.last().click();
+    await expect(page.getByRole("tab", { name: latestTab, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.reload();
+    await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .nth(captured.revisions.findIndex((revision) => revision.id === saved.revisionId))
+      .click();
+    review = page.getByRole("region", { name: "Revision diff", exact: true });
+    await expect(page.getByRole("tab", { name: pinned, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
+      beforeTyping ?? "",
+    );
     await page.evaluate(() => window.desktop.stopAll());
     await application.close();
     application = await launch(directory, repo, database);
     page = await application.firstWindow();
     await page.getByRole("button", { name: "Yes", exact: true }).click();
-    await page.locator(".chat-reviews > summary").click();
-    await page.locator(".chat-reviews details > summary").click();
+    const changesTab = page.getByRole("tab", { name: "Changes", exact: true });
+    if (!(await changesTab.isVisible()))
+      await page.getByRole("button", { name: "Toggle files panel" }).first().click();
+    await changesTab.click();
     await page
-      .locator(".chat-reviews details")
-      .getByRole("button", { name: "Implement validation", exact: true })
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .last()
       .click();
-    review = page.getByRole("region", { name: "Changes: Implement validation", exact: true });
+    review = page.getByRole("region", { name: "Revision diff", exact: true });
+    await expect(page.getByRole("tab", { name: latestTab, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(
-      review.getByText("Saved review · conversation disconnected", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      review.locator(".review-comment").filter({ hasText: "Keep this unsent note" }),
-    ).toContainText("draft");
-    await expect(review.getByRole("button", { name: "Send feedback", exact: true })).toBeDisabled();
-    await review.getByRole("button", { name: "Reconnect to this chat", exact: true }).click();
-    await expect(review.getByRole("button", { name: "Send feedback", exact: true })).toBeEnabled();
-    await expect(review.locator(".review-submission")).toHaveCount(1);
-    await page.screenshot({ path: "test-results/chat-review.png" });
+      review.getByRole("navigation", { name: "Changed files" }).getByRole("button"),
+    ).toHaveCount(2);
+    await review
+      .getByRole("navigation", { name: "Changed files" })
+      .getByRole("button")
+      .nth(changedFile)
+      .click();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "readonlyMarker",
+    );
+    await expect(review.locator("form, .review-feedback, .task-actions")).toHaveCount(0);
+    const unchanged = await page.evaluate(
+      (identity) => window.desktop.readReview({ ...identity, requestId: crypto.randomUUID() }),
+      saved.identity,
+    );
+    expect(unchanged.comments).toEqual([]);
+    expect(unchanged.submissions).toEqual([]);
+    expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
+    await page.screenshot({ path: "test-results/chat-review-readonly.png" });
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

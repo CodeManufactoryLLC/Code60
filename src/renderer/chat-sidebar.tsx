@@ -199,7 +199,9 @@ export function ChatSidebar({
                 />
               </span>
             ) : (
-              <span className="chat-role-icon chat-role-dot" aria-hidden="true" />
+              <span className="chat-role-icon" aria-hidden="true">
+                <Icon name="ai-agent" />
+              </span>
             )}
             <span className="chat-sidebar-label">{entry.label}</span>
             <span className="chat-sidebar-indicators">

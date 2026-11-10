@@ -73,12 +73,13 @@ Useful scripts:
 - `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
 - `npm run build`: compile the CLI and desktop main process and build the renderer.
 - `npm run dev`: build and start the desktop app with rebuilds on changes.
-- `npm run test:desktop`: build and run the Electron Playwright tests. A display is required.
-- `npm run test:desktop:container`: build and run the same desktop suite in Linux with Xvfb, without opening windows on your Mac.
+- `npm run test:desktop:container`: build and run the Electron Playwright tests in a Linux container with Xvfb, without opening windows on your machine. Use this for local desktop testing.
+- `npm run test:desktop`: build and run the same tests directly on the host. A display is required. Use it only in CI and for native-platform validation (macOS, Windows, packaged and installer tests).
 
-Run `npm run check` before each commit. Run `npm run test:desktop` for desktop
-changes. Tests must not require live agents, credentials, or network services.
-Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
+Run `npm run check` before each commit. Run `npm run test:desktop:container` for
+desktop changes; if Docker is unavailable, report that instead of running the
+desktop tests on the host. Tests must not require live agents, credentials, or
+network services. Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
 
 ### Coverage and unused-code gates
 

@@ -12,10 +12,12 @@ import {
 } from "../bridge/index.js";
 import type { ReviewSnapshotFile, TaskSource } from "../core/index.js";
 import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
+import { reviewLineStats } from "./review-line-stats.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 const MAX_RECORD = 16 * 1_048_576;
+const MAX_LINE_STATS_WORK = 2_000_000;
 async function readJson(path: string): Promise<unknown> {
   const file = await open(
     path,
@@ -200,11 +202,7 @@ export class ReviewStore {
       .revisions.find((revision) => revision.id === revisionId)
       ?.files.find((file) => file.key === fileKey);
     if (!file) throw new Error("Unknown file in this review revision");
-    const contents = await readJson(join(this.root, `${revisionId}.rev`)).catch((cause) => {
-      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
-      // Read earlier releases' nested layout without moving or rewriting saved data.
-      return readJson(join(this.root, id, `${revisionId}.json`));
-    });
+    const contents = await this.revisionContents(id, revisionId);
     if (!Array.isArray(contents)) throw new Error("Invalid saved revision");
     const content = contents.find(
       (entry: unknown) =>
@@ -219,6 +217,61 @@ export class ReviewStore {
     )
       throw new Error("Invalid saved file content");
     return { file, original: content.original, modified: content.modified };
+  }
+  async withLineStats(id: string, revisionId: string): Promise<Review> {
+    const review = structuredClone(this.get(id));
+    const revision = review.revisions.find((item) => item.id === revisionId);
+    if (!revision) throw new Error("Unknown review revision");
+    let contents: unknown;
+    try {
+      contents = await this.revisionContents(id, revisionId);
+    } catch {
+      for (const file of revision.files) file.lineCountsUnavailable = true;
+      return review;
+    }
+    if (!Array.isArray(contents)) {
+      for (const file of revision.files) file.lineCountsUnavailable = true;
+      return review;
+    }
+    const byKey = new Map<string, { original: string; modified: string }>();
+    for (const item of contents) {
+      if (
+        item !== null &&
+        typeof item === "object" &&
+        "key" in item &&
+        typeof item.key === "string" &&
+        "original" in item &&
+        typeof item.original === "string" &&
+        "modified" in item &&
+        typeof item.modified === "string" &&
+        item.original.length <= 1_048_576 &&
+        item.modified.length <= 1_048_576
+      )
+        byKey.set(item.key, { original: item.original, modified: item.modified });
+    }
+    const budget = { remaining: MAX_LINE_STATS_WORK };
+    for (const file of revision.files) {
+      const content = byKey.get(file.key);
+      if (file.limitation || !content) {
+        file.lineCountsUnavailable = true;
+        continue;
+      }
+      const stats = await reviewLineStats(content.original, content.modified, budget);
+      if (stats) {
+        file.additions = stats.additions;
+        file.deletions = stats.deletions;
+      } else {
+        file.lineCountsUnavailable = true;
+      }
+    }
+    return review;
+  }
+  private async revisionContents(id: string, revisionId: string): Promise<unknown> {
+    return readJson(join(this.root, `${revisionId}.rev`)).catch((cause) => {
+      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+      // Read earlier releases' nested layout without moving or rewriting saved data.
+      return readJson(join(this.root, id, `${revisionId}.json`));
+    });
   }
   async action(action: Exclude<ReviewAction, { type: "open-run" }>): Promise<Review> {
     return this.mutate(action.reviewId, async (review) => {

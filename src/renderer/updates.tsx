@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, UpdateAction, UpdateState } from "../bridge/index.js";
 import { Icon } from "./icons.js";
+import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
 export function useUpdates(api: DesktopApi) {
   const [state, setState] = useState<UpdateState>();
@@ -122,27 +123,11 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
   const { state, error, act } = updates;
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
-      <h2 id={id}>Updates</h2>
-      <label className="settings-row">
-        Automatically check for updates
-        <input
-          type="checkbox"
-          role="switch"
-          checked={state?.autoCheck ?? true}
-          aria-checked={state?.autoCheck ?? true}
-          disabled={!state || updates.savingPreference || state.status === "installing"}
-          onChange={(event) => void act(event.target.checked ? "auto-on" : "auto-off")}
-        />
-      </label>
-      <p role="status">{state?.message ?? "Loading update status…"}</p>
-      {error && <p role="alert">{error}</p>}
-      {state?.status === "downloading" && (
-        <>
-          <progress aria-label="Update download" value={state.percent} max={100} />
-          <span> {state.percent}%</span>
-        </>
-      )}
-      <div className="button-group">
+      <SettingsHeader
+        id={id}
+        title="Updates"
+        tip="Updates are downloaded only when you choose. Your settings, databases and worktrees are preserved."
+      >
         <button
           type="button"
           disabled={!state || !["idle", "available", "error"].includes(state.status)}
@@ -151,7 +136,7 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
           Check for updates
         </button>
         {state?.status === "available" && (
-          <button type="button" onClick={() => void act("download")}>
+          <button type="button" className="primary" onClick={() => void act("download")}>
             Download update
           </button>
         )}
@@ -161,15 +146,38 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
           </button>
         )}
         {state?.status === "ready" && (
-          <button type="button" onClick={() => void act("install")}>
+          <button type="button" className="primary" onClick={() => void act("install")}>
             Install and restart
           </button>
         )}
-      </div>
-      <p>
-        Updates are downloaded only when you choose. Your settings, databases and worktrees are
-        preserved.
-      </p>
+      </SettingsHeader>
+      <SettingsCard>
+        <div className="settings-row">
+          <span role="status">{state?.message ?? "Loading update status…"}</span>
+          {state?.status === "downloading" && (
+            <span className="update-progress">
+              <progress aria-label="Update download" value={state.percent} max={100} />
+              {state.percent}%
+            </span>
+          )}
+        </div>
+        <label className="settings-row">
+          Automatically check for updates
+          <input
+            type="checkbox"
+            role="switch"
+            checked={state?.autoCheck ?? true}
+            aria-checked={state?.autoCheck ?? true}
+            disabled={!state || updates.savingPreference || state.status === "installing"}
+            onChange={(event) => void act(event.target.checked ? "auto-on" : "auto-off")}
+          />
+        </label>
+      </SettingsCard>
+      {error && (
+        <p className="error-banner" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

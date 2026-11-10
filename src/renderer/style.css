@@ -74,6 +74,8 @@
   --primary-hover: #329d98;
   --primary-text: #000000;
   --danger: var(--text);
+  --change-additions: #42603a;
+  --change-deletions: #9b3a35;
   --warning-bg: #ffffff;
   --warning-text: #333333;
   --success: var(--muted);
@@ -117,6 +119,8 @@
   --primary-hover: var(--accent);
   --primary-text: #000000;
   --danger: #ffffff;
+  --change-additions: #afc59d;
+  --change-deletions: #dfa69b;
   --warning-bg: #000000;
   --warning-text: var(--accent);
   --success: #aaaaaa;
@@ -160,6 +164,8 @@
     --primary-hover: var(--accent);
     --primary-text: #000000;
     --danger: #ffffff;
+    --change-additions: #afc59d;
+    --change-deletions: #dfa69b;
     --warning-bg: #000000;
     --warning-text: var(--accent);
     --success: #aaaaaa;
@@ -923,24 +929,6 @@ button.sidebar-settings-toggle {
   }
 }
 
-/* Polling */
-.poll-actions,
-.poll-interval-form {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.poll-interval-form {
-  margin-bottom: 8px;
-  align-items: end;
-}
-.poll-interval-form input {
-  width: 140px;
-}
-.polling-settings :where(fieldset) {
-  margin-top: 12px;
-}
 /* Settings */
 .settings-page {
   flex: 1;
@@ -999,24 +987,72 @@ button.sidebar-settings-toggle {
 .files-title h2:where(:hover) {
   opacity: 1;
 }
+/* Settings pages: a header with the page title and actions, then cards of rows or field groups. */
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-height: 36px;
+  margin: 0 0 16px;
+}
+.settings-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.settings-status:empty {
+  display: none;
+}
+.settings-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-card {
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+/* A floated legend sits inside the card instead of breaking its top border. */
+.settings-card-title {
+  float: left;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
 .settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px;
-  background: var(--surface);
-  border-top: 1px solid transparent;
-  border-bottom: 1px solid var(--surface-edge);
+  min-height: 56px;
+  margin: 0;
+  padding: 10px 16px;
   font-size: var(--text-size, 13px);
-  margin-top: 8px;
 }
 .settings-row + .settings-row {
-  margin-top: 0;
-  border-top: 0;
+  border-top: 1px solid var(--border);
+}
+.settings-card > :not(legend) {
+  clear: both;
 }
 .settings-section h2,
-.text-style legend,
 .field-label,
 .run-context b,
 .eyebrow {
@@ -1038,52 +1074,229 @@ button.sidebar-settings-toggle {
   color: var(--muted);
   font-size: 12px;
 }
-.settings-options {
-  display: flex;
-  gap: 16px;
+.settings-section-header h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 24px;
+}
+.settings-note {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.settings-note p {
+  margin: 0;
+}
+.settings-empty {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+button.info-tip {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  color: var(--muted);
 }
 .settings-row select {
-  min-width: 140px;
+  min-width: 160px;
   font-family: var(--font);
   --letter-spacing: normal;
 }
-.orchestration-controls {
-  display: flex;
+.version-list {
+  margin: 0;
+}
+.version-list dt,
+.version-list dd {
+  margin: 0;
+}
+.version-list .settings-row {
+  min-height: 44px;
+}
+.version-list dd {
+  color: var(--muted);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+  --letter-spacing: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.update-progress {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
-}
-.orchestration-provider-row {
-  flex-wrap: wrap;
-}
-.text-section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-}
-.text-style {
-  border: 1px solid transparent;
-  margin-top: 18px;
-  padding: 12px;
-  background: var(--surface);
-}
-.text-style legend {
-  padding: 0 8px;
-  color: var(--text);
+  flex-shrink: 0;
+  color: var(--muted);
   font-size: 12px;
 }
-.text-style-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(64px, 1fr) minmax(90px, 1fr);
-  gap: 8px 12px;
+.update-progress progress {
+  width: 140px;
+  height: 6px;
+  accent-color: var(--primary);
 }
-.text-style-controls select,
-.text-style-controls input[type="number"] {
-  display: block;
-  margin-top: 6px;
+/* A settings group is a fieldset card; its floated legend sits inside the card's top border. */
+.settings-group {
+  position: relative;
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.settings-group-title {
+  float: left;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0 88px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 24px;
+}
+.settings-group > :not(legend, .settings-group-reset) {
+  clear: both;
+}
+button.settings-group-reset {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 24px;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+.settings-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  --letter-spacing: normal;
+}
+.settings-field select,
+.settings-field input[type="number"] {
   width: 100%;
   min-width: 0;
+  color: var(--text);
+}
+.settings-field-number {
+  flex: 0 1 160px;
+}
+.settings-unit {
+  position: relative;
+  display: block;
+}
+.settings-unit input[type="number"] {
+  padding-right: 30px;
+}
+.settings-unit > span {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+/* Segmented radio groups: joined options with hidden native radios. */
+.segmented {
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid var(--group-border);
+  background: var(--group-fill);
+}
+.segmented-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 100%;
+  margin: 0;
+  padding: 0 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+}
+.segmented-option + .segmented-option {
+  border-left: 1px solid var(--group-border);
+}
+.segmented-option:hover:not(:has(input:checked)) {
+  background: var(--hover-bg);
+}
+.segmented-option:has(input:checked) {
+  background: var(--accent-bg);
+  box-shadow: inset 0 -2px var(--primary);
+}
+.segmented-option input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+:where(:root[data-focus-highlight="on"]) .segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -3px;
+}
+@media (forced-colors: active) {
+  .segmented-option:has(input:checked) {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+}
+/* Text settings */
+.text-style-preview {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  min-height: 52px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+  color: var(--text);
+  line-height: 1.25;
+}
+.text-style-preview span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.text-style-preview[data-role="human"] {
+  color: var(--human-text);
+}
+.text-style-typeface {
+  flex: 1 1 180px;
+}
+.text-style-size {
+  flex: 0 0 88px;
+}
+.text-style-weight {
+  flex: 0 1 150px;
 }
 .path {
   font-family: var(--font);
@@ -1716,9 +1929,6 @@ label.check-label {
 .permission-grid label.check-label {
   font: 12px var(--font);
   --letter-spacing: normal;
-}
-.settings-options label.check-label {
-  font-size: inherit;
 }
 .connected-path {
   font-family: var(--font);
@@ -4055,6 +4265,15 @@ button.file-open-link {
   font-size: inherit;
   margin-top: 4px;
 }
+.settings-card .agent-review-item {
+  padding: 12px 16px;
+}
+.settings-card .agent-review-item + .agent-review-item {
+  border-top: 1px solid var(--border);
+}
+.settings-card .agent-review small {
+  font-size: 12px;
+}
 :root[data-theme="dark"] :is(.agent-logo-codex, .agent-logo-copilot, .agent-logo-opencode) {
   filter: invert(1);
 }
@@ -4115,12 +4334,9 @@ button.file-open-link {
 .chat-orchestrator-icon > .chat-orchestrator-icon-dark {
   display: none;
 }
-.chat-role-dot::before {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-  content: "";
+.chat-role-icon > .carbon-icon {
+  width: 100%;
+  height: 100%;
 }
 :root[data-theme="dark"] .chat-orchestrator-icon > .chat-orchestrator-icon-light {
   display: none;
@@ -4329,6 +4545,76 @@ button.file-open-link {
 }
 
 /* Chat review shares the file panel's surfaces and responsive layout. */
+.revision-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  gap: 8px;
+}
+.revision-task,
+.revision-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  min-width: 0;
+  padding: 0 12px;
+}
+.revision-task {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 400;
+}
+.revision-task > span:first-of-type,
+.revision-item > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.revision-count,
+.revision-item time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.revision-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.revision-item {
+  --letter-spacing: normal;
+  width: 100%;
+  padding-left: 36px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-transform: none;
+  font-family: var(--font);
+}
+.revision-item:hover:not([data-open]) {
+  background: var(--hover-bg);
+}
+.revision-item[data-open] {
+  background: var(--accent-bg);
+}
+.revision-latest {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+}
 .review-panel {
   container-type: inline-size;
   width: 100%;
@@ -4357,22 +4643,40 @@ button.file-open-link {
 .review-heading :where(h2) {
   flex: 1;
 }
+.review-count-total,
+.review-hide-reviewed {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+.review-count-total {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.review-added {
+  color: var(--change-additions);
+}
+.review-deleted {
+  color: var(--change-deletions);
+}
+.review-count-partial,
+.review-count-unavailable {
+  color: var(--muted);
+  font-size: 12px;
+}
+.review-hide-reviewed {
+  white-space: nowrap;
+}
+.review-panel .review-hide-reviewed input {
+  margin: 0;
+}
 .review-actions,
-.review-controls,
-.review-diff-actions,
 .review-submission {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-.review-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.review-controls select {
-  max-width: 230px;
 }
 .review-workspace {
   display: grid;
@@ -4408,11 +4712,16 @@ button.file-open-link {
   font-size: 12px;
   color: var(--muted);
 }
+.review-files :where(button) .review-file-counts {
+  font-size: 12px;
+  color: var(--text);
+}
+.review-file-counts > span {
+  display: inline-flex;
+  gap: 8px;
+}
 .review-file {
   min-width: 0;
-}
-.review-diff-actions {
-  margin: 8px 0;
 }
 .review-diff-editor {
   min-height: 160px;
@@ -4449,8 +4758,7 @@ button.file-open-link {
   min-height: 80px;
 }
 .review-comment {
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
+  padding: 4px 0;
 }
 .review-comment :where(p) {
   white-space: pre-wrap;
@@ -4458,8 +4766,11 @@ button.file-open-link {
   margin: 8px 0;
 }
 .review-submission {
-  border-top: 1px solid var(--border);
-  padding: 8px 0;
+  padding: 0;
+}
+.review-comment + .review-comment,
+.review-submission + .review-submission {
+  margin-top: 8px;
 }
 .review-file-preview {
   display: flex;
@@ -4482,28 +4793,10 @@ button.file-open-link {
   gap: 6px;
   margin: 16px 0;
   padding-top: 12px;
-  border-top: 1px solid var(--border);
 }
 .chat-review-activity > span:nth-child(2) {
   color: var(--muted);
   font-size: 12px;
-}
-.chat-reviews {
-  position: relative;
-}
-.chat-reviews > div {
-  display: flex;
-  flex-direction: column;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  min-width: 220px;
-  max-height: 320px;
-  overflow: auto;
-  padding: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  z-index: 5;
 }
 @media (max-width: 1200px) {
   .review-workspace {

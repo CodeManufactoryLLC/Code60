@@ -41,7 +41,7 @@
 
 - Display automatic worker prompts as labelled activity, never as user messages. Show paused worker updates with a keyboard-reachable Resume updates control bound to the current chat ID. Label orchestrator-owned worker chats as allowing all actions. MCP contract descriptions must distinguish read-only tools from tools that change worker state.
 
-- Group Configurations, Events, Logs, Messages, Polling, Sessions and Worktrees beneath Tables. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
+- Group Configurations, Events, Logs, Messages, Polling, Sessions and Worktrees beneath Tables. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Nest Agents, Appearance, Table defaults, Text, Polling, Updates and About as individual pages beneath Settings. Build Settings pages from `SettingsHeader` (title, optional tip, page-wide actions) and bordered `SettingsCard` rows or `settings-group` field cards, so no row or field sits outside a card; use the shared `segmented` control for short exclusive choices. Settings pages have no explanatory paragraphs: put explanations behind an `InfoTip` information button beside the setting or heading, keep them as the control's accessible description, and drop text that only restates the controls. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
 - Logs is app-wide and available without a database. Reuse DataTable settings and
   saved filters, applying search/conditions to retained history through validated
   requests, not only the visible page. Use bounded cursors and stale-response
@@ -66,14 +66,13 @@
 
 - Search submits only on Enter or Search. Capture results after transcript reads settle, keep them stable until resubmission, and keep AI overview failures separate from usable results. Use single-column title actions and local numeric citations; never render generated markup or links. Start an overview even without literal matches, use relevant saved context for natural-language questions, and map citations to the exact returned evidence. File sources open the read-only file tab in the Chat panel. Cancel stale requests and preserve page-switch state.
 
-- PanelShell owns only layout, tab interactions and focus; FilePanel retains file identities, reads and preview state. Keep tab descriptors stable across unrelated streamed updates. ReviewPanel/useReviewFile own revision selection, anchored feedback and cancellable saved-file reads with local loading/errors. Only successful empty captures render No changes; failures and Retry stay in the panel. Preserve pinned revisions, distinct same-path worker versions and explicit reconnection after restart. Only human actions resolve feedback or mark files reviewed.
+- PanelShell owns only layout, tab interactions and focus; FilePanel retains file identities, reads and preview state. Keep tab descriptors stable across unrelated streamed updates. Changes lists revisions nested beneath review (task) titles, without a review dropdown. Each revision opens a separate tab deduplicated by review/revision identity. ReviewPanel/useReviewFile own pinned revision diffs and cancellable saved-file reads with local loading/errors and read Retry. Revision tabs show only the file list and read-only inline diff, without selectors, titles, counts, diff toolbar, review/worker/compare controls, capture, apply/undo or feedback actions. Show all captured files, including reviewed files, and leave empty revisions blank. Preserve pinned revisions and distinct same-path worker versions.
 
 - Chat owns guided Git setup with selectable files and bounded previews. Preserve conversation/drafts, require explicit initial-commit confirmation and explicit task continuation. Show failures and partial completion honestly; never replay dispatch or suggest Refresh can recover a non-isolated run baseline.
 
 - Changes lives beside orchestrator Chat in the shared panel. Preserve revision selection and
   view state on incoming captures. Keep worker sources distinct, including same-path files.
-  Feedback is anchored to immutable versions, saved before submission, and shows pending,
-  failed and delivered state. Only user actions mark reviewed or resolve comments. Source-aware
+  The tab never changes files, review decisions or feedback. Source-aware
   review file tabs show saved content rather than silently opening project files.
 
 - Worker headers place status as a subtitle beneath the agent name. Scale sidebar branch/terminal icons and worker heading icons to 1em of the associated text; composer harness logos retain their dedicated size.

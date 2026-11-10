@@ -1004,7 +1004,11 @@ export class DesktopController {
 
   async readReview(value: ReviewRead): Promise<Review> {
     const request = parseReviewRead(value);
-    return structuredClone(this.reviewStore(request.project).get(request.reviewId));
+    const store = this.reviewStore(request.project);
+    if (!request.revisionId) return structuredClone(store.get(request.reviewId));
+    const review = await store.withLineStats(request.reviewId, request.revisionId);
+    if (store !== this.reviewStore(request.project)) throw new Error("Review context changed");
+    return review;
   }
 
   private scheduleReviewCapture(id: string): void {

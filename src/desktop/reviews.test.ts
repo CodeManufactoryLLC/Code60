@@ -52,6 +52,37 @@ it("persists separate worker versions and keeps immutable content after later ca
   );
   expect((await ReviewStore.open(root, "/other")).list()).toEqual([]);
 });
+it("computes line counts for only the requested immutable revision without persisting them", async () => {
+  const { review, revision } = await fixture();
+  const captured = await store.withLineStats(review.id, revision.id);
+  expect(captured.revisions[0]?.files).toMatchObject([
+    { key: "worker-a:same.ts", additions: 1, deletions: 1 },
+    { key: "worker-b:same.ts", additions: 1, deletions: 1 },
+  ]);
+  expect(store.get(review.id).revisions[0]?.files[0]).not.toHaveProperty("additions");
+
+  await store.capture(review.id, [{ runId: "worker-a", files: [file("new\nlines\n")] }]);
+  const latest = store.get(review.id).revisions.at(-1);
+  if (!latest) throw new Error("Missing latest revision");
+  expect((await store.withLineStats(review.id, latest.id)).revisions.at(-1)?.files).toMatchObject([
+    { key: "worker-a:same.ts", additions: 2, deletions: 1 },
+  ]);
+  expect((await store.withLineStats(review.id, revision.id)).revisions[0]?.files[0]).toMatchObject({
+    key: "worker-a:same.ts",
+    additions: 1,
+    deletions: 1,
+  });
+});
+it("marks line counts unavailable for limited snapshot content", async () => {
+  const review = await store.create("chat-a", 1, "Limited file");
+  const limited = { ...file("after\n"), limitation: "Binary content" };
+  await store.capture(review.id, [{ runId: "worker-a", files: [limited] }]);
+  const revision = store.get(review.id).revisions[0];
+  if (!revision) throw new Error("Missing revision");
+  expect((await store.withLineStats(review.id, revision.id)).revisions[0]?.files[0]).toMatchObject({
+    lineCountsUnavailable: true,
+  });
+});
 it("deduplicates unchanged captures, invalidates reviewed fingerprints, and retains explicit read failures", async () => {
   const { review, revision, identity } = await fixture();
   await store.action({
@@ -164,6 +195,10 @@ it("reads legacy nested revisions and never falls back from corrupt new content"
   expect((await store.content(review.id, revision.id, "worker-a:same.ts")).modified).toBe(
     "first\n",
   );
+  expect((await store.withLineStats(review.id, revision.id)).revisions[0]?.files[0]).toMatchObject({
+    additions: 1,
+    deletions: 1,
+  });
   await writeFile(flat, "invalid JSON");
   await expect(store.content(review.id, revision.id, "worker-a:same.ts")).rejects.toThrow();
 });
