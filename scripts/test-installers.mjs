@@ -153,7 +153,7 @@ try {
             verifiedOn: { platform: process.platform, release: osRelease(), arch: process.arch },
             signing: signed ? "authenticode" : "unsigned-beta",
             signaturesVerified: signed,
-            certificate: signed ? process.env.WIN_SIGNING_THUMBPRINT : null,
+            publisher: signed ? process.env.WIN_SIGNING_PUBLISHER : null,
           }),
         );
       }

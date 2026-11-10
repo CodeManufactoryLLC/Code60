@@ -49,9 +49,13 @@ jobs:
           HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_P8 != '' }}
           HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
           HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
-          HAS_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK != '' }}
-          HAS_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD != '' }}
-          HAS_WIN_SIGNING_THUMBPRINT: ${{ vars.WIN_SIGNING_THUMBPRINT != '' }}
+          HAS_AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID != '' }}
+          HAS_AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID != '' }}
+          HAS_AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID != '' }}
+          HAS_AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT != '' }}
+          HAS_AZURE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME != '' }}
+          HAS_AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME != '' }}
+          HAS_WIN_SIGNING_PUBLISHER: ${{ vars.WIN_SIGNING_PUBLISHER != '' }}
         run: node scripts/release/preflight.mjs
 
   linux-check:
@@ -182,10 +186,15 @@ jobs:
     needs: [preflight, linux-check]
     runs-on: windows-2025
     timeout-minutes: 45
+    # The Azure federated credential trusts only this main-restricted environment.
+    environment: windows-signing
+    permissions:
+      contents: read
+      id-token: write
     env:
       CODE60_RELEASE: "1"
       RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
-      WIN_SIGNING_THUMBPRINT: ${{ vars.WIN_SIGNING_THUMBPRINT }}
+      WIN_SIGNING_PUBLISHER: ${{ vars.WIN_SIGNING_PUBLISHER }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -213,10 +222,18 @@ jobs:
           node dist/cli/main.js --help
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node dist/cli/main.js --version
+      - name: Sign in to Azure Artifact Signing with GitHub OIDC
+        if: ${{ !inputs.unsigned_windows_beta }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Build Windows installer in the selected signing mode
         env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME }}
         run: npm run package:win
       - run: npm run test:installers
       - run: node scripts/release/artifacts.mjs win

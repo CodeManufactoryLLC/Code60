@@ -67,6 +67,7 @@ export async function stage(
   let verifiedOn;
   let nativeX64;
   let installedAppVerified;
+  let publisher;
   if (platform === "win") {
     const report = await json("release/windows-verification.json");
     const unsigned = unsignedWindowsBeta(version);
@@ -78,9 +79,8 @@ export async function stage(
       (unsigned
         ? report.signing !== "unsigned-beta" || report.signaturesVerified !== false
         : report.signaturesVerified !== true ||
-          typeof report.certificate !== "string" ||
-          report.certificate.toUpperCase() !==
-            (process.env.WIN_SIGNING_THUMBPRINT || "").toUpperCase())
+          !process.env.WIN_SIGNING_PUBLISHER ||
+          report.publisher !== process.env.WIN_SIGNING_PUBLISHER)
     )
       throw new Error("Windows signing mode and installed-app verification is missing");
     signaturesVerified = !unsigned;
@@ -88,10 +88,11 @@ export async function stage(
     verifiedOn = report.verifiedOn;
     nativeX64 = report.nativeX64;
     installedAppVerified = report.verified;
+    publisher = unsigned ? undefined : report.publisher;
   }
   await writeFile(
     join(destination, `manifest-${platform}.json`),
-    `${JSON.stringify({ tag, sha, platform, assets, signaturesVerified, signing, verifiedOn, nativeX64, installedAppVerified }, null, 2)}\n`,
+    `${JSON.stringify({ tag, sha, platform, assets, signaturesVerified, signing, publisher, verifiedOn, nativeX64, installedAppVerified }, null, 2)}\n`,
   );
 }
 export async function verify(directory, tag, sha, env = process.env) {

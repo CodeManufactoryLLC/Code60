@@ -66,6 +66,16 @@ export function validateCandidate({ tag, sha, expectedSha, manifest, lock, onMai
     throw new Error("Existing draft belongs to a different commit");
   return version;
 }
+// Non-secret Azure Artifact Signing settings; GitHub OIDC replaces stored credentials.
+export const windowsSigningSettings = [
+  "AZURE_CLIENT_ID",
+  "AZURE_TENANT_ID",
+  "AZURE_SUBSCRIPTION_ID",
+  "AZURE_SIGNING_ENDPOINT",
+  "AZURE_SIGNING_ACCOUNT_NAME",
+  "AZURE_SIGNING_CERTIFICATE_PROFILE_NAME",
+  "WIN_SIGNING_PUBLISHER",
+];
 export function signingReady(env) {
   const required = [
     "HAS_CSC_LINK",
@@ -75,7 +85,7 @@ export function signingReady(env) {
     "HAS_APPLE_API_ISSUER",
     ...(unsignedWindowsBeta((env.RELEASE_TAG || "").replace(/^v/, ""), env)
       ? []
-      : ["HAS_WIN_CSC_LINK", "HAS_WIN_CSC_KEY_PASSWORD", "HAS_WIN_SIGNING_THUMBPRINT"]),
+      : windowsSigningSettings.map((name) => `HAS_${name}`)),
   ];
   if (required.some((key) => env[key] !== "true"))
     throw new Error("Missing signing configuration; see RELEASING.md");
