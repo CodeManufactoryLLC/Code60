@@ -67,6 +67,26 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("renders only agent replies as Markdown, including adjacent streamed chunks", () => {
+    const events: RunEvent[] = [
+      {
+        runId: "orchestrator",
+        at: "2026-01-01",
+        type: "prompt",
+        turn: 1,
+        text: "**literal user**",
+      },
+      { runId: "orchestrator", at: "2026-01-01", type: "message", text: "## Result\n\n**Bo" },
+      { runId: "orchestrator", at: "2026-01-01", type: "message", text: "ld** and `code`" },
+    ];
+    const html = render("idle", [], [], events);
+    expect(html).toContain("<h2>Result</h2>");
+    expect(html).toContain("<strong>Bold</strong>");
+    expect(html).toContain("<code>code</code>");
+    expect(html).toContain("<pre>**literal user**</pre>");
+    expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
+    expect(events[1]).toMatchObject({ text: "## Result\n\n**Bo" });
+  });
   it("disables chat controls without a database even when a run is still reported", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
@@ -268,7 +288,9 @@ describe("orchestration activity presentation", () => {
       ],
     );
     expect(html).toMatch(/<pre>user source<\/pre><div class="message-copy">/);
-    expect(html).toMatch(/<pre>assistant source<\/pre><div class="message-copy">/);
+    expect(html).toMatch(
+      /<div class="chat-markdown"><p>assistant source<\/p><\/div><div class="message-copy">/,
+    );
     expect(html).toContain('class="event prompt automatic"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });

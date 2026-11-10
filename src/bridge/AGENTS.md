@@ -8,6 +8,7 @@
 
 - Use the browser-safe `contracts` module for shared validation. Import only types from `core`, and nothing from Node.js, Electron, or React, so the renderer can use this module.
 - Validate every renderer request here: reject unknown fields, check sizes, and check run-ID and permission-ID formats.
+- openWebLink accepts only a bounded absolute HTTP(S) URL without credentials, controls, whitespace or backslashes. Main validates again before a native confirmation; no other protocols or filesystem access.
 - Offer only once-only permission answers (`allow` or `deny`). Never add generic file access or command execution.
 - Logs exposes bounded query/detail and explicit-confirmation clear requests, plus
   a payload-free change subscription. No paths, agent access, generic filesystem,

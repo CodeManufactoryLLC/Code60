@@ -49,6 +49,7 @@ const snapshot = (revision: number, directory = "/repo"): Snapshot => ({
   databaseError: null,
   projects: [],
   configurations: [],
+  commands: [],
   directory,
   agents: ["claude"],
   defaultAgent: "claude",

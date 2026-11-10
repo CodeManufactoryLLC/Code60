@@ -33,7 +33,7 @@ it("shows equal task weighting and a count outside the document", () => {
   expect(html).toContain('value="1" max="4"');
   expect(html).toContain("1 out of 4");
   expect(html.split("<article")[1]).not.toContain("out of");
-  expect(html.match(/checked=""/g)).toHaveLength(1);
+  expect(html.match(/<input[^>]*type="checkbox"[^>]*checked=""/g)).toHaveLength(1);
   expect(html).toContain("&lt;script&gt;");
   expect(html).not.toContain("<script>");
 });
@@ -44,4 +44,14 @@ it("shows empty progress before acceptance and full progress on completion", () 
   expect(complete).toContain('value="2" max="2"');
   expect(complete).toContain("2 out of 2");
   expect(complete).not.toContain(">Accept</button>");
+});
+it("labels every task state in text and keeps completion read-only", () => {
+  const html = render(["completed", "in_progress", "blocked", "pending"], "paused");
+  for (const label of ["Completed", "In progress", "Blocked", "Pending"])
+    expect(html).toContain(`<span class="plan-task-badge">${label}</span>`);
+  expect(html.match(/<input[^>]*type="checkbox"[^>]*disabled=""/g)).toHaveLength(4);
+  expect(html).toMatch(/<label class="plan-task-text" for="[^"]+-task-0">Task 0<\/label>/);
+  expect(html).toContain('<p class="plan-task-note">Evidence</p>');
+  expect(html).toContain('class="primary plan-action"');
+  expect(html).toContain(">Resume plan</button>");
 });

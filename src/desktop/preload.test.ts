@@ -48,6 +48,7 @@ describe("sandboxed diagnostic preload", () => {
     expect(api).not.toHaveProperty("readFile");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
+      openWebLink: "web-link",
       checkGit: "git-check",
       beginGitSetup: "git-begin",
       previewGitSetupFile: "git-file",
@@ -90,6 +91,8 @@ describe("sandboxed diagnostic preload", () => {
       saveConfiguration: "configuration-save",
       deleteConfiguration: "configuration-delete",
       savePromptTemplate: "prompt-save",
+      saveCommand: "command-save",
+      deleteCommand: "command-delete",
       resetPromptTemplate: "prompt-reset",
       action: "action",
     };

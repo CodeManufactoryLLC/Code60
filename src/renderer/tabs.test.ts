@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { initialTabs, updateTabs } from "./tabs.js";
 
 describe("page tabs", () => {
-  it("starts on Chat with all thirteen permanent tabs including app-wide Logs", () => {
+  it("starts on Chat with permanent tabs including app-wide Logs and Commands", () => {
     expect(initialTabs).toEqual({
       open: [
         "logs",
@@ -17,6 +17,7 @@ describe("page tabs", () => {
         "worktrees",
         "polling",
         "prompts",
+        "commands",
         "settings",
       ],
       active: "chat",

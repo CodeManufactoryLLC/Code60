@@ -1,8 +1,9 @@
 import { useId, useRef, useState } from "react";
 import {
-  MCP_TOOL_CONTRACT_INFO,
-  MCP_TOOL_DEFINITIONS,
+  OPERATING_CONTRACT_CLAUSE_IDS,
+  OPERATING_CONTRACT_CLAUSES,
   type PromptId,
+  type PromptTemplate,
   type PromptTemplateState,
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
@@ -25,13 +26,14 @@ export function PromptEditorPage({
 }: {
   prompts: readonly PromptTemplateState[];
   busy: boolean;
-  onSave(id: PromptId, template: string): Promise<boolean>;
+  onSave(id: PromptId, template: PromptTemplate): Promise<boolean>;
   onReset(id: PromptId): Promise<boolean>;
 }) {
   const id = useId();
   const [selectedId, setSelectedId] = useState<PromptId | undefined>(prompts[0]?.id);
   const [drafts, setDrafts] = useState<PromptDrafts>({});
   const [systemExpanded, setSystemExpanded] = useState(true);
+  const [previewVisible, setPreviewVisible] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const selected = prompts.find((entry) => entry.id === selectedId) ?? prompts[0];
   if (!selected) return null;
@@ -42,18 +44,24 @@ export function PromptEditorPage({
   const summaryDraft = summary ? draftText(drafts, summary.id, summary.template) : undefined;
   // An invalid summary draft cannot be saved, so the turn preview falls back to the effective one.
   const summaryText =
-    summaryDraft !== undefined && previewPrompt("handoffSummary", summaryDraft).ok
+    typeof summaryDraft === "string" && previewPrompt("handoffSummary", summaryDraft).ok
       ? summaryDraft
-      : summary?.template;
+      : typeof summary?.template === "string"
+        ? summary.template
+        : undefined;
   const preview = previewPrompt(selected.id, text, summaryText);
-  const setDraft = (value: string | undefined) =>
+  const setDraft = (value: PromptTemplate | undefined) =>
     setDrafts((current) => {
       const next = { ...current };
       if (value === undefined) delete next[selected.id];
-      else next[selected.id] = value;
+      else if (selected.id === "operatingContract" && typeof value !== "string")
+        next.operatingContract = value;
+      else if (selected.id !== "operatingContract" && typeof value === "string")
+        next[selected.id] = value;
       return next;
     });
   const insert = (field: string) => {
+    if (typeof text !== "string") return;
     const element = input.current;
     const result = insertField(
       text,
@@ -157,90 +165,120 @@ export function PromptEditorPage({
             {selected.source !== "built-in" && `Source: ${sourceLabels[selected.source]}.`}
             {dirty ? " Unsaved changes." : ""}
           </p>
-          {selected.fields.length > 0 && (
-            <div className="prompt-editor-fields">
-              <label className="field-label" htmlFor={`${id}-fields`}>
-                Insert merge field
-              </label>
-              <select
-                id={`${id}-fields`}
-                value=""
-                disabled={busy}
-                onChange={(event) => {
-                  if (event.target.value) insert(event.target.value);
-                }}
-              >
-                <option value="" disabled>
-                  Choose a merge field…
-                </option>
-                {selected.fields.map((field) => (
-                  <option key={field} value={field}>
-                    {`{{${field}}}`}
-                  </option>
-                ))}
-              </select>
+          <div className="prompt-editor-view-toggle">
+            <button
+              type="button"
+              aria-controls={`${id}-template-view`}
+              onClick={() => setPreviewVisible((current) => !current)}
+            >
+              {previewVisible ? "Edit template" : "Preview"}
+            </button>
+          </div>
+          {previewVisible ? (
+            <section
+              className="prompt-editor-preview-view"
+              id={`${id}-template-view`}
+              aria-labelledby={`${id}-preview-title`}
+            >
+              <h3 className="field-label" id={`${id}-preview-title`}>
+                {selected.id === "operatingContract"
+                  ? "Assembled Operating Contract"
+                  : "Preview with sample values"}
+              </h3>
+              {selected.fields.includes("summary") && (
+                <p className="muted">
+                  {"{{summary}}"} is the {promptLabels.handoffSummary} template merged with the same
+                  sample values, including its unsaved changes.
+                </p>
+              )}
+              {!preview.ok && (
+                <p className="prompt-editor-problem" role="status">
+                  {preview.error}
+                </p>
+              )}
+              <pre className="prompt-editor-preview">
+                {preview.ok ? preview.text : "Fix the template to see a preview."}
+              </pre>
+            </section>
+          ) : (
+            <div className="prompt-editor-template-editor" id={`${id}-template-view`}>
+              {selected.fields.length > 0 && (
+                <div className="prompt-editor-fields">
+                  <label className="field-label" htmlFor={`${id}-fields`}>
+                    Insert merge field
+                  </label>
+                  <select
+                    id={`${id}-fields`}
+                    value=""
+                    disabled={busy}
+                    onChange={(event) => {
+                      if (event.target.value) insert(event.target.value);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose a merge field…
+                    </option>
+                    {selected.fields.map((field) => (
+                      <option key={field} value={field}>
+                        {`{{${field}}}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {typeof text !== "string" ? (
+                <div className="prompt-editor-clauses">
+                  {OPERATING_CONTRACT_CLAUSE_IDS.map((key) => (
+                    <div className="prompt-editor-clause" key={key}>
+                      <label className="field-label" htmlFor={`${id}-clause-${key}`}>
+                        {OPERATING_CONTRACT_CLAUSES[key]}
+                      </label>
+                      <div
+                        className="prompt-editor-input"
+                        data-invalid={preview.ok ? undefined : "true"}
+                      >
+                        <textarea
+                          id={`${id}-clause-${key}`}
+                          value={text[key]}
+                          disabled={busy}
+                          spellCheck={false}
+                          aria-invalid={!preview.ok}
+                          aria-describedby={`${id}-problem`}
+                          onChange={(event) => setDraft({ ...text, [key]: event.target.value })}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <label className="field-label" htmlFor={`${id}-template`}>
+                    Template
+                  </label>
+                  <div
+                    className="prompt-editor-input"
+                    data-invalid={preview.ok ? undefined : "true"}
+                  >
+                    <textarea
+                      id={`${id}-template`}
+                      ref={input}
+                      value={text}
+                      disabled={busy}
+                      spellCheck={false}
+                      aria-invalid={!preview.ok}
+                      aria-describedby={`${id}-problem`}
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              <p className="prompt-editor-problem" id={`${id}-problem`} aria-live="polite">
+                {preview.ok ? "" : preview.error}
+              </p>
             </div>
           )}
-          <label className="field-label" htmlFor={`${id}-template`}>
-            Template
-          </label>
-          <div className="prompt-editor-input" data-invalid={preview.ok ? undefined : "true"}>
-            <textarea
-              id={`${id}-template`}
-              ref={input}
-              value={text}
-              disabled={busy}
-              spellCheck={false}
-              aria-invalid={!preview.ok}
-              aria-describedby={`${id}-problem`}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-          </div>
-          <p className="prompt-editor-problem" id={`${id}-problem`} aria-live="polite">
-            {preview.ok ? "" : preview.error}
-          </p>
-          <h3 className="field-label" id={`${id}-preview`}>
-            Preview with sample values
-          </h3>
-          {selected.fields.includes("summary") && (
-            <p className="muted">
-              {"{{summary}}"} is the {promptLabels.handoffSummary} template merged with the same
-              sample values, including its unsaved changes.
-            </p>
-          )}
-          <pre className="prompt-editor-preview">
-            {preview.ok ? preview.text : "Fix the template to see a preview."}
-          </pre>
         </section>
       </div>
-      <section className="prompt-editor-mcp" aria-labelledby={`${id}-mcp-title`}>
-        <h2 id={`${id}-mcp-title`}>MCP tool descriptions</h2>
-        <p className="muted">{MCP_TOOL_CONTRACT_INFO}</p>
-        <div className="prompt-editor-mcp-list">
-          {MCP_TOOL_DEFINITIONS.map((tool) => (
-            <article className="prompt-editor-mcp-tool" key={tool.name}>
-              <h3>{tool.name}</h3>
-              <p>{tool.description}</p>
-              <details>
-                <summary>
-                  Input contract (
-                  {tool.readOnly
-                    ? "read-only"
-                    : tool.kind === "activity"
-                      ? "updates activity display"
-                      : tool.name.includes("plan")
-                        ? "updates plan documents"
-                        : "changes worker state"}
-                  )
-                </summary>
-                <pre className="prompt-editor-preview">
-                  {JSON.stringify(tool.inputSchema, null, 2)}
-                </pre>
-              </details>
-            </article>
-          ))}
-        </div>
-      </section>
     </main>
   );
 }

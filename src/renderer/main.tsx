@@ -25,7 +25,8 @@ import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import { ChatPage } from "./chat-page.js";
 import { newestMessage } from "./chat-presentation.js";
-import type { OpenChat } from "./chats.js";
+import { type OpenChat, workerLabel } from "./chats.js";
+import { CommandsPage } from "./commands-page.js";
 import { agentCount, ConfigurationsTable, providers } from "./configurations.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
@@ -739,7 +740,8 @@ function App() {
       | "worktrees"
       | "polling"
       | "search"
-      | "prompts",
+      | "prompts"
+      | "commands",
     label: string,
   ): Command => ({
     id,
@@ -771,6 +773,7 @@ function App() {
     page("worktrees", "Worktrees"),
     page("polling", "Polling"),
     page("prompts", "Prompt Editor"),
+    page("commands", "Commands"),
     {
       id: "settings",
       label: "Settings",
@@ -1074,6 +1077,7 @@ function App() {
                   }
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
+                  commands={snapshot?.commands ?? []}
                   runs={snapshot?.runs ?? []}
                   reviews={reviewSummaries}
                   onReview={openReview}
@@ -1096,6 +1100,7 @@ function App() {
                     key={`${workerScope}:${id}`}
                     api={api}
                     run={run}
+                    label={workerLabel(snapshot?.chats ?? [], run)}
                     orchestrated={snapshot?.workers.includes(id) ?? false}
                     events={transcripts.events[id] ?? []}
                     active={!splash && tabs.active === "chat" && workerId === id}
@@ -1276,6 +1281,22 @@ function App() {
                 Connect to database
               </button>
             </section>
+          )}
+        </div>
+        <div
+          className="page-panel"
+          role="tabpanel"
+          id="panel-commands"
+          aria-labelledby="tab-commands"
+          hidden={tabs.active !== "commands"}
+        >
+          {database && snapshot && (
+            <CommandsPage
+              key={database}
+              commands={snapshot.commands}
+              api={api}
+              onSnapshot={(next) => setState((current) => applyUpdate(current, next))}
+            />
           )}
         </div>
         <div

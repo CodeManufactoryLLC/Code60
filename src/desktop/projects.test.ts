@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { COMMAND_LIMIT, DEFAULT_OPERATING_CONTRACT_CLAUSES } from "../bridge/index.js";
 import { privateDirectory, verifyPrivateSync } from "../platform/index.js";
 import { filePreferences } from "./preferences.js";
-import { openProjectDatabase, sqliteAvailable } from "./projects.js";
+import { openProjectDatabase, SCHEMA, sqliteAvailable } from "./projects.js";
 
 async function expectPrivate(path: string, mode: number): Promise<void> {
   if (process.platform === "win32") expect(() => verifyPrivateSync(path)).not.toThrow();
@@ -25,6 +27,151 @@ afterEach(async () => {
 // Node.js 22.12 needs a flag for node:sqlite; the desktop app runs on Electron's newer Node.js.
 describe.skipIf(!sqliteAvailable())("project database", () => {
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+
+  it("upgrades schema 4 without resetting clause edits, then persists sorted commands", () => {
+    const path = join(directory, "v4.sqlite");
+    const db = openProjectDatabase(path, true);
+    const clauses = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "Keep this role." };
+    db.savePromptTemplate("operatingContract", clauses, "a");
+    db.record("/repo", "a");
+    db.close();
+    const old = new (sqlite().DatabaseSync)(path);
+    old.exec("DROP TABLE code60_commands; UPDATE code60_meta SET value = '4' WHERE key = 'schema'");
+    old.close();
+    const upgraded = openProjectDatabase(path, false);
+    expect(upgraded.commands()).toEqual([]);
+    expect(upgraded.promptTemplates().templates.operatingContract).toEqual(clauses);
+    expect(upgraded.list()).toHaveLength(1);
+    const entry = {
+      id: randomUUID(),
+      name: "review",
+      title: "Review",
+      description: "",
+      prompt: "Inspect.",
+      createdAt: "a",
+      updatedAt: "a",
+    };
+    upgraded.saveCommand(entry);
+    upgraded.saveCommand({ ...entry, id: randomUUID(), name: "audit" });
+    expect(upgraded.commands().map((entry) => entry.name)).toEqual(["audit", "review"]);
+    expect(upgraded.command("REVIEW")).toEqual(entry);
+    expect(() => upgraded.saveCommand({ ...entry, id: randomUUID() })).toThrow(/already exists/);
+    expect(() => upgraded.saveCommand({ ...entry, prompt: " " })).toThrow();
+    upgraded.saveCommand({ ...entry, title: "Updated", createdAt: "wrong", updatedAt: "b" });
+    upgraded.close();
+    const reopened = openProjectDatabase(path, false);
+    expect(reopened.command("review")).toEqual({ ...entry, title: "Updated", updatedAt: "b" });
+    reopened.deleteCommand(entry.id);
+    expect(reopened.command("review")).toBeUndefined();
+    reopened.close();
+  });
+
+  it("enforces the command count while still permitting updates and replacement after deletion", () => {
+    const db = openProjectDatabase(join(directory, "limit.sqlite"), true);
+    const entries = Array.from({ length: COMMAND_LIMIT }, (_, index) => ({
+      id: randomUUID(),
+      name: `command-${index}`,
+      title: "Title",
+      description: "",
+      prompt: "Prompt",
+      createdAt: "a",
+      updatedAt: "a",
+    }));
+    for (const entry of entries) db.saveCommand(entry);
+    const first = entries[0] as (typeof entries)[number];
+    const next = { ...first, id: randomUUID(), name: "extra" };
+    expect(() => db.saveCommand(next)).toThrow(/at most 200/);
+    db.saveCommand({ ...first, title: "Updated" });
+    expect(db.commands()).toHaveLength(COMMAND_LIMIT);
+    db.deleteCommand(first.id);
+    db.saveCommand(next);
+    expect(db.commands()).toHaveLength(COMMAND_LIMIT);
+    db.close();
+  });
+
+  it("resets a schema 3 single-block contract once without changing other prompts", () => {
+    const path = join(directory, "contract-reset.sqlite");
+    const db = openProjectDatabase(path, true);
+    db.record("/repo", "2026-01-01");
+    db.savePromptTemplate("handoffSummary", "Summary {{agent}}", "2026-01-01");
+    db.close();
+    const raw = new (sqlite().DatabaseSync)(path);
+    raw.exec(
+      "UPDATE code60_meta SET value = '3' WHERE key = 'schema';" +
+        "DROP TABLE code60_commands;" +
+        "INSERT INTO code60_prompt_templates VALUES ('operatingContract', 'Legacy contract', 'x');",
+    );
+    raw.close();
+    const upgraded = openProjectDatabase(path, false);
+    expect(upgraded.list()).toEqual([{ path: "/repo", openedAt: "2026-01-01" }]);
+    expect(upgraded.promptTemplates()).toEqual({
+      templates: { handoffSummary: "Summary {{agent}}" },
+      skipped: [],
+    });
+    const clauses = {
+      ...DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      role: "A new role.",
+      planning: "Plan first.",
+    };
+    upgraded.savePromptTemplate("operatingContract", clauses, "2026-02-01");
+    upgraded.close();
+    const reopened = openProjectDatabase(path, false);
+    expect(reopened.promptTemplates().templates).toEqual({
+      operatingContract: clauses,
+      handoffSummary: "Summary {{agent}}",
+    });
+    reopened.close();
+  });
+
+  it("saves all clauses together, rejects invalid replacements, and resets only the contract", () => {
+    const path = join(directory, "clauses.sqlite");
+    const db = openProjectDatabase(path, true);
+    const clauses = {
+      ...DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      planning: "Plan.\nThen wait.",
+      role: "A role.",
+    };
+    db.savePromptTemplate("operatingContract", clauses, "2026-01-01");
+    db.savePromptTemplate("workerUpdates", "{{updates}}", "2026-01-01");
+    expect(() =>
+      db.savePromptTemplate(
+        "operatingContract",
+        { ...clauses, role: "Changed.", planning: "" },
+        "2026-02-01",
+      ),
+    ).toThrow();
+    expect(db.promptTemplates().templates.operatingContract).toEqual(clauses);
+    const competing = new (sqlite().DatabaseSync)(path);
+    try {
+      competing.exec("BEGIN EXCLUSIVE");
+      expect(() =>
+        db.savePromptTemplate("operatingContract", { ...clauses, role: "Changed." }, "2026-02-01"),
+      ).toThrow(/locked/);
+      competing.exec("ROLLBACK");
+    } finally {
+      competing.close();
+    }
+    expect(db.promptTemplates().templates.operatingContract).toEqual(clauses);
+    db.deletePromptTemplate("operatingContract");
+    expect(db.promptTemplates().templates).toEqual({ workerUpdates: "{{updates}}" });
+    db.close();
+  });
+
+  it("skips malformed persisted clause data instead of sending it as instructions", () => {
+    const path = join(directory, "bad-clauses.sqlite");
+    openProjectDatabase(path, true).close();
+    for (const value of ["not JSON", JSON.stringify({ role: "Missing other clauses." })]) {
+      const raw = new (sqlite().DatabaseSync)(path);
+      raw
+        .prepare("INSERT OR REPLACE INTO code60_prompt_templates VALUES (?, ?, ?)")
+        .run("operatingContract", value, "x");
+      raw.close();
+      const db = openProjectDatabase(path, false);
+      expect(db.promptTemplates().templates).toEqual({});
+      expect(db.promptTemplates().skipped).toHaveLength(1);
+      db.close();
+    }
+  });
 
   it.runIf(process.platform === "win32")(
     "bounds a real competing writer and works after the lock is released",
@@ -121,7 +268,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     again.close();
     const check = new (sqlite().DatabaseSync)(path);
     expect(check.prepare("SELECT value FROM code60_meta WHERE key = 'schema'").get()).toEqual({
-      value: "3",
+      value: String(SCHEMA),
     });
     check.close();
   });
@@ -238,7 +385,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     const path = join(directory, "newer.sqlite");
     openProjectDatabase(path, true).close();
     const db = new (sqlite().DatabaseSync)(path);
-    db.exec("UPDATE code60_meta SET value = '4' WHERE key = 'schema'");
+    db.prepare("UPDATE code60_meta SET value = ? WHERE key = 'schema'").run(String(SCHEMA + 1));
     db.close();
     expect(() => openProjectDatabase(path, false)).toThrow(/newer version/);
   });

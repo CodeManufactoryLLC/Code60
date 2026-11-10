@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { ChatMarkdown } from "./chat-markdown.js";
 import { sessionStatus, turnTimings } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
@@ -15,6 +16,7 @@ const endedStatuses = new Set(["finished", "failed", "cancelled", "timed_out", "
 export function WorkerChat({
   api,
   run,
+  label,
   orchestrated,
   events,
   active,
@@ -25,6 +27,8 @@ export function WorkerChat({
 }: {
   api: DesktopApi;
   run: DesktopRun;
+  /** Defaults to the provider and short run ID. */
+  label?: string;
   orchestrated: boolean;
   events: readonly RunEvent[];
   active: boolean;
@@ -167,7 +171,7 @@ export function WorkerChat({
             <span className="chat-role-icon" aria-hidden="true">
               <Icon name="ai-agent" />
             </span>
-            {run.record.agent} / {id.slice(-6)}
+            {label ?? `${run.record.agent} / ${id.slice(-6)}`}
           </h2>
           <span className="status-label worker-chat-subtitle" data-status={status}>
             {run.view?.stopping
@@ -259,7 +263,12 @@ export function WorkerChat({
                       <div className="chat-message-speaker">Automatic worker update</div>
                     )}
                     <McpBadge mcp={block.mcp} />
-                    {block.text && <pre>{block.text}</pre>}
+                    {block.text &&
+                      (block.type === "message" ? (
+                        <ChatMarkdown text={block.text} openLink={api.openWebLink} />
+                      ) : (
+                        <pre>{block.text}</pre>
+                      ))}
                     {(block.type === "message" ||
                       (block.type === "prompt" && !block.automatic)) && (
                       <MessageCopy text={block.text} />

@@ -9,6 +9,23 @@ import {
 import { readMcpTool } from "./mcp-tables.js";
 
 describe("Code60 table tools", () => {
+  it("advertises command creation as a non-destructive mutation without an overwrite ID", () => {
+    const tool = MCP_CONTROL_TOOL_DEFINITIONS.find(
+      (entry) => entry.name === "code60_create_command",
+    );
+    expect(tool).toMatchObject({
+      kind: "control",
+      readOnly: false,
+      destructive: false,
+      inputSchema: { required: ["name", "title", "prompt"], additionalProperties: false },
+    });
+    expect(Object.keys(tool?.inputSchema.properties ?? {})).toEqual([
+      "name",
+      "title",
+      "description",
+      "prompt",
+    ]);
+  });
   it("offers exactly a read and search tool for each UI table", async () => {
     expect(MCP_TABLE_TOOL_DEFINITIONS).toHaveLength(12);
     expect(MCP_TABLE_TOOL_DEFINITIONS.every((tool) => tool.readOnly && !tool.destructive)).toBe(

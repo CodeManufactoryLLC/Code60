@@ -364,6 +364,32 @@ describe("turn timeouts and cancellation", () => {
 });
 
 describe("follow-up turns (desktop app)", () => {
+  it("separates delivered follow-up text from transcript text with and without context", async () => {
+    for (const context of [undefined, "Operating context"]) {
+      const { orch, agents, store } = await setup({
+        mode: "interactive",
+        ...(context ? { promptContext: () => context } : {}),
+      });
+      orch.start();
+      await flush();
+      orch.reply("r1", "/review  exact typed text\n", undefined, "Expanded command prompt");
+      await flush();
+      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+        context
+          ? `${context}\n\n--- User request ---\nExpanded command prompt`
+          : "Expanded command prompt",
+      );
+      expect(store.events.findLast((event) => event.type === "prompt")).toMatchObject({
+        text: "/review  exact typed text\n",
+      });
+      orch.reply("r1", "ordinary reply");
+      await flush();
+      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+        context ? `${context}\n\n--- User request ---\nordinary reply` : "ordinary reply",
+      );
+      await orch.shutdown();
+    }
+  });
   it("replies continue the same session, and the last turn sets the final status", async () => {
     const reasons = ["max_tokens", "end_turn"] as const;
     let i = 0;

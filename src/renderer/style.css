@@ -839,6 +839,11 @@ button.sidebar-settings-toggle {
   margin: 0 0 8px;
   font-size: var(--text-size, 13px);
 }
+.prompt-editor-view-toggle {
+  display: flex;
+  justify-content: flex-end;
+  margin: 20px 0 8px;
+}
 .prompt-editor-fields {
   display: flex;
   flex-direction: column;
@@ -871,6 +876,14 @@ button.sidebar-settings-toggle {
   text-transform: none;
   letter-spacing: normal;
 }
+.prompt-editor-clauses {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+:where(.prompt-editor-clause) .prompt-editor-input textarea {
+  min-height: 100px;
+}
 .prompt-editor-input textarea:focus-visible {
   outline: 0;
   box-shadow: none;
@@ -895,37 +908,79 @@ button.sidebar-settings-toggle {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.prompt-editor-mcp {
-  margin: 0 var(--page-padding) var(--page-padding);
-  padding-top: 20px;
-  border-top: 1px solid var(--control-border);
-}
-.prompt-editor-mcp > h2 {
-  margin: 0 0 8px;
-  font-size: var(--text-size, 13px);
-}
-.prompt-editor-mcp-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-  gap: 8px;
-}
-.prompt-editor-mcp-tool {
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--control-border);
-  background: var(--surface);
-}
-.prompt-editor-mcp-tool h3 {
-  margin: 0 0 8px;
-  font: 12px / 1.4 var(--font);
-  overflow-wrap: anywhere;
-}
-.prompt-editor-mcp-tool p {
-  margin: 0;
-}
 @media (max-width: 800px) {
   .prompt-editor-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.commands-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.commands-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.command-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.command-field input {
+  width: 100%;
+}
+.command-name-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.command-picker {
+  border-bottom: 1px solid var(--control-border);
+  padding: 8px;
+}
+.command-picker [role="listbox"] {
+  max-height: 220px;
+  overflow: auto;
+}
+.command-picker [role="option"] {
+  display: grid;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  padding: 8px;
+  cursor: pointer;
+}
+.command-picker [role="option"]:hover {
+  background: var(--hover-bg);
+}
+.command-picker [aria-selected="true"] {
+  background: var(--accent-bg);
+}
+.command-picker small {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+.command-picker p,
+.command-plain-text {
+  margin: 4px 12px;
+}
+.command-label {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+@media (forced-colors: active) {
+  .command-picker [aria-selected="true"] {
+    outline: 1px solid Highlight;
   }
 }
 
@@ -1423,6 +1478,7 @@ button.settings-group-reset {
   margin: 0 auto 16px;
   max-width: 1000px;
 }
+.event.message .chat-markdown,
 .event.message pre,
 .event.thought pre {
   font-family: var(--agent-font, var(--font));
@@ -1431,6 +1487,126 @@ button.settings-group-reset {
   font-weight: var(--agent-weight, 400);
   text-transform: var(--agent-case, none);
   line-height: 1.65;
+}
+.chat-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-synthesis: weight style;
+}
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+.chat-markdown :is(p, ul, ol, blockquote, pre, .chat-markdown-table) {
+  margin-block: 0.75em;
+}
+.chat-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1em 0.4em;
+  font-family: inherit;
+  font-weight: 400;
+  line-height: 1.3;
+}
+.chat-markdown h1 {
+  font-size: 1.5em;
+}
+.chat-markdown h2 {
+  font-size: 1.3em;
+}
+.chat-markdown h3 {
+  font-size: 1.15em;
+}
+.chat-markdown :is(h4, h5, h6) {
+  font-size: 1em;
+}
+.chat-markdown strong {
+  font-weight: 700;
+}
+.chat-markdown em {
+  font-style: italic;
+}
+.chat-markdown :is(ul, ol) {
+  padding-inline-start: 1.6em;
+}
+.chat-markdown li > p {
+  margin-block: 0.25em;
+}
+.chat-markdown blockquote {
+  margin-inline: 0;
+  border-inline-start: 2px solid var(--control-border);
+  padding-inline-start: 1em;
+  color: var(--muted);
+}
+.event.message .chat-markdown :is(pre, code) {
+  font-family: var(--mono);
+  font-size: 0.95em;
+  font-weight: 400;
+  text-transform: none;
+  --letter-spacing: normal;
+}
+.chat-markdown code {
+  padding: 0.1em 0.25em;
+  background: var(--field-fill);
+  border: 1px solid var(--border);
+}
+.event.message .chat-markdown pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--field-fill);
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.event.message .chat-markdown pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: inherit;
+}
+.chat-markdown-table {
+  max-width: 100%;
+  overflow: auto;
+}
+.chat-markdown table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+.chat-markdown :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: start;
+}
+.chat-markdown th {
+  font-weight: 400;
+  background: var(--field-fill);
+}
+.chat-markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.chat-markdown a:focus-visible,
+.chat-markdown-table:focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: 2px;
+}
+.chat-markdown a[aria-disabled="true"] {
+  cursor: progress;
+}
+.chat-markdown input[type="checkbox"]:disabled {
+  opacity: 1;
+  background-image: none;
+}
+.chat-markdown-link-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.9em;
+}
+.chat-markdown-image {
+  color: var(--muted);
 }
 .event.prompt pre {
   font-family: var(--human-font, var(--font));
@@ -5199,65 +5375,183 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   border-radius: 0 !important;
 }
 
+/* Plan view. */
 .plan-panel {
+  --plan-pad: 16px;
+  --plan-gap: 12px;
+  --plan-row-pad: 12px;
+  --plan-note-gap: 6px;
+  --plan-control: 32px;
   display: flex;
+  flex: 1;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   min-height: 0;
+  container-type: inline-size;
 }
-.plan-progress {
+.plan-toolbar {
   flex: none;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--plan-gap);
+  padding: var(--plan-pad);
   border-bottom: 1px solid var(--border);
 }
 .plan-progress-label {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
 }
-.plan-progress progress {
+.plan-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A supplementary marker; the state is always written beside it. */
+.plan-state::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--muted);
+}
+.plan-state:is([data-state="queued"], [data-state="running"])::before {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.plan-state[data-state="completed"]::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.plan-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.plan-toolbar progress {
   display: block;
   width: 100%;
-  height: 8px;
-  margin-top: 8px;
-  accent-color: var(--accent);
+  height: 4px;
 }
 .plan-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
 }
 .plan-actions:empty {
   display: none;
 }
+.plan-action {
+  min-height: var(--plan-control);
+  padding-block: 0;
+}
+.plan-notice {
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .plan-document {
-  overflow: auto;
-  padding: 12px;
+  flex: 1;
   min-height: 0;
+  overflow: auto;
+  padding: var(--plan-pad);
   overflow-wrap: anywhere;
 }
 .plan-title {
-  font-size: 1.15em;
-  margin: 0 0 16px;
+  font-family: var(--title-font, var(--font));
+  --letter-spacing: var(--title-spacing, normal);
+  font-size: max(var(--title-size, 18px), 1.2em);
+  font-weight: var(--title-weight, 400);
+  text-transform: var(--title-case, none);
+  line-height: 1.3;
 }
-.plan-description,
-.plan-document label {
+.plan-description {
+  margin-top: var(--plan-note-gap);
+  color: var(--muted);
   white-space: pre-wrap;
 }
-.plan-document ul {
-  list-style: none;
+.plan-tasks {
+  margin: calc(var(--plan-pad) + 4px) 0 0;
   padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
 }
+/* The check and status cells are one line box tall, so they centre on the first line of text
+   at any font size, however the text wraps. */
 .plan-task {
-  margin: 16px 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  align-items: start;
+  padding: var(--plan-row-pad) 4px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
 }
-.plan-document label {
+.plan-task-check,
+.plan-task-status {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  height: 1lh;
 }
-.plan-document li p {
-  margin: 6px 0 0 24px;
+.plan-task-check {
+  justify-content: center;
+}
+.plan-task-text {
+  white-space: pre-wrap;
+  cursor: default;
+}
+.plan-task-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.plan-task[data-state="in_progress"] .plan-task-badge {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+  color: var(--text);
+}
+.plan-task[data-state="blocked"] .plan-task-badge {
+  border-color: var(--text);
+  border-style: dashed;
+  color: var(--text);
+}
+.plan-task[data-state="completed"] .plan-task-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.plan-task-note {
+  grid-column: 2 / -1;
+  margin-top: var(--plan-note-gap);
+  color: var(--muted);
+  font-size: 0.92em;
+  white-space: pre-wrap;
+}
+@container (max-width: 360px) {
+  .plan-task-status {
+    grid-column: 2;
+    grid-row: 2;
+    height: auto;
+    margin-top: 4px;
+  }
+}
+/* Completion boxes are read-only indicators, not unavailable controls. */
+.app .plan-task input[type="checkbox"]:disabled {
+  border-style: solid;
+  border-color: var(--control-border);
+  background-color: var(--surface);
+  background-image: none;
+}
+.app .plan-task input[type="checkbox"]:disabled:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+.app .plan-task input[type="checkbox"]:disabled:checked::before {
+  background-color: var(--primary-text);
 }
 .chat-plans {
   display: flex;
@@ -5265,35 +5559,52 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   gap: 8px;
 }
 @media (forced-colors: active) {
-  .plan-progress progress {
+  .plan-toolbar progress {
     forced-color-adjust: auto;
+  }
+  .app .plan-task input[type="checkbox"]:disabled {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    background-color: Canvas;
+  }
+  .app .plan-task input[type="checkbox"]:disabled:checked {
+    border-color: Highlight;
+    background-color: Highlight;
+  }
+  .app .plan-task input[type="checkbox"]:disabled:checked::before {
+    background-color: HighlightText;
+  }
+  .plan-state::before {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    background: Canvas;
   }
 }
 
-.plan-progress progress {
+.plan-toolbar progress {
   appearance: none;
   border: 0;
   border-radius: 0;
   background: var(--border);
 }
-.plan-progress progress::-webkit-progress-bar {
+.plan-toolbar progress::-webkit-progress-bar {
   background: var(--border);
 }
-.plan-progress progress::-webkit-progress-value {
+.plan-toolbar progress::-webkit-progress-value {
   background: var(--accent);
 }
-.plan-progress progress::-moz-progress-bar {
+.plan-toolbar progress::-moz-progress-bar {
   background: var(--accent);
 }
 @media (forced-colors: active) {
-  .plan-progress progress::-webkit-progress-bar {
+  .plan-toolbar progress::-webkit-progress-bar {
     background: Canvas;
     border: 1px solid CanvasText;
   }
-  .plan-progress progress::-webkit-progress-value {
+  .plan-toolbar progress::-webkit-progress-value {
     background: Highlight;
   }
-  .plan-progress progress::-moz-progress-bar {
+  .plan-toolbar progress::-moz-progress-bar {
     background: Highlight;
   }
 }

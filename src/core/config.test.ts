@@ -1,6 +1,35 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_OPERATING_CONTRACT_CLAUSES } from "../contracts/index.js";
 import { configuredMcpServers, loadConfig, parseConfig } from "./config.js";
 import { UsageError } from "./types.js";
+
+describe("Operating Contract configuration", () => {
+  it("accepts the complete clause map and resets old single-block overrides", () => {
+    const clauses = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "Custom planning." };
+    expect(
+      parseConfig({ prompts: { operatingContract: clauses } }).prompts.operatingContract,
+    ).toEqual(clauses);
+    expect(
+      parseConfig({
+        prompts: { operatingContract: "Old custom contract", workerUpdates: "{{updates}}" },
+      }).prompts,
+    ).toMatchObject({
+      operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      workerUpdates: "{{updates}}",
+    });
+  });
+
+  it("rejects incomplete, empty, or unexpected clauses", () => {
+    for (const clauses of [
+      { role: "Role only." },
+      { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "" },
+      { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, extra: "Not predefined" },
+    ])
+      expect(() => parseConfig({ prompts: { operatingContract: clauses } })).toThrow(
+        /prompts.operatingContract/,
+      );
+  });
+});
 
 describe("MCP configuration", () => {
   it("defaults to no servers and fills transport-specific defaults", () => {

@@ -53,6 +53,41 @@ Install and authenticate your chosen agent through its own CLI. See
 [architecture](ARCHITECTURE.md#cli) for CLI usage and configuration, and
 [Windows setup](WINDOWS.md) for Windows-specific requirements.
 
+## Chat formatting
+
+Agent replies in both chat views render Markdown, including code blocks, lists and
+tables. Copy keeps the original Markdown source. Web links ask for confirmation
+before opening your browser; HTML and images are not loaded.
+
+## Reusable commands
+
+Open **Commands** after connecting a database to save a reusable prompt. In an
+orchestrator chat, type `/` at the start of your message. Use Up/Down to choose
+and Enter or Tab to insert the command, then add optional instructions and send.
+Escape closes the list. Unknown commands and paths such as `/tmp` are sent as
+plain text. Commands are shared across projects in the same database; worker
+chats do not expand them.
+
+Use the built-in `/create-command` to have the orchestrator create one for you:
+
+```text
+/create-command Make a command called review that checks changes for bugs and missing tests.
+```
+
+It asks for clarification when needed and saves the new command without running it.
+
+Two more built-ins guide work through Code60's plan review:
+
+- `/plan <request>` asks the orchestrator to create a plan, then wait for **Accept**.
+- `/business-evaluation <idea>` proposes an evaluation plan before doing research,
+  analysis or delegation. After **Accept**, its prompt guides an evidence-based
+  evaluation with five deliverables: decision brief, feasibility analysis, market
+  and economics model, risks and assumptions, and a validation plan. Proposed
+  experiments do not authorize outreach, spending or business operations.
+
+Built-ins appear in the slash picker and do not use a saved-command slot. A saved
+command with the same name takes precedence.
+
 ## More information
 
 - [Architecture and behavior](ARCHITECTURE.md)

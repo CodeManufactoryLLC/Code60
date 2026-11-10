@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
-import { conversations, reconcileDisclosure } from "./chats.js";
+import { conversations, reconcileDisclosure, workerLabel } from "./chats.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const view = (id: string, status: RunStatus = "idle"): RunView => ({
@@ -64,11 +64,11 @@ describe("conversation hierarchy", () => {
     ]);
     expect(archived.run?.id).toBe("a");
   });
-  it("nests only known owned workers and includes manual and historical runs once", () => {
+  it("nests only known owned workers and includes unfinished manual and historical runs once", () => {
     expect(
       conversations(
         [chat("a", ["one", "missing"]), chat("b", ["two", "one"])],
-        [run("one"), run("manual"), run("two"), run("history", "finished")],
+        [run("one"), run("manual"), run("two"), run("history", "failed")],
       ),
     ).toEqual([
       { id: "a", label: "Chat 1", role: "orchestrator" },
@@ -78,6 +78,36 @@ describe("conversation hierarchy", () => {
       { id: "manual", label: "fake / manual", role: "worker" },
       { id: "history", label: "fake / istory", role: "worker" },
     ]);
+  });
+  it("hides finished workers unless a current orchestrator owns them", () => {
+    const archived = { ...chat("old", ["archived"]), archived: true };
+    const finished = (id: string) => run(id, "finished");
+    expect(
+      conversations(
+        [chat("a", ["owned"]), archived],
+        [finished("owned"), finished("archived"), finished("manual"), run("failed", "failed")],
+      ).map(({ id }) => id),
+    ).toEqual(["a", "owned", "failed"]);
+    const live = finished("live");
+    if (live.view) live.view.status = "running";
+    expect(conversations([], [live]).map(({ id }) => id)).toEqual(["live"]);
+    expect(conversations([], [finished("manual")], "manual").map(({ id }) => id)).toEqual([
+      "manual",
+    ]);
+  });
+  it("names workers by the role the orchestrator assigned", () => {
+    const owner = { ...chat("a", ["one", "two"]), workerLabels: { one: "Parser fix" } };
+    expect(conversations([owner], [run("one"), run("two")])).toEqual([
+      { id: "a", label: "Chat 1", role: "orchestrator" },
+      { id: "one", label: "Parser fix", role: "worker", parentId: "a" },
+      { id: "two", label: "fake / two", role: "worker", parentId: "a" },
+    ]);
+    const archived = { ...owner, archived: true };
+    expect(conversations([archived], [run("one")])).toEqual([
+      { id: "one", label: "Parser fix", role: "worker" },
+    ]);
+    expect(workerLabel([owner], run("one"))).toBe("Parser fix");
+    expect(workerLabel([owner], run("two"))).toBe("fake / two");
   });
   it("shows workers at the root after owner replacement or loss, without inferring ownership", () => {
     const unavailable = { ...chat("old", ["one"]), run: null };
@@ -165,12 +195,18 @@ describe("conversation hierarchy", () => {
 });
 
 describe("embedded worker chat", () => {
-  const render = (worker: DesktopRun, events: RunEvent[] = [], orchestrated = true) => {
+  const render = (
+    worker: DesktopRun,
+    events: RunEvent[] = [],
+    orchestrated = true,
+    label?: string,
+  ) => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     return renderToStaticMarkup(
       <WorkerChat
         api={{} as DesktopApi}
         run={worker}
+        {...(label === undefined ? {} : { label })}
         orchestrated={orchestrated}
         events={events}
         active
@@ -181,6 +217,24 @@ describe("embedded worker chat", () => {
       />,
     );
   };
+  it.each([true, false])(
+    "renders Markdown replies for live and historical workers (%s)",
+    (historical) => {
+      const worker = run("one", historical ? "finished" : "idle");
+      if (historical) delete worker.view;
+      const events: RunEvent[] = [
+        { runId: "one", at: "2026-01-01", type: "prompt", turn: 1, text: "**literal user**" },
+        { runId: "one", at: "2026-01-01", type: "message", text: "# Result\n\n**Bo" },
+        { runId: "one", at: "2026-01-01", type: "message", text: "ld** and `code`" },
+      ];
+      const html = render(worker, events);
+      expect(html).toContain("<h1>Result</h1>");
+      expect(html).toContain("<strong>Bold</strong>");
+      expect(html).toContain("<code>code</code>");
+      expect(html).toContain("<pre>**literal user**</pre>");
+      expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
+    },
+  );
   it.each([true, false])(
     "shows MCP attribution for owned/manual and historical workers (%s)",
     (orchestrated) => {
@@ -235,6 +289,10 @@ describe("embedded worker chat", () => {
     expect(html).toContain('class="chat-activity"');
     expect(html).toContain('class="turn-timer"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
+  });
+  it("titles the worker by its role name, falling back to provider and run ID", () => {
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/h2>/);
+    expect(render(run("one"))).toMatch(/fake \/ one<\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

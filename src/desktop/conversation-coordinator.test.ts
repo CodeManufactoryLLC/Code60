@@ -44,6 +44,33 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe("conversation coordination", () => {
+  it("retains dispatch role labels without inventing labels for older workers", () => {
+    const h = harness();
+    expect(h.coordinator.ownedWorker("worker", h.session)).not.toHaveProperty("label");
+    h.coordinator.register("worker", h.session, "/project", "claude", "Market researcher");
+    expect(h.coordinator.ownedWorker("worker", h.session)).toMatchObject({
+      provider: "claude",
+      label: "Market researcher",
+    });
+    h.coordinator.stop();
+  });
+
+  it("rejects missing project scope and sends without an available orchestration run", () => {
+    const h = harness();
+    h.project("");
+    expect(() => h.coordinator.requireScope(h.session.workerScope, h.session)).toThrow(
+      "Open a project",
+    );
+    h.session.chat = undefined;
+    expect(() => h.coordinator.send(h.session, "/plan A request")).toThrow(
+      "No orchestration session",
+    );
+    h.session.chat = { runs: () => [] } as unknown as Orchestrator;
+    expect(() => h.coordinator.send(h.session, "A request")).toThrow("No orchestration session");
+    expect(h.deliver).not.toHaveBeenCalled();
+    h.coordinator.stop();
+  });
+
   it("keeps worker authority in the owning generation and project", () => {
     const h = harness();
     expect(h.coordinator.ownedWorker("worker", h.session).provider).toBe("claude");
@@ -89,8 +116,21 @@ describe("conversation coordination", () => {
       h.session,
       expect.stringContaining("worker"),
       "automatic",
+      undefined,
     ]);
     expect(h.session.inbox).toHaveLength(0);
+    h.coordinator.stop();
+  });
+
+  it("passes command expansion separately from the literal human message", () => {
+    const h = harness();
+    h.coordinator.send(h.session, "/review My changes", undefined, "Inspect my changes.");
+    expect(h.deliver).toHaveBeenCalledExactlyOnceWith(
+      h.session,
+      "/review My changes",
+      undefined,
+      "Inspect my changes.",
+    );
     h.coordinator.stop();
   });
 

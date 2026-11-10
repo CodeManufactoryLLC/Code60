@@ -25,6 +25,7 @@ const labels: Record<PageId, string> = {
   worktrees: "Worktrees",
   polling: "Polling",
   prompts: "Prompt Editor",
+  commands: "Commands",
   settings: "Settings",
 };
 
@@ -39,6 +40,7 @@ const pageIcons: Record<PageId, IconName> = {
   events: "grid",
   polling: "grid",
   prompts: "prompt-template",
+  commands: "terminal",
   search: "search",
   sessions: "grid",
   settings: "settings",
@@ -325,7 +327,10 @@ function PageTabList({
     localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
   }, [experimentsExpanded]);
   const pages = [...tabs.open].sort((a, b) => labels[a].localeCompare(labels[b]));
-  const primary = pages.filter((id) => pageGroup(id) === "primary" && id !== "files");
+  const primary = pages.filter(
+    (id) => pageGroup(id) === "primary" && id !== "files" && id !== "commands",
+  );
+  if (pages.includes("commands")) primary.splice(primary.indexOf("prompts") + 1, 0, "commands");
   const experiments = pages.filter((id) => experimentPages.includes(id));
   const tables = pages.filter((id) => tablePages.includes(id));
   const destinations: (PageId | SettingsSectionId | "tables" | "advanced" | "experiments")[] = [

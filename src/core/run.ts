@@ -372,7 +372,7 @@ export class Run {
   }
 
   /** Sends a follow-up prompt to an idle run (desktop app only). */
-  reply(text: string, origin?: "automatic"): void {
+  reply(text: string, origin?: "automatic", deliveredText = text): void {
     if (this.settings.mode !== "interactive")
       throw new Error("follow-up prompts are only available in the desktop app");
     if (this.status !== "idle" || this.ending || this.modeChanging) {
@@ -384,7 +384,7 @@ export class Run {
       origin === "automatic"
         ? "--- Automatic Code60 update (not written by the user) ---"
         : "--- User request ---";
-    const sent = context ? `${context}\n\n${heading}\n${text}` : text;
+    const sent = context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText;
     this.runTurn(text, true, false, sent, origin).catch((error) =>
       this.end({ status: "failed", reason: message(error) }),
     );

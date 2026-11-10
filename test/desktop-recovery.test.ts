@@ -85,6 +85,10 @@ async function setup(
       projects.splice(0);
     },
     configurations: () => [],
+    commands: () => [],
+    command: () => undefined,
+    saveCommand() {},
+    deleteCommand() {},
     saveConfiguration() {},
     deleteConfiguration() {},
     useConfiguration() {},

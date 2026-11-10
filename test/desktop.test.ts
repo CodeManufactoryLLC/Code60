@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  assembleOperatingContract,
+  BUILTIN_COMMANDS,
+  COMMAND_LIMIT,
+  type Command,
   DEFAULT_PROMPT_TEMPLATES,
   type Plan,
   type PollSettingsPatch,
@@ -16,7 +20,6 @@ import {
   defaultDeps,
   loadConfig,
   openWorkspace,
-  TaskLoop,
 } from "../src/core/index.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
@@ -42,6 +45,7 @@ const databases = new Map<
     entries: Map<string, string>;
     configurations: RunConfiguration[];
     prompts: Partial<PromptTemplates>;
+    commands: Command[];
     failWrites: boolean;
   }
 >();
@@ -49,7 +53,7 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   let data = databases.get(path);
   if (data === undefined) {
     if (!create) throw new Error(`Database not found: ${path}`);
-    data = { entries: new Map(), configurations: [], prompts: {}, failWrites: false };
+    data = { entries: new Map(), configurations: [], prompts: {}, commands: [], failWrites: false };
     databases.set(path, data);
   }
   const shared = data;
@@ -74,6 +78,28 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
       shared.entries.clear();
     },
     configurations: () => structuredClone(shared.configurations),
+    commands: () => structuredClone(shared.commands).sort((a, b) => a.name.localeCompare(b.name)),
+    command: (name) =>
+      structuredClone(
+        shared.commands.find((entry) => entry.name.toLowerCase() === name.toLowerCase()),
+      ),
+    saveCommand: (entry) => {
+      if (shared.failWrites) throw new Error("disk is full");
+      if (shared.commands.some((item) => item.id !== entry.id && item.name === entry.name))
+        throw new Error("A command with that name already exists");
+      if (
+        !shared.commands.some((item) => item.id === entry.id) &&
+        shared.commands.length >= COMMAND_LIMIT
+      )
+        throw new Error(`You can save at most ${COMMAND_LIMIT} commands`);
+      shared.commands = [
+        ...shared.commands.filter((item) => item.id !== entry.id),
+        structuredClone(entry),
+      ];
+    },
+    deleteCommand: (id) => {
+      shared.commands = shared.commands.filter((item) => item.id !== id);
+    },
     saveConfiguration: (entry) => {
       if (shared.failWrites) throw new Error("disk is full");
       if (
@@ -101,7 +127,10 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
     promptTemplates: () => ({ templates: { ...shared.prompts }, skipped: [] }),
     savePromptTemplate: (id, template) => {
       if (shared.failWrites) throw new Error("disk is full");
-      shared.prompts[id] = template;
+      if (id === "operatingContract" && typeof template !== "string")
+        shared.prompts.operatingContract = structuredClone(template);
+      else if (id !== "operatingContract" && typeof template === "string")
+        shared.prompts[id] = template;
     },
     deletePromptTemplate: (id) => {
       delete shared.prompts[id];
@@ -303,6 +332,8 @@ describe("desktop orchestration", () => {
     agents.startGate = new Promise(() => {});
     const first = controller.testOrchestrationProvider();
     await vi.waitFor(() => expect(controller.snapshot().orchestration.connection).toBe("testing"));
+    // The probe reports testing before its agent launch is recorded.
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
     const second = controller.testOrchestrationProvider();
     await controller.poll(["config"]);
     expect(agents.specs).toHaveLength(2);
@@ -857,6 +888,38 @@ describe("desktop orchestration", () => {
 describe("prompt templates", () => {
   const state = (id: string) => controller.snapshot().prompts.find((entry) => entry.id === id);
 
+  it("resolves complete clause sets from the database, config, and defaults", async () => {
+    const original = DEFAULT_PROMPT_TEMPLATES.operatingContract;
+    const configured = { ...original, planning: "Configured planning." };
+    await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
+    await fs.writeFile(
+      join(directory, "config", "code60", "config.json"),
+      JSON.stringify({ prompts: { operatingContract: configured } }),
+    );
+    await controller.poll(["config"]);
+    expect(state("operatingContract")).toMatchObject({
+      source: "config",
+      template: configured,
+      fallback: configured,
+    });
+    const edited = { ...configured, role: "Edited role.", planning: "Edited planning." };
+    await controller.savePromptTemplate({ id: "operatingContract", template: edited });
+    expect(state("operatingContract")).toMatchObject({ source: "database", template: edited });
+    await expect(
+      controller.savePromptTemplate({
+        id: "operatingContract",
+        template: { ...edited, role: "Not saved.", planning: "" },
+      }),
+    ).rejects.toThrow();
+    expect(state("operatingContract")?.template).toEqual(edited);
+    confirm.mockResolvedValueOnce(false);
+    await expect(controller.resetPromptTemplate("operatingContract")).resolves.toBe(false);
+    expect(state("operatingContract")?.template).toEqual(edited);
+    await controller.resetPromptTemplate("operatingContract");
+    expect(state("operatingContract")).toMatchObject({ source: "config", template: configured });
+    expect(original.planning).not.toBe(configured.planning);
+  });
+
   it("keeps skipped-template warnings when switching databases", async () => {
     const open = openDatabase.getMockImplementation();
     if (!open) throw new Error("Missing database fixture");
@@ -1187,19 +1250,26 @@ describe("app-wide orchestration chat", () => {
     };
     await send("first");
     expect(agents.sessions[0]?.prompts[0]).toBe(
-      `${DEFAULT_PROMPT_TEMPLATES.operatingContract}\n\n--- User request ---\nfirst`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nfirst`,
     );
+    const edited = {
+      ...DEFAULT_PROMPT_TEMPLATES.operatingContract,
+      role: "Edited Code60 role.",
+      planning: "Make a plan before starting work.",
+    };
     await controller.savePromptTemplate({
       id: "operatingContract",
-      template: "Edited Code60 role.",
+      template: edited,
     });
     await send("second");
     expect(agents.sessions[0]?.prompts[1]).toBe(
-      "Edited Code60 role.\n\n--- User request ---\nsecond",
+      `${assembleOperatingContract(edited)}\n\n--- User request ---\nsecond`,
     );
     await controller.resetPromptTemplate("operatingContract");
     await send("third");
-    expect(agents.sessions[0]?.prompts[2]).toContain(DEFAULT_PROMPT_TEMPLATES.operatingContract);
+    expect(agents.sessions[0]?.prompts[2]).toContain(
+      assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
+    );
     expect(
       controller
         .snapshot()
@@ -1208,6 +1278,164 @@ describe("app-wide orchestration chat", () => {
         .map((event) => event.text),
     ).toEqual(["first", "second", "third"]);
     expect(agents.specs).toHaveLength(1);
+  });
+
+  it("expands the built-in create-command from a fresh database and keeps the typed transcript", async () => {
+    const id = await ready();
+    expect(controller.snapshot().commands).toEqual([]);
+    for (const text of ["/create-command Review SQL migrations for safety.", "/create-command"]) {
+      await controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text,
+        command: "create-command",
+      });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      expect(agents.sessions[0]?.prompts.at(-1)).toContain("Use code60_create_command");
+      if (text.includes("Review SQL"))
+        expect(agents.sessions[0]?.prompts.at(-1)).toContain(
+          "Additional instructions:\nReview SQL migrations for safety.",
+        );
+      expect(
+        controller
+          .snapshot()
+          .chat.events.map(({ event }) => event)
+          .findLast((event) => event.type === "prompt"),
+      ).toMatchObject({ text });
+      expect(controller.snapshot().commands).toEqual([]);
+    }
+    await controller.saveCommand({
+      name: "create-command",
+      title: "My creator",
+      prompt: "User-defined creator.",
+    });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "/create-command",
+      command: "create-command",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.sessions[0]?.prompts.at(-1)).toContain("User-defined creator.");
+    expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /create-command: My creator\nUser-defined creator.`,
+    );
+  });
+
+  it.each(["plan", "business-evaluation"])(
+    "delivers the complete /%s built-in without saving it",
+    async (name) => {
+      const id = await ready();
+      const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
+      if (!builtin) throw new Error(`Missing /${name}`);
+      for (const suffix of [
+        "",
+        " A tool for independent bookshops.\nCompare possible business models.",
+      ]) {
+        const text = `/${name}${suffix}`;
+        await controller.orchestrationChatAction({ type: "send", id, text, command: name });
+        await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+        expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
+        );
+        expect(controller.snapshot().commands).toEqual([]);
+        expect(
+          controller
+            .snapshot()
+            .chat.events.map(({ event }) => event)
+            .findLast((event) => event.type === "prompt"),
+        ).toMatchObject({ text });
+      }
+    },
+  );
+
+  it("expands the latest command on send but records the exact typed text", async () => {
+    const id = await ready();
+    const fields = {
+      name: "review",
+      title: "Review code",
+      description: "",
+      prompt: "Inspect the diff.",
+    };
+    await controller.saveCommand(fields);
+    const command = controller.snapshot().commands[0];
+    expect(command?.name).toBe("review");
+    for (const [text, expected] of [
+      ["/review", "Command /review: Review code\nInspect the diff."],
+      [
+        "/REVIEW  Focus on errors.\n",
+        "Command /review: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus on errors.",
+      ],
+    ]) {
+      await controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: text as string,
+        command: "review",
+      });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${expected}`,
+      );
+      const event = controller
+        .snapshot()
+        .chat.events.map(({ event }) => event)
+        .findLast((event) => event.type === "prompt");
+      expect(event).toMatchObject({ text });
+    }
+    await controller.saveCommand({
+      ...fields,
+      id: command?.id as string,
+      prompt: "Updated instructions.",
+    });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "/review",
+      command: "review",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.sessions[0]?.prompts.at(-1)).toContain("Updated instructions.");
+    await expect(
+      controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: "not a command",
+        command: "review",
+      }),
+    ).rejects.toThrow(/beginning/);
+    confirm.mockResolvedValueOnce(false);
+    expect(await controller.deleteCommand({ id: command?.id as string })).toBe(false);
+    expect(controller.snapshot().commands).toHaveLength(1);
+    expect(await controller.deleteCommand({ id: command?.id as string })).toBe(true);
+    const turns = controller.snapshot().chat.run?.turns;
+    await expect(
+      controller.orchestrationChatAction({ type: "send", id, text: "/review", command: "review" }),
+    ).rejects.toThrow("Command /review no longer exists");
+    expect(controller.snapshot().chat.run?.turns).toBe(turns);
+    await controller.orchestrationChatAction({ type: "send", id, text: "/tmp is full" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.sessions[0]?.prompts.at(-1)).toContain("--- User request ---\n/tmp is full");
+  });
+
+  it("shares commands across project switches, not databases, and rejects invalid writes", async () => {
+    await controller.saveCommand({ name: "review", title: "Review", prompt: "Review code." });
+    const command = controller.snapshot().commands[0] as Command;
+    await controller.open(directory);
+    expect(controller.snapshot().commands).toEqual([command]);
+    await expect(
+      controller.saveCommand({ name: "review", title: "Duplicate", prompt: "Prompt" }),
+    ).rejects.toThrow(/already exists/);
+    await expect(
+      controller.saveCommand({ name: "Bad Name", title: "Title", prompt: "Prompt" }),
+    ).rejects.toThrow();
+    await expect(
+      controller.saveCommand({ id: randomUUID(), name: "gone", title: "Gone", prompt: "Prompt" }),
+    ).rejects.toThrow(/no longer exists/);
+    await controller.connect(join(directory, "other.sqlite"), true);
+    expect(controller.snapshot().commands).toEqual([]);
+    await controller.connect(join(directory, "first.sqlite"), false);
+    expect(controller.snapshot().commands).toEqual([command]);
   });
 
   it("provides read/search for every UI table, with current-project scope and no mutation tools", async () => {
@@ -1550,8 +1778,8 @@ describe("app-wide orchestration chat", () => {
     // The existing fake session retains its original hanging turn script.
     await controller.orchestrationChatAction({ type: "send", id, text: "again" });
     expect(agents.sessions[0]?.prompts).toEqual([
-      `${DEFAULT_PROMPT_TEMPLATES.operatingContract}\n\n--- User request ---\nworking`,
-      `${DEFAULT_PROMPT_TEMPLATES.operatingContract}\n\n--- User request ---\nagain`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nworking`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nagain`,
     ]);
     await controller.stopAll();
     expect(controller.snapshot().chat.run?.status).toBe("cancelled");
@@ -1756,6 +1984,49 @@ describe("orchestrated workers over ACP", () => {
     });
     return { call, scope: context.body.result.scope as string };
   }
+
+  it("creates reusable commands through the chat gateway without executing or overwriting them", async () => {
+    const { call } = await setup();
+    const prompts = [...chatPrompts()];
+    const fields = { name: "review", title: "Review changes", prompt: "Inspect the code." };
+    const created = await call("code60_create_command", fields);
+    expect(created.status).toBe(200);
+    expect(created.body.result).toMatchObject({
+      ...fields,
+      description: "",
+      id: expect.any(String),
+    });
+    expect(controller.snapshot().commands).toEqual([created.body.result]);
+    expect(chatPrompts()).toEqual(prompts);
+    expect(
+      (await call("code60_create_command", { ...fields, prompt: "Replacement" })).body.error,
+    ).toMatch(/already exists/);
+    expect(
+      (await call("code60_create_command", { ...fields, id: created.body.result.id })).status,
+    ).toBe(400);
+    expect(controller.snapshot().commands).toEqual([created.body.result]);
+
+    const db = databases.get(join(directory, "first.sqlite"));
+    if (!db) throw new Error("Expected connected database");
+    db.failWrites = true;
+    expect(
+      (await call("code60_create_command", { ...fields, name: "failure" })).body.error,
+    ).toMatch(/disk is full/);
+    expect(controller.snapshot().commands).toEqual([created.body.result]);
+    db.failWrites = false;
+    const command = controller.snapshot().commands[0] as Command;
+    db.commands = Array.from({ length: COMMAND_LIMIT - 1 }, (_, i) => ({
+      ...command,
+      id: randomUUID(),
+      name: `saved-${i}`,
+    }));
+    expect((await call("code60_create_command", { ...fields, name: "last" })).status).toBe(200);
+    expect(controller.snapshot().commands).toHaveLength(COMMAND_LIMIT);
+    expect(
+      (await call("code60_create_command", { ...fields, name: "overflow" })).body.error,
+    ).toMatch(/at most 200/);
+    expect(controller.snapshot().commands).toHaveLength(COMMAND_LIMIT);
+  });
 
   it("gates a revised plan, accepts once and persists verified progress", async () => {
     const { call, scope } = await setup();

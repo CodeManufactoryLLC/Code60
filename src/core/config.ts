@@ -164,7 +164,9 @@ function configError(issue: z.core.$ZodIssue): string {
     case "prompts":
       return name === undefined
         ? "prompts must be an object"
-        : `prompts.${String(name)} must be a string`;
+        : name === "operatingContract"
+          ? "prompts.operatingContract must contain the predefined valid clauses"
+          : `prompts.${String(name)} must be a string`;
     default:
       return "must be a JSON object";
   }

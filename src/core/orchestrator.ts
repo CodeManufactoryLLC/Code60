@@ -84,7 +84,7 @@ export interface Orchestrator {
   /** Problems that do not change a run's outcome, such as a failed record write. */
   onWarning(listener: (message: string) => void): () => void;
   /** `origin` marks a prompt Code60 generated instead of the user. */
-  reply(runId: string, text: string, origin?: "automatic"): void;
+  reply(runId: string, text: string, origin?: "automatic", deliveredText?: string): void;
   /** Attempts ACP restoration; a handoff offer does not mutate the ended run. */
   restore(runId: string): Promise<RecoveryResult>;
   /** Starts a fresh ACP session whose first turn sends the summary and the user's message. */
@@ -239,7 +239,7 @@ export async function createOrchestrator(
       warningListeners.add(listener);
       return () => warningListeners.delete(listener);
     },
-    reply: (runId, text, origin) => find(runId).reply(text, origin),
+    reply: (runId, text, origin, deliveredText) => find(runId).reply(text, origin, deliveredText),
     restore: (runId) => find(runId).restore(),
     handoff: (runId, summary, text, reason) => find(runId).handoff(summary, text, reason),
     setMode: (runId, change) => find(runId).setMode(change),

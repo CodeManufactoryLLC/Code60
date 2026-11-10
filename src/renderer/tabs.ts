@@ -12,6 +12,7 @@ export type PageId =
   | "worktrees"
   | "polling"
   | "prompts"
+  | "commands"
   | "settings";
 
 export const settingsSectionIds = [
@@ -44,6 +45,7 @@ export const initialTabs: PageTabs = {
     "worktrees",
     "polling",
     "prompts",
+    "commands",
     "settings",
   ],
   active: "chat",

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export * from "./logs.js";
 
-import { type PromptId, validatePromptTemplate } from "./prompts.js";
+import { type OperatingContractClauses, type PromptId, validatePromptTemplate } from "./prompts.js";
 
 // Disable code generation before constructing objects: even the eval capability probe
 // triggers a CSP violation in the sandboxed renderer. Apply the same mode in Node.
@@ -71,6 +71,7 @@ export function parseValue<S extends z.ZodType>(schema: S, value: unknown): z.ou
 }
 
 export * from "./activity.js";
+export * from "./commands.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./prompts.js";
@@ -82,9 +83,18 @@ const promptTemplateSchema = (id: PromptId) =>
     const problem = validatePromptTemplate(id, template);
     if (problem) ctx.addIssue({ code: "custom", message: `prompts.${id}: ${problem}` });
   });
+export const operatingContractSchema = z
+  .custom<OperatingContractClauses>(
+    (value) => validatePromptTemplate("operatingContract", value) === undefined,
+    { error: "Invalid Operating Contract clauses" },
+  )
+  .transform((clauses) => ({ ...clauses }));
 /** User overrides for the built-in prompt templates, keyed by template ID. */
 export const promptTemplatesSchema = z.strictObject({
-  operatingContract: promptTemplateSchema("operatingContract").optional(),
+  // Old single-block overrides reset to defaults rather than being migrated.
+  operatingContract: z
+    .union([operatingContractSchema, z.string().transform(() => undefined)])
+    .optional(),
   handoffSummary: promptTemplateSchema("handoffSummary").optional(),
   handoffTurn: promptTemplateSchema("handoffTurn").optional(),
   workerUpdates: promptTemplateSchema("workerUpdates").optional(),
