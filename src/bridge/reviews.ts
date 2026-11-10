@@ -5,7 +5,7 @@ const run = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
 const text = z.string().max(8_000);
 const key = z.string().min(1).max(2_048);
 const project = z.string().min(1).max(4_096);
-export const reviewAnchorSchema = z
+const reviewAnchorSchema = z
   .strictObject({
     revisionId: uuid,
     fileKey: key,
@@ -21,6 +21,9 @@ const reviewFileSchema = z.strictObject({
   oldPath: key,
   status: z.enum(["added", "modified", "deleted", "renamed"]),
   fingerprint: z.string().max(160),
+  additions: z.number().int().min(0).optional(),
+  deletions: z.number().int().min(0).optional(),
+  lineCountsUnavailable: z.literal(true).optional(),
   limitation: z.string().max(200).optional(),
 });
 const reviewRevisionSchema = z.strictObject({
@@ -87,7 +90,6 @@ export type ReviewSummary = Pick<
 > & { revisions: Pick<ReviewRevision, "id" | "at">[] };
 export type ReviewRevision = z.infer<typeof reviewRevisionSchema>;
 export type ReviewFile = z.infer<typeof reviewFileSchema>;
-export type ReviewAnchor = z.infer<typeof reviewAnchorSchema>;
 export interface ReviewContent {
   file: ReviewFile;
   original: string;
@@ -119,7 +121,11 @@ const reviewActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("withdraw"), ...identity, id: uuid }),
   z.strictObject({ type: z.literal("retry"), ...identity, id: uuid }),
 ]);
-const reviewReadSchema = z.strictObject({ ...identity, requestId: uuid });
+const reviewReadSchema = z.strictObject({
+  ...identity,
+  requestId: uuid,
+  revisionId: uuid.optional(),
+});
 const reviewFileReadSchema = z.strictObject({
   ...identity,
   requestId: uuid,

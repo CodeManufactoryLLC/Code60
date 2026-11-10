@@ -132,8 +132,9 @@ describe("conversation hierarchy", () => {
       /data-role="orchestrator".*?<span class="chat-role-icon chat-orchestrator-icon" aria-hidden="true">/,
     );
     expect(html).toMatch(
-      /data-role="worker".*?<span class="chat-role-icon chat-role-dot" aria-hidden="true"><\/span><span class="chat-sidebar-label">fake \/ one/,
+      /data-role="worker".*?<span class="chat-role-icon" aria-hidden="true"><svg[^>]*><path d="M16,31/,
     );
+    expect(html).not.toContain("chat-role-dot");
     expect(html).toContain("ClientDeliveryNetworkPrimary.svg");
     expect(html).toContain("ClientDeliveryNetworkPrimary-dark.svg");
     expect(html).not.toContain('role="dialog"');
@@ -206,7 +207,10 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain('<span class="chat-role-icon chat-role-dot" aria-hidden="true"></span>');
+    expect(html).toContain(
+      '<span class="chat-role-icon" aria-hidden="true"><svg class="carbon-icon"',
+    );
+    expect(html).toContain('d="M16,31c-1.6543');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain("Code60 auto-approval: On");
     expect(html).toContain('aria-label="Worker composer"');

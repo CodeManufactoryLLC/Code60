@@ -9,7 +9,7 @@ import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon, type IconName } from "./icons.js";
 import { pathLabel } from "./path-label.js";
-import type { PageId, PageTabs } from "./tabs.js";
+import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds } from "./tabs.js";
 
 const labels: Record<PageId, string> = {
   logs: "Logs",
@@ -45,10 +45,32 @@ const pageIcons: Record<PageId, IconName> = {
   worktrees: "grid",
 };
 
+const settingsLabels: Record<SettingsSectionId, string> = {
+  agents: "Agents",
+  appearance: "Appearance",
+  "table-defaults": "Table defaults",
+  text: "Text",
+  "polling-settings": "Polling",
+  updates: "Updates",
+  about: "About",
+};
+
+const settingsIcons: Record<SettingsSectionId, IconName> = {
+  agents: "ai-agent",
+  appearance: "view",
+  "table-defaults": "grid",
+  text: "settings--adjust",
+  "polling-settings": "time",
+  updates: "renew",
+  about: "information",
+};
+
 export function PageTabBar({
   tabs,
+  settingsSection,
   directory,
   onSelect,
+  onSettingsSectionSelect,
   onOpenProject,
   onConnectDatabase,
   projectDisabled,
@@ -62,9 +84,11 @@ export function PageTabBar({
   eventsByRun,
 }: {
   tabs: PageTabs;
+  settingsSection: SettingsSectionId;
   /** The open project folder, if any. */
   directory?: string | undefined;
   onSelect(id: PageId): void;
+  onSettingsSectionSelect(id: SettingsSectionId): void;
   onOpenProject(): void;
   onConnectDatabase?(): void;
   projectDisabled: boolean;
@@ -137,7 +161,9 @@ export function PageTabBar({
         </button>
         <PageTabList
           tabs={tabs}
+          settingsSection={settingsSection}
           onSelect={onSelect}
+          onSettingsSectionSelect={onSettingsSectionSelect}
           api={api}
           chats={chats}
           runs={runs}
@@ -163,16 +189,23 @@ const tablePages: readonly PageId[] = [
 ];
 
 const experimentPages: readonly PageId[] = ["episodic-memory"];
-const pageGroup = (id: PageId) => {
-  if (tablePages.includes(id)) return "tables";
-  if (experimentPages.includes(id) || id === "contributor-tools") return "advanced";
+const isSettingsSection = (id: string): id is SettingsSectionId =>
+  settingsSectionIds.some((section) => section === id);
+
+const pageGroup = (id: PageId | SettingsSectionId) => {
+  if (tablePages.some((pageId) => pageId === id)) return "tables";
+  if (experimentPages.some((pageId) => pageId === id) || id === "contributor-tools")
+    return "advanced";
+  if (isSettingsSection(id)) return "settings";
   if (id === "chat" || id === "settings") return id;
   return "primary";
 };
 
 function PageTabList({
   tabs,
+  settingsSection,
   onSelect,
+  onSettingsSectionSelect,
   api,
   chats,
   runs,
@@ -183,7 +216,9 @@ function PageTabList({
   eventsByRun,
 }: {
   tabs: PageTabs;
+  settingsSection: SettingsSectionId;
   onSelect(id: PageId): void;
+  onSettingsSectionSelect(id: SettingsSectionId): void;
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -260,7 +295,7 @@ function PageTabList({
   useLayoutEffect(() => {
     const activeChanged = previousActivePage.current !== tabs.active;
     previousActivePage.current = tabs.active;
-    if (activeChanged && (tabs.active === "settings" || pageGroup(tabs.active) === "advanced")) {
+    if (tabs.active === "settings" || (activeChanged && pageGroup(tabs.active) === "advanced")) {
       setSettingsExpanded(true);
     }
     if (tablePages.includes(tabs.active)) setExpanded(true);
@@ -293,7 +328,7 @@ function PageTabList({
   const primary = pages.filter((id) => pageGroup(id) === "primary" && id !== "files");
   const experiments = pages.filter((id) => experimentPages.includes(id));
   const tables = pages.filter((id) => tablePages.includes(id));
-  const destinations: (PageId | "tables" | "advanced" | "experiments")[] = [
+  const destinations: (PageId | SettingsSectionId | "tables" | "advanced" | "experiments")[] = [
     "chat",
     ...primary,
     "tables",
@@ -301,6 +336,7 @@ function PageTabList({
     "settings",
     ...(settingsExpanded
       ? ([
+          ...settingsSectionIds,
           "advanced",
           ...(advancedExpanded
             ? [
@@ -315,11 +351,21 @@ function PageTabList({
   const visible = destinations.filter(
     (id) =>
       database ||
-      ["chat", "tables", "logs", "settings", "advanced", "contributor-tools"].includes(id),
+      id === "chat" ||
+      id === "tables" ||
+      id === "logs" ||
+      id === "settings" ||
+      id === "advanced" ||
+      id === "contributor-tools" ||
+      isSettingsSection(id),
   );
   function moveTo(target: (typeof visible)[number] | undefined) {
     if (target === "tables" || target === "advanced" || target === "experiments") {
       document.getElementById(`${target}-toggle`)?.focus();
+    } else if (target && isSettingsSection(target)) {
+      onSelect("settings");
+      onSettingsSectionSelect(target);
+      document.getElementById(`tab-settings-${target}`)?.focus();
     } else if (target) {
       onSelect(target);
       document.getElementById(`tab-${target}`)?.focus();
@@ -367,12 +413,13 @@ function PageTabList({
     }
     if (id === "settings" && event.key === "ArrowRight") {
       event.preventDefault();
-      if (settingsExpanded) moveTo("advanced");
+      if (settingsExpanded) moveTo(settingsSectionIds[0]);
       else setSettingsExpanded(true);
       return;
     }
-    if (id === "advanced" && event.key === "ArrowUp") {
+    if (isSettingsSection(id) && event.key === "ArrowLeft") {
       event.preventDefault();
+      setSettingsExpanded(false);
       document.getElementById("tab-settings")?.focus();
       return;
     }
@@ -453,21 +500,47 @@ function PageTabList({
           role="tab"
           id={`tab-${id}`}
           aria-controls={`panel-${id}`}
-          aria-selected={tabs.active === id}
+          aria-selected={tabs.active === id && (id !== "settings" || !settingsExpanded)}
           title={labels[id]}
           disabled={!database && id !== "settings" && id !== "contributor-tools" && id !== "logs"}
           tabIndex={
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
           onClick={() => {
-            if (id === "settings" && tabs.active === "settings")
+            if (id === "settings" && tabs.active === "settings") {
               setSettingsExpanded((value) => !value);
+              return;
+            }
             onSelect(id);
           }}
           onKeyDown={(event) => navigate(event, id)}
         >
           <Icon name={pageIcons[id]} />
           <span className="page-tab-label">{labels[id]}</span>
+        </button>
+      </div>
+    );
+  }
+  function settingsPage(id: SettingsSectionId) {
+    const selected = tabs.active === "settings" && settingsSection === id;
+    return (
+      <div className="page-tab" role="presentation" key={id} data-nav-active={selected}>
+        <button
+          type="button"
+          role="tab"
+          id={`tab-settings-${id}`}
+          aria-controls={`panel-settings-${id}`}
+          aria-selected={selected}
+          title={settingsLabels[id]}
+          tabIndex={selected ? 0 : -1}
+          onClick={() => {
+            onSettingsSectionSelect(id);
+            onSelect("settings");
+          }}
+          onKeyDown={(event) => navigate(event, id)}
+        >
+          <Icon name={settingsIcons[id]} />
+          <span className="page-tab-label">{settingsLabels[id]}</span>
         </button>
       </div>
     );
@@ -615,8 +688,8 @@ function PageTabList({
       <div className="page-tab-list sidebar-settings">
         <div
           className="sidebar-settings-heading"
-          data-active={tabs.active === "settings" || (advancedActive && !settingsExpanded)}
-          data-nav-active={tabs.active === "settings" || (advancedActive && !settingsExpanded)}
+          data-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
+          data-nav-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
         >
           <div
             className="page-tab-list"
@@ -643,6 +716,14 @@ function PageTabList({
           className="page-tab-list page-group-pages"
           hidden={!settingsExpanded}
         >
+          <div
+            className="page-tab-list"
+            role="tablist"
+            aria-label="Settings pages"
+            aria-orientation="vertical"
+          >
+            {settingsSectionIds.map(settingsPage)}
+          </div>
           <div className="page-tab" data-nav-active={advancedActive && !advancedExpanded}>
             <button
               type="button"

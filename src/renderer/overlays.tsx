@@ -170,6 +170,35 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
   );
 }
 
+/**
+ * An information button whose tooltip holds a setting's explanation. The hidden copy keeps the
+ * explanation available to controls that reference `id` with aria-describedby.
+ */
+export function InfoTip({ label, id, children }: { label: string; id?: string; children: string }) {
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-button info-tip"
+        aria-label={`About ${label}`}
+        data-tooltip={children}
+        // Pressing hides tooltips; refocusing shows this one again for pointer and touch users.
+        onClick={(event) => {
+          event.currentTarget.blur();
+          event.currentTarget.focus();
+        }}
+      >
+        <Icon name="information" />
+      </button>
+      {id && (
+        <span id={id} hidden>
+          {children}
+        </span>
+      )}
+    </>
+  );
+}
+
 type Tip = { text: string; keys: string | undefined; target: HTMLElement };
 
 export function Tooltips() {

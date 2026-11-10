@@ -14,6 +14,17 @@ export type PageId =
   | "prompts"
   | "settings";
 
+export const settingsSectionIds = [
+  "agents",
+  "appearance",
+  "table-defaults",
+  "text",
+  "polling-settings",
+  "updates",
+  "about",
+] as const;
+export type SettingsSectionId = (typeof settingsSectionIds)[number];
+
 export interface PageTabs {
   open: PageId[];
   active: PageId;

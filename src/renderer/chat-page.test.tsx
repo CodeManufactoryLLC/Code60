@@ -217,6 +217,7 @@ describe("orchestration activity presentation", () => {
     const delivered = render("idle", [], [], events, [review]);
     expect(delivered).toContain('aria-label="Your review feedback"');
     expect(delivered).toContain("View submitted feedback");
+    expect(delivered).not.toContain('class="chat-reviews"');
   });
   it("shows concurrent owned workers while updates are paused without changing own controls", () => {
     const html = render(

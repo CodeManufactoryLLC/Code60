@@ -1,5 +1,5 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   type DesktopApi,
   type Polling,
@@ -13,6 +13,8 @@ import { DataTable, type TableOptions } from "./data-table.js";
 import { drawIcon, Icon } from "./icons.js";
 import { MessageAge } from "./message-controls.js";
 import { Modal } from "./modal.js";
+import { InfoTip } from "./overlays.js";
+import { SettingsHeader } from "./settings-layout.js";
 import { useTicker } from "./ticker.js";
 
 export const labels: Record<PollKey, string> = {
@@ -142,7 +144,7 @@ function IntervalForm({
   const [min, max] = pollRanges[source.key];
   return (
     <form
-      className="poll-interval-form"
+      className="settings-controls"
       onSubmit={(event) => {
         event.preventDefault();
         onSave(
@@ -152,7 +154,7 @@ function IntervalForm({
       }}
     >
       {(["active", "idle"] as const).map((mode) => (
-        <label key={mode}>
+        <label key={mode} className="settings-field settings-field-number">
           {mode === "active"
             ? source.key === "worktrees" || source.key === "files"
               ? "Visible tab seconds"
@@ -180,9 +182,16 @@ function IntervalForm({
   );
 }
 
-export function PollingControls({ polling, api, chartTickMs, onChartTick }: PollingProps) {
+export function PollingControls({
+  polling,
+  api,
+  chartTickMs,
+  onChartTick,
+  onOpenMonitor,
+}: PollingProps & { onOpenMonitor?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const tickerId = useId();
   const attempt = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -196,12 +205,10 @@ export function PollingControls({ polling, api, chartTickMs, onChartTick }: Poll
   };
   return (
     <section className="settings-section polling-settings" aria-label="Polling settings">
-      <h2>Polling</h2>
-      <p className="muted">
-        Desktop only. Empty intervals turn automatic polling off. Worktrees scan only while their
-        tab is visible. Manual polls still work while paused.
-      </p>
-      <div className="poll-actions">
+      <SettingsHeader
+        title="Polling"
+        tip="Desktop only. Empty intervals turn automatic polling off. Worktrees scan only while their tab is visible. Manual polls still work while paused."
+      >
         <button
           type="button"
           disabled={busy}
@@ -213,10 +220,29 @@ export function PollingControls({ polling, api, chartTickMs, onChartTick }: Poll
         >
           Reset polling defaults
         </button>
-      </div>
+        {onOpenMonitor && (
+          <button type="button" onClick={onOpenMonitor}>
+            Open polling monitor
+          </button>
+        )}
+      </SettingsHeader>
+      {error && (
+        <p className="error-banner" role="alert">
+          {error}
+        </p>
+      )}
       {polling.sources.map((source) => (
-        <fieldset key={source.key}>
-          <legend>{labels[source.key]}</legend>
+        <fieldset key={source.key} className="settings-group">
+          <legend className="settings-group-title">{labels[source.key]}</legend>
+          <button
+            type="button"
+            className="settings-group-reset"
+            aria-label={`Reset ${labels[source.key].toLowerCase()}`}
+            disabled={busy}
+            onClick={() => void attempt(() => api.setPollSettings({ [source.key]: null }))}
+          >
+            Reset
+          </button>
           <IntervalForm
             key={`${source.key}:${source.setting.intervalMs}:${source.setting.idleIntervalMs}`}
             source={source}
@@ -235,38 +261,42 @@ export function PollingControls({ polling, api, chartTickMs, onChartTick }: Poll
               )
             }
           />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void attempt(() => api.setPollSettings({ [source.key]: null }))}
-          >
-            Reset {labels[source.key].toLowerCase()}
-          </button>
         </fieldset>
       ))}
-      <label className="settings-row">
-        Chart ticker seconds (local clock, no data reads)
-        <input
-          type="number"
-          min="1"
-          max="60"
-          step="1"
-          value={chartTickMs / 1000}
-          onChange={(event) => {
-            const seconds = Number(event.target.value);
-            if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 60)
-              onChartTick(seconds * 1000);
-          }}
-        />
-      </label>
-      <button type="button" onClick={() => onChartTick(5000)}>
-        Reset chart ticker
-      </button>
-      {error && (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
-      )}
+      <fieldset className="settings-group">
+        <legend className="settings-group-title">Charts</legend>
+        <button
+          type="button"
+          className="settings-group-reset"
+          aria-label="Reset chart ticker"
+          onClick={() => onChartTick(5000)}
+        >
+          Reset
+        </button>
+        <div className="settings-controls">
+          <label className="settings-field settings-field-number">
+            <span className="settings-label">
+              <span id={tickerId}>Chart ticker seconds</span>
+              <InfoTip label="Chart ticker">
+                Redraws the sessions table charts on the local clock. It reads no data.
+              </InfoTip>
+            </span>
+            <input
+              aria-labelledby={tickerId}
+              type="number"
+              min="1"
+              max="60"
+              step="1"
+              value={chartTickMs / 1000}
+              onChange={(event) => {
+                const seconds = Number(event.target.value);
+                if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 60)
+                  onChartTick(seconds * 1000);
+              }}
+            />
+          </label>
+        </div>
+      </fieldset>
     </section>
   );
 }
