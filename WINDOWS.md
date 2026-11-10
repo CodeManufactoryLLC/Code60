@@ -2,7 +2,8 @@
 
 Code60 targets Windows 11 x64, both the Electron desktop and the headless CLI.
 Windows ARM64 and older Windows versions are not supported release targets.
-ARM64 development and x64 emulation do not replace native x64 acceptance.
+Release validation runs on a Windows Server 2025 x64 CI runner; ARM64
+development and x64 emulation do not replace it.
 
 ## Desktop
 
@@ -94,11 +95,12 @@ termination. Unknown, inaccessible or mismatched identity blocks unsafe
 continuation/discard. Recovery is always explicit; startup does not resume work.
 Code60 does not delete worktrees on shutdown.
 
-Automated tests use fake ACP providers only. Native Windows 11 x64 acceptance
-must cover source CLI and desktop, installed/reinstalled/uninstalled packages,
-Ctrl+C, task/owner crashes, descendant cleanup, once-only permissions,
-cancellation, recovery, locked files/databases, caption buttons, Snap,
-keyboard shortcuts and retained user data. Signed release verification also
+Automated tests use fake ACP providers only. Release validation is the Windows
+Server 2025 x64 CI runner: checks, source desktop tests, and installed,
+reinstalled and uninstalled packages with retained user data. There is no
+separate manual Windows 11 hardware acceptance, so behavior CI does not exercise
+(interactive console Ctrl+C, caption buttons, Snap, DPI and client-only UI) is
+not certified. Signed release verification also
 requires real configured signing credentials and timestamp/certificate checks.
 Live-provider testing requires separate authorization and is not implied by
 running the automated suite. See [release gates](RELEASING.md).
