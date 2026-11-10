@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
+  Command,
   DesktopApi,
   DesktopRun,
   OrchestrationChat,
@@ -9,8 +10,10 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import { ChatMarkdown } from "./chat-markdown.js";
 import { RenameChat } from "./chat-name.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
+import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
 import { Icon } from "./icons.js";
 import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
@@ -39,7 +42,15 @@ function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: numbe
   );
 }
 
-function ChatMessage({ block }: { block: Block }) {
+function ChatMessage({
+  block,
+  commands = [],
+  api,
+}: {
+  block: Block;
+  commands?: readonly Command[];
+  api: DesktopApi;
+}) {
   const speaker =
     block.type === "prompt"
       ? block.automatic
@@ -63,7 +74,17 @@ function ChatMessage({ block }: { block: Block }) {
     >
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
       <McpBadge mcp={block.mcp} />
-      <pre>{block.text}</pre>
+      {block.type === "message" ? (
+        <ChatMarkdown text={block.text} openLink={api.openWebLink} />
+      ) : (
+        <pre>
+          {block.type === "prompt" && !block.automatic ? (
+            <CommandMessage text={block.text} commands={commands} />
+          ) : (
+            block.text
+          )}
+        </pre>
+      )}
       {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
         <MessageCopy text={block.text} />
       )}
@@ -83,6 +104,7 @@ export function ChatPage({
   runs,
   reviews = [],
   plans = [],
+  commands = [],
   onPlan,
   onReview,
 }: {
@@ -96,6 +118,7 @@ export function ChatPage({
   runs: readonly DesktopRun[];
   reviews?: ReviewSummary[];
   plans?: PlanSummary[];
+  commands?: readonly Command[];
   onPlan?: (id: string) => void;
   onReview?(id: string): void;
 }) {
@@ -223,7 +246,7 @@ export function ChatPage({
         <div className="activity-details-content">
           {activityTurns.groups
             .get(turn)
-            ?.map((block) => <ChatMessage key={block.key} block={block} />) ?? (
+            ?.map((block) => <ChatMessage key={block.key} block={block} api={api} />) ?? (
             <p>No activity yet.</p>
           )}
         </div>
@@ -312,7 +335,16 @@ export function ChatPage({
   async function send() {
     if (!ready || !run || !draft.trim()) return;
     const text = draft;
-    if ((await action({ type: "send", id: run.id, text })) && currentKey.current === key) {
+    const command = invokedCommand(commands, text);
+    if (
+      (await action({
+        type: "send",
+        id: run.id,
+        text,
+        ...(command ? { command: command.name } : {}),
+      })) &&
+      currentKey.current === key
+    ) {
       setDraft((current) => (current === text ? "" : current));
       if (sessionStorage.getItem(key) === text) sessionStorage.removeItem(key);
       follow.current = true;
@@ -408,6 +440,14 @@ export function ChatPage({
           ref={scroll}
           role="log"
           aria-label="Orchestration conversation"
+          // Content growth during streaming can make a scroll event look like a resize,
+          // so explicit upward input releases following before that event arrives.
+          onWheel={(event) => {
+            if (event.deltaY < 0) follow.current = false;
+          }}
+          onKeyDown={(event) => {
+            if (["ArrowUp", "PageUp", "Home"].includes(event.key)) follow.current = false;
+          }}
           onScroll={() => {
             if (!active || !scroll.current) return;
             const element = scroll.current;
@@ -462,7 +502,7 @@ export function ChatPage({
                         </button>
                       </article>
                     ) : (
-                      <ChatMessage key={item.key} block={block} />
+                      <ChatMessage key={item.key} block={block} commands={commands} api={api} />
                     );
                   })()}
                 {item.blocks.flatMap((block) => {
@@ -586,20 +626,14 @@ export function ChatPage({
           <label className="sr-only" htmlFor={`${id}-message`}>
             Message to orchestrator
           </label>
-          <textarea
+          <CommandComposer
+            key={key}
             id={`${id}-message`}
-            placeholder="Message…"
-            rows={2}
             value={draft}
+            commands={commands}
             disabled={!database || !run || !!ended || connecting}
-            maxLength={1_000_000}
-            onChange={(event) => edit(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                void send();
-              }
-            }}
+            onChange={edit}
+            onSend={() => void send()}
           />
           <SessionInfo
             harness={run?.agent ?? "N/A"}

@@ -17,8 +17,9 @@ export const MCP_TABLES = [
 export type McpTable = (typeof MCP_TABLES)[number];
 type McpTableAction = "read" | "search";
 
-/** Worker tools: the orchestration chat dispatches and controls only workers it created. */
+/** Orchestrator tools, including control of only the workers this chat created. */
 const MCP_CONTROL_TOOLS = [
+  "code60_create_command",
   "code60_create_plan",
   "code60_read_plan",
   "code60_update_plan",
@@ -107,32 +108,6 @@ const tableTitles: Record<McpTable, string> = {
   polling: "Polling",
 };
 
-export const MCP_TOOL_CONTRACT_INFO =
-  "Contract: the table tools are read-only and return source rows from Code60's UI tables, independent " +
-  "of renderer sorting, column visibility, and filters. Dates and sizes retain their underlying " +
-  "timestamps and byte values. " +
-  "They search or page rows, never accept SQL, file paths, or write operations. Sessions, Messages and Events " +
-  "are scoped to the currently open project; Configurations are scoped to the connected database; " +
-  "Worktrees are scoped to the current project; Polling returns the current in-memory poller snapshot " +
-  "without triggering a poll, including nested result rows. Read accepts offset (default 0) and " +
-  "limit (default 50, maximum 100); Search also requires query (1 to 512 characters) and uses " +
-  "case-insensitive substring matching across row values. Results report table, action, offset, " +
-  "limit, total matching rows, and rows. Text fields are clipped to 8,000 characters with a " +
-  "truncation marker; search matches full text before clipping. Reads fail explicitly when data " +
-  "cannot be loaded. Worktrees use the last UI poll; refresh that table first if it has not loaded. " +
-  "Pagination is not a frozen snapshot: rows can change between calls. " +
-  "The worker tools dispatch and control ACP agent sessions in the currently open project. They act " +
-  "only on workers this orchestration chat dispatched, never on manual sessions, other projects, or " +
-  "the chat itself, and accept no commands, paths, or environment settings. Every change requires " +
-  "the scope token from code60_get_context, which changes when the project or chat changes. Workers " +
-  "require a Git repository with an initial commit and always run in isolated worktrees, receive no Code60 " +
-  "tools, and allow each of their own tool calls once without asking. Live workers, including idle " +
-  "ones, count against the configured parallel limit until they are finished or stopped. " +
-  "Plan tools save conversation-owned documents; only the human Accept button starts execution. Drafts block new worker work. " +
-  "Activity tools discover supported semantic types and set or clear a turn-scoped display declaration. " +
-  "They do not control workers or execute work, need no project authority, and expose no artwork. " +
-  "Observed execution and lifecycle states take precedence over agent-reported purpose.";
-
 const scopeInput = {
   scope: {
     type: "string",
@@ -208,6 +183,27 @@ const planDraftInput = {
 };
 
 export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] = [
+  control(
+    "code60_create_command",
+    "Create a command",
+    "Save a reusable slash command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Commands and the orchestrator slash picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
+    object(
+      {
+        name: {
+          type: "string",
+          minLength: 1,
+          maxLength: 64,
+          pattern: "^[a-z0-9][a-z0-9-]{0,63}$",
+          description: "Lowercase slash name without the leading slash.",
+        },
+        title: { type: "string", minLength: 1, maxLength: 120, description: "Single-line title." },
+        description: { type: "string", maxLength: 500 },
+        ...promptInput("The reusable prompt, not executed when saved."),
+      },
+      ["name", "title", "prompt"],
+    ),
+    false,
+  ),
   control(
     "code60_create_plan",
     "Create a plan",
@@ -315,7 +311,8 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Short human-readable worker task name used in the review.",
+          description:
+            'Short role name for this worker, such as "Parser fix" or "Test writer". Code60 shows it as the worker\'s name in the conversation list and in the review.',
         },
         requestId: {
           type: "string",

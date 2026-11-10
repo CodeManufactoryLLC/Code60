@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_OPERATING_CONTRACT_CLAUSES,
   PROMPT_TEMPLATE_LIMIT,
   parseAction,
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseDeleteCommand,
   parseDiffIdentity,
   parseDiffRequest,
   parseFileContext,
@@ -18,6 +20,7 @@ import {
   parseReviewAction,
   parseReviewFileRead,
   parseRunSettings,
+  parseSaveCommand,
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseStart,
@@ -25,6 +28,62 @@ import {
 } from "./index.js";
 
 describe("desktop IPC validation", () => {
+  it("validates narrow command saves, deletes and orchestrator invocations", () => {
+    const id = "01900000-0000-4000-8000-000000000001";
+    const fields = { name: "review", title: "Review", prompt: "Inspect changes." };
+    expect(parseSaveCommand(fields)).toEqual({ ...fields, description: "" });
+    expect(parseSaveCommand({ ...fields, id })).toEqual({ ...fields, description: "", id });
+    expect(parseDeleteCommand({ id })).toEqual({ id });
+    for (const invalid of [
+      { ...fields, id: "bad" },
+      { ...fields, directory: "/tmp" },
+      { ...fields, name: "/review" },
+    ])
+      expect(() => parseSaveCommand(invalid)).toThrow();
+    for (const invalid of [id, {}, { id, name: "review" }])
+      expect(() => parseDeleteCommand(invalid)).toThrow();
+    expect(
+      parseOrchestrationChatAction({
+        type: "send",
+        id: "chat-1",
+        text: "/review",
+        command: "review",
+      }),
+    ).toEqual({ type: "send", id: "chat-1", text: "/review", command: "review" });
+    expect(() =>
+      parseOrchestrationChatAction({
+        type: "send",
+        id: "chat-1",
+        text: "/review",
+        command: "/review",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseAction({ type: "reply", id: "worker-1", text: "/review", command: "review" }),
+    ).toThrow();
+  });
+  it("accepts only the complete predefined clauses for an Operating Contract save", () => {
+    const template = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "Review a plan first." };
+    expect(parseSavePromptTemplate({ id: "operatingContract", template })).toEqual({
+      id: "operatingContract",
+      template,
+    });
+    for (const invalid of [
+      "Legacy contract",
+      {},
+      { ...template, planning: "" },
+      { ...template, planning: "{{updates}}" },
+      { ...template, role: "x".repeat(PROMPT_TEMPLATE_LIMIT) },
+      { ...template, extra: "Unknown" },
+    ])
+      expect(() =>
+        parseSavePromptTemplate({ id: "operatingContract", template: invalid }),
+      ).toThrow();
+    expect(() => parseSavePromptTemplate({ id: "handoffSummary", template })).toThrow();
+    expect(() =>
+      parseSavePromptTemplate({ id: "operatingContract", template, extra: true }),
+    ).toThrow();
+  });
   it("allows only fixed update actions, never URLs, paths or commands", () => {
     for (const action of [
       "status",

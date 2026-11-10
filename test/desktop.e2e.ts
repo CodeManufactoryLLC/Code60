@@ -476,6 +476,14 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
     if (!sidebar) throw new Error("Missing navigation sidebar");
     const bounds = element.getBoundingClientRect();
     const bar = sidebar.getBoundingClientRect();
+    // When navigation overflows, rows end at its vertical scrollbar rather than the divider.
+    let list = element.parentElement;
+    while (list && list !== sidebar && list.scrollHeight <= list.clientHeight)
+      list = list.parentElement;
+    const listEdge =
+      list && list !== sidebar
+        ? list.getBoundingClientRect().left + list.clientLeft + list.clientWidth
+        : Number.POSITIVE_INFINITY;
     const line = getComputedStyle(element, "::after");
     const probe = document.createElement("span");
     probe.style.color = "var(--primary)";
@@ -485,7 +493,7 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
     return {
       left: bounds.left,
       right: bounds.right,
-      edge: bar.right - 1,
+      edge: Math.min(bar.right - 1, listEdge),
       lineWidth: Number.parseFloat(line.width),
       width: bounds.width,
       border: line.borderBottomWidth,
@@ -752,7 +760,7 @@ test("desktop: read-only task revisions preserve project files and switch review
       await window.desktop.connectDatabase("create");
       await window.desktop.chooseFolder();
     });
-    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator" });
     const waitForCapture = (title: string, path: string) =>
       expect
         .poll(() =>
@@ -888,7 +896,7 @@ test("desktop: database connection gates splash and workspace controls", async (
     const bounds = await notice.boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(88);
     expect(bounds?.y).toBeLessThan(60);
-    for (const name of ["Prompt Editor", "Search"]) {
+    for (const name of ["Prompt Editor", "Commands", "Search"]) {
       await expect(page.getByRole("tab", { name, exact: true })).toBeDisabled();
     }
     await expect(page.getByRole("button", { name: "Tables", exact: true })).toBeEnabled();
@@ -900,7 +908,7 @@ test("desktop: database connection gates splash and workspace controls", async (
       page.getByRole("button", { name: "Open polling controls", exact: true }),
     ).toBeDisabled();
     await expect(
-      page.getByRole("textbox", { name: "Message to orchestrator", exact: true }),
+      page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
     ).toBeDisabled();
     await page.getByRole("tab", { name: "Chat", exact: true }).focus();
     await page.keyboard.press("ArrowDown");
@@ -974,7 +982,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     const chat = page.locator(".orchestration-chat-page:visible");
     await chat
-      .getByRole("textbox", { name: "Message to orchestrator", exact: true })
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true })
       .fill("Fix parser validation");
     await chat.getByRole("button", { name: "Send", exact: true }).click();
     await expect(chat.getByRole("button", { name: "Rename chat: ok", exact: true })).toBeVisible();
@@ -1353,7 +1361,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       element.scrollTop = 0;
     });
     await send(JSON.stringify([{ message: "read while open" }, { message: "more" }]));
-    await expect(chat.locator(".event.message pre").last()).toHaveText("read while openmore");
+    await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText(
+      "read while openmore",
+    );
     await expect(first.locator(".chat-unread")).toHaveCount(0);
     await selectSidebarPage(page, "Settings");
     await send("reply while on another page");
@@ -1417,7 +1427,9 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     ]);
     await composer.fill(prompt);
     await chat.getByRole("button", { name: "Send", exact: true }).click();
-    await expect(chat.locator(".event.message pre")).toHaveText(source);
+    await expect(chat.locator(".event.message .chat-markdown pre code")).toHaveText(
+      "const value = '<not markup>';\n",
+    );
     await expect(chat.locator(".turn-timer")).toHaveCount(0);
     await expect(chat.locator(".activity-display")).toHaveCount(1);
     await expect(chat.locator(".activity-timer")).toBeVisible();
@@ -1457,7 +1469,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(agentCopy.locator("svg")).toHaveCount(1);
     await expectMessageCopy(agentCopy);
     await composer.focus();
-    const selectedText = await chat.locator(".event.message pre").evaluate((element) => {
+    const selectedText = await chat.locator(".event.message .chat-markdown").evaluate((element) => {
       const range = document.createRange();
       range.selectNodeContents(element);
       const selection = getSelection();
@@ -1471,7 +1483,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(agentCopy).toHaveAttribute("aria-disabled", "true");
     await expect(agentCopy).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(chat.getByText("Copied.", { exact: true })).toHaveCount(0);
-    await expect(chat.locator(".event.message pre")).toHaveText(`${source}later chunk`);
+    await expect(chat.locator(".event.message .chat-markdown p")).toHaveText("later chunk");
     const clipboardValues = () =>
       page.evaluate(
         () => (window as unknown as { copyHarness: { values: string[] } }).copyHarness.values,
@@ -1629,7 +1641,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-top-right-radius", "0px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(20);
+    await expect(tabs).toHaveCount(21);
     const tabCorners = await tabs.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -1700,7 +1712,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       BrowserWindow.getAllWindows()[0]?.getSize(),
     );
     await application.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 640),
     );
     await expectTabAppearance(page);
     expect(
@@ -1902,7 +1914,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const versions = (await page.evaluate(() => window.desktop.snapshot())).versions;
     expect(versions).toMatchObject({
       code60: version,
-      databaseSchema: 3,
+      databaseSchema: 5,
       runRecordFormat: 1,
       acpProtocol: 1,
       mcpProtocol: "2025-03-26",
@@ -1983,7 +1995,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(18);
+    await expect(page.getByRole("tab")).toHaveCount(19);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -2401,7 +2413,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(18);
+    await expect(page.getByRole("tab")).toHaveCount(19);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await selectSettingsPage(page, "Text");
@@ -2433,6 +2445,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const sidebarPages = [
       "Chat",
       "Prompt Editor",
+      "Commands",
       "Search",
       "Tables",
       "Configurations",
@@ -2463,7 +2476,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await page.keyboard.press("ArrowDown");
       await expect(
         page
-          .locator(index >= 12 ? "#settings-pages" : index === 8 ? "#table-pages" : ".page-tabs")
+          .locator(
+            index >= sidebarPages.indexOf("Agents")
+              ? "#settings-pages"
+              : index === sidebarPages.indexOf("Polling")
+                ? "#table-pages"
+                : ".page-tabs",
+          )
           .getByRole(name === "Tables" ? "button" : "tab", {
             name,
             exact: true,
@@ -2482,7 +2501,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(18);
+    await expect(page.getByRole("tab")).toHaveCount(19);
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -2580,7 +2599,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         "font-family",
         /^"?D-DIN"?/,
       );
-      await expect(page.locator(".event.message pre").first()).toHaveCSS(
+      await expect(page.locator(".event.message .chat-markdown").first()).toHaveCSS(
         "font-family",
         /^"?D-DIN"?/,
       );
@@ -2751,9 +2770,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await sessionsTab.click();
     if (!(await chatPopup.isVisible())) await chatHead.click();
     await expectChatFooterLayout();
-    await expect(page.locator(".event.message pre").first()).toHaveCSS("font-size", "18px");
+    await expect(page.locator(".event.message .chat-markdown").first()).toHaveCSS(
+      "font-size",
+      "18px",
+    );
     await expect(page.locator(".event.prompt pre").first()).toHaveCSS("font-size", "19px");
-    await expect(page.locator(".event.message pre").first()).toHaveCSS(
+    await expect(page.locator(".event.message .chat-markdown").first()).toHaveCSS(
       "text-transform",
       "lowercase",
     );
@@ -2927,7 +2949,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     ).toBe("low"); // Historical sessions remain in Chat without opening on startup.
     const restoredChat = again.locator(".worker-chat-page");
     await expect(restoredChat).toBeHidden();
-    await expect(again.locator('.chat-sidebar-entry[data-role="worker"]')).toHaveCount(1);
+    // Quitting finished this unowned worker, so Chat hides it until it is opened again.
+    await expect(again.locator('.chat-sidebar-entry[data-role="worker"]')).toHaveCount(0);
     await selectSidebarPage(again, "Messages");
     await expect(
       again.locator("#panel-messages [data-testid^='glide-cell-5-']").filter({
@@ -3218,9 +3241,26 @@ test("desktop: prompt template editing and persistence", async () => {
     await tab.click();
     const panel = page.locator("#panel-prompts");
     const template = panel.getByLabel("Template", { exact: true });
+    const role = panel.getByRole("textbox", { name: "Role", exact: true });
+    const planning = panel.getByRole("textbox", { name: "Planning", exact: true });
+    const originalContract = (
+      await readFile(join(root, "test/fixtures/operating-contract.txt"), "utf8")
+    ).trimEnd();
+    const originalPlanning = originalContract.split("\n")[3];
+    await expect(panel.getByRole("textbox")).toHaveCount(13);
+    await expect(template).toHaveCount(0);
     const save = panel.getByRole("button", { name: "Save", exact: true });
     const fields = panel.getByRole("combobox", { name: "Insert merge field" });
     const preview = panel.locator(".prompt-editor-main .prompt-editor-preview");
+    const showPreview = panel.getByRole("button", { name: "Preview", exact: true });
+    const editTemplate = panel.getByRole("button", { name: "Edit template", exact: true });
+    await expect(role).toBeVisible();
+    await expect(showPreview).toBeVisible();
+    await expect(preview).toHaveCount(0);
+    await expect(panel.locator(".prompt-editor-mcp")).toHaveCount(0);
+    await expect(
+      panel.getByRole("heading", { name: "MCP tool descriptions", exact: true }),
+    ).toHaveCount(0);
     await expect(
       panel.getByRole("heading", { name: "Operating Contract", exact: true }),
     ).toBeVisible();
@@ -3284,28 +3324,51 @@ test("desktop: prompt template editing and persistence", async () => {
       BrowserWindow.getAllWindows()[0]?.setSize(1200, 850),
     );
     await expect(fields).toHaveCount(0);
-    await template.fill("You are controlled by Code60.");
+    await role.fill("You are controlled by Code60.");
+    await planning.fill("Make a plan and wait for acceptance.");
     await system.click();
     await expect(system).toHaveAttribute("aria-expanded", "false");
     await expect(promptList).toBeHidden();
-    await expect(template).toHaveValue("You are controlled by Code60.");
+    await expect(role).toHaveValue("You are controlled by Code60.");
     await system.focus();
     await page.keyboard.press("Space");
     await expect(promptList).toBeVisible();
     await expect(promptList.getByRole("button", { name: /Operating Contract/ })).toContainText(
       "Unsaved changes",
     );
+    await showPreview.focus();
+    await page.keyboard.press("Enter");
+    await expect(panel.getByRole("textbox")).toHaveCount(0);
+    await expect(preview).toHaveCount(1);
+    const editedContract = originalContract.split("\n");
+    editedContract[0] = "You are controlled by Code60.";
+    editedContract[3] = "Make a plan and wait for acceptance.";
+    await expect(preview).toHaveText(editedContract.join("\n"));
+    expect(await preview.evaluate((element) => (element as HTMLElement).isContentEditable)).toBe(
+      false,
+    );
+    await editTemplate.focus();
+    await page.keyboard.press("Space");
+    await expect(role).toHaveValue(editedContract[0]);
+    await expect(planning).toHaveValue(editedContract[3]);
+    await panel.getByRole("button", { name: /^Handoff summary/ }).click();
+    await panel.getByRole("button", { name: /^Operating Contract/ }).click();
+    await expect(role).toHaveValue(editedContract[0]);
+    await expect(planning).toHaveValue(editedContract[3]);
+    await selectSidebarPage(page, "Sessions");
+    await tab.click();
+    await expect(role).toHaveValue(editedContract[0]);
+    await expect(planning).toHaveValue(editedContract[3]);
+    await planning.fill("");
+    await expect(save).toBeDisabled();
+    await expect(panel.locator(".prompt-editor-problem")).toContainText("Planning");
+    await planning.fill(editedContract[3]);
+    // Save all clauses while viewing their combined, read-only body.
+    await showPreview.click();
     await save.click();
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
-    await expect(
-      panel.getByRole("heading", { name: "MCP tool descriptions", exact: true }),
-    ).toBeVisible();
-    await expect(panel.locator(".prompt-editor-mcp-tool")).toHaveCount(28);
-    await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_read_review");
-    await expect(panel.locator(".prompt-editor-mcp")).toContainText("code60_address_feedback");
-    await expect(panel.locator(".prompt-editor-mcp")).toContainText("never accept SQL");
-    await expect(panel.locator(".prompt-editor-mcp")).toContainText("changes worker state");
-    await expect(panel.locator(".prompt-editor-mcp")).toContainText("updates activity display");
+    await expect(preview).toHaveText(editedContract.join("\n"));
+    await editTemplate.click();
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
     await template.fill("Agent: ");
     await fields.selectOption("agent");
@@ -3326,13 +3389,29 @@ test("desktop: prompt template editing and persistence", async () => {
     );
     await fields.selectOption("agent");
     await expect(template).toHaveValue("Agent: {{agent}}");
+    await showPreview.focus();
+    await page.keyboard.press("Enter");
     await expect(preview).toHaveText("Agent: claude");
+    await expect(template).toHaveCount(0);
+    await expect(fields).toHaveCount(0);
+    expect(
+      await preview.evaluate((element) => ({
+        tag: element.tagName,
+        editable: (element as HTMLElement).isContentEditable,
+      })),
+    ).toEqual({ tag: "PRE", editable: false });
+    await editTemplate.focus();
+    await page.keyboard.press("Space");
+    await expect(preview).toHaveCount(0);
+    await expect(template).toHaveValue("Agent: {{agent}}");
+    await showPreview.click();
     // The first-prompt preview merges the summary draft, so switching templates changes it.
     await panel.getByRole("button", { name: /^Handoff first prompt/ }).click();
     await expect(preview).toContainText("Agent: claude\n\nThe user's new message follows.");
     await expect(preview).toContainText("Please finish the failing test.");
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
     await expect(preview).toHaveText("Agent: claude");
+    await editTemplate.click();
     await selectSidebarPage(page, "Sessions");
     await tab.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
@@ -3340,16 +3419,38 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
     await page.reload();
     await tab.click();
-    await expect(template).toHaveValue("You are controlled by Code60.");
+    await expect(role).toHaveValue("You are controlled by Code60.");
+    await expect(planning).toHaveValue("Make a plan and wait for acceptance.");
+    await role.fill("Unsaved role.");
+    await planning.fill("Unsaved planning.");
+    await showPreview.click();
+    await panel.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await expect(preview).toHaveText(editedContract.join("\n"));
+    await editTemplate.click();
+    await expect(role).toHaveValue("You are controlled by Code60.");
+    await expect(planning).toHaveValue("Make a plan and wait for acceptance.");
     await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
-    await expect(template).toHaveValue(/Code60's orchestration assistant/);
+    await expect(role).toHaveValue(/Code60's orchestration assistant/);
+    await expect(planning).toHaveValue(originalPlanning ?? "");
+    await showPreview.click();
+    await expect(preview).toHaveText(originalContract);
+    await editTemplate.click();
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
     await expect(template).toHaveValue("Agent: {{agent}}");
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
     await template.fill("{{unknown}}");
     await expect(template).toHaveAttribute("aria-invalid", "true");
     await expect(save).toBeDisabled();
+    await showPreview.click();
+    await expect(preview).toHaveText("Fix the template to see a preview.");
+    await expect(panel.getByRole("status")).toContainText([
+      "Unsaved changes.",
+      "This template unknown merge field 'unknown'.",
+    ]);
+    await expect(save).toBeDisabled();
     await panel.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await expect(preview).toHaveText("Agent: claude");
+    await editTemplate.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
     await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
     await expect(panel.getByRole("status")).toBeEmpty();
@@ -4410,7 +4511,7 @@ test("desktop: MCP badges, saved attribution and Server table controls", async (
       chat.getByRole("note", { name: "MCP server: context7", exact: true }),
     ).toBeVisible();
     await chat.screenshot({ path: test.info().outputPath("mcp-attribution.png") });
-    await page.evaluate((id) => window.desktop.action({ type: "finish", id }), id);
+    // Keep this unowned worker idle, since finished unowned workers are hidden.
     await page.reload();
     await selectSidebarPage(page, "Chat");
     await page.locator("#tab-chat").press("ArrowRight");
@@ -4572,12 +4673,19 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(advanced).toBeHidden();
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     await expect(tables).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByRole("tab")).toHaveText(["Chat", "Prompt Editor", "Search", "Settings"]);
+    await expect(page.getByRole("tab")).toHaveText([
+      "Chat",
+      "Prompt Editor",
+      "Commands",
+      "Search",
+      "Settings",
+    ]);
     await tables.press("ArrowRight");
     await expect(tables).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab")).toHaveText([
       "Chat",
       "Prompt Editor",
+      "Commands",
       "Search",
       "Configurations",
       "Events",
@@ -4653,10 +4761,11 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       chatList().getByRole("button", { name: "Chat 1", exact: true }).locator(".."),
     );
     await expect(page.locator(".chat-page-heading")).toHaveAttribute("data-nav-active", "false");
-    const input = () => chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
+    const input = () =>
+      chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await input().fill("hello from Chat");
     await input().press("Enter");
-    await expect(chat.locator(".event.message pre")).toHaveText("ok");
+    await expect(chat.locator(".event.message .chat-markdown")).toHaveText("ok");
     await expect(chat.locator(".wordmark")).toHaveCount(0);
     await expect(chat.locator(".orchestration-chat-status")).not.toContainText("claude");
     const provider = chat.getByRole("img", { name: "Current provider: Claude", exact: true });
@@ -4729,7 +4838,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(chat.locator(".event.prompt, .event.message")).toHaveCount(0);
     await input().fill("second conversation");
     await input().press("Enter");
-    await expect(chat.locator(".event.message pre")).toHaveText("ok");
+    await expect(chat.locator(".event.message .chat-markdown")).toHaveText("ok");
     await input().fill("second draft");
     await chatList().getByRole("button", { name: "Chat 1", exact: true }).click();
     await expect(input()).toHaveValue("draft retained");
@@ -4750,7 +4859,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "true",
     );
     await expect(input()).toHaveValue("draft retained");
-    await expect(chat.locator(".event.message pre").first()).toHaveText("ok");
+    await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
     await expect(chat.locator(".event.prompt")).toHaveCount(2);
     await chatList().getByRole("button", { name: "Chat 2", exact: true }).focus();
     await page.keyboard.press("Enter");
@@ -5362,7 +5471,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await page.evaluate(() => window.desktop.chooseFolder());
     await selectSidebarPage(page, "Prompt Editor");
-    const editor = page.locator(".prompt-editor-input");
+    const editor = page.locator(".prompt-editor-clause .prompt-editor-input").first();
     await editor.locator("textarea").focus();
     await expect(editor).toHaveCSS("outline-style", "none");
     await selectSettingsPage(page, "Appearance");
@@ -6547,7 +6656,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
       await window.desktop.connectDatabase("create");
       await window.desktop.chooseFolder();
     });
-    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator" });
     await expect(page.locator(".activity-display")).toHaveCount(0);
     await composer.fill("Draft preserved through setup");
     await expect(page.getByRole("region", { name: "Project Git setup" })).toBeVisible();
@@ -6786,7 +6895,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     const chat = page.locator("#panel-chat .orchestration-chat-page:visible");
     const status = chat.locator(".activity-display");
     await expect(status).toHaveCount(0);
-    const input = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
+    const input = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     const waitForFadeOut = () =>
       status.evaluate(
         (element) =>
@@ -6948,7 +7057,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(artwork).toHaveCSS("height", `${activitySize}px`);
     const imageBox = await artwork.boundingBox();
     const textBox = await status.locator(".activity-name").boundingBox();
-    const replyBox = await chat.locator(".event.message pre").last().boundingBox();
+    const replyBox = await chat.locator(".event.message .chat-markdown").last().boundingBox();
     expect(replyBox && textBox && Math.abs(replyBox.x - textBox.x) < 1).toBe(true);
     expect(imageBox && textBox && textBox.x >= imageBox.x + imageBox.width).toBe(true);
     expect(
@@ -7160,7 +7269,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
       await window.desktop.connectDatabase("create");
       await window.desktop.chooseFolder();
     });
-    const composer = page.getByRole("textbox", { name: "Message to orchestrator" });
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator" });
     await composer.fill("Plan a change");
     await composer.press("Enter");
     const panel = page.getByRole("region", { name: "Plan", exact: true });
@@ -7241,6 +7350,494 @@ test("desktop: accepted plans show task progress outside their Markdown document
       .getByRole("button", { name: "Plan · Revised change", exact: true })
       .click();
     await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: safe Markdown replies, source Copy, confirmed links and streaming scroll", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-markdown-ui-"));
+  execFileSync("git", ["init", "-q", directory]);
+  commitFixture(directory);
+  application = await launch(directory, directory, join(directory, "markdown.sqlite"));
+  try {
+    const page = await application.firstWindow();
+    const requests: string[] = [];
+    page.on("request", (request) => {
+      requests.push(request.url());
+    });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    await selectSidebarPage(page, "Chat");
+    await application.evaluate(({ dialog, shell }) => {
+      const state = {
+        confirm: false,
+        fail: false,
+        opened: [] as string[],
+        destinations: [] as string[],
+      };
+      (globalThis as typeof globalThis & { markdownLinks?: typeof state }).markdownLinks = state;
+      dialog.showMessageBox = async (...args: unknown[]) => {
+        const options = args.at(-1) as { detail?: string };
+        state.destinations.push(options.detail ?? "");
+        return { response: state.confirm ? 1 : 0, checkboxChecked: false };
+      };
+      shell.openExternal = async (url: string) => {
+        if (state.fail) throw new Error("fixture open failure");
+        state.opened.push(url);
+      };
+    });
+    const linkState = () =>
+      application.evaluate(
+        () =>
+          (
+            globalThis as typeof globalThis & {
+              markdownLinks?: { opened: string[]; destinations: string[] };
+            }
+          ).markdownLinks,
+      );
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const source = [
+      "# Report",
+      "",
+      "**Ready** and *careful* with ~~removed~~ text.",
+      "",
+      "- [x] Done",
+      "- [ ] Next",
+      "",
+      "| Name | Value |",
+      "| --- | --- |",
+      "| One | Two |",
+      "",
+      "```ts",
+      `const Value = '${"x".repeat(240)}';`,
+      "```",
+      "",
+      "[Docs](https://example.com/docs)",
+      "",
+      "[Unsafe](javascript:alert%281%29) [Local](file:///tmp/test)",
+      "",
+      "![No remote load](https://example.invalid/beacon.png)",
+      "",
+      "<script>window.markdownUnsafe = true</script>",
+    ].join("\n");
+    const split = source.indexOf("careful") + 3;
+    await composer.fill(
+      JSON.stringify([
+        { message: source.slice(0, split) },
+        { sleep: 500 },
+        { message: source.slice(split) },
+      ]),
+    );
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    const markdown = chat.locator(".event.message .chat-markdown").first();
+    await expect(markdown.getByRole("heading", { name: "Report", level: 1 })).toBeVisible();
+    await expect(markdown.locator("strong")).toHaveText("Ready");
+    await expect(markdown.locator("em")).toHaveText("careful");
+    await expect(markdown.locator("table td")).toHaveText(["One", "Two"]);
+    await expect(markdown.getByRole("checkbox").first()).toBeChecked();
+    await expect(markdown.getByRole("checkbox").first()).toBeDisabled();
+    await expect(markdown.locator("pre code")).toHaveText(`const Value = '${"x".repeat(240)}';\n`);
+    await expect(markdown.locator("script, img, iframe")).toHaveCount(0);
+    expect(requests.some((url) => url.includes("example.invalid"))).toBe(false);
+    expect(
+      await page.evaluate(async () => {
+        for (const url of [
+          "file:///tmp/test",
+          "javascript:alert(1)",
+          "https://user:pass@example.com",
+        ]) {
+          try {
+            await window.desktop.openWebLink({ url });
+            return false;
+          } catch {
+            /* Invalid destinations must not reach confirmation or shell. */
+          }
+        }
+        return true;
+      }),
+    ).toBe(true);
+    expect(await linkState()).toEqual({
+      opened: [],
+      destinations: [],
+      confirm: false,
+      fail: false,
+    });
+    const link = markdown.getByRole("link");
+    await expect(link).toHaveCount(1);
+    const originalUrl = page.url();
+    await link.click();
+    expect((await linkState())?.opened).toEqual([]);
+    expect((await linkState())?.destinations).toEqual(["https://example.com/docs"]);
+    await application.evaluate(() => {
+      const state = (globalThis as typeof globalThis & { markdownLinks?: { confirm: boolean } })
+        .markdownLinks;
+      if (state) state.confirm = true;
+    });
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(async () => (await linkState())?.opened)
+      .toEqual(["https://example.com/docs"]);
+    expect(page.url()).toBe(originalUrl);
+    await application.evaluate(() => {
+      const state = (globalThis as typeof globalThis & { markdownLinks?: { fail: boolean } })
+        .markdownLinks;
+      if (state) state.fail = true;
+    });
+    await link.click();
+    await expect(markdown.getByRole("alert")).toContainText("Could not open link");
+    expect((await linkState())?.opened).toEqual(["https://example.com/docs"]);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: async (text: string) => {
+          (window as unknown as { markdownCopy: string }).markdownCopy = text;
+        },
+      });
+    });
+    await chat
+      .locator(".event.message")
+      .first()
+      .getByRole("button", { name: "Copy message" })
+      .click();
+    expect(
+      await page.evaluate(() => (window as unknown as { markdownCopy: string }).markdownCopy),
+    ).toBe(source);
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    const long = `# Long reply\n\n${"Paragraph **with emphasis** and `code`.\n\n".repeat(100)}`;
+    await composer.fill(
+      JSON.stringify([
+        { message: long },
+        { sleep: 3000 },
+        { message: "\n\n## Finished\n\n| A | B |\n| --- | --- |\n| 1 | 2 |" },
+      ]),
+    );
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    const scroller = chat.locator(".transcript");
+    await expect(chat.locator(".chat-markdown h1").last()).toHaveText("Long reply");
+    await expect
+      .poll(() =>
+        scroller.evaluate(
+          (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+        ),
+      )
+      .toBeLessThanOrEqual(2);
+    await scroller.hover();
+    // A streamed render can interrupt Chromium's animated wheel scroll just short of the top.
+    await expect(async () => {
+      await page.mouse.wheel(0, -100_000);
+      await expect
+        .poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 1_000 })
+        .toBe(0);
+    }).toPass({ timeout: 5_000 });
+    await expect(chat.locator(".chat-markdown h2").last()).toHaveText("Finished");
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
+    expect(
+      await scroller.evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(1);
+    const originalViewport = page.viewportSize();
+    await page.setViewportSize({ width: 820, height: 640 });
+    expect(
+      await scroller.evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(1);
+    if (originalViewport) await page.setViewportSize(originalViewport);
+    await expect(composer).toBeEnabled();
+    const [workerId] = await page.evaluate(() =>
+      window.desktop.start({
+        agents: ["claude"],
+        allow: [],
+        allowAll: false,
+        prompt: JSON.stringify([{ message: "# Worker result\n\n**Saved** with `Code`." }]),
+      }),
+    );
+    if (!workerId) throw new Error("Missing Markdown worker");
+    await page.locator(`#conversation-${workerId}`).click();
+    const worker = page.locator(`#chat-${workerId}`);
+    await expect(worker.locator(".chat-markdown h1")).toHaveText("Worker result");
+    await expect(worker.locator(".chat-markdown strong")).toHaveText("Saved");
+    await page.reload();
+    await page.locator(`#conversation-${workerId}`).click();
+    await expect(worker.locator(".chat-markdown h1")).toHaveText("Worker result");
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Commands drafts, keyboard picker and send-time expansion", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-commands-ui-"));
+  const repo = join(directory, "repo");
+  await mkdir(repo);
+  try {
+    application = await launch(directory, repo, join(directory, "commands.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const tab = page.getByRole("tab", { name: "Commands", exact: true });
+    await expect(tab).toBeDisabled();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    await tab.click();
+    const editor = page.locator("#panel-commands");
+    await editor.getByLabel("Title", { exact: true }).fill("Fixture review");
+    await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("fixture-review");
+    await editor.getByLabel("Description", { exact: true }).fill("Inspect saved changes");
+    await editor.getByLabel("Prompt", { exact: true }).fill("Inspect the selected files.");
+    const originalViewport = page.viewportSize();
+    const heading = editor.getByRole("heading", { name: "Commands", level: 1, exact: true });
+    const newCommand = editor.getByRole("button", { name: "New command", exact: true });
+    const scroll = editor.locator(".commands-scroll");
+    for (const size of [
+      { width: 1200, height: 600 },
+      { width: 760, height: 600 },
+    ]) {
+      await page.setViewportSize(size);
+      await scroll.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      const before = await heading.boundingBox();
+      await scroll.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await expect(heading).toBeInViewport();
+      await expect(newCommand).toBeInViewport();
+      expect(await heading.boundingBox()).toEqual(before);
+      await newCommand.click();
+      await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("Fixture review");
+    }
+    if (originalViewport) await page.setViewportSize(originalViewport);
+    await selectSidebarPage(page, "Search");
+    await tab.click();
+    await expect(editor.getByLabel("Prompt", { exact: true })).toHaveValue(
+      "Inspect the selected files.",
+    );
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    const list = editor.getByRole("navigation", { name: "Commands", exact: true });
+    await expect(
+      list.getByRole("button", { name: "/fixture-review Fixture review", exact: true }),
+    ).toBeVisible();
+    await editor.getByLabel("Prompt", { exact: true }).fill("Unsaved edit.");
+    await editor.getByRole("button", { name: "New command", exact: true }).click();
+    await editor.getByLabel("Title", { exact: true }).fill("Fixture audit");
+    await editor.getByLabel("Prompt", { exact: true }).fill("Audit changes.");
+    await list.getByRole("button", { name: /\/fixture-review/ }).click();
+    await expect(editor.getByLabel("Prompt", { exact: true })).toHaveValue("Unsaved edit.");
+    await editor.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await expect(editor.getByLabel("Prompt", { exact: true })).toHaveValue(
+      "Inspect the selected files.",
+    );
+    await list.getByRole("button", { name: "New command (unsaved)", exact: true }).click();
+    await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("Fixture audit");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(list.getByRole("button")).toHaveCount(2);
+
+    await selectSidebarPage(page, "Chat");
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await expect(composer).toBeEnabled();
+    for (const name of ["plan", "business-evaluation"]) {
+      await composer.fill(`/${name}`);
+      await expect(chat.getByRole("option")).toHaveCount(1);
+      await expect(chat.getByRole("option")).toContainText(`/${name}`);
+      await composer.press("Enter");
+      await expect(composer).toHaveValue(`/${name} `);
+      await expect(chat.locator(".event.prompt")).toHaveCount(0);
+    }
+    await composer.fill("/create");
+    await expect(chat.getByRole("option")).toHaveCount(1);
+    await expect(chat.getByRole("option")).toContainText("/create-command");
+    await composer.press("Tab");
+    await expect(composer).toHaveValue("/create-command ");
+    await expect(chat.locator(".event.prompt")).toHaveCount(0);
+    await composer.fill("/");
+    await expect(composer).toHaveAttribute("aria-expanded", "true");
+    await expect(chat.getByRole("option")).toHaveCount(5);
+    await composer.press("ArrowDown");
+    await composer.press("ArrowUp");
+    await composer.press("Tab");
+    await expect(composer).toHaveValue("/fixture-audit ");
+    await expect(chat.locator(".event.prompt")).toHaveCount(0);
+    await composer.fill("/review");
+    await expect(chat.getByRole("option")).toHaveCount(1);
+    await composer.press("Escape");
+    await expect(composer).toHaveAttribute("aria-expanded", "false");
+    await composer.fill("/rev");
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("/fixture-review ");
+    await expect(chat.locator(".event.prompt")).toHaveCount(0);
+    await composer.fill("/fixture-review  Focus on errors.\n");
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(chat.locator(".event.message .chat-markdown")).toHaveText(
+      "Received command:\nCommand /fixture-review: Fixture review\nInspect the selected files.\n\nAdditional instructions:\nFocus on errors.",
+    );
+    await expect(chat.locator(".event.prompt pre")).toHaveText(
+      "/fixture-review  Focus on errors.\n",
+    );
+    await expect(chat.locator(".event.prompt mark")).toHaveText("/fixture-review");
+    await composer.fill("/fixture-review");
+    await composer.press("Escape");
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText(
+      "Received command:\nCommand /fixture-review: Fixture review\nInspect the selected files.",
+    );
+    await composer.fill("/tmp is full");
+    await expect(
+      chat.getByText("No matching command. This message will be sent as plain text."),
+    ).toBeVisible();
+    await expect(composer).toHaveAttribute("aria-expanded", "false");
+    await composer.press("Enter");
+    await expect(chat.locator(".event.prompt pre").last()).toHaveText("/tmp is full");
+    await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText("ok");
+
+    await tab.click();
+    await list.getByRole("button", { name: /\/fixture-review/ }).click();
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await editor.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(list.getByRole("button")).toHaveCount(2);
+    await expect(editor.getByRole("button", { name: "Delete", exact: true })).toBeEnabled();
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await editor.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await page.reload();
+    await tab.click();
+    await expect(
+      list.getByRole("button", { name: "/fixture-audit Fixture audit", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: plan task rows align checkboxes with their first line of text", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-plan-layout-"));
+  const repo = join(directory, "repo");
+  const config = join(directory, "config", "code60");
+  await mkdir(config, { recursive: true });
+  await mkdir(repo);
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  commitFixture(repo);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      defaultAgent: "claude",
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--plan"],
+        },
+      },
+    }),
+  );
+  const measure = (page: Page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".plan-task")].map((task) => {
+        const box = task.querySelector("input[type=checkbox]")?.getBoundingClientRect();
+        const text = task.querySelector<HTMLElement>(".plan-task-text");
+        const note = task.querySelector<HTMLElement>(".plan-task-note");
+        if (!box || !text) throw new Error("Missing task parts");
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const first = range.getClientRects()[0];
+        if (!first) throw new Error("Missing task text line");
+        const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+        return {
+          offset: box.top + box.height / 2 - (first.top + first.height / 2),
+          lines: lines.size,
+          textLeft: text.getBoundingClientRect().left,
+          noteLeft: note?.getBoundingClientRect().left,
+          overflow: task.scrollWidth - task.clientWidth,
+        };
+      }),
+    );
+  try {
+    application = await launch(directory, repo, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1400, 900),
+    );
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator" });
+    await composer.fill("Plan a layout check");
+    await composer.press("Enter");
+    const panel = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(panel.getByRole("heading", { name: "Layout check" })).toBeVisible();
+    await panel.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(panel.getByText("1 out of 4", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText("Paused", { exact: true })).toBeVisible();
+    const resize = page.getByRole("button", { name: "Resize files panel", exact: true });
+    const drag = async (width: number) => {
+      const grip = await resize.boundingBox();
+      const aside = await page.locator("#chat-file-panel").boundingBox();
+      if (!grip || !aside) throw new Error("Missing panel resize grip");
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(aside.x + aside.width - width, grip.y + grip.height / 2, { steps: 4 });
+      await page.mouse.up();
+      await expect
+        .poll(async () =>
+          Math.abs(((await page.locator("#chat-file-panel").boundingBox())?.width ?? 0) - width),
+        )
+        .toBeLessThanOrEqual(2);
+    };
+    const check = async (name: string) => {
+      const rows = await measure(page);
+      expect(rows[1]?.lines).toBeGreaterThan(1);
+      expect(rows[2]?.lines).toBeGreaterThanOrEqual(3);
+      for (const row of rows) {
+        expect(Math.abs(row.offset), name).toBeLessThanOrEqual(1);
+        if (row.noteLeft !== undefined)
+          expect(Math.abs(row.noteLeft - row.textLeft), name).toBeLessThan(1);
+        expect(row.overflow, name).toBeLessThanOrEqual(0);
+      }
+      expect(
+        await panel.evaluate((element) => element.scrollWidth <= element.clientWidth),
+        name,
+      ).toBe(true);
+      return rows;
+    };
+    await check("wide");
+    await page.screenshot({ path: "test-results/plan-styling/wide.png" });
+    await drag(300);
+    await check("narrow");
+    expect(await panel.evaluate((element) => element.clientWidth)).toBeLessThanOrEqual(300);
+    await page.screenshot({ path: "test-results/plan-styling/narrow.png" });
+    await page.evaluate(() => document.documentElement.style.setProperty("--text-size", "22px"));
+    await check("large text");
+    await page.screenshot({ path: "test-results/plan-styling/large-text.png" });
+    await page.evaluate(() => document.documentElement.style.removeProperty("--text-size"));
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "dark";
+    });
+    await check("dark");
+    await page.screenshot({ path: "test-results/plan-styling/dark.png" });
+    await page.emulateMedia({ forcedColors: "active" });
+    await check("forced colors");
+    await expect(panel.getByRole("progressbar")).toBeVisible();
+    await page.screenshot({ path: "test-results/plan-styling/forced-colors.png" });
+    await page.emulateMedia({ forcedColors: "none" });
+    await expect(panel.getByRole("radiogroup")).toHaveCount(0);
+    await expect(panel.getByRole("checkbox", { name: "Short task" })).toBeChecked();
+    await expect(panel.getByRole("checkbox", { name: "Short task" })).toBeDisabled();
+    await expect(panel.getByText("Blocked", { exact: true })).toBeVisible();
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

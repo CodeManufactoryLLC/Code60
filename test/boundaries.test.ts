@@ -24,6 +24,8 @@ const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "electron-updater": "desktop",
   react: "renderer",
   "react-dom": "renderer",
+  "react-markdown": "renderer",
+  "remark-gfm": "renderer",
   "@glideapps/glide-data-grid": "renderer",
   "@headless-tree/core": "renderer",
   "@headless-tree/react": "renderer",

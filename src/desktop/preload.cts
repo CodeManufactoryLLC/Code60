@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  openWebLink: (request: unknown) => ipcRenderer.invoke("desktop:web-link", request),
   queryLogs: (request: unknown) => ipcRenderer.invoke("desktop:logs-query", request),
   logDetail: (request: unknown) => ipcRenderer.invoke("desktop:logs-detail", request),
   clearLogs: (request: unknown) => ipcRenderer.invoke("desktop:logs-clear", request),
@@ -69,6 +70,8 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:configuration-save", request),
   deleteConfiguration: (id: unknown) => ipcRenderer.invoke("desktop:configuration-delete", id),
   savePromptTemplate: (request: unknown) => ipcRenderer.invoke("desktop:prompt-save", request),
+  saveCommand: (request: unknown) => ipcRenderer.invoke("desktop:command-save", request),
+  deleteCommand: (request: unknown) => ipcRenderer.invoke("desktop:command-delete", request),
   resetPromptTemplate: (id: unknown) => ipcRenderer.invoke("desktop:prompt-reset", id),
   action: (action: unknown) => ipcRenderer.invoke("desktop:action", action),
   stopAll: () => ipcRenderer.invoke("desktop:stop-all"),

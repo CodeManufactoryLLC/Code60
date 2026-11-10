@@ -11,6 +11,7 @@
 
 - Depend only on `core`, `bridge`, and the Node-only `platform` leaf. Only this module imports `electron`.
 - Keep the renderer sandboxed: context isolation on, Node.js integration off, navigation and new windows blocked.
+- Chat web links use the narrow openWebLink bridge: validate absolute HTTP(S) URLs without credentials, confirm the normalized destination natively, then open the default browser only on approval. Serialize confirmations, expose no arbitrary shell capability, and never log URLs or raw errors.
 - Keep `preload.cts` self-contained and expose only fixed methods. Never expose `ipcRenderer` or raw channels.
 - Check the sender of every IPC request and parse its arguments with `bridge` before acting. Act only on runs recorded in the open workspace.
 - Serialize user actions and completion history refreshes in the controller. Allow overlapping batches, each with its own selected parallel limit, orchestrator, and subscriptions. Route actions and approvals to the owning batch, and retain earlier transcripts when adding sessions.
@@ -18,7 +19,8 @@
 - Return only newly created session IDs from start. Require Git readiness on every project launch and continuation, with required isolation during core preparation. Never continue legacy non-isolated workers. Keep Chat and read-only history usable before Git setup.
 - Ask with a native dialog before destructive actions and before quitting with active runs. Reject unisolated project workers; guided Git setup uses its own explicit initial-commit confirmation.
 - On quit, signals, and renderer crashes, shut down every run through `core` and wait for it before exiting. Never remove worktrees automatically.
-- Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), and validated prompt template edits. Never store user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Load `node:sqlite` lazily; Node.js 22.12 has it only behind a flag.
+- Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), validated prompt template edits and explicitly saved reusable commands. Never store per-turn user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Load `node:sqlite` lazily; Node.js 22.12 has it only behind a flag.
+- Validate command saves/deletes again in main, confirm deletion natively, and resolve commands from the connected database at send time. Preserve exact typed transcript text separately from delivered expansion. Commands are shared across projects, not databases. The current orchestrator's authenticated MCP gateway may create commands on user request using the same validation and serialized writes, but cannot update/delete them; workers gain no command capability.
 - Route every repeated external read (run history, config, run configurations, worktrees) through the `Poller` in `poller.ts`. Keep reads single-flight, discard results after a workspace or database switch, keep worktree scans outside the exclusive queue, and stop the poller on shutdown. Never poll agent events or watch files. Persist only user overrides under `polling` in desktop.json.
 - Do not use top-level `await` in `main.ts`; Electron automation needs the module to finish loading.
 - Own private desktop-only diagnostic JSONL storage separately from transcripts

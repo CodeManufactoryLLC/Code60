@@ -38,7 +38,7 @@ export function ChatSidebar({
     null,
   );
   const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null);
-  const entries = useMemo(() => conversations(chats, runs), [chats, runs]);
+  const entries = useMemo(() => conversations(chats, runs, selectedId), [chats, runs, selectedId]);
   const archivedFocus = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!archivedFocus.current || entries.some((entry) => entry.id === archivedFocus.current))

@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  assembleOperatingContract,
+  DEFAULT_OPERATING_CONTRACT_CLAUSES,
   DEFAULT_PROMPT_TEMPLATES,
+  OPERATING_CONTRACT_CLAUSE_IDS,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
   parseValue,
@@ -17,7 +21,7 @@ describe("prompt templates", () => {
   });
 
   it("allows requested external MCP tasks while preserving worker and tool boundaries", () => {
-    const contract = DEFAULT_PROMPT_TEMPLATES.operatingContract;
+    const contract = assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract);
     expect(contract).toContain("tasks the user explicitly requests");
     expect(contract).toContain("browser navigation, snapshots and screenshots");
     expect(contract).toContain("Delegate project changes to workers");
@@ -68,8 +72,10 @@ describe("prompt templates", () => {
   });
 
   it("validates overrides by template ID", () => {
-    expect(parseValue(promptTemplatesSchema, { operatingContract: "Code60 role" })).toEqual({
-      operatingContract: "Code60 role",
+    expect(
+      parseValue(promptTemplatesSchema, { operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES }),
+    ).toEqual({
+      operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES,
     });
     expect(parseValue(promptTemplatesSchema, { handoffTurn: "Hi {{message}}" })).toEqual({
       handoffTurn: "Hi {{message}}",
@@ -78,5 +84,58 @@ describe("prompt templates", () => {
       /prompts.handoffTurn: must include/,
     );
     expect(() => parseValue(promptTemplatesSchema, { other: "x" })).toThrow();
+  });
+
+  it("assembles the default contract exactly, regardless of object key order", () => {
+    const original = readFileSync(
+      new URL("./fixtures/operating-contract.txt", import.meta.url),
+      "utf8",
+    );
+    const clauses = Object.fromEntries(
+      Object.entries(DEFAULT_OPERATING_CONTRACT_CLAUSES).reverse(),
+    ) as typeof DEFAULT_OPERATING_CONTRACT_CLAUSES;
+    expect(OPERATING_CONTRACT_CLAUSE_IDS).toHaveLength(13);
+    expect(assembleOperatingContract(clauses)).toBe(original.trimEnd());
+  });
+
+  it("preserves multiline clause boundaries and adds no labels to the assembled text", () => {
+    const clauses = {
+      ...DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      role: "First line.\nSecond line.",
+      planning: "A custom planning rule.",
+    };
+    const contract = assembleOperatingContract(clauses);
+    expect(contract.startsWith("First line.\nSecond line.\nInterpret")).toBe(true);
+    expect(contract).toContain("\nA custom planning rule.\nCommunicate");
+    expect(contract).not.toContain("Planning:");
+  });
+
+  it.each([
+    null,
+    [],
+    "Legacy contract",
+    {},
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: undefined },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, extra: "Unknown clause" },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "" },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "  " },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "{{message}}" },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "{{invalid" },
+    { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: 123 },
+  ])("rejects malformed contract clauses", (clauses) => {
+    expect(validatePromptTemplate("operatingContract", clauses)).toBeTypeOf("string");
+  });
+
+  it("checks the assembled limit, including separators, at the exact boundary", () => {
+    const clauses = Object.fromEntries(
+      OPERATING_CONTRACT_CLAUSE_IDS.map((key) => [key, "x"]),
+    ) as typeof DEFAULT_OPERATING_CONTRACT_CLAUSES;
+    const base = assembleOperatingContract(clauses).length;
+    const atLimit = { ...clauses, role: "x".repeat(PROMPT_TEMPLATE_LIMIT - base + 1) };
+    expect(assembleOperatingContract(atLimit)).toHaveLength(PROMPT_TEMPLATE_LIMIT);
+    expect(validatePromptTemplate("operatingContract", atLimit)).toBeUndefined();
+    expect(
+      validatePromptTemplate("operatingContract", { ...atLimit, role: `${atLimit.role}x` }),
+    ).toMatch(/at most/);
   });
 });

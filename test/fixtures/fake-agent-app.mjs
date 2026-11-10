@@ -113,6 +113,22 @@ export function createFakeAgent(options = {}) {
           });
           planId = plan.id;
           steps = [{ message: "Plan ready for acceptance." }];
+        } else if (request === "Plan a layout check") {
+          const plan = await tool("code60_create_plan", {
+            requestId: "fixture-layout-plan",
+            title: "Layout check",
+            description: "Exercise task rows with short, wrapped, and multiline text.",
+            tasks: [
+              { text: "Short task" },
+              {
+                text: "A long task whose description wraps across several lines in a narrow plan panel so that the checkbox alignment can be checked against the first line of text",
+              },
+              { text: "Multiline task\nSecond line of the task\nThird line" },
+              { text: "Pending task" },
+            ],
+          });
+          planId = plan.id;
+          steps = [{ message: "Layout plan ready for acceptance." }];
         } else if (request === "Revise the plan") {
           const plan = await tool("code60_read_plan", { planId });
           await tool("code60_update_plan", {
@@ -127,18 +143,39 @@ export function createFakeAgent(options = {}) {
           });
           steps = [{ message: "Plan revised." }];
         } else if (text.includes("Code60: the user accepted plan")) {
-          const plan = await tool("code60_read_plan", { planId });
-          const { scope } = await tool("code60_get_context");
-          await tool("code60_dispatch_agent", {
-            scope,
-            requestId: "planned-worker",
-            planTaskId: plan.tasks[0].id,
-            prompt: JSON.stringify([
-              { write: { path: "result.txt", content: "planned result\n" } },
-              { message: "Created and verified result.txt" },
-            ]),
-          });
-          steps = [{ message: "Executing the accepted plan." }];
+          let plan = await tool("code60_read_plan", { planId });
+          if (plan.title === "Layout check") {
+            const updates = [
+              ["completed", "Verified the short task."],
+              [
+                "in_progress",
+                "Working through the long task; this evidence note is also long enough to wrap onto more than one line in the panel.",
+              ],
+              ["blocked", "Waiting for a decision\nabout the third line."],
+            ];
+            for (const [index, [state, note]] of updates.entries())
+              plan = await tool("code60_update_plan", {
+                operation: "progress",
+                planId,
+                revision: plan.revision,
+                taskId: plan.tasks[index].id,
+                state,
+                note,
+              });
+            steps = [{ message: "Layout progress reported." }];
+          } else {
+            const { scope } = await tool("code60_get_context");
+            await tool("code60_dispatch_agent", {
+              scope,
+              requestId: "planned-worker",
+              planTaskId: plan.tasks[0].id,
+              prompt: JSON.stringify([
+                { write: { path: "result.txt", content: "planned result\n" } },
+                { message: "Created and verified result.txt" },
+              ]),
+            });
+            steps = [{ message: "Executing the accepted plan." }];
+          }
         } else if (planId && text.includes("Code60 generated this message automatically")) {
           let plan = await tool("code60_read_plan", { planId });
           const { workers } = await tool("code60_list_agents");
@@ -280,7 +317,10 @@ export function createFakeAgent(options = {}) {
       try {
         if (!steps) {
           // The orchestration role prepends its Operating Contract; scripts remain user input.
-          steps = JSON.parse(text.split("--- User request ---\n").at(-1));
+          const request = text.split("--- User request ---\n").at(-1);
+          steps = request.startsWith("Command /fixture-")
+            ? [{ message: `Received command:\n${request}` }]
+            : JSON.parse(request);
           if (!Array.isArray(steps)) throw new Error("not steps");
         }
       } catch {

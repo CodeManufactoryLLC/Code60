@@ -1,5 +1,6 @@
 export * from "./logs.js";
 export * from "./plans.js";
+export * from "./web-links.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
 import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from "./agent-setup.js";
@@ -11,20 +12,29 @@ import { z } from "zod";
 import {
   type ActivitySnapshot,
   boundedString,
+  type Command,
+  commandNameSchema,
+  type DeleteCommand,
+  deleteCommandSchema,
   durationSchema,
+  operatingContractSchema,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
   type PromptId,
+  type PromptTemplate,
   parseValue,
   runIdSchema,
+  type SaveCommand,
   SEARCH_EXCERPT_LIMIT,
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
+  saveCommandSchema,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
 import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js";
+import type { WebLink } from "./web-links.js";
 
 export {
   ACTIVITY_LIFETIME_MS,
@@ -34,11 +44,22 @@ export {
   type ActivityDeclaration,
   type ActivitySnapshot,
   type ActivityState,
+  assembleOperatingContract,
+  availableCommands,
+  BUILTIN_COMMANDS,
   CODE60_COPYRIGHT,
+  COMMAND_LIMIT,
+  type Command,
+  commandFieldsSchema,
+  commandSchema,
+  DEFAULT_OPERATING_CONTRACT_CLAUSES,
   DEFAULT_PROMPT_TEMPLATES,
+  type DeleteCommand,
+  expandCommand,
   findMcpTableTool,
   isActivityTool,
   isMcpControlTool,
+  leadingCommand,
   MCP_ACTIVITY_TOOL_DEFINITIONS,
   MCP_CONTROL_LIMITS,
   MCP_CONTROL_TOOL_DEFINITIONS,
@@ -46,19 +67,23 @@ export {
   MCP_PROTOCOL_VERSIONS,
   MCP_TABLE_TOOL_DEFINITIONS,
   MCP_TABLES,
-  MCP_TOOL_CONTRACT_INFO,
   MCP_TOOL_DEFINITIONS,
   type McpControlTool,
   type McpTable,
+  OPERATING_CONTRACT_CLAUSE_IDS,
+  OPERATING_CONTRACT_CLAUSES,
   PROMPT_FIELDS,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
   type PromptFields,
   type PromptId,
+  type PromptTemplate,
   type PromptTemplates,
   parseActivityContextArgs,
   parseActivityReport,
+  parseValue,
   renderPrompt,
+  type SaveCommand,
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
@@ -74,10 +99,10 @@ export interface PromptTemplateState {
   id: PromptId;
   fields: readonly string[];
   /** The effective text used by this prompt. */
-  template: string;
+  template: PromptTemplate;
   source: PromptSource;
   /** What the template returns to when its saved edit is removed. */
-  fallback: string;
+  fallback: PromptTemplate;
   fallbackSource: Exclude<PromptSource, "database">;
 }
 
@@ -213,6 +238,7 @@ export interface Snapshot {
   databaseError: string | null;
   projects: ProjectEntry[];
   configurations: RunConfiguration[];
+  commands: Command[];
   directory: string | null;
   agents: string[];
   defaultAgent: string;
@@ -258,6 +284,8 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  /** Confirms an HTTP(S) destination natively; false means cancelled or already pending. */
+  openWebLink(request: WebLink): Promise<boolean>;
   queryLogs(request: import("./logs.js").LogQuery): Promise<import("./logs.js").LogPage>;
   logDetail(request: { id: string }): Promise<import("./logs.js").LogRecord | null>;
   clearLogs(request: { confirm: true }): Promise<boolean>;
@@ -325,6 +353,9 @@ export interface DesktopApi {
   /** New session IDs in batch order; empty when confirmation is declined. */
   start(request: StartRequest): Promise<string[]>;
   saveConfiguration(request: SaveConfiguration): Promise<void>;
+  saveCommand(request: SaveCommand): Promise<void>;
+  /** Asks for native confirmation; false when declined. */
+  deleteCommand(request: DeleteCommand): Promise<boolean>;
   deleteConfiguration(id: string): Promise<boolean>;
   /** Saves an edited template in the connected database. */
   savePromptTemplate(request: SavePromptTemplate): Promise<void>;
@@ -383,6 +414,8 @@ export interface OrchestrationChat {
   activity?: ActivitySnapshot;
   /** Current-project workers owned by this conversation, never inferred from process liveness. */
   workers?: string[];
+  /** Role names the orchestrator assigned when dispatching, by worker run ID. */
+  workerLabels?: Record<string, string>;
   run: RunView | null;
   directory: string | null;
   error: string | null;
@@ -417,6 +450,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("send"),
     id: configurationIdSchema,
+    command: commandNameSchema.optional(),
     text: boundedString("message", 1_000_000).refine(
       (text) => text.trim().length > 0,
       "The message is empty",
@@ -531,7 +565,10 @@ const savePromptTemplateSchema = z
   .strictObject(
     {
       id: promptIdSchema,
-      template: boundedString("prompt template", PROMPT_TEMPLATE_LIMIT),
+      template: z.union([
+        boundedString("prompt template", PROMPT_TEMPLATE_LIMIT),
+        operatingContractSchema,
+      ]),
     },
     { error: objectError },
   )
@@ -692,6 +729,8 @@ export const parseConfigurationId = (value: unknown) => parseValue(configuration
 export const parseRunSettings = (value: unknown) => parseValue(runSettingsSchema, value);
 export const parseSaveConfiguration = (value: unknown) =>
   parseValue(saveConfigurationSchema, value);
+export const parseSaveCommand = (value: unknown) => parseValue(saveCommandSchema, value);
+export const parseDeleteCommand = (value: unknown) => parseValue(deleteCommandSchema, value);
 export const parsePromptTemplateId = (value: unknown) => parseValue(promptIdSchema, value);
 export const parseSavePromptTemplate = (value: unknown) =>
   parseValue(savePromptTemplateSchema, value);

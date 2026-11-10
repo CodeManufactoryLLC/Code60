@@ -7,10 +7,26 @@ export interface Conversation {
   parentId?: string;
 }
 
-/** Ownership comes only from the current chat snapshots, never agent names or liveness. */
+const fallbackLabel = ({ record }: DesktopRun) => `${record.agent} / ${record.id.slice(-6)}`;
+
+/** The orchestrator's role name for a worker, or its provider and short run ID. */
+export function workerLabel(chats: readonly OrchestrationChat[], run: DesktopRun): string {
+  for (const chat of chats) {
+    const label = chat.workerLabels?.[run.record.id];
+    if (label) return label;
+  }
+  return fallbackLabel(run);
+}
+
+/**
+ * Ownership comes only from the current chat snapshots, never agent names or liveness. Finished
+ * workers outside a current orchestrator are hidden unless selected; other unowned runs stay at
+ * the root.
+ */
 export function conversations(
   chats: readonly OrchestrationChat[],
   runs: readonly DesktopRun[],
+  selectedId?: string,
 ): Conversation[] {
   const result: Conversation[] = [];
   const owned = new Set<string>();
@@ -29,19 +45,19 @@ export function conversations(
       owned.add(id);
       result.push({
         id,
-        label: `${run.record.agent} / ${id.slice(-6)}`,
+        label: chat.workerLabels?.[id] || fallbackLabel(run),
         role: "worker",
         parentId: chat.run.id,
       });
     }
   }
-  for (const { record } of runs) {
-    if (owned.has(record.id)) continue;
-    result.push({
-      id: record.id,
-      label: `${record.agent} / ${record.id.slice(-6)}`,
-      role: "worker",
-    });
+  for (const run of runs) {
+    if (
+      owned.has(run.record.id) ||
+      (run.record.id !== selectedId && (run.view?.status ?? run.record.status) === "finished")
+    )
+      continue;
+    result.push({ id: run.record.id, label: workerLabel(chats, run), role: "worker" });
   }
   return result;
 }

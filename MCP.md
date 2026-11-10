@@ -157,6 +157,27 @@ or a task succeeded. Only the marker and server name are added to typed events,
 not server definitions. Raw ACP events retain the provider's original payload
 under the existing transcript rules.
 
+## Orchestrator commands
+
+Start a Chat message with the built-in `/create-command`, followed by instructions
+for the command you want. For example, `/create-command Make a review command that
+checks changes for bugs.` The bundled prompt guides the agent to infer the fields,
+ask for missing details, and use the creation tool without executing the saved
+prompt. It is available in the slash picker without adding a database row; a saved
+command with the same name takes precedence.
+
+Ask the desktop orchestrator to create a reusable slash command. Its
+`code60_create_command` tool takes `name` (without `/`), `title`, optional
+`description`, and `prompt`. It saves immediately in the connected database,
+shared across projects, and returns the saved command. It does not run the prompt.
+Use `/name` at the start of an orchestrator message to invoke it.
+
+Names use 1–64 lowercase letters, digits or hyphens, starting with a letter or
+digit. Titles are single-line and at most 120 characters, descriptions at most
+500, and prompts nonempty and at most 100,000. A database holds at most 200 commands.
+The tool is create-only: duplicate names fail rather than overwrite. Edit or delete
+commands on the Commands page. Workers and CLI runs do not receive this capability.
+
 ## Orchestrator plans
 
 The desktop orchestrator can use `code60_create_plan` to save an optional task list.

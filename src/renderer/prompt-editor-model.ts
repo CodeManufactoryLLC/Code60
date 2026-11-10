@@ -1,8 +1,12 @@
 import {
+  assembleOperatingContract,
   DEFAULT_PROMPT_TEMPLATES,
+  OPERATING_CONTRACT_CLAUSE_IDS,
   type PromptFields,
   type PromptId,
   type PromptSource,
+  type PromptTemplate,
+  type PromptTemplates,
   renderPrompt,
   validatePromptTemplate,
 } from "../bridge/index.js";
@@ -71,13 +75,19 @@ export type PromptPreview = { ok: true; text: string } | { ok: false; error: str
 
 export function previewPrompt(
   id: PromptId,
-  template: string,
+  template: PromptTemplate,
   summaryTemplate: string = DEFAULT_PROMPT_TEMPLATES.handoffSummary,
 ): PromptPreview {
   const problem = validatePromptTemplate(id, template);
   if (problem) return { ok: false, error: `This template ${problem}.` };
   // The field maps differ per ID; validation above guarantees every placeholder has a value.
-  return { ok: true, text: renderPrompt(id, template, sampleFields(summaryTemplate)[id] as never) };
+  return {
+    ok: true,
+    text:
+      typeof template === "string"
+        ? renderPrompt(id, template, sampleFields(summaryTemplate)[id] as never)
+        : assembleOperatingContract(template),
+  };
 }
 
 /** Replaces the selection with a merge field and returns the new text and cursor position. */
@@ -93,11 +103,18 @@ export function insertField(
   return { text: text.slice(0, from) + token + text.slice(to), cursor: from + token.length };
 }
 
-export type PromptDrafts = Partial<Record<PromptId, string>>;
+export type PromptDrafts = Partial<PromptTemplates>;
 
 /** The text shown in the editor: the unsaved draft, or the effective template. */
-export const draftText = (drafts: PromptDrafts, id: PromptId, effective: string) =>
-  drafts[id] ?? effective;
+export const draftText = <Id extends PromptId>(
+  drafts: PromptDrafts,
+  id: Id,
+  effective: PromptTemplates[Id],
+): PromptTemplates[Id] => drafts[id] ?? effective;
 
-export const isDirty = (drafts: PromptDrafts, id: PromptId, effective: string) =>
-  drafts[id] !== undefined && drafts[id] !== effective;
+export function isDirty(drafts: PromptDrafts, id: PromptId, effective: PromptTemplate): boolean {
+  const draft = drafts[id];
+  if (draft === undefined) return false;
+  if (typeof draft === "string" || typeof effective === "string") return draft !== effective;
+  return OPERATING_CONTRACT_CLAUSE_IDS.some((key) => draft[key] !== effective[key]);
+}

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  commandFieldsSchema,
   MCP_CONTROL_LIMITS,
   type McpControlTool,
   planCreateSchema,
@@ -26,6 +27,7 @@ const name = z
 const target = z.strictObject({ scope, runId });
 
 const controlSchemas = {
+  code60_create_command: commandFieldsSchema,
   code60_create_plan: planCreateSchema,
   code60_read_plan: z.strictObject({ planId: z.string().uuid() }),
   code60_update_plan: planUpdateSchema,

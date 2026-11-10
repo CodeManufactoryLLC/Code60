@@ -2,11 +2,16 @@ import { chmodSync, existsSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import {
+  COMMAND_LIMIT,
+  type Command,
+  commandSchema,
   PROMPT_IDS,
   type ProjectEntry,
   type PromptId,
+  type PromptTemplate,
   type PromptTemplates,
   parseRunSettings,
+  parseValue,
   type RunConfiguration,
   validatePromptTemplate,
 } from "../bridge/index.js";
@@ -34,15 +39,23 @@ export interface ProjectDatabase {
   deleteConfiguration(id: string): void;
   useConfiguration(id: string, at: string): void;
   promptTemplates(): SavedPromptTemplates;
-  savePromptTemplate(id: PromptId, template: string, at: string): void;
+  savePromptTemplate(id: PromptId, template: PromptTemplate, at: string): void;
   deletePromptTemplate(id: PromptId): void;
+  commands(): Command[];
+  command(name: string): Command | undefined;
+  saveCommand(command: Command): void;
+  deleteCommand(id: string): void;
   close(): void;
 }
 
 export type OpenProjectDatabase = (path: string, create: boolean) => ProjectDatabase;
 
 const APP = "code60";
-export const SCHEMA = 3;
+export const SCHEMA = 5;
+const COMMAND_TABLE =
+  "CREATE TABLE code60_commands (" +
+  "id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, title TEXT NOT NULL, " +
+  "description TEXT NOT NULL, prompt TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)";
 const CONFIG_TABLE =
   "CREATE TABLE code60_run_configurations (" +
   "id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, " +
@@ -81,6 +94,7 @@ function prepare(db: DatabaseSync, path: string): void {
       );
       db.exec(CONFIG_TABLE);
       db.exec(PROMPT_TABLE);
+      db.exec(COMMAND_TABLE);
       const insert = db.prepare("INSERT INTO code60_meta (key, value) VALUES (?, ?)");
       insert.run("app", APP);
       insert.run("schema", String(SCHEMA));
@@ -102,11 +116,15 @@ function prepare(db: DatabaseSync, path: string): void {
     throw new Error(`${path} is not a Code60 database`);
   const schema = Number(meta.get("schema"));
   if (schema > SCHEMA) throw new Error(`${path} was created by a newer version of Code60`);
-  if (schema === 1 || schema === 2) {
+  if (schema === 1 || schema === 2 || schema === 3 || schema === 4) {
     db.exec("BEGIN");
     try {
       if (schema === 1) db.exec(CONFIG_TABLE);
-      db.exec(PROMPT_TABLE);
+      if (schema < 3) db.exec(PROMPT_TABLE);
+      // Clause editing starts fresh; preserve every other saved prompt.
+      if (schema < 4)
+        db.prepare("DELETE FROM code60_prompt_templates WHERE id = ?").run("operatingContract");
+      db.exec(COMMAND_TABLE);
       db.prepare("UPDATE code60_meta SET value = ? WHERE key = 'schema'").run(String(SCHEMA));
       db.exec("COMMIT");
     } catch (error) {
@@ -152,8 +170,63 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
   );
   const remove = database.prepare("DELETE FROM code60_projects WHERE path = ?");
   const clear = database.prepare("DELETE FROM code60_projects");
+  const commandColumns =
+    "id, name, title, description, prompt, created_at AS createdAt, updated_at AS updatedAt";
   return {
     path,
+    commands: () =>
+      database
+        .prepare(`SELECT ${commandColumns} FROM code60_commands ORDER BY name, id`)
+        .all()
+        .map((row) => parseValue(commandSchema, row)),
+    command: (name) => {
+      const row = database
+        .prepare(`SELECT ${commandColumns} FROM code60_commands WHERE name = ?`)
+        .get(name);
+      return row ? parseValue(commandSchema, row) : undefined;
+    },
+    saveCommand: (value) => {
+      const entry = parseValue(commandSchema, value);
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        if (
+          database
+            .prepare("SELECT id FROM code60_commands WHERE name = ? AND id != ?")
+            .get(entry.name, entry.id)
+        )
+          throw new Error("A command with that name already exists");
+        const exists = database
+          .prepare("SELECT id FROM code60_commands WHERE id = ?")
+          .get(entry.id);
+        if (
+          !exists &&
+          Number(database.prepare("SELECT COUNT(*) AS count FROM code60_commands").get()?.count) >=
+            COMMAND_LIMIT
+        )
+          throw new Error(`You can save at most ${COMMAND_LIMIT} commands`);
+        database
+          .prepare(
+            "INSERT INTO code60_commands (id, name, title, description, prompt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) " +
+              "ON CONFLICT(id) DO UPDATE SET name = excluded.name, title = excluded.title, description = excluded.description, prompt = excluded.prompt, updated_at = excluded.updated_at",
+          )
+          .run(
+            entry.id,
+            entry.name,
+            entry.title,
+            entry.description,
+            entry.prompt,
+            entry.createdAt,
+            entry.updatedAt,
+          );
+        database.exec("COMMIT");
+      } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+    deleteCommand: (id) => {
+      database.prepare("DELETE FROM code60_commands WHERE id = ?").run(id);
+    },
     list: () =>
       list
         .all(HISTORY_LIMIT)
@@ -218,13 +291,23 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
           saved.skipped.push(`Ignored a saved prompt template with an unknown ID: ${id}`);
           continue;
         }
-        const template = String(row.template);
+        let template: unknown = String(row.template);
+        if (id === "operatingContract") {
+          try {
+            template = JSON.parse(String(row.template));
+          } catch {
+            saved.skipped.push("Ignored invalid saved Operating Contract clauses");
+            continue;
+          }
+        }
         const problem = validatePromptTemplate(id as PromptId, template);
         if (problem) {
           saved.skipped.push(`Ignored the saved ${id} prompt template: it ${problem}`);
           continue;
         }
-        saved.templates[id as PromptId] = template;
+        if (id === "operatingContract")
+          saved.templates.operatingContract = template as PromptTemplates["operatingContract"];
+        else saved.templates[id as Exclude<PromptId, "operatingContract">] = template as string;
       }
       return saved;
     },
@@ -236,7 +319,7 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
           "INSERT INTO code60_prompt_templates (id, template, updated_at) VALUES (?, ?, ?) " +
             "ON CONFLICT(id) DO UPDATE SET template = excluded.template, updated_at = excluded.updated_at",
         )
-        .run(id, template, at);
+        .run(id, typeof template === "string" ? template : JSON.stringify(template), at);
     },
     deletePromptTemplate: (id) => {
       database.prepare("DELETE FROM code60_prompt_templates WHERE id = ?").run(id);

@@ -17,6 +17,8 @@ export interface Worker {
   generation: number;
   directory: string;
   provider: string;
+  /** Role name the orchestrator gave the worker at dispatch. */
+  label?: string;
   /** The last turn already reported to the chat, so each turn wakes it at most once. */
   reportedTurn: number;
   /** The tail of the reply in the current turn. */
@@ -64,7 +66,7 @@ interface CoordinationDeps {
   closing(): boolean;
   changed(): void;
   formatUpdates(updates: WorkerUpdate[]): string;
-  deliver(session: ChatSession, text: string, origin?: "automatic"): void;
+  deliver(session: ChatSession, text: string, origin?: "automatic", deliveredText?: string): void;
 }
 
 /** In-memory conversation authority and delivery; process lifecycle stays in the controller. */
@@ -124,11 +126,18 @@ export class ConversationCoordinator {
     return worker;
   }
 
-  register(id: string, session: ChatSession, directory: string, provider: string): void {
+  register(
+    id: string,
+    session: ChatSession,
+    directory: string,
+    provider: string,
+    label?: string,
+  ): void {
     this.registry.set(id, {
       generation: session.chatGeneration,
       directory,
       provider,
+      ...(label === undefined ? {} : { label }),
       reportedTurn: -1,
       reply: "",
     });
@@ -169,12 +178,12 @@ export class ConversationCoordinator {
     return result;
   }
 
-  send(session: ChatSession, text: string, origin?: "automatic"): void {
+  send(session: ChatSession, text: string, origin?: "automatic", deliveredText?: string): void {
     this.assertCurrent(session);
     const run = session.chat?.runs()[0];
     if (!run || !session.chat) throw new Error("No orchestration session is available");
     // The core retains the authoritative readiness checks and their existing errors.
-    this.deps.deliver(session, text, origin);
+    this.deps.deliver(session, text, origin, deliveredText);
     if (origin === undefined) session.updatesPaused = false;
   }
 

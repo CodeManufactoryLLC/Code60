@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import type {
   Action,
   ActionResult,
+  Command,
+  DeleteCommand,
   DesktopRun,
   DiffIdentity,
   DiffRequest,
@@ -25,6 +27,7 @@ import type {
   RecoveryActionResult,
   RunConfiguration,
   RunSettings,
+  SaveCommand,
   SaveConfiguration,
   SavePromptTemplate,
   SearchSummaryRequest,
@@ -40,8 +43,11 @@ import type {
   WorktreeListing,
 } from "../bridge/index.js";
 import {
+  assembleOperatingContract,
+  BUILTIN_COMMANDS,
   DEFAULT_PROMPT_TEMPLATES,
   emitLog,
+  expandCommand,
   type GitProject,
   type GitReadiness,
   type GitSetupCommit,
@@ -55,6 +61,7 @@ import {
   type PlanAction,
   type PlanRead,
   parseActivityContextArgs,
+  parseDeleteCommand,
   parseDiffIdentity,
   parseDiffRequest,
   parseFileContext,
@@ -76,6 +83,7 @@ import {
   parseReviewFileRead,
   parseReviewRead,
   parseRunSettings,
+  parseSaveCommand,
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseSearchSummary,
@@ -238,8 +246,6 @@ interface Batch {
   disposers: (() => void)[];
 }
 
-const STALE_CONTRACT = "Do not start or control agent runs";
-
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class DesktopController {
   private readonly agentSetup: AgentSetup;
@@ -263,6 +269,7 @@ export class DesktopController {
   private configurations: RunConfiguration[] = [];
   /** Template edits saved in the connected database. */
   private savedPrompts: Partial<PromptTemplates> = {};
+  private commands: Command[] = [];
   private launches = new Map<string, { settings: RunSettings; at: string; saved: boolean }>();
   private worktrees: WorktreeListing | null = null;
   private fileContext: FileContext | null = null;
@@ -307,10 +314,10 @@ export class DesktopController {
           .workerUpdates,
         { updates: updates.map(formatWorkerUpdate).join("\n") },
       ),
-    deliver: (session, text, origin) => {
+    deliver: (session, text, origin, deliveredText) => {
       const run = session.chat?.runs()[0];
       if (!session.chat || !run) throw new Error("No orchestration session is available");
-      session.chat.reply(run.id, text, origin);
+      session.chat.reply(run.id, text, origin, deliveredText);
     },
   });
 
@@ -1226,6 +1233,7 @@ export class DesktopController {
         const database = this.requireDatabase();
         this.configurations = database.configurations();
         this.savedPrompts = this.readPrompts(database);
+        this.commands = database.commands();
       }
     });
   }
@@ -1908,8 +1916,10 @@ export class DesktopController {
       const chat = await prepareOrchestrationChat(this.deps, directory, provider, config, {
         mcpServers,
         promptContext: () =>
-          effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-            .operatingContract,
+          assembleOperatingContract(
+            effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
+              .operatingContract,
+          ),
       });
       if (this.closing) {
         await chat.shutdown(this.forceClosing);
@@ -2016,7 +2026,15 @@ export class DesktopController {
         await this.syncOrchestrationChat(true);
       } else if (!session.chat || !run) throw new Error("No orchestration session is available");
       else if (request.type === "send") {
-        this.conversations.send(session, request.text);
+        let deliveredText: string | undefined;
+        if (request.command !== undefined) {
+          const command =
+            this.requireDatabase().command(request.command) ??
+            BUILTIN_COMMANDS.find((entry) => entry.name === request.command);
+          if (!command) throw new Error(`Command /${request.command} no longer exists`);
+          deliveredText = expandCommand(command, request.text);
+        }
+        this.conversations.send(session, request.text, undefined, deliveredText);
         session.reviewTask = { title: request.text, turn: session.chat.runs()[0]?.turns ?? 0 };
       } else if (request.type === "cancel") {
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
@@ -2111,33 +2129,36 @@ export class DesktopController {
       ),
     );
     const session = this.conversations.current;
-    const chatSnapshot = (session: ChatSession) => ({
-      ...(session.title === undefined ? {} : { title: session.title }),
-      archived: session.archived,
-      plans: session.plans?.list() ?? [],
-      workers: [...this.conversations.workers]
-        .filter(
-          ([, worker]) =>
-            worker.generation === session.chatGeneration &&
-            worker.directory === this.workspace?.dir,
-        )
-        .map(([id]) => id),
-      run: session.chat?.runs()[0] ?? null,
-      directory: session.chatDirectory,
-      error: session.chatError,
-      events: [...(allEvents ? session.chatEvents : session.chatPending)],
-      updates: { paused: session.updatesPaused, pending: session.inbox.length },
-      activity: session.activity.snapshot(
-        session.chat?.runs()[0] ?? null,
-        session.chatError,
-        [...this.conversations.workers].filter(
-          ([id, worker]) =>
-            worker.generation === session.chatGeneration &&
-            worker.directory === this.workspace?.dir &&
-            ["queued", "running", "waiting"].includes(this.liveView(id)?.status ?? ""),
-        ).length,
-      ),
-    });
+    const chatSnapshot = (session: ChatSession) => {
+      const owned = [...this.conversations.workers].filter(
+        ([, worker]) =>
+          worker.generation === session.chatGeneration && worker.directory === this.workspace?.dir,
+      );
+      return {
+        ...(session.title === undefined ? {} : { title: session.title }),
+        archived: session.archived,
+        plans: session.plans?.list() ?? [],
+        workers: owned.map(([id]) => id),
+        workerLabels: Object.fromEntries(
+          owned.flatMap(([id, worker]) => (worker.label ? [[id, worker.label]] : [])),
+        ),
+        run: session.chat?.runs()[0] ?? null,
+        directory: session.chatDirectory,
+        error: session.chatError,
+        events: [...(allEvents ? session.chatEvents : session.chatPending)],
+        updates: { paused: session.updatesPaused, pending: session.inbox.length },
+        activity: session.activity.snapshot(
+          session.chat?.runs()[0] ?? null,
+          session.chatError,
+          [...this.conversations.workers].filter(
+            ([id, worker]) =>
+              worker.generation === session.chatGeneration &&
+              worker.directory === this.workspace?.dir &&
+              ["queued", "running", "waiting"].includes(this.liveView(id)?.status ?? ""),
+          ).length,
+        ),
+      };
+    };
     return {
       versions: {
         code60: CODE60_VERSION,
@@ -2188,6 +2209,7 @@ export class DesktopController {
       databaseError: this.databaseError,
       projects: [...this.projects],
       configurations: structuredClone(this.configurations),
+      commands: this.database ? structuredClone(this.commands) : [],
       directory: this.workspace?.dir ?? null,
       agents: this.agentSetup.complete ? this.agentSetup.enabled : [],
       defaultAgent: this.agentSetup.record?.primary ?? "",
@@ -2450,9 +2472,11 @@ export class DesktopController {
     const projects = database.list();
     const configurations = database.configurations();
     const prompts = this.readPrompts(database);
+    const commands = database.commands();
     this.projects = projects;
     this.configurations = configurations;
     this.savedPrompts = prompts;
+    this.commands = commands;
     this.database = database;
     this.databaseError = null;
     this.poller.invalidate(["configurations"]);
@@ -2548,12 +2572,54 @@ export class DesktopController {
     for (const warning of saved.skipped) {
       if (!this.warnings.includes(warning)) this.warnings.push(warning);
     }
-    const stale =
-      "The saved Operating Contract edit still tells the orchestrator not to start or control agent runs. Reset or edit it in Prompt Editor so it can use the worker tools.";
-    if (saved.templates.operatingContract?.includes(STALE_CONTRACT)) {
-      if (!this.warnings.includes(stale)) this.warnings.push(stale);
-    } else this.warnings = this.warnings.filter((warning) => warning !== stale);
     return saved.templates;
+  }
+
+  async saveCommand(value: SaveCommand): Promise<void> {
+    const request = parseSaveCommand(value);
+    return this.exclusive(async () => {
+      this.storeCommand(request);
+    });
+  }
+
+  /** Caller owns the action queue. MCP passes validated create-only fields. */
+  private storeCommand(request: ReturnType<typeof parseSaveCommand>): Command {
+    const database = this.requireDatabase();
+    const previous = request.id
+      ? database.commands().find((entry) => entry.id === request.id)
+      : undefined;
+    if (request.id && !previous) throw new Error("This command no longer exists");
+    const at = this.deps.clock.now().toISOString();
+    const command = {
+      ...request,
+      id: request.id ?? randomUUID(),
+      createdAt: previous?.createdAt ?? at,
+      updatedAt: at,
+    };
+    database.saveCommand(command);
+    this.commands = database.commands();
+    this.changed();
+    return command;
+  }
+
+  async deleteCommand(request: DeleteCommand): Promise<boolean> {
+    request = parseDeleteCommand(request);
+    return this.exclusive(async () => {
+      const database = this.requireDatabase();
+      const entry = database.commands().find((entry) => entry.id === request.id);
+      if (!entry) throw new Error("This command no longer exists");
+      if (
+        !(await this.dialogs.confirm(
+          "Delete command?",
+          `Delete /${entry.name}? This cannot be undone.`,
+        ))
+      )
+        return false;
+      database.deleteCommand(request.id);
+      this.commands = database.commands();
+      this.changed();
+      return true;
+    });
   }
 
   /** Saves a template edit for future orchestration turns or handoffs. */
@@ -3153,6 +3219,10 @@ export class DesktopController {
 
   private controlTool(name: McpControlTool, args: unknown, session: ChatSession): Promise<unknown> {
     switch (name) {
+      case "code60_create_command": {
+        const request = parseControlArgs(name, args);
+        return this.chatExclusive(session, async () => this.storeCommand(request));
+      }
       case "code60_create_plan": {
         const request = parseControlArgs(name, args);
         return this.chatExclusive(session, async () => {
@@ -3346,7 +3416,7 @@ export class DesktopController {
           },
           (started, target) => {
             for (const id of started) {
-              this.conversations.register(id, session, target.dir, provider);
+              this.conversations.register(id, session, target.dir, provider, request.label);
               if (assignment)
                 Object.assign(this.conversations.workers.get(id) as Worker, assignment);
             }
@@ -3383,6 +3453,7 @@ export class DesktopController {
   private controlWorker(
     name: Exclude<
       McpControlTool,
+      | "code60_create_command"
       | "code60_create_plan"
       | "code60_read_plan"
       | "code60_update_plan"

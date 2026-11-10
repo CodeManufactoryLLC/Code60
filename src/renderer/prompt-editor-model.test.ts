@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROMPT_TEMPLATES } from "../bridge/index.js";
+import { assembleOperatingContract, DEFAULT_PROMPT_TEMPLATES } from "../bridge/index.js";
 import { draftText, insertField, isDirty, previewPrompt } from "./prompt-editor-model.js";
 
 describe("prompt editor model", () => {
@@ -16,9 +16,10 @@ describe("prompt editor model", () => {
   });
 
   it("previews templates with sample values and explains invalid ones", () => {
-    expect(previewPrompt("operatingContract", "Controlled by Code60")).toEqual({
+    const clauses = { ...DEFAULT_PROMPT_TEMPLATES.operatingContract, role: "Controlled by Code60" };
+    expect(previewPrompt("operatingContract", clauses)).toEqual({
       ok: true,
-      text: "Controlled by Code60",
+      text: assembleOperatingContract(clauses),
     });
     expect(previewPrompt("operatingContract", "{{message}}")).toMatchObject({ ok: false });
     const summary = previewPrompt("handoffSummary", "{{agent}} on {{branch}}");
@@ -48,5 +49,22 @@ describe("prompt editor model", () => {
     expect(isDirty({}, "handoffTurn", "A")).toBe(false);
     expect(isDirty({ handoffTurn: "A" }, "handoffTurn", "A")).toBe(false);
     expect(isDirty({ handoffTurn: "B" }, "handoffTurn", "A")).toBe(true);
+  });
+
+  it("preserves every clause draft and compares values rather than object identity", () => {
+    const original = DEFAULT_PROMPT_TEMPLATES.operatingContract;
+    const edited = { ...original, planning: "Plan carefully.", role: "A different role." };
+    const drafts = { operatingContract: edited };
+    expect(draftText(drafts, "operatingContract", original)).toEqual(edited);
+    expect(draftText(drafts, "handoffTurn", "Other template")).toBe("Other template");
+    expect(isDirty(drafts, "operatingContract", original)).toBe(true);
+    expect(isDirty({ operatingContract: { ...original } }, "operatingContract", original)).toBe(
+      false,
+    );
+    expect(isDirty(drafts, "operatingContract", { ...edited })).toBe(false);
+    expect(original.role).not.toBe(edited.role);
+    const preview = previewPrompt("operatingContract", edited);
+    expect(preview.ok && preview.text).toContain("A different role.");
+    expect(preview.ok && preview.text).toContain("Plan carefully.");
   });
 });

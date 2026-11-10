@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { DesktopApi, Plan, PlanAction, PlanSummary } from "../bridge/index.js";
 
 const states: Record<Plan["state"], string> = {
@@ -9,6 +9,12 @@ const states: Record<Plan["state"], string> = {
   failed: "Delivery failed",
   completed: "Complete",
   dismissed: "Dismissed",
+};
+const taskStates: Record<Plan["tasks"][number]["state"], string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  completed: "Completed",
 };
 
 export function PlanPanel({
@@ -24,6 +30,7 @@ export function PlanPanel({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const id = useId();
   const completed = plan.tasks.filter((task) => task.state === "completed").length;
   const total = plan.tasks.length;
   const current = currentChat === plan.chatId;
@@ -42,10 +49,12 @@ export function PlanPanel({
   };
   return (
     <section className="plan-panel" aria-label="Plan">
-      <header className="plan-progress">
+      <header className="plan-toolbar">
         <div className="plan-progress-label" aria-live="polite">
-          <span>{states[plan.state]}</span>
-          <output aria-label="Tasks completed">
+          <span className="plan-state" data-state={plan.state}>
+            {states[plan.state]}
+          </span>
+          <output className="plan-count" aria-label="Tasks completed">
             {completed} out of {total}
           </output>
         </div>
@@ -57,18 +66,29 @@ export function PlanPanel({
         />
         <div className="plan-actions">
           {plan.state === "draft" && (
-            <button type="button" disabled={!available} onClick={() => void action("accept")}>
+            <button
+              type="button"
+              className="primary plan-action"
+              disabled={!available}
+              onClick={() => void action("accept")}
+            >
               Accept
             </button>
           )}
           {(["paused", "failed"] as string[]).includes(plan.state) && (
-            <button type="button" disabled={!available} onClick={() => void action("resume")}>
+            <button
+              type="button"
+              className="primary plan-action"
+              disabled={!available}
+              onClick={() => void action("resume")}
+            >
               Resume plan
             </button>
           )}
           {!["running", "completed", "dismissed"].includes(plan.state) && (
             <button
               type="button"
+              className="plan-action"
               disabled={!current || pending}
               onClick={() => void action("dismiss")}
             >
@@ -76,25 +96,44 @@ export function PlanPanel({
             </button>
           )}
         </div>
-        {plan.project !== project && <p role="status">Open the plan’s project to continue.</p>}
-        {plan.error && <p role="status">{plan.error}</p>}
-        {error && <p role="alert">{error}</p>}
+        {plan.project !== project && (
+          <p className="plan-notice" role="status">
+            Open the plan’s project to continue.
+          </p>
+        )}
+        {plan.error && (
+          <p className="plan-notice" role="status">
+            {plan.error}
+          </p>
+        )}
+        {error && (
+          <p className="plan-notice" role="alert">
+            {error}
+          </p>
+        )}
       </header>
       <article className="plan-document" aria-label="Plan document">
         <h2 className="plan-title">{plan.title}</h2>
-        <p className="plan-description">{plan.description}</p>
-        <ul>
+        {plan.description && <p className="plan-description">{plan.description}</p>}
+        <ul className="plan-tasks">
           {plan.tasks.map((task) => (
-            <li className="plan-task" key={task.id}>
-              <label>
-                <input type="checkbox" checked={task.state === "completed"} disabled readOnly />{" "}
-                <span>{task.text}</span>
+            <li className="plan-task" key={task.id} data-state={task.state}>
+              <span className="plan-task-check">
+                <input
+                  id={`${id}-task-${task.id}`}
+                  type="checkbox"
+                  checked={task.state === "completed"}
+                  disabled
+                  readOnly
+                />
+              </span>
+              <label className="plan-task-text" htmlFor={`${id}-task-${task.id}`}>
+                {task.text}
               </label>
-              {task.note && (
-                <p>
-                  {task.state.replaceAll("_", " ")}: {task.note}
-                </p>
-              )}
+              <span className="plan-task-status">
+                <span className="plan-task-badge">{taskStates[task.state]}</span>
+              </span>
+              {task.note && <p className="plan-task-note">{task.note}</p>}
             </li>
           ))}
         </ul>
@@ -102,7 +141,6 @@ export function PlanPanel({
     </section>
   );
 }
-
 export function PlanPanelLoader({
   summary,
   api,

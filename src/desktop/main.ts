@@ -10,6 +10,7 @@ import {
   Menu,
   type MenuItemConstructorOptions,
   nativeTheme,
+  shell,
 } from "electron";
 import updaterPackage from "electron-updater";
 import {
@@ -19,6 +20,7 @@ import {
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseDeleteCommand,
   parseDiffIdentity,
   parseDiffRequest,
   parseFileContext,
@@ -43,6 +45,7 @@ import {
   parseReviewAction,
   parseReviewFileRead,
   parseReviewRead,
+  parseSaveCommand,
   parseSaveConfiguration,
   parseSavePromptTemplate,
   parseSearchSummary,
@@ -64,6 +67,7 @@ import { DesktopLogStore, logProjectId } from "./log-store.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
+import { WebLinks } from "./web-links.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const page = pathToFileURL(join(here, "../renderer/index.html")).href;
@@ -72,6 +76,22 @@ let exiting = false;
 let quitPending = false;
 const startup = new AbortController();
 let updates: DesktopUpdates | undefined;
+const webLinks = new WebLinks({
+  async confirm(url) {
+    const result = await dialog.showMessageBox({
+      type: "question",
+      title: "Open web link?",
+      message: "Open this address in your default browser?",
+      detail: url,
+      buttons: ["Cancel", "Open link"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return result.response === 1 && !exiting && !!window && !window.isDestroyed();
+  },
+  open: (url) => shell.openExternal(url),
+});
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const logs = new DesktopLogStore(join(stateHome(process.env), "code60", "logs"));
@@ -403,6 +423,7 @@ async function ready(): Promise<void> {
     return true;
   });
   handle("desktop:snapshot", () => controller.snapshot());
+  handle("desktop:web-link", (value) => webLinks.open(value));
   handle("desktop:database", async (value) => {
     const mode = parseDatabaseMode(value);
     if (controller.active) throw new Error("Finish or stop all runs before switching databases");
@@ -494,6 +515,8 @@ async function ready(): Promise<void> {
   handle("desktop:prompt-save", (value) =>
     controller.savePromptTemplate(parseSavePromptTemplate(value)),
   );
+  handle("desktop:command-save", (value) => controller.saveCommand(parseSaveCommand(value)));
+  handle("desktop:command-delete", (value) => controller.deleteCommand(parseDeleteCommand(value)));
   handle("desktop:prompt-reset", (value) =>
     controller.resetPromptTemplate(parsePromptTemplateId(value)),
   );

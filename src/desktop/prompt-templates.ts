@@ -1,4 +1,5 @@
 import {
+  assembleOperatingContract,
   DEFAULT_PROMPT_TEMPLATES,
   PROMPT_FIELDS,
   PROMPT_IDS,
@@ -20,7 +21,14 @@ export function promptStates(
   saved: Readonly<Partial<PromptTemplates>>,
 ): PromptTemplateState[] {
   return PROMPT_IDS.map((id) => {
-    const fallbackSource = config[id] === DEFAULT_PROMPT_TEMPLATES[id] ? "built-in" : "config";
+    const fallbackSource = (
+      id === "operatingContract"
+        ? assembleOperatingContract(config.operatingContract) ===
+          assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)
+        : config[id] === DEFAULT_PROMPT_TEMPLATES[id]
+    )
+      ? "built-in"
+      : "config";
     const edit = saved[id];
     return {
       id,
