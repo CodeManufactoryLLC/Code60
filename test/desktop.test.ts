@@ -332,6 +332,8 @@ describe("desktop orchestration", () => {
     agents.startGate = new Promise(() => {});
     const first = controller.testOrchestrationProvider();
     await vi.waitFor(() => expect(controller.snapshot().orchestration.connection).toBe("testing"));
+    // The probe reports testing before its agent launch is recorded.
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
     const second = controller.testOrchestrationProvider();
     await controller.poll(["config"]);
     expect(agents.specs).toHaveLength(2);
