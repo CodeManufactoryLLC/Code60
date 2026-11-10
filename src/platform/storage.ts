@@ -7,6 +7,13 @@ export async function privateDirectory(path: string): Promise<void> {
   else await mkdir(path, { recursive: true, mode: 0o700 });
 }
 
+/** Creates one private directory exclusively, failing with EEXIST when it already exists.
+ * Windows sets the owner explicitly: elevated tokens otherwise default it to Administrators. */
+export async function createPrivateDirectory(path: string): Promise<void> {
+  if (process.platform === "win32") await helperOutput(["mkdir-private-new", path]);
+  else await mkdir(path, { mode: 0o700 });
+}
+
 export function privateDirectorySync(path: string): void {
   if (process.platform === "win32") helperSync(["mkdir-private", path]);
   else mkdirSync(path, { recursive: true, mode: 0o700 });

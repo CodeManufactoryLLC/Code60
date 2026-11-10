@@ -76,7 +76,9 @@ function nativeError(message: string): Error {
       ? "EACCES"
       : /Windows error (32|33)\)/.test(message)
         ? "EBUSY"
-        : undefined;
+        : /Windows error (80|183)\)/.test(message)
+          ? "EEXIST"
+          : undefined;
   return Object.assign(new Error(code ? `${code}: ${message}` : message), code ? { code } : {});
 }
 

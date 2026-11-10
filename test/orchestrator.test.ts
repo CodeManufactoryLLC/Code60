@@ -612,6 +612,28 @@ describe("shutdown", () => {
     await orch.shutdown();
     expect(status("r1")).toBe("cancelled");
   });
+
+  it("stops an agent that finishes starting after shutdown begins, before any prompt", async () => {
+    const { orch, agents, status } = await setup();
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const start = agents.start.bind(agents);
+    // Startup completes despite the abort, as when the agent was already initialized.
+    agents.start = async (spec) => {
+      await started;
+      return start(spec);
+    };
+    orch.start();
+    await flush();
+    const shutdown = orch.shutdown();
+    release();
+    await shutdown;
+    expect(status("r1")).toBe("cancelled");
+    expect(orch.runs()[0]?.reason).toBe("cancelled before the first prompt");
+    expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+  });
 });
 
 describe("leftover commands", () => {

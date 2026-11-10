@@ -3,9 +3,13 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createGit } from "../git/index.js";
 import { TaskLoop } from "./task-loop.js";
+
+// Each case runs real Git and, on Windows, a native helper process per private write.
+// Unloaded Windows runners take up to 7 seconds per case.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let project: string;

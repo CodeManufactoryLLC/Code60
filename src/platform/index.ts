@@ -13,6 +13,7 @@ export { type OwnedProcess, spawnOwnedProcess } from "./process.js";
 export {
   appendPrivateFile,
   atomicReplace,
+  createPrivateDirectory,
   createPrivateFileSync,
   privateDirectory,
   privateDirectorySync,

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { nativeIdentity, type OwnedProcess, ownedJob, spawnOwnedProcess } from "./index.js";
 
 const children: OwnedProcess[] = [];
@@ -33,6 +33,54 @@ describe("owned native processes", () => {
     await child.stop(0);
     expect(Date.now() - started).toBeLessThan(7_000);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "waits for lingering group members after the root exits",
+    async () => {
+      const child = await launch("setInterval(() => {}, 1000)");
+      const kill = process.kill.bind(process);
+      let lingering = 0;
+      const spy = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+        if (pid === -child.pid && signal === 0 && child.hasExited() && lingering < 2) {
+          lingering++;
+          return true;
+        }
+        return kill(pid, signal);
+      });
+      try {
+        await child.stop(0);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(lingering).toBe(2);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "fails when the process group outlives the cleanup deadline",
+    async () => {
+      const child = await launch("setInterval(() => {}, 1000)");
+      children.splice(children.indexOf(child), 1);
+      const kill = process.kill.bind(process);
+      const now = Date.now.bind(Date);
+      let offset = 0;
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => now() + offset);
+      const spy = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+        if (pid === -child.pid && signal === 0 && child.hasExited()) {
+          offset = 8_000;
+          return true;
+        }
+        return kill(pid, signal);
+      });
+      try {
+        await expect(child.stop(0)).rejects.toThrow(/seven seconds/);
+      } finally {
+        spy.mockRestore();
+        clock.mockRestore();
+        for (const stream of [child.stdin, child.stdout, child.stderr]) stream.destroy();
+      }
+    },
+  );
 
   it.runIf(process.platform === "win32")("helper failure closes the job", async () => {
     const child = await launch("setInterval(() => {}, 1000)");

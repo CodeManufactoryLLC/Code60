@@ -427,6 +427,16 @@ void privateDirectory(const std::wstring& input, bool verify = true) {
   verifyPrivate(path);
 }
 
+// Exclusive creation for lock directories: an existing path fails with Windows error 183.
+void newPrivateDirectory(const std::wstring& input) {
+  const std::wstring path = fullPath(input);
+  CheckedPath ancestors(parentPath(path), L"");
+  Security security;
+  if (!CreateDirectoryW(path.c_str(), &security.attributes)) fail("Cannot create private directory");
+  CheckedPath checked(path, L"");
+  verifyPrivate(path);
+}
+
 void privateFile(const std::wstring& input, bool existing = false, bool contents = false) {
   const std::wstring path = fullPath(input);
   CheckedPath ancestors(parentPath(path), L"");
@@ -571,6 +581,7 @@ int wmain(int argc, wchar_t** argv) {
       write(GetStdHandle(STD_OUTPUT_HANDLE), "{" + identity(process.value) + "}\n");
     } else if (mode == L"status" || mode == L"stop") ownedStatus(argc, argv, mode == L"stop");
     else if (mode == L"mkdir-private" && argc == 3) privateDirectory(argv[2]);
+    else if (mode == L"mkdir-private-new" && argc == 3) newPrivateDirectory(argv[2]);
     else if (mode == L"create-private" && argc == 3) privateFile(argv[2]);
     else if (mode == L"write-private" && argc == 3) privateFile(argv[2], false, true);
     else if (mode == L"append-private" && argc == 3) privateFile(argv[2], true, true);

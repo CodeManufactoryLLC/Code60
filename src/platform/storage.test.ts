@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendPrivateFile,
   atomicReplace,
+  createPrivateDirectory,
   createPrivateFileSync,
   privateDirectory,
   verifyPrivateSync,
@@ -71,6 +72,22 @@ describe("atomic replacement", () => {
       }
     },
   );
+});
+describe("exclusive private directories", () => {
+  it("creates one private directory and reports EEXIST without touching an existing one", async () => {
+    const root = await mkdtemp(join(tmpdir(), "code60-exclusive-"));
+    directories.push(root);
+    const lock = join(root, "lock");
+    await createPrivateDirectory(lock);
+    await writeFile(join(lock, "owner"), "first");
+    await expect(createPrivateDirectory(lock)).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await readFile(join(lock, "owner"), "utf8")).toBe("first");
+    await expect(createPrivateDirectory(join(root, "missing", "lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    if (process.platform === "win32") expect(() => verifyPrivateSync(lock)).not.toThrow();
+    else expect((await stat(lock)).mode & 0o077).toBe(0);
+  });
 });
 describe("private Windows objects", () => {
   it.runIf(process.platform === "win32")(

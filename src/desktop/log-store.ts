@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants, type Stats } from "node:fs";
-import { lstat, mkdir, open, readdir, rmdir, unlink } from "node:fs/promises";
+import { lstat, open, readdir, rmdir, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   LOG_EVENTS,
@@ -12,7 +12,12 @@ import {
   logInputSchema,
   logRecordSchema,
 } from "../bridge/index.js";
-import { helperOutput, privateDirectory, writePrivateFile } from "../platform/index.js";
+import {
+  createPrivateDirectory,
+  helperOutput,
+  privateDirectory,
+  writePrivateFile,
+} from "../platform/index.js";
 
 export const LOG_QUOTA = 20 * 1024 * 1024;
 export const LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -250,8 +255,8 @@ export class DesktopLogStore {
     for (;;) {
       let created = false;
       try {
-        // mkdir is exclusive on every platform. Windows inherits the verified private parent's ACL.
-        await mkdir(lock, { mode: 0o700 });
+        // Exclusive on every platform, with an explicit private owner and ACL on Windows.
+        await createPrivateDirectory(lock);
         created = true;
         await this.verify(lock, true);
         await writePrivateFile(join(lock, ownerName), "", {
