@@ -1971,7 +1971,8 @@ describe("orchestrated workers over ACP", () => {
       return "end_turn";
     };
     await setProvider("claude");
-    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    // Chat startup performs several helper-backed private writes on Windows.
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"), { timeout: 10_000 });
     await controller.open(directory);
     const call = caller();
     const context = await call("code60_get_context");

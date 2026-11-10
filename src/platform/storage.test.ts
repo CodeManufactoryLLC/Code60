@@ -26,6 +26,25 @@ describe("atomic replacement", () => {
       ["temporary", "record"],
     ]);
   });
+  it("gives every attempt the full helper timeout, even late in the retry window", async () => {
+    vi.useFakeTimers();
+    try {
+      const busy = Object.assign(new Error("sharing violation"), { code: "EBUSY" });
+      const replace = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          throw busy;
+        })
+        .mockResolvedValueOnce(undefined);
+      const done = atomicReplace("temporary", "record", replace, "win32");
+      await vi.runAllTimersAsync();
+      await done;
+      expect(replace.mock.calls.map((args) => args[2])).toEqual([7_000, 7_000]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it.each(["EACCES", "EPERM", "ENOSPC", "ENOENT"])("never retries %s", async (code) => {
     const error = Object.assign(new Error("denied"), { code });
     const replace = vi.fn().mockRejectedValue(error);

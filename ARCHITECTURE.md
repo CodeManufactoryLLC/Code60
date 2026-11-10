@@ -210,7 +210,8 @@ identity uses canonical spelling, not globally lowercased paths. XDG/home config
 and state defaults remain unchanged. New private objects receive restrictive
 owner/SYSTEM ACLs at creation; existing user parent ACLs are never rewritten.
 An unsafe existing Code60-private ACL fails closed. Atomic rename retries only
-Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write.
+Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write. Each
+helper rename attempt keeps the normal seven-second helper bound.
 
 ## A run
 
