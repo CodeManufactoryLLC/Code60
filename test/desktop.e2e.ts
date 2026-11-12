@@ -6852,9 +6852,28 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     const signals = panel.getByRole("switch", { name: "Signal colors", exact: true });
     await expect(signals).toHaveAccessibleDescription(/^Adds color to status labels/);
     const about = panel.getByRole("button", { name: "About Signal colors", exact: true });
-    await about.focus();
+    // Assert after the rendering step delivers focus's automatic scroll events,
+    // not in the brief interval before they can dismiss a newly opened tooltip.
+    await about.evaluate(
+      (element) =>
+        new Promise<void>((resolve) => {
+          element.focus();
+          requestAnimationFrame(() => resolve());
+        }),
+    );
     await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    // Escape also cancels a reveal still waiting for the focus scroll to settle.
+    await about.evaluate(
+      (element) =>
+        new Promise<void>((resolve) => {
+          element.blur();
+          element.focus();
+          element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+          requestAnimationFrame(() => resolve());
+        }),
+    );
     await expect(page.getByRole("tooltip")).toHaveCount(0);
     await about.hover();
     await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
@@ -6863,6 +6882,11 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     await expect(signals).not.toBeChecked();
     await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
     await page.screenshot({ path: "test-results/settings-tooltip.png" });
+    // Later user scrolling retains its normal dismissal behavior.
+    await page.locator(".settings-page").evaluate((element) => {
+      element.scrollTop = element.scrollTop ? 0 : 1;
+    });
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     for (const [name, button] of [
       ["Table defaults", "About Table defaults"],
       ["Polling", "About Chart ticker"],
