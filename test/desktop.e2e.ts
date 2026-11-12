@@ -480,7 +480,7 @@ async function expectIndustrialSurfaces(page: Page) {
           const leading = controls[0] === element ? 5 : 0;
           const trailing = controls.at(-1) === element ? 5 : 0;
           const rounded = element.matches(
-            "button, input[type=button], input[type=submit], input[type=reset], input[type=checkbox], input[type=radio], [role=switch], dialog:not(.splash), [role=dialog], [popover], .app-toast, .button-group, .chat-sidebar-row, .segmented, .settings-card, .settings-group, .approval, .composer, .event.prompt:not(.automatic) > pre",
+            "button, input[type=button], input[type=submit], input[type=reset], input[type=checkbox], input[type=radio], [role=switch], dialog:not(.splash), [role=dialog], [popover], .app-toast, .actions-menu, .button-group, .chat-sidebar-row, .segmented, .settings-card, .settings-group, .approval, .composer, .event.prompt:not(.automatic) > pre",
           );
           return {
             label: `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 40)}`,
@@ -1003,6 +1003,92 @@ async function launch(directory: string, folder: string, database: string, confi
   }
   return launchDesktop(directory, folder, database);
 }
+
+test("desktop: renderer scopes retain database drafts and dispose project views across A to B to A", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-renderer-scopes-"));
+  const first = join(directory, "project-a");
+  const second = join(directory, "project-b");
+  await mkdir(first);
+  await mkdir(second);
+  try {
+    application = await launch(directory, first, join(directory, "scope.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(async () => {
+      await window.desktop.connectDatabase("create");
+      await window.desktop.chooseFolder();
+    });
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    await expect(composer).toBeEnabled();
+    await composer.fill("Retain this conversation");
+    await composer.press("Enter");
+    await expect(chat.locator(".event.message")).not.toHaveCount(0);
+    await composer.fill("Database conversation draft");
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    const history = await chat.locator(".event.message .chat-markdown").allTextContents();
+    const original = await page.evaluate(() => window.desktop.snapshot());
+    await selectSidebarPage(page, "Commands");
+    const commands = page.locator("#panel-commands");
+    await commands.getByLabel("Title", { exact: true }).fill("Database command draft");
+    await commands.getByLabel("Prompt", { exact: true }).fill("Do not save or discard me.");
+    await selectSidebarPage(page, "Prompt Editor");
+    const role = page.locator("#panel-prompts").getByRole("textbox", { name: "Role", exact: true });
+    await role.fill("Database prompt draft");
+    await selectSidebarPage(page, "Files");
+    const fileTabs = page.getByRole("tablist", { name: "File tabs", includeHidden: true });
+    await expect(fileTabs.getByRole("tab", { includeHidden: true })).toHaveCount(1);
+    const verifyDatabaseDrafts = async () => {
+      await selectSidebarPage(page, "Chat");
+      await expect(composer).toHaveValue("Database conversation draft");
+      expect(await chat.locator(".event.message .chat-markdown").allTextContents()).toEqual(
+        history,
+      );
+      expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(
+        original.chat.run?.id,
+      );
+      await selectSidebarPage(page, "Commands");
+      await expect(commands.getByLabel("Title", { exact: true })).toHaveValue(
+        "Database command draft",
+      );
+      await selectSidebarPage(page, "Prompt Editor");
+      await expect(role).toHaveValue("Database prompt draft");
+    };
+    for (const project of [second, first]) {
+      await application.evaluate(({ dialog }, folder) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
+      }, project);
+      await page.locator(".project-card").click();
+      const picker = page.getByRole("dialog", { name: "Open Project", exact: true });
+      await picker.getByRole("button", { name: "Open Folder", exact: true }).click();
+      await expect(picker).toHaveCount(0);
+      await expect(page.locator(".project-card")).toHaveText(basename(project));
+      await expect(fileTabs.getByRole("tab", { includeHidden: true })).toHaveCount(0);
+      await verifyDatabaseDrafts();
+    }
+    await selectSidebarPage(page, "Files");
+    await page.getByRole("button", { name: "return to splash page", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(fileTabs.getByRole("tab", { includeHidden: true })).toHaveCount(1);
+    await verifyDatabaseDrafts();
+    await application.evaluate(
+      ({ dialog }, database) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath: database });
+      },
+      join(directory, "replacement.sqlite"),
+    );
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await expect(role).not.toHaveValue("Database prompt draft");
+    await selectSidebarPage(page, "Commands");
+    await expect(commands.getByLabel("Title", { exact: true })).toHaveValue("");
+    await selectSidebarPage(page, "Chat");
+    await expect(composer).toHaveValue("");
+    await expect(fileTabs.getByRole("tab", { includeHidden: true })).toHaveCount(0);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("desktop: Tactics preview, keyboard selection, draft preservation and stopped-chat recovery", async () => {
   test.setTimeout(90_000);
@@ -1906,7 +1992,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
         ["dark", dark],
       ] as const) {
         await page.evaluate(
-          (theme) => document.documentElement.setAttribute("data-theme", theme),
+          (theme) => document.documentElement.setAttribute("data-color-scheme", theme),
           theme,
         );
         await expect(glyph).toHaveCSS("color", color);
@@ -1916,7 +2002,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     }
     await page.evaluate((theme) => {
       if (theme === null) document.documentElement.removeAttribute("data-theme");
-      else document.documentElement.setAttribute("data-theme", theme);
+      else document.documentElement.setAttribute("data-color-scheme", theme);
     }, navigationTheme);
     const sidebar = page.locator(".sidebar");
     const originalButtonSize = await sidebar.evaluate((element) => ({
@@ -4024,7 +4110,7 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
     await page.getByRole("button", { name: "Change primary", exact: true }).click();
     await wizard.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Codex connected");
-    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+    await page.evaluate(() => (document.documentElement.dataset.colorScheme = "dark"));
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
@@ -4096,7 +4182,7 @@ test("desktop: prompt template editing and persistence", async () => {
     const otherPrompt = promptList.getByRole("button", { name: "Handoff summary", exact: true });
     for (const theme of ["light", "dark"]) {
       await page.evaluate(async (theme) => {
-        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.colorScheme = theme;
         await document.fonts.ready;
       }, theme);
       // Late layout updates can move the item beneath the native Electron pointer.
@@ -4838,9 +4924,9 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(resultsBox.y);
     await expect(search.locator(".search-preview")).toHaveCount(0);
     await page.screenshot({ path: join(root, "test-results", "search-expanded.png") });
-    const originalTheme = await page.locator("html").getAttribute("data-theme");
+    const originalTheme = await page.locator("html").getAttribute("data-color-scheme");
     await page.evaluate(() => {
-      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.colorScheme = "dark";
     });
     await expect(search.locator(".search-page")).toHaveCSS("color", "rgb(255, 255, 255)");
     await page.screenshot({ path: join(root, "test-results", "search-dark.png") });
@@ -4882,8 +4968,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
       BrowserWindow.getAllWindows()[0]?.setSize(1280, 860),
     );
     await page.evaluate((theme) => {
-      if (theme) document.documentElement.dataset.theme = theme;
-      else delete document.documentElement.dataset.theme;
+      if (theme) document.documentElement.dataset.colorScheme = theme;
+      else delete document.documentElement.dataset.colorScheme;
     }, originalTheme);
     await expect(
       search.getByText("2 transcripts unavailable. Results are incomplete."),
@@ -6405,7 +6491,7 @@ test("desktop: sidebar disclosure motion and stable pointer-pressed borders", as
     });
     for (const theme of ["light", "dark"]) {
       await page.evaluate((theme) => {
-        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.colorScheme = theme;
         document.documentElement.dataset.focusHighlight = "on";
       }, theme);
       for (const control of [
@@ -7022,7 +7108,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await devtools.send("CSS.enable");
     try {
       const { root } = await devtools.send("DOM.getDocument");
-      const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+      const originalTheme = await page.evaluate(() => document.documentElement.dataset.colorScheme);
       await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
       await page.getByRole("note", { name: "Running Code60 version" }).hover();
       const leftNavigation = page.locator("#tab-prompts");
@@ -7052,7 +7138,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
           await expect(row).toHaveCSS("transition-delay", "0.02s");
           for (const theme of ["light", "dark"]) {
             await page.evaluate((theme) => {
-              document.documentElement.dataset.theme = theme;
+              document.documentElement.dataset.colorScheme = theme;
             }, theme);
             const colors = await row.evaluate((element) => {
               const probe = document.createElement("span");
@@ -7103,8 +7189,8 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
         }
       } finally {
         await page.evaluate((theme) => {
-          if (theme === undefined) delete document.documentElement.dataset.theme;
-          else document.documentElement.dataset.theme = theme;
+          if (theme === undefined) delete document.documentElement.dataset.colorScheme;
+          else document.documentElement.dataset.colorScheme = theme;
         }, originalTheme);
         await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
       }
@@ -7897,7 +7983,7 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
       animations: "disabled",
     });
     await page.evaluate(() => {
-      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.colorScheme = "dark";
     });
     await page.screenshot({
       path: testInfo.outputPath("session-info-dark.png"),
@@ -8807,10 +8893,10 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await page.keyboard.press("Escape");
     await input.focus();
     await page.screenshot({ path: test.info().outputPath("activity-light.png") });
-    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+    await page.evaluate(() => (document.documentElement.dataset.colorScheme = "dark"));
     await expect(artwork).toHaveCSS("mix-blend-mode", "screen");
     await page.screenshot({ path: test.info().outputPath("activity-dark.png") });
-    await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+    await page.evaluate(() => (document.documentElement.dataset.colorScheme = "light"));
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(chat.locator(".activity-details").last()).toHaveCSS("transition-duration", "0s");
     await expect(status.locator(".activity-name")).toHaveCSS("animation-name", "none");
@@ -9029,7 +9115,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
     expect(markdown).not.toContain("out of");
     await page.screenshot({ path: "test-results/orchestrator-plan.png" });
     await page.evaluate(() => {
-      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.colorScheme = "dark";
     });
     await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/orchestrator-plan-dark.png" });
@@ -9519,7 +9605,7 @@ test("desktop: plan task rows align checkboxes with their first line of text", a
     await page.screenshot({ path: "test-results/plan-styling/large-text.png" });
     await page.evaluate(() => document.documentElement.style.removeProperty("--text-size"));
     await page.evaluate(() => {
-      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.colorScheme = "dark";
     });
     await check("dark");
     await page.screenshot({ path: "test-results/plan-styling/dark.png" });

@@ -1,6 +1,16 @@
 import { hotkeysCoreFeature, syncDataLoaderFeature } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   DesktopApi,
   FileContext,
@@ -8,6 +18,7 @@ import type {
   FileEntry,
   Snapshot,
 } from "../bridge/index.js";
+import { FileBrowserState } from "./file-browser-state.js";
 import { Icon } from "./icons.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { pathLabel } from "./path-label.js";
@@ -22,22 +33,22 @@ export function useFiles(
   snapshot: Snapshot | undefined,
   active: boolean,
   preview: string | null,
+  instance?: string,
 ) {
   const project = snapshot?.directory ?? null;
   const workspace = `${snapshot?.database}:${project}`;
-  const [selection, setSelection] = useState<{ workspace: string; path: string }>();
-  const [expansions, setExpansions] = useState<Record<string, string[]>>({});
-  const [error, setError] = useState("");
-  const [selectionWorkspace, setSelectionWorkspace] = useState(workspace);
-  if (selectionWorkspace !== workspace) {
-    setSelectionWorkspace(workspace);
-    setSelection(undefined);
-    setError("");
-  }
+  const owner = useMemo(() => new FileBrowserState(instance ?? workspace), [workspace, instance]);
+  useLayoutEffect(() => {
+    owner.activate();
+    return () => owner.dispose();
+  }, [owner]);
+  const {
+    selected: selectedFile,
+    expanded,
+    error,
+  } = useSyncExternalStore(owner.subscribe, owner.snapshot, owner.snapshot);
+  const { setError, selectFile, setExpanded } = owner;
   const root = project;
-  const selectedFile = selection?.workspace === workspace ? selection.path : null;
-  const expansionKey = JSON.stringify([workspace, root]);
-  const expanded = expansions[expansionKey] ?? [];
   const context: FileContext | null =
     project && root
       ? {
@@ -81,7 +92,7 @@ export function useFiles(
     return () => {
       current = false;
     };
-  }, [api, requestJson]);
+  }, [api, requestJson, setError]);
   const directorySnapshot =
     snapshot?.files?.context.project === project && snapshot.files.context.root === root
       ? snapshot.files
@@ -93,16 +104,6 @@ export function useFiles(
       ? directorySnapshot
       : null;
   const roots = project ? [{ path: project, label: `Project · ${pathLabel(project)}` }] : [];
-  const selectFile = (path: string) => setSelection({ workspace, path });
-  const setExpanded = (next: string[] | ((previous: string[]) => string[])) => {
-    const paths = typeof next === "function" ? next(expanded) : next;
-    if (paths.length > 63) {
-      setError("Folder limit reached. Collapse a folder before expanding another.");
-      return;
-    }
-    setError("");
-    setExpansions((previous) => ({ ...previous, [expansionKey]: paths }));
-  };
   return {
     root,
     preview,

@@ -1,30 +1,7 @@
-export type PageId =
-  | "logs"
-  | "contributor-tools"
-  | "episodic-memory"
-  | "files"
-  | "chat"
-  | "sessions"
-  | "search"
-  | "messages"
-  | "events"
-  | "configurations"
-  | "worktrees"
-  | "polling"
-  | "prompts"
-  | "commands"
-  | "settings";
+import { type PageId, renderedPages, resolvePage } from "./navigation.js";
 
-export const settingsSectionIds = [
-  "agents",
-  "appearance",
-  "table-defaults",
-  "text",
-  "polling-settings",
-  "updates",
-  "about",
-] as const;
-export type SettingsSectionId = (typeof settingsSectionIds)[number];
+export type { PageId, SettingsSectionId } from "./navigation.js";
+export { settingsSectionIds } from "./navigation.js";
 
 export interface PageTabs {
   open: PageId[];
@@ -32,29 +9,14 @@ export interface PageTabs {
 }
 
 export const initialTabs: PageTabs = {
-  open: [
-    "logs",
-    "contributor-tools",
-    "chat",
-    "episodic-memory",
-    "sessions",
-    "messages",
-    "events",
-    "search",
-    "configurations",
-    "worktrees",
-    "polling",
-    "prompts",
-    "commands",
-    "settings",
-  ],
+  open: [...renderedPages].sort((a, b) => a.initialOrder - b.initialOrder).map((page) => page.id),
   active: "chat",
 };
 
 export type TabAction = { type: "open" | "select" | "close"; id: PageId };
 
 export function updateTabs(state: PageTabs, action: TabAction): PageTabs {
-  if (action.id === "files") action = { ...action, id: "chat" };
+  action = { ...action, id: resolvePage(action.id) };
   switch (action.type) {
     case "open":
       return {

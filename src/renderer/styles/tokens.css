@@ -1,0 +1,151 @@
+/* Tokens styles. Imported into its declared layer by style.css. */
+
+:root {
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --logo: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--text-font, var(--font));
+  --letter-spacing: var(--text-spacing, normal);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --rule: 1px;
+  --rule-strong: 1px;
+  --rule-select: 2px;
+  --ui-radius: 5px;
+  --motion: 175ms;
+  --navigation-hover-delay: 20ms;
+  --chat-reply-duration: 175ms;
+  --chat-scroll-response: 175ms;
+  --chat-activity-duration: 175ms;
+  --chat-details-duration: 175ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --icon-size: 16px;
+  /* The native window controls overlay the top of the window; these are the space they take. */
+  --titlebar-left: env(titlebar-area-x, 0px);
+  --titlebar-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+  --titlebar-height: env(titlebar-area-height, 0px);
+  --app-bottom-padding: 4px;
+  --app-footer-content-height: max(
+    20px,
+    calc(1.1 * max(var(--button-size, 13px), var(--text-size, 13px)) + 5px)
+  );
+  --app-footer-height: calc(var(--app-footer-content-height) + var(--app-bottom-padding));
+  --app-titlebar-height: max(28px, var(--titlebar-height));
+  --sidebar-width: 220px;
+  /* Workspace inset and content spacing. */
+  --page-margin: 12px;
+  --page-padding: 16px;
+}
+
+/* Application appearance tokens, also inherited by the splash. */
+:root {
+  --control-fill: var(--surface);
+  --control-hover: var(--hover-bg);
+  --group-fill: #ffffff;
+  --group-hover: var(--hover-bg);
+  --group-border: color-mix(in srgb, var(--border) 75%, var(--muted));
+  --group-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  --composer-shadow: 0 0 1px var(--border);
+  --surface-edge: var(--border);
+  --field-fill: var(--surface);
+  --surface-band: var(--surface);
+  --footer-bg: var(--surface);
+  --scrollbar-thumb: color-mix(in srgb, var(--surface) 78%, var(--muted));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
+  --overlay-shadow: 0 3px 14px rgb(0 0 0 / 18%);
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #ffffff;
+  --row-alt: #ffffff;
+  --text: #000000;
+  --muted: #555555;
+  --border: #d0d0d0;
+  --control-border: #777777;
+  --accent: #146c67;
+  --accent-bg: #ededed;
+  --hover-bg: #e2f3f1;
+  --primary: #43b3ae;
+  --primary-hover: #329d98;
+  --primary-text: #000000;
+  --danger: var(--text);
+  --change-additions: #42603a;
+  --change-deletions: #9b3a35;
+  --warning-bg: #ffffff;
+  --warning-text: #333333;
+  --success: var(--muted);
+  --code: #ffffff;
+  --disabled-fill: #ffffff;
+  --disabled-stripe: transparent;
+  --chat-bg: #ffffff;
+  --chat-neutral: var(--surface);
+  --user-bubble: #43b3ae;
+  --on-user-bubble: #000000;
+  --human-text: #146c67;
+  --destructive: #a03d31;
+  --destructive-hover: #873327;
+  --on-destructive: #ffffff;
+  --focus-line: #146c67;
+  --focus-band: #d8efed;
+}
+
+:root[data-color-scheme="dark"] {
+  color-scheme: dark;
+  --surface-edge: var(--border);
+  --group-fill: var(--surface);
+  --group-hover: var(--hover-bg);
+  --control-fill: var(--surface);
+  --control-hover: var(--hover-bg);
+  --field-fill: var(--surface);
+  --surface-band: var(--surface);
+  --disabled-fill: var(--surface);
+  --footer-bg: var(--surface);
+  --bg: #000000;
+  --surface: #000000;
+  --surface-hover: #000000;
+  --row-alt: #000000;
+  --text: #ffffff;
+  --muted: #aaaaaa;
+  --border: #444444;
+  --control-border: #888888;
+  --accent: #91d8d4;
+  --accent-bg: #303030;
+  --hover-bg: #203e3b;
+  --primary: #77ccc8;
+  --primary-hover: var(--accent);
+  --primary-text: #000000;
+  --danger: #ffffff;
+  --change-additions: #afc59d;
+  --change-deletions: #dfa69b;
+  --warning-bg: #000000;
+  --warning-text: var(--accent);
+  --success: #aaaaaa;
+  --code: #000000;
+  --disabled-stripe: transparent;
+  --chat-bg: #000000;
+  --chat-neutral: var(--surface);
+  --user-bubble: var(--primary);
+  --on-user-bubble: #ffffff;
+  --human-text: var(--accent);
+  --destructive: #df9d8f;
+  --destructive-hover: #edb3a7;
+  --on-destructive: #000000;
+  --focus-line: var(--accent);
+  --focus-band: var(--hover-bg);
+}
+
+/* Signal colors are an opt-in setting; by default failure is neutral and carried by icon and rule. */
+:root[data-signals="on"] {
+  --danger: #9b3a35;
+  --success: #42603a;
+}
+
+:root[data-signals="on"][data-color-scheme="dark"] {
+  --danger: #dfa69b;
+  --success: #afc59d;
+}

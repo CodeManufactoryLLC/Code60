@@ -1,0 +1,1016 @@
+/* Files styles. Imported into its declared layer by style.css. */
+
+.file-panel-toolbar > .icon-button {
+  flex-shrink: 0;
+}
+
+.file-panel-open {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  z-index: 3;
+}
+
+.chat-workspace-body:has(> .file-panel[data-minimized="true"]) .orchestration-chat-heading {
+  padding-right: 64px;
+}
+
+/* Chat's single file workspace shares the navigation fill. */
+#panel-chat {
+  flex-direction: column;
+}
+
+.chat-workspace-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-panel {
+  --control-fill: var(--chat-neutral);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px));
+  min-width: 0;
+  overflow: hidden;
+  transition: width var(--motion) ease;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-width: 0 0 0 1px;
+  background: var(--chat-neutral);
+}
+
+.file-panel[data-minimized="true"] {
+  width: 0;
+  border-width: 0;
+}
+
+.file-panel[data-resizing="true"] {
+  transition: none;
+}
+
+.file-panel[data-minimized="true"]
+  :is(.file-tab-actions, .file-panel-content, .file-column-resize) {
+  display: none;
+}
+
+.file-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.file-panel-toggle {
+  margin-left: auto;
+}
+
+.file-panel-toolbar,
+.file-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.file-tabs {
+  overflow-x: scroll;
+}
+
+.file-panel-toolbar {
+  align-items: center;
+}
+
+.file-tab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 260px;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+
+.file-tab > :where([role="tab"]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.file-tab > :where([role="tab"]) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tab[data-selected="true"] {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+
+.file-tab[data-selected="true"] > [role="tab"] {
+  color: var(--text);
+}
+
+.file-tab > .file-tab-close {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* The shared tab paints under both independent controls, including Close. */
+.file-tab:has(> [role="tab"]:enabled):hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.file-panel .file-tab > [role="tab"]:is(:hover, :active, :focus) {
+  background: transparent;
+  color: inherit;
+}
+
+.file-panel-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-panel-empty {
+  display: grid;
+  place-items: center;
+  flex: 1;
+}
+
+button.file-open-link {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+
+.file-panel :is(button, select):focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.file-panel button:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--hover-bg);
+}
+
+.orchestration-chat-body .chat-turn-history > .turn-timer {
+  margin-left: 18px;
+}
+
+.orchestration-chat-body .chat-turn-history > .turn-separator {
+  margin-inline: 18px;
+}
+
+@media (max-width: 1200px) {
+  .chat-workspace-body {
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 1200px) {
+  .chat-workspace-body:has(> .file-panel[data-minimized="false"]) > .chat-conversations {
+    flex: 1 0
+      max(
+        300px,
+        calc(
+          8 *
+          max(var(--human-size, 14px), var(--button-size, 13px), var(--text-size, 13px)) +
+          140px
+        )
+      );
+  }
+}
+
+@media (max-width: 1200px) {
+  .chat-workspace-body > .file-panel {
+    transition: flex-basis var(--motion) ease;
+    flex: 1 0 max(340px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .chat-workspace-body > .file-panel[data-minimized="true"] {
+    width: 0;
+    height: 0;
+    flex-basis: 0;
+    flex-grow: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .file-panel > .file-column-resize {
+    display: none;
+  }
+}
+
+.files-page {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.files-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.files-title h2 {
+  min-width: 0;
+}
+
+.setup-dialog .files-hidden {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.files-header,
+.file-inspector-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+}
+
+.files-header h2,
+.file-inspector-header h2 {
+  margin: 0;
+  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  text-transform: var(--title-case, none);
+  --letter-spacing: var(--title-spacing, normal);
+  overflow-wrap: anywhere;
+}
+
+.file-inspector-header h2 {
+  font-family: var(--font);
+  text-transform: none;
+  --letter-spacing: normal;
+}
+
+.files-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.files-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.files-controls select {
+  font-family: var(--font);
+  --letter-spacing: normal;
+  text-transform: none;
+  max-width: 320px;
+  min-width: 0;
+}
+
+.files-status {
+  margin: 12px 16px;
+}
+
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 8px;
+}
+
+.file-tree-item {
+  --letter-spacing: normal;
+  justify-content: flex-start;
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font);
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.file-tree-item:hover:not([aria-selected="true"], [aria-disabled="true"]) {
+  background: var(--hover-bg);
+}
+
+.file-tree-item[aria-selected="true"] {
+  background: var(--accent-bg);
+  font-weight: 400;
+}
+
+.file-tree-item[aria-disabled="true"] {
+  color: var(--muted);
+}
+
+.file-inspector {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--chat-neutral);
+  overflow: hidden;
+}
+
+.file-inspector-context {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  overflow-wrap: anywhere;
+}
+
+.file-metadata {
+  padding: 0 16px 12px;
+}
+
+.file-metadata dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+}
+
+.file-metadata dd {
+  margin: 0;
+}
+
+.file-preview-editor {
+  --letter-spacing: normal;
+  text-transform: none;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.file-column-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  border-radius: var(--ui-radius);
+  background: var(--chat-neutral);
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.file-column-resize:focus-visible,
+.files-title button:focus-visible,
+.setup-dialog .files-hidden input:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+/* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */
+:root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle),
+:root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle):focus {
+  /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime control styles. */
+  border: 0 !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime control styles. */
+  box-shadow: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime control styles. */
+  outline: 0 !important;
+}
+
+:root
+  .monaco-editor
+  .find-widget
+  :is(.button, .monaco-custom-toggle):is(:hover, :focus):not(
+    .disabled,
+    [aria-disabled="true"]
+  )::before {
+  color: var(--accent);
+}
+
+/* Chat review shares the file panel's surfaces and responsive layout. */
+.revision-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 8px;
+  gap: 8px;
+}
+
+.revision-task,
+.revision-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.revision-task {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.revision-task > span:first-of-type,
+.revision-item > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.revision-count,
+.revision-item time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.revision-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.revision-item {
+  --letter-spacing: normal;
+  width: 100%;
+  padding-left: 36px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-transform: none;
+  font-family: var(--font);
+}
+
+.revision-item:hover:not([data-open]) {
+  background: var(--hover-bg);
+}
+
+.revision-item[data-open] {
+  background: var(--accent-bg);
+}
+
+.revision-latest {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.review-panel {
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 12px;
+  background: var(--chat-neutral);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-heading,
+.review-file-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-heading :where(h2),
+.review-file-heading :where(h3),
+.review-feedback :where(h3) {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.review-heading :where(h2) {
+  flex: 1;
+}
+
+.review-count-total,
+.review-hide-reviewed {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-count-total {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.review-added {
+  color: var(--change-additions);
+}
+
+.review-deleted {
+  color: var(--change-deletions);
+}
+
+.review-count-partial,
+.review-count-unavailable {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-hide-reviewed {
+  white-space: nowrap;
+}
+
+.review-panel .review-hide-reviewed input {
+  margin: 0;
+}
+
+.review-actions,
+.review-submission {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(140px, 26%) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.review-files {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  max-height: 460px;
+}
+
+.review-files :where(button) {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  text-align: left;
+  flex-shrink: 0;
+  padding: 8px;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+.review-files :where(button)[aria-current="true"] {
+  background: var(--accent-bg);
+}
+
+.review-files :where(button):hover {
+  background: var(--hover-bg);
+}
+
+.review-files :where(button) span:not(:first-child) {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.review-files :where(button) .review-file-counts {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.review-file-counts > span {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.review-file {
+  min-width: 0;
+}
+
+.review-diff-editor {
+  min-height: 160px;
+}
+
+@container (max-width: 680px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-files {
+    max-height: 140px;
+  }
+  .review-files :where(button) {
+    display: grid;
+    grid-template-columns: minmax(80px, 1fr) minmax(100px, 2fr);
+    padding: 6px 8px;
+  }
+  .review-files :where(button) > :last-child {
+    grid-column: 2;
+  }
+}
+
+.review-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-feedback form {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+}
+
+.review-feedback :where(textarea) {
+  width: 100%;
+  min-height: 80px;
+}
+
+.review-comment {
+  padding: 4px 0;
+}
+
+.review-comment :where(p) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+
+.review-submission {
+  padding: 0;
+}
+
+.review-comment + .review-comment,
+.review-submission + .review-submission {
+  margin-top: 8px;
+}
+
+.review-file-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.review-file-preview > :where(p) {
+  margin: 8px;
+}
+
+.review-panel[data-expanded="true"] {
+  position: fixed;
+  inset: 40px 0 40px;
+  z-index: 30;
+}
+
+.chat-review-activity {
+  display: flex;
+  align-items: start;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+  padding-top: 12px;
+}
+
+.chat-review-activity > span:nth-child(2) {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .review-files {
+    max-height: 150px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .review-diff-editor {
+    height: 320px;
+  }
+}
+
+/* Plan view. */
+.plan-panel {
+  --plan-pad: 16px;
+  --plan-gap: 12px;
+  --plan-row-pad: 12px;
+  --plan-note-gap: 6px;
+  --plan-control: 32px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.plan-toolbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--plan-gap);
+  padding: var(--plan-pad);
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-progress-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.plan-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A supplementary marker; the state is always written beside it. */
+.plan-state::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--muted);
+}
+
+.plan-state:is([data-state="queued"], [data-state="running"])::before {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.plan-state[data-state="completed"]::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.plan-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-toolbar progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+}
+
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-actions:empty {
+  display: none;
+}
+
+.plan-action {
+  min-height: var(--plan-control);
+  padding-block: 0;
+}
+
+.plan-notice {
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.plan-document {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: var(--plan-pad);
+  overflow-wrap: anywhere;
+}
+
+.plan-title {
+  font-family: var(--title-font, var(--font));
+  --letter-spacing: var(--title-spacing, normal);
+  font-size: max(var(--title-size, 18px), 1.2em);
+  font-weight: var(--title-weight, 400);
+  text-transform: var(--title-case, none);
+  line-height: 1.3;
+}
+
+.plan-description {
+  margin-top: var(--plan-note-gap);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.plan-tasks {
+  margin: calc(var(--plan-pad) + 4px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+/* The check and status cells are one line box tall, so they centre on the first line of text
+   at any font size, however the text wraps. */
+.plan-task {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  align-items: start;
+  padding: var(--plan-row-pad) 4px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.plan-task-check,
+.plan-task-status {
+  display: flex;
+  align-items: center;
+  height: 1lh;
+}
+
+.plan-task-check {
+  justify-content: center;
+}
+
+.plan-task-text {
+  white-space: pre-wrap;
+  cursor: default;
+}
+
+.plan-task-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.plan-task[data-state="in_progress"] .plan-task-badge {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.plan-task[data-state="blocked"] .plan-task-badge {
+  border-color: var(--text);
+  border-style: dashed;
+  color: var(--text);
+}
+
+.plan-task[data-state="completed"] .plan-task-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.plan-task-note {
+  grid-column: 2 / -1;
+  margin-top: var(--plan-note-gap);
+  color: var(--muted);
+  font-size: 0.92em;
+  white-space: pre-wrap;
+}
+
+@container (max-width: 360px) {
+  .plan-task-status {
+    grid-column: 2;
+    grid-row: 2;
+    height: auto;
+    margin-top: 4px;
+  }
+}
+
+/* Completion boxes are read-only indicators, not unavailable controls. */
+.app .plan-task input[type="checkbox"]:disabled {
+  border-style: solid;
+  border-color: var(--control-border);
+  background-color: var(--surface);
+  background-image: none;
+}
+
+.app .plan-task input[type="checkbox"]:disabled:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.app .plan-task input[type="checkbox"]:disabled:checked::before {
+  background-color: var(--primary-text);
+}
+
+.plan-toolbar progress {
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--border);
+}
+
+.plan-toolbar progress::-webkit-progress-bar {
+  background: var(--border);
+}
+
+.plan-toolbar progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.plan-toolbar progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+/* Glide's bundled rules are in the vendor layer. Override only its editor geometry. */
+.data-table,
+.table-preview-grid {
+  --gdg-rounding-radius: 0px;
+}
+
+.gdg-search-bar,
+.gdg-seveqep,
+.gdg-style,
+.gdg-clip-region,
+.gdg-edit-icon {
+  border-radius: 0;
+}
+
+/* Monaco adds unlayered runtime CSS. These adapters intentionally target editor internals only. */
+.file-panel .monaco-editor :is(.monaco-scrollable-element, .slider, .inputbox, .monaco-inputbox) {
+  /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime geometry. */
+  border-radius: 0 !important;
+}
+
+.file-tab-actions > .icon-button {
+  flex-shrink: 0;
+}

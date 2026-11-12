@@ -1,5 +1,5 @@
 import type { RunEvent, RunStatus } from "../core/index.js";
-import { statusSpec } from "./state.js";
+import { statusSpec } from "./session-presentation.js";
 
 /** Inline chart data for a session row, derived only from its recorded events. */
 const turnSamples = 6;

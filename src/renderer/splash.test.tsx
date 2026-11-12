@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { Theme } from "./appearance.js";
 import { Splash } from "./splash.js";
-import type { Theme } from "./state.js";
 
 afterEach(() => vi.unstubAllGlobals());
 

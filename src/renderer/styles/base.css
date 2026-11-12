@@ -1,0 +1,631 @@
+/* Base styles. Imported into its declared layer by style.css. */
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-size, 13px);
+  font-weight: var(--text-weight, 400);
+  line-height: 1.5;
+  text-transform: var(--text-case, none);
+  font-synthesis-weight: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Set on every element so an em spacing scales with each element's own font size. */
+*,
+::before,
+::after {
+  letter-spacing: var(--letter-spacing);
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.carbon-icon {
+  display: inline-block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  min-width: var(--icon-size);
+  flex-shrink: 0;
+  fill: currentColor;
+  vertical-align: -3px;
+  pointer-events: none;
+}
+
+/* Buttons. Text roles opt out of Normal Text's case, size, and weight overrides. */
+button {
+  position: relative;
+  font-family: var(--button-font, var(--font));
+  --letter-spacing: var(--button-spacing, normal);
+  font-size: var(--button-size, 13px);
+  font-weight: var(--button-weight, 400);
+  text-transform: var(--button-case, none);
+  font-synthesis: none;
+  color: var(--text);
+  border: 1px solid var(--surface-edge);
+  background: var(--control-fill);
+  min-height: 36px;
+  padding: 7px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  border-radius: var(--ui-radius);
+}
+
+button:hover:not(:disabled, [aria-pressed="true"], [aria-selected="true"], [aria-current="true"]) {
+  background: var(--control-hover);
+}
+
+button:active:not(:disabled) {
+  background: var(--text);
+  color: var(--bg);
+}
+
+button[aria-pressed="true"] {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+
+button.primary {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: transparent;
+  font-weight: var(--button-weight, 400);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+button.primary:active:not(:disabled) {
+  background: var(--primary-text);
+  color: var(--primary);
+}
+
+button.destructive {
+  background: var(--destructive);
+  color: var(--on-destructive);
+  border-color: var(--destructive);
+  font-weight: var(--button-weight, 400);
+}
+
+button.destructive:hover:not(:disabled) {
+  background: var(--destructive-hover);
+  border-color: var(--destructive-hover);
+}
+
+button.danger-text {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+button.danger-text:hover:not(:disabled) {
+  box-shadow: inset 4px 0 0 var(--destructive);
+}
+
+button.danger-text:active:not(:disabled) {
+  background: var(--destructive);
+  color: var(--on-destructive);
+}
+
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+button.small {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: var(--button-size, 12px);
+}
+
+.danger-text {
+  color: var(--destructive);
+}
+
+/* Fields */
+input,
+select,
+textarea {
+  border: 1px solid var(--surface-edge);
+  border-radius: 0;
+  background: var(--field-fill);
+  color: var(--text);
+  padding: 9px 11px;
+  min-height: 36px;
+  accent-color: var(--primary);
+}
+
+/* Paint field baselines inside the fill. */
+input:not([type="checkbox"], [type="radio"]),
+select,
+textarea {
+  box-shadow: inset 0 -1px var(--control-border);
+}
+
+input[type="number"] {
+  font-family: var(--font);
+  --letter-spacing: normal;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.65;
+  scrollbar-gutter: stable;
+}
+
+textarea::placeholder,
+input::placeholder {
+  color: var(--muted);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  border: 1px solid var(--control-border);
+  background: var(--bg);
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background: var(--primary);
+  border-color: var(--primary-text);
+}
+
+input[type="checkbox"]:checked::before {
+  content: "";
+  width: var(--icon-size);
+  height: var(--icon-size);
+  background-color: var(--primary-text);
+  mask: url("../icons/carbon/checkmark.svg") center / contain no-repeat;
+}
+
+input[type="radio"]:checked::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--primary-text);
+  border-radius: var(--ui-radius);
+}
+
+/* A switch prints its state inside the track, so on and off never rely on color or position. */
+input[type="checkbox"][role="switch"] {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 26px;
+  min-height: 26px;
+  background: var(--bg);
+}
+
+input[type="checkbox"][role="switch"]::before,
+input[type="checkbox"][role="switch"]:checked::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  mask: none;
+  background: var(--control-border);
+  border-radius: var(--ui-radius);
+  transition: transform var(--motion) var(--ease);
+}
+
+input[type="checkbox"][role="switch"]::after {
+  content: "OFF";
+  position: absolute;
+  right: 5px;
+  top: 0;
+  font: 400 9px / 24px var(--font);
+  --letter-spacing: normal;
+  color: var(--muted);
+}
+
+input[type="checkbox"][role="switch"]:checked {
+  background: var(--primary);
+  border-color: var(--primary-text);
+}
+
+input[type="checkbox"][role="switch"]:checked::before {
+  transform: translateX(26px);
+  background: var(--primary-text);
+}
+
+input[type="checkbox"][role="switch"]:checked::after {
+  content: "ON";
+  left: 6px;
+  right: auto;
+  color: var(--primary-text);
+}
+
+/* Focus remains functional; its optional border/glow is off until explicitly enabled. */
+:focus-visible {
+  outline: 0;
+}
+
+/* A blue-gray line with a neutral band, outset on controls. Filled controls get a gap. */
+:where(:root[data-focus-highlight="on"]) :focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--focus-band);
+}
+
+:where(:root[data-focus-highlight="on"])
+  :is(button.primary, button.destructive, input:checked):focus-visible {
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+/* Rows, menu items, and anything in a clipping or scrolling region use inset focus. */
+:where(:root[data-focus-highlight="on"])
+  :is(
+    [role="menuitem"],
+    [role="option"],
+    .project-item,
+    .modal-heading button,
+    .page-tab [role="tab"],
+    .button-group > button,
+    .table-control-group > select
+  ):focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 5px var(--focus-band);
+}
+
+pre {
+  text-transform: none;
+  font-family: var(--mono);
+  --letter-spacing: normal;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  margin: 0;
+}
+
+kbd {
+  font: 11px var(--font);
+  --letter-spacing: normal;
+  display: inline-block;
+  border: 1px solid transparent;
+  background: var(--control-fill);
+  padding: 0 4px;
+  margin-right: 4px;
+}
+
+/* Segmented radio groups: joined options with hidden native radios. */
+.segmented {
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid var(--group-border);
+  background: var(--group-fill);
+
+  border-radius: var(--ui-radius);
+}
+
+.segmented-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 100%;
+  margin: 0;
+  padding: 0 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segmented-option + .segmented-option {
+  border-left: 1px solid var(--group-border);
+}
+
+.segmented-option:hover:not(:has(input:checked)) {
+  background: var(--hover-bg);
+}
+
+.segmented-option:has(input:checked) {
+  background: var(--accent-bg);
+  box-shadow: inset 0 -2px var(--primary);
+}
+
+.segmented-option input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+:where(:root[data-focus-highlight="on"]) .segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -3px;
+}
+
+/* Status label, matching the grid's canvas drawing for chat titles and palette hints. */
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  font: 400 12px / 16px var(--font);
+  --letter-spacing: normal;
+  text-transform: none;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-label:is([data-status="running"], [data-status="idle"]) {
+  color: var(--text);
+  font-weight: 400;
+}
+
+.status-label[data-status="waiting"] {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+  font-weight: 400;
+}
+
+.status-label:is([data-status="failed"], [data-status="timed_out"], [data-status="interrupted"]) {
+  color: var(--danger);
+  font-weight: 400;
+  border-left: 3px solid currentColor;
+  padding-left: 4px;
+}
+
+details[open] > summary::after {
+  mask-image: url("../icons/carbon/subtract.svg");
+}
+
+summary:hover {
+  color: var(--text);
+}
+
+/* Related controls meet along straight edges with fine separators. */
+.button-group {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--group-border);
+  background: var(--group-fill);
+  box-shadow: var(--group-shadow);
+  vertical-align: middle;
+  max-width: 100%;
+  border-radius: var(--ui-radius);
+}
+
+.button-group > button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 12px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--group-fill);
+  color: var(--text);
+}
+
+.button-group > button + button {
+  border-left: 0;
+}
+
+.button-group
+  > button:hover:not(
+    :disabled,
+    [aria-pressed="true"],
+    [aria-selected="true"],
+    [aria-current="true"]
+  ) {
+  background: var(--group-hover);
+}
+
+.button-group > button[aria-pressed="true"] {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+
+.button-group > button.danger-text {
+  color: var(--destructive);
+}
+
+.button-group > button.primary {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.button-group > button.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.button-group > button:active:not(:disabled) {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.button-group.compact > button {
+  min-height: 24px;
+  height: 24px;
+  width: 30px;
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .button-group:not(.compact) {
+    display: flex;
+    width: fit-content;
+  }
+}
+
+@media (max-width: 640px) {
+  .button-group:not(.compact) > button {
+    flex-shrink: 1;
+    white-space: normal;
+    justify-content: center;
+  }
+}
+
+/* Round only group ends, including the keyboard-only add-row action. */
+:root .button-group > :is(button, select):first-child {
+  border-top-left-radius: var(--ui-radius);
+  border-bottom-left-radius: var(--ui-radius);
+}
+
+:root
+  .button-group
+  > :is(button, select):not(.table-add-accessible:not(:focus-visible)):not(
+    :has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible)))
+  ) {
+  border-top-right-radius: var(--ui-radius);
+  border-bottom-right-radius: var(--ui-radius);
+}
+
+:root
+  .button-group
+  > :is(button, select):has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible))) {
+  border-right: 1px solid var(--control-border);
+}
+
+.diff,
+.event.toolCall pre,
+.event.stderr pre,
+.project-item .path,
+.connected-path {
+  text-transform: none;
+}
+
+.composer textarea,
+.setup-dialog textarea {
+  font-family: var(--human-font, var(--font));
+  font-size: var(--human-size, 14px);
+  font-weight: var(--human-weight, 400);
+  line-height: 1.65;
+  --letter-spacing: var(--human-spacing, normal);
+  text-transform: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::after {
+  content: "";
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex-shrink: 0;
+  background-color: currentColor;
+  mask: url("../icons/carbon/add.svg") center / contain no-repeat;
+}
+
+summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.settings-page-heading h1,
+.orchestration-chat-heading h1,
+.worker-chat-title,
+.chat-empty h2,
+.contributor-tools h1,
+.memory-heading h2,
+.workspace-heading h1,
+.table-title,
+.files-title h2 {
+  opacity: 0.65;
+}
+
+.settings-page-heading h1:where(:hover),
+.orchestration-chat-heading h1:where(:hover),
+.worker-chat-title:where(:hover),
+.chat-empty h2:where(:hover),
+.contributor-tools h1:where(:hover),
+.memory-heading h2:where(:hover),
+.workspace-heading h1:where(:hover),
+.table-title:where(:hover),
+.files-title h2:where(:hover) {
+  opacity: 1;
+}
+
+* {
+  box-sizing: border-box;
+  font-weight: inherit;
+}
+
+[role="button"] {
+  border-radius: var(--ui-radius);
+}
+
+input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"]) {
+  border-radius: var(--ui-radius);
+}
+
+[role="switch"] {
+  border-radius: var(--ui-radius);
+}
+
+.button-group > :is(button, select) {
+  border-radius: 0;
+}
+
+.segmented > .segmented-option {
+  border-radius: 0;
+}
+
+.segmented > .segmented-option:first-child {
+  border-top-left-radius: var(--ui-radius);
+  border-bottom-left-radius: var(--ui-radius);
+}
+
+.segmented > .segmented-option:last-child {
+  border-top-right-radius: var(--ui-radius);
+  border-bottom-right-radius: var(--ui-radius);
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.button-group > .icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}

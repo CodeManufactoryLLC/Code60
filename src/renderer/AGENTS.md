@@ -1,5 +1,32 @@
 # Renderer
 
+## Ownership and style boundaries
+
+- Keep `main.tsx` as bootstrap and `App` as composition, not another monolithic
+  hook. Inject the desktop API. Use focused snapshot, preference, window,
+  visibility and splash lifecycles.
+- Application services outlive projects. Database conversations/events and
+  Commands/Prompt Editor drafts survive same-database project replacement.
+  Project-instance state owns worker views, file tabs/reads, transcript caches,
+  table selections, menus and project dialogs. Keep form/draft/scroll state local.
+- Hiding a page/panel or returning to splash is activation, not disposal.
+  Replacing today's single project disposes its scope. Use generation captures,
+  not path equality alone, for delayed reads/actions, including A → B → A.
+  Capture execution identity before awaiting. Disposal must not replay actions,
+  stop backend workers or delete persisted history. Do not add a project cache
+  or claim multi-project backend authority.
+- Derive static navigation metadata from `navigation.ts` and keep page rendering
+  exhaustive. Dynamic conversation identities are not static pages.
+- Share message presentation and exact-source draft mechanics. Keep orchestrator
+  and worker action/recovery lifecycles separate.
+- `style.css` owns only imports and ordered layers: vendor, tokens, base, layout,
+  components, utilities, accessibility. Put rules beside their feature owner in
+  `styles/`; reconcile existing declarations instead of adding late corrections.
+  Keep the selected `data-theme` distinct from resolved `data-color-scheme`.
+  Use the resolved attribute for the single dark palette and artwork. Import
+  Glide CSS in the vendor layer. Scope runtime Monaco overrides to its internals.
+  Never restore a universal important radius reset or global rounding patch.
+
 - Tactics opens only from the orchestrator composer. Use the bundled browser-safe
   catalog as React/text, never prototype HTML/scripts. Preview does not apply;
   Apply persists before closing, Remove explicitly clears, and neither sends or

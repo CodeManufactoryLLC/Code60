@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SessionState } from "../core/index.js";
 import { contextUsage, SessionInfo } from "./session-info.js";
-import { transcript } from "./state.js";
+import { transcript } from "./transcript.js";
 import { replyTurns } from "./unread.js";
 
 const at = "2026-11-07T12:00:00.000Z";

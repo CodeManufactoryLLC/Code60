@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { fileLanguage, monaco, useMonacoTheme } from "./monaco-runtime.js";
-import { monospaceFont } from "./state.js";
+import { monospaceFont } from "./typography.js";
 
 export type PreviewViewState = monaco.editor.ICodeEditorViewState;
 

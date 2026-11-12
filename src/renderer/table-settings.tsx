@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "./icons.js";
-import { rowDensities, type TextStyles } from "./state.js";
+import { rowDensities } from "./table-preferences.js";
 import { TablePreview } from "./table-preview.js";
 import {
   defaultView,
@@ -9,6 +9,7 @@ import {
   type TableView,
   type ViewDefaults,
 } from "./table-view.js";
+import type { TextStyles } from "./typography.js";
 
 export interface SettingsColumn {
   key: string;

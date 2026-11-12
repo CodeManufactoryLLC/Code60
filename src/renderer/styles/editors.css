@@ -1,0 +1,198 @@
+/* Editors styles. Imported into its declared layer by style.css. */
+
+/* Prompt Editor */
+.prompt-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.prompt-editor-body {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 20px;
+  padding: 0 var(--page-padding) var(--page-padding);
+}
+
+.prompt-editor-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.prompt-editor-list button {
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.prompt-editor-list .prompt-system-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.prompt-system-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+.prompt-system-list[hidden] {
+  display: none;
+}
+
+.prompt-editor-list button:hover:not(:disabled, [aria-current="true"]) {
+  background: var(--hover-bg);
+}
+
+.prompt-editor-list button[aria-current="true"] {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+
+.prompt-editor-name {
+  font-weight: 400;
+}
+
+.prompt-editor-source,
+.prompt-editor-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prompt-editor-main {
+  min-width: 0;
+}
+
+.prompt-editor-main h2 {
+  margin: 0 0 8px;
+  font-size: var(--text-size, 13px);
+}
+
+.prompt-editor-view-toggle {
+  display: flex;
+  justify-content: flex-end;
+  margin: 20px 0 8px;
+}
+
+.prompt-editor-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 20px 0 16px;
+  padding: 2px;
+}
+
+.prompt-editor-fields select {
+  max-width: 100%;
+}
+
+.prompt-editor-input {
+  margin-top: 8px;
+  border: 1px solid transparent;
+  background: var(--field-fill);
+  box-shadow: inset 0 -1px var(--control-border);
+}
+
+.prompt-editor-input textarea {
+  display: block;
+  width: 100%;
+  min-height: 260px;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+}
+
+.prompt-editor-input textarea,
+.prompt-editor-preview {
+  font: 13px / 1.65 var(--mono);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.prompt-editor-clauses {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+:where(.prompt-editor-clause) .prompt-editor-input textarea {
+  min-height: 100px;
+}
+
+.prompt-editor-input textarea:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+:where(:root[data-focus-highlight="on"]) .prompt-editor-input:focus-within {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 5px var(--focus-band);
+}
+
+.prompt-editor-input[data-invalid="true"] {
+  border-bottom: 2px solid var(--danger);
+}
+
+.prompt-editor-problem {
+  min-height: 1.5em;
+  margin: 6px 0 16px;
+  color: var(--danger);
+}
+
+.prompt-editor-preview {
+  margin: 8px 0 0;
+  padding: 12px;
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .prompt-editor-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.commands-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.commands-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.command-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.command-field input {
+  width: 100%;
+}
+
+.command-name-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

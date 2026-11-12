@@ -1,0 +1,934 @@
+/* Overlays styles. Imported into its declared layer by style.css. */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.project-row > button + button {
+  border-left: 0;
+}
+
+.project-dialog .project-row > button {
+  border: 0;
+}
+
+.polling-dialog-body .button-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 300px);
+}
+
+:where(.splash-projects) .project-row > button {
+  border: 0;
+  box-shadow: none;
+}
+
+/* Banners: a written prefix and a 2px left rule. */
+.database-notice {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex-shrink: 0;
+  min-height: 88px;
+  margin: 0 var(--page-margin) 12px;
+  padding: 16px 20px;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid currentColor;
+  border-left-width: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.database-notice > div {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.database-notice h2 {
+  margin: 0 0 4px;
+  font-size: var(--title-size, 18px);
+}
+
+.database-notice p {
+  margin: 0;
+}
+
+.splash-brand > .database-notice {
+  margin: 0;
+}
+
+.database-dependent-controls {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.error-banner,
+.warning-banner {
+  padding: 10px 16px;
+  font-size: var(--text-size, 12px);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-banner::before,
+.warning-banner::before {
+  flex-shrink: 0;
+  font: 400 12px var(--font);
+  --letter-spacing: normal;
+}
+
+.error-banner {
+  justify-content: space-between;
+  border: 1px solid var(--danger);
+  border-left-width: 2px;
+  color: var(--danger);
+  background: var(--bg);
+}
+
+.error-banner::before {
+  content: "Error";
+}
+
+.error-banner > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.warning-banner {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border-left: 2px solid var(--warning-text);
+}
+
+.warning-banner::before {
+  content: "Warning";
+}
+
+.setup-dialog .error-banner {
+  margin-top: 12px;
+}
+
+/* Dialogs: a 48px title bar and footer stay in place while the body scrolls. */
+.setup-dialog {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--surface-edge);
+  border-radius: var(--ui-radius);
+  padding: 0 16px;
+  width: min(600px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow: auto;
+  scrollbar-gutter: stable;
+  box-shadow: var(--overlay-shadow);
+}
+
+.picker-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.project-dialog {
+  height: min(600px, calc(100dvh - 32px));
+}
+
+.project-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.changes-dialog {
+  width: min(960px, 92vw);
+}
+
+.setup-dialog::backdrop {
+  background: #0009;
+}
+
+.setup-dialog > p,
+.setup-dialog form > p {
+  margin-bottom: 12px;
+}
+
+.modal-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  margin: 0 -16px 16px;
+  padding: 0 16px;
+  background: var(--surface-band);
+  border-bottom: 1px solid var(--surface-edge);
+}
+
+.modal-heading h2 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-heading > button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.modal-heading
+  > button:hover:not(
+    :disabled,
+    [aria-pressed="true"],
+    [aria-selected="true"],
+    [aria-current="true"]
+  ) {
+  background: var(--hover-bg);
+}
+
+:where(.project-dialog) .modal-heading > button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: -8px -16px 0 0;
+  --icon-size: 18px;
+}
+
+.agent-setup-dialog .modal-heading {
+  margin-bottom: 0;
+}
+
+/* A destructive choice adds a muted-red hazard strip above the title. */
+.setup-dialog:has(.danger-text input:checked) .modal-heading {
+  padding-top: 6px;
+  background:
+    repeating-linear-gradient(135deg, var(--destructive) 0 8px, var(--bg) 8px 16px) top / 100% 6px
+    no-repeat,
+    var(--surface);
+}
+
+.modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px -16px 0;
+  padding: 10px 16px;
+  border-top: 1px solid transparent;
+  background: var(--surface);
+}
+
+.project-dialog > .modal-footer {
+  margin-top: auto;
+}
+
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 16px 0 0;
+  min-width: 0;
+}
+
+fieldset label {
+  display: block;
+  font-size: var(--text-size, 12px);
+  font-weight: var(--text-weight, 400);
+  margin-bottom: 9px;
+}
+
+.setup-dialog textarea,
+.setup-dialog input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.field-hint {
+  font-size: var(--text-size, 11px);
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 6px 0 16px;
+}
+
+.field-label {
+  margin: 12px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid transparent;
+}
+
+.agent-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-row select {
+  flex: 1;
+}
+
+.space-top {
+  margin-top: 16px;
+}
+
+details {
+  border-top: 1px solid transparent;
+  margin-top: 20px;
+  padding-top: 12px;
+}
+
+.event.note {
+  border-left: 2px solid var(--border);
+  padding-left: 14px;
+  color: var(--muted);
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px 12px;
+}
+
+label.check-label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--text-size, 13px);
+}
+
+.permission-grid label.check-label {
+  font: 12px var(--font);
+  --letter-spacing: normal;
+}
+
+.connected-path {
+  font-family: var(--font);
+  --letter-spacing: normal;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.project-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.project-dialog .project-list {
+  margin: 0 -16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.project-remove {
+  font-size: 10px;
+  opacity: 0.5;
+  transition: opacity var(--motion) ease;
+}
+
+.project-remove:hover,
+.project-remove:focus-visible {
+  opacity: 1;
+}
+
+.project-row {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+}
+
+.project-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  min-width: 0;
+  font-family: var(--font);
+  font-weight: 400;
+}
+
+.project-item strong {
+  font-weight: 400;
+}
+
+.project-list > li > .project-item {
+  width: 100%;
+}
+
+.project-item .path {
+  max-width: 100%;
+}
+
+.project-open-folder {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  text-align: left;
+}
+
+.project-open-folder:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.project-confirmation-path {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-transform: none;
+}
+
+.recovery-reason {
+  font-family: var(--font);
+}
+
+/* Actions and context menus */
+.actions-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 220px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid transparent;
+  box-shadow: var(--overlay-shadow);
+
+  border-radius: var(--ui-radius);
+}
+
+.actions-menu .menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.actions-menu .menu-group + .menu-group {
+  border-top: 2px solid var(--border);
+}
+
+.actions-menu [role="menuitem"] {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  justify-content: stretch;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 12px 4px 8px;
+  border: 0;
+  border-top: 1px solid transparent;
+  background: var(--bg);
+  text-align: left;
+  font: 400 13px var(--font);
+  --letter-spacing: normal;
+  text-transform: none;
+}
+
+.actions-menu .menu-group > [role="menuitem"]:first-child {
+  border-top: 0;
+}
+
+.actions-menu [role="menuitem"] .menu-key {
+  font: 11px var(--font);
+  color: var(--muted);
+}
+
+.actions-menu [role="menuitem"]:focus {
+  background: var(--accent-bg);
+  outline: 0;
+}
+
+.actions-menu [role="menuitem"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--hover-bg);
+}
+
+:where(:root[data-focus-highlight="on"]) .actions-menu [role="menuitem"]:focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -3px;
+}
+
+.actions-menu [role="menuitem"].danger-text {
+  color: var(--destructive);
+}
+
+.actions-menu [role="menuitem"].danger-text:focus,
+.actions-menu [role="menuitem"].danger-text:hover:not(:disabled, [aria-disabled="true"]) {
+  background: color-mix(in srgb, var(--destructive) 12%, var(--bg));
+}
+
+.app .actions-menu [role="menuitem"]:is(:disabled, [aria-disabled="true"]) {
+  border-style: solid;
+  border-width: 1px 0 0;
+  border-color: var(--border);
+}
+
+.app
+  .actions-menu
+  .menu-group
+  > [role="menuitem"]:is(:disabled, [aria-disabled="true"]):first-child {
+  border-top-width: 0;
+}
+
+/* Tooltip: inverted, with a muted-yellow top edge and a stem toward its control. */
+.app-tooltip[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  overflow: visible;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px 10px;
+  border: 0;
+  border-top: 2px solid var(--primary);
+  background: var(--text);
+  color: var(--bg);
+  font: 400 12px / 1.4 var(--font);
+  --letter-spacing: normal;
+  pointer-events: none;
+}
+
+.app-tooltip::before {
+  content: "";
+  position: absolute;
+  left: var(--stem, 12px);
+  width: 2px;
+  height: 6px;
+  background: var(--text);
+}
+
+.app-tooltip[data-side="below"]::before {
+  top: -8px;
+  background: var(--primary);
+}
+
+.app-tooltip[data-side="beside"]::before {
+  display: none;
+}
+
+.app-tooltip[data-side="above"]::before {
+  bottom: -6px;
+}
+
+.app-tooltip kbd {
+  margin: 0 0 0 auto;
+  color: var(--bg);
+  background: transparent;
+  border-color: var(--muted);
+}
+
+/* Command palette */
+.command-palette {
+  position: fixed;
+  margin: 12vh auto auto;
+  width: min(640px, calc(100vw - 32px));
+  max-height: 76vh;
+  padding: 0;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid transparent;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  flex-direction: column;
+  box-shadow: var(--overlay-shadow);
+}
+
+.command-palette[open] {
+  display: flex;
+}
+
+.command-palette::backdrop {
+  background: #0009;
+}
+
+.command-palette .palette-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid transparent;
+}
+
+.palette-input > .carbon-icon {
+  color: var(--accent);
+}
+
+.command-palette .palette-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: 14px var(--font);
+  --letter-spacing: normal;
+}
+
+.command-palette .palette-input input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+.command-palette [role="listbox"] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 4px 0;
+}
+
+.command-palette .palette-group {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.command-palette [role="option"] {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  justify-content: stretch;
+  width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  border: 0;
+  padding: 0 16px 0 12px;
+  background: var(--bg);
+  font: 400 14px var(--font);
+  --letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.command-palette [role="option"] > .option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-palette [role="option"] mark {
+  background: none;
+  color: inherit;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.command-palette [role="option"][aria-selected="true"] {
+  background: var(--accent-bg);
+}
+
+.command-palette [role="option"].danger-text {
+  color: var(--destructive);
+}
+
+.command-hint {
+  color: var(--muted);
+  font: 11px var(--font);
+  --letter-spacing: normal;
+}
+
+.command-palette .palette-empty {
+  padding: 16px;
+  color: var(--muted);
+}
+
+.command-palette footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-top: 1px solid transparent;
+  padding: 8px 16px;
+  font: 11px var(--font);
+  --letter-spacing: normal;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.command-palette footer .palette-count {
+  margin-left: auto;
+}
+
+/* Toasts: bottom-left, newest at the bottom, at most three. */
+.toast-stack {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.app-toast {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 6px 12px 12px;
+  padding-right: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-left: 3px solid var(--border);
+  margin: 0;
+  min-width: 0;
+  pointer-events: auto;
+  overflow: hidden;
+  animation: toast-in var(--motion) var(--ease);
+  box-shadow: var(--overlay-shadow);
+
+  border-radius: var(--ui-radius);
+}
+
+.app-toast > .carbon-icon {
+  margin-top: 2px;
+}
+
+.app-toast .toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-toast .toast-kind {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.app-toast .toast-actions {
+  margin-top: 6px;
+}
+
+.app-toast[data-tone="info"] > .carbon-icon,
+.app-toast[data-tone="info"] .toast-kind {
+  color: var(--muted);
+}
+
+.app-toast[data-tone="success"] {
+  border-left-color: var(--success);
+}
+
+.app-toast[data-tone="success"] .toast-kind {
+  color: var(--success);
+}
+
+.app-toast[data-tone="warning"] {
+  border-left-color: var(--warning-text);
+  background: var(--warning-bg);
+}
+
+.app-toast[data-tone="warning"] .toast-kind {
+  color: var(--warning-text);
+}
+
+.app-toast[data-tone="error"] {
+  border-color: var(--danger);
+}
+
+.app-toast[data-tone="error"] .toast-kind {
+  color: var(--danger);
+}
+
+.app-toast .toast-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--control-border);
+  transform-origin: left;
+  animation: toast-timer var(--duration) linear forwards;
+}
+
+.app-toast[data-paused="true"] .toast-timer {
+  animation-play-state: paused;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes toast-timer {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.git-readiness {
+  flex-shrink: 0;
+  margin: 8px 24px;
+  font-size: 13px;
+}
+
+.git-readiness :where(p) {
+  margin: 6px 0;
+}
+
+.git-setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  max-height: 75vh;
+}
+
+.git-setup-body > :where(button) {
+  align-self: flex-start;
+}
+
+.git-setup-files {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.git-setup-files :where(fieldset) {
+  min-width: 0;
+  max-height: 360px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border: 0;
+  padding: 0;
+}
+
+.git-setup-file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.git-setup-file :where(label) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.git-setup-file :where(input) {
+  flex-shrink: 0;
+}
+
+.git-setup-files :where(pre) {
+  max-height: 360px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.git-setup-author {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.git-setup-author :where(label) {
+  flex: 1 1 240px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.git-setup-author :where(input) {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .git-setup-files {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mode-menu-control {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.polling-dialog {
+  min-height: min(200px, calc(100dvh - 32px));
+  scrollbar-gutter: stable both-edges;
+}
+
+.polling-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.polling-dialog-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 120px;
+  padding: 16px 0;
+}
+
+dialog:not(.splash) {
+  border-radius: var(--ui-radius);
+}
+
+[role="dialog"] {
+  border-radius: var(--ui-radius);
+}
+
+[popover] {
+  border-radius: var(--ui-radius);
+}
+
+.mode-menu {
+  border-radius: var(--ui-radius);
+}
+
+.app-toast .icon-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-color: transparent;
+  background: transparent;
+}

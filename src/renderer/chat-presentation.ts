@@ -1,6 +1,6 @@
 import type { DesktopRun } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
-import { statusSpec } from "./state.js";
+import { statusSpec } from "./session-presentation.js";
 
 export function sessionStatus(run: Pick<RunView, "status" | "turns" | "stopping" | "pending">) {
   if (run.stopping) return { ...statusSpec.cancelled, label: "Stopping" };

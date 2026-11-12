@@ -1,0 +1,120 @@
+/* Layout styles. Imported into its declared layer by style.css. */
+
+.app {
+  /* Resolve beside the live width override, not once on :root before inheritance. */
+  --sidebar-track-width: clamp(
+    180px,
+    var(--sidebar-width),
+    min(480px, calc(100vw - var(--page-margin) - 360px))
+  );
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+:root[data-transparent="true"],
+:root[data-transparent="true"] body,
+:root[data-transparent="true"] .app {
+  background: transparent;
+}
+
+/* Native window controls keep their own drag strip above the workspace. */
+.window-drag-strip {
+  height: var(--app-titlebar-height);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.app-workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--page-margin);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 var(--page-margin) 0 0;
+}
+
+.app-workspace:has(> .sidebar)::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--app-titlebar-height));
+  bottom: calc(-1 * var(--app-footer-height));
+  left: calc(var(--sidebar-track-width) - 1px);
+  width: 1px;
+  border-left: 1px solid var(--border);
+  z-index: 11;
+  pointer-events: none;
+}
+
+/* Unframed main content alongside the navigation. */
+.page-panel {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.page-panel > :is(.error-banner, .warning-banner) {
+  margin: 8px var(--page-padding) 0;
+}
+
+.page-panel[hidden] {
+  display: none;
+}
+
+.app-workspace > .page-panel {
+  margin-bottom: var(--page-margin);
+}
+
+/* Welcome */
+.welcome {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 36px;
+  text-align: center;
+}
+
+.welcome-corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+/* Without a native title bar, the top of each screen moves the window. A scrolling element must
+   never be a drag region: the window would take its wheel and scrollbar input. */
+.welcome,
+.settings-page-heading,
+.app > .error-banner {
+  -webkit-app-region: drag;
+}
+
+.welcome button,
+.settings-page-heading button,
+.error-banner button,
+dialog,
+dialog::backdrop {
+  -webkit-app-region: no-drag;
+}
+
+.app > .error-banner {
+  min-height: var(--titlebar-height);
+  padding-left: max(30px, var(--titlebar-left));
+  padding-right: max(30px, calc(var(--titlebar-right) + 12px));
+}

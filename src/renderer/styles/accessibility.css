@@ -1,0 +1,367 @@
+/* Accessibility styles. Imported into its declared layer by style.css. */
+
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"][role="switch"]::before {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .navigation-icon[data-icon] {
+    color: ButtonText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar :is(.page-group-pages, .chat-worker-children) {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .command-picker [aria-selected="true"] {
+    outline: 1px solid Highlight;
+  }
+}
+
+@media (forced-colors: active) {
+  .transition-range input[type="range"]::-webkit-slider-runnable-track {
+    background: CanvasText;
+  }
+  .transition-range input[type="range"]::-webkit-slider-thumb {
+    border-color: ButtonText;
+    background: Highlight;
+  }
+}
+
+@media (forced-colors: active) {
+  .segmented-option:has(input:checked) {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+}
+
+@media (forced-colors: active) {
+  .status-label[data-status="waiting"] {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+    forced-color-adjust: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .splash {
+    --bg: Canvas;
+    --splash-logo-text: CanvasText;
+  }
+  .splash-brand {
+    background: Canvas;
+  }
+  .splash-projects {
+    --bg: Canvas;
+    --splash-panel-bg: Canvas;
+    --splash-panel-text: CanvasText;
+    --text: CanvasText;
+    --muted: CanvasText;
+    --border: CanvasText;
+    --control-border: ButtonText;
+    --primary: Highlight;
+    --primary-text: HighlightText;
+    --focus-line: Highlight;
+    border-right: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .app-toast,
+  .command-palette,
+  .actions-menu {
+    border-color: ButtonText;
+  }
+}
+
+@media (forced-colors: active) {
+  .table-preview-frame {
+    border-color: CanvasText;
+  }
+}
+
+@media (forced-colors: none) {
+  ::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: var(--surface);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border: 3px solid var(--surface);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --composer-shadow: none;
+  }
+  button,
+  input,
+  select,
+  textarea,
+  .button-group,
+  .composer {
+    border: 1px solid ButtonText;
+  }
+  .page-tab [aria-selected="true"],
+  .search-results [aria-selected="true"],
+  .prompt-editor-list [aria-current="true"],
+  .chat-sidebar-entry[aria-current="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+  input[type="checkbox"]:checked,
+  input[type="radio"]:checked {
+    forced-color-adjust: none;
+    background: Highlight;
+    border-color: Highlight;
+  }
+  input[type="checkbox"]:checked::before,
+  input[type="radio"]:checked::before {
+    background: HighlightText;
+  }
+  input[type="checkbox"][role="switch"] {
+    forced-color-adjust: none;
+    background: Canvas;
+    border-color: ButtonText;
+  }
+  input[type="checkbox"][role="switch"]::before {
+    background: ButtonText;
+  }
+  input[type="checkbox"][role="switch"]::after {
+    color: CanvasText;
+  }
+  input[type="checkbox"][role="switch"]:checked::before {
+    background: HighlightText;
+  }
+  input[type="checkbox"][role="switch"]:checked::after {
+    color: HighlightText;
+  }
+}
+
+@media (forced-colors: active) {
+  .button-group {
+    box-shadow: none;
+  }
+  :root
+    .button-group
+    > :is(button, select):has(
+      ~ :is(button, select):not(.table-add-accessible:not(:focus-visible))
+    ) {
+    border-right-color: ButtonText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-page,
+  .search-entry,
+  .search-wordmark {
+    transition: none;
+  }
+  .search-content .search-body {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .chat-message-layout {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .orchestration-chat-body .event.message[data-entering="true"] {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-loader {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .chat-loader {
+    forced-color-adjust: none;
+    --color-1: Canvas;
+    --color-2: CanvasText;
+  }
+  .event.prompt:not(.automatic) pre {
+    border: 1px solid CanvasText;
+  }
+  .orchestration-chat-body .composer:focus-within {
+    border-color: Highlight;
+  }
+}
+
+@media (forced-colors: active) {
+  .memory-statements li {
+    background: Canvas;
+    color: CanvasText;
+    outline: 1px solid CanvasText;
+    filter: none;
+  }
+  .memory-cloud-shape {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-copy {
+    transition: none;
+  }
+  .message-copy-glyph[data-clicked] {
+    animation: none;
+  }
+  .message-copy button:active .message-copy-glyph {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .turn-separator {
+    border-top-color: CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace,
+  .chat-workspace-body > .file-panel {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root
+    :is(button.icon-button, .gdg-search-bar-inner button):is(
+      :hover,
+      :active,
+      :focus,
+      [aria-pressed="true"]
+    ):not(:disabled, [aria-disabled="true"]) {
+    color: Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
+  .chat-sidebar-row,
+  .file-tab {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root
+    .monaco-editor
+    .find-widget
+    :is(.button, .monaco-custom-toggle):is(:hover, :focus):not(
+      .disabled,
+      [aria-disabled="true"]
+    )::before {
+    color: Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-connection progress {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .context-track {
+    stroke: GrayText;
+  }
+  .context-used {
+    stroke: CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .activity-display,
+  .chat-connecting,
+  .chat-connection-frame .chat-empty {
+    transition: none;
+  }
+  .activity-display[data-animate="true"] .activity-name,
+  .chat-connecting[data-animate="true"] .activity-name {
+    animation: none;
+    background: none;
+    color: var(--text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-details {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .plan-toolbar progress {
+    forced-color-adjust: auto;
+  }
+  .app .plan-task input[type="checkbox"]:disabled {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    background-color: Canvas;
+  }
+  .app .plan-task input[type="checkbox"]:disabled:checked {
+    border-color: Highlight;
+    background-color: Highlight;
+  }
+  .app .plan-task input[type="checkbox"]:disabled:checked::before {
+    background-color: HighlightText;
+  }
+  .plan-state::before {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    background: Canvas;
+  }
+}
+
+@media (forced-colors: active) {
+  .plan-toolbar progress::-webkit-progress-bar {
+    background: Canvas;
+    border: 1px solid CanvasText;
+  }
+  .plan-toolbar progress::-webkit-progress-value {
+    background: Highlight;
+  }
+  .plan-toolbar progress::-moz-progress-bar {
+    background: Highlight;
+  }
+}

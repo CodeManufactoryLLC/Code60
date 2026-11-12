@@ -3,7 +3,7 @@ import { type ComponentProps, useCallback, useMemo } from "react";
 import type { RunEvent } from "../core/index.js";
 import { DataTable, type TableOptions, useCssColors } from "./data-table.js";
 import { drawIcon } from "./icons.js";
-import { resolveText, type SessionRow, statusSpec } from "./state.js";
+import { type SessionRow, statusSpec } from "./session-presentation.js";
 import { useTableView } from "./table-view.js";
 import {
   bucketCount,
@@ -17,6 +17,7 @@ import {
   telemetry,
 } from "./telemetry.js";
 import { useTicker } from "./ticker.js";
+import { resolveText } from "./typography.js";
 
 const started = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" });
 

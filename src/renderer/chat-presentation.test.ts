@@ -11,7 +11,7 @@ import {
   turnTimings,
 } from "./chat-presentation.js";
 import { copyMessage } from "./message-controls.js";
-import { transcript } from "./state.js";
+import { transcript } from "./transcript.js";
 
 const at = (seconds: number) => new Date(seconds * 1000).toISOString();
 const event = (seconds: number, body: object) =>

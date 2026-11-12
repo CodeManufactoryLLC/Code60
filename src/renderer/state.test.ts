@@ -1,30 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { DesktopRun, Snapshot } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { migrateAppearance, parseTheme } from "./appearance.js";
+import { sessionRows } from "./session-presentation.js";
+import { applyUpdate, hasOrchestrationProvider } from "./snapshot-state.js";
 import {
-  applyCase,
-  applyUpdate,
-  defaultTextStyles,
   fitWidths,
-  fontFamily,
-  hasOrchestrationProvider,
-  letterSpacing,
-  migrateAppearance,
-  migrateTypography,
   parseFitColumns,
   parseRowDensity,
   parseTableLines,
+  rowHeight,
+} from "./table-preferences.js";
+import { transcript } from "./transcript.js";
+import {
+  applyCase,
+  defaultTextStyles,
+  fontFamily,
+  letterSpacing,
+  migrateTypography,
   parseTextStyles,
-  parseTheme,
   parseTypeface,
   resolveText,
-  rowHeight,
-  sessionRows,
   textRoles,
   textStyleProperties,
-  transcript,
   typefaces,
-} from "./state.js";
+} from "./typography.js";
 
 const snapshot = (revision: number, directory = "/repo"): Snapshot => ({
   versions: {

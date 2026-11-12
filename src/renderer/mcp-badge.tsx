@@ -1,4 +1,4 @@
-import type { Block } from "./state.js";
+import type { Block } from "./transcript.js";
 
 export function McpBadge({ mcp }: Pick<Block, "mcp">) {
   if (mcp === undefined) return null;
