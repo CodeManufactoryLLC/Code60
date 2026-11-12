@@ -1,6 +1,7 @@
 import type { Theme } from "@glideapps/glide-data-grid";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { resolveText, type TableLines, type TextStyles } from "./state.js";
+import type { TableLines } from "./table-preferences.js";
+import { resolveText, type TextStyles } from "./typography.js";
 
 /** The grid draws on a canvas, so the app's CSS variables are resolved to concrete colors. */
 export function useCssColors(): (name: string) => string {
@@ -10,7 +11,7 @@ export function useCssColors(): (name: string) => string {
     const observer = new MutationObserver(bump);
     // The typeface is a style property on the root element and may finish loading later.
     observer.observe(document.documentElement, {
-      attributeFilter: ["data-theme", "data-signals", "style"],
+      attributeFilter: ["data-theme", "data-color-scheme", "data-signals", "style"],
     });
     const media = matchMedia("(prefers-color-scheme: dark)");
     media.addEventListener("change", bump);

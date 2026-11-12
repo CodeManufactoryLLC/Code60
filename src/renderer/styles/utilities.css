@@ -1,0 +1,92 @@
+/* Shared disabled treatment, including controls disabled by a parent fieldset. Keep this after
+   component background shorthands so primary buttons and composer fields retain the hatching. */
+.app
+  :is(button, input, select, textarea):is(:disabled, [aria-disabled="true"]):not(
+    .project-card,
+    .icon-button,
+    .gdg-search-bar-inner button,
+    .plan-task input
+  ),
+.app
+  [aria-disabled="true"]:not(
+    .project-card,
+    .icon-button,
+    .gdg-search-bar-inner button,
+    .plan-task input
+  ) {
+  background-color: var(--disabled-fill);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 4px,
+    var(--disabled-stripe) 4px 6px
+  );
+  color: var(--muted);
+  border-style: dashed;
+  border-color: var(--control-border);
+  box-shadow: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.app input[type="checkbox"]:disabled:checked:not(.plan-task input)::before {
+  background-color: var(--muted);
+}
+
+.app input[type="checkbox"][role="switch"]:disabled::after {
+  color: var(--muted);
+}
+
+.app input[type="radio"]:disabled:checked::before {
+  background: var(--muted);
+}
+
+/* Utilities styles. Imported into its declared layer by style.css. */
+
+.path {
+  font-family: var(--font);
+  --letter-spacing: normal;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.muted {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Independent icon actions highlight the glyph for hover, press and focus.
+   Decorative icons inherit the enclosing control's state. */
+:root :is(button.icon-button, .gdg-search-bar-inner button),
+:root
+  :is(button.icon-button, .gdg-search-bar-inner button):is(
+    :hover,
+    :active,
+    :focus,
+    :disabled,
+    [aria-disabled="true"],
+    [aria-pressed="true"]
+  ) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+:root
+  :is(button.icon-button, .gdg-search-bar-inner button):is(
+    :hover,
+    :active,
+    :focus,
+    [aria-pressed="true"]
+  ):not(:disabled, [aria-disabled="true"]) {
+  color: var(--accent);
+}
+
+.app .button-group > button:is(:disabled, [aria-disabled="true"]) {
+  border-style: solid;
+  border-color: var(--border);
+  border-width: 0;
+}

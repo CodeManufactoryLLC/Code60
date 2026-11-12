@@ -207,11 +207,16 @@ export function Tooltips() {
   const id = useId();
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let focusFrame: number | undefined;
+    let focusing: HTMLElement | undefined;
     let described: HTMLElement | undefined;
     let previous: string | null = null;
     let hiddenAt = 0;
     const hide = () => {
       clearTimeout(timer);
+      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
+      focusFrame = undefined;
+      focusing = undefined;
       if (described) {
         if (previous === null) described.removeAttribute("aria-describedby");
         else described.setAttribute("aria-describedby", previous);
@@ -237,8 +242,16 @@ export function Tooltips() {
         target.setAttribute("aria-describedby", [previous, id].filter(Boolean).join(" "));
         setTip({ text, keys: target.dataset.tooltipKeys, target });
       };
-      // Keyboard focus and a quick move from another tooltip show it at once.
-      if (event.type === "focusin" || Date.now() - hiddenAt < 300) reveal();
+      // Automatic focus scrolling is delivered before this frame's callbacks.
+      // Reveal at its final position, without that same scroll dismissing it.
+      if (event.type === "focusin") {
+        focusing = target;
+        focusFrame = requestAnimationFrame(() => {
+          focusFrame = undefined;
+          focusing = undefined;
+          if (target.isConnected && document.activeElement === target) reveal();
+        });
+      } else if (Date.now() - hiddenAt < 300) reveal();
       else timer = setTimeout(reveal, 500);
     };
     const leave = (event: PointerEvent) => {
@@ -253,6 +266,10 @@ export function Tooltips() {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") hide();
     };
+    const scroll = () => {
+      if (focusFrame !== undefined && focusing === document.activeElement) return;
+      hide();
+    };
     document.addEventListener("pointerover", show);
     document.addEventListener("focusin", show);
     document.addEventListener("pointerout", leave);
@@ -260,7 +277,7 @@ export function Tooltips() {
     document.addEventListener("focusout", hide);
     document.addEventListener("keydown", key);
     window.addEventListener("resize", hide);
-    document.addEventListener("scroll", hide, true);
+    document.addEventListener("scroll", scroll, true);
     return () => {
       hide();
       document.removeEventListener("pointerover", show);
@@ -270,7 +287,7 @@ export function Tooltips() {
       document.removeEventListener("focusout", hide);
       document.removeEventListener("keydown", key);
       window.removeEventListener("resize", hide);
-      document.removeEventListener("scroll", hide, true);
+      document.removeEventListener("scroll", scroll, true);
     };
   }, [id]);
   // Activity purposes can change while the pointer or keyboard focus stays on the status.

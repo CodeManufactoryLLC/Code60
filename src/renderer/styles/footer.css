@@ -1,0 +1,116 @@
+/* Footer styles. Imported into its declared layer by style.css. */
+
+/* Application footer */
+/* The application footer spans the window, below both navigation and content. */
+.app-footer {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--app-footer-height);
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 0 var(--page-margin) var(--app-bottom-padding);
+  border-top: 0;
+  background: var(--footer-bg);
+  -webkit-app-region: no-drag;
+}
+
+.footer-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 calc(var(--sidebar-track-width) - var(--page-margin));
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.update-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.footer-note {
+  font: 11px var(--font);
+  --letter-spacing: normal;
+  color: var(--warning-text);
+  white-space: nowrap;
+}
+
+.footer-polling {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.footer-polling .button-group {
+  display: flex;
+}
+
+.footer-polling .error-banner {
+  margin-top: 12px;
+}
+
+.poll-timestamp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 12px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.poll-timestamp > [role="img"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poll-timestamp:focus-visible {
+  outline: 1px solid var(--focus-line);
+  outline-offset: 2px;
+}
+
+.footer-sidebar > .footer-polling {
+  flex: 1;
+}
+
+.footer-sidebar .poll-timestamp {
+  max-width: 100%;
+}
+
+.footer-polling .polling-dialog-body .button-group > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.app-footer > :is(.update-indicator, .footer-note),
+.footer-polling > .poll-timestamp {
+  min-height: 0;
+  height: var(--app-footer-content-height);
+  padding-block: 0;
+}
+
+.app-version {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.footer-sidebar > .icon-button {
+  flex-shrink: 0;
+  width: 28px;
+  height: var(--app-footer-content-height);
+  min-height: 0;
+  color: var(--muted);
+}

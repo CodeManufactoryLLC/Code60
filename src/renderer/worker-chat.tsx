@@ -1,15 +1,17 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
+import type { DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
-import { ChatMarkdown } from "./chat-markdown.js";
+import { useChatDraft } from "./chat-draft.js";
+import { ChatMessage } from "./chat-message.js";
 import { sessionStatus, turnTimings } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
-import { McpBadge } from "./mcp-badge.js";
-import { MessageCopy, TurnTimer } from "./message-controls.js";
+import { TurnTimer } from "./message-controls.js";
 import { continueBlocker } from "./recovery.js";
 import { SessionInfo } from "./session-info.js";
-import { statusSpec, transcript } from "./state.js";
+import { statusSpec } from "./session-presentation.js";
+import { transcript } from "./transcript.js";
+import { useWorkerActions } from "./worker-actions.js";
 
 const endedStatuses = new Set(["finished", "failed", "cancelled", "timed_out", "interrupted"]);
 
@@ -43,12 +45,10 @@ export function WorkerChat({
   const titleId = useId();
   const replyId = useId();
   const draftKey = `code60.workerDraft:${id}`;
-  const [draft, setDraft] = useState(() => sessionStorage.getItem(draftKey) ?? "");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const draftState = useChatDraft(draftKey);
+  const { draft } = draftState;
+  const { error, busy, act } = useWorkerActions(api, id);
   const [visible, setVisible] = useState(300);
-  const inFlight = useRef(false);
-  const mounted = useRef(true);
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const savedScroll = useRef(0);
@@ -75,6 +75,7 @@ export function WorkerChat({
   const runPending = run.view?.pending ?? [];
   const failure =
     error ||
+    draftState.storageError ||
     historyError ||
     (["failed", "timed_out", "interrupted"].includes(status) ? run.record.reason : "");
   const target = request?.id === id ? request : undefined;
@@ -84,12 +85,6 @@ export function WorkerChat({
     composed.current = target.serial;
     composer.current?.focus({ preventScroll: true });
   }, [target, active]);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: streaming blocks and history change the scroll height.
   useEffect(() => {
     const element = scroll.current;
@@ -135,28 +130,12 @@ export function WorkerChat({
     element.focus({ preventScroll: true });
     matched.current = target.serial;
   }, [target, active, loading, blocks, visible]);
-  async function act(action: Action): Promise<boolean> {
-    if (inFlight.current) return false;
-    inFlight.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      await api.action(action);
-      return true;
-    } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause));
-      return false;
-    } finally {
-      inFlight.current = false;
-      if (mounted.current) setBusy(false);
-    }
-  }
   async function send() {
     if (!sendable || busy || !draft.trim()) return;
-    const text = draft;
+    const sent = draftState.sent();
+    const text = sent.text;
     if (await act({ type: resumable ? "continue" : "reply", id, text })) {
-      setDraft((current) => (current === text ? "" : current));
-      if (sessionStorage.getItem(draftKey) === text) sessionStorage.removeItem(draftKey);
+      draftState.clear(sent);
       follow.current = true;
     }
   }
@@ -256,37 +235,24 @@ export function WorkerChat({
                   block.automatic ||
                   ["thought", "toolCall", "permission", "note"].includes(block.type);
                 const message = (
-                  <article
-                    className={`event ${block.type}${block.automatic ? " automatic" : ""}${target?.eventIndex === Number(block.key) ? " search-match" : ""}`}
-                    data-event-index={block.key}
+                  <ChatMessage
+                    block={block}
+                    openLink={api.openWebLink}
+                    at={events[Number(block.key)]?.at}
+                    visible={active}
+                    onCopied={onCopied}
+                    className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
+                    eventIndex={block.key}
                     tabIndex={-1}
-                  >
-                    {block.automatic && (
-                      <div className="chat-message-speaker">Automatic worker update</div>
-                    )}
-                    <McpBadge mcp={block.mcp} />
-                    {block.text &&
-                      (block.type === "message" ? (
-                        <ChatMarkdown text={block.text} openLink={api.openWebLink} />
-                      ) : (
-                        <pre>{block.text}</pre>
-                      ))}
-                    {(block.type === "message" ||
-                      (block.type === "prompt" && !block.automatic)) && (
-                      <MessageCopy
-                        text={block.text}
-                        at={events[Number(block.key)]?.at}
-                        visible={active}
-                        onCopied={onCopied}
-                      />
-                    )}
-                    {block.detail && (
-                      <details>
-                        <summary>Handoff summary</summary>
-                        <pre>{block.detail}</pre>
-                      </details>
-                    )}
-                  </article>
+                    detail={
+                      block.detail ? (
+                        <details>
+                          <summary>Handoff summary</summary>
+                          <pre>{block.detail}</pre>
+                        </details>
+                      ) : undefined
+                    }
+                  />
                 );
                 return (
                   <Fragment key={block.key}>
@@ -371,8 +337,7 @@ export function WorkerChat({
               disabled={!sendable || busy}
               maxLength={1_000_000}
               onChange={(event) => {
-                setDraft(event.target.value);
-                sessionStorage.setItem(draftKey, event.target.value);
+                draftState.edit(event.target.value);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {

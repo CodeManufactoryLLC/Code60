@@ -10,6 +10,7 @@ import {
 } from "./commands-model.js";
 import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
+import { useScopeLifetime } from "./scope-lifetime.js";
 
 export function CommandsPage({
   commands,
@@ -21,6 +22,7 @@ export function CommandsPage({
   onSnapshot(snapshot: Snapshot): void;
 }) {
   const id = useId();
+  const lifetime = useScopeLifetime(id);
   const [selected, setSelected] = useState<string>(commands[0]?.id ?? "new");
   const [drafts, setDrafts] = useState<Record<string, CommandDraft>>({});
   const [busy, setBusy] = useState(false);
@@ -55,7 +57,8 @@ export function CommandsPage({
     setError("");
   }
   async function perform(remove: boolean) {
-    if (pending.current) return;
+    const current = lifetime.capture();
+    if (pending.current || !current()) return;
     pending.current = true;
     setBusy(true);
     setError("");
@@ -63,7 +66,9 @@ export function CommandsPage({
       if (remove) {
         if (!saved || !(await api.deleteCommand({ id: saved.id }))) return;
       } else await api.saveCommand(commandRequest(fields, saved?.id));
+      if (!current()) return;
       const snapshot = await api.snapshot();
+      if (!current()) return;
       onSnapshot(snapshot);
       discard();
       setSelected(
@@ -72,10 +77,10 @@ export function CommandsPage({
           : (snapshot.commands.find((entry) => entry.name === fields.name)?.id ?? "new"),
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (current()) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       pending.current = false;
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }
   return (

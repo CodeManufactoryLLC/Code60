@@ -6,10 +6,11 @@ import {
   type Item,
 } from "@glideapps/glide-data-grid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { applyCase, fitWidths, rowHeight, type TextStyles } from "./state.js";
 import { useTableAppearance } from "./table-appearance.js";
+import { fitWidths, rowHeight } from "./table-preferences.js";
 import type { SettingsColumn } from "./table-settings.js";
 import { orderedColumns, type TableId, type TableView } from "./table-view.js";
+import { applyCase, type TextStyles } from "./typography.js";
 
 // Deliberately fictional, deterministic values. The preview never reads project records.
 const sampleValues: Record<string, readonly string[]> = {

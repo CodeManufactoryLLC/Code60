@@ -8,44 +8,18 @@ import type {
 import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
-import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
+import {
+  groups,
+  isSettingsSection,
+  pageAvailable,
+  pageDefinitions,
+  pageGroup,
+  pagesInGroup,
+  settingsLabels,
+} from "./navigation.js";
+import { NavigationIcon } from "./navigation-icons.js";
 import { pathLabel } from "./path-label.js";
 import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds } from "./tabs.js";
-
-const labels: Record<PageId, string> = {
-  logs: "Logs",
-  "contributor-tools": "Contributor Tools",
-  chat: "Chat",
-  "episodic-memory": "Episodic Memory",
-  files: "Files",
-  sessions: "Sessions",
-  messages: "Messages",
-  events: "Events",
-  search: "Search",
-  configurations: "Configurations",
-  worktrees: "Worktrees",
-  polling: "Polling",
-  prompts: "Prompt Editor",
-  commands: "Commands",
-  settings: "Settings",
-};
-
-const settingsLabels: Record<SettingsSectionId, string> = {
-  agents: "Agents",
-  appearance: "Appearance",
-  "table-defaults": "Table defaults",
-  text: "Text",
-  "polling-settings": "Polling",
-  updates: "Updates",
-  about: "About",
-};
-
-const pageIcons: Partial<Record<PageId, NavigationIconName>> = {
-  prompts: "pencil-line",
-  commands: "megaphone",
-  settings: "gear",
-  search: "magnifying-glass",
-};
 
 export function PageTabBar({
   tabs,
@@ -161,28 +135,8 @@ export function PageTabBar({
   );
 }
 
-const tablePages: readonly PageId[] = [
-  "configurations",
-  "events",
-  "logs",
-  "messages",
-  "polling",
-  "sessions",
-  "worktrees",
-];
-
-const experimentPages: readonly PageId[] = ["episodic-memory"];
-const isSettingsSection = (id: string): id is SettingsSectionId =>
-  settingsSectionIds.some((section) => section === id);
-
-const pageGroup = (id: PageId | SettingsSectionId) => {
-  if (tablePages.some((pageId) => pageId === id)) return "tables";
-  if (experimentPages.some((pageId) => pageId === id) || id === "contributor-tools")
-    return "advanced";
-  if (isSettingsSection(id)) return "settings";
-  if (id === "chat" || id === "settings") return id;
-  return "primary";
-};
+const tablePages = pagesInGroup("tables");
+const experimentPages = pagesInGroup("experiments");
 
 function PageTabList({
   tabs,
@@ -307,13 +261,11 @@ function PageTabList({
   useEffect(() => {
     localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
   }, [experimentsExpanded]);
-  const pages = [...tabs.open].sort((a, b) => labels[a].localeCompare(labels[b]));
-  const primary = pages.filter(
-    (id) => pageGroup(id) === "primary" && id !== "files" && id !== "commands",
-  );
-  if (pages.includes("commands")) primary.splice(primary.indexOf("prompts") + 1, 0, "commands");
-  const experiments = pages.filter((id) => experimentPages.includes(id));
-  const tables = pages.filter((id) => tablePages.includes(id));
+  const openPages = (group: Parameters<typeof pagesInGroup>[0]) =>
+    pagesInGroup(group).filter((id) => tabs.open.includes(id));
+  const primary = openPages("primary");
+  const experiments = openPages("experiments");
+  const tables = openPages("tables");
   const destinations: (PageId | SettingsSectionId | "tables" | "advanced" | "experiments")[] = [
     "chat",
     ...primary,
@@ -337,13 +289,10 @@ function PageTabList({
   const visible = destinations.filter(
     (id) =>
       database ||
-      id === "chat" ||
       id === "tables" ||
-      id === "logs" ||
-      id === "settings" ||
       id === "advanced" ||
-      id === "contributor-tools" ||
-      isSettingsSection(id),
+      isSettingsSection(id) ||
+      (id !== "experiments" && pageAvailable(id, database)),
   );
   function moveTo(target: (typeof visible)[number] | undefined) {
     if (target === "tables" || target === "advanced" || target === "experiments") {
@@ -474,7 +423,7 @@ function PageTabList({
     moveTo(visible[next]);
   }
   function page(id: PageId, first: boolean) {
-    const icon = pageIcons[id];
+    const icon = pageDefinitions[id].icon;
     return (
       <div
         className="page-tab"
@@ -488,8 +437,8 @@ function PageTabList({
           id={`tab-${id}`}
           aria-controls={`panel-${id}`}
           aria-selected={tabs.active === id && (id !== "settings" || !settingsExpanded)}
-          title={labels[id]}
-          disabled={!database && id !== "settings" && id !== "contributor-tools" && id !== "logs"}
+          title={pageDefinitions[id].label}
+          disabled={!pageAvailable(id, database)}
           tabIndex={
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
@@ -503,7 +452,7 @@ function PageTabList({
           onKeyDown={(event) => navigate(event, id)}
         >
           {icon && <NavigationIcon name={icon} />}
-          <span className="page-tab-label">{labels[id]}</span>
+          <span className="page-tab-label">{pageDefinitions[id].label}</span>
         </button>
       </div>
     );
@@ -551,8 +500,8 @@ function PageTabList({
             }}
             onKeyDown={(event) => navigate(event, "chat")}
           >
-            <NavigationIcon name="chats" />
-            <span className="page-tab-label">Chat</span>
+            {pageDefinitions.chat.icon && <NavigationIcon name={pageDefinitions.chat.icon} />}
+            <span className="page-tab-label">{pageDefinitions.chat.label}</span>
             <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
           </button>
         </div>
@@ -658,8 +607,8 @@ function PageTabList({
           }}
           onKeyDown={(event) => navigate(event, "tables")}
         >
-          <NavigationIcon name="database" />
-          <span className="page-tab-label">Tables</span>
+          <NavigationIcon name={groups.tables.icon} />
+          <span className="page-tab-label">{groups.tables.label}</span>
           <Icon name={expanded ? "chevron--down" : "chevron--right"} />
         </button>
       </div>
@@ -727,7 +676,7 @@ function PageTabList({
               onClick={() => setAdvancedExpanded((value) => !value)}
               onKeyDown={(event) => navigate(event, "advanced")}
             >
-              <span className="page-tab-label">Advanced</span>
+              <span className="page-tab-label">{groups.advanced.label}</span>
               <Icon name={advancedExpanded ? "chevron--down" : "chevron--right"} />
             </button>
           </div>
@@ -750,7 +699,7 @@ function PageTabList({
                 onClick={() => setExperimentsExpanded((value) => !value)}
                 onKeyDown={(event) => navigate(event, "experiments")}
               >
-                <span className="page-tab-label">Experiments</span>
+                <span className="page-tab-label">{groups.experiments.label}</span>
                 <Icon name={experimentsExpanded ? "chevron--down" : "chevron--right"} />
               </button>
             </div>

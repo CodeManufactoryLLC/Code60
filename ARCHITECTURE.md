@@ -613,6 +613,61 @@ When runs end with different statuses, the code earliest in this table wins:
 
 ## Desktop app
 
+### Renderer ownership and composition
+
+`main.tsx` only loads assets, runs existing preference migrations and mounts the
+API-injected `App`. The shell composes snapshot, preference, window appearance,
+visibility and splash lifecycles with focused pages, dialogs, menus and footer
+components. `desktop-snapshot.ts` subscribes before the initial read and publishes
+buffered updates atomically through the revision-aware snapshot reducer.
+
+Ownership does not imply visibility:
+
+| Lifetime | Owners |
+| --- | --- |
+| Application | Preferences, updates, notifications, navigation, splash, snapshot subscription and file-panel layout/visibility |
+| Database | Orchestrator identities/events, conversation views and Commands/Prompt Editor drafts |
+| Project instance | Worker views/selection, Explorer and file tabs/reads, transcript cache, table selections, menus and project dialogs |
+| Conversation or dialog | Form/draft text, action progress/errors, scroll and disclosure state |
+
+Hiding a page, closing the file panel or returning to splash does not dispose its
+owner. Replacing the single open project disposes its temporary state and read
+callbacks, but does not key or reset the database's conversations or editor
+drafts. Database replacement also disposes those database-owned views. Existing
+storage keys and persisted history remain intact. `ScopeLifetime` captures a
+generation, not just a path: completions from the first A in A → B → A cannot
+publish into the new A. Snapshot replacement epochs preserve that boundary even
+when React batches away the intermediate B render. Captured run/project identities go to existing bridge
+methods; disposal never stops workers, deletes history, or replays actions.
+Transcript reads stay bounded and file-context changes remain serialized.
+
+`navigation.ts` is the static source for page and Settings IDs, labels, ordering,
+groups, availability and palette destinations. `app-pages.tsx` renders an
+exhaustive page map. Dynamic conversations stay separate. Focused modules replace
+the former mixed `state.ts`: snapshot state, transcript formatting, session
+presentation, appearance, typography and table preferences.
+
+`ChatMessage` shares safe presentation, exact-source Copy/age controls and slots
+for command highlighting or handoff details. `ChatDraft` shares storage and
+revision-aware, success-only clearing without erasing in-flight edits.
+`OrchestratorActions` and `WorkerActions` remain distinct controllers; recovery,
+permissions, tactics, semantic activity and timing retain their feature owners.
+
+`style.css` declares `vendor`, `tokens`, `base`, `layout`, `components`,
+`utilities`, then `accessibility`. Feature sheets in `styles/` own navigation,
+editors, settings, tables, chats, files/plans, overlays and splash. Glide CSS is
+imported into `vendor`; necessary Monaco runtime adapters target only its editor
+internals. Square fields, rounded controls and joined outside corners are defined
+by their owners, without a universal important radius reset. The preference
+lifecycle retains selected `data-theme` and publishes resolved
+`data-color-scheme`; explicit Dark and live System-dark use the same palette,
+signal tokens, artwork and canvas/editor colors.
+
+These are preparation boundaries, not concurrent-project support. There is no
+project cache or multi-project host. Concurrent snapshots, polling, background
+execution and execution authority still require backend/bridge design; view
+activation alone grants none of those capabilities.
+
 The Code60 desktop app is the interactive interface. It is a standalone Electron app with a React interface. `npm run dev` builds and starts it, rebuilding on changes; `npm start` starts the built app. It is not packaged or signed in this version.
 
 - **Orchestration Chat.** Chat is the default page after the splash and renderer reload, and the first alphabetical sidebar entry. Once setup is complete and a database and enabled orchestration provider are available, the main process loads saved conversations as stopped history. With no saved conversations, it creates an initial idle ACP session in a generated UUID subfolder of `.code60_workspace` beside the database. **New chat** creates and selects another independent session; the expandable Chat group in the primary sidebar switches conversations without stopping background turns. An accessible Carbon plus action sits beside Chat, outside the tab button and available even while the Chat group is collapsed. It creates a conversation and reveals the group. Only labelled conversation buttons are nested beneath Chat, with selection, activity and failure indicators. Creation and selection share an in-flight guard and visible failure feedback. Expansion is remembered, external navigation reveals the selected conversation, and collapse never changes it. Each live chat has its own working directory, transcript, draft, scroll position, worker ownership, authenticated gateway and automatic-update inbox. New directories use mode `0700`; existing folders and legacy workspace contents are retained, with no Git initialization or branch creation. Sessions start idle without a prompt and use the fixed allow-all, once-only permission policy. They stay alive across page and project switches; changing databases, provider, or its configured command ends live chats while preserving their saved files. Renderer reloads reuse all main-process sessions and the selected conversation, never creating another. Conversations are independent of project batches, tables and search. Run and event records live privately in `.code60_workspace/<chat-folder>/.code60/runs`, outside SQLite. Restart restores only stopped history and metadata, not gateways, worker ownership, update inboxes or plan authority. The empty conversation shows “Give Code60 a task.” The header retains connection controls. The page presents user messages on the right and streamed replies on the left; thoughts, tools, permissions and session notes appear in inline activity dropdowns toggled by the live activity icon/status or completed turn timing. Errors stay visible. A persistent composer has 5px rounded corners, a visible 1px border and a subtle 1px outer shadow retained on focus. It and both sidebars use the main app surface rather than a contrasting background fill, including resting controls and file previews. Focus replaces the normal border color with the focus color, without a separate inset line or layout shift, including system colors in forced-color mode. Worker composers use the same border replacement when Focus highlight border is enabled. The current provider logo appears inside the composer footer; connection, cancel and new-session controls remain in the header. It shows explicit semantic activity below the latest transcript message. Neither chat composers nor sidebar entries show striped loading lines. Current-project worker counts remain in the activity tooltip, supplied by main-process ownership snapshots even when automatic updates are paused. These counts never change orchestrator sendability or Stop semantics. Enter sends a new human request, Shift+Enter inserts a newline, and Stop cancels that chat's turn. Stopped chats offer explicit Continue task with the frozen tactic, or Send with the current selection; New session replaces only that conversation. The main process validates every action against an existing chat run ID; stale requests cannot target replacement sessions. Paths are generated only in the main process, never supplied by the renderer or agents. Existing core startup and turn timeouts, permission handling, cancellation and process-group cleanup apply. Stop all and every shutdown path stop every chat; quitting warns when any chat is starting or working, and idle orchestrators alone do not trigger a confirmation. Each chat's draft survives switching conversations, pages and renderer reloads for the current run. Initial database connection is available from Chat when needed.

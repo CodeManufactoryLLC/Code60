@@ -1,4 +1,3 @@
-import "@glideapps/glide-data-grid/dist/index.css";
 import {
   CompactSelection,
   DataEditor,
@@ -27,18 +26,10 @@ import {
   type SavedFilter,
   useSavedFilters,
 } from "./saved-filters.js";
-import {
-  applyCase,
-  fitWidths,
-  type RowDensity,
-  rowHeight,
-  type TableLines,
-  type TextStyles,
-} from "./state.js";
 import { useTableAppearance } from "./table-appearance.js";
 import { ColumnMenu } from "./table-controls.js";
+import { fitWidths, type RowDensity, rowHeight, type TableLines } from "./table-preferences.js";
 import { type SettingsColumn, TableSettings } from "./table-settings.js";
-
 import {
   type ColumnFilter,
   type FilterKind,
@@ -48,6 +39,7 @@ import {
   useTableView,
 } from "./table-view.js";
 import { useTicker } from "./ticker.js";
+import { applyCase, type TextStyles } from "./typography.js";
 
 export { useCssColors } from "./table-appearance.js";
 

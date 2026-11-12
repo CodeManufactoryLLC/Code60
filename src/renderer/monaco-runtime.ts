@@ -12,9 +12,7 @@ export { monaco };
 export function useMonacoTheme() {
   const color = useCssColors();
   useEffect(() => {
-    const mode = document.documentElement.dataset.theme;
-    const dark =
-      mode === "dark" || (mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    const dark = document.documentElement.dataset.colorScheme === "dark";
     const forced = matchMedia("(forced-colors: active)").matches;
     // Monaco requires hex colors; the shared CSS resolver returns concrete RGB values.
     const hex = (name: string) =>

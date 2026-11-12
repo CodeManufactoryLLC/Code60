@@ -4,23 +4,24 @@ import type {
   DesktopApi,
   DesktopRun,
   OrchestrationChat,
-  OrchestrationChatAction,
   ReviewSummary,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
-import { ChatMarkdown } from "./chat-markdown.js";
+import { useChatDraft } from "./chat-draft.js";
+import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
 import { useChatScroll } from "./chat-scroll.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
 import { Icon } from "./icons.js";
-import { McpBadge } from "./mcp-badge.js";
-import { MessageCopy, TurnTimer } from "./message-controls.js";
+import { TurnTimer } from "./message-controls.js";
+import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { SessionInfo } from "./session-info.js";
-import { type Block, statusSpec, transcript } from "./state.js";
+import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
+import { type Block, transcript } from "./transcript.js";
 import { useTransitionTimes } from "./transition-times.js";
 
 function isActivityBlock(block: Block): boolean {
@@ -42,87 +43,6 @@ function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: numbe
   return (
     review.chatId === chatId &&
     ((review.originChatId === chatId && review.turn === turn) || feedbackAt(review, chatId, turn))
-  );
-}
-
-function ChatMessage({
-  block,
-  at,
-  commands = [],
-  api,
-  incoming = false,
-  visible = true,
-  onCopied,
-}: {
-  block: Block;
-  at?: string | undefined;
-  commands?: readonly Command[];
-  api: DesktopApi;
-  incoming?: boolean;
-  visible?: boolean;
-  onCopied?: (() => void) | undefined;
-}) {
-  const [entering, setEntering] = useState(incoming);
-  useEffect(() => {
-    if (!visible) setEntering(false);
-  }, [visible]);
-  useEffect(() => {
-    if (!entering) return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const settle = () => {
-      if (media.matches || document.visibilityState !== "visible") setEntering(false);
-    };
-    settle();
-    media.addEventListener("change", settle);
-    document.addEventListener("visibilitychange", settle);
-    return () => {
-      media.removeEventListener("change", settle);
-      document.removeEventListener("visibilitychange", settle);
-    };
-  }, [entering]);
-  const speaker =
-    block.type === "prompt"
-      ? block.automatic
-        ? "Automatic worker update"
-        : "You"
-      : block.type === "message"
-        ? "Assistant"
-        : block.type === "thought"
-          ? "Thinking"
-          : block.type === "toolCall"
-            ? "Tool"
-            : block.type === "permission"
-              ? "Permission"
-              : block.type === "stderr"
-                ? "Error"
-                : "Session";
-  return (
-    <article
-      className={`event ${block.type}${block.automatic ? " automatic" : ""}`}
-      aria-label={speaker}
-      data-entering={entering || undefined}
-      onAnimationEnd={(event) => {
-        if (event.target === event.currentTarget) setEntering(false);
-      }}
-    >
-      {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
-      <McpBadge mcp={block.mcp} />
-      {block.type === "message" ? (
-        <ChatMarkdown text={block.text} openLink={api.openWebLink} />
-      ) : (
-        <pre>
-          {block.type === "prompt" && !block.automatic ? (
-            <CommandMessage text={block.text} commands={commands} />
-          ) : (
-            block.text
-          )}
-        </pre>
-      )}
-      {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
-        <MessageCopy text={block.text} at={at} visible={visible} onCopied={onCopied} />
-      )}
-      {block.detail && <pre>{block.detail}</pre>}
-    </article>
   );
 }
 
@@ -161,13 +81,18 @@ export function ChatPage({
   const key = run ? `code60.orchestrationDraft:${run.id}` : "";
   const currentKey = useRef(key);
   currentKey.current = key;
-  const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState<OrchestrationChatAction["type"] | null>(null);
+  const draftState = useChatDraft(key);
+  const { draft, edit } = draftState;
+  const {
+    pending,
+    error: actionError,
+    setError,
+    action,
+  } = useOrchestratorActions(api, database, key);
   const busy = pending !== null;
-  const [error, setError] = useState("");
+  const error = actionError || draftState.storageError;
   const [visible, setVisible] = useState(300);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(() => new Set());
-  const inFlight = useRef(false);
   const { activityDetails: detailsDuration } = useTransitionTimes();
   const {
     scroll,
@@ -294,9 +219,9 @@ export function ChatPage({
         <div className="activity-details-content">
           {activityTurns.groups
             .get(turn)
-            ?.map((block) => <ChatMessage key={block.key} block={block} api={api} />) ?? (
-            <p>No activity yet.</p>
-          )}
+            ?.map((block) => (
+              <ChatMessage key={block.key} block={block} openLink={api.openWebLink} />
+            )) ?? <p>No activity yet.</p>}
         </div>
       </div>
     </section>
@@ -328,46 +253,24 @@ export function ChatPage({
   const failure = error || chat?.error || (failed ? run.reason : "");
   const opening = progress === "Connecting" && !failure;
   useEffect(() => {
-    setDraft(key ? (sessionStorage.getItem(key) ?? "") : "");
     setError("");
     setVisible(300);
     setExpandedActivities(new Set());
-  }, [key]);
-  function edit(text: string) {
-    setDraft(text);
-    if (key) sessionStorage.setItem(key, text);
-  }
-  async function action(request: OrchestrationChatAction) {
-    if (!database || inFlight.current) return false;
-    inFlight.current = true;
-    setPending(request.type);
-    setError("");
-    try {
-      await api.orchestrationChatAction(request);
-      return true;
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      return false;
-    } finally {
-      inFlight.current = false;
-      setPending(null);
-    }
-  }
+  }, [setError]);
   async function send() {
     if (!ready || !run || !draft.trim()) return;
-    const text = draft;
+    const sent = draftState.sent();
+    const text = sent.text;
     const command = invokedCommand(commands, text);
     if (
-      (await action({
+      await action({
         type: "send",
         id: run.id,
         text,
         ...(command ? { command: command.name } : {}),
-      })) &&
-      currentKey.current === key
+      })
     ) {
-      setDraft((current) => (current === text ? "" : current));
-      if (sessionStorage.getItem(key) === text) sessionStorage.removeItem(key);
+      draftState.clear(sent);
       resume();
     }
   }
@@ -536,8 +439,8 @@ export function ChatPage({
                           key={item.key}
                           block={block}
                           at={events[Number(block.key)]?.at}
-                          commands={commands}
-                          api={api}
+                          prompt={<CommandMessage text={block.text} commands={commands} />}
+                          openLink={api.openWebLink}
                           incoming={block.type === "message" && fresh}
                           visible={active && !hidden}
                           onCopied={onCopied}

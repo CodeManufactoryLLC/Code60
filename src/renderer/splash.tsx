@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
+import type { Theme } from "./appearance.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { ProjectSelector, type ProjectSelectorProps } from "./project-selector.js";
-import { hasOrchestrationProvider, type Theme } from "./state.js";
+import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
   ready,

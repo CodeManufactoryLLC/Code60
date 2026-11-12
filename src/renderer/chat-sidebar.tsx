@@ -6,7 +6,7 @@ import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
 import { type Conversation, conversations, reconcileDisclosure } from "./chats.js";
 import { Icon } from "./icons.js";
-import { statusSpec } from "./state.js";
+import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
 export function ChatSidebar({

@@ -1,0 +1,243 @@
+/* Splash styles. Imported into its declared layer by style.css. */
+
+/* Splash and logo */
+.splash {
+  --splash-panel-bg: var(--bg);
+  --splash-panel-text: var(--text);
+  --splash-logo-text: var(--text);
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+
+.splash[open] {
+  display: grid;
+  grid-template-columns: clamp(280px, 32vw, 400px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.splash::backdrop {
+  background: var(--bg);
+}
+
+.splash > .window-drag-strip {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+}
+
+.splash-brand {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: calc(var(--app-titlebar-height) + 48px) 24px 80px;
+  background: var(--bg);
+}
+
+.splash-theme-toggle {
+  --button-size: 12px;
+  position: absolute;
+  z-index: 2;
+  top: var(--app-titlebar-height);
+  right: 16px;
+  -webkit-app-region: no-drag;
+}
+
+.splash-theme-toggle > button {
+  -webkit-app-region: no-drag;
+}
+
+.splash-logo {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.splash-logo::after {
+  content: "";
+  /* Lift the lockup 48px, shrinking this space rather than overlapping on short panels. */
+  flex: 0 1 96px;
+}
+
+.splash-lockup {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-block: auto;
+  visibility: hidden;
+}
+
+.splash-subtitle {
+  --letter-spacing: normal;
+  margin: 0;
+  color: var(--splash-logo-text);
+  font-family: var(--logo);
+  font-size: 18px;
+  font-weight: 400;
+  text-align: center;
+  text-transform: none;
+}
+
+.splash-projects {
+  --text: var(--splash-panel-text);
+  --muted: var(--splash-panel-text);
+  --surface: transparent;
+  --control-fill: transparent;
+  --control-hover: var(--hover-bg);
+  --group-fill: transparent;
+  --group-hover: var(--hover-bg);
+  --group-border: var(--control-border);
+  --group-shadow: none;
+  --border: color-mix(in srgb, var(--splash-panel-text) 35%, transparent);
+  --control-border: color-mix(in srgb, var(--splash-panel-text) 65%, transparent);
+  --accent: var(--splash-panel-text);
+  --hover-bg: color-mix(in srgb, var(--splash-panel-text) 12%, transparent);
+  --primary: var(--splash-panel-text);
+  --primary-text: var(--bg);
+  --primary-hover: color-mix(in srgb, var(--splash-panel-text) 85%, var(--bg));
+  --disabled-fill: transparent;
+  --destructive: var(--splash-panel-text);
+  --on-destructive: var(--bg);
+  --danger: var(--splash-panel-text);
+  --focus-line: var(--splash-panel-text);
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: max(48px, var(--app-titlebar-height)) 24px 24px;
+  background: var(--splash-panel-bg);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+
+.splash-projects h2 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.splash-projects .project-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  margin: 0 -12px;
+}
+
+.splash-projects .project-remove {
+  opacity: 1;
+  font-size: 11px;
+}
+
+:where(.splash-projects) .button-group {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.splash-projects .modal-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+:where(.splash-projects) .modal-footer > button {
+  width: 100%;
+  white-space: normal;
+}
+
+.splash-projects button:focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -2px;
+}
+
+.splash-projects button:active:not(:disabled) {
+  --muted: var(--bg);
+}
+
+@media (max-width: 700px) {
+  .splash[open] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .splash-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .splash-projects {
+    grid-row: 2;
+    padding-top: 24px;
+  }
+}
+
+.wordmark {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  --letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* A small 45-degree corner cut keeps the visible side padding balanced. */
+.wordmark b {
+  --wordmark-chamfer: 0.25em;
+  display: inline-block;
+  margin-left: 0.1em;
+  padding: 0.227em 0.16em 0.182em 0.136em;
+  line-height: 1;
+  font-weight: 400;
+  background: var(--primary);
+  color: var(--primary-text);
+  text-box: trim-both cap alphabetic;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--wordmark-chamfer)) 0,
+    100% var(--wordmark-chamfer),
+    100% 100%,
+    0 100%
+  );
+}
+
+.splash-title {
+  font-size: 64px;
+  padding: 16px 24px;
+  background: transparent;
+  color: var(--splash-logo-text);
+}
+
+.splash[data-ready="true"] .splash-lockup {
+  visibility: visible;
+}

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DesktopApi, LogPage } from "../bridge/index.js";
 import { LogsPage } from "./logs.js";
-import { defaultTextStyles } from "./state.js";
+import { defaultTextStyles } from "./typography.js";
 
 const forwarded = vi.hoisted(() => ({ options: {} as Record<string, unknown> }));
 // The desktop is client-only; use its initial snapshot for this static toolbar test.

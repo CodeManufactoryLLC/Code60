@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RowDensity, TableLines } from "./state.js";
+import type { RowDensity, TableLines } from "./table-preferences.js";
 
 export type TableId =
   | "logs"

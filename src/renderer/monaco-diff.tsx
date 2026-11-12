@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fileLanguage, monaco, useMonacoTheme } from "./monaco-runtime.js";
-import { monospaceFont } from "./state.js";
+import { monospaceFont } from "./typography.js";
 
 const views = new Map<string, monaco.editor.IDiffEditorViewState>();
 export default function MonacoDiff({
