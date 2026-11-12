@@ -1,50 +1,95 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { DesktopApi, ReviewContent } from "../bridge/index.js";
+import type { DesktopApi, ProjectRequestIdentity, ReviewContent } from "../bridge/index.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
-export interface ReviewAddress {
+export interface ReviewAddress extends ProjectRequestIdentity {
   reviewId: string;
   revisionId: string;
   fileKey: string;
   label: string;
+  relay?: { conversationId: string; generation: number; targetId: string };
 }
 export function useReviewFile(
   api: DesktopApi,
   project: string,
   address: ReviewAddress | undefined,
 ) {
-  const { reviewId, revisionId, fileKey } = address ?? {};
+  const { reviewId, revisionId, fileKey, projectId, databaseEpoch } = address ?? {};
+  const { conversationId, generation, targetId } = address?.relay ?? {};
   const [attempt, retry] = useState(0);
-  const key = reviewId ? `${project}:${reviewId}:${revisionId}:${fileKey}:${attempt}` : "";
+  const key = reviewId
+    ? `${project}:${projectId}:${databaseEpoch}:${conversationId}:${generation}:${targetId}:${reviewId}:${revisionId}:${fileKey}:${attempt}`
+    : "";
   const [result, setResult] = useState<{ key: string; content?: ReviewContent; error?: string }>();
   useEffect(() => {
     if (!reviewId || !revisionId || !fileKey) return;
     let current = true;
     const requestId = crypto.randomUUID();
     setResult(undefined);
-    void api
-      .readReviewFile({
-        requestId,
-        project,
-        reviewId,
-        revisionId,
-        fileKey,
-      })
-      .then(
-        (content) => {
-          if (current) setResult({ key, content });
-        },
-        (cause: unknown) => {
-          if (current)
-            setResult({ key, error: cause instanceof Error ? cause.message : String(cause) });
-        },
-      );
+    const read =
+      conversationId && generation !== undefined && targetId
+        ? api
+            .relayReview({
+              type: "file",
+              conversationId,
+              generation,
+              targetId,
+              reviewId,
+              requestId,
+              revisionId,
+              fileKey,
+            })
+            .then((result) => {
+              if (result.type !== "file") throw new Error("Unexpected Relay review file response");
+              return result.content;
+            })
+        : api.readReviewFile({
+            requestId,
+            project,
+            projectId,
+            databaseEpoch,
+            reviewId,
+            revisionId,
+            fileKey,
+          });
+    void read.then(
+      (content) => {
+        if (current) setResult({ key, content });
+      },
+      (cause: unknown) => {
+        if (current)
+          setResult({ key, error: cause instanceof Error ? cause.message : String(cause) });
+      },
+    );
     return () => {
       current = false;
-      void api.cancelDiff({ requestId }).catch(() => {});
+      const cancel =
+        conversationId && generation !== undefined && targetId
+          ? api.relayReview({
+              type: "cancel",
+              conversationId,
+              generation,
+              targetId,
+              reviewId,
+              requestId,
+            })
+          : api.cancelDiff({ requestId });
+      void cancel.catch(() => {});
     };
-  }, [api, project, reviewId, revisionId, fileKey, key]);
+  }, [
+    api,
+    project,
+    projectId,
+    databaseEpoch,
+    conversationId,
+    generation,
+    targetId,
+    reviewId,
+    revisionId,
+    fileKey,
+    key,
+  ]);
   return { ...(result?.key === key ? result : {}), retry: () => retry((value) => value + 1) };
 }
 export function ReviewFilePreview({

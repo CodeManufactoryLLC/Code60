@@ -18,6 +18,7 @@ export function CommandComposer({
   id,
   value,
   commands,
+  commandsEnabled = true,
   disabled,
   onChange,
   onSend,
@@ -25,6 +26,7 @@ export function CommandComposer({
   id: string;
   value: string;
   commands: readonly Command[];
+  commandsEnabled?: boolean;
   disabled: boolean;
   onChange(text: string): void;
   onSend(): void;
@@ -35,11 +37,11 @@ export function CommandComposer({
   const [dismissed, setDismissed] = useState(false);
   const [focused, setFocused] = useState(false);
   const [selected, setSelected] = useState(0);
-  const matches = matchingCommands(commands, value, cursor);
+  const matches = commandsEnabled ? matchingCommands(commands, value, cursor) : [];
   const open = focused && !disabled && !dismissed && matches.length > 0;
   const index = Math.min(selected, matches.length - 1);
   const listId = `${id}-commands`;
-  const unknown = /^\/\S+/.test(value) && !invokedCommand(commands, value);
+  const unknown = commandsEnabled && /^\/\S+/.test(value) && !invokedCommand(commands, value);
   function insert(command: Command) {
     const rest = value.replace(/^\/\S*\s?/, "");
     const prefix = `/${command.name} `;
@@ -95,7 +97,7 @@ export function CommandComposer({
           open && matches[index] ? `${listId}-${matches[index].id}` : undefined
         }
         aria-describedby={unknown ? `${id}-plain-text` : undefined}
-        placeholder="Message… (type / for commands)"
+        placeholder={commandsEnabled ? "Message… (type / for commands)" : "Message…"}
         rows={2}
         value={value}
         disabled={disabled}

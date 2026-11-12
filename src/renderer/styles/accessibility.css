@@ -258,7 +258,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .app-workspace,
-  .chat-workspace-body > .file-panel {
+  .chat-workspace-body .file-panel {
     transition: none;
   }
 }

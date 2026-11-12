@@ -1,11 +1,16 @@
 import { z } from "zod";
+import {
+  type ProjectRequestIdentity,
+  pairedProjectIdentity,
+  projectRequestFields,
+} from "./project-identity.js";
 
 const uuid = z.string().uuid();
 const run = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
 const text = z.string().max(8_000);
 const key = z.string().min(1).max(2_048);
 const project = z.string().min(1).max(4_096);
-const reviewAnchorSchema = z
+export const reviewAnchorSchema = z
   .strictObject({
     revisionId: uuid,
     fileKey: key,
@@ -59,6 +64,21 @@ const reviewSubmissionSchema = z.strictObject({
   state: z.enum(["pending", "delivering", "delivered", "failed", "withdrawn"]),
   error: z.string().max(2_000).optional(),
 });
+const nativeIdentity = z.string().regex(/^(?:0|[1-9][0-9]{0,39})$/);
+const relayProvenanceSchema = z.strictObject({
+  conversationId: uuid,
+  generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  taskId: uuid,
+  targetId: uuid,
+  cwd: z.string().min(1).max(32_768),
+  device: nativeIdentity,
+  inode: nativeIdentity,
+  workspaceMode: z.enum(["direct", "worktree"]),
+  baseline: z
+    .string()
+    .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/)
+    .optional(),
+});
 export const reviewSchema = z.strictObject({
   version: z.number().int().min(0).default(0),
   format: z.literal(1),
@@ -68,14 +88,32 @@ export const reviewSchema = z.strictObject({
   originChatId: run.nullable(),
   chatId: run.nullable(),
   turn: z.number().int().min(0),
-  workers: z.array(z.strictObject({ runId: run, label: z.string().max(160) })).max(100),
+  workers: z
+    .array(
+      z.strictObject({
+        runId: run,
+        label: z.string().max(160),
+        turn: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+        checkout: z
+          .strictObject({
+            cwd: z.string().min(1).max(32_768),
+            device: nativeIdentity,
+            inode: nativeIdentity,
+            base: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+            branch: z.string().min(1).max(4_096),
+          })
+          .optional(),
+      }),
+    )
+    .max(100),
   revisions: z.array(reviewRevisionSchema).max(100),
   comments: z.array(reviewCommentSchema).max(1_000),
   submissions: z.array(reviewSubmissionSchema).max(100),
   reviewed: z.record(key, z.string().max(160)),
   error: z.string().max(2_000).optional(),
+  relay: relayProvenanceSchema.optional(),
 });
-export type Review = z.infer<typeof reviewSchema>;
+export type Review = z.infer<typeof reviewSchema> & ProjectRequestIdentity;
 export type ReviewSummary = Pick<
   Review,
   | "id"
@@ -87,7 +125,8 @@ export type ReviewSummary = Pick<
   | "turn"
   | "workers"
   | "submissions"
-> & { revisions: Pick<ReviewRevision, "id" | "at">[] };
+> &
+  ProjectRequestIdentity & { revisions: Pick<ReviewRevision, "id" | "at">[] };
 export type ReviewRevision = z.infer<typeof reviewRevisionSchema>;
 export type ReviewFile = z.infer<typeof reviewFileSchema>;
 export interface ReviewContent {
@@ -96,42 +135,48 @@ export interface ReviewContent {
   modified: string;
 }
 
-const identity = { project, reviewId: uuid };
-const reviewActionSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("open-run"), project, runId: run }),
-  z.strictObject({ type: z.literal("reconnect"), ...identity, chatId: run }),
-  z.strictObject({
-    type: z.literal("comment"),
+const identity = { project, reviewId: uuid, ...projectRequestFields };
+const reviewActionSchema = z
+  .discriminatedUnion("type", [
+    z.strictObject({ type: z.literal("open-run"), project, runId: run, ...projectRequestFields }),
+    z.strictObject({ type: z.literal("reconnect"), ...identity, chatId: run }),
+    z.strictObject({
+      type: z.literal("comment"),
+      ...identity,
+      id: uuid,
+      revisionId: uuid,
+      text,
+      anchor: reviewAnchorSchema.optional(),
+    }),
+    z.strictObject({ type: z.literal("delete-comment"), ...identity, id: uuid }),
+    z.strictObject({ type: z.literal("resolve"), ...identity, id: uuid, resolved: z.boolean() }),
+    z.strictObject({
+      type: z.literal("reviewed"),
+      ...identity,
+      revisionId: uuid,
+      fileKey: key,
+      reviewed: z.boolean(),
+    }),
+    z.strictObject({ type: z.literal("submit"), ...identity, id: uuid, revisionId: uuid }),
+    z.strictObject({ type: z.literal("withdraw"), ...identity, id: uuid }),
+    z.strictObject({ type: z.literal("retry"), ...identity, id: uuid }),
+  ])
+  .refine(pairedProjectIdentity);
+const reviewReadSchema = z
+  .strictObject({
     ...identity,
-    id: uuid,
-    revisionId: uuid,
-    text,
-    anchor: reviewAnchorSchema.optional(),
-  }),
-  z.strictObject({ type: z.literal("delete-comment"), ...identity, id: uuid }),
-  z.strictObject({ type: z.literal("resolve"), ...identity, id: uuid, resolved: z.boolean() }),
-  z.strictObject({
-    type: z.literal("reviewed"),
+    requestId: uuid,
+    revisionId: uuid.optional(),
+  })
+  .refine(pairedProjectIdentity);
+const reviewFileReadSchema = z
+  .strictObject({
     ...identity,
+    requestId: uuid,
     revisionId: uuid,
     fileKey: key,
-    reviewed: z.boolean(),
-  }),
-  z.strictObject({ type: z.literal("submit"), ...identity, id: uuid, revisionId: uuid }),
-  z.strictObject({ type: z.literal("withdraw"), ...identity, id: uuid }),
-  z.strictObject({ type: z.literal("retry"), ...identity, id: uuid }),
-]);
-const reviewReadSchema = z.strictObject({
-  ...identity,
-  requestId: uuid,
-  revisionId: uuid.optional(),
-});
-const reviewFileReadSchema = z.strictObject({
-  ...identity,
-  requestId: uuid,
-  revisionId: uuid,
-  fileKey: key,
-});
+  })
+  .refine(pairedProjectIdentity);
 export type ReviewAction = z.infer<typeof reviewActionSchema>;
 export type ReviewRead = z.infer<typeof reviewReadSchema>;
 export type ReviewFileRead = z.infer<typeof reviewFileReadSchema>;

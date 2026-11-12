@@ -14,6 +14,7 @@ import { drawIcon, Icon } from "./icons.js";
 import { MessageAge } from "./message-controls.js";
 import { Modal } from "./modal.js";
 import { InfoTip } from "./overlays.js";
+import { pollRequestIdentity } from "./poll-identity.js";
 import { SettingsHeader } from "./settings-layout.js";
 import { useTicker } from "./ticker.js";
 
@@ -108,7 +109,14 @@ export function PollingWidget({
                   !available.length ||
                   available.some((source) => source.status === "polling")
                 }
-                onClick={() => void attempt(() => api.poll(available.map((source) => source.key)))}
+                onClick={() =>
+                  void attempt(() =>
+                    api.poll(
+                      available.map((source) => source.key),
+                      pollRequestIdentity(polling),
+                    ),
+                  )
+                }
               >
                 <Icon name="renew" />
                 Refresh

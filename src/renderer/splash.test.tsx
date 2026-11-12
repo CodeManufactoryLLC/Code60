@@ -174,5 +174,8 @@ describe("startup project sidebar", () => {
 
   it("does not show an active-run restriction when project switching is available", () => {
     expect(render()).not.toContain("Finish or stop all runs before switching projects.");
+    expect(render({ active: true, openProjects: [] })).not.toContain(
+      "Finish or stop all runs before switching projects.",
+    );
   });
 });

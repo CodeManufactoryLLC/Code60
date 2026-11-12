@@ -51,10 +51,15 @@ export class OrchestratorActions extends ScopeLifetime {
     }
   };
 }
-export function useOrchestratorActions(api: DesktopApi, database: string | null, key: string) {
+export function useOrchestratorActions(
+  api: DesktopApi,
+  database: string | null,
+  key: string,
+  applicationOwned = false,
+) {
   const owner = useMemo(
-    () => new OrchestratorActions(api, key, database !== null),
-    [api, database, key],
+    () => new OrchestratorActions(api, key, database !== null || applicationOwned),
+    [api, database, key, applicationOwned],
   );
   useEffect(() => {
     owner.activate();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
@@ -88,6 +88,10 @@ export function FilePanel({
   plans = [],
   project = "",
   currentChat,
+  panelId = "chat-file-panel",
+  targetLabel,
+  emptyContent,
+  changesContent,
 }: {
   tabs: FileTabs;
   onAction(action: FileTabAction): void;
@@ -102,6 +106,10 @@ export function FilePanel({
   plans?: PlanSummary[];
   project?: string;
   currentChat?: string | undefined;
+  panelId?: string;
+  targetLabel?: string | undefined;
+  emptyContent?: ReactNode;
+  changesContent?: ReactNode;
 }) {
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
@@ -151,7 +159,7 @@ export function FilePanel({
   return (
     <PanelShell
       disabled={disabled}
-      id="chat-file-panel"
+      id={panelId}
       name="Files"
       emptyLabel="Open files"
       tabs={panelTabs}
@@ -161,85 +169,100 @@ export function FilePanel({
       active={active}
       onToggle={onToggle}
     >
-      {(focusActiveTab) =>
-        disabled ? (
-          <p className="file-panel-empty">Connect a database to use files.</p>
-        ) : !selected || selected.kind === "blank" ? (
-          <div className="file-panel-empty">
-            <button
-              type="button"
-              className="file-open-link"
-              onClick={() => {
+      {(focusActiveTab) => (
+        <>
+          {changesContent && (
+            <div className="file-panel-changes" hidden={selected?.kind !== "changes"}>
+              {changesContent}
+            </div>
+          )}
+          {targetLabel && (
+            <p className="file-target-label" role="note" aria-label="File target">
+              Project files: {targetLabel}
+            </p>
+          )}
+          {disabled ? (
+            <p className="file-panel-empty">Connect a database to use files.</p>
+          ) : !selected || selected.kind === "blank" ? (
+            <div className="file-panel-empty">
+              {emptyContent}
+              <button
+                type="button"
+                className="file-open-link"
+                onClick={() => {
+                  focusActiveTab();
+                  act({ type: "explorer" });
+                }}
+              >
+                Open Files
+              </button>
+            </div>
+          ) : selected.kind === "plan" ? (
+            api && active && open && plans.some((plan) => plan.id === selected.planId) ? (
+              <PlanPanelLoader
+                key={selected.planId}
+                api={api}
+                summary={plans.find((plan) => plan.id === selected.planId) as PlanSummary}
+                currentChat={currentChat}
+                project={project || null}
+              />
+            ) : (
+              <p role="status">Plan conversation unavailable.</p>
+            )
+          ) : selected.kind === "changes" ? (
+            changesContent ? null : (
+              <RevisionList
+                reviews={reviews}
+                open={openRevisions}
+                onOpen={(action) => {
+                  focusActiveTab();
+                  act(action);
+                }}
+              />
+            )
+          ) : selected.kind === "revision" ? (
+            api && active && open && selectedReview ? (
+              <ReviewPanelLoader
+                key={`${selected.reviewId}:${selected.revisionId}`}
+                api={api}
+                project={project}
+                review={selectedReview}
+                revisionId={selected.revisionId}
+              />
+            ) : selectedReview ? null : (
+              <p role="status">Revision unavailable.</p>
+            )
+          ) : selected.kind === "explorer" ? (
+            <FilesPage
+              key={selected.id}
+              browser={browser}
+              onOpenProject={onOpenProject}
+              active={active && open}
+              hidden={hiddenFiles}
+              onHidden={setHiddenFiles}
+              onOpenFile={(path) => {
                 focusActiveTab();
-                act({ type: "explorer" });
+                browser.selectFile(path);
+                act({ type: "file", path });
               }}
-            >
-              Open Files
-            </button>
-          </div>
-        ) : selected.kind === "plan" ? (
-          api && active && open && plans.some((plan) => plan.id === selected.planId) ? (
-            <PlanPanelLoader
-              key={selected.planId}
-              api={api}
-              summary={plans.find((plan) => plan.id === selected.planId) as PlanSummary}
-              currentChat={currentChat}
-              project={project || null}
             />
-          ) : (
-            <p role="status">Plan conversation unavailable.</p>
-          )
-        ) : selected.kind === "changes" ? (
-          <RevisionList
-            reviews={reviews}
-            open={openRevisions}
-            onOpen={(action) => {
-              focusActiveTab();
-              act(action);
-            }}
-          />
-        ) : selected.kind === "revision" ? (
-          api && active && open && selectedReview ? (
-            <ReviewPanelLoader
-              key={`${selected.reviewId}:${selected.revisionId}`}
+          ) : active && open && selected.kind === "file" && selected.source && api ? (
+            <ReviewFilePreview
+              key={selected.id}
               api={api}
               project={project}
-              review={selectedReview}
-              revisionId={selected.revisionId}
+              address={selected.source}
+              viewState={views.current.get(selected.id)}
             />
-          ) : selectedReview ? null : (
-            <p role="status">Revision unavailable.</p>
-          )
-        ) : selected.kind === "explorer" ? (
-          <FilesPage
-            key={selected.id}
-            browser={browser}
-            onOpenProject={onOpenProject}
-            active={active && open}
-            hidden={hiddenFiles}
-            onHidden={setHiddenFiles}
-            onOpenFile={(path) => {
-              focusActiveTab();
-              browser.selectFile(path);
-              act({ type: "file", path });
-            }}
-          />
-        ) : active && open && selected.kind === "file" && selected.source && api ? (
-          <ReviewFilePreview
-            key={selected.id}
-            api={api}
-            project={project}
-            address={selected.source}
-            viewState={views.current.get(selected.id)}
-          />
-        ) : active && open ? (
-          <FileInspector
-            key={selected.id}
-            browser={browser}
-            viewState={views.current.get(selected.id)}
-          />
-        ) : null
-      }
+          ) : active && open ? (
+            <FileInspector
+              key={selected.id}
+              browser={browser}
+              viewState={views.current.get(selected.id)}
+            />
+          ) : null}
+        </>
+      )}
     </PanelShell>
   );
 }

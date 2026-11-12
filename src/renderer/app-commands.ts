@@ -97,7 +97,12 @@ export function appCommands({
       icon: "renew",
       disabled: busy || !database || !directory,
       run: () =>
-        void attempt(() => api.poll(["history", "config", "configurations"])).then((ok) => {
+        void attempt(() =>
+          api.poll(["history", "config", "configurations"], {
+            projectId: snapshot?.projectInstanceId ?? undefined,
+            databaseEpoch: snapshot?.databaseEpoch,
+          }),
+        ).then((ok) => {
           if (ok) notify("Project data polled.", "info");
         }),
     },

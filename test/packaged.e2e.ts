@@ -105,8 +105,16 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     );
     await expect(page.locator(".app-footer")).toHaveCSS("height", "24px");
     await expect(page.locator(".app-footer")).toHaveCSS("padding-bottom", "4px");
-    await page.evaluate(() => window.desktop.connectDatabase("create"));
-    await page.evaluate(() => window.desktop.chooseFolder());
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+    );
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch)),
+    );
     await page.evaluate(() => window.desktop.setOrchestrationProvider("fake"));
     await expect
       .poll(async () => readFile(probe, "utf8").catch(() => ""), { timeout: 30_000 })

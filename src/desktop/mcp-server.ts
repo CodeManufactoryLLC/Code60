@@ -10,6 +10,86 @@ import { diagnosticText } from "../platform/index.js";
 
 const MAX_LINE_LENGTH = 1_048_576;
 
+function toolDefinitions() {
+  if (process.env.CODE60_MCP_ROLE !== "relay") return MCP_TOOL_DEFINITIONS;
+  const allowed = new Set([
+    "code60_get_context",
+    "code60_dispatch_agent",
+    "code60_list_agents",
+    "code60_read_agent",
+    "code60_send_agent",
+    "code60_finish_agent",
+    "code60_cancel_agent",
+    "code60_stop_agent",
+    "code60_create_plan",
+    "code60_read_plan",
+    "code60_update_plan",
+    "code60_get_activity_context",
+    "code60_report_activity",
+  ]);
+  return MCP_TOOL_DEFINITIONS.filter((tool) => allowed.has(tool.name)).map((tool) => {
+    if (tool.name === "code60_create_plan" || tool.name === "code60_update_plan") {
+      const inputSchema = structuredClone(tool.inputSchema);
+      const properties =
+        tool.name === "code60_create_plan"
+          ? inputSchema.properties
+          : (inputSchema.properties.draft?.properties as Record<string, Record<string, unknown>>);
+      const items = properties.tasks?.items as {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
+      items.properties.target = {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          cwd: { type: "string", minLength: 1, maxLength: 32_768 },
+          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
+        },
+        required: ["cwd", "workspaceMode"],
+      };
+      items.required = [...items.required, "target"];
+      return {
+        ...tool,
+        inputSchema,
+        description: `${tool.description} Every Relay task requires an explicit target with absolute cwd and direct/worktree workspaceMode. Human acceptance binds this revision and every target/mode assignment.`,
+      };
+    }
+    if (tool.name !== "code60_dispatch_agent")
+      return {
+        ...tool,
+        description: tool.description.replaceAll(
+          "in the open project",
+          "across Relay's execution targets",
+        ),
+      };
+    const { reviewId: _review, ...properties } = tool.inputSchema.properties;
+    return {
+      ...tool,
+      description:
+        "Dispatch one Relay-owned worker to an explicit absolute cwd. No open project or database is required. Direct edits affect that exact directory and have no isolated apply/undo/discard. Worktree requires Git with a valid base. No fallback or permission bypass.",
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: {
+          ...properties,
+          base: {
+            ...properties.base,
+            description:
+              "Optional explicit Git base, resolved to a frozen commit. Otherwise worktree mode captures saved files once per human task/target, without changing HEAD or staging. Direct mode rejects a base.",
+          },
+          cwd: {
+            type: "string",
+            minLength: 1,
+            maxLength: 32_768,
+            description: "Required absolute target directory. Never infer from sidebar state.",
+          },
+          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
+        },
+        required: [...(tool.inputSchema.required ?? []), "cwd", "workspaceMode"],
+      },
+    };
+  });
+}
+
 interface RpcRequest {
   jsonrpc?: unknown;
   id?: unknown;
@@ -54,8 +134,7 @@ function gatewayConfiguration(): { url: string; token: string } {
 }
 
 async function callGateway(name: string, args: unknown): Promise<unknown> {
-  if (!MCP_TOOL_DEFINITIONS.some((tool) => tool.name === name))
-    throw new Error("Unknown Code60 tool");
+  if (!toolDefinitions().some((tool) => tool.name === name)) throw new Error("Unknown Code60 tool");
   const gateway = gatewayConfiguration();
   const response = await fetch(gateway.url, {
     method: "POST",
@@ -117,7 +196,7 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
       jsonrpc: "2.0",
       id: request.id,
       result: {
-        tools: MCP_TOOL_DEFINITIONS.map((tool) => ({
+        tools: toolDefinitions().map((tool) => ({
           name: tool.name,
           title: tool.title,
           description: tool.description,

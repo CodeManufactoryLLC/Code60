@@ -56,6 +56,43 @@ async function setup(
   return { clock, agents, git, store, processes, orch, status };
 }
 
+it("cancels interactive worktree preparation and awaits started cleanup before shutdown", async () => {
+  const { orch, agents, git, status } = await setup({ mode: "interactive" });
+  let cleanup = () => {};
+  const cleaning = new Promise<void>((resolve) => {
+    cleanup = resolve;
+  });
+  let cancelled = false;
+  const add = vi.spyOn(git, "addWorktree").mockImplementation(async (_spec, signal) => {
+    if (!signal) throw new Error("Missing worktree cancellation");
+    await new Promise<void>((resolve) => {
+      signal.addEventListener(
+        "abort",
+        () => {
+          cancelled = true;
+          resolve();
+        },
+        { once: true },
+      );
+    });
+    await cleaning;
+    signal.throwIfAborted();
+  });
+  orch.start();
+  await vi.waitFor(() => expect(add).toHaveBeenCalledOnce());
+  let stopped = false;
+  const stopping = orch.shutdown().then(() => {
+    stopped = true;
+  });
+  await vi.waitFor(() => expect(cancelled).toBe(true));
+  expect(stopped).toBe(false);
+  expect(agents.sessions).toHaveLength(0);
+  cleanup();
+  await stopping;
+  expect(status("r1")).toBe("cancelled");
+  expect(git.worktrees).toHaveLength(0);
+});
+
 describe("a headless run", () => {
   it("records native owner identity before launching and reuses it for the batch", async () => {
     const owner = { createdAt: "12345", owner: "S-1-5-21-1" };

@@ -1,22 +1,29 @@
 import { z } from "zod";
+import { pairedProjectIdentity, projectRequestFields } from "./project-identity.js";
 
-const identity = { project: z.string().min(1).max(4096), reviewId: z.string().uuid() };
-const taskActionSchema = z.discriminatedUnion("type", [
-  z.strictObject({ ...identity, type: z.literal("status") }),
-  z.strictObject({ ...identity, type: z.literal("cancel") }),
-  z.strictObject({ ...identity, type: z.literal("prepare"), revisionId: z.string().uuid() }),
-  z.strictObject({
-    ...identity,
-    type: z.literal("file"),
-    operationId: z.string().uuid(),
-    fileId: z.string().uuid(),
-  }),
-  z.strictObject({
-    ...identity,
-    type: z.enum(["apply", "undo", "recover", "revise"]),
-    operationId: z.string().uuid(),
-  }),
-]);
+const identity = {
+  project: z.string().min(1).max(4096),
+  reviewId: z.string().uuid(),
+  ...projectRequestFields,
+};
+const taskActionSchema = z
+  .discriminatedUnion("type", [
+    z.strictObject({ ...identity, type: z.literal("status") }),
+    z.strictObject({ ...identity, type: z.literal("cancel") }),
+    z.strictObject({ ...identity, type: z.literal("prepare"), revisionId: z.string().uuid() }),
+    z.strictObject({
+      ...identity,
+      type: z.literal("file"),
+      operationId: z.string().uuid(),
+      fileId: z.string().uuid(),
+    }),
+    z.strictObject({
+      ...identity,
+      type: z.enum(["apply", "undo", "recover", "revise"]),
+      operationId: z.string().uuid(),
+    }),
+  ])
+  .refine(pairedProjectIdentity);
 export type TaskAction = z.infer<typeof taskActionSchema>;
 export interface TaskView {
   available: boolean;

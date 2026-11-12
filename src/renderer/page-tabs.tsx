@@ -2,8 +2,10 @@ import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from
 import type {
   DesktopApi,
   DesktopRun,
+  OpenProject,
   OrchestrationChat,
   OrchestrationChatAction,
+  ProjectAction,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
@@ -19,6 +21,7 @@ import {
 } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { pathLabel } from "./path-label.js";
+import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds } from "./tabs.js";
 
 export function PageTabBar({
@@ -38,6 +41,8 @@ export function PageTabBar({
   navigationSerial,
   database,
   eventsByRun,
+  openProjects,
+  selectedProjectId,
 }: {
   tabs: PageTabs;
   settingsSection: SettingsSectionId;
@@ -51,11 +56,13 @@ export function PageTabBar({
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
-  onWorkerSelect(id: string | undefined): void;
+  onWorkerSelect(id: string | undefined, projectId?: string | null): void;
   selectedId: string | undefined;
   navigationSerial: number | undefined;
   database: string | null;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
+  openProjects?: readonly OpenProject[] | undefined;
+  selectedProjectId?: string | null | undefined;
 }) {
   const repository = directory ? pathLabel(directory) : directory;
   const sidebar = useRef<HTMLElement>(null);
@@ -129,6 +136,8 @@ export function PageTabBar({
           navigationSerial={navigationSerial}
           database={database}
           eventsByRun={eventsByRun}
+          openProjects={openProjects}
+          selectedProjectId={selectedProjectId}
         />
       </div>
     </nav>
@@ -151,6 +160,8 @@ function PageTabList({
   navigationSerial,
   database,
   eventsByRun,
+  openProjects,
+  selectedProjectId,
 }: {
   tabs: PageTabs;
   settingsSection: SettingsSectionId;
@@ -159,17 +170,45 @@ function PageTabList({
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
-  onWorkerSelect(id: string | undefined): void;
+  onWorkerSelect(id: string | undefined, projectId?: string | null): void;
   selectedId: string | undefined;
   navigationSerial: number | undefined;
   database: string | null;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
+  openProjects?: readonly OpenProject[] | undefined;
+  selectedProjectId?: string | null | undefined;
 }) {
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState("");
   const chatInFlight = useRef(false);
+  async function projectAction(request: ProjectAction) {
+    if (chatInFlight.current) return false;
+    chatInFlight.current = true;
+    setChatPending(true);
+    setChatError("");
+    try {
+      await api.projectAction(request);
+      return true;
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : String(cause));
+      return false;
+    } finally {
+      chatInFlight.current = false;
+      setChatPending(false);
+    }
+  }
   async function chatAction(request: OrchestrationChatAction) {
-    if (!database || chatInFlight.current) return false;
+    if (
+      (!database &&
+        !chats.some(
+          (chat) =>
+            chat.kind === "relay" &&
+            (chat.run?.id === ("id" in request ? request.id : undefined) ||
+              chat.conversationId === ("id" in request ? request.id : undefined)),
+        )) ||
+      chatInFlight.current
+    )
+      return false;
     chatInFlight.current = true;
     setChatPending(true);
     setChatError("");
@@ -177,7 +216,16 @@ function PageTabList({
     if (navigate) onSelect("chat");
     try {
       await api.orchestrationChatAction(request);
-      if (navigate) onWorkerSelect(undefined);
+      if (navigate)
+        onWorkerSelect(
+          undefined,
+          openProjects
+            ? ((request.type === "new"
+                ? request.projectId
+                : chats.find((chat) => chat.run?.id === ("id" in request ? request.id : undefined))
+                    ?.projectId) ?? null)
+            : undefined,
+        );
       return true;
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : String(cause));
@@ -505,26 +553,30 @@ function PageTabList({
             <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
           </button>
         </div>
-        <button
-          type="button"
-          className="icon-button chat-sidebar-new"
-          aria-label="New chat"
-          title="New chat"
-          disabled={chatPending || !database}
-          onClick={() => {
-            setChatExpanded(true);
-            void chatAction({ type: "new" });
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              document.getElementById("tab-chat")?.focus();
-            } else if (["ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-              navigate(event, "chat");
-          }}
-        >
-          <Icon name="add" />
-        </button>
+        {!chats.some((chat) => chat.kind === "relay") && (
+          <button
+            type="button"
+            className="icon-button chat-sidebar-new"
+            aria-label="New chat"
+            title="New chat"
+            disabled={chatPending || !database}
+            onClick={() => {
+              setChatExpanded(true);
+              void chatAction({ type: "new" });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                document.getElementById("tab-chat")?.focus();
+              } else if (
+                ["ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              )
+                navigate(event, "chat");
+            }}
+          >
+            <Icon name="add" />
+          </button>
+        )}
       </div>
       {chatError && (
         <p className="error-banner" role="alert">
@@ -571,24 +623,50 @@ function PageTabList({
           }
         }}
       >
-        <ChatSidebar
-          onAction={chatAction}
-          chats={chats}
-          runs={runs}
-          selectedId={selectedId}
-          navigationSerial={navigationSerial}
-          database={database}
-          eventsByRun={eventsByRun}
-          open={tabs.active === "chat"}
-          pending={chatPending || !database}
-          onSelect={(id) => {
-            if (chats.some((chat) => chat.run?.id === id)) void chatAction({ type: "select", id });
-            else {
-              onWorkerSelect(id);
-              onSelect("chat");
-            }
-          }}
-        />
+        {openProjects ? (
+          <ProjectChatSidebar
+            projects={openProjects}
+            selectedProjectId={selectedProjectId}
+            onProjectAction={projectAction}
+            onAction={chatAction}
+            chats={chats}
+            runs={runs}
+            selectedId={selectedId}
+            navigationSerial={navigationSerial}
+            database={database}
+            eventsByRun={eventsByRun}
+            open={tabs.active === "chat"}
+            pending={chatPending}
+            onSelect={(id) => {
+              if (chats.some((chat) => chat.run?.id === id))
+                void chatAction({ type: "select", id });
+              else {
+                onWorkerSelect(id);
+                onSelect("chat");
+              }
+            }}
+          />
+        ) : (
+          <ChatSidebar
+            onAction={chatAction}
+            chats={chats}
+            runs={runs}
+            selectedId={selectedId}
+            navigationSerial={navigationSerial}
+            database={database}
+            eventsByRun={eventsByRun}
+            open={tabs.active === "chat"}
+            pending={chatPending}
+            onSelect={(id) => {
+              if (chats.some((chat) => chat.run?.id === id))
+                void chatAction({ type: "select", id });
+              else {
+                onWorkerSelect(id);
+                onSelect("chat");
+              }
+            }}
+          />
+        )}
       </div>
       <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">
         {primary.map((id, index) => page(id, index === 0))}

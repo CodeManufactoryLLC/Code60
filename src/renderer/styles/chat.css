@@ -1,5 +1,68 @@
 /* Chat styles. Imported into its declared layer by style.css. */
 
+.project-chat-heading {
+  display: flex;
+  align-items: center;
+  padding-left: 40px;
+  min-height: 40px;
+}
+
+.project-chat-name {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.project-chat-name > span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.project-chat-activity {
+  color: var(--text-muted);
+}
+
+.project-chat-pages[hidden] {
+  display: none;
+}
+
+.project-chat-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 4px;
+}
+
+.project-file-panel-scope:not([hidden]) {
+  display: contents;
+}
+
+.retained-project-panel:not([hidden]) {
+  display: contents;
+}
+
+.retained-project-panel[hidden] {
+  display: none;
+}
+
+.relay-history {
+  flex: 0 1 auto;
+  max-height: 40vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 12px;
+}
+
+.relay-history pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .command-picker {
   border-bottom: 1px solid var(--control-border);
   padding: 8px;

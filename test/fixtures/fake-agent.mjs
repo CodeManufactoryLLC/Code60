@@ -12,6 +12,7 @@ createFakeAgent({
   sessionInfo: process.argv.includes("--session-info"),
   planWorkflow: process.argv.includes("--plan"),
   reviewWorkflow: process.argv.includes("--review"),
+  relayWorkflow: process.argv.includes("--relay"),
   memoryExtraction: process.argv.includes("--memory"),
   authRequired: process.env.FAKE_AGENT_AUTH === "1" || process.argv.includes("--auth"),
 }).connect(ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

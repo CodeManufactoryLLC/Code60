@@ -10,6 +10,36 @@ afterEach(() => {
 });
 
 describe("MCP initialization", () => {
+  it("advertises Relay-only target-qualified plans without mutating project schemas", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.stubEnv("CODE60_MCP_ROLE", "relay");
+    await handleMcpRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+    const relay = JSON.parse(String(write.mock.calls[0]?.[0])).result.tools as Array<{
+      name: string;
+      inputSchema: { properties: Record<string, unknown> };
+    }>;
+    expect(relay.some((tool) => tool.name === "code60_create_command")).toBe(false);
+    const plan = relay.find((tool) => tool.name === "code60_create_plan");
+    expect(plan?.inputSchema.properties.tasks).toMatchObject({
+      items: {
+        required: ["text", "target"],
+        properties: { target: { required: ["cwd", "workspaceMode"] } },
+      },
+    });
+    expect(
+      relay.find((tool) => tool.name === "code60_dispatch_agent")?.inputSchema.properties,
+    ).toHaveProperty("planTaskId");
+    write.mockClear();
+    vi.stubEnv("CODE60_MCP_ROLE", "");
+    await handleMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+    const project = JSON.parse(String(write.mock.calls[0]?.[0])).result.tools as typeof relay;
+    expect(
+      project.find((tool) => tool.name === "code60_create_plan")?.inputSchema.properties.tasks,
+    ).toMatchObject({ items: { required: ["text"] } });
+    expect(
+      JSON.stringify(project.find((tool) => tool.name === "code60_create_plan")),
+    ).not.toContain('"workspaceMode"');
+  });
   it.each([...MCP_PROTOCOL_VERSIONS, "unknown"])(
     "negotiates %s and reports the Code60 version",
     async (requested) => {

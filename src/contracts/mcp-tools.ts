@@ -301,6 +301,12 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
     object(
       {
         ...scopeInput,
+        planTaskId: {
+          type: "string",
+          format: "uuid",
+          description:
+            "Required for accepted plan work: the unfinished task assigned to this worker.",
+        },
         reviewId: {
           type: "string",
           format: "uuid",

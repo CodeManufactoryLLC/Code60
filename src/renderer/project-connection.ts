@@ -125,7 +125,7 @@ export function useProjectConnection({
     },
     onCreate: () => {
       if (busy) return;
-      if (snapshot?.active) {
+      if (snapshot?.active && !snapshot.openProjects) {
         setError("Finish or stop all runs before switching projects.");
         return;
       }

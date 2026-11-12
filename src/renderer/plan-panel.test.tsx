@@ -3,7 +3,11 @@ import { expect, it } from "vitest";
 import type { DesktopApi, Plan } from "../bridge/index.js";
 import { PlanPanel } from "./plan-panel.js";
 
-function render(states: Plan["tasks"][number]["state"][], state: Plan["state"] = "running") {
+function render(
+  states: Plan["tasks"][number]["state"][],
+  state: Plan["state"] = "running",
+  mode?: "direct" | "worktree",
+) {
   const plan: Plan = {
     format: 1,
     id: "plan",
@@ -22,12 +26,20 @@ function render(states: Plan["tasks"][number]["state"][], state: Plan["state"] =
       state,
       note: "Evidence",
       workerIds: [],
+      ...(mode ? { target: { id: "target", cwd: "/explicit/<source>", workspaceMode: mode } } : {}),
     })),
   };
   return renderToStaticMarkup(
     <PlanPanel plan={plan} api={{} as DesktopApi} currentChat="chat" project={null} />,
   );
 }
+it("shows escaped target assignments and warns before accepting direct edits", () => {
+  const direct = render(["pending"], "draft", "direct");
+  expect(direct).toContain("/explicit/&lt;source&gt;");
+  expect(direct).toContain("direct edits, no isolated apply or undo");
+  expect(direct).toContain(">Accept</button>");
+  expect(render(["pending"], "draft", "worktree")).toContain("isolated worktree");
+});
 it("shows equal task weighting and a count outside the document", () => {
   const html = render(["completed", "in_progress", "blocked", "pending"]);
   expect(html).toContain('value="1" max="4"');

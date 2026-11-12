@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, dirname, join, resolve } from "node:path";
 import { runIdSchema } from "../contracts/index.js";
 import { atomicReplace } from "../platform/index.js";
 import { RUN_EVENT_TYPES, runEventSchema, runRecordSchema } from "./record-schemas.js";
@@ -9,6 +9,8 @@ import { RUN_RECORD_FORMAT } from "./version.js";
 
 /** The subset of `node:fs/promises` the record store uses. */
 export interface RecordFs {
+  /** Wrappers over one filesystem share this scope; independent injected filesystems do not. */
+  recordStoreScope?: object;
   realpath?(path: string): Promise<string>;
   mkdir(path: string, options: { recursive: true; mode: number }): Promise<unknown>;
   writeFile(path: string, data: string, options: { mode: number; flag: "wx" }): Promise<void>;
@@ -42,6 +44,32 @@ export function directoryRunsDir(stateHome: string, directory: string): string {
   return join(stateHome, "code60", "dirs", key, "runs");
 }
 
+interface StoreCoordination {
+  writes: Map<string, Promise<void>>;
+  listings: WeakMap<
+    RecordFs["readFile"],
+    WeakMap<RecordFs["readdir"], Map<string, Promise<RunRecord[]>>>
+  >;
+}
+
+const coordinators = new WeakMap<object, StoreCoordination>();
+
+async function canonicalDirectory(fs: RecordFs, dir: string): Promise<string> {
+  let parent = resolve(dir);
+  if (!fs.realpath) return parent;
+  const missing: string[] = [];
+  for (;;) {
+    try {
+      return join(await fs.realpath(parent), ...missing.toReversed());
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code !== "ENOENT" || dirname(parent) === parent)
+        throw cause;
+      missing.push(basename(parent));
+      parent = dirname(parent);
+    }
+  }
+}
+
 function parseRecord(text: string, id: string): RunRecord {
   let value: unknown;
   try {
@@ -73,12 +101,38 @@ function parseRecord(text: string, id: string): RunRecord {
  * and `run.json` replacements never interleave.
  */
 export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
-  const queues = new Map<string, Promise<void>>();
+  const scope = fs.recordStoreScope ?? fs;
+  let shared = coordinators.get(scope);
+  if (!shared) {
+    shared = { writes: new Map(), listings: new WeakMap() };
+    coordinators.set(scope, shared);
+  }
+  const { writes: queues } = shared;
+  let readers = shared.listings.get(fs.readFile);
+  if (!readers) {
+    readers = new WeakMap();
+    shared.listings.set(fs.readFile, readers);
+  }
+  const listings = readers.get(fs.readdir) ?? new Map<string, Promise<RunRecord[]>>();
+  readers.set(fs.readdir, listings);
+  let directory: Promise<string> | undefined;
+  const canonical = () =>
+    (directory ??= canonicalDirectory(fs, dir).catch((cause) => {
+      directory = undefined;
+      throw cause;
+    }));
+  const temporaryId = randomUUID();
   let tmpCounter = 0;
 
-  const enqueue = (id: string, op: () => Promise<void>): Promise<void> => {
-    const next = (queues.get(id) ?? Promise.resolve()).then(op, op);
-    queues.set(id, next);
+  const enqueue = async (id: string, op: () => Promise<void>): Promise<void> => {
+    assertRunId(id);
+    const key = JSON.stringify([await canonical(), id]);
+    const next = (queues.get(key) ?? Promise.resolve()).then(op, op);
+    queues.set(key, next);
+    const release = () => {
+      if (queues.get(key) === next) queues.delete(key);
+    };
+    void next.then(release, release);
     return next;
   };
 
@@ -94,7 +148,7 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       return enqueue(record.id, async () => {
         const target = runDir(record.id);
         await fs.mkdir(target, { recursive: true, mode: 0o700 });
-        const tmp = join(target, `.run.json.${process.pid}.${tmpCounter++}.tmp`);
+        const tmp = join(target, `.run.json.${process.pid}.${temporaryId}.${tmpCounter++}.tmp`);
         try {
           await fs.writeFile(tmp, snapshot, { mode: 0o600, flag: "wx" });
           await atomicReplace(tmp, join(target, "run.json"), (from, to, timeoutMs) =>
@@ -152,24 +206,36 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       return events;
     },
     async list() {
-      let ids: string[];
-      try {
-        ids = await fs.readdir(dir);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-        throw error;
+      const key = await canonical();
+      let pending = listings.get(key);
+      if (!pending) {
+        pending = listRecords(fs, dir);
+        listings.set(key, pending);
+        const release = () => {
+          if (listings.get(key) === pending) listings.delete(key);
+        };
+        void pending.then(release, release);
       }
-      const records: RunRecord[] = [];
-      for (const id of ids.filter((name) => runIdSchema.safeParse(name).success)) {
-        try {
-          records.push(parseRecord(await fs.readFile(join(dir, id, "run.json"), "utf8"), id));
-        } catch {
-          // A directory without a readable run.json is not a run the tool can show.
-        }
-      }
-      return records.sort(
-        (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id),
-      );
+      return structuredClone(await pending);
     },
   };
+}
+
+async function listRecords(fs: RecordFs, dir: string): Promise<RunRecord[]> {
+  let ids: string[];
+  try {
+    ids = await fs.readdir(dir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const records: RunRecord[] = [];
+  for (const id of ids.filter((name) => runIdSchema.safeParse(name).success)) {
+    try {
+      records.push(parseRecord(await fs.readFile(join(dir, id, "run.json"), "utf8"), id));
+    } catch {
+      // A directory without a readable run.json is not a run the tool can show.
+    }
+  }
+  return records.sort((a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id));
 }

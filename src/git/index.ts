@@ -2,7 +2,8 @@ import { copyFile, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { samePath } from "../platform/index.js";
-import { GitError, runGit } from "./exec.js";
+import { GitError, runGit, runSetupGit } from "./exec.js";
+import { coordinateMetadata } from "./metadata.js";
 import { type GitSetupOps, gitSetup } from "./setup.js";
 import { type TaskGit, taskGit } from "./tasks.js";
 
@@ -28,6 +29,10 @@ export interface GitWorktree {
   branch: string | null;
   createdAt: string | null;
   sizeBytes: number | null;
+}
+interface WorktreeReadOptions {
+  sizes?: boolean;
+  current?(): boolean;
 }
 
 type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
@@ -55,10 +60,10 @@ export interface Git {
   setup?: GitSetupOps;
   tasks?: TaskGit;
   repoInfo(cwd: string): Promise<RepoInfo>;
-  listWorktrees(repoDir: string): Promise<GitWorktree[]>;
+  listWorktrees(repoDir: string, options?: WorktreeReadOptions): Promise<GitWorktree[]>;
   /** Resolves a revision to a full commit hash. */
   resolveCommit(repoDir: string, rev: string): Promise<string>;
-  addWorktree(spec: WorktreeSpec): Promise<void>;
+  addWorktree(spec: WorktreeSpec, signal?: AbortSignal): Promise<void>;
   /** Removes the worktree, then deletes its branch. */
   removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
@@ -98,13 +103,15 @@ export function parseWorktrees(output: string): { path: string; branch: string |
   return worktrees;
 }
 
-async function logicalSize(root: string): Promise<number> {
+async function logicalSize(root: string, current: () => boolean): Promise<number | null> {
   const pending = [root];
   let bytes = 0;
   while (pending.length > 0) {
+    if (!current()) return null;
     const directory = pending.pop();
     if (!directory) continue;
     for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (!current()) return null;
       if (directory === root && entry.name === ".git") continue;
       const path = join(directory, entry.name);
       const info = await lstat(path);
@@ -113,13 +120,16 @@ async function logicalSize(root: string): Promise<number> {
       else if (info.isFile()) bytes += info.size;
     }
   }
-  return bytes;
+  return current() ? bytes : null;
 }
 
-async function summarizeWorktree(worktree: {
-  path: string;
-  branch: string | null;
-}): Promise<GitWorktree | undefined> {
+async function summarizeWorktree(
+  worktree: {
+    path: string;
+    branch: string | null;
+  },
+  options: WorktreeReadOptions,
+): Promise<GitWorktree | undefined> {
   let root: Awaited<ReturnType<typeof lstat>>;
   try {
     root = await lstat(worktree.path);
@@ -135,7 +145,8 @@ async function summarizeWorktree(worktree: {
       : null;
   let sizeBytes: number | null = null;
   try {
-    sizeBytes = await logicalSize(worktree.path);
+    if (options.sizes !== false)
+      sizeBytes = await logicalSize(worktree.path, options.current ?? (() => true));
   } catch {
     // An unreadable file or directory makes the total unknown, not a misleading partial size.
   }
@@ -304,13 +315,15 @@ export function createGit(): Git {
       return { topLevel: normalize(topLevel), commonDir: normalize(commonDir) };
     },
 
-    async listWorktrees(repoDir) {
+    async listWorktrees(repoDir, options = {}) {
       const output = await runGit(["worktree", "list", "--porcelain", "-z"], repoDir);
       const worktrees = parseWorktrees(output).map((item) => ({
         ...item,
         path: normalize(item.path),
       }));
-      const summaries = await Promise.all(worktrees.map(summarizeWorktree));
+      const summaries = await Promise.all(
+        worktrees.map((worktree) => summarizeWorktree(worktree, options)),
+      );
       return summaries.filter((worktree): worktree is GitWorktree => worktree !== undefined);
     },
 
@@ -324,40 +337,50 @@ export function createGit(): Git {
       }
     },
 
-    async addWorktree({ repoDir, path, branch, base }) {
+    async addWorktree({ repoDir, path, branch, base }, signal) {
       assertOwnBranch(branch);
-      await runGit(["worktree", "add", "--quiet", "-b", branch, path, base], repoDir);
+      await coordinateMetadata(
+        repoDir,
+        async () => {
+          const args = ["worktree", "add", "--quiet", "-b", branch, path, base];
+          if (signal) await runSetupGit(args, repoDir, signal);
+          else await runGit(args, repoDir);
+        },
+        signal,
+      );
     },
 
     async removeWorktree(repoDir, path, branch) {
       assertOwnBranch(branch);
-      const list = await runGit(["worktree", "list", "--porcelain", "-z"], repoDir);
-      const inventory = parseWorktrees(list);
-      let registered: (typeof inventory)[number] | undefined;
-      for (const worktree of inventory) {
-        if (await samePath(worktree.path, path)) {
-          registered = worktree;
-          break;
+      return coordinateMetadata(repoDir, async () => {
+        const list = await runGit(["worktree", "list", "--porcelain", "-z"], repoDir);
+        const inventory = parseWorktrees(list);
+        let registered: (typeof inventory)[number] | undefined;
+        for (const worktree of inventory) {
+          if (await samePath(worktree.path, path)) {
+            registered = worktree;
+            break;
+          }
         }
-      }
-      if (registered) {
-        if (registered.branch !== branch)
-          throw new Error("refusing to remove a worktree whose branch does not match the run");
-        // A removal failure must never fall through to branch deletion.
-        await runGit(["worktree", "remove", "--force", registered.path], repoDir);
-      }
-      for (const worktree of parseWorktrees(
-        await runGit(["worktree", "list", "--porcelain", "-z"], repoDir),
-      )) {
-        if (worktree.branch === branch)
-          throw new Error("refusing to delete a branch still registered to a worktree");
-      }
-      try {
-        await runGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], repoDir);
-      } catch {
-        return;
-      }
-      await runGit(["branch", "-D", branch], repoDir);
+        if (registered) {
+          if (registered.branch !== branch)
+            throw new Error("refusing to remove a worktree whose branch does not match the run");
+          // A removal failure must never fall through to branch deletion.
+          await runGit(["worktree", "remove", "--force", registered.path], repoDir);
+        }
+        for (const worktree of parseWorktrees(
+          await runGit(["worktree", "list", "--porcelain", "-z"], repoDir),
+        )) {
+          if (worktree.branch === branch)
+            throw new Error("refusing to delete a branch still registered to a worktree");
+        }
+        try {
+          await runGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], repoDir);
+        } catch {
+          return;
+        }
+        await runGit(["branch", "-D", branch], repoDir);
+      });
     },
 
     async diff(worktree, base, signal) {

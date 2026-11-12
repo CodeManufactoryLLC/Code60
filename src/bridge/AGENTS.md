@@ -1,5 +1,22 @@
 # Bridge
 
+- Relay is application-owned and usable without a database. Carry explicit
+  conversation/target/project identities, lifecycle generations and revisions.
+  Relay history paging accepts only bounded opaque cursors, never paths.
+  Explicit-directory dispatch is restricted to the authenticated main-process MCP
+  gateway; it adds no generic renderer filesystem or process capability.
+  Original-message Copy reads use conversation identity and expiring opaque source
+  cursors only, never paths or caller-supplied journal offsets.
+- Relay file contexts name an existing conversation/target detail subscription
+  and increasing view sequence, with bounded relative folders/preview only.
+  Accept no root paths or project identities; main resolves the owned root.
+- Relay review provenance retains conversation/generation/task, opaque target,
+  canonical cwd/mode and exact native directory identity as decimal strings.
+  This saved evidence is not authority. Relay review requests use opaque IDs and
+  the current presentation generation, with no cwd or project-path fallback.
+  Worker evidence may include a pinned checkout identity, canonical directory,
+  branch and base. These are main-produced provenance, never request fields.
+
 - Tactic selection accepts only chat/project identity and a catalog ID or explicit
   null. Continue task accepts only existing chat/task identity. Never accept
   tactic prompts, versions or storage paths from the renderer. Private saved
@@ -8,6 +25,28 @@
 - Review requests accept only project identity, generated review/revision/comment IDs and
   bounded feedback anchors. Revision file reads resolve saved file keys, never arbitrary paths.
   Agents may report addressed feedback but never resolve it or mark files reviewed.
+  Project review/task/Git requests pair the runtime UUID with its database epoch.
+  Optional fields support legacy single-project callers only; Relay-enabled main
+  requires both. Return this ephemeral address separately from persisted review data.
+- Database selection, folder picking, project history and command/configuration/prompt writes wrap their existing validated
+  request with a database epoch. Main requires the epoch in Relay mode and
+  rechecks it after native dialogs and inside the action queue; never persist
+  it as database content. Empty picker/history requests accept no extra payload.
+- Explicit polling carries the originating target runtime UUID and database epoch.
+  Application-only configuration polling needs neither. Database-only polling
+  needs the epoch, not project membership. Main never refreshes a stale address.
+- App update frames include the preceding broadcast revision so missed deltas
+  require a full snapshot read. Full snapshot responses omit that delta marker.
+- Production updates and appSummary reads carry summaryOnly and omit all
+  transcripts/history/file/worktree/review detail, including the selected view.
+  Explicit snapshot reads retain compatibility. Run summaries include constant-size
+  reply counts, not prompt bodies; details carry full requested view data.
+  App summaries may include bounded subscription UUID/revision hints only, never
+  detail payloads, so a dropped final detail frame can recover independently.
+- Detail requests use strict project/epoch, conversation/generation or opaque
+  target/Relay-generation addresses and a subscription UUID. Accept no paths.
+  Read requires an existing matching subscription; unsubscribe accepts its UUID
+  only. Terminal frames cannot be interpreted as replacement-owner data.
 
 `src/bridge` is the typed IPC contract shared by `desktop` and `renderer`.
 

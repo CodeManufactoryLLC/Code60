@@ -141,10 +141,14 @@ export class TaskLoop {
   private saveState(state: TaskState) {
     return this.save(join(this.root, `${state.id}.tsk`), state);
   }
-  async baseline(id: string): Promise<string> {
+  async baseline(id: string, captured?: string): Promise<string> {
+    if (captured !== undefined) oid.parse(captured, { jitless: true });
     const state = await this.state(id);
+    if (captured !== undefined && state.baseline && state.baseline !== captured)
+      throw new Error("Task baseline is already bound to another capture");
     if (!state.baseline) {
-      state.baseline = await this.git.snapshot(this.project, { exclude: this.excludedPaths });
+      state.baseline =
+        captured ?? (await this.git.snapshot(this.project, { exclude: this.excludedPaths }));
       await this.saveState(state);
     }
     return state.baseline;

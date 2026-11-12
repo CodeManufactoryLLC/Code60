@@ -1,5 +1,48 @@
 # Desktop
 
+## Relay exceptions and ownership
+
+- The Relay section of ARCHITECTURE.md supersedes single-project/database-wide
+  rules below for Relay only. Keep desktop host, singleton Relay service, project
+  host, execution host and database services separate within this module.
+- Relay storage and its writer lock are application-owned, private and independent
+  of databases. Missing/unsafe state is recovery, never permission to reset history.
+  Pin journal identity and nanosecond change stamps. Bounded source reads and
+  owned appends share storage I/O serialization, never the conversation queue.
+  Outside changes invalidate exact Copy; only verified owned appends advance stamps.
+- Connect a fresh idle ACP session after verified setup, with zero startup prompts
+  or restored worker/plan authority. Attach the shared bounded history window only
+  to the first human Send. Never resume a native Relay session on restart.
+- Relay's authenticated gateway alone may name an explicit absolute target cwd and
+  direct/worktree mode. Resolve an opaque canonical target, recheck identity, reserve
+  global conversation capacity before awaits and preserve accepted dispatch results
+  despite later metadata errors. Never accept executable/environment overrides.
+  Use bigint filesystem identities internally; rounding a Windows file ID to a
+  number must not allow a replaced target or workspace to pass revalidation.
+- Keep project chats bound to their own target with mandatory isolation. Project
+  navigation preserves owners and views; actual close and database replacement
+  dispose only their own work. Relay and its workers must survive those changes.
+- Stop/shutdown every execution owner, even invisible targets; attempt all cleanup
+  and preserve failures and force escalation. Never remove Relay's workspace.
+- Capture scoped detail owners synchronously on subscription. Recheck identity
+  and generation on every read/publication. Bound subscriptions, clear them on
+  renderer reload/shutdown and isolate a failed listener from other owners.
+- Build app summaries without copying transcript, file or worktree payloads.
+  All conversations are compact, including the selected one. Push worker reply
+  counters with metadata; only addressed details expose transcript contents.
+- Relay file contexts belong to existing detail subscriptions, never the selected
+  project. Resolve only its private workspace or an owned opaque target; recheck
+  canonical identity, generation, subscription and view sequence around reads.
+  Reuse Poller per root and share flights; release views on unsubscribe/reload,
+  and gate previews on visibility without changing another root's context.
+- Relay reviews use private application storage and on-demand individual records.
+  Persist exact target/task/worker-turn provenance, never execution authority.
+  The compatibility project key is Relay's UUID, not a cwd. Seed TaskLoop from
+  the already captured first-default-dispatch baseline; do not recapture at Accept.
+  Historical evidence reads cannot reconnect workers or replay feedback.
+  Pin each review worker's accepted worktree identity, branch and base; recheck
+  before capture/application so editable run records cannot redirect evidence.
+
 - ChatStore owns bounded private orchestration metadata beneath `.code60_workspace/chats`,
   not SQLite or CLI records. Persist tactic selection/explicit null without execution.
   Freeze full versioned instructions per human request and associate worker turns,
@@ -32,6 +75,10 @@
 - Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), validated prompt template edits and explicitly saved reusable commands. Never store per-turn user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Load `node:sqlite` lazily; Node.js 22.12 has it only behind a flag.
 - Validate command saves/deletes again in main, confirm deletion natively, and resolve commands from the connected database at send time. Preserve exact typed transcript text separately from delivered expansion. Commands are shared across projects, not databases. The current orchestrator's authenticated MCP gateway may create commands on user request using the same validation and serialized writes, but cannot update/delete them; workers gain no command capability.
 - Route every repeated external read (run history, config, run configurations, worktrees) through the `Poller` in `poller.ts`. Keep reads single-flight, discard results after a workspace or database switch, keep worktree scans outside the exclusive queue, and stop the poller on shutdown. Never poll agent events or watch files. Persist only user overrides under `polling` in desktop.json.
+  In Relay mode, the scoped registry captures application/database/target owners
+  before the first await. Navigation hides target scheduling but does not dispose
+  a live scope or redirect an existing flight. Actual close/replacement stops
+  that scope and prevents late publication. Reuse the existing Poller scheduler.
 - Do not use top-level `await` in `main.ts`; Electron automation needs the module to finish loading.
 - Own private desktop-only diagnostic JSONL storage separately from transcripts
   and SQLite. Enforce total active-file quota, expiry and cross-process locking.
@@ -58,6 +105,9 @@
 - Enforce enabled membership and unchanged verified command identities in snapshots, desktop launch/recovery, saved configurations and MCP worker tools. Headless CLI behavior stays unchanged. Settings add transactions preserve primary and live chats; primary changes require active work to finish or stop. Keep existing settings until commit.
 
 - Diff preparation is serialized with lifecycle mutations; expensive reads run through DiffReads outside the action queue, with at most two in flight. Cancel reads on context replacement, renderer reload and shutdown, and settle a run's reads before discard. Queued preparation cancellation must not deadlock the control queue.
+  Retained-project reads capture their runtime even when selected. Tag diff,
+  review capture and review-file reads with that owner. Project close/stop/reset
+  and discard cancel only its reads; reload and shutdown still cancel all owners.
 - ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
 - Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Persist title/archive state with private chat metadata; archive only hides navigation and never deletes records or stops work.
 

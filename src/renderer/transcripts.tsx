@@ -116,8 +116,12 @@ export function useTranscripts(
   runs: readonly DesktopRun[] = emptyRuns,
   liveIds: readonly string[] = emptyIds,
   streamed: Readonly<Record<string, readonly RunEvent[]>> = emptyEvents,
+  ownerCache?: TranscriptCache,
 ) {
-  const cache = useMemo(() => new TranscriptCache(api, scope), [api, scope]);
+  const cache = useMemo(
+    () => ownerCache ?? new TranscriptCache(api, scope),
+    [api, scope, ownerCache],
+  );
   const state = useSyncExternalStore(cache.subscribe, cache.snapshot);
   // The log changes when a recorded run advances a turn, ends, or resumes.
   const manifest = JSON.stringify(
@@ -130,8 +134,8 @@ export function useTranscripts(
   );
   useLayoutEffect(() => {
     cache.activate();
-    return () => cache.dispose();
-  }, [cache]);
+    return ownerCache ? undefined : () => cache.dispose();
+  }, [cache, ownerCache]);
   useEffect(() => {
     if (active) void cache.load(JSON.parse(manifest));
   }, [cache, manifest, active]);

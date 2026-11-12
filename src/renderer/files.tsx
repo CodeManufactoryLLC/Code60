@@ -16,9 +16,11 @@ import type {
   FileContext,
   FileDirectory,
   FileEntry,
+  FileSnapshot,
   Snapshot,
 } from "../bridge/index.js";
 import { FileBrowserState } from "./file-browser-state.js";
+import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { pathLabel } from "./path-label.js";
@@ -34,14 +36,18 @@ export function useFiles(
   active: boolean,
   preview: string | null,
   instance?: string,
-) {
+  ownerState?: FileBrowserState,
+): FileBrowser {
   const project = snapshot?.directory ?? null;
   const workspace = `${snapshot?.database}:${project}`;
-  const owner = useMemo(() => new FileBrowserState(instance ?? workspace), [workspace, instance]);
+  const owner = useMemo(
+    () => ownerState ?? new FileBrowserState(instance ?? workspace),
+    [workspace, instance, ownerState],
+  );
   useLayoutEffect(() => {
     owner.activate();
-    return () => owner.dispose();
-  }, [owner]);
+    return ownerState ? undefined : () => owner.dispose();
+  }, [owner, ownerState]);
   const {
     selected: selectedFile,
     expanded,
@@ -53,6 +59,9 @@ export function useFiles(
     project && root
       ? {
           project,
+          ...(snapshot?.projectInstanceId && snapshot.databaseEpoch !== undefined
+            ? { projectId: snapshot.projectInstanceId, databaseEpoch: snapshot.databaseEpoch }
+            : {}),
           root,
           directories:
             preview !== null
@@ -71,7 +80,7 @@ export function useFiles(
       : null;
   const requestJson = JSON.stringify({
     workspace,
-    context: active ? context : null,
+    context: context ? (active ? context : { ...context, active: false }) : null,
   });
   const requests = useRef(Promise.resolve());
   useEffect(() => {
@@ -82,9 +91,8 @@ export function useFiles(
     requests.current = requests.current.then(async () => {
       if (!current) return;
       try {
-        await api.setFileContext(
-          (JSON.parse(requestJson) as { context: FileContext | null }).context,
-        );
+        const context = (JSON.parse(requestJson) as { context: FileContext | null }).context;
+        if (context) await api.setFileContext(context);
       } catch (cause) {
         if (current) setError(message(cause));
       }
@@ -94,13 +102,14 @@ export function useFiles(
     };
   }, [api, requestJson, setError]);
   const directorySnapshot =
-    snapshot?.files?.context.project === project && snapshot.files.context.root === root
+    snapshot?.files?.context.project === project &&
+    snapshot.files.context.root === root &&
+    snapshot.files.context.projectId === context?.projectId &&
+    snapshot.files.context.databaseEpoch === context?.databaseEpoch
       ? snapshot.files
       : null;
   const files =
-    active &&
-    directorySnapshot &&
-    JSON.stringify(directorySnapshot.context) === JSON.stringify(context)
+    active && directorySnapshot && sameFileContext(directorySnapshot.context, context)
       ? directorySnapshot
       : null;
   const roots = project ? [{ path: project, label: `Project · ${pathLabel(project)}` }] : [];
@@ -121,7 +130,21 @@ export function useFiles(
     workspace,
   };
 }
-export type FileBrowser = ReturnType<typeof useFiles>;
+export interface FileBrowser {
+  root: string | null;
+  preview: string | null;
+  selectedFile: string | null;
+  expanded: string[];
+  setExpanded(change: string[] | ((previous: string[]) => string[])): void;
+  files: Pick<FileSnapshot, "directories" | "preview"> | null;
+  directories: FileDirectory[];
+  roots: { path: string; label: string }[];
+  setRoot?: (root: string) => void;
+  selectFile(path: string): void;
+  error: string;
+  loading: boolean;
+  workspace: string;
+}
 
 export function FilesPage({
   browser,
@@ -162,7 +185,11 @@ export function FilesPage({
           <div className="files-controls">
             <label>
               Root
-              <select aria-label="File root" value={browser.root} onChange={() => {}}>
+              <select
+                aria-label="File root"
+                value={browser.root}
+                onChange={(event) => browser.setRoot?.(event.target.value)}
+              >
                 {!browser.roots.some((root) => root.path === browser.root) && (
                   <option value={browser.root}>Unavailable · {browser.root}</option>
                 )}

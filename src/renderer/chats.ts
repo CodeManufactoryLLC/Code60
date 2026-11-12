@@ -9,6 +9,18 @@ export interface Conversation {
 
 const fallbackLabel = ({ record }: DesktopRun) => `${record.agent} / ${record.id.slice(-6)}`;
 
+export function conversationTitle(
+  chats: readonly OrchestrationChat[],
+  chat: OrchestrationChat,
+): string {
+  if (chat.title) return chat.title;
+  if (chat.kind === "relay") return "Relay";
+  const peers = chats.filter(
+    (other) => other.kind === chat.kind && other.projectId === chat.projectId,
+  );
+  return `Chat ${Math.max(0, peers.indexOf(chat)) + 1}`;
+}
+
 /** The orchestrator's role name for a worker, or its provider and short run ID. */
 export function workerLabel(chats: readonly OrchestrationChat[], run: DesktopRun): string {
   for (const chat of chats) {
@@ -31,11 +43,11 @@ export function conversations(
   const result: Conversation[] = [];
   const owned = new Set<string>();
   const available = new Map(runs.map((run) => [run.record.id, run]));
-  for (const [index, chat] of chats.entries()) {
+  for (const chat of chats) {
     if (!chat.run || chat.archived) continue;
     result.push({
       id: chat.run.id,
-      label: chat.title ?? `Chat ${index + 1}`,
+      label: conversationTitle(chats, chat),
       role: "orchestrator",
     });
     for (const id of chat.workers ?? []) {

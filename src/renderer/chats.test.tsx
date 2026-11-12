@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
-import { conversations, reconcileDisclosure, workerLabel } from "./chats.js";
+import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const view = (id: string, status: RunStatus = "idle"): RunView => ({
@@ -32,6 +32,22 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("numbers project chats within their owner, consistently with a filtered sidebar", () => {
+    const relay = { ...chat("relay"), kind: "relay" as const };
+    const a = { ...chat("a"), kind: "project" as const, projectId: "a" };
+    const b = { ...chat("b"), kind: "project" as const, projectId: "b" };
+    const next = { ...chat("next"), kind: "project" as const, projectId: "a" };
+    const all = [relay, a, b, next];
+    expect(all.map((item) => conversationTitle(all, item))).toEqual([
+      "Relay",
+      "Chat 1",
+      "Chat 1",
+      "Chat 2",
+    ]);
+    expect(conversations(all, []).find((item) => item.id === next.run?.id)?.label).toBe(
+      conversations([a, next], [])[1]?.label,
+    );
+  });
   it.each([true, false])("marks only the opened conversation current (Chat open: %s)", (open) => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     for (const selectedId of ["a", "one", "manual"]) {

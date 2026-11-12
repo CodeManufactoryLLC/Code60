@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { DesktopApi, FilePreview, GitReadiness, GitSetupSession } from "../bridge/index.js";
+import type {
+  DesktopApi,
+  FilePreview,
+  GitReadiness,
+  GitSetupSession,
+  ProjectRequestIdentity,
+} from "../bridge/index.js";
 import { Modal } from "./modal.js";
 
 export function GitReadinessNotice({
@@ -38,8 +44,10 @@ export function GitReadinessNotice({
 export function GitSetupDialog({
   api,
   project,
+  projectId,
+  databaseEpoch,
   onClose,
-}: {
+}: ProjectRequestIdentity & {
   api: DesktopApi;
   project: string;
   onClose(): void;
@@ -59,9 +67,9 @@ export function GitSetupDialog({
     mounted.current = true;
     return () => {
       mounted.current = false;
-      void api.cancelGitSetup({ project }).catch(() => {});
+      void api.cancelGitSetup({ project, projectId, databaseEpoch }).catch(() => {});
     };
-  }, [api, project]);
+  }, [api, project, projectId, databaseEpoch]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: The explicit retry counter requests a fresh main-process preview.
   useEffect(() => {
     let current = true;
@@ -70,7 +78,7 @@ export function GitSetupDialog({
     setSession(undefined);
     setFileId(undefined);
     void api
-      .beginGitSetup({ project })
+      .beginGitSetup({ project, projectId, databaseEpoch })
       .then(
         (session) => {
           if (!current) return;
@@ -89,30 +97,38 @@ export function GitSetupDialog({
     return () => {
       current = false;
     };
-  }, [api, project, attempt]);
+  }, [api, project, projectId, databaseEpoch, attempt]);
   useEffect(() => {
     let current = true;
     setPreview(undefined);
     if (session && fileId)
-      void api.previewGitSetupFile({ project, sessionId: session.sessionId, fileId }).then(
-        (preview) => {
-          if (current) setPreview(preview);
-        },
-        (cause: unknown) => {
-          if (current)
-            setPreview({
-              path: "",
-              text: null,
-              size: null,
-              modifiedAt: null,
-              error: cause instanceof Error ? cause.message : String(cause),
-            });
-        },
-      );
+      void api
+        .previewGitSetupFile({
+          project,
+          projectId,
+          databaseEpoch,
+          sessionId: session.sessionId,
+          fileId,
+        })
+        .then(
+          (preview) => {
+            if (current) setPreview(preview);
+          },
+          (cause: unknown) => {
+            if (current)
+              setPreview({
+                path: "",
+                text: null,
+                size: null,
+                modifiedAt: null,
+                error: cause instanceof Error ? cause.message : String(cause),
+              });
+          },
+        );
     return () => {
       current = false;
     };
-  }, [api, project, session, fileId]);
+  }, [api, project, projectId, databaseEpoch, session, fileId]);
   async function commit() {
     if (!session || busy) return;
     setBusy(true);
@@ -120,6 +136,8 @@ export function GitSetupDialog({
     try {
       const result = await api.commitGitSetup({
         project,
+        projectId,
+        databaseEpoch,
         sessionId: session.sessionId,
         fileIds: selected,
         name,
@@ -138,7 +156,7 @@ export function GitSetupDialog({
     }
   }
   async function cancel() {
-    await api.cancelGitSetup({ project }).catch((cause) => {
+    await api.cancelGitSetup({ project, projectId, databaseEpoch }).catch((cause) => {
       if (mounted.current) setError(String(cause));
     });
     if (mounted.current) setBusy(false);

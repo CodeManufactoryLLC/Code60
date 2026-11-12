@@ -89,7 +89,7 @@ export function AppPages(props: AppPagesProps) {
   const run = snapshot?.runs.find((item) => item.record.id === selected);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
   const views = {
-    chat: <ChatWorkspace key={databaseKey} {...props} />,
+    chat: <ChatWorkspace {...props} />,
     settings: (
       <>
         <SettingsPage

@@ -49,6 +49,13 @@ export function ChatSidebar({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const previous = useRef<Record<string, string[]>>({});
   const markers = useRef(new Map<string, number>());
+  const relay = chats.find((chat) => chat.kind === "relay");
+  const markerScope = (id: string) =>
+    relay?.run?.id === id || relay?.workers?.includes(id)
+      ? `relay:${relay.conversationId ?? id}`
+      : database;
+  const selectedMarkerScope =
+    selectedId && entries.some((entry) => entry.id === selectedId) ? markerScope(selectedId) : null;
   const replies = useMemo(
     () =>
       Object.fromEntries(
@@ -56,6 +63,17 @@ export function ChatSidebar({
       ),
     [eventsByRun],
   );
+  const summaries = new Map([
+    ...chats.flatMap((chat) =>
+      chat.run && chat.replies ? [[chat.run.id, chat.replies] as const] : [],
+    ),
+    ...runs.flatMap((run) => (run.replies ? [[run.record.id, run.replies] as const] : [])),
+  ]);
+  const markerKey = (scope: string, id: string) =>
+    readMarkerKey(scope, id, summaries.has(id) ? "reply-count" : undefined);
+  const selectedMarkerKey =
+    selectedMarkerScope && selectedId ? markerKey(selectedMarkerScope, selectedId) : null;
+  const selectedReplies = summaries.get(selectedId ?? "")?.count;
   useLayoutEffect(() => {
     const prior = previous.current;
     setCollapsed((current) => {
@@ -85,19 +103,21 @@ export function ChatSidebar({
     });
   }, [selectedId, parentId, open, navigationSerial]);
   useLayoutEffect(() => {
-    if (!database || !open || !selectedId) return;
-    const key = readMarkerKey(database, selectedId);
-    const read = (replies[selectedId] ?? []).reduce(
-      (latest, turn) => Math.max(latest, turn),
-      markers.current.get(key) ?? loadReadMarker(sessionStorage, key),
-    );
+    if (!selectedMarkerKey || !open || !selectedId) return;
+    const key = selectedMarkerKey;
+    const read =
+      selectedReplies ??
+      (replies[selectedId] ?? []).reduce(
+        (latest, turn) => Math.max(latest, turn),
+        markers.current.get(key) ?? loadReadMarker(sessionStorage, key),
+      );
     markers.current.set(key, read);
     try {
       sessionStorage.setItem(key, String(read));
     } catch {
       // Keep in-memory read state when browser storage is unavailable.
     }
-  }, [database, open, selectedId, replies]);
+  }, [selectedMarkerKey, open, selectedId, replies, selectedReplies]);
 
   const chatById = new Map(chats.map((chat) => [chat.run?.id, chat]));
   const runById = new Map(runs.map((run) => [run.record.id, run]));
@@ -116,9 +136,16 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
-    const key = readMarkerKey(database ?? "", entry.id);
+    const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
+    const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
-    const unread = open && entry.id === selectedId ? 0 : unreadCount(replies[entry.id] ?? [], read);
+    const summary = summaries.get(entry.id);
+    const unread =
+      open && entry.id === selectedId
+        ? 0
+        : summary
+          ? Math.max(0, summary.count - read)
+          : unreadCount(replies[entry.id] ?? [], read);
     const unreadLabel = unread > 0 ? `${unread} unread ${unread === 1 ? "reply" : "replies"}` : "";
     const approvals = view?.pending.length ?? 0;
     const description = [
@@ -142,10 +169,16 @@ export function ChatSidebar({
             aria-label={entry.label}
             aria-description={description}
             aria-current={open && entry.id === selectedId ? "true" : undefined}
-            disabled={pending}
+            disabled={disabled}
             onClick={() => onSelect(entry.id)}
             onContextMenu={(event) => {
-              if (entry.role !== "orchestrator" || pending) return;
+              if (
+                entry.role !== "orchestrator" ||
+                chat?.kind === "relay" ||
+                chat?.kind === "legacy" ||
+                disabled
+              )
+                return;
               event.preventDefault();
               event.currentTarget.focus();
               setMenu({ ...entry, x: event.clientX, y: event.clientY });
@@ -154,6 +187,8 @@ export function ChatSidebar({
             onKeyDown={(event) => {
               if (
                 entry.role === "orchestrator" &&
+                chat?.kind !== "relay" &&
+                chat?.kind !== "legacy" &&
                 (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
               ) {
                 event.preventDefault();
@@ -193,7 +228,7 @@ export function ChatSidebar({
             </span>
             <span className="sr-only">{description}</span>
           </button>
-          {entry.role === "orchestrator" && (
+          {entry.role === "orchestrator" && chat?.kind !== "relay" && chat?.kind !== "legacy" && (
             <button
               type="button"
               className="icon-button"

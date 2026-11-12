@@ -17,6 +17,8 @@ export interface AppPagesProps {
   project: ReturnType<typeof useProjectScope> & {
     explorerOpen: boolean;
     setExplorerOpen: Dispatch<SetStateAction<boolean>>;
+    visitedRelayWorkers?: string[];
+    explicitProjectFiles?: boolean;
   };
   preferences: ReturnType<typeof useAppPreferences>;
   appearance: ReturnType<typeof useWindowAppearance>;

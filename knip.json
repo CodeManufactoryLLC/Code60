@@ -10,12 +10,13 @@
     "test/**/*.{test,e2e}.{ts,mjs}",
     "test/fixtures/fake-agent.mjs",
     "test/fixtures/packaged-agent.mjs",
-    "test/fixtures/fake-docker.mjs"
+    "test/fixtures/fake-docker.mjs",
+    "test/fixtures/renderer-replay.tsx"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",
     "scripts/**/*.{mjs,cjs}",
-    "test/**/*.{ts,mjs}",
+    "test/**/*.{ts,tsx,mjs}",
     "*config*.ts"
   ],
   "ignoreDependencies": ["@wyw-in-js/shared", "app-builder-lib"],

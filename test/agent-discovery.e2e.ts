@@ -104,8 +104,16 @@ for (const location of process.platform === "win32"
         }
       }
       await expect(page.locator(".splash-title")).toHaveText("Code60");
-      await page.evaluate(() => window.desktop.connectDatabase("create"));
-      await page.evaluate(() => window.desktop.chooseFolder());
+      await page.evaluate(() =>
+        window.desktop
+          .snapshot()
+          .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+      );
+      await page.evaluate(() =>
+        window.desktop
+          .snapshot()
+          .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch)),
+      );
       await page.evaluate(async () => {
         let session = (await window.desktop.snapshot()).agentSetup?.session;
         if (!session) {
@@ -118,6 +126,18 @@ for (const location of process.platform === "win32"
         await window.desktop.finishAgentSetup({ sessionId: session.id });
       });
       await expect.poll(() => readFile(probe, "utf8").catch(() => "")).toBe("ok\n");
+      const idle = await page.evaluate(() => window.desktop.snapshot());
+      expect(idle.chat.run?.turns).toBe(0);
+      expect(idle.runs).toEqual([]);
+      await page.evaluate(async (cwd) => {
+        const relay = (await window.desktop.snapshot()).chat.run;
+        if (!relay) throw new Error("Missing Relay");
+        await window.desktop.orchestrationChatAction({
+          type: "send",
+          id: relay.id,
+          text: `Relay target: ${JSON.stringify({ cwd, workspaceMode: "worktree", provider: "codex" })}`,
+        });
+      }, project);
       await expect
         .poll(() =>
           page.evaluate(async () => {

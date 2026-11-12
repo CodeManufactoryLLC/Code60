@@ -81,6 +81,17 @@ const controlSchemas = {
 
 export type ControlArgs<T extends McpControlTool> = z.output<(typeof controlSchemas)[T]>;
 
+const relayDispatchSchema = controlSchemas.code60_dispatch_agent.omit({ reviewId: true }).extend({
+  cwd: z.string().min(1).max(32_768),
+  workspaceMode: z.enum(["direct", "worktree"]),
+});
+/** This schema is never used for project chats; they still reject cwd and mode. */
+export function parseRelayDispatch(args: unknown) {
+  const result = relayDispatchSchema.safeParse(args, { jitless: true });
+  if (!result.success) throw new Error("Invalid Relay dispatch arguments");
+  return result.data;
+}
+
 /** Validates worker tool arguments. Errors name the field, never echo the supplied value. */
 export function parseControlArgs<T extends McpControlTool>(tool: T, args: unknown): ControlArgs<T> {
   const result = controlSchemas[tool].safeParse(args ?? {}, { jitless: true });

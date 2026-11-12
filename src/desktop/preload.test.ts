@@ -46,6 +46,8 @@ describe("sandboxed diagnostic preload", () => {
     expect(removeListener).toHaveBeenCalledWith(channel, handler);
     expect(api).not.toHaveProperty("ipcRenderer");
     expect(api).not.toHaveProperty("readFile");
+    expect(await api.appSummary?.()).toBe("result");
+    expect(invoke).toHaveBeenLastCalledWith("desktop:snapshot-summary");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
       openWebLink: "web-link",
@@ -56,6 +58,12 @@ describe("sandboxed diagnostic preload", () => {
       commitGitSetup: "git-commit",
       cancelGitSetup: "git-cancel",
       readPlan: "plan-read",
+      subscribeDetails: "detail-subscribe",
+      readDetails: "detail-read",
+      setRelayFileContext: "relay-files",
+      unsubscribeDetails: "detail-unsubscribe",
+      readRelayMessage: "relay-message",
+      relayReview: "relay-review",
       planAction: "plan-action",
       readReview: "review-read",
       taskAction: "task-action",
@@ -78,34 +86,74 @@ describe("sandboxed diagnostic preload", () => {
       setWindowTheme: "window-theme",
       setTransparent: "transparent",
       setBackgroundHitTest: "background-hit-test",
-      connectDatabase: "database",
-      openProject: "project",
-      removeProject: "project-remove",
+      projectAction: "project-action",
       setFileContext: "files",
-      poll: "poll",
       setPollSettings: "poll-settings",
       setPollingPaused: "poll-paused",
       setVisibility: "visibility",
       setOrchestrationProvider: "orchestration-provider",
       start: "start",
+      action: "action",
+    };
+    const request = { opaque: "request" };
+    const detailListener = vi.fn();
+    const offDetails = api.onDetails?.(detailListener) as () => void;
+    const [detailChannel, detailHandler] = on.mock.calls.at(-1) as [
+      string,
+      (event: unknown, frame: unknown) => void,
+    ];
+    expect(detailChannel).toBe("desktop:detail");
+    detailHandler(null, { revision: 5 });
+    expect(detailListener).toHaveBeenCalledWith({ revision: 5 });
+    offDetails();
+    expect(removeListener).toHaveBeenLastCalledWith(detailChannel, detailHandler);
+    const projectId = crypto.randomUUID();
+    for (const identity of [{ projectId, databaseEpoch: 7 }, undefined]) {
+      expect(await api.poll?.(["history"], identity)).toBe("result");
+      expect(invoke).toHaveBeenLastCalledWith("desktop:poll", {
+        keys: ["history"],
+        projectId: identity?.projectId,
+        databaseEpoch: identity?.databaseEpoch,
+      });
+    }
+    for (const [method, channel] of Object.entries(requests)) {
+      expect(await api[method]?.(request)).toBe("result");
+      expect(invoke).toHaveBeenLastCalledWith(`desktop:${channel}`, request);
+    }
+    for (const [method, channel] of Object.entries({
+      connectDatabase: "database",
+      openProject: "project",
+      removeProject: "project-remove",
       saveConfiguration: "configuration-save",
       deleteConfiguration: "configuration-delete",
       savePromptTemplate: "prompt-save",
       saveCommand: "command-save",
       deleteCommand: "command-delete",
       resetPromptTemplate: "prompt-reset",
-      action: "action",
-    };
-    const request = { opaque: "request" };
-    for (const [method, channel] of Object.entries(requests)) {
-      expect(await api[method]?.(request)).toBe("result");
-      expect(invoke).toHaveBeenLastCalledWith(`desktop:${channel}`, request);
+    })) {
+      expect(await api[method]?.(request, 7)).toBe("result");
+      expect(invoke).toHaveBeenLastCalledWith(`desktop:${channel}`, { request, databaseEpoch: 7 });
+      await api[method]?.(request);
+      expect(invoke).toHaveBeenLastCalledWith(`desktop:${channel}`, {
+        request,
+        databaseEpoch: undefined,
+      });
+    }
+    for (const [method, channel] of Object.entries({
+      chooseFolder: "folder",
+      clearProjects: "project-clear",
+    })) {
+      for (const databaseEpoch of [7, undefined]) {
+        expect(await api[method]?.(databaseEpoch)).toBe("result");
+        expect(invoke).toHaveBeenLastCalledWith(`desktop:${channel}`, {
+          request: undefined,
+          databaseEpoch,
+        });
+      }
     }
     for (const [method, channel] of Object.entries({
       snapshot: "snapshot",
       windowAppearance: "window-appearance",
-      chooseFolder: "folder",
-      clearProjects: "project-clear",
       testOrchestrationProvider: "orchestration-test",
       cancelOrchestrationTest: "orchestration-test-cancel",
       stopAll: "stop-all",

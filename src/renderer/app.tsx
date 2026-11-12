@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
 import { useAppActions } from "./app-actions.js";
 import { appCommands } from "./app-commands.js";
@@ -7,6 +7,7 @@ import { AppFooter } from "./app-footer.js";
 import { AppMenus } from "./app-menus.js";
 import { AppPages } from "./app-pages.js";
 import { useAppPreferences } from "./app-preferences.js";
+import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { pageAvailable } from "./navigation.js";
@@ -22,6 +23,7 @@ import { PageTabBar } from "./page-tabs.js";
 import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
+import { useScopedDetails } from "./scoped-details.js";
 import { createSessionCommands } from "./session-commands.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 import { Splash } from "./splash.js";
@@ -30,12 +32,18 @@ import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
 import { useUpdateNotice, useUpdates } from "./updates.js";
 import { useWindowAppearance } from "./window-appearance.js";
 
-export function App({ api }: { api: DesktopApi }) {
-  const updates = useUpdates(api);
+export function App({ api: transport }: { api: DesktopApi }) {
+  const updates = useUpdates(transport);
   const [error, setError] = useState("");
-  const { state, accept } = useDesktopSnapshot(api, setError);
+  const { state: appState, accept } = useDesktopSnapshot(transport, setError);
+  const [detailWorkerId, setDetailWorkerId] = useState<string>();
+  const state = useScopedDetails(transport, appState, setError, detailWorkerId);
   const snapshot = state?.snapshot;
-  const appearance = useWindowAppearance(api, setError);
+  const api = useMemo(
+    () => bindDatabaseWrites(transport, snapshot?.databaseEpoch),
+    [transport, snapshot?.databaseEpoch],
+  );
+  const appearance = useWindowAppearance(transport, setError);
 
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
@@ -50,7 +58,7 @@ export function App({ api }: { api: DesktopApi }) {
     [],
   );
   const { busy, attempt, setBusy } = useAppActions(setError);
-  const preferences = useAppPreferences(api, setError);
+  const preferences = useAppPreferences(transport, setError);
   const { theme, setTheme } = preferences;
   const [tabs, setTabs] = useState(initialTabs);
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("agents");
@@ -87,7 +95,17 @@ export function App({ api }: { api: DesktopApi }) {
     resume,
     openReview,
     reviewRun,
-  } = useProjectWorkspace({ api, state, tabs, splash, setTabs, setError, notify, setBusy });
+  } = useProjectWorkspace({
+    api,
+    state,
+    tabs,
+    splash,
+    setTabs,
+    setError,
+    notify,
+    setBusy,
+    onWorkerSelection: setDetailWorkerId,
+  });
   const {
     scope,
     selected,
@@ -233,10 +251,19 @@ export function App({ api }: { api: DesktopApi }) {
             tabs={tabs}
             settingsSection={settingsSection}
             api={api}
+            openProjects={snapshot?.openProjects}
+            selectedProjectId={snapshot?.projectInstanceId}
             chats={snapshot?.chats ?? []}
             selectedId={workerId ?? snapshot?.chat.run?.id}
             navigationSerial={chatRequest?.serial}
-            runs={snapshot?.runs ?? []}
+            runs={[
+              ...new Map(
+                [
+                  ...Object.values(state?.projectViews ?? {}).flatMap((view) => view.runs),
+                  ...(snapshot?.runs ?? []),
+                ].map((run) => [run.record.id, run]),
+              ).values(),
+            ]}
             onWorkerSelect={selectWorker}
             database={database}
             eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
@@ -244,7 +271,9 @@ export function App({ api }: { api: DesktopApi }) {
             onOpenProject={() => showPicker("project")}
             onConnectDatabase={() => showPicker("database")}
             onSettingsSectionSelect={setSettingsSection}
-            projectDisabled={busy || !snapshot || Boolean(snapshot.active)}
+            projectDisabled={
+              busy || !snapshot || Boolean(snapshot.active && !snapshot.openProjects)
+            }
             onSelect={(id) => {
               setMenu(undefined);
               setConfigurationMenu(undefined);

@@ -12,6 +12,39 @@ const deferred = <T>() => {
 };
 
 describe("diff read lifetime", () => {
+  it("filters cancellation by owner without releasing another owner's capacity", async () => {
+    const reads = new DiffReads();
+    const first = request();
+    const second = request();
+    const a = deferred<null>();
+    const b = deferred<null>();
+    const executeA = vi.fn(async () => "A");
+    const executeB = vi.fn(async () => "B");
+    const pendingA = reads.read(first, () => a.promise, executeA, "project-a");
+    const rejectedA = expect(pendingA).rejects.toThrow("cancelled");
+    const pendingB = reads.read(second, () => b.promise, executeB, "project-b");
+    await reads.cancel(first.requestId, undefined, "project-b");
+    await reads.cancel(undefined, undefined, "project-a");
+    await rejectedA;
+    a.resolve(null);
+    await Promise.resolve();
+    expect(executeA).not.toHaveBeenCalled();
+    await expect(
+      reads.read(
+        request(),
+        async () => null,
+        async () => "new",
+        "project-c",
+      ),
+    ).resolves.toBe("new");
+    const rejectedB = expect(pendingB).rejects.toThrow("cancelled");
+    await reads.cancel();
+    await rejectedB;
+    b.resolve(null);
+    await Promise.resolve();
+    expect(executeB).not.toHaveBeenCalled();
+  });
+
   it("bounds admission and cancels only the requested read, waiting for cleanup", async () => {
     const reads = new DiffReads();
     const first = request();

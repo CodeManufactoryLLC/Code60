@@ -67,29 +67,63 @@ async function save(path: string, value: unknown): Promise<void> {
   }
 }
 
-/** Project-scoped human review records. No agent process or worker authority is persisted here. */
+/** Human review evidence. Neither project nor Relay provenance restores worker authority. */
 export class ReviewStore {
   private records = new Map<string, Review>();
   private writes: Promise<unknown> = Promise.resolve();
   private constructor(
     readonly root: string,
     readonly project: string,
+    private readonly recordId: string | undefined,
+    private readonly readRecord: typeof readJson,
   ) {}
 
-  static async open(root: string, project: string): Promise<ReviewStore> {
-    const store = new ReviewStore(join(root, digest(project)), project);
-    await privateDirectory(store.root);
-    const entries = (await readdir(store.root)).filter((entry) =>
-      /^[a-f0-9-]{36}\.json$/.test(entry),
+  static async open(
+    root: string,
+    project: string,
+    options: {
+      recordId?: string;
+      create?: boolean;
+      read?: typeof readJson;
+      liveSubmissions?: ReadonlySet<string>;
+    } = {},
+  ): Promise<ReviewStore> {
+    if (options.recordId !== undefined)
+      reviewSchema.shape.id.parse(options.recordId, { jitless: true });
+    const store = new ReviewStore(
+      join(root, digest(project)),
+      project,
+      options.recordId,
+      options.read ?? readJson,
     );
+    await privateDirectory(store.root);
+    const entries =
+      options.recordId !== undefined
+        ? [`${options.recordId}.json`]
+        : (await readdir(store.root)).filter((entry) => /^[a-f0-9-]{36}\.json$/.test(entry));
     if (entries.length > 200) throw new Error("Review limit reached for this project");
     for (const entry of entries) {
-      const review = reviewSchema.parse(await readJson(join(store.root, entry)), { jitless: true });
+      let raw: unknown;
+      try {
+        raw = await store.readRecord(join(store.root, entry));
+      } catch (cause) {
+        if (
+          options.recordId !== undefined &&
+          options.create &&
+          (cause as NodeJS.ErrnoException).code === "ENOENT"
+        )
+          continue;
+        throw cause;
+      }
+      const review = reviewSchema.parse(raw, { jitless: true });
       if (review.project !== project || entry !== `${review.id}.json`)
         throw new Error("Invalid saved review identity");
       // Never replay a possibly delivered prompt after a crash or app restart.
       for (const batch of review.submissions)
-        if (batch.state === "pending" || batch.state === "delivering") {
+        if (
+          (batch.state === "pending" || batch.state === "delivering") &&
+          !options.liveSubmissions?.has(batch.id)
+        ) {
           batch.state = "failed";
           batch.error =
             "Delivery interrupted. Reconnect and check the conversation before retrying.";
@@ -122,13 +156,25 @@ export class ReviewStore {
       return review;
     });
   }
-  create(chatId: string | null, turn: number, title: string): Promise<Review> {
+  create(
+    chatId: string | null,
+    turn: number,
+    title: string,
+    relay?: NonNullable<Review["relay"]>,
+  ): Promise<Review> {
     return this.serialized(async () => {
       if (this.records.size >= 200) throw new Error("Review limit reached for this project");
+      const id = this.recordId ?? randomUUID();
+      if (this.records.has(id)) throw new Error("This review already exists");
+      const existing = await lstat(join(this.root, `${id}.json`)).catch((cause) => {
+        if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+        return null;
+      });
+      if (existing) throw new Error("This review already exists");
       const review: Review = {
         version: 0,
         format: 1,
-        id: randomUUID(),
+        id,
         project: this.project,
         title: title.trim().slice(0, 160) || "Worker changes",
         originChatId: chatId,
@@ -139,16 +185,39 @@ export class ReviewStore {
         comments: [],
         submissions: [],
         reviewed: {},
+        ...(relay ? { relay } : {}),
       };
+      reviewSchema.parse(review, { jitless: true });
       await save(join(this.root, `${review.id}.json`), review);
       this.records.set(review.id, review);
       return review;
     });
   }
-  async addWorker(id: string, runId: string, label: string): Promise<void> {
+  async addWorker(
+    id: string,
+    runId: string,
+    label: string,
+    turn?: number,
+    checkout?: Review["workers"][number]["checkout"],
+  ): Promise<void> {
     await this.mutate(id, (review) => {
-      if (!review.workers.some((worker) => worker.runId === runId))
-        review.workers.push({ runId, label: label.slice(0, 160) });
+      const existing = review.workers.find((worker) => worker.runId === runId);
+      if (existing) {
+        if (
+          checkout &&
+          existing.checkout &&
+          JSON.stringify(checkout) !== JSON.stringify(existing.checkout)
+        )
+          throw new Error("Review worker checkout identity changed");
+        if (checkout) existing.checkout = checkout;
+        if (turn !== undefined) existing.turn = turn;
+      } else
+        review.workers.push({
+          runId,
+          label: label.slice(0, 160),
+          ...(turn === undefined ? {} : { turn }),
+          ...(checkout ? { checkout } : {}),
+        });
     });
   }
   async capture(
@@ -267,10 +336,10 @@ export class ReviewStore {
     return review;
   }
   private async revisionContents(id: string, revisionId: string): Promise<unknown> {
-    return readJson(join(this.root, `${revisionId}.rev`)).catch((cause) => {
+    return this.readRecord(join(this.root, `${revisionId}.rev`)).catch((cause) => {
       if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
       // Read earlier releases' nested layout without moving or rewriting saved data.
-      return readJson(join(this.root, id, `${revisionId}.json`));
+      return this.readRecord(join(this.root, id, `${revisionId}.json`));
     });
   }
   async action(action: Exclude<ReviewAction, { type: "open-run" }>): Promise<Review> {

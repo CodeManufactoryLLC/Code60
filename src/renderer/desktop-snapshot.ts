@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
 import { applyUpdate, type DesktopState } from "./snapshot-state.js";
+import { startSnapshotStream } from "./snapshot-stream.js";
+
+function hasGap(state: DesktopState, update: Snapshot): boolean {
+  return (
+    update.revision > state.snapshot.revision &&
+    update.previousRevision !== undefined &&
+    update.previousRevision > state.snapshot.revision
+  );
+}
 
 /** The stream and explicit snapshot refreshes share one revision-aware owner. */
 export class SnapshotStore {
@@ -19,37 +28,19 @@ export class SnapshotStore {
     this.state = next;
     for (const listener of this.listeners) listener();
   }
-  start(api: Pick<DesktopApi, "subscribe" | "snapshot">, fail: (message: string) => void) {
-    let disposed = false;
-    let initialized = false;
-    const buffered: Snapshot[] = [];
-    const off = api.subscribe((update) => {
-      if (disposed) return;
-      if (!initialized) buffered.push(update);
-      else this.accept(update);
+  start(
+    api: Pick<DesktopApi, "subscribe" | "snapshot" | "appSummary">,
+    fail: (message: string) => void,
+  ) {
+    return startSnapshotStream({
+      subscribe: (listener) => api.subscribe(listener),
+      read: () => (api.appSummary ? api.appSummary() : api.snapshot()),
+      current: this.snapshot,
+      merge: applyUpdate,
+      hasGap,
+      publish: (state) => this.publish(state),
+      fail,
     });
-    void api
-      .snapshot()
-      .then((initial) => {
-        if (disposed) return;
-        let next = applyUpdate(this.state, initial);
-        for (const update of buffered) next = applyUpdate(next, update);
-        buffered.length = 0;
-        initialized = true;
-        this.publish(next);
-      })
-      .catch((cause: unknown) => {
-        if (disposed) return;
-        disposed = true;
-        buffered.length = 0;
-        off();
-        fail(cause instanceof Error ? cause.message : String(cause));
-      });
-    return () => {
-      if (!disposed) off();
-      disposed = true;
-      buffered.length = 0;
-    };
   }
 }
 

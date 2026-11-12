@@ -96,7 +96,7 @@ export function Splash({
         {ready && (
           <aside className="splash-projects" aria-labelledby={`${id}-projects`}>
             <h2 id={`${id}-projects`}>Open Project</h2>
-            {configured && snapshot?.active && (
+            {configured && snapshot?.active && !snapshot.openProjects && (
               <p className="muted" role="status">
                 Finish or stop all runs before switching projects. Choose Start to return to your
                 workspace.

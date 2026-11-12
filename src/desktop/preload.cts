@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("desktop", {
   commitGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-commit", request),
   cancelGitSetup: (request: unknown) => ipcRenderer.invoke("desktop:git-cancel", request),
   readPlan: (request: unknown) => ipcRenderer.invoke("desktop:plan-read", request),
+  readRelayMessage: (request: unknown) => ipcRenderer.invoke("desktop:relay-message", request),
+  relayReview: (request: unknown) => ipcRenderer.invoke("desktop:relay-review", request),
   planAction: (request: unknown) => ipcRenderer.invoke("desktop:plan-action", request),
   readReview: (request: unknown) => ipcRenderer.invoke("desktop:review-read", request),
   taskAction: (request: unknown) => ipcRenderer.invoke("desktop:task-action", request),
@@ -51,13 +53,35 @@ contextBridge.exposeInMainWorld("desktop", {
   setBackgroundHitTest: (ignore: unknown) =>
     ipcRenderer.invoke("desktop:background-hit-test", ignore),
   snapshot: () => ipcRenderer.invoke("desktop:snapshot"),
-  connectDatabase: (mode: unknown) => ipcRenderer.invoke("desktop:database", mode),
-  chooseFolder: () => ipcRenderer.invoke("desktop:folder"),
-  openProject: (path: unknown) => ipcRenderer.invoke("desktop:project", path),
-  removeProject: (path: unknown) => ipcRenderer.invoke("desktop:project-remove", path),
-  clearProjects: () => ipcRenderer.invoke("desktop:project-clear"),
+  appSummary: () => ipcRenderer.invoke("desktop:snapshot-summary"),
+  subscribeDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-subscribe", request),
+  readDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-read", request),
+  setRelayFileContext: (request: unknown) => ipcRenderer.invoke("desktop:relay-files", request),
+  unsubscribeDetails: (request: unknown) =>
+    ipcRenderer.invoke("desktop:detail-unsubscribe", request),
+  onDetails: (listener: (frame: unknown) => void) => {
+    const handler = (_event: unknown, frame: unknown) => listener(frame);
+    ipcRenderer.on("desktop:detail", handler);
+    return () => ipcRenderer.removeListener("desktop:detail", handler);
+  },
+  connectDatabase: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:database", { request, databaseEpoch }),
+  chooseFolder: (databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:folder", { request: undefined, databaseEpoch }),
+  openProject: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:project", { request, databaseEpoch }),
+  projectAction: (request: unknown) => ipcRenderer.invoke("desktop:project-action", request),
+  removeProject: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:project-remove", { request, databaseEpoch }),
+  clearProjects: (databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:project-clear", { request: undefined, databaseEpoch }),
   setFileContext: (context: unknown) => ipcRenderer.invoke("desktop:files", context),
-  poll: (keys: unknown) => ipcRenderer.invoke("desktop:poll", keys),
+  poll: (keys: unknown, identity?: { projectId?: string; databaseEpoch?: number }) =>
+    ipcRenderer.invoke("desktop:poll", {
+      keys,
+      projectId: identity?.projectId,
+      databaseEpoch: identity?.databaseEpoch,
+    }),
   setPollSettings: (settings: unknown) => ipcRenderer.invoke("desktop:poll-settings", settings),
   setPollingPaused: (paused: unknown) => ipcRenderer.invoke("desktop:poll-paused", paused),
   setVisibility: (visibility: unknown) => ipcRenderer.invoke("desktop:visibility", visibility),
@@ -66,13 +90,18 @@ contextBridge.exposeInMainWorld("desktop", {
   testOrchestrationProvider: () => ipcRenderer.invoke("desktop:orchestration-test"),
   cancelOrchestrationTest: () => ipcRenderer.invoke("desktop:orchestration-test-cancel"),
   start: (request: unknown) => ipcRenderer.invoke("desktop:start", request),
-  saveConfiguration: (request: unknown) =>
-    ipcRenderer.invoke("desktop:configuration-save", request),
-  deleteConfiguration: (id: unknown) => ipcRenderer.invoke("desktop:configuration-delete", id),
-  savePromptTemplate: (request: unknown) => ipcRenderer.invoke("desktop:prompt-save", request),
-  saveCommand: (request: unknown) => ipcRenderer.invoke("desktop:command-save", request),
-  deleteCommand: (request: unknown) => ipcRenderer.invoke("desktop:command-delete", request),
-  resetPromptTemplate: (id: unknown) => ipcRenderer.invoke("desktop:prompt-reset", id),
+  saveConfiguration: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:configuration-save", { request, databaseEpoch }),
+  deleteConfiguration: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:configuration-delete", { request, databaseEpoch }),
+  savePromptTemplate: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:prompt-save", { request, databaseEpoch }),
+  saveCommand: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:command-save", { request, databaseEpoch }),
+  deleteCommand: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:command-delete", { request, databaseEpoch }),
+  resetPromptTemplate: (request: unknown, databaseEpoch?: number) =>
+    ipcRenderer.invoke("desktop:prompt-reset", { request, databaseEpoch }),
   action: (action: unknown) => ipcRenderer.invoke("desktop:action", action),
   stopAll: () => ipcRenderer.invoke("desktop:stop-all"),
   subscribe: (listener: (value: unknown) => void) => {

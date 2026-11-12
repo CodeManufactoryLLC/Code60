@@ -14,3 +14,7 @@
   Zod jitless parsing before schema construction in directly re-exported modules.
 
 - Worker tools require Git readiness and an initial commit. Context reports prerequisites; direct users to Chat setup and wait for explicit continuation. No agent-accessible initialization or commit tool.
+- Relay-only dispatch may require an explicit bounded absolute cwd and direct/worktree
+  mode; project dispatch still rejects directories and requires Git isolation.
+  Shared identities and history-window policies remain browser-safe, strict and
+  free of I/O. No executable/environment fields are permitted.

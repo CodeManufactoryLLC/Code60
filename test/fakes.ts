@@ -196,7 +196,7 @@ export class FakeGit implements Git {
     if (rev === "bad") throw new Error("unknown revision 'bad'");
     return "c0ffee";
   }
-  async addWorktree(spec: WorktreeSpec) {
+  async addWorktree(spec: WorktreeSpec, _signal?: AbortSignal) {
     if (this.addError !== undefined) throw this.addError;
     this.worktrees.push(spec);
   }

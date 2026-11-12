@@ -18,6 +18,7 @@ import { CommandComposer, CommandMessage, invokedCommand } from "./command-compo
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
+import { RelayHistoryMessages } from "./relay-history.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
@@ -78,7 +79,14 @@ export function ChatPage({
   const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
-  const key = run ? `code60.orchestrationDraft:${run.id}` : "";
+  const relay = chat?.kind === "relay";
+  const readOnly = chat?.kind === "legacy";
+  const available = !!database || relay;
+  const key = chat?.conversationId
+    ? `code60.orchestrationDraft:${chat.conversationId}`
+    : run
+      ? `code60.orchestrationDraft:${run.id}`
+      : "";
   const currentKey = useRef(key);
   currentKey.current = key;
   const draftState = useChatDraft(key);
@@ -88,7 +96,7 @@ export function ChatPage({
     error: actionError,
     setError,
     action,
-  } = useOrchestratorActions(api, database, key);
+  } = useOrchestratorActions(api, database, key, relay);
   const busy = pending !== null;
   const error = actionError || draftState.storageError;
   const [visible, setVisible] = useState(300);
@@ -109,7 +117,8 @@ export function ChatPage({
   const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
   const ready =
-    !!database &&
+    !readOnly &&
+    available &&
     !!run &&
     (run.status === "idle" ||
       !!chat?.restored ||
@@ -118,7 +127,7 @@ export function ChatPage({
     !run.modeChanging;
   const ended = run && !["queued", "running", "waiting", "idle"].includes(run.status);
   const initialized = Boolean(
-    database && run && (run.turns > 0 || run.status === "idle" || chat?.restored || ended),
+    available && run && (run.turns > 0 || run.status === "idle" || chat?.restored || ended),
   );
   const blocks = useMemo(() => transcript(events), [events]);
   const timings = useMemo(
@@ -261,7 +270,7 @@ export function ChatPage({
     if (!ready || !run || !draft.trim()) return;
     const sent = draftState.sent();
     const text = sent.text;
-    const command = invokedCommand(commands, text);
+    const command = relay ? undefined : invokedCommand(commands, text);
     if (
       await action({
         type: "send",
@@ -282,14 +291,19 @@ export function ChatPage({
         ? statusSpec[run.status].label
         : "Not connected";
   return (
-    <main className="orchestration-chat-page" aria-labelledby={id} hidden={hidden}>
+    <main
+      className="orchestration-chat-page"
+      aria-labelledby={id}
+      hidden={hidden}
+      data-chat-id={run?.id}
+    >
       <header className="orchestration-chat-heading">
         <h1 id={id}>
           <button
             type="button"
             className="chat-title"
             aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
-            disabled={!database || !run}
+            disabled={relay || readOnly || !available || !run}
             onClick={() => setRenaming(true)}
           >
             {chat?.title ?? "Chat"}
@@ -302,38 +316,47 @@ export function ChatPage({
             onSave={(title) => action({ type: "rename", id: run.id, title })}
           />
         )}
-        <div className="orchestration-chat-status">
-          {!database ? (
-            <button type="button" onClick={onDatabase}>
-              Connect to database
-            </button>
-          ) : connecting && !chat?.restored ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void action({ type: "stop", id: run?.id ?? null })}
-            >
-              Cancel
-            </button>
-          ) : (
-            (!run || ended) && (
+        {!readOnly && (
+          <div className="orchestration-chat-status">
+            {!available ? (
+              <button type="button" onClick={onDatabase}>
+                Connect to database
+              </button>
+            ) : connecting && !chat?.restored ? (
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void action({ type: "restart", id: run?.id ?? null })}
+                onClick={() => void action({ type: "stop", id: run?.id ?? null })}
               >
-                New session
+                Cancel
               </button>
-            )
-          )}
-        </div>
+            ) : (
+              (!run || ended) && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void action({ type: "restart", id: run?.id ?? chat?.conversationId ?? null })
+                  }
+                >
+                  {relay ? "Retry connection" : "New session"}
+                </button>
+              )
+            )}
+          </div>
+        )}
       </header>
+      {readOnly && (
+        <p role="status">
+          Legacy database-wide history. No project or worker authority was restored.
+        </p>
+      )}
       {failure && (
         <div className="error-banner" role="alert">
           {failure}
         </div>
       )}
-      {chat?.restored && (
+      {chat?.restored && !readOnly && (
         <div className="warning-banner" role="status">
           <span>
             Saved chat is stopped. Send starts a new request with the selected tactic. Continue task
@@ -353,7 +376,7 @@ export function ChatPage({
           )}
         </div>
       )}
-      {run && !ended && chat?.updates.paused && (
+      {run && !ended && !readOnly && chat?.updates.paused && (
         <div className="warning-banner" role="status">
           <span>
             Automatic worker updates are paused
@@ -362,7 +385,7 @@ export function ChatPage({
           </span>
           <button
             type="button"
-            disabled={!database || busy}
+            disabled={!available || busy}
             onClick={() => void action({ type: "resume-updates", id: run.id })}
           >
             Resume updates
@@ -370,6 +393,56 @@ export function ChatPage({
         </div>
       )}
       <div className="orchestration-chat-body">
+        {relay && chat.history && (
+          <section className="relay-history" aria-label="Previous Relay conversation">
+            {chat.history.incomplete && (
+              <p role="alert">History is incomplete. Original files were preserved.</p>
+            )}
+            {chat.history.older && (
+              <p>
+                Older history remains on disk. This is a bounded excerpt, not a retention limit.
+              </p>
+            )}
+            <RelayHistoryMessages
+              history={chat.history}
+              conversationId={chat.conversationId}
+              readMessage={api.readRelayMessage}
+              openLink={api.openWebLink}
+              visible={active && !hidden}
+              onCopied={onCopied}
+            />
+            {chat.history.older && chat.history.cursor && run && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void action({
+                    type: "history",
+                    id: run.id,
+                    before: chat.history?.cursor ?? null,
+                  })
+                }
+              >
+                Read older history
+              </button>
+            )}
+            {run && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void action({
+                    type: "history",
+                    id: run.id,
+                    before: null,
+                  })
+                }
+              >
+                Latest history
+              </button>
+            )}
+          </section>
+        )}
         <div className="chat-connection-frame">
           <ActivityDisplay
             key={run?.id ?? "empty"}
@@ -439,7 +512,13 @@ export function ChatPage({
                           key={item.key}
                           block={block}
                           at={events[Number(block.key)]?.at}
-                          prompt={<CommandMessage text={block.text} commands={commands} />}
+                          prompt={
+                            relay ? (
+                              block.text
+                            ) : (
+                              <CommandMessage text={block.text} commands={commands} />
+                            )
+                          }
                           openLink={api.openWebLink}
                           incoming={block.type === "message" && fresh}
                           visible={active && !hidden}
@@ -572,67 +651,72 @@ export function ChatPage({
             </div>
           </div>
         </div>
-        <section className="composer" aria-label="Chat composer">
-          <label className="sr-only" htmlFor={`${id}-message`}>
-            Message to orchestrator
-          </label>
-          <CommandComposer
-            key={key}
-            id={`${id}-message`}
-            value={draft}
-            commands={commands}
-            disabled={!database || !run || (connecting && !chat?.restored)}
-            onChange={edit}
-            onSend={() => void send()}
-          />
-          <SessionInfo
-            leading={
-              <TacticsControl
-                selection={chat?.tactic}
-                disabled={!database || !run || busy}
-                active={active && !hidden}
-                context={`${run?.id ?? ""}:${project ?? ""}`}
-                onChange={(tactic) =>
-                  run
-                    ? action({ type: "set-tactic", id: run.id, project, tactic })
-                    : Promise.resolve(false)
-                }
-              />
-            }
-            harness={run?.agent ?? "N/A"}
-            sessionId={run?.id ?? ""}
-            active={active}
-            state={run?.sessionState}
-            ended={!!ended}
-            editable={ready && !busy}
-            changing={!!run?.modeChanging || pending === "set-mode"}
-            autoApproval
-            onMode={(change) => {
-              if (run) void action({ type: "set-mode", id: run.id, change });
-            }}
-          >
-            {working ? (
-              <button
-                type="button"
-                className="composer-send"
-                disabled={!database || busy || !!run?.stopping}
-                onClick={() => void action({ type: "cancel", id: run?.id ?? null })}
-              >
-                <Icon name="stop" />
-                Stop
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="primary composer-send"
-                disabled={busy || !ready || !draft.trim()}
-                onClick={() => void send()}
-              >
-                Send <Icon name="arrow--up" />
-              </button>
-            )}
-          </SessionInfo>
-        </section>
+        {!readOnly && (
+          <section className="composer" aria-label="Chat composer">
+            <label className="sr-only" htmlFor={`${id}-message`}>
+              Message to orchestrator
+            </label>
+            <CommandComposer
+              key={key}
+              id={`${id}-message`}
+              value={draft}
+              commands={commands}
+              commandsEnabled={!relay}
+              disabled={!available || !run || (connecting && !chat?.restored)}
+              onChange={edit}
+              onSend={() => void send()}
+            />
+            <SessionInfo
+              leading={
+                !relay && (
+                  <TacticsControl
+                    selection={chat?.tactic}
+                    disabled={!database || !run || busy}
+                    active={active && !hidden}
+                    context={`${run?.id ?? ""}:${project ?? ""}`}
+                    onChange={(tactic) =>
+                      run
+                        ? action({ type: "set-tactic", id: run.id, project, tactic })
+                        : Promise.resolve(false)
+                    }
+                  />
+                )
+              }
+              harness={run?.agent ?? "N/A"}
+              sessionId={run?.id ?? ""}
+              active={active}
+              state={run?.sessionState}
+              ended={!!ended}
+              editable={ready && !busy}
+              changing={!!run?.modeChanging || pending === "set-mode"}
+              autoApproval
+              onMode={(change) => {
+                if (run) void action({ type: "set-mode", id: run.id, change });
+              }}
+            >
+              {working ? (
+                <button
+                  type="button"
+                  className="composer-send"
+                  disabled={!available || busy || !!run?.stopping}
+                  onClick={() => void action({ type: "cancel", id: run?.id ?? null })}
+                >
+                  <Icon name="stop" />
+                  Stop
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="primary composer-send"
+                  disabled={busy || !ready || !draft.trim()}
+                  onClick={() => void send()}
+                >
+                  Send <Icon name="arrow--up" />
+                </button>
+              )}
+            </SessionInfo>
+          </section>
+        )}
       </div>
     </main>
   );
