@@ -29,6 +29,29 @@ function render(value: ActivitySnapshot | undefined, hidden = false, override?: 
   );
 }
 describe("activity presentation", () => {
+  it("uses a non-interactive centered status for connection without a timer or disclosure", () => {
+    for (const hidden of [false, true]) {
+      const html = renderToStaticMarkup(
+        <ActivityDisplay
+          activity={undefined}
+          fallback="Connecting"
+          delegated=""
+          override="Connecting"
+          presentation="connecting"
+          hidden={hidden}
+        />,
+      );
+      expect(html).toContain('class="chat-connecting" role="status"');
+      expect(html).toContain(">Connecting...</span>");
+      expect(html).not.toContain("<button");
+      expect(html).not.toContain('class="activity-timer"');
+      expect(html).not.toContain("aria-expanded");
+      if (hidden) expect(html).not.toContain("<img");
+      else expect(html).toContain("communicating.gif");
+    }
+    expect(activityAnimation("connecting")).toBe(activityAnimation("communicating"));
+  });
+
   it("preserves attribution, counts, and plain text without implying test success", () => {
     const html = render(activity);
     expect(html).toContain(">Executing...</span>");

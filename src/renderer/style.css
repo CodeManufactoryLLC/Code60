@@ -14,7 +14,7 @@
 }
 
 :root {
-  --font: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --logo: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--text-font, var(--font));
@@ -29,15 +29,40 @@
   --rule: 1px;
   --rule-strong: 1px;
   --rule-select: 2px;
-  --motion: 160ms;
+  --ui-radius: 5px;
+  --motion: 175ms;
+  --navigation-hover-delay: 20ms;
+  --chat-reply-duration: 175ms;
+  --chat-scroll-response: 175ms;
+  --chat-activity-duration: 175ms;
+  --chat-details-duration: 175ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --icon-size: 16px;
+  /* The native window controls overlay the top of the window; these are the space they take. */
+  --titlebar-left: env(titlebar-area-x, 0px);
+  --titlebar-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+  --titlebar-height: env(titlebar-area-height, 0px);
+  --app-bottom-padding: 4px;
+  --app-footer-content-height: max(
+    20px,
+    calc(1.1 * max(var(--button-size, 13px), var(--text-size, 13px)) + 5px)
+  );
+  --app-footer-height: calc(var(--app-footer-content-height) + var(--app-bottom-padding));
+  --app-titlebar-height: max(28px, var(--titlebar-height));
+  --sidebar-width: 220px;
+  /* Workspace inset and content spacing. */
+  --page-margin: 12px;
+  --page-padding: 16px;
+}
+/* Application appearance tokens, also inherited by the splash. */
+:root {
   --control-fill: var(--surface);
   --control-hover: var(--hover-bg);
   --group-fill: #ffffff;
   --group-hover: var(--hover-bg);
   --group-border: color-mix(in srgb, var(--border) 75%, var(--muted));
   --group-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  --composer-shadow: 0 0 1px var(--border);
   --surface-edge: var(--border);
   --field-fill: var(--surface);
   --surface-band: var(--surface);
@@ -45,19 +70,6 @@
   --scrollbar-thumb: color-mix(in srgb, var(--surface) 78%, var(--muted));
   --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
   --overlay-shadow: 0 3px 14px rgb(0 0 0 / 18%);
-  /* The native window controls overlay the top of the window; these are the space they take. */
-  --titlebar-left: env(titlebar-area-x, 0px);
-  --titlebar-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
-  --titlebar-height: env(titlebar-area-height, 0px);
-  --app-footer-height: max(
-    20px,
-    calc(1.1 * max(var(--button-size, 13px), var(--text-size, 13px)) + 5px)
-  );
-  --app-titlebar-height: max(28px, var(--titlebar-height));
-  --sidebar-width: 220px;
-  /* Workspace inset and content spacing. */
-  --page-margin: 12px;
-  --page-padding: 16px;
   color-scheme: light;
   --bg: #ffffff;
   --surface: #ffffff;
@@ -267,7 +279,6 @@ button:hover:not(:disabled, [aria-pressed="true"], [aria-selected="true"], [aria
 }
 button:active:not(:disabled) {
   background: var(--text);
-  border-color: var(--text);
   color: var(--bg);
 }
 button[aria-pressed="true"] {
@@ -285,7 +296,6 @@ button.primary:hover:not(:disabled) {
 }
 button.primary:active:not(:disabled) {
   background: var(--primary-text);
-  border-color: var(--primary-text);
   color: var(--primary);
 }
 button.destructive {
@@ -352,6 +362,7 @@ input[type="number"] {
 textarea {
   resize: vertical;
   line-height: 1.65;
+  scrollbar-gutter: stable;
 }
 textarea::placeholder,
 input::placeholder {
@@ -389,6 +400,8 @@ input[type="radio"]:checked::before {
   width: 8px;
   height: 8px;
   background: var(--primary-text);
+  /* biome-ignore lint/complexity/noImportantStyles: Keep the selected indicator rounded through the square reset. */
+  border-radius: var(--ui-radius) !important;
 }
 /* A switch prints its state inside the track, so on and off never rely on color or position. */
 input[type="checkbox"][role="switch"] {
@@ -409,6 +422,8 @@ input[type="checkbox"][role="switch"]:checked::before {
   height: 18px;
   mask: none;
   background: var(--control-border);
+  /* biome-ignore lint/complexity/noImportantStyles: The switch thumb shares its track's corners. */
+  border-radius: var(--ui-radius) !important;
   transition: transform var(--motion) var(--ease);
 }
 input[type="checkbox"][role="switch"]::after {
@@ -490,6 +505,12 @@ kbd {
   margin-right: 4px;
 }
 .app {
+  /* Resolve beside the live width override, not once on :root before inheritance. */
+  --sidebar-track-width: clamp(
+    180px,
+    var(--sidebar-width),
+    min(480px, calc(100vw - var(--page-margin) - 360px))
+  );
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -508,7 +529,6 @@ kbd {
   -webkit-app-region: drag;
 }
 .app-workspace {
-  --sidebar-track-width: clamp(180px, var(--sidebar-width), min(480px, calc(100% - 360px)));
   position: relative;
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
@@ -535,6 +555,9 @@ kbd {
 /* Repository identity above the interactive page tabs. */
 .sidebar {
   position: relative;
+  --button-size: var(--nav-font-size, 15px);
+  --nav-row-height: max(40px, calc(var(--button-size, 15px) * 1.5 + 8px));
+  --nav-inset: max(40px, calc(var(--button-size, 15px) * 1.5 + 20px));
   --control-fill: var(--chat-neutral);
   --disabled-fill: var(--chat-neutral);
   grid-column: 1;
@@ -557,7 +580,7 @@ kbd {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   padding: 0;
   min-width: 0;
   min-height: 0;
@@ -568,7 +591,10 @@ kbd {
   flex-direction: column;
   gap: 2px;
   flex-shrink: 0;
-  padding: 4px 12px 4px 30px;
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
+  padding: 4px 12px;
   border: 0;
   background: transparent;
 }
@@ -576,12 +602,12 @@ button.project-card {
   width: 100%;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
   border: 0;
   border-radius: 0;
   background-color: var(--control-fill);
-  text-align: left;
+  text-align: center;
 }
 .app button.project-card[data-empty] {
   border: 0;
@@ -611,10 +637,11 @@ button.project-card {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   background: transparent;
 }
 .page-tab {
@@ -627,10 +654,10 @@ button.project-card {
 .page-tab [role="tab"],
 .page-tab .page-group-toggle {
   width: 100%;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
-  padding: 4px 12px 4px calc(30px + var(--nav-indent));
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
+  padding: 4px 12px 4px calc(var(--nav-inset) + var(--nav-indent));
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
@@ -646,6 +673,40 @@ button.project-card {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Scale Phosphor icons with labels; the gutter and rows grow only when needed. */
+.navigation-icon {
+  position: absolute;
+  left: calc(var(--nav-inset) + var(--nav-indent) - 1.5em - 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5em;
+  height: 1.5em;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.navigation-icon[data-icon="chats"] {
+  color: light-dark(#24864b, #6cce96);
+}
+.navigation-icon[data-icon="pencil-line"] {
+  color: light-dark(#8054bd, #bd9cf4);
+}
+.navigation-icon[data-icon="megaphone"] {
+  color: light-dark(#c33d49, #ff8792);
+}
+.navigation-icon[data-icon="gear"] {
+  color: light-dark(#6a737d, #adb5bd);
+}
+.navigation-icon[data-icon="magnifying-glass"] {
+  color: light-dark(#bb650d, #f5af57);
+}
+.navigation-icon[data-icon="database"] {
+  color: light-dark(#2878b8, #78b9ef);
+}
+@media (forced-colors: active) {
+  .navigation-icon[data-icon] {
+    color: ButtonText;
+  }
 }
 .page-tab[data-closable="true"] [role="tab"] {
   padding-right: 30px;
@@ -695,31 +756,65 @@ button.project-card {
   color: var(--text);
 }
 button.sidebar-settings-toggle {
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
   align-self: stretch;
-  padding-inline: 8px 12px;
+  padding-inline: 6px;
   color: inherit;
 }
 
 .page-tab-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   flex-shrink: 0;
 }
 .page-group-pages {
-  --nav-indent: 16px;
+  --nav-indent: 24px;
 }
 #advanced-pages {
-  --nav-indent: 32px;
+  --nav-indent: 48px;
 }
 #experiment-pages {
-  --nav-indent: 48px;
+  --nav-indent: 72px;
 }
 .page-group-pages[hidden] {
   display: none;
+}
+/* Keep closing groups painted for the transition, but inert as soon as they close. */
+.sidebar :is(.page-group-pages, .chat-worker-children) {
+  --sidebar-disclosure-delay: 20ms;
+  interpolate-size: allow-keywords;
+  height: auto;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: clip;
+  opacity: 1;
+  transition:
+    height var(--motion) var(--ease) var(--sidebar-disclosure-delay),
+    opacity var(--motion) var(--ease) var(--sidebar-disclosure-delay),
+    display calc(var(--motion) + var(--sidebar-disclosure-delay)) allow-discrete;
+}
+.sidebar :is(.page-group-pages, .chat-worker-children)[hidden] {
+  display: none;
+  height: 0;
+  opacity: 0;
+}
+/* Keyboard and external navigation must reveal focused destinations without clipping. */
+.sidebar :is(.page-group-pages, .chat-worker-children):has(:focus) {
+  transition: none;
+}
+@starting-style {
+  .sidebar :is(.page-group-pages, .chat-worker-children):not([hidden]) {
+    height: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar :is(.page-group-pages, .chat-worker-children) {
+    transition: none;
+  }
 }
 .page-group-toggle .page-tab-label {
   flex: 1;
@@ -729,7 +824,7 @@ button.sidebar-settings-toggle {
   flex-shrink: 0;
 }
 .chat-page-heading .page-tab-label {
-  padding-right: 28px;
+  padding-right: 40px;
 }
 .sidebar [data-nav-active="true"] {
   position: relative;
@@ -737,20 +832,6 @@ button.sidebar-settings-toggle {
   background: var(--accent-bg);
   color: var(--text);
 }
-.sidebar [data-nav-active="true"]::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0;
-  border-bottom: 2px solid var(--primary);
-  pointer-events: none;
-  z-index: 1;
-}
-@media (forced-colors: active) {
-  .sidebar [data-nav-active="true"]::after {
-    border-bottom-color: Highlight;
-  }
-}
-
 /* Unframed main content alongside the navigation. */
 .page-panel {
   grid-column: 2;
@@ -781,6 +862,7 @@ button.sidebar-settings-toggle {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .prompt-editor-body {
   display: grid;
@@ -923,6 +1005,7 @@ button.sidebar-settings-toggle {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .command-form {
   display: flex;
@@ -944,6 +1027,7 @@ button.sidebar-settings-toggle {
 .command-picker [role="listbox"] {
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .command-picker [role="option"] {
   display: grid;
@@ -989,6 +1073,7 @@ button.sidebar-settings-toggle {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   /* Padding, not a narrower box, centers the content so the scrollbar stays at the page edge. */
   margin-block: 0 var(--page-padding);
   padding: 0 max(var(--page-padding), calc((100% - 640px) / 2));
@@ -1269,6 +1354,99 @@ button.settings-group-reset {
   font-size: 12px;
   pointer-events: none;
 }
+.transition-settings .settings-group-title {
+  padding-right: 140px;
+}
+.transition-setting + .transition-setting {
+  margin-top: 20px;
+}
+.transition-setting-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 6px;
+}
+.transition-setting-heading output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.transition-time-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 16px;
+  align-items: start;
+}
+.transition-range,
+.transition-time-controls .settings-unit {
+  min-width: 0;
+}
+.transition-range input[type="range"] {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--primary);
+}
+.transition-range input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--border);
+}
+.transition-range input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 18px;
+  margin-top: -7.5px;
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  background: var(--primary);
+}
+.transition-range input[type="range"]:focus-visible::-webkit-slider-thumb {
+  background: var(--text);
+}
+@media (forced-colors: active) {
+  .transition-range input[type="range"]::-webkit-slider-runnable-track {
+    background: CanvasText;
+  }
+  .transition-range input[type="range"]::-webkit-slider-thumb {
+    border-color: ButtonText;
+    background: Highlight;
+  }
+}
+.transition-range-limits {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.transition-time-controls input[type="number"] {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .transition-settings .settings-group-title {
+    padding-right: 0;
+  }
+  .transition-settings .settings-group-reset {
+    position: static;
+    float: right;
+    margin-bottom: 12px;
+  }
+  .transition-time-controls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .transition-time-controls .settings-unit {
+    width: 112px;
+    justify-self: end;
+  }
+}
 /* Segmented radio groups: joined options with hidden native radios. */
 .segmented {
   display: inline-flex;
@@ -1409,10 +1587,25 @@ button.settings-group-reset {
   height: var(--app-footer-height);
   flex-shrink: 0;
   min-width: 0;
-  padding: 0 var(--page-margin);
+  padding: 0 var(--page-margin) var(--app-bottom-padding);
   border-top: 0;
   background: var(--footer-bg);
   -webkit-app-region: no-drag;
+}
+.footer-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 calc(var(--sidebar-track-width) - var(--page-margin));
+  min-width: 0;
+  padding-right: 8px;
+}
+.footer-sidebar > .icon-button {
+  flex-shrink: 0;
+  width: 28px;
+  height: var(--app-footer-content-height);
+  min-height: 0;
+  color: var(--muted);
 }
 .update-indicator {
   display: inline-flex;
@@ -1472,6 +1665,7 @@ button.settings-group-reset {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 24px 30px;
 }
 .event {
@@ -1553,7 +1747,8 @@ button.settings-group-reset {
 }
 .event.message .chat-markdown pre {
   max-width: 100%;
-  overflow: auto;
+  overflow: scroll auto;
+  scrollbar-gutter: stable;
   padding: 12px;
   border: 1px solid var(--border);
   background: var(--field-fill);
@@ -1568,7 +1763,8 @@ button.settings-group-reset {
 }
 .chat-markdown-table {
   max-width: 100%;
-  overflow: auto;
+  overflow: scroll auto;
+  scrollbar-gutter: stable;
 }
 .chat-markdown table {
   border-collapse: collapse;
@@ -1677,7 +1873,7 @@ button.settings-group-reset {
 .composer {
   margin: 12px;
   border: 1px solid var(--surface-edge);
-  box-shadow: inset 0 -1px var(--control-border);
+  box-shadow: var(--composer-shadow);
   background: var(--field-fill);
   flex-shrink: 0;
   overflow: hidden;
@@ -1708,7 +1904,7 @@ button.settings-group-reset {
 :where(:root[data-focus-highlight="on"]) .composer:focus-within {
   border-color: var(--focus-line);
   outline: 0;
-  box-shadow: none;
+  box-shadow: var(--composer-shadow);
 }
 .composer-footer {
   display: flex;
@@ -1787,11 +1983,7 @@ button.settings-group-reset {
 .database-notice p {
   margin: 0;
 }
-.splash > .database-notice {
-  position: absolute;
-  top: max(36px, var(--app-titlebar-height));
-  left: 24px;
-  right: 24px;
+.splash-brand > .database-notice {
   margin: 0;
 }
 .database-dependent-controls {
@@ -1847,6 +2039,7 @@ button.settings-group-reset {
   padding: 8px 30px;
   max-height: 240px;
   overflow: auto;
+  scrollbar-gutter: stable;
   border-top: 1px solid transparent;
 }
 .approval {
@@ -1882,6 +2075,7 @@ button.settings-group-reset {
   width: min(600px, calc(100vw - 32px));
   max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
+  scrollbar-gutter: stable;
   box-shadow: var(--overlay-shadow);
 }
 .picker-dialog {
@@ -1975,9 +2169,6 @@ button.settings-group-reset {
 .project-dialog > .modal-footer {
   margin-top: auto;
 }
-.footer-start {
-  margin-right: auto;
-}
 .muted {
   color: var(--muted);
   line-height: 1.6;
@@ -2061,7 +2252,8 @@ summary {
   margin-top: 8px;
   padding: 10px 14px;
   max-height: 320px;
-  overflow: auto;
+  overflow: scroll auto;
+  scrollbar-gutter: stable;
   background: var(--code);
   border: 1px solid transparent;
   color: var(--text);
@@ -2118,6 +2310,7 @@ label.check-label {
   padding: 0;
   max-height: 50vh;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .project-dialog .project-list {
   margin: 0 -16px;
@@ -2128,7 +2321,7 @@ label.check-label {
 .project-remove {
   font-size: 10px;
   opacity: 0.5;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion) ease;
 }
 .project-remove:hover,
 .project-remove:focus-visible {
@@ -2158,6 +2351,30 @@ label.check-label {
 }
 .project-item .path {
   max-width: 100%;
+}
+.project-open-folder {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  text-align: left;
+}
+.project-open-folder:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.project-confirmation-path {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-transform: none;
 }
 .recovery-reason {
   font-family: var(--font);
@@ -2194,6 +2411,9 @@ dialog::backdrop {
 
 /* Splash and logo */
 .splash {
+  --splash-panel-bg: var(--bg);
+  --splash-panel-text: var(--text);
+  --splash-logo-text: var(--text);
   position: fixed;
   inset: 0;
   width: 100vw;
@@ -2201,17 +2421,198 @@ dialog::backdrop {
   max-width: none;
   max-height: none;
   margin: 0;
-  padding: 24px;
+  padding: 0;
   border: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  isolation: isolate;
   background: var(--bg);
   color: var(--text);
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
+}
+.splash[open] {
+  display: grid;
+  grid-template-columns: clamp(280px, 32vw, 400px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 .splash::backdrop {
   background: var(--bg);
 }
-.wordmark {
+.splash > .window-drag-strip {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+}
+.splash-brand {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: calc(var(--app-titlebar-height) + 48px) 24px 80px;
+  background: var(--bg);
+}
+.splash-theme-toggle {
+  --button-size: 12px;
+  position: absolute;
+  z-index: 2;
+  top: var(--app-titlebar-height);
+  right: 16px;
+  -webkit-app-region: no-drag;
+}
+.splash-theme-toggle > button {
+  -webkit-app-region: no-drag;
+}
+.splash-logo {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.splash-logo::after {
+  content: "";
+  /* Lift the lockup 48px, shrinking this space rather than overlapping on short panels. */
+  flex: 0 1 96px;
+}
+.splash-lockup {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-block: auto;
+  visibility: hidden;
+}
+.splash-subtitle {
+  --letter-spacing: normal;
+  margin: 0;
+  color: var(--splash-logo-text);
   font-family: var(--logo);
+  font-size: 18px;
+  font-weight: 400;
+  text-align: center;
+  text-transform: none;
+}
+.splash-projects {
+  --text: var(--splash-panel-text);
+  --muted: var(--splash-panel-text);
+  --surface: transparent;
+  --control-fill: transparent;
+  --control-hover: var(--hover-bg);
+  --group-fill: transparent;
+  --group-hover: var(--hover-bg);
+  --group-border: var(--control-border);
+  --group-shadow: none;
+  --border: color-mix(in srgb, var(--splash-panel-text) 35%, transparent);
+  --control-border: color-mix(in srgb, var(--splash-panel-text) 65%, transparent);
+  --accent: var(--splash-panel-text);
+  --hover-bg: color-mix(in srgb, var(--splash-panel-text) 12%, transparent);
+  --primary: var(--splash-panel-text);
+  --primary-text: var(--bg);
+  --primary-hover: color-mix(in srgb, var(--splash-panel-text) 85%, var(--bg));
+  --disabled-fill: transparent;
+  --destructive: var(--splash-panel-text);
+  --on-destructive: var(--bg);
+  --danger: var(--splash-panel-text);
+  --focus-line: var(--splash-panel-text);
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: max(48px, var(--app-titlebar-height)) 24px 24px;
+  background: var(--splash-panel-bg);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+.splash-projects h2 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 400;
+  text-align: center;
+}
+.splash-projects .project-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  margin: 0 -12px;
+}
+:where(.splash-projects) .project-row > button {
+  border: 0;
+  box-shadow: none;
+}
+.splash-projects .project-remove {
+  opacity: 1;
+  font-size: 11px;
+}
+:where(.splash-projects) .button-group {
+  flex-direction: column;
+  align-items: stretch;
+}
+.splash-projects .modal-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 20px;
+}
+:where(.splash-projects) .modal-footer > button {
+  width: 100%;
+  white-space: normal;
+}
+.splash-projects button:focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -2px;
+}
+.splash-projects button:active:not(:disabled) {
+  --muted: var(--bg);
+}
+@media (max-width: 700px) {
+  .splash[open] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .splash-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .splash-projects {
+    grid-row: 2;
+    padding-top: 24px;
+  }
+}
+@media (forced-colors: active) {
+  .splash {
+    --bg: Canvas;
+    --splash-logo-text: CanvasText;
+  }
+  .splash-brand {
+    background: Canvas;
+  }
+  .splash-projects {
+    --bg: Canvas;
+    --splash-panel-bg: Canvas;
+    --splash-panel-text: CanvasText;
+    --text: CanvasText;
+    --muted: CanvasText;
+    --border: CanvasText;
+    --control-border: ButtonText;
+    --primary: Highlight;
+    --primary-text: HighlightText;
+    --focus-line: Highlight;
+    border-right: 1px solid CanvasText;
+  }
+}
+.wordmark {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 400;
   --letter-spacing: 0.02em;
   text-transform: none;
@@ -2237,41 +2638,13 @@ dialog::backdrop {
   );
 }
 .splash-title {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   font-size: 64px;
-  visibility: hidden;
+  padding: 16px 24px;
+  background: transparent;
+  color: var(--splash-logo-text);
 }
-.splash[data-ready="true"] .splash-title {
+.splash[data-ready="true"] .splash-lockup {
   visibility: visible;
-}
-.splash-prompt {
-  position: absolute;
-  top: 75%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(100% - 48px);
-  text-align: center;
-  -webkit-app-region: no-drag;
-}
-.splash-prompt h2 {
-  font-size: 14px;
-  font-weight: 400;
-  margin-bottom: 12px;
-  overflow-wrap: anywhere;
-  text-transform: none;
-}
-.splash-actions {
-  width: min(360px, 100%);
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: 8px;
-}
-.splash-actions button {
-  min-width: 0;
 }
 /* Shared disabled treatment, including controls disabled by a parent fieldset. Keep this after
    component background shorthands so primary buttons and composer fields retain the hatching. */
@@ -2512,6 +2885,7 @@ dialog::backdrop {
   background: var(--bg);
   border: 1px solid transparent;
   overflow: hidden;
+  scrollbar-gutter: auto;
   flex-direction: column;
   box-shadow: var(--overlay-shadow);
 }
@@ -2550,6 +2924,7 @@ dialog::backdrop {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 4px 0;
 }
 .command-palette .palette-group {
@@ -2767,7 +3142,8 @@ dialog::backdrop {
   min-width: 0;
   flex: 0 0 auto;
   margin-inline-start: auto;
-  overflow-x: auto;
+  overflow-x: scroll;
+  overflow-y: hidden;
 }
 .button-group.table-control-group > button {
   min-width: 0;
@@ -2807,6 +3183,7 @@ dialog::backdrop {
   max-height: min(780px, calc(100dvh - 64px));
   padding: 0;
   overflow: hidden;
+  scrollbar-gutter: auto;
 }
 .table-settings-dialog[open] {
   display: flex;
@@ -2824,6 +3201,7 @@ dialog::backdrop {
 .table-settings-body {
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 20px 24px 24px;
 }
 .table-settings-preview h3,
@@ -2897,6 +3275,7 @@ dialog::backdrop {
   margin: 0;
   padding: 16px;
   overflow: auto;
+  scrollbar-gutter: stable;
   border: 1px solid var(--border);
   background: var(--bg);
   box-shadow: var(--overlay-shadow);
@@ -2996,6 +3375,7 @@ dialog::backdrop {
   width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 12px;
   border: 1px solid transparent;
   background: var(--surface);
@@ -3045,7 +3425,15 @@ dialog::backdrop {
     background-color: var(--scrollbar-thumb-hover);
   }
 }
+/* Reserve native table gutters before row counts or wrapping require a thumb. */
+.dvn-scroller,
+.gdg-clip-region {
+  scrollbar-gutter: stable;
+}
 @media (forced-colors: active) {
+  :root {
+    --composer-shadow: none;
+  }
   button,
   input,
   select,
@@ -3106,6 +3494,7 @@ dialog::backdrop {
   min-height: 0;
   flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .filter-library,
 .search-controls {
@@ -3281,17 +3670,22 @@ dialog::backdrop {
   }
 }
 
-/* Shared groups retain straight edges, including the keyboard-only add-row action. */
-.button-group > :is(button, select):first-child {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+/* Round only group ends, including the keyboard-only add-row action. */
+:root .button-group > :is(button, select):first-child {
+  /* biome-ignore lint/complexity/noImportantStyles: Preserve group ends over the shared corner reset. */
+  border-top-left-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Preserve group ends over the shared corner reset. */
+  border-bottom-left-radius: var(--ui-radius) !important;
 }
-.button-group
+:root
+  .button-group
   > :is(button, select):not(.table-add-accessible:not(:focus-visible)):not(
     :has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible)))
   ) {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  /* biome-ignore lint/complexity/noImportantStyles: Preserve group ends over the shared corner reset. */
+  border-top-right-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Preserve group ends over the shared corner reset. */
+  border-bottom-right-radius: var(--ui-radius) !important;
 }
 :root
   .button-group
@@ -3331,6 +3725,12 @@ dialog::backdrop {
   outline: 1px solid var(--focus-line);
   outline-offset: 2px;
 }
+.footer-sidebar > .footer-polling {
+  flex: 1;
+}
+.footer-sidebar .poll-timestamp {
+  max-width: 100%;
+}
 .button-group.table-control-group > button {
   white-space: nowrap;
 }
@@ -3353,7 +3753,8 @@ dialog::backdrop {
   grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
-  transition: grid-template-rows 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  scrollbar-gutter: auto;
+  transition: grid-template-rows var(--motion) cubic-bezier(0.22, 1, 0.36, 1);
 }
 .search-page[data-expanded="true"] {
   grid-template-rows: minmax(0, 0fr) auto minmax(0, 1fr);
@@ -3366,7 +3767,7 @@ dialog::backdrop {
   max-width: 560px;
   min-width: 0;
   margin-inline: auto;
-  transition: max-width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: max-width var(--motion) cubic-bezier(0.22, 1, 0.36, 1);
 }
 .search-page[data-expanded="true"] .search-entry {
   max-width: 780px;
@@ -3382,9 +3783,9 @@ dialog::backdrop {
   line-height: 1.35;
   opacity: 1;
   transition:
-    max-height 280ms ease,
-    margin-bottom 280ms ease,
-    opacity 140ms ease;
+    max-height var(--motion) ease,
+    margin-bottom var(--motion) ease,
+    opacity var(--motion) ease;
 }
 .search-page[data-expanded="true"] .search-wordmark {
   max-height: 0;
@@ -3410,12 +3811,13 @@ dialog::backdrop {
   max-width: 780px;
   width: 100%;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .search-content[hidden] {
   display: none;
 }
 .search-content .search-body {
-  animation: search-reveal 220ms 120ms both ease-out;
+  animation: search-reveal var(--motion) 120ms both ease-out;
 }
 @keyframes search-reveal {
   from {
@@ -3458,10 +3860,10 @@ dialog::backdrop {
   top: 50%;
   right: 32px;
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
-  min-height: 24px;
-  padding: 4px;
+  width: 36px;
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  padding: 4px 6px;
   margin: 0;
   border: 0;
   background: var(--control-fill);
@@ -3469,9 +3871,10 @@ dialog::backdrop {
 .chat-sidebar-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .chat-sidebar-entry {
   flex: 1;
@@ -3483,10 +3886,10 @@ dialog::backdrop {
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
-  padding: 4px 8px 4px calc(26px + var(--nav-indent));
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
+  padding: 4px 8px 4px calc(var(--nav-inset) - 4px + var(--nav-indent));
   margin: 0;
   border: 0;
   text-align: left;
@@ -3543,6 +3946,41 @@ dialog::backdrop {
   min-height: 0;
   padding: 24px 12px 32px;
   scrollbar-gutter: stable;
+  overflow-anchor: none;
+  scroll-behavior: auto;
+}
+.chat-connection-frame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.chat-connecting {
+  --activity-size: 48px;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--chat-activity-duration) ease;
+}
+.chat-connecting[data-exiting="true"] {
+  opacity: 0;
+}
+.chat-connecting[data-immediate="true"] {
+  transition: none;
+}
+@starting-style {
+  .chat-connecting:not([data-immediate="true"]) {
+    opacity: 0;
+  }
 }
 .orchestration-chat-body .event {
   margin: 0 0 28px;
@@ -3551,6 +3989,44 @@ dialog::backdrop {
 .orchestration-chat-body .event.message {
   padding: 16px 18px;
   border: 0;
+}
+.chat-message-layout {
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: clip;
+  transition: height var(--chat-reply-duration) cubic-bezier(0.16, 1, 0.3, 1);
+}
+.chat-message-layout-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.chat-message-layout[data-layout-immediate="true"] {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .chat-message-layout {
+    transition: none;
+  }
+}
+.orchestration-chat-body .event.message[data-entering="true"] {
+  animation: chat-reply-enter var(--chat-reply-duration) cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes chat-reply-enter {
+  from {
+    opacity: 0.65;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .orchestration-chat-body .event.message[data-entering="true"] {
+    animation: none;
+  }
 }
 .orchestration-chat-body .event.prompt pre {
   font-weight: var(--human-weight, 400);
@@ -3579,6 +4055,14 @@ dialog::backdrop {
 .chat-empty h2 {
   margin: 0;
 }
+.chat-connection-frame .chat-empty {
+  opacity: 1;
+  transition: opacity var(--chat-activity-duration) ease;
+}
+.chat-connection-frame:where(:has(> .chat-connecting)) .chat-empty {
+  visibility: hidden;
+  opacity: 0;
+}
 .orchestration-chat-body .chat-activity {
   border: 0;
   padding: 0;
@@ -3606,16 +4090,16 @@ dialog::backdrop {
 .orchestration-chat-body .composer {
   position: relative;
   flex-shrink: 0;
-  margin: 0;
+  margin: 1px;
   border: 1px solid var(--control-border);
   border-top-right-radius: 0;
-  box-shadow: none;
+  box-shadow: var(--composer-shadow);
   background: var(--chat-neutral);
 }
 .orchestration-chat-body .composer:focus-within {
   border-color: var(--focus-line);
   outline: 0;
-  box-shadow: none;
+  box-shadow: var(--composer-shadow);
 }
 .chat-provider {
   flex-shrink: 0;
@@ -3725,6 +4209,7 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .memory-heading {
   display: flex;
@@ -3879,10 +4364,10 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  width: clamp(300px, var(--file-panel-width, 50%), calc(100% - 300px));
+  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px));
   min-width: 0;
   overflow: hidden;
-  transition: width 200ms ease;
+  transition: width var(--motion) ease;
   min-height: 0;
   padding: 0;
   border: 1px solid var(--border);
@@ -3918,7 +4403,14 @@ dialog::backdrop {
   flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
+}
+.file-tabs {
+  overflow-x: scroll;
+}
+.file-panel-toolbar {
+  align-items: center;
 }
 .file-tab {
   display: flex;
@@ -3926,6 +4418,8 @@ dialog::backdrop {
   align-items: center;
   max-width: 260px;
   border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
 }
 .file-tab > :where([role="tab"]) {
   display: flex;
@@ -3944,6 +4438,7 @@ dialog::backdrop {
 }
 .file-tab[data-selected="true"] {
   background: var(--accent-bg);
+  color: var(--text);
 }
 .file-tab[data-selected="true"] > [role="tab"] {
   color: var(--text);
@@ -3952,6 +4447,15 @@ dialog::backdrop {
   flex-shrink: 0;
   border: 0;
   background: transparent;
+}
+/* The shared tab paints under both independent controls, including Close. */
+.file-tab:has(> [role="tab"]:enabled):hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+.file-panel .file-tab > [role="tab"]:is(:hover, :active, :focus) {
+  background: transparent;
+  color: inherit;
 }
 .file-panel-toolbar > .icon-button {
   flex-shrink: 0;
@@ -4011,7 +4515,7 @@ button.file-open-link {
 }
 #chat-pages .chat-sidebar-entry {
   display: grid;
-  grid-template-columns: 1em minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   overflow-wrap: anywhere;
@@ -4020,38 +4524,98 @@ button.file-open-link {
   position: relative;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
   font-size: var(--text-size, 13px);
   color: var(--muted);
   text-transform: none;
+  opacity: 0;
+  transition: opacity var(--motion) ease;
+}
+.event:is(:hover, :focus-within) > .message-copy {
+  opacity: 1;
+}
+.message-sent-time {
+  flex: 0 1 12ch;
+  width: 12ch;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .event.prompt .message-copy {
   justify-content: flex-end;
+  margin-left: auto;
   margin-top: 4px;
 }
-.message-copy-feedback:not(:empty) {
+.message-copy-feedback {
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 4px);
   left: 0;
   padding: 4px 8px;
-  max-width: 100%;
+  width: max-content;
+  max-width: min(36ch, calc(100vw - 48px));
   background: var(--surface);
   border: 1px solid var(--border);
   z-index: 1;
 }
+.message-copy-feedback:empty {
+  display: none;
+}
+.event.prompt .message-copy-feedback {
+  left: auto;
+  right: 0;
+}
 :is(.transcript .event) .message-copy button {
-  --icon-size: 12px;
+  --icon-size: 16px;
   width: 24px;
   height: 24px;
   min-height: 24px;
   min-width: 24px;
-  padding: 6px;
+  padding: 4px;
+  flex: 0 0 24px;
   border: 0;
   background: transparent;
   background-image: none;
   box-shadow: none;
   color: var(--muted);
+}
+.message-copy-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+.message-copy-glyph[data-clicked] {
+  animation: message-copy-depress var(--motion) ease;
+}
+.message-copy button:active .message-copy-glyph {
+  transform: translateY(1px) scale(0.9);
+}
+@keyframes message-copy-depress {
+  0%,
+  100% {
+    transform: none;
+  }
+  35% {
+    transform: translateY(1px) scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-copy {
+    transition: none;
+  }
+  .message-copy-glyph[data-clicked] {
+    animation: none;
+  }
+  .message-copy button:active .message-copy-glyph {
+    transform: none;
+  }
 }
 .turn-timer {
   margin: 8px 0;
@@ -4063,6 +4627,19 @@ button.file-open-link {
 .orchestration-chat-body .chat-turn-history > .turn-timer {
   margin-left: 18px;
 }
+.turn-separator {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.orchestration-chat-body .chat-turn-history > .turn-separator {
+  margin-inline: 18px;
+}
+@media (forced-colors: active) {
+  .turn-separator {
+    border-top-color: CanvasText;
+  }
+}
 .chat-turn-content {
   display: contents;
 }
@@ -4071,6 +4648,7 @@ button.file-open-link {
   min-height: 0;
   max-height: 45%;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .sidebar :is(button, [role="tab"]):focus-visible,
 .message-copy button:focus-visible {
@@ -4081,6 +4659,7 @@ button.file-open-link {
   .chat-workspace-body {
     flex-direction: column;
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   .chat-workspace-body:has(> .file-panel[data-minimized="false"]) > .chat-conversations {
     flex: 1 0
@@ -4094,7 +4673,7 @@ button.file-open-link {
       );
   }
   .chat-workspace-body > .file-panel {
-    transition: flex-basis 200ms ease;
+    transition: flex-basis var(--motion) ease;
     flex: 1 0 max(340px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
     width: 100%;
     min-width: 0;
@@ -4184,6 +4763,7 @@ button.file-open-link {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 8px;
 }
 .file-tree-item {
@@ -4325,6 +4905,20 @@ button.file-open-link {
   background: var(--hover-bg);
 }
 
+/* Use the same delayed hover entry and exit on both navigation surfaces. */
+.sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
+.chat-sidebar-row,
+.file-tab {
+  transition: background-color var(--motion) var(--ease) var(--navigation-hover-delay);
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
+  .chat-sidebar-row,
+  .file-tab {
+    transition: none;
+  }
+}
+
 /* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */
 :root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle),
 :root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle):focus {
@@ -4363,6 +4957,7 @@ button.file-open-link {
 .agent-setup-body {
   padding: 20px 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 180px;
 }
 .agent-choices {
@@ -4540,6 +5135,7 @@ button.file-open-link {
   min-height: 0;
   max-height: 45%;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding-inline: 0;
 }
 .chat-sidebar-row {
@@ -4548,14 +5144,23 @@ button.file-open-link {
   min-width: 0;
 }
 .chat-sidebar-row > .icon-button {
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
   align-self: stretch;
 }
-#chat-pages .chat-sidebar-row:hover > .chat-sidebar-entry[data-role="orchestrator"],
-#chat-pages .chat-sidebar-row:hover > .icon-button[aria-haspopup="menu"] {
+#chat-pages .chat-sidebar-row:has(> .chat-sidebar-entry:enabled):hover {
   background: var(--hover-bg);
+}
+#chat-pages .chat-sidebar-row > .chat-sidebar-entry {
+  background-color: transparent;
+}
+#chat-pages .chat-sidebar-row > .chat-sidebar-entry:not(:disabled) {
+  color: inherit;
+}
+#chat-pages .chat-sidebar-row:has(> .chat-sidebar-entry:enabled:active) {
+  background: var(--text);
+  color: var(--bg);
 }
 #chat-pages .chat-sidebar-entry > .chat-sidebar-label {
   display: block;
@@ -4570,18 +5175,23 @@ button.file-open-link {
   gap: 6px;
   white-space: nowrap;
 }
-.chat-sidebar-entry > .icon,
+.chat-sidebar-status {
+  max-width: 7ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
 .chat-unread,
 .chat-workers-toggle {
   flex-shrink: 0;
 }
 .chat-workers-toggle {
-  width: 24px;
-  min-height: 30px;
-  padding: 4px;
+  width: 36px;
+  min-height: var(--nav-row-height);
+  padding: 4px 6px;
 }
 .chat-worker-children {
-  --nav-indent: 32px;
+  --nav-indent: 48px;
 }
 .chat-worker-children[hidden] {
   display: none;
@@ -4590,7 +5200,7 @@ button.file-open-link {
 .chat-worker-children {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 }
 
 /* Session controls share the composer's bottom row. */
@@ -4683,6 +5293,7 @@ button.file-open-link {
   min-width: 180px;
   max-width: min(360px, calc(100vw - 16px));
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 4px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -4730,6 +5341,7 @@ button.file-open-link {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 8px;
   gap: 8px;
 }
@@ -4796,6 +5408,7 @@ button.file-open-link {
   width: 100%;
   height: 100%;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 12px;
   background: var(--chat-neutral);
   display: flex;
@@ -4863,6 +5476,7 @@ button.file-open-link {
   display: flex;
   flex-direction: column;
   overflow: auto;
+  scrollbar-gutter: stable;
   max-height: 460px;
 }
 .review-files :where(button) {
@@ -5008,6 +5622,7 @@ button.file-open-link {
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+  scrollbar-gutter: stable;
   max-height: 75vh;
 }
 .git-setup-body > :where(button) {
@@ -5022,6 +5637,7 @@ button.file-open-link {
   min-width: 0;
   max-height: 360px;
   overflow: auto;
+  scrollbar-gutter: stable;
   border: 0;
   padding: 0;
 }
@@ -5044,6 +5660,7 @@ button.file-open-link {
 .git-setup-files :where(pre) {
   max-height: 360px;
   overflow: auto;
+  scrollbar-gutter: stable;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -5083,6 +5700,8 @@ button.file-open-link {
 .chat-transcript-content > .chat-empty {
   flex: 1;
   min-height: 0;
+  /* Keep pending status at the same starting position when the first prompt replaces this. */
+  order: 1;
 }
 
 /* Local artwork and spotlight indicate activity without changing semantic evidence. */
@@ -5099,7 +5718,7 @@ button.file-open-link {
   transform: scale(1);
   transform-origin: left center;
   transition-property: opacity, height, margin-top, transform;
-  transition-duration: 200ms;
+  transition-duration: var(--chat-activity-duration);
   transition-timing-function: ease;
   flex-shrink: 0;
   display: flex;
@@ -5146,6 +5765,10 @@ button.file-open-link {
   width: 8px;
   height: 8px;
 }
+.chat-connecting .activity-visual > svg {
+  width: 16px;
+  height: 16px;
+}
 .activity-visual img {
   display: block;
   width: 100%;
@@ -5172,7 +5795,12 @@ button.file-open-link {
   text-align: left;
   overflow-wrap: anywhere;
 }
-.activity-display[data-animate="true"] .activity-name {
+.chat-connecting .activity-name {
+  flex: 0;
+  text-align: center;
+}
+.activity-display[data-animate="true"] .activity-name,
+.chat-connecting[data-animate="true"] .activity-name {
   background-image: linear-gradient(
     100deg,
     var(--muted) 35%,
@@ -5195,10 +5823,13 @@ button.file-open-link {
   }
 }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
-  .activity-display {
+  .activity-display,
+  .chat-connecting,
+  .chat-connection-frame .chat-empty {
     transition: none;
   }
-  .activity-display[data-animate="true"] .activity-name {
+  .activity-display[data-animate="true"] .activity-name,
+  .chat-connecting[data-animate="true"] .activity-name {
     animation: none;
     background: none;
     color: var(--text);
@@ -5206,7 +5837,8 @@ button.file-open-link {
 }
 @media (max-height: 700px) {
   .chat-transcript-content,
-  .activity-display {
+  .activity-display,
+  .chat-connecting {
     --activity-size: 32px;
   }
 }
@@ -5236,9 +5868,9 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   opacity: 0;
   visibility: hidden;
   transition:
-    grid-template-rows 250ms ease,
-    opacity 200ms ease,
-    visibility 0s 250ms;
+    grid-template-rows var(--chat-details-duration) ease,
+    opacity var(--chat-details-duration) ease,
+    visibility 0s var(--chat-details-duration);
   overflow: visible;
   max-height: none;
 }
@@ -5303,6 +5935,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 
 .polling-dialog {
   min-height: min(200px, calc(100dvh - 32px));
+  scrollbar-gutter: stable both-edges;
 }
 .polling-dialog[open] {
   display: flex;
@@ -5349,7 +5982,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 .app-footer > :is(.update-indicator, .footer-note),
 .footer-polling > .poll-timestamp {
   min-height: 0;
-  height: var(--app-footer-height);
+  height: var(--app-footer-content-height);
   padding-block: 0;
 }
 
@@ -5367,12 +6000,69 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   padding-right: 64px;
 }
 
-/* Square geometry also applies to vendor editor/table controls and their overlays. */
+/* Keep page surfaces, fields and vendor internals square unless rounded below. */
 :root *,
 :root *::before,
 :root *::after {
   /* biome-ignore lint/complexity/noImportantStyles: Override inline rounding supplied by vendor controls. */
   border-radius: 0 !important;
+}
+
+/* Shared corners for controls, cards, popup windows, human bubbles and composers.
+   The full-window splash and native window frame retain their existing geometry. */
+:root
+  :is(
+    button,
+    [role="button"],
+    input[type="button"],
+    input[type="submit"],
+    input[type="reset"],
+    input[type="checkbox"],
+    input[type="radio"],
+    [role="switch"],
+    dialog:not(.splash),
+    [role="dialog"],
+    [popover],
+    .app-toast,
+    .button-group,
+    .segmented,
+    .settings-card,
+    .settings-group,
+    .approval,
+    .chat-sidebar-row,
+    .composer,
+    :where(.event.prompt:not(.automatic)) > pre
+  ) {
+  /* biome-ignore lint/complexity/noImportantStyles: Override the square reset and vendor inline corners. */
+  border-radius: var(--ui-radius) !important;
+}
+:root :is(.button-group, .chat-sidebar-row) > :is(button, select) {
+  /* biome-ignore lint/complexity/noImportantStyles: Joined controls keep straight internal seams. */
+  border-radius: 0 !important;
+}
+:root .chat-sidebar-row > button:first-child {
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends, including disabled fills. */
+  border-top-left-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends, including disabled fills. */
+  border-bottom-left-radius: var(--ui-radius) !important;
+}
+:root .chat-sidebar-row > button:last-child {
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends, including disabled fills. */
+  border-top-right-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends, including disabled fills. */
+  border-bottom-right-radius: var(--ui-radius) !important;
+}
+:root .segmented > .segmented-option:first-child {
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends of joined radio choices. */
+  border-top-left-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends of joined radio choices. */
+  border-bottom-left-radius: var(--ui-radius) !important;
+}
+:root .segmented > .segmented-option:last-child {
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends of joined radio choices. */
+  border-top-right-radius: var(--ui-radius) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Round only the outside ends of joined radio choices. */
+  border-bottom-right-radius: var(--ui-radius) !important;
 }
 
 /* Plan view. */
@@ -5456,6 +6146,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: var(--plan-pad);
   overflow-wrap: anywhere;
 }
@@ -5552,11 +6243,6 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 .app .plan-task input[type="checkbox"]:disabled:checked::before {
   background-color: var(--primary-text);
-}
-.chat-plans {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 @media (forced-colors: active) {
   .plan-toolbar progress {

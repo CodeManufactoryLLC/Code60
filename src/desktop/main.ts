@@ -456,6 +456,18 @@ async function ready(): Promise<void> {
       title: "Open project",
     });
     if (result.canceled || !result.filePaths[0]) return false;
+    if (!window || window.isDestroyed()) return false;
+    const confirmation = await dialog.showMessageBox(window, {
+      type: "question",
+      title: "Open project?",
+      message: "Open this project?",
+      detail: result.filePaths[0],
+      buttons: ["Cancel", "Open project"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (confirmation.response !== 1) return false;
     await controller.open(result.filePaths[0]);
     return true;
   });

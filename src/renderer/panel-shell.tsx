@@ -81,7 +81,7 @@ export function PanelShell({
   };
   const resize = (value: number) => {
     const available = panel.current?.parentElement?.getBoundingClientRect().width ?? 600;
-    setWidth(Math.max(300, Math.min(available - 300, value)));
+    setWidth(Math.max(120, Math.min(available - 300, value)));
   };
   const toggle = (
     <button
@@ -128,7 +128,7 @@ export function PanelShell({
             if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
               event.preventDefault();
               resize(
-                (panel.current?.getBoundingClientRect().width ?? 300) +
+                (panel.current?.getBoundingClientRect().width ?? 120) +
                   (event.key === "ArrowLeft" ? 20 : -20),
               );
             }

@@ -102,6 +102,7 @@ export async function prepareOrchestrationChat(
   options: {
     mcpServers?: readonly AgentMcpServer[];
     promptContext?: () => string;
+    recovery?: RunRecord;
   } = {},
 ): Promise<Orchestrator> {
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
@@ -115,6 +116,7 @@ export async function prepareOrchestrationChat(
       mode: "interactive",
       agents: [{ name, config: agent }],
       directory,
+      ...(options.recovery ? { recovery: options.recovery } : {}),
       base: "",
       repoDir: directory,
       worktreeRoot: directory,
@@ -127,6 +129,25 @@ export async function prepareOrchestrationChat(
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
     },
   );
+}
+
+/** Reads desktop chat history without starting an agent or restoring execution authority. */
+export async function readOrchestrationChat(
+  deps: CoreDeps,
+  directory: string,
+  id: string,
+  includeEvents = true,
+) {
+  const store = createRecordStore(deps.fs, join(directory, ".code60", "runs"));
+  const record = await store.read(id);
+  if (record.branch !== null || record.base !== null || record.worktree !== directory)
+    throw new RefusedError("The saved orchestration directory does not match its run");
+  await markInterrupted({ store, processes: deps.processes, clock: deps.clock }, [record]);
+  return {
+    record,
+    events: includeEvents ? await store.readEvents(id) : [],
+    agentAlive: await recordedAgentAlive(deps.processes, record),
+  };
 }
 
 export interface Workspace {

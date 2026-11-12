@@ -1,5 +1,14 @@
 # Desktop
 
+- ChatStore owns bounded private orchestration metadata beneath `.code60_workspace/chats`,
+  not SQLite or CLI records. Persist tactic selection/explicit null without execution.
+  Freeze full versioned instructions per human request and associate worker turns,
+  plans and feedback with that task. Batch automatic updates only within one task.
+  Serialize delivery against pending context writes. Reload saved chats as stopped
+  history only; never reconstruct ownership, gateways, queues or plan authority.
+  Explicit continuation validates the saved provider command and process safety
+  before creating a fresh gateway or attempting ACP recovery.
+
 - Chat review persistence belongs in the focused review store beside the private workspace,
   never SQLite or run records. Capture Git outside the control queue through bounded reads.
   Validate revisions and anchors in the main process. Pending review feedback uses conversation
@@ -16,6 +25,7 @@
 - Check the sender of every IPC request and parse its arguments with `bridge` before acting. Act only on runs recorded in the open workspace.
 - Serialize user actions and completion history refreshes in the controller. Allow overlapping batches, each with its own selected parallel limit, orchestrator, and subscriptions. Route actions and approvals to the owning batch, and retain earlier transcripts when adding sessions.
 - Refuse folder and database switches until every batch has ended. Stop all and every shutdown path, including forced shutdown, must stop every batch.
+- After a native folder pick, confirm the full project path before opening or adding it to history. Default to Cancel; declining must leave the current project and history unchanged.
 - Return only newly created session IDs from start. Require Git readiness on every project launch and continuation, with required isolation during core preparation. Never continue legacy non-isolated workers. Keep Chat and read-only history usable before Git setup.
 - Ask with a native dialog before destructive actions and before quitting with active runs. Reject unisolated project workers; guided Git setup uses its own explicit initial-commit confirmation.
 - On quit, signals, and renderer crashes, shut down every run through `core` and wait for it before exiting. Never remove worktrees automatically.
@@ -36,7 +46,7 @@
 
 - Own the agent setup transaction in the main process. Require versioned verified setup for every installation; legacy providers do not unlock entry. Atomically persist primary, enabled providers and command identity hashes only on Finish. Keep ACP probes single-flight, cancellable, bounded to 15 seconds and rooted in private temporary directories independent of any database. Send no prompts and create no runs/transcripts/worktrees. Stop the process before directory removal. Ignore stale results on cancellation, config changes, renderer loss/reload and shutdown. Refresh executable discovery on retries; npx alone is not provider detection. Never install provider CLIs or store credentials.
 
-- Own multiple independent orchestration Chat sessions, each rooted in a generated private subfolder of `.code60_workspace` beside the database. Start an initial chat automatically only once verified setup/provider/database are available; New chat adds a session without stopping existing ones. Reuse all chats and selection across renderer reloads and project switches, and replace all on provider/command/database changes. Retry replaces only its target chat. Use core for run records, streaming, once-only allow-all permissions, cancellation and process cleanup. Chat actions are the explicit exception to the open-project run rule: accept only IDs of existing orchestration runs, and never accept a workspace path. Keep each chat's event stream separate from project events; stop every chat on Stop all and every shutdown path.
+- Own multiple independent orchestration Chat sessions, each rooted in a generated private subfolder of `.code60_workspace` beside the database. Restore saved chats as stopped history once verified setup/provider/database are available; start an initial idle chat only when none are saved. New chat adds a session without stopping existing ones. Reuse all chats and selection across renderer reloads and project switches, and replace live sessions on provider/command/database changes without deleting history. New session replaces only its target chat. Use core for run records, streaming, once-only allow-all permissions, cancellation and process cleanup. Chat actions are the explicit exception to the open-project run rule: accept only IDs of existing orchestration runs, and never accept a workspace path. Keep each chat's event stream separate from project events; stop every chat on Stop all and every shutdown path.
 
 - Expose worker dispatch and control only through the chat's authenticated MCP gateway. Validate arguments, require the current project/chat scope for mutations, and act only on workers created by that chat in the open project. Never pass the gateway to workers. Keep ownership and request-ID deduplication in memory, enforce `maxParallel` including idle workers, and preserve normal worktree and leftover-process safeguards.
 - Deliver bounded worker turn-end/failure updates only between orchestration turns, with automatic prompt origin. Stop and Stop all pause automatic updates; user send or Resume updates unpauses them. Revoke the gateway on chat replacement and clear update timers on shutdown.
@@ -49,6 +59,6 @@
 
 - Diff preparation is serialized with lifecycle mutations; expensive reads run through DiffReads outside the action queue, with at most two in flight. Cancel reads on context replacement, renderer reload and shutdown, and settle a run's reads before discard. Queued preparation cancellation must not deadlock the control queue.
 - ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
-- Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Keep title/archive state with the in-memory conversation; archive only hides navigation and never deletes records or stops work.
+- Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Persist title/archive state with private chat metadata; archive only hides navigation and never deletes records or stops work.
 
 - GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.

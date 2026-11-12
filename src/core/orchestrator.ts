@@ -88,7 +88,14 @@ export interface Orchestrator {
   /** Attempts ACP restoration; a handoff offer does not mutate the ended run. */
   restore(runId: string): Promise<RecoveryResult>;
   /** Starts a fresh ACP session whose first turn sends the summary and the user's message. */
-  handoff(runId: string, summary: string, text: string, reason: string): Promise<void>;
+  handoff(
+    runId: string,
+    summary: string,
+    text: string,
+    reason: string,
+    deliveredText?: string,
+    origin?: "automatic",
+  ): Promise<void>;
   setMode(runId: string, change: ModeChange): Promise<void>;
   finish(runId: string): void;
   /** Resolves after this run's cleanup and final record write, independently of other runs. */
@@ -241,7 +248,8 @@ export async function createOrchestrator(
     },
     reply: (runId, text, origin, deliveredText) => find(runId).reply(text, origin, deliveredText),
     restore: (runId) => find(runId).restore(),
-    handoff: (runId, summary, text, reason) => find(runId).handoff(summary, text, reason),
+    handoff: (runId, summary, text, reason, deliveredText, origin) =>
+      find(runId).handoff(summary, text, reason, deliveredText, origin),
     setMode: (runId, change) => find(runId).setMode(change),
     finish: (runId) => find(runId).finish(),
     cancelTurn: (runId) => find(runId).cancelTurn("user"),

@@ -132,7 +132,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("renders distinct left-side role icons, nested groups, and independent unread/status indicators", () => {
+  it("keeps names and status text-only with separate menu and disclosure icons", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -158,16 +158,53 @@ describe("conversation hierarchy", () => {
     expect(html).toContain('aria-label="Chat 1 workers"');
     expect(html).toContain('aria-label="1 unread reply"');
     expect(html).toContain("Worker. Failed");
-    expect(html).toMatch(
-      /data-role="orchestrator".*?<span class="chat-role-icon chat-orchestrator-icon" aria-hidden="true">/,
-    );
-    expect(html).toMatch(
-      /data-role="worker".*?<span class="chat-role-icon" aria-hidden="true"><svg[^>]*><path d="M16,31/,
-    );
-    expect(html).not.toContain("chat-role-dot");
-    expect(html).toContain("ClientDeliveryNetworkPrimary.svg");
-    expect(html).toContain("ClientDeliveryNetworkPrimary-dark.svg");
+    expect(html).toContain('<span class="chat-sidebar-status">Failed</span>');
+    for (const action of ["Actions", "Workers"]) {
+      const button = html.match(
+        new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
+      )?.[0];
+      expect(button).toContain('class="icon-button');
+      expect(button?.match(/<svg/g)).toHaveLength(1);
+    }
+    for (const entry of html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/g) ??
+      [])
+      expect(entry).not.toContain("<svg");
+    expect(html).not.toContain("chat-role-icon");
+    expect(html.match(/<svg/g)).toHaveLength(2);
+    expect(html).not.toContain("<img");
     expect(html).not.toContain('role="dialog"');
+  });
+  it("keeps errors and approval counts visible without icons", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const owner = chat("a");
+    owner.error = "Connection failed";
+    if (owner.run)
+      owner.run.pending = [
+        { id: "permission", runId: "a", toolCallId: "tool", kind: "execute", title: "Run command" },
+      ];
+    const html = renderToStaticMarkup(
+      <ChatSidebar
+        chats={[owner]}
+        runs={[]}
+        navigationSerial={undefined}
+        selectedId="a"
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('<span class="chat-sidebar-status">Error</span>');
+    expect(html).toContain('<span class="chat-approval-count">(1)</span>');
+    expect(html).toContain("Connection failed. 1 approvals waiting");
+    expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
+      "disabled",
+    );
+    expect(
+      html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/)?.[0],
+    ).not.toContain("<svg");
+    expect(html).not.toContain("<img");
   });
   it("clears unread for the selected worker without clearing its siblings", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -225,7 +262,7 @@ describe("embedded worker chat", () => {
       const events: RunEvent[] = [
         { runId: "one", at: "2026-01-01", type: "prompt", turn: 1, text: "**literal user**" },
         { runId: "one", at: "2026-01-01", type: "message", text: "# Result\n\n**Bo" },
-        { runId: "one", at: "2026-01-01", type: "message", text: "ld** and `code`" },
+        { runId: "one", at: "2026-01-01T00:00:30Z", type: "message", text: "ld** and `code`" },
       ];
       const html = render(worker, events);
       expect(html).toContain("<h1>Result</h1>");
@@ -233,6 +270,8 @@ describe("embedded worker chat", () => {
       expect(html).toContain("<code>code</code>");
       expect(html).toContain("<pre>**literal user**</pre>");
       expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
+      expect(html.toLowerCase().match(/datetime="2026-01-01t00:00:00.000z"/g)).toHaveLength(2);
+      expect(html.toLowerCase()).not.toContain('datetime="2026-01-01t00:00:30.000z"');
     },
   );
   it.each([true, false])(
@@ -288,6 +327,7 @@ describe("embedded worker chat", () => {
     expect(html).toContain(">Allow once</button>");
     expect(html).toContain('class="chat-activity"');
     expect(html).toContain('class="turn-timer"');
+    expect(html).not.toContain('class="turn-separator"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
   it("titles the worker by its role name, falling back to provider and run ID", () => {

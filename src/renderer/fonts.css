@@ -49,6 +49,18 @@
   src: url("./fonts/shantell-sans/ShantellSans.ttf") format("truetype");
 }
 @font-face {
+  font-family: "Lexend";
+  font-style: normal;
+  font-weight: 100 900;
+  src: url("./fonts/lexend/Lexend.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  src: url("./fonts/space-grotesk/SpaceGrotesk.ttf") format("truetype");
+}
+@font-face {
   font-family: "OCR-A";
   font-style: normal;
   font-weight: 400;

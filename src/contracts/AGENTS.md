@@ -5,6 +5,9 @@
 - Depend only on Zod. Do not import other application modules, Node.js, Electron, or React.
 - Keep side effects and I/O out of schemas. Use `parseValue` for concise errors and CSP-safe parsing.
 - Preserve input limits and strict IPC field rejection. Do not coerce untrusted values.
+- Keep bundled tactics versioned, browser-safe and side-effect-free. Compose shared
+  instructions once for both preview and trusted main-process delivery. Roles and
+  iteration limits are guidance, never runtime guarantees or extra permissions.
 - Diagnostic schemas accept versioned records with fixed event messages and bounded,
   allowlisted metadata only, never free-form content or raw errors. Keep query
   conditions bounded and reject unknown fields and filesystem paths. Initialize

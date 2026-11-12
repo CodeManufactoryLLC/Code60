@@ -93,6 +93,7 @@ export function parseControlArgs<T extends McpControlTool>(tool: T, args: unknow
 
 /** A worker turn that ended or failed, waiting to be reported to the orchestration chat. */
 export interface WorkerUpdate {
+  taskId?: string;
   runId: string;
   provider: string;
   status: RunStatus;

@@ -1,24 +1,27 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   Command,
   DesktopApi,
   DesktopRun,
   OrchestrationChat,
   OrchestrationChatAction,
-  PlanSummary,
   ReviewSummary,
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import { ChatMarkdown } from "./chat-markdown.js";
+import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
 import { delegatedActivity, turnTimings } from "./chat-presentation.js";
+import { useChatScroll } from "./chat-scroll.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
 import { Icon } from "./icons.js";
 import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy, TurnTimer } from "./message-controls.js";
 import { SessionInfo } from "./session-info.js";
 import { type Block, statusSpec, transcript } from "./state.js";
+import { TacticsControl } from "./tactics.js";
+import { useTransitionTimes } from "./transition-times.js";
 
 function isActivityBlock(block: Block): boolean {
   return (
@@ -44,13 +47,39 @@ function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: numbe
 
 function ChatMessage({
   block,
+  at,
   commands = [],
   api,
+  incoming = false,
+  visible = true,
+  onCopied,
 }: {
   block: Block;
+  at?: string | undefined;
   commands?: readonly Command[];
   api: DesktopApi;
+  incoming?: boolean;
+  visible?: boolean;
+  onCopied?: (() => void) | undefined;
 }) {
+  const [entering, setEntering] = useState(incoming);
+  useEffect(() => {
+    if (!visible) setEntering(false);
+  }, [visible]);
+  useEffect(() => {
+    if (!entering) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const settle = () => {
+      if (media.matches || document.visibilityState !== "visible") setEntering(false);
+    };
+    settle();
+    media.addEventListener("change", settle);
+    document.addEventListener("visibilitychange", settle);
+    return () => {
+      media.removeEventListener("change", settle);
+      document.removeEventListener("visibilitychange", settle);
+    };
+  }, [entering]);
   const speaker =
     block.type === "prompt"
       ? block.automatic
@@ -71,6 +100,10 @@ function ChatMessage({
     <article
       className={`event ${block.type}${block.automatic ? " automatic" : ""}`}
       aria-label={speaker}
+      data-entering={entering || undefined}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget) setEntering(false);
+      }}
     >
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
       <McpBadge mcp={block.mcp} />
@@ -86,7 +119,7 @@ function ChatMessage({
         </pre>
       )}
       {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
-        <MessageCopy text={block.text} />
+        <MessageCopy text={block.text} at={at} visible={visible} onCopied={onCopied} />
       )}
       {block.detail && <pre>{block.detail}</pre>}
     </article>
@@ -99,28 +132,28 @@ export function ChatPage({
   hidden = false,
   events,
   database,
+  project = null,
   active,
   onDatabase,
   runs,
   reviews = [],
-  plans = [],
   commands = [],
-  onPlan,
   onReview,
+  onCopied,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
   hidden?: boolean;
   events: readonly RunEvent[];
   database: string | null;
+  project?: string | null;
   active: boolean;
   onDatabase(): void;
   runs: readonly DesktopRun[];
   reviews?: ReviewSummary[];
-  plans?: PlanSummary[];
   commands?: readonly Command[];
-  onPlan?: (id: string) => void;
   onReview?(id: string): void;
+  onCopied?: (() => void) | undefined;
 }) {
   const [renaming, setRenaming] = useState(false);
   const id = useId();
@@ -135,15 +168,33 @@ export function ChatPage({
   const [visible, setVisible] = useState(300);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(() => new Set());
   const inFlight = useRef(false);
-  const scroll = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const position = useRef(0);
-  const geometry = useRef({ width: 0, height: 0, contentHeight: 0 });
+  const { activityDetails: detailsDuration } = useTransitionTimes();
+  const {
+    scroll,
+    content,
+    pause,
+    resume,
+    reveal: revealActivity,
+  } = useChatScroll(active && !hidden, key);
+  const receivedEvents = useRef({ key, count: events.length });
+  if (receivedEvents.current.key !== key) receivedEvents.current = { key, count: events.length };
+  useLayoutEffect(() => {
+    receivedEvents.current = { key, count: events.length };
+  }, [key, events.length]);
   const working = (run?.status === "running" || run?.status === "waiting") && run.turns > 0;
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
-  const ready = !!database && run?.status === "idle" && !run.stopping && !run.modeChanging;
+  const ready =
+    !!database &&
+    !!run &&
+    (run.status === "idle" ||
+      !!chat?.restored ||
+      !["queued", "running", "waiting"].includes(run.status)) &&
+    !run.stopping &&
+    !run.modeChanging;
   const ended = run && !["queued", "running", "waiting", "idle"].includes(run.status);
+  const initialized = Boolean(
+    database && run && (run.turns > 0 || run.status === "idle" || chat?.restored || ended),
+  );
   const blocks = useMemo(() => transcript(events), [events]);
   const timings = useMemo(
     () => turnTimings(events, run?.status ?? "interrupted"),
@@ -190,8 +241,7 @@ export function ChatPage({
   const detailsId = (turn: string) => `${id}-activity-details-${turn}`;
   const historyId = (turn: string) => `${id}-activity-history-${turn}`;
   const toggleActivity = (turn: string) => {
-    follow.current = false;
-    if (scroll.current) position.current = scroll.current.scrollTop;
+    pause();
     setExpandedActivities((current) => {
       const next = new Set(current);
       if (next.has(turn)) next.delete(turn);
@@ -211,15 +261,12 @@ export function ChatPage({
         const height = details.querySelector(".activity-details-content")?.scrollHeight ?? 0;
         if (height + details.getBoundingClientRect().top > bounds.bottom) {
           const destination = viewport.scrollTop + trigger.getBoundingClientRect().top - bounds.top;
-          const started = performance.now();
           // The scroll range grows with the dropdown. Reveal its beginning as it opens.
-          const reveal = (now: number) => {
-            if (currentKey.current !== key || !details.isConnected || details.inert) return;
-            viewport.scrollTop = destination;
-            position.current = viewport.scrollTop;
-            if (now - started < 250) requestAnimationFrame(reveal);
-          };
-          requestAnimationFrame(reveal);
+          revealActivity(
+            destination,
+            detailsDuration,
+            () => currentKey.current === key && details.isConnected && !details.inert,
+          );
         }
       });
     }
@@ -236,6 +283,7 @@ export function ChatPage({
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
+        pause();
         setExpandedActivities((current) => new Set([...current].filter((key) => key !== turn)));
         document
           .getElementById(liveTurn === turn ? `${id}-live-activity` : historyId(turn))
@@ -278,40 +326,13 @@ export function ChatPage({
               : "";
   const failed = run && ["failed", "timed_out", "interrupted"].includes(run.status);
   const failure = error || chat?.error || (failed ? run.reason : "");
+  const opening = progress === "Connecting" && !failure;
   useEffect(() => {
     setDraft(key ? (sessionStorage.getItem(key) ?? "") : "");
     setError("");
     setVisible(300);
     setExpandedActivities(new Set());
-    follow.current = true;
-    position.current = 0;
   }, [key]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: streamed text and expanded history change the scroll height.
-  useEffect(() => {
-    const element = scroll.current;
-    if (!active || !element) return;
-    element.scrollTop = follow.current ? element.scrollHeight : position.current;
-    geometry.current = {
-      width: element.clientWidth,
-      height: element.clientHeight,
-      contentHeight: element.scrollHeight,
-    };
-  }, [active, events, visible, progress]);
-  useEffect(() => {
-    const element = scroll.current;
-    if (!active || !element) return;
-    const resize = new ResizeObserver(() => {
-      if (follow.current) element.scrollTop = element.scrollHeight;
-      geometry.current = {
-        width: element.clientWidth,
-        height: element.clientHeight,
-        contentHeight: element.scrollHeight,
-      };
-    });
-    resize.observe(element);
-    if (content.current) resize.observe(content.current);
-    return () => resize.disconnect();
-  }, [active]);
   function edit(text: string) {
     setDraft(text);
     if (key) sessionStorage.setItem(key, text);
@@ -347,7 +368,7 @@ export function ChatPage({
     ) {
       setDraft((current) => (current === text ? "" : current));
       if (sessionStorage.getItem(key) === text) sessionStorage.removeItem(key);
-      follow.current = true;
+      resume();
     }
   }
   const label = connecting
@@ -379,20 +400,11 @@ export function ChatPage({
           />
         )}
         <div className="orchestration-chat-status">
-          {plans.length > 0 && (
-            <nav className="chat-plans" aria-label="Plans">
-              {plans.map((plan) => (
-                <button type="button" key={plan.id} onClick={() => onPlan?.(plan.id)}>
-                  Plan · {plan.title}
-                </button>
-              ))}
-            </nav>
-          )}
           {!database ? (
             <button type="button" onClick={onDatabase}>
               Connect to database
             </button>
-          ) : connecting ? (
+          ) : connecting && !chat?.restored ? (
             <button
               type="button"
               disabled={busy}
@@ -407,7 +419,7 @@ export function ChatPage({
                 disabled={busy}
                 onClick={() => void action({ type: "restart", id: run?.id ?? null })}
               >
-                Retry
+                New session
               </button>
             )
           )}
@@ -416,6 +428,26 @@ export function ChatPage({
       {failure && (
         <div className="error-banner" role="alert">
           {failure}
+        </div>
+      )}
+      {chat?.restored && (
+        <div className="warning-banner" role="status">
+          <span>
+            Saved chat is stopped. Send starts a new request with the selected tactic. Continue task
+            uses its original instructions. Previous workers are history only.
+          </span>
+          {run && chat.taskId && (
+            <button
+              type="button"
+              disabled={busy || !database}
+              onClick={() => {
+                if (chat.taskId)
+                  void action({ type: "continue-task", id: run.id, taskId: chat.taskId });
+              }}
+            >
+              Continue task
+            </button>
+          )}
         </div>
       )}
       {run && !ended && chat?.updates.paused && (
@@ -435,191 +467,206 @@ export function ChatPage({
         </div>
       )}
       <div className="orchestration-chat-body">
-        <div
-          className="transcript"
-          ref={scroll}
-          role="log"
-          aria-label="Orchestration conversation"
-          // Content growth during streaming can make a scroll event look like a resize,
-          // so explicit upward input releases following before that event arrives.
-          onWheel={(event) => {
-            if (event.deltaY < 0) follow.current = false;
-          }}
-          onKeyDown={(event) => {
-            if (["ArrowUp", "PageUp", "Home"].includes(event.key)) follow.current = false;
-          }}
-          onScroll={() => {
-            if (!active || !scroll.current) return;
-            const element = scroll.current;
-            const resized =
-              geometry.current.width !== element.clientWidth ||
-              geometry.current.height !== element.clientHeight ||
-              geometry.current.contentHeight !== element.scrollHeight;
-            if (resized && follow.current) element.scrollTop = element.scrollHeight;
-            else
-              follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-            geometry.current = {
-              width: element.clientWidth,
-              height: element.clientHeight,
-              contentHeight: element.scrollHeight,
-            };
-            position.current = element.scrollTop;
-          }}
-        >
-          <div className="chat-transcript-content" ref={content}>
-            {blocks.length === 0 && (
-              <div className="chat-empty">
-                <h2>Give Code60 a task.</h2>
-              </div>
-            )}
-            {blocks.length > visible && (
-              <button
-                type="button"
-                onClick={() => {
-                  follow.current = false;
-                  setVisible((count) => count + 300);
-                }}
-              >
-                Show earlier activity
-              </button>
-            )}
-            {items.map((item) => (
-              <div className="chat-turn-content" key={item.key}>
-                {!item.activity &&
-                  (() => {
-                    const block = item.blocks[0] as Block;
+        <div className="chat-connection-frame">
+          <ActivityDisplay
+            key={run?.id ?? "empty"}
+            presentation="connecting"
+            activity={undefined}
+            fallback="Connecting"
+            delegated=""
+            override={opening ? "Connecting" : undefined}
+            hidden={
+              hidden ||
+              !active ||
+              !!failure ||
+              working ||
+              pending === "send" ||
+              progress === "Stopping"
+            }
+          />
+          <div
+            className="transcript"
+            ref={scroll}
+            role="log"
+            aria-label="Orchestration conversation"
+            aria-busy={opening}
+          >
+            <div className="chat-transcript-content" ref={content}>
+              {blocks.length === 0 && initialized && (
+                <div className="chat-empty">
+                  <h2>Give Code60 a task.</h2>
+                </div>
+              )}
+              {blocks.length > visible && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    pause();
+                    setVisible((count) => count + 300);
+                  }}
+                >
+                  Show earlier activity
+                </button>
+              )}
+              {items.map((item) => (
+                <div className="chat-turn-content" key={item.key}>
+                  {!item.activity &&
+                    (() => {
+                      const block = item.blocks[0] as Block;
+                      const event = events[Number(block.key)];
+                      const feedback =
+                        event?.type === "prompt"
+                          ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
+                          : undefined;
+                      const fresh =
+                        Number(block.key) >= receivedEvents.current.count &&
+                        !chat?.restored &&
+                        active &&
+                        !hidden;
+                      const message = feedback ? (
+                        <article className="event prompt" aria-label="Your review feedback">
+                          <div className="chat-message-speaker">You</div>
+                          <p>Feedback on {feedback.title}</p>
+                          <button type="button" onClick={() => onReview?.(feedback.id)}>
+                            View submitted feedback
+                          </button>
+                        </article>
+                      ) : (
+                        <ChatMessage
+                          key={item.key}
+                          block={block}
+                          at={events[Number(block.key)]?.at}
+                          commands={commands}
+                          api={api}
+                          incoming={block.type === "message" && fresh}
+                          visible={active && !hidden}
+                          onCopied={onCopied}
+                        />
+                      );
+                      return block.type === "message" || block.type === "prompt" ? (
+                        <ChatMessageLayout incoming={fresh} active={active && !hidden}>
+                          {message}
+                        </ChatMessageLayout>
+                      ) : (
+                        message
+                      );
+                    })()}
+                  {item.blocks.flatMap((block) => {
                     const event = events[Number(block.key)];
-                    const feedback =
-                      event?.type === "prompt"
-                        ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
-                        : undefined;
-                    return feedback ? (
-                      <article className="event prompt" aria-label="Your review feedback">
-                        <div className="chat-message-speaker">You</div>
-                        <p>Feedback on {feedback.title}</p>
-                        <button type="button" onClick={() => onReview?.(feedback.id)}>
-                          View submitted feedback
-                        </button>
-                      </article>
-                    ) : (
-                      <ChatMessage key={item.key} block={block} commands={commands} api={api} />
-                    );
-                  })()}
-                {item.blocks.flatMap((block) => {
-                  const event = events[Number(block.key)];
-                  if (event?.type !== "prompt") return [];
-                  return reviews
-                    .filter((review) => reviewAt(review, run?.id, event.turn))
-                    .map((review) => (
-                      <div className="chat-review-activity" key={review.id}>
-                        <span>{review.title}</span>
-                        <span>
-                          {review.workers
-                            .map(
-                              (worker) =>
-                                `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                            )
-                            .join(" · ")}
-                        </span>
-                        <button type="button" onClick={() => onReview?.(review.id)}>
-                          {review.submissions.some((batch) => batch.state === "delivered")
-                            ? "Review updates"
-                            : "Review changes"}
-                        </button>
+                    if (event?.type !== "prompt") return [];
+                    return reviews
+                      .filter((review) => reviewAt(review, run?.id, event.turn))
+                      .map((review) => (
+                        <div className="chat-review-activity" key={review.id}>
+                          <span>{review.title}</span>
+                          <span>
+                            {review.workers
+                              .map(
+                                (worker) =>
+                                  `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                              )
+                              .join(" · ")}
+                          </span>
+                          <button type="button" onClick={() => onReview?.(review.id)}>
+                            {review.submissions.some((batch) => batch.state === "delivered")
+                              ? "Review updates"
+                              : "Review changes"}
+                          </button>
+                        </div>
+                      ));
+                  })}
+                  {item.blocks.map((block) => {
+                    const timing = timings.get(block.key);
+                    return timing && !timing.active ? (
+                      <div className="chat-turn-history" key={block.key}>
+                        <TurnTimer
+                          timing={timing}
+                          visible={active}
+                          disclosure={
+                            liveTurn !== block.key && activityTurns.groups.has(block.key)
+                              ? {
+                                  id: historyId(block.key),
+                                  controls: detailsId(block.key),
+                                  expanded: expandedActivities.has(block.key),
+                                  toggle: () => toggleActivity(block.key),
+                                }
+                              : undefined
+                          }
+                        />
+                        {liveTurn !== block.key &&
+                          activityTurns.groups.has(block.key) &&
+                          activityDetails(block.key)}
                       </div>
-                    ));
-                })}
-                {item.blocks.map((block) => {
-                  const timing = timings.get(block.key);
-                  return timing && !timing.active ? (
-                    <div className="chat-turn-history" key={block.key}>
-                      <TurnTimer
-                        timing={timing}
-                        visible={active}
-                        disclosure={
-                          liveTurn !== block.key && activityTurns.groups.has(block.key)
-                            ? {
-                                id: historyId(block.key),
-                                controls: detailsId(block.key),
-                                expanded: expandedActivities.has(block.key),
-                                toggle: () => toggleActivity(block.key),
-                              }
-                            : undefined
-                        }
-                      />
-                      {liveTurn !== block.key &&
-                        activityTurns.groups.has(block.key) &&
-                        activityDetails(block.key)}
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            ))}
-            {reviews
-              .filter(
-                (review) =>
-                  review.chatId === run?.id &&
-                  review.workers.length > 0 &&
-                  !events.some(
-                    (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
-                  ),
-              )
-              .map((review) => (
-                <div className="chat-review-activity" key={review.id}>
-                  <span>{review.title}</span>
-                  <span>
-                    {review.workers
-                      .map(
-                        (worker) =>
-                          `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                      )
-                      .join(" · ")}
-                  </span>
-                  <button type="button" onClick={() => onReview?.(review.id)}>
-                    {review.submissions.some((batch) => batch.state === "delivered")
-                      ? "Review updates"
-                      : "Review changes"}
-                  </button>
+                    ) : null;
+                  })}
                 </div>
               ))}
-            <ActivityDisplay
-              key={run?.id ?? "empty"}
-              id={`${id}-live-activity`}
-              controls={detailsId(activityTurns.current)}
-              expanded={expandedActivities.has(activityTurns.current)}
-              onToggle={() => toggleActivity(activityTurns.current)}
-              activity={chat?.activity}
-              fallback={progress || label}
-              delegated={delegated}
-              hidden={hidden}
-              override={
-                run?.stopping || pending === "cancel" || pending === "stop"
-                  ? "Stopping"
-                  : pending === "restart"
-                    ? "Connecting"
-                    : pending === "send"
-                      ? "Sending"
-                      : undefined
-              }
-            />
-            {liveTurn !== null && activityDetails(liveTurn)}
-            {liveTurn === null &&
-              activityTurns.current === "session" &&
-              activityTurns.groups.has("session") && (
-                <>
-                  <button
-                    type="button"
-                    className="activity-history-toggle"
-                    id={historyId("session")}
-                    aria-expanded={expandedActivities.has("session")}
-                    aria-controls={detailsId("session")}
-                    onClick={() => toggleActivity("session")}
-                  >
-                    Session details
-                  </button>
-                  {activityDetails("session")}
-                </>
+              {reviews
+                .filter(
+                  (review) =>
+                    review.chatId === run?.id &&
+                    review.workers.length > 0 &&
+                    !events.some(
+                      (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
+                    ),
+                )
+                .map((review) => (
+                  <div className="chat-review-activity" key={review.id}>
+                    <span>{review.title}</span>
+                    <span>
+                      {review.workers
+                        .map(
+                          (worker) =>
+                            `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
+                        )
+                        .join(" · ")}
+                    </span>
+                    <button type="button" onClick={() => onReview?.(review.id)}>
+                      {review.submissions.some((batch) => batch.state === "delivered")
+                        ? "Review updates"
+                        : "Review changes"}
+                    </button>
+                  </div>
+                ))}
+              {!opening && (
+                <ActivityDisplay
+                  key={run?.id ?? "empty"}
+                  id={`${id}-live-activity`}
+                  controls={detailsId(activityTurns.current)}
+                  expanded={expandedActivities.has(activityTurns.current)}
+                  onToggle={() => toggleActivity(activityTurns.current)}
+                  activity={chat?.activity?.state === "connecting" ? undefined : chat?.activity}
+                  fallback={progress || label}
+                  delegated={delegated}
+                  hidden={hidden}
+                  override={
+                    run?.stopping || pending === "cancel" || pending === "stop"
+                      ? "Stopping"
+                      : pending === "send"
+                        ? "Sending"
+                        : undefined
+                  }
+                />
               )}
+              {liveTurn !== null && activityDetails(liveTurn)}
+              {liveTurn === null &&
+                activityTurns.current === "session" &&
+                activityTurns.groups.has("session") && (
+                  <>
+                    <button
+                      type="button"
+                      className="activity-history-toggle"
+                      id={historyId("session")}
+                      aria-expanded={expandedActivities.has("session")}
+                      aria-controls={detailsId("session")}
+                      onClick={() => toggleActivity("session")}
+                    >
+                      Session details
+                    </button>
+                    {activityDetails("session")}
+                  </>
+                )}
+            </div>
           </div>
         </div>
         <section className="composer" aria-label="Chat composer">
@@ -631,11 +678,24 @@ export function ChatPage({
             id={`${id}-message`}
             value={draft}
             commands={commands}
-            disabled={!database || !run || !!ended || connecting}
+            disabled={!database || !run || (connecting && !chat?.restored)}
             onChange={edit}
             onSend={() => void send()}
           />
           <SessionInfo
+            leading={
+              <TacticsControl
+                selection={chat?.tactic}
+                disabled={!database || !run || busy}
+                active={active && !hidden}
+                context={`${run?.id ?? ""}:${project ?? ""}`}
+                onChange={(tactic) =>
+                  run
+                    ? action({ type: "set-tactic", id: run.id, project, tactic })
+                    : Promise.resolve(false)
+                }
+              />
+            }
             harness={run?.agent ?? "N/A"}
             sessionId={run?.id ?? ""}
             active={active}

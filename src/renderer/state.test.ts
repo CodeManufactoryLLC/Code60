@@ -20,8 +20,10 @@ import {
   resolveText,
   rowHeight,
   sessionRows,
+  textRoles,
   textStyleProperties,
   transcript,
+  typefaces,
 } from "./state.js";
 
 const snapshot = (revision: number, directory = "/repo"): Snapshot => ({
@@ -223,7 +225,7 @@ describe("desktop stream state", () => {
     ]);
     expect(
       resolveText(parseTextStyles(storage.getItem("code60.textStyles")), "normalText").family,
-    ).toMatch(/^"D-DIN"/);
+    ).toMatch(/^"IBM Plex Sans"/);
     values.set("code60.theme", "light");
     values.set("code60.textStyles", '{"normalText":{"typeface":"georgia"}}');
     values.set("code60.tableLines", '{"horizontal":false,"vertical":false,"heading":false}');
@@ -233,7 +235,7 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults every category to D-DIN Regular and sentence case", () => {
+  it("defaults every category to IBM Plex Sans Regular and sentence case", () => {
     for (const role of [
       "tableHeadings",
       "buttons",
@@ -243,7 +245,7 @@ describe("desktop stream state", () => {
       "normalText",
     ] as const)
       expect(resolveText(defaultTextStyles, role)).toMatchObject({
-        family: fontFamily("d-din"),
+        family: fontFamily("ibm-plex-sans"),
         weight: 400,
       });
     expect(resolveText(defaultTextStyles, "tableHeadings")).toMatchObject({
@@ -276,7 +278,10 @@ describe("desktop stream state", () => {
     migrateTypography(storage);
     const styles = parseTextStyles(storage.getItem("code60.textStyles"));
     for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
-      expect(resolveText(styles, role)).toMatchObject({ family: fontFamily("d-din"), weight: 400 });
+      expect(resolveText(styles, role)).toMatchObject({
+        family: fontFamily("ibm-plex-sans"),
+        weight: 400,
+      });
     expect(styles.normalText).toEqual({ size: 22, case: "lower" });
     expect(storage.getItem("code60.theme")).toBe("dark");
     expect(storage.getItem("code60.tableView.v1:sessions")).toBe("saved layout");
@@ -285,6 +290,63 @@ describe("desktop stream state", () => {
     const later = [...values];
     migrateTypography(storage);
     expect([...values]).toEqual(later);
+  });
+
+  it("uses the new defaults without resetting current saved typography choices", () => {
+    const values = new Map([
+      ["code60.appearanceVersion", "theme-4"],
+      ["code60.typographyVersion", "d-din-regular-1"],
+      [
+        "code60.textStyles",
+        JSON.stringify({
+          buttons: { typeface: "d-din", size: 13, weight: 500, case: "upper" },
+          normalText: { typeface: "georgia", size: 22 },
+        }),
+      ],
+    ]);
+    const before = [...values];
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    };
+    migrateAppearance(storage);
+    migrateTypography(storage);
+    expect([...values]).toEqual(before);
+    const styles = parseTextStyles(storage.getItem("code60.textStyles"));
+    expect(resolveText(styles, "buttons")).toMatchObject({
+      family: fontFamily("d-din"),
+      size: 13,
+      weight: 500,
+      case: "upper",
+    });
+    expect(resolveText(styles, "normalText")).toMatchObject({
+      family: fontFamily("georgia"),
+      size: 22,
+    });
+    expect(resolveText(styles, "agentMessages").family).toBe(fontFamily("ibm-plex-sans"));
+    expect(textStyleProperties(styles)["--nav-font-size"]).toBe("13px");
+  });
+
+  it("defaults navigation to 15px without changing other button sizes or saved overrides", () => {
+    for (const stored of [null, "{}", '{"buttons":{"typeface":"georgia","weight":600}}']) {
+      const styles = parseTextStyles(stored);
+      expect(resolveText(styles, "buttons").size).toBe(13);
+      expect(textStyleProperties(styles)).toMatchObject({
+        "--button-size": "13px",
+        "--nav-font-size": "15px",
+      });
+    }
+    for (const size of [8, 13, 15, 16, 24, 32, 48]) {
+      const styles = parseTextStyles(JSON.stringify({ buttons: { size } }));
+      expect(textStyleProperties(styles)).toMatchObject({
+        "--button-size": `${size}px`,
+        "--nav-font-size": `${size}px`,
+      });
+      expect(parseTextStyles(JSON.stringify(styles)).buttons.size).toBe(size);
+      delete styles.buttons.size;
+      expect(textStyleProperties(styles)["--nav-font-size"]).toBe("15px");
+    }
   });
 
   it("validates stored role styles without accepting arbitrary fonts or values", () => {
@@ -548,6 +610,33 @@ describe("row density setting", () => {
 });
 
 describe("typeface setting", () => {
+  it.each([
+    ["lexend", "Lexend"],
+    ["space-grotesk", "Space Grotesk"],
+  ] as const)("offers and restores %s independently for every text role", (typeface, label) => {
+    expect(typefaces).toContainEqual({ id: typeface, label, family: fontFamily(typeface) });
+    expect(parseTypeface(typeface)).toBe(typeface);
+    expect(fontFamily(typeface)).toMatch(new RegExp(`^"${label}", -apple-system`));
+    for (const weight of [400, 500, 600, 700] as const) {
+      const styles = parseTextStyles(
+        JSON.stringify(
+          Object.fromEntries(textRoles.map(({ id }) => [id, { typeface, weight, size: 18 }])),
+        ),
+      );
+      for (const { id, css } of textRoles) {
+        expect(styles[id]).toEqual({ typeface, weight, size: 18 });
+        expect(resolveText(styles, id)).toMatchObject({
+          family: fontFamily(typeface),
+          spacing: "normal",
+          weight,
+          size: 18,
+        });
+        expect(textStyleProperties(styles)[`--${css}-font`]).toBe(fontFamily(typeface));
+      }
+    }
+    expect(resolveText(defaultTextStyles, "normalText").family).toBe(fontFamily("ibm-plex-sans"));
+  });
+
   it("defaults to the system font and keeps known typefaces", () => {
     expect(parseTypeface(null)).toBe("system");
     expect(parseTypeface("comic-sans")).toBe("system");

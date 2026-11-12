@@ -42,6 +42,15 @@ export function durationText(ms: number): string {
       : `${seconds}s`;
 }
 
+export function messageAgeText(at: number, now: number): string {
+  if (!Number.isFinite(at) || !Number.isFinite(now)) return "Time unavailable";
+  const seconds = Math.floor(Math.max(0, now - at) / 1000);
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds >= 60) return `${Math.floor(seconds / 60)}m ago`;
+  return `${seconds}s ago`;
+}
+
 export function newestMessage(events: readonly RunEvent[]): number | null | undefined {
   let newest: number | undefined;
   let invalid = false;

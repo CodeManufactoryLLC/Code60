@@ -31,6 +31,7 @@ export function SessionInfo({
   sessionId,
   active = true,
   children,
+  leading,
 }: {
   state: SessionState | undefined;
   ended: boolean;
@@ -42,6 +43,7 @@ export function SessionInfo({
   sessionId: string;
   active?: boolean;
   children?: ReactNode;
+  leading?: ReactNode;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -127,6 +129,7 @@ export function SessionInfo({
   return (
     <section className="composer-footer session-info" aria-label="Session information">
       <div className="composer-mode">
+        {leading}
         <button
           ref={trigger}
           type="button"

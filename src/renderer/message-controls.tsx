@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { durationText, type TurnTiming, timingText } from "./chat-presentation.js";
+import { durationText, messageAgeText, type TurnTiming, timingText } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { useTicker } from "./ticker.js";
 
@@ -10,8 +10,35 @@ export async function copyMessage(
   await write(text);
 }
 
-export function MessageCopy({ text }: { text: string }) {
-  const [state, setState] = useState<"idle" | "copying" | "copied" | "failed">("idle");
+function MessageTime({ at, visible }: { at: string | undefined; visible: boolean }) {
+  const timestamp = at === undefined ? NaN : Date.parse(at);
+  const valid = Number.isFinite(timestamp);
+  const now = useTicker(visible && valid);
+  return (
+    <time
+      className="message-sent-time"
+      dateTime={valid ? new Date(timestamp).toISOString() : undefined}
+      title={valid ? new Date(timestamp).toLocaleString() : "Message time unavailable"}
+      aria-live="off"
+    >
+      {messageAgeText(timestamp, now)}
+    </time>
+  );
+}
+
+export function MessageCopy({
+  text,
+  at,
+  visible = true,
+  onCopied,
+}: {
+  text: string;
+  at?: string | undefined;
+  visible?: boolean;
+  onCopied?: (() => void) | undefined;
+}) {
+  const [state, setState] = useState<"idle" | "copying" | "failed">("idle");
+  const [press, setPress] = useState(0);
   const mounted = useRef(true);
   const inFlight = useRef(false);
   useEffect(() => {
@@ -20,27 +47,28 @@ export function MessageCopy({ text }: { text: string }) {
       mounted.current = false;
     };
   }, []);
-  useEffect(() => {
-    if (state !== "copied") return;
-    const timer = setTimeout(() => setState("idle"), 3000);
-    return () => clearTimeout(timer);
-  }, [state]);
   if (!text.length) return null;
   async function copy() {
     if (inFlight.current) return;
     inFlight.current = true;
+    setPress((current) => current + 1);
     setState("copying");
     try {
       await copyMessage(text, (source) => navigator.clipboard.writeText(source));
-      if (mounted.current) setState("copied");
     } catch {
       if (mounted.current) setState("failed");
+      return;
     } finally {
       inFlight.current = false;
+    }
+    if (mounted.current) {
+      setState("idle");
+      onCopied?.();
     }
   }
   return (
     <div className="message-copy">
+      <MessageTime at={at} visible={visible} />
       <button
         type="button"
         className="icon-button"
@@ -50,17 +78,12 @@ export function MessageCopy({ text }: { text: string }) {
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => void copy()}
       >
-        <Icon name="copy" />
+        <span className="message-copy-glyph" key={press} data-clicked={press > 0 || undefined}>
+          <Icon name="copy" />
+        </span>
       </button>
-      <span
-        className="message-copy-feedback"
-        role={state === "copied" || state === "failed" ? "status" : undefined}
-      >
-        {state === "copied"
-          ? "Copied."
-          : state === "failed"
-            ? "Copy failed. Check clipboard access and retry."
-            : ""}
+      <span className="message-copy-feedback" role={state === "failed" ? "status" : undefined}>
+        {state === "failed" ? "Copy failed. Check clipboard access and retry." : ""}
       </span>
     </div>
   );
@@ -77,23 +100,26 @@ export function TurnTimer({
 }) {
   const now = useTicker(visible && timing?.active === true);
   if (!timing) return null;
-  if (disclosure)
-    return (
-      <button
-        type="button"
-        id={disclosure.id}
-        className="turn-timer activity-history-toggle"
-        aria-expanded={disclosure.expanded}
-        aria-controls={disclosure.controls}
-        onClick={disclosure.toggle}
-      >
-        {timingText(timing, now)}
-      </button>
-    );
   return (
-    <p className="turn-timer" aria-live="off">
-      {timingText(timing, now)}
-    </p>
+    <>
+      {disclosure ? (
+        <button
+          type="button"
+          id={disclosure.id}
+          className="turn-timer activity-history-toggle"
+          aria-expanded={disclosure.expanded}
+          aria-controls={disclosure.controls}
+          onClick={disclosure.toggle}
+        >
+          {timingText(timing, now)}
+        </button>
+      ) : (
+        <p className="turn-timer" aria-live="off">
+          {timingText(timing, now)}
+        </p>
+      )}
+      {!timing.active && <hr className="turn-separator" />}
+    </>
   );
 }
 

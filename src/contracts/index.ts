@@ -77,6 +77,7 @@ export * from "./product.js";
 export * from "./prompts.js";
 export * from "./search-summary.js";
 export * from "./session-state.js";
+export * from "./tactics.js";
 
 const promptTemplateSchema = (id: PromptId) =>
   z.string().superRefine((template, ctx) => {

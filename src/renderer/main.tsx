@@ -16,13 +16,11 @@ import type {
   DesktopApi,
   DesktopRun,
   MenuCommand,
-  ProjectEntry,
   RunConfiguration,
   Snapshot,
   StartRequest,
 } from "../bridge/index.js";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
-import { AgentSetupWizard } from "./agent-setup.js";
 import { ChatPage } from "./chat-page.js";
 import { newestMessage } from "./chat-presentation.js";
 import { type OpenChat, workerLabel } from "./chats.js";
@@ -54,11 +52,15 @@ import {
 import { PageTabBar } from "./page-tabs.js";
 import { pathLabel } from "./path-label.js";
 import { PollingControls, PollingPage, PollingWidget, labels as pollLabels } from "./polling.js";
+import { ProjectConfirmation } from "./project-confirmation.js";
+import { ProjectSelector, type ProjectSelectorProps } from "./project-selector.js";
 import { PromptEditorPage } from "./prompt-editor.js";
 import { continueBlocker } from "./recovery.js";
 import { SearchPage } from "./search-page.js";
 import { SessionsTable } from "./sessions.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
+import { SidebarFooterActions } from "./sidebar-footer-actions.js";
+import { Splash } from "./splash.js";
 import {
   applyUpdate,
   type DesktopState,
@@ -90,12 +92,17 @@ import {
 import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
 import { parseChartTick } from "./ticker.js";
 import { useTranscripts } from "./transcripts.js";
+import { TransitionSettings } from "./transition-settings.js";
+import { transitionTimeProperties, useTransitionTimes } from "./transition-times.js";
 import { UpdateIndicator, UpdatesSection, useUpdateNotice, useUpdates } from "./updates.js";
 import { WorkerChat } from "./worker-chat.js";
 import { WorktreesPage } from "./worktrees.js";
 import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/400-italic.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-sans/700.css";
+import "@fontsource/ibm-plex-sans/700-italic.css";
 import "@fontsource/ibm-plex-serif/400.css";
 import "@fontsource/ibm-plex-serif/500.css";
 import "@fontsource/ibm-plex-serif/600.css";
@@ -220,6 +227,11 @@ function App() {
     contextual?: boolean | undefined;
   }>();
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
+  const transitionTimes = useTransitionTimes();
+  useLayoutEffect(() => {
+    for (const [property, value] of Object.entries(transitionTimeProperties(transitionTimes)))
+      document.documentElement.style.setProperty(property, value);
+  }, [transitionTimes]);
   const [textStyles, setTextStyles] = useState<TextStyles>(() =>
     parseTextStyles(localStorage.getItem("code60.textStyles")),
   );
@@ -247,6 +259,18 @@ function App() {
   }, [chartTickMs]);
   // Reloads can skip the splash only after the saved provider has been checked.
   const [splash, setSplash] = useState(true);
+  const splashReturned = useRef(sessionStorage.getItem("code60.splashReturned") === "1");
+  const enterApp = () => {
+    splashReturned.current = false;
+    sessionStorage.removeItem("code60.splashReturned");
+    sessionStorage.setItem("code60.splashShown", "1");
+    setSplash(false);
+  };
+  const [projectChoice, setProjectChoice] = useState<{
+    path: string;
+    database: string;
+    project: string | null;
+  }>();
   const updateNotice = useUpdateNotice(updates.state, !splash && !busy);
   const openUpdates = () => {
     setSettingsSection("updates");
@@ -277,7 +301,12 @@ function App() {
   useEffect(() => {
     if (!snapshot || startupChecked.current) return;
     startupChecked.current = true;
-    if (orchestratorConfigured && sessionStorage.getItem("code60.splashShown")) setSplash(false);
+    if (
+      !splashReturned.current &&
+      orchestratorConfigured &&
+      sessionStorage.getItem("code60.splashShown")
+    )
+      setSplash(false);
   }, [snapshot, orchestratorConfigured]);
   const database = snapshot?.database ?? null;
   const databaseLoaded = snapshot !== undefined;
@@ -296,6 +325,15 @@ function App() {
     setPollMenu(undefined);
   }, [database, databaseLoaded]);
   const directory = snapshot?.directory;
+  useEffect(() => {
+    if (
+      projectChoice &&
+      (projectChoice.database !== database ||
+        projectChoice.project !== (directory ?? null) ||
+        !orchestratorConfigured)
+    )
+      setProjectChoice(undefined);
+  }, [projectChoice, database, directory, orchestratorConfigured]);
   useEffect(() => {
     if (!directory || !snapshot?.database) setGitSetupProject(undefined);
     else setGitSetupProject((current) => (current === directory ? current : undefined));
@@ -380,10 +418,8 @@ function App() {
     return () => document.removeEventListener("visibilitychange", visibility);
   }, [tabs.active, splash, filesActive]);
   const loaded = snapshot !== undefined || error !== "";
-  // With a connected database and no open project, the splash offers the most recent project.
-  const lastProject = database && !directory ? snapshot?.projects[0] : undefined;
   useEffect(() => {
-    if (splash && directory && orchestratorConfigured) {
+    if (!splashReturned.current && splash && directory && orchestratorConfigured) {
       sessionStorage.setItem("code60.splashShown", "1");
       setSplash(false);
     }
@@ -561,7 +597,29 @@ function App() {
     const latest = await api.snapshot();
     setState((current) => applyUpdate(current, latest));
     setPicker(undefined);
-    if (latest.directory) notify(`Opened ${folderName(latest.directory)}.`);
+    if (latest.directory) {
+      enterApp();
+      notify(`Opened ${folderName(latest.directory)}.`);
+    }
+  };
+  const projectActions = {
+    onConnect: connectDatabase,
+    onOpen: (path: string) => {
+      if (busy || !database || !orchestratorConfigured) return;
+      setError("");
+      setProjectChoice({ path, database, project: directory ?? null });
+    },
+    onCreate: () => {
+      if (busy) return;
+      if (snapshot?.active) {
+        setError("Finish or stop all runs before switching projects.");
+        return;
+      }
+      void attempt(async () => {
+        if (await api.chooseFolder()) await projectOpened();
+      });
+    },
+    onRemove: (path: string) => void attempt(() => api.removeProject(path)),
   };
   const plans = snapshot?.chats.flatMap((chat) => chat.plans ?? []) ?? [];
   const reviewSummaries = snapshot?.reviews ?? [];
@@ -576,13 +634,6 @@ function App() {
       }),
     );
   }, [reviewSummaries, workspace]);
-  const openPlan = (id: string) => {
-    const plan = plans.find((item) => item.id === id);
-    if (!plan) return;
-    fileAction({ type: "plan", planId: id, title: plan.title });
-    setExplorerOpen(true);
-    setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
-  };
   const openedPlans = useRef(new Map<string, number>());
   useEffect(() => {
     if (splash || workerId) return;
@@ -991,14 +1042,15 @@ function App() {
           ready={splashReady && loaded}
           snapshot={snapshot}
           api={api}
-          project={lastProject}
           busy={busy}
+          error={error}
+          theme={theme}
+          onThemeChange={setTheme}
+          projectActions={projectActions}
           onConnectDatabase={() => showPicker("database")}
-          onAnswer={(open) => {
+          onEnter={() => {
             if (!orchestratorConfigured) return;
-            sessionStorage.setItem("code60.splashShown", "1");
-            setSplash(false);
-            if (open && lastProject) void attempt(() => api.openProject(lastProject.path));
+            enterApp();
           }}
         />
       )}
@@ -1078,11 +1130,10 @@ function App() {
                   events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
                   database={database}
                   commands={snapshot?.commands ?? []}
+                  project={directory ?? null}
                   runs={snapshot?.runs ?? []}
                   reviews={reviewSummaries}
                   onReview={openReview}
-                  plans={chat?.plans ?? []}
-                  onPlan={openPlan}
                   active={
                     !splash &&
                     tabs.active === "chat" &&
@@ -1090,6 +1141,7 @@ function App() {
                     chat?.directory === snapshot?.chat.directory
                   }
                   onDatabase={() => showPicker("database")}
+                  onCopied={() => notify("Copied.")}
                 />
               ))}
               {(visitedWorkers.workspace === workerScope ? visitedWorkers.ids : []).map((id) => {
@@ -1112,6 +1164,7 @@ function App() {
                     }
                     historyError={transcripts.errors[id]}
                     onRetry={transcripts.retry}
+                    onCopied={() => notify("Copied.")}
                   />
                 );
               })}
@@ -1146,7 +1199,15 @@ function App() {
               section={settingsSection}
               updates={<UpdatesSection updates={updates} />}
               versions={snapshot?.versions}
-              orchestration={snapshot && <OrchestrationSettings snapshot={snapshot} api={api} />}
+              orchestration={
+                snapshot && (
+                  <OrchestrationSettings
+                    snapshot={snapshot}
+                    api={api}
+                    active={!splash && tabs.active === "settings" && settingsSection === "agents"}
+                  />
+                )
+              }
               pollingControls={
                 snapshot && (
                   <fieldset disabled={!database} className="database-dependent-controls">
@@ -1555,32 +1616,50 @@ function App() {
       </div>
       {!splash && (
         <footer className="app-footer">
-          {snapshot && (
-            <PollingWidget
-              disabled={!database}
-              key={database ?? "none"}
-              polling={snapshot.polling}
-              api={api}
-              messageScope={
-                tabs.active === "chat" ? "selected conversation" : "current project sessions"
-              }
-              messageAt={
-                tabs.active === "chat"
-                  ? workerId && (transcripts.errors[workerId] || !transcripts.events[workerId])
-                    ? null
-                    : newestMessage(
-                        workerId ? (transcripts.events[workerId] ?? []) : (state?.chatEvents ?? []),
-                      )
-                  : transcripts.pending || Object.keys(transcripts.errors).length
-                    ? null
-                    : newestMessage(
-                        snapshot.runs.flatMap(({ record }) => [
-                          ...(transcripts.events[record.id] ?? []),
-                        ]),
-                      )
-              }
+          <div className="footer-sidebar">
+            {snapshot && (
+              <PollingWidget
+                disabled={!database}
+                key={database ?? "none"}
+                polling={snapshot.polling}
+                api={api}
+                messageScope={
+                  tabs.active === "chat" ? "selected conversation" : "current project sessions"
+                }
+                messageAt={
+                  tabs.active === "chat"
+                    ? workerId && (transcripts.errors[workerId] || !transcripts.events[workerId])
+                      ? null
+                      : newestMessage(
+                          workerId
+                            ? (transcripts.events[workerId] ?? [])
+                            : (state?.chatEvents ?? []),
+                        )
+                    : transcripts.pending || Object.keys(transcripts.errors).length
+                      ? null
+                      : newestMessage(
+                          snapshot.runs.flatMap(({ record }) => [
+                            ...(transcripts.events[record.id] ?? []),
+                          ]),
+                        )
+                }
+              />
+            )}
+            <SidebarFooterActions
+              returnDisabled={busy || !snapshot}
+              databaseDisabled={busy || !snapshot || Boolean(snapshot.active)}
+              onDatabase={() => showPicker("database")}
+              onReturn={() => {
+                splashReturned.current = true;
+                sessionStorage.setItem("code60.splashReturned", "1");
+                sessionStorage.removeItem("code60.splashShown");
+                setPicker(undefined);
+                setProjectChoice(undefined);
+                setError("");
+                setSplash(true);
+              }}
             />
-          )}
+          </div>
           <UpdateIndicator state={updates.state} onOpen={openUpdates} />
           {snapshot?.runs.some((run) => run.view?.pending.length) && (
             <button
@@ -1632,27 +1711,37 @@ function App() {
       )}
       {picker === "project" && snapshot && (
         <ProjectDialog
+          {...projectActions}
           projects={snapshot.projects}
           database={database}
-          onConnect={(mode) => void attempt(() => api.connectDatabase(mode))}
           busy={busy}
           error={error}
           onClose={() => setPicker(undefined)}
-          onOpen={(path) =>
-            void attempt(async () => {
-              await api.openProject(path);
-              await projectOpened();
-            })
-          }
-          onCreate={() =>
-            void attempt(async () => {
-              if (await api.chooseFolder()) await projectOpened();
-            })
-          }
-          onRemove={(path) => void attempt(() => api.removeProject(path))}
-          onClear={() => void attempt(() => api.clearProjects())}
         />
       )}
+      {projectChoice &&
+        projectChoice.database === database &&
+        projectChoice.project === (directory ?? null) &&
+        orchestratorConfigured && (
+          <ProjectConfirmation
+            path={projectChoice.path}
+            busy={busy}
+            blocked={Boolean(snapshot?.active)}
+            error={error}
+            onCancel={() => {
+              setProjectChoice(undefined);
+              setError("");
+            }}
+            onConfirm={() => {
+              if (snapshot?.active) return;
+              void attempt(async () => {
+                await api.openProject(projectChoice.path);
+                await projectOpened();
+                setProjectChoice(undefined);
+              });
+            }}
+          />
+        )}
       {setup && snapshot && (
         <NewSession
           snapshot={snapshot}
@@ -1937,6 +2026,7 @@ function SettingsPage({
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
           <SettingsHeader id={`${id}-appearance`} title="Appearance" />
+          <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">
               Theme
@@ -2177,7 +2267,7 @@ function TextSettings({
                       })
                     }
                   >
-                    <option value="">Default (D-DIN)</option>
+                    <option value="">Default (IBM Plex Sans)</option>
                     {typefaces.map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.label}
@@ -2307,100 +2397,6 @@ function AboutSection({ versions }: { versions: Versions | undefined }) {
   );
 }
 
-function Splash({
-  ready,
-  snapshot,
-  api,
-  project,
-  onAnswer,
-  busy,
-  onConnectDatabase,
-}: {
-  ready: boolean;
-  snapshot: Snapshot | undefined;
-  api: DesktopApi;
-  project: ProjectEntry | undefined;
-  onAnswer(open: boolean): void;
-  busy: boolean;
-  onConnectDatabase(): void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const yes = useRef<HTMLButtonElement>(null);
-  const id = useId();
-  const configured = hasOrchestrationProvider(snapshot);
-  const providerLoaded = snapshot !== undefined;
-  const [setup, setSetup] = useState(false);
-  // A modal dialog keeps the app behind it out of reach until the splash is gone.
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
-  useEffect(() => {
-    if (!ready) return;
-    if (configured && !snapshot?.database)
-      dialog.current?.querySelector<HTMLButtonElement>(".database-notice button")?.focus();
-    else yes.current?.focus();
-  }, [ready, configured, snapshot?.database]);
-  useEffect(() => {
-    if (ready && !configured && providerLoaded) setSetup(true);
-  }, [ready, configured, providerLoaded]);
-  const answer = (open: boolean) => {
-    if (!ready) return;
-    if (!configured) setSetup(true);
-    else onAnswer(open);
-  };
-  return (
-    <>
-      <dialog
-        ref={dialog}
-        className="splash"
-        data-ready={ready}
-        aria-labelledby={`${id}-title`}
-        onCancel={(event) => {
-          if (event.target !== event.currentTarget) return;
-          event.preventDefault();
-          if (configured) answer(false);
-        }}
-      >
-        {ready && snapshot && !snapshot.database && (
-          <DatabaseNotice
-            busy={busy}
-            error={snapshot.databaseError}
-            onConnect={onConnectDatabase}
-          />
-        )}
-        <span id={`${id}-title`} className="wordmark splash-title">
-          Code<b>60</b>
-        </span>
-        {ready && (
-          <div className="splash-prompt">
-            {configured && project && (
-              <h2 id={`${id}-question`}>Continue {folderName(project.path)}?</h2>
-            )}
-            <div className="splash-actions">
-              {configured && project && (
-                <button type="button" onClick={() => answer(false)}>
-                  No
-                </button>
-              )}
-              <button type="button" className="primary" ref={yes} onClick={() => answer(true)}>
-                {!configured ? "Set up agents" : project ? "Yes" : "Start"}
-              </button>
-            </div>
-          </div>
-        )}
-      </dialog>
-      {setup && snapshot && (
-        <AgentSetupWizard
-          snapshot={snapshot}
-          api={api}
-          mode="primary"
-          onClose={() => setSetup(false)}
-        />
-      )}
-    </>
-  );
-}
-
 function DatabaseDialog({
   database,
   busy,
@@ -2450,95 +2446,19 @@ function DatabaseDialog({
 }
 
 function ProjectDialog({
-  projects,
-  database,
-  onConnect,
-  busy,
-  error,
   onClose,
-  onOpen,
-  onCreate,
-  onRemove,
-  onClear,
-}: {
-  projects: ProjectEntry[];
-  database: string | null;
-  onConnect(mode: DatabaseMode): void;
-  busy: boolean;
-  error: string;
-  onClose(): void;
-  onOpen(path: string): void;
-  onCreate(): void;
-  onRemove(path: string): void;
-  onClear(): void;
-}) {
+  ...props
+}: Omit<ProjectSelectorProps, "footerAction"> & { onClose(): void }) {
   return (
-    <Modal title="Open Project" busy={busy} className="project-dialog" onClose={onClose}>
-      {!database ? (
-        <>
-          <p className="muted">No database connected.</p>
-          {/* biome-ignore lint/a11y/useSemanticElements: This group contains actions, not form inputs. */}
-          <div className="button-group" role="group" aria-label="Database connection">
-            <button type="button" disabled={busy} onClick={() => onConnect("open")}>
-              Open existing database…
-            </button>
-            <button type="button" disabled={busy} onClick={() => onConnect("create")}>
-              Create database…
-            </button>
-          </div>
-        </>
-      ) : projects.length > 0 ? (
-        <ul className="project-list" aria-label="Recent projects">
-          {projects.map((project) => (
-            <li key={project.path} className="project-row">
-              <button
-                type="button"
-                className="project-item"
-                disabled={busy}
-                onClick={() => onOpen(project.path)}
-              >
-                <strong>{folderName(project.path)}</strong>
-                <span className="path">{project.path}</span>
-              </button>
-              <button
-                type="button"
-                className="project-remove"
-                aria-label={`Remove ${folderName(project.path)} from history`}
-                title={`Remove ${project.path} from history`}
-                disabled={busy}
-                onClick={() => onRemove(project.path)}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">No recent projects.</p>
-      )}
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
-      )}
-      <div className="modal-footer">
-        {projects.length > 0 && (
-          <button
-            type="button"
-            className="danger-text footer-start"
-            disabled={busy}
-            onClick={onClear}
-          >
-            Clear history
+    <Modal title="Open Project" busy={props.busy} className="project-dialog" onClose={onClose}>
+      <ProjectSelector
+        {...props}
+        footerAction={
+          <button type="button" disabled={props.busy} onClick={onClose}>
+            Cancel
           </button>
-        )}
-        <button type="button" disabled={busy} onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="primary" disabled={busy || !database} onClick={onCreate}>
-          Open Folder
-        </button>
-      </div>
+        }
+      />
     </Modal>
   );
 }
