@@ -3,7 +3,15 @@ import type { DesktopApi, Snapshot } from "../bridge/index.js";
 import { AgentLogo, AgentSetupWizard } from "./agent-setup.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
-export function OrchestrationSettings({ snapshot, api }: { snapshot: Snapshot; api: DesktopApi }) {
+export function OrchestrationSettings({
+  snapshot,
+  api,
+  active,
+}: {
+  snapshot: Snapshot;
+  api: DesktopApi;
+  active: boolean;
+}) {
   const id = useId();
   const [mode, setMode] = useState<"primary" | "add" | null>(null);
   const setup = snapshot.agentSetup;
@@ -45,7 +53,7 @@ export function OrchestrationSettings({ snapshot, api }: { snapshot: Snapshot; a
           <input type="checkbox" role="switch" checked aria-checked="true" disabled />
         </label>
       </SettingsCard>
-      {(mode || (setup?.complete && setup.session)) && (
+      {active && (mode || (setup?.complete && setup.session)) && (
         <AgentSetupWizard
           snapshot={snapshot}
           api={api}

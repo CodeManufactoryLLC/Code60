@@ -1,5 +1,10 @@
 # Bridge
 
+- Tactic selection accepts only chat/project identity and a catalog ID or explicit
+  null. Continue task accepts only existing chat/task identity. Never accept
+  tactic prompts, versions or storage paths from the renderer. Private saved
+  task schemas do not grant historical worker or plan authority.
+
 - Review requests accept only project identity, generated review/revision/comment IDs and
   bounded feedback anchors. Revision file reads resolve saved file keys, never arbitrary paths.
   Agents may report addressed feedback but never resolve it or mark files reviewed.

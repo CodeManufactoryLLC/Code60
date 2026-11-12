@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, SetupBegin, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
@@ -22,8 +22,9 @@ export function AgentSetupWizard({
   const id = useId();
   const attemptInFlight = useRef(false);
   const [pending, setPending] = useState<{ provider: string; revision: number } | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [review, setReview] = useState(false);
+  const [connected, setConnected] = useState<string | null>(null);
+  const saveInFlight = useRef(false);
+  const autoSaveSession = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const setup = snapshot.agentSetup;
@@ -33,20 +34,36 @@ export function AgentSetupWizard({
     pending !== null &&
     (snapshot.revision <= pending.revision || session?.candidate !== pending.provider);
   const candidate = providers.find(
-    (p) => p.id === (starting ? pending?.provider : session?.candidate),
+    (p) => p.id === (starting ? pending?.provider : (session?.candidate ?? connected)),
   );
-  const busy = starting || session?.phase === "detecting" || session?.phase === "connecting";
-  const success = session?.phase === "success" && !adding && !starting;
-  const choosing = !starting && !review && (!session || session.phase === "select" || adding);
-  const heading = review
-    ? "Your agents"
-    : success
-      ? "Would you like to connect another agent?"
-      : choosing
-        ? session?.primary || mode === "add"
-          ? "Connect another agent"
-          : "Select your Primary / Orchestrator"
-        : `Connect ${candidate?.name ?? "agent"}`;
+  const success = connected !== null;
+  const busy =
+    starting ||
+    saving ||
+    session?.phase === "detecting" ||
+    session?.phase === "connecting" ||
+    (session?.phase === "success" && !success && !error);
+  const choosing = !busy && !success && (!session || session.phase === "select");
+  const heading = choosing
+    ? setup?.complete || mode === "add"
+      ? "Connect another agent"
+      : "Select your Primary / Orchestrator"
+    : `Connect ${candidate?.name ?? "agent"}`;
+  const finish = useCallback(async () => {
+    if (!session?.id || !session.candidate || saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await api.finishAgentSetup({ sessionId: session.id });
+      setConnected(session.candidate);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
+  }, [api, session?.id, session?.candidate]);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.current?.showModal();
@@ -60,10 +77,16 @@ export function AgentSetupWizard({
       setPending(null);
   }, [pending, snapshot.revision, session?.candidate]);
   useEffect(() => {
-    if (started.current || session) return;
+    if (session) started.current = true;
+    if (started.current || connected || saving) return;
     started.current = true;
     void api.beginAgentSetup({ mode }).catch((cause: unknown) => setError(String(cause)));
-  }, [api, mode, session]);
+  }, [api, mode, session, connected, saving]);
+  useEffect(() => {
+    if (session?.phase !== "success" || autoSaveSession.current === session.id) return;
+    autoSaveSession.current = session.id;
+    void finish();
+  }, [session?.phase, session?.id, finish]);
   async function invoke(action: () => Promise<void>) {
     setError("");
     try {
@@ -73,16 +96,15 @@ export function AgentSetupWizard({
     }
   }
   async function close() {
-    if (saving) return;
+    if (saveInFlight.current) return;
     await invoke(async () => {
-      if (session) await api.abandonAgentSetup({ sessionId: session.id });
+      if (session && !connected) await api.abandonAgentSetup({ sessionId: session.id });
       onClose();
     });
   }
   async function attempt(provider: string) {
     if (!session || !provider || busy || attemptInFlight.current) return;
     attemptInFlight.current = true;
-    setAdding(false);
     setPending({ provider, revision: snapshot.revision });
     setError("");
     try {
@@ -94,13 +116,15 @@ export function AgentSetupWizard({
       attemptInFlight.current = false;
     }
   }
-  async function finish() {
-    if (!session) return;
+  async function addAnother() {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
     setSaving(true);
     await invoke(async () => {
-      await api.finishAgentSetup({ sessionId: session.id });
-      onClose();
+      await api.beginAgentSetup({ mode: "add" });
+      setConnected(null);
     });
+    saveInFlight.current = false;
     setSaving(false);
   }
   return (
@@ -167,12 +191,12 @@ export function AgentSetupWizard({
               ))}
           </fieldset>
         )}
-        {!choosing && !review && candidate && (
+        {!choosing && candidate && (
           <div className="agent-connection">
             <div className="agent-identity">
               <AgentLogo id={candidate.logo} />
               <span>{candidate.name}</span>
-              {!starting && session?.phase === "success" ? (
+              {success ? (
                 <span className="agent-status">
                   <Icon name="checkmark" />
                   Connected
@@ -187,11 +211,15 @@ export function AgentSetupWizard({
             <p role="status" aria-live="polite">
               {starting || session?.phase === "detecting"
                 ? `Detecting ${candidate.name}…`
-                : session?.phase === "connecting"
-                  ? `Connecting to ${candidate.name}…`
-                  : success
+                : saving || (session?.phase === "success" && !error)
+                  ? success
                     ? `${candidate.name} connected`
-                    : ""}
+                    : "Saving connection…"
+                  : session?.phase === "connecting"
+                    ? `Connecting to ${candidate.name}…`
+                    : success
+                      ? `${candidate.name} connected`
+                      : ""}
             </p>
             {busy && (
               <progress
@@ -208,28 +236,10 @@ export function AgentSetupWizard({
             )}
           </div>
         )}
-        {review && (
-          <ul className="agent-review">
-            {session?.verified.map((provider) => {
-              const p = providers.find((p) => p.id === provider);
-              return (
-                <li className="agent-review-item" key={provider}>
-                  <AgentLogo id={p?.logo ?? provider} />
-                  <span>
-                    {p?.name ?? provider}
-                    <small>
-                      {provider === session.primary ? "Primary / Orchestrator" : "Additional agent"}
-                    </small>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
         {error && <p role="alert">{error}</p>}
       </div>
       <div className="modal-footer">
-        {busy ? (
+        {busy && !saving ? (
           <button
             type="button"
             onClick={() =>
@@ -242,68 +252,56 @@ export function AgentSetupWizard({
           >
             Cancel attempt
           </button>
-        ) : review ? (
+        ) : success ? (
           <>
-            <button type="button" disabled={saving} onClick={() => setReview(false)}>
-              Back
-            </button>
             <button
               type="button"
               className="primary"
               disabled={saving}
-              onClick={() => void finish()}
+              onClick={() => void close()}
             >
-              {saving ? "Saving…" : "Finish setup"}
-            </button>
-          </>
-        ) : success ? (
-          <>
-            <button type="button" onClick={() => setReview(true)}>
-              No, finish setup
+              Close
             </button>
             <button
               type="button"
+              disabled={saving || providers.every((p) => setup?.enabled.includes(p.id))}
+              onClick={() => void addAnother()}
+            >
+              Add another agent
+            </button>
+          </>
+        ) : session?.phase === "failed" || (session?.phase === "success" && error) ? (
+          <>
+            <button type="button" onClick={() => void close()}>
+              Close
+            </button>
+            {session.phase === "failed" && (
+              <button
+                type="button"
+                onClick={() =>
+                  void invoke(async () => {
+                    if (session) await api.cancelAgentSetup({ sessionId: session.id });
+                  })
+                }
+              >
+                Choose another agent
+              </button>
+            )}
+            <button
+              type="button"
               className="primary"
-              disabled={providers.every((p) => session?.verified.includes(p.id))}
               onClick={() => {
-                setAdding(true);
+                if (session.phase === "success") void finish();
+                else if (candidate) void attempt(candidate.id);
               }}
-            >
-              Yes, add another
-            </button>
-          </>
-        ) : session?.phase === "failed" ? (
-          <>
-            <button
-              type="button"
-              onClick={() =>
-                void invoke(async () => {
-                  if (session) await api.cancelAgentSetup({ sessionId: session.id });
-                  setAdding(true);
-                })
-              }
-            >
-              Choose another agent
-            </button>
-            <button
-              type="button"
-              className="primary"
-              onClick={() => candidate && void attempt(candidate.id)}
             >
               Retry
             </button>
           </>
         ) : (
-          <>
-            <button type="button" onClick={() => void close()}>
-              Cancel
-            </button>
-            {session?.primary && (
-              <button type="button" onClick={() => setReview(true)}>
-                Review agents
-              </button>
-            )}
-          </>
+          <button type="button" disabled={saving} onClick={() => void close()}>
+            {saving ? "Saving…" : "Close"}
+          </button>
         )}
       </div>
     </dialog>

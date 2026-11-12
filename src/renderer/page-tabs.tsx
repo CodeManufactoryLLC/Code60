@@ -7,7 +7,8 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
-import { Icon, type IconName } from "./icons.js";
+import { Icon } from "./icons.js";
+import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
 import { pathLabel } from "./path-label.js";
 import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds } from "./tabs.js";
 
@@ -29,24 +30,6 @@ const labels: Record<PageId, string> = {
   settings: "Settings",
 };
 
-const pageIcons: Record<PageId, IconName> = {
-  logs: "document",
-  "contributor-tools": "settings",
-  chat: "chat",
-  "episodic-memory": "document",
-  files: "document",
-  configurations: "grid",
-  messages: "grid",
-  events: "grid",
-  polling: "grid",
-  prompts: "prompt-template",
-  commands: "terminal",
-  search: "search",
-  sessions: "grid",
-  settings: "settings",
-  worktrees: "grid",
-};
-
 const settingsLabels: Record<SettingsSectionId, string> = {
   agents: "Agents",
   appearance: "Appearance",
@@ -57,14 +40,11 @@ const settingsLabels: Record<SettingsSectionId, string> = {
   about: "About",
 };
 
-const settingsIcons: Record<SettingsSectionId, IconName> = {
-  agents: "ai-agent",
-  appearance: "view",
-  "table-defaults": "grid",
-  text: "settings--adjust",
-  "polling-settings": "time",
-  updates: "renew",
-  about: "information",
+const pageIcons: Partial<Record<PageId, NavigationIconName>> = {
+  prompts: "pencil-line",
+  commands: "megaphone",
+  settings: "gear",
+  search: "magnifying-glass",
 };
 
 export function PageTabBar({
@@ -110,7 +90,9 @@ export function PageTabBar({
     return Number.isFinite(saved) && saved >= 180 && saved <= 480 ? saved : 220;
   });
   useLayoutEffect(() => {
-    sidebar.current?.parentElement?.style.setProperty("--sidebar-width", `${width}px`);
+    sidebar.current
+      ?.closest<HTMLElement>(".app")
+      ?.style.setProperty("--sidebar-width", `${width}px`);
     localStorage.setItem("code60.sidebarWidth", String(width));
   }, [width]);
   const resize = (value: number) => {
@@ -156,7 +138,6 @@ export function PageTabBar({
           aria-haspopup="dialog"
           title={!database ? "Connect to database" : (directory ?? "Open a project")}
         >
-          <Icon name="folder" />
           <span className="sidebar-title">
             {!database ? "Connect to database" : (repository ?? "Open a project")}
           </span>
@@ -493,6 +474,7 @@ function PageTabList({
     moveTo(visible[next]);
   }
   function page(id: PageId, first: boolean) {
+    const icon = pageIcons[id];
     return (
       <div
         className="page-tab"
@@ -520,7 +502,7 @@ function PageTabList({
           }}
           onKeyDown={(event) => navigate(event, id)}
         >
-          <Icon name={pageIcons[id]} />
+          {icon && <NavigationIcon name={icon} />}
           <span className="page-tab-label">{labels[id]}</span>
         </button>
       </div>
@@ -544,7 +526,6 @@ function PageTabList({
           }}
           onKeyDown={(event) => navigate(event, id)}
         >
-          <Icon name={settingsIcons[id]} />
           <span className="page-tab-label">{settingsLabels[id]}</span>
         </button>
       </div>
@@ -570,7 +551,7 @@ function PageTabList({
             }}
             onKeyDown={(event) => navigate(event, "chat")}
           >
-            <Icon name="chat" />
+            <NavigationIcon name="chats" />
             <span className="page-tab-label">Chat</span>
             <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
           </button>
@@ -608,6 +589,8 @@ function PageTabList({
         aria-label="Chat conversations"
         className="page-group-pages"
         hidden={!chatExpanded}
+        inert={!chatExpanded}
+        aria-hidden={!chatExpanded}
         onKeyDown={(event) => {
           const buttons = [
             ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
@@ -675,7 +658,7 @@ function PageTabList({
           }}
           onKeyDown={(event) => navigate(event, "tables")}
         >
-          <Icon name="grid" />
+          <NavigationIcon name="database" />
           <span className="page-tab-label">Tables</span>
           <Icon name={expanded ? "chevron--down" : "chevron--right"} />
         </button>
@@ -687,6 +670,8 @@ function PageTabList({
         aria-label="Tables"
         aria-orientation="vertical"
         hidden={!expanded}
+        inert={!expanded}
+        aria-hidden={!expanded}
       >
         {tables.map((id, index) => page(id, index === 0))}
       </div>
@@ -720,6 +705,8 @@ function PageTabList({
           id="settings-pages"
           className="page-tab-list page-group-pages"
           hidden={!settingsExpanded}
+          inert={!settingsExpanded}
+          aria-hidden={!settingsExpanded}
         >
           <div
             className="page-tab-list"
@@ -740,7 +727,6 @@ function PageTabList({
               onClick={() => setAdvancedExpanded((value) => !value)}
               onKeyDown={(event) => navigate(event, "advanced")}
             >
-              <Icon name="compare" />
               <span className="page-tab-label">Advanced</span>
               <Icon name={advancedExpanded ? "chevron--down" : "chevron--right"} />
             </button>
@@ -749,6 +735,8 @@ function PageTabList({
             id="advanced-pages"
             className="page-tab-list page-group-pages"
             hidden={!advancedExpanded}
+            inert={!advancedExpanded}
+            aria-hidden={!advancedExpanded}
           >
             <div className="page-tab" data-nav-active={experimentActive && !experimentsExpanded}>
               <button
@@ -762,7 +750,6 @@ function PageTabList({
                 onClick={() => setExperimentsExpanded((value) => !value)}
                 onKeyDown={(event) => navigate(event, "experiments")}
               >
-                <Icon name="compare" />
                 <span className="page-tab-label">Experiments</span>
                 <Icon name={experimentsExpanded ? "chevron--down" : "chevron--right"} />
               </button>
@@ -774,6 +761,8 @@ function PageTabList({
               aria-orientation="vertical"
               className="page-tab-list page-group-pages"
               hidden={!experimentsExpanded}
+              inert={!experimentsExpanded}
+              aria-hidden={!experimentsExpanded}
             >
               {experiments.map((id, index) => page(id, index === 0))}
             </div>

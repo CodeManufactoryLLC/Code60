@@ -20,6 +20,7 @@ import writing from "./activity-animations/writing.gif";
 import { durationText } from "./chat-presentation.js";
 import { Icon, type IconName } from "./icons.js";
 import { useTicker } from "./ticker.js";
+import { useTransitionTimes } from "./transition-times.js";
 
 /** Presentation is local: the MCP vocabulary never contains these choices. */
 const visuals: Partial<Record<ActivityState, IconName>> = {
@@ -73,6 +74,7 @@ const animations: Partial<Record<ActivityState, string>> = {
   summarizing,
   delegating,
   communicating,
+  connecting: communicating,
   waiting_for_workers,
   executing,
   testing,
@@ -137,6 +139,7 @@ export function ActivityDisplay({
   expanded = false,
   controls,
   onToggle,
+  presentation = "inline",
 }: {
   activity: ActivitySnapshot | undefined;
   fallback: string;
@@ -146,6 +149,7 @@ export function ActivityDisplay({
   expanded?: boolean;
   controls?: string;
   onToggle?(): void;
+  presentation?: "inline" | "connecting";
   override?: "Stopping" | "Connecting" | "Sending" | undefined;
 }) {
   const target: ActivitySnapshot | undefined = override
@@ -165,6 +169,8 @@ export function ActivityDisplay({
         urgent: override === "Stopping",
       }
     : activity;
+  const { activityFade } = useTransitionTimes();
+  const previousFade = useRef(activityFade);
   const [displayed, setDisplayed] = useState(target);
   const [exiting, setExiting] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(
@@ -173,10 +179,10 @@ export function ActivityDisplay({
   const [reducedMotion, setReducedMotion] = useState(
     () =>
       typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)").matches,
   );
   useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const media = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
     const update = () => setReducedMotion(media.matches);
     update();
     media.addEventListener("change", update);
@@ -188,11 +194,17 @@ export function ActivityDisplay({
   // Avoid scheduling redraws just because an unrelated snapshot arrived.
   const signature = JSON.stringify(target);
   const immediate =
+    activityFade === 0 ||
     hidden ||
     !documentVisible ||
     reducedMotion ||
     (target?.urgent === true && target.state !== "idle" && target.state !== "waiting_for_workers");
   useEffect(() => {
+    if (previousFade.current !== activityFade) {
+      if (timer.current !== undefined) clearTimeout(timer.current);
+      timer.current = undefined;
+      previousFade.current = activityFade;
+    }
     const value: ActivitySnapshot | undefined =
       signature === undefined ? undefined : JSON.parse(signature);
     if (
@@ -211,9 +223,9 @@ export function ActivityDisplay({
         timer.current = undefined;
         setDisplayed(latest.current);
         setExiting(false);
-      }, 200);
+      }, activityFade);
     }
-  }, [signature, immediate, displayed?.state]);
+  }, [signature, immediate, displayed?.state, activityFade]);
   useEffect(() => {
     const visibility = () => setDocumentVisible(!document.hidden);
     document.addEventListener("visibilitychange", visibility);
@@ -241,6 +253,22 @@ export function ActivityDisplay({
   ]
     .filter(Boolean)
     .join(" · ");
+  if (presentation === "connecting")
+    return (
+      <div
+        className="chat-connecting"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        data-activity={state}
+        data-animate={animate}
+        data-exiting={!immediate && exiting}
+        data-immediate={immediate}
+      >
+        <ActivityArtwork key={state} state={state} animate={animate} />
+        <span className="activity-name">{label}</span>
+      </div>
+    );
   return (
     <button
       type="button"

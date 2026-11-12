@@ -11,6 +11,10 @@ This product bundles third-party fonts and icons. Each keeps its own license,
 which is included in the directory that contains it under src/renderer/fonts,
 src/renderer/icons, and docs.
 
+Navigation icons: Phosphor duotone, @phosphor-icons/core 2.1.1.
+Copyright (c) 2023 Phosphor Icons, MIT licensed.
+See src/renderer/icons/phosphor/LICENSE and README.md for provenance.
+
 Geometry animated icons created by Magnific - Flaticon
 https://www.flaticon.com/free-animated-icons/geometry
 Bundled activity animations: src/renderer/activity-animations.

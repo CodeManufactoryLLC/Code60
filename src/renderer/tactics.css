@@ -1,0 +1,223 @@
+.tactics-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.composer-mode:has(.tactics-control) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tactics-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 240px;
+}
+.tactics-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+.tactic-unavailable {
+  flex-basis: 100%;
+  max-width: 220px;
+}
+.tactics-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, calc(100vw - 32px));
+  height: min(560px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.tactics-dialog .modal-heading {
+  flex: none;
+  margin: 0;
+}
+.tactics-layout {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+}
+.tactics-browser {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+.tactics-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+}
+.tactics-search input {
+  width: 100%;
+  min-width: 0;
+}
+.tactics-list {
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  min-height: 0;
+  min-width: 0;
+}
+.tactics-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px;
+  cursor: pointer;
+}
+.tactics-option span:first-of-type {
+  flex: 1;
+}
+.tactics-dialog .tactics-option input[type="radio"] {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  clip-path: inset(50%);
+  opacity: 0;
+}
+.tactics-option[data-preview="true"] {
+  background: var(--accent-bg);
+}
+.tactics-option:hover {
+  background: var(--hover-bg);
+}
+.tactics-option:focus-within {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.tactics-empty {
+  padding: 12px;
+}
+.tactics-details {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.tactic-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  padding: 16px;
+}
+.tactic-heading h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+}
+.tactic-heading button {
+  flex: none;
+}
+.tactic-content {
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 0 16px 16px;
+  min-height: 0;
+}
+.tactic-workflow {
+  margin: 0 0 12px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+}
+.tactic-workflow svg {
+  display: block;
+  width: 100%;
+  min-width: 360px;
+}
+.tactic-workflow rect {
+  fill: var(--surface);
+  stroke: var(--control-border);
+}
+.tactic-workflow text {
+  fill: currentColor;
+  font: 13px var(--font);
+}
+.tactic-edge {
+  stroke: var(--muted);
+  fill: none;
+}
+.tactic-facts {
+  margin: 0 0 20px;
+}
+.tactic-facts div {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 12px;
+  margin: 8px 0;
+}
+.tactic-facts dt {
+  color: var(--muted);
+}
+.tactic-facts dd {
+  margin: 0;
+}
+.tactic-disclosure {
+  margin: 16px 0 0;
+}
+.tactic-disclosure summary {
+  cursor: pointer;
+}
+.tactic-disclosure p {
+  margin: 12px 0;
+  line-height: 1.5;
+}
+.tactic-prompt {
+  white-space: pre-wrap;
+}
+@media (max-width: 600px) {
+  .tactics-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(90px, 32%) minmax(0, 1fr);
+  }
+  .tactics-browser {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tactic-heading {
+    padding: 10px 16px;
+  }
+  .tactic-heading h3 {
+    font-size: 16px;
+  }
+}
+@media (forced-colors: active) {
+  .tactics-option[data-preview="true"] {
+    outline: 1px solid Highlight;
+  }
+  .tactics-option:focus-within {
+    outline: 2px solid Highlight;
+  }
+  .tactic-workflow rect,
+  .tactic-edge {
+    stroke: CanvasText;
+  }
+}

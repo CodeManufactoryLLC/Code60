@@ -21,6 +21,7 @@ import {
   loadConfig,
   openWorkspace,
 } from "../src/core/index.js";
+import { ChatStore } from "../src/desktop/chat-store.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
@@ -1115,11 +1116,239 @@ describe("project database", () => {
 });
 
 describe("app-wide orchestration chat", () => {
+  it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const first = controller.snapshot().chat.run?.id as string;
+    const before = agents.specs.length;
+    const apply = (tactic: string | null, id = first, project: string | null = null) =>
+      controller.orchestrationChatAction({ type: "set-tactic", id, project, tactic });
+    await apply("independent-review");
+    expect(controller.snapshot().chat.tactic).toBe("independent-review");
+    expect(agents.specs).toHaveLength(before);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+    await expect(apply("missing")).rejects.toThrow("unavailable");
+    await expect(apply("diagnose-a-bug", first, "/stale")).rejects.toThrow("project changed");
+    await controller.orchestrationChatAction({ type: "new" });
+    const second = controller.snapshot().chat.run?.id as string;
+    expect(controller.snapshot().chat.tactic).toBeUndefined();
+    await expect(apply("diagnose-a-bug")).rejects.toThrow("chat or project changed");
+    await controller.orchestrationChatAction({ type: "select", id: first });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: first,
+      text: "/plan Review the changes",
+      command: "plan",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(agents.sessions[0]?.prompts[0]).toContain("Tactic: Independent review");
+    expect(agents.sessions[0]?.prompts[0]).toContain("Command /plan: Make a plan");
+    expect(
+      controller
+        .snapshot()
+        .chat.events.some(
+          ({ event }) => event.type === "prompt" && event.text === "/plan Review the changes",
+        ),
+    ).toBe(true);
+    await apply(null);
+    expect(agents.sessions[0]?.prompts).toHaveLength(1);
+    await controller.orchestrationChatAction({ type: "send", id: first, text: "Ordinary request" });
+    await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toHaveLength(2));
+    expect(agents.sessions[0]?.prompts[1]).toContain("No earlier task's tactic applies");
+    expect(
+      controller.snapshot().chats.find((chat) => chat.run?.id === second)?.tactic,
+    ).toBeUndefined();
+  });
+
+  it("rolls back failed tactic saves without sending and leaves unavailable saved IDs actionable", async () => {
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const id = controller.snapshot().chat.run?.id as string;
+    const save = vi
+      .spyOn(ChatStore.prototype, "save")
+      .mockRejectedValueOnce(new Error("disk full"));
+    try {
+      await expect(
+        controller.orchestrationChatAction({
+          type: "set-tactic",
+          id,
+          project: null,
+          tactic: "diagnose-a-bug",
+        }),
+      ).rejects.toThrow("disk full");
+      expect(controller.snapshot().chat.tactic).toBeUndefined();
+      expect(agents.sessions[0]?.prompts).toEqual([]);
+    } finally {
+      save.mockRestore();
+    }
+    const store = new ChatStore(join(directory, ".code60_workspace"));
+    const saved = (await store.load()).chats[0];
+    if (!saved) throw new Error("Missing saved chat");
+    await controller.shutdown(true);
+    await store.save({ ...saved, tactic: "retired-tactic" });
+    agents = new FakeAgents();
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences },
+    );
+    await controller.restore();
+    expect(controller.snapshot().chat.tactic).toBe("retired-tactic");
+    expect(agents.specs).toHaveLength(0);
+    await expect(
+      controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: "Do not silently ignore a missing tactic",
+      }),
+    ).rejects.toThrow("Replace or clear");
+    await controller.orchestrationChatAction({
+      type: "set-tactic",
+      id,
+      project: null,
+      tactic: null,
+    });
+    expect(controller.snapshot().chat.tactic).toBeNull();
+    expect(agents.specs).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    "restores stopped chat context without execution and explicitly continues the frozen task (handoff=%s)",
+    async (handoff) => {
+      agents.script = () => "end_turn";
+      await setProvider("claude");
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      const id = controller.snapshot().chat.run?.id as string;
+      await controller.orchestrationChatAction({
+        type: "set-tactic",
+        id,
+        project: null,
+        tactic: "independent-review",
+      });
+      await controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: "Review original changes",
+      });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      const taskId = controller.snapshot().chat.taskId as string;
+      await controller.orchestrationChatAction({
+        type: "set-tactic",
+        id,
+        project: null,
+        tactic: "explore-the-codebase",
+      });
+      await controller.orchestrationChatAction({ type: "rename", id, title: "Saved review" });
+      await controller.shutdown(true);
+      agents = new FakeAgents(() => "end_turn");
+      agents.restoreUnavailable = handoff;
+      controller = new DesktopController(
+        controllerDeps(),
+        { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+        { confirm },
+        { openDatabase, preferences },
+      );
+      await controller.restore();
+      expect(controller.snapshot().chat).toMatchObject({
+        title: "Saved review",
+        tactic: "explore-the-codebase",
+        restored: true,
+        taskId,
+        run: { id },
+        workers: [],
+        updates: { paused: true, pending: 0 },
+      });
+      expect(agents.specs).toHaveLength(0);
+      expect(agents.restores).toHaveLength(0);
+      await controller.orchestrationChatAction({ type: "continue-task", id, taskId });
+      await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toHaveLength(1));
+      expect(agents.sessions[0]?.prompts[0]).toContain("Tactic: Independent review");
+      expect(agents.sessions[0]?.prompts[0]).not.toContain("Tactic: Explore the codebase");
+      expect(agents.sessions[0]?.prompts[0]).toContain("Code60's orchestration assistant");
+      expect(controller.snapshot().chat.tactic).toBe("explore-the-codebase");
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      await controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: "A new exploration request",
+      });
+      await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toHaveLength(2));
+      expect(agents.sessions[0]?.prompts[1]).toContain("Tactic: Explore the codebase");
+    },
+  );
+
   async function ready() {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     return controller.snapshot().chat.run?.id as string;
   }
+
+  it.each([
+    "command",
+    "project",
+    "live owner",
+    "missing history",
+    "corrupt history",
+    "wrong directory",
+    "corrupt plans",
+  ])("refuses unsafe stopped-chat continuation without starting agents: %s", async (failure) => {
+    agents.script = () => "end_turn";
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "Original task" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const taskId = controller.snapshot().chat.taskId as string;
+    const chatDirectory = controller.snapshot().chat.directory as string;
+    await controller.shutdown(true);
+    const store = new ChatStore(join(directory, ".code60_workspace"));
+    const saved = (await store.load()).chats.find((chat) => chat.runId === id);
+    if (!saved) throw new Error("Expected a saved chat");
+    const runFile = join(chatDirectory, ".code60", "runs", id, "run.json");
+    const eventsFile = join(chatDirectory, ".code60", "runs", id, "events.jsonl");
+    if (failure === "command") await store.save({ ...saved, commandHash: "0".repeat(64) });
+    if (failure === "project") {
+      const task = saved.tasks.find((task) => task.id === taskId);
+      if (!task) throw new Error("Expected task");
+      task.project = "/different-project";
+      await store.save(saved);
+    }
+    if (failure === "live owner" || failure === "wrong directory") {
+      const record = JSON.parse(await fs.readFile(runFile, "utf8"));
+      await fs.writeFile(
+        runFile,
+        JSON.stringify({
+          ...record,
+          ...(failure === "live owner"
+            ? { status: "running", ownerPid: process.pid }
+            : { worktree: directory }),
+        }),
+      );
+    }
+    if (failure === "missing history") await fs.rm(eventsFile);
+    if (failure === "corrupt history") await fs.writeFile(eventsFile, "{\n");
+    if (failure === "corrupt plans") {
+      await fs.mkdir(join(chatDirectory, ".code60", "plans"), { recursive: true });
+      await fs.writeFile(join(chatDirectory, ".code60", "plans", `${randomUUID()}.json`), "{");
+    }
+    agents = new FakeAgents(() => "end_turn");
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences },
+    );
+    await controller.restore();
+    expect(controller.snapshot().chat.restored).toBe(true);
+    expect(agents.specs).toHaveLength(0);
+    await expect(
+      controller.orchestrationChatAction({ type: "continue-task", id, taskId }),
+    ).rejects.toThrow();
+    expect(agents.specs).toHaveLength(0);
+    expect(agents.restores).toHaveLength(0);
+    expect((await store.load()).chats.find((chat) => chat.runId === id)?.tasks).toEqual(
+      saved.tasks,
+    );
+  });
 
   function tableCaller(index = 0) {
     const server = agents.specs[index]?.mcpServers?.find((server) => server.name === "code60");
@@ -1138,6 +1367,100 @@ describe("app-wide orchestration chat", () => {
       return { status: response.status, body: await response.json() };
     };
   }
+
+  it("never sends after a failed task snapshot write, and leaves explicit recovery retryable", async () => {
+    agents.script = () => "end_turn";
+    const id = await ready();
+    const save = vi
+      .spyOn(ChatStore.prototype, "save")
+      .mockRejectedValueOnce(new Error("disk full"));
+    try {
+      await expect(
+        controller.orchestrationChatAction({ type: "send", id, text: "Do not replay" }),
+      ).rejects.toThrow("disk full");
+      expect(agents.sessions[0]?.prompts).toEqual([]);
+      expect(controller.snapshot().chat.taskId).toBeUndefined();
+    } finally {
+      save.mockRestore();
+    }
+    await controller.orchestrationChatAction({
+      type: "set-tactic",
+      id,
+      project: null,
+      tactic: "diagnose-a-bug",
+    });
+    await controller.orchestrationChatAction({ type: "send", id, text: "Diagnose original task" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const taskId = controller.snapshot().chat.taskId as string;
+    await controller.shutdown(true);
+    agents = new FakeAgents(() => "end_turn");
+    agents.restoreUnavailable = true;
+    agents.startError = new Error("provider unavailable");
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences },
+    );
+    await controller.restore();
+    await expect(
+      controller.orchestrationChatAction({ type: "continue-task", id, taskId }),
+    ).rejects.toThrow("provider unavailable");
+    expect(agents.sessions).toHaveLength(0);
+    expect(controller.snapshot().chat).toMatchObject({ restored: true, taskId });
+    agents.startError = undefined;
+    await controller.orchestrationChatAction({ type: "continue-task", id, taskId });
+    await vi.waitFor(() => expect(agents.sessions[0]?.prompts).toHaveLength(1));
+    expect(agents.sessions[0]?.prompts[0]).toContain("Tactic: Diagnose a bug");
+    expect(agents.sessions[0]?.prompts[0]).not.toContain("Do not replay");
+  });
+
+  it("defers the saved registry until provider setup completes instead of replacing stopped history", async () => {
+    const id = await ready();
+    await controller.orchestrationChatAction({
+      type: "set-tactic",
+      id,
+      project: null,
+      tactic: "independent-review",
+    });
+    await controller.shutdown(true);
+    agents = new FakeAgents();
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences: { ...preferences, agentSetup: async () => null } },
+    );
+    await controller.restore();
+    expect(agents.specs).toHaveLength(0);
+    await setProvider("claude");
+    expect(controller.snapshot().chat).toMatchObject({
+      restored: true,
+      tactic: "independent-review",
+      run: { id },
+      workers: [],
+    });
+    expect(agents.specs).toHaveLength(0);
+  });
+
+  it("keeps unavailable registry storage visible without automatically starting an agent", async () => {
+    await ready();
+    await controller.shutdown(true);
+    const metadata = join(directory, ".code60_workspace", "chats");
+    await fs.rename(metadata, `${metadata}.preserved`);
+    await fs.writeFile(metadata, "not a directory");
+    agents = new FakeAgents();
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences },
+    );
+    await controller.restore();
+    expect(controller.snapshot().chat.error).toContain("Saved chats");
+    expect(agents.specs).toHaveLength(0);
+    expect(await fs.readFile(metadata, "utf8")).toBe("not a directory");
+  });
 
   it("serves turn-scoped display reports without project authority and keeps them out of run records", async () => {
     agents.script = () => "hang";
@@ -1927,6 +2250,92 @@ it("refuses Git setup while project workers are still owned", async () => {
 });
 
 describe("orchestrated workers over ACP", () => {
+  it("keeps correction and failure updates with the original tactic after a newer human task and capacity rejection", async () => {
+    await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
+    await fs.writeFile(
+      join(directory, "config", "code60", "config.json"),
+      JSON.stringify({ maxParallel: 1 }),
+    );
+    await controller.poll(["config"]);
+    const { call, scope } = await setup(1);
+    const chatId = controller.snapshot().chat.run?.id as string;
+    const project = controller.snapshot().directory;
+    await controller.orchestrationChatAction({
+      type: "set-tactic",
+      id: chatId,
+      project,
+      tactic: "implement-and-review",
+    });
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatId,
+      text: "Original feature",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const taskId = controller.snapshot().chat.taskId;
+    const owner = await dispatch(call, scope, "HANG implementing");
+    await vi.waitFor(() => expect(session(owner)?.turnActive).toBe(true));
+    await controller.orchestrationChatAction({
+      type: "set-tactic",
+      id: chatId,
+      project,
+      tactic: "explore-the-codebase",
+    });
+    await controller.orchestrationChatAction({ type: "send", id: chatId, text: "New code map" });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    expect(
+      (
+        await call("code60_dispatch_agent", {
+          scope,
+          requestId: "no-slot",
+          prompt: "Review in another slot",
+        })
+      ).body.error,
+    ).toContain("slots are in use");
+    session(owner)?.update({
+      type: "message",
+      text: "Finding: repeated failure needs correction; missing test evidence.",
+    });
+    session(owner)?.endTurn("end_turn");
+    await vi.waitFor(() => expect(chatPrompts()).toHaveLength(3));
+    expect(chatPrompts()[2]).toContain("Tactic: Implement and review");
+    expect(chatPrompts()[2]).not.toContain("New code map");
+    expect(controller.snapshot().chat.taskId).toBe(taskId);
+    for (const round of [1, 2]) {
+      await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+      await call("code60_send_agent", {
+        scope,
+        runId: owner,
+        prompt: `Correction ${round}: HANG for evidence`,
+      });
+      await vi.waitFor(() => expect(session(owner)?.turnActive).toBe(true));
+      session(owner)?.update({
+        type: "message",
+        text: "Same problem persists. Evidence incomplete; report a blocker.",
+      });
+      session(owner)?.endTurn("end_turn");
+      await vi.waitFor(() => expect(chatPrompts()).toHaveLength(3 + round));
+      expect(chatPrompts().at(-1)).toContain("at most two correction rounds");
+      expect(chatPrompts().at(-1)).toContain("Same problem persists");
+      expect(chatPrompts().at(-1)).toContain(
+        "Missing, inaccessible, partial, or truncated evidence is incomplete",
+      );
+    }
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    await call("code60_send_agent", { scope, runId: owner, prompt: "HANG verify blocker" });
+    await vi.waitFor(() => expect(session(owner)?.turnActive).toBe(true));
+    session(owner)?.failTurn(new Error("Verifier unavailable; findings preserved"));
+    await vi.waitFor(() => expect(chatPrompts()).toHaveLength(6));
+    expect(chatPrompts().at(-1)).toContain("Verifier unavailable");
+    expect(chatPrompts().at(-1)).toContain("not proof that the task succeeded");
+    expect(controller.snapshot().chat.tactic).toBe("explore-the-codebase");
+    const store = new ChatStore(join(directory, ".code60_workspace"));
+    const saved = (await store.load()).chats.find((chat) => chat.runId === chatId);
+    expect(
+      saved?.tasks.find((task) => task.id === taskId)?.workers.map((worker) => worker.turn),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
   type Call = (
     name: string,
     args?: unknown,
@@ -2280,12 +2689,15 @@ describe("orchestrated workers over ACP", () => {
     });
     const removeBaseline = async () =>
       workspace.store.save({ ...(await workspace.store.read(id)), base: null, branch: null });
+    // Live status publishes before its queued record write. Do not race that write.
+    await vi.waitFor(async () => expect((await workspace.store.read(id)).status).toBe("idle"));
     await removeBaseline();
     expect(
       (await call("code60_send_agent", { scope, runId: id, prompt: "more" })).body.error,
     ).toContain("No baseline");
     expect((await call("code60_finish_agent", { scope, runId: id })).status).toBe(200);
     await vi.waitFor(() => expect(controller.active).toBe(false));
+    await vi.waitFor(async () => expect((await workspace.store.read(id)).status).toBe("finished"));
     await removeBaseline();
     expect(
       (await call("code60_resume_agent", { scope, runId: id, prompt: "resume" })).body.error,

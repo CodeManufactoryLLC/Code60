@@ -1,5 +1,6 @@
 export * from "./logs.js";
 export * from "./plans.js";
+export * from "./tactics.js";
 export * from "./web-links.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
@@ -30,6 +31,7 @@ import {
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
   saveCommandSchema,
+  tacticIdSchema,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
@@ -407,6 +409,10 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  /** Absent only for legacy/disconnected snapshots; null is an explicit removal. */
+  tactic?: string | null;
+  restored?: boolean;
+  taskId?: string;
   title?: string;
   archived?: boolean;
   plans?: import("./plans.js").PlanSummary[];
@@ -431,6 +437,13 @@ const objectError = (issue: { code: string }) =>
 const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("set-tactic"),
+    id: runIdSchema,
+    project: z.string().max(32_768).nullable(),
+    tactic: tacticIdSchema.nullable(),
+  }),
+  z.strictObject({ type: z.literal("continue-task"), id: runIdSchema, taskId: z.string().uuid() }),
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
   z.strictObject({ type: z.literal("new") }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),

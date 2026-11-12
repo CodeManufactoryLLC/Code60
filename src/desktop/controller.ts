@@ -48,6 +48,7 @@ import {
   DEFAULT_PROMPT_TEMPLATES,
   emitLog,
   expandCommand,
+  findTactic,
   type GitProject,
   type GitReadiness,
   type GitSetupCommit,
@@ -96,6 +97,7 @@ import {
   type ReviewFileRead,
   type ReviewRead,
   renderPrompt,
+  type SavedChat,
 } from "../bridge/index.js";
 import type { ModeChange } from "../core/index.js";
 import {
@@ -123,6 +125,7 @@ import {
   RUN_RECORD_FORMAT,
   type RunEvent,
   type RunView,
+  readOrchestrationChat,
   listWorktrees as readWorktrees,
   stopRun,
   summarizeSearch,
@@ -139,6 +142,7 @@ import {
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import { ChatStore } from "./chat-store.js";
 import {
   type ChatSession,
   ConversationCoordinator,
@@ -165,6 +169,7 @@ import { effectivePrompts, promptStates } from "./prompt-templates.js";
 import { desktopConfig, detectProvider } from "./provider-catalog.js";
 import { ReviewStore } from "./reviews.js";
 import { projectSearchEvidence } from "./search-evidence.js";
+import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
   confirm(title: string, detail: string): Promise<boolean>;
@@ -290,7 +295,106 @@ export class DesktopController {
     | undefined;
   private connectionTest: { abort: AbortController; done: Promise<void> } | undefined;
   private chatKey = "";
+  private chatStore: ChatStore | undefined;
+  private chatRegistryLoaded = false;
+
+  private async saveChat(session: ChatSession): Promise<void> {
+    const run = session.run;
+    const provider = session.saved?.provider ?? run?.agent;
+    const command = provider ? this.config?.agents[provider]?.command : undefined;
+    if (!this.chatStore || !run || !session.chatDirectory || !provider) return;
+    const saved: SavedChat = {
+      format: 1,
+      directoryId: basename(session.chatDirectory),
+      runId: run.id,
+      provider,
+      commandHash:
+        session.saved?.commandHash ??
+        createHash("sha256").update(JSON.stringify(command)).digest("hex"),
+      ...(session.title === undefined ? {} : { title: session.title }),
+      archived: session.archived,
+      selectedAt: session.selectedAt,
+      ...(session.tactic === undefined ? {} : { tactic: session.tactic }),
+      tasks: session.tasks,
+      ...(session.taskId ? { taskId: session.taskId } : {}),
+    };
+    await this.chatStore.save(saved);
+    session.saved = saved;
+  }
+
+  private persistChatSoon(session: ChatSession): void {
+    void this.exclusive(async () => {
+      if (session.revoked || !this.conversations.sessions.includes(session)) return;
+      await this.saveChat(session);
+    }).catch(() => {
+      session.chatError =
+        "Chat context could not be saved. Inspect the conversation before continuing; do not resend completed work.";
+      this.changed();
+    });
+  }
+
+  private async chatHistory(saved: SavedChat, includeEvents = true) {
+    const store = this.chatStore;
+    if (!store) throw new Error("Chat storage is unavailable");
+    const directory = await store.directory(saved.directoryId);
+    const result = await readOrchestrationChat(
+      {
+        ...this.deps,
+        fs: {
+          ...this.deps.fs,
+          readFile: (path) => store.readHistory(saved.directoryId, saved.runId, path),
+        },
+      },
+      directory,
+      saved.runId,
+      includeEvents,
+    );
+    if (result.record.agent !== saved.provider) throw new Error("Saved chat provider mismatch");
+    return result;
+  }
+
+  private async loadChatHistory(session: ChatSession) {
+    if (!session.restored || session.historyLoaded || !session.saved || !session.chatDirectory)
+      return;
+    const { events } = await this.chatHistory(session.saved);
+    session.plans = await PlanStore.open(session.chatDirectory, session.saved.runId);
+    session.chatEvents = events.map((event) => ({ revision: ++this.revision, event }));
+    session.chatPending = [...session.chatEvents];
+    session.historyLoaded = true;
+  }
+
+  private async sendTask(
+    session: ChatSession,
+    text: string,
+    origin?: "automatic",
+    taskId: string | null | undefined = session.taskId,
+  ): Promise<void> {
+    const task = session.tasks.find((task) => task.id === taskId);
+    if (task && task.project !== (this.workspace?.dir ?? null))
+      throw new Error("Open the originating task's project before delivering its updates");
+    const previous = session.taskId;
+    const deliveries = task?.deliveries ? [...task.deliveries] : [];
+    session.taskId = taskId ?? undefined;
+    if (task) task.deliveries = [...deliveries, (session.run?.turns ?? 0) + 1];
+    session.deliveryPending = true;
+    try {
+      await this.saveChat(session);
+      this.conversations.send(session, text, origin, undefined, taskId ?? null);
+    } catch (cause) {
+      session.taskId = previous;
+      if (task) task.deliveries = deliveries;
+      this.persistChatSoon(session);
+      throw cause;
+    } finally {
+      session.deliveryPending = false;
+    }
+  }
   private readonly conversations = new ConversationCoordinator({
+    sendAutomatic: (session, text, taskId) =>
+      this.exclusive(async () => {
+        if (session.updatesPaused || this.closing) throw new Error("Worker updates are paused");
+        await this.sendTask(session, text, "automatic", taskId ?? null);
+      }),
     hasPendingFeedback: (session) =>
       (!!session.plans?.active() && session.plans.active()?.state !== "running") ||
       (this.reviews
@@ -491,7 +595,7 @@ export class DesktopController {
 
   private async plans(session: ChatSession): Promise<PlanStore> {
     this.conversations.assertCurrent(session);
-    const id = session.chat?.runs()[0]?.id;
+    const id = session.run?.id;
     if (!id || !session.chatDirectory) throw new Error("No orchestration session is available");
     session.plans ??= await PlanStore.open(session.chatDirectory, id);
     return session.plans;
@@ -500,9 +604,7 @@ export class DesktopController {
   readPlan(value: PlanRead): Promise<Plan> {
     const request = parsePlanRead(value);
     return this.exclusive(async () => {
-      const session = this.conversations.sessions.find(
-        (item) => item.chat?.runs()[0]?.id === request.chatId,
-      );
+      const session = this.conversations.sessions.find((item) => item.run?.id === request.chatId);
       if (!session) throw new Error("This plan conversation is no longer available");
       return (await this.plans(session)).get(request.planId);
     });
@@ -511,9 +613,7 @@ export class DesktopController {
   planAction(value: PlanAction): Promise<void> {
     const request = parsePlanAction(value);
     return this.exclusive(async () => {
-      const session = this.conversations.sessions.find(
-        (item) => item.chat?.runs()[0]?.id === request.chatId,
-      );
+      const session = this.conversations.sessions.find((item) => item.run?.id === request.chatId);
       if (!session) throw new Error("This plan conversation is no longer available");
       const store = await this.plans(session);
       const plan = store.get(request.planId);
@@ -632,10 +732,11 @@ export class DesktopController {
             delete current.error;
           });
           deliveryAttempted = true;
-          this.conversations.send(
+          await this.sendTask(
             session,
             `Code60: the user accepted plan ${plan.id}. Read it with code60_read_plan, inspect any previous work, and execute the remaining tasks. Report each task's progress with evidence and responsible workerIds. Do not repeat completed work.`,
             "automatic",
+            session.tasks.find((task) => task.planIds.includes(plan.id))?.id ?? null,
           );
         } catch (cause) {
           this.conversations.pause(session);
@@ -1086,7 +1187,12 @@ export class DesktopController {
             const item = current.submissions.find((item) => item.id === batch.id);
             if (item) item.state = "delivering";
           });
-          this.conversations.send(session, text);
+          await this.sendTask(
+            session,
+            text,
+            undefined,
+            session.tasks.find((task) => task.reviewId === review.id)?.id ?? null,
+          );
           delivered = true;
           session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
           await store.mutate(review.id, (current) => {
@@ -1867,15 +1973,94 @@ export class DesktopController {
       this.agentSetup.complete,
     ]);
     if (!restart && key === this.chatKey) return;
+    const root = this.database ? join(dirname(this.database.path), ".code60_workspace") : undefined;
+    if (this.chatStore?.root !== root) this.chatRegistryLoaded = false;
+    const loadSaved = !restart && !!root && !this.chatRegistryLoaded;
     if (restart) {
       const previous = this.conversations.current;
       await this.disposeChat(previous);
-      this.conversations.replace(previous);
+      const replacement = this.conversations.replace(previous);
+      replacement.tactic = previous.tactic;
     } else {
       await Promise.all(this.conversations.sessions.map((session) => this.disposeChat(session)));
       this.conversations.replace();
     }
     this.chatKey = key;
+    this.chatStore = root ? new ChatStore(root) : undefined;
+    if (loadSaved && this.chatStore && provider && this.agentSetup.complete) {
+      const { chats, errors } = await this.chatStore.load().catch(() => ({
+        chats: [],
+        errors: [
+          "Saved chats could not be opened safely. Their files were preserved; repair the private chat storage or start a new chat.",
+        ],
+      }));
+      this.chatRegistryLoaded = true;
+      this.warnings.push(...errors);
+      if (chats.length) {
+        this.conversations.sessions = [];
+        for (const saved of chats) {
+          const session = this.conversations.create();
+          session.saved = saved;
+          session.title = saved.title;
+          session.archived = saved.archived;
+          session.tactic = saved.tactic;
+          session.tasks = saved.tasks;
+          session.taskId = saved.taskId;
+          session.selectedAt = saved.selectedAt;
+          session.restored = true;
+          session.updatesPaused = true;
+          try {
+            session.chatDirectory = await this.chatStore.directory(saved.directoryId);
+            const { record } = await this.chatHistory(saved, false);
+            session.historyRun = {
+              id: record.id,
+              agent: record.agent,
+              status: record.status,
+              turns: record.turns,
+              branch: record.branch,
+              worktree: record.worktree,
+              pending: [],
+              modeChanging: false,
+              stopping: false,
+              ...(record.reason === undefined ? {} : { reason: record.reason }),
+              ...(record.sessionState ? { sessionState: record.sessionState } : {}),
+            };
+          } catch {
+            session.historyRun = {
+              id: saved.runId,
+              agent: saved.provider,
+              status: "interrupted",
+              turns: 0,
+              branch: null,
+              worktree: session.chatDirectory ?? "",
+              pending: [],
+              modeChanging: false,
+              stopping: false,
+            };
+            session.chatError =
+              "Saved chat history is missing or unsafe. Its files were preserved. Start a new chat, or repair the saved files before continuing.";
+          }
+        }
+        const available = this.conversations.sessions
+          .filter((session) => !session.archived)
+          .sort((a, b) => b.selectedAt - a.selectedAt);
+        const selected = available[0];
+        if (selected) {
+          this.conversations.current = selected;
+          await this.loadChatHistory(selected).catch(() => {
+            selected.chatError =
+              "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
+          });
+          this.changed();
+          return;
+        }
+        this.conversations.create();
+      } else if (errors.length) {
+        this.conversations.current.chatError = errors[0] ?? "Saved chats are unavailable.";
+        this.changed();
+        return;
+      }
+    }
     await this.startChat(this.conversations.current);
   }
 
@@ -1926,59 +2111,171 @@ export class DesktopController {
         await this.closeMcpGateway(session);
         return;
       }
-      session.chat = chat;
-      const gateway = session.mcpGateway;
-      void chat.done
-        .then(async () => {
-          await gateway?.close();
-          if (session.mcpGateway === gateway) session.mcpGateway = undefined;
-        })
-        .catch(() => {});
-      session.chatDisposers = [
-        chat.onEvent((event) => {
-          session.activity.event(event);
-          if (
-            session.plans?.active() &&
-            ((event.type === "status" &&
-              ["failed", "timed_out", "cancelled", "interrupted"].includes(event.status)) ||
-              (event.type === "turnEnd" && event.stopReason !== "end_turn"))
-          ) {
-            this.conversations.pause(session);
-            void this.exclusive(async () => {
-              await this.pausePlan(session, "The plan conversation stopped or failed.");
-              this.changed();
-            }).catch((cause: unknown) => {
-              session.chatError = message(cause);
-              this.changed();
-            });
-          }
-          this.changed();
-          const entry = { revision: this.revision, event };
-          session.chatEvents.push(entry);
-          session.chatPending.push(entry);
-          if (event.type === "turnEnd" && event.stopReason === "end_turn") this.titleChat(session);
-          if (event.type === "status" && event.status === "idle") {
-            this.schedulePlans();
-            this.scheduleFeedback();
-            this.conversations.scheduleUpdates();
-          }
-        }),
-        chat.onChange(() => {
-          if (chat.runs()[0]?.stopping) session.activity.invalidate();
-          this.changed();
-        }),
-        chat.onWarning((warning) => {
-          session.chatError = warning;
-          session.activity.invalidate();
-          this.changed();
-        }),
-      ];
+      this.attachChat(session, chat);
+      session.selectedAt = Date.now();
+      await this.saveChat(session);
       chat.start();
     } catch (error) {
+      await session.chat?.shutdown();
       await this.closeMcpGateway(session);
       session.chatError = message(error);
     }
     this.changed();
+  }
+
+  private attachChat(session: ChatSession, chat: Orchestrator): void {
+    session.chat = chat;
+    const gateway = session.mcpGateway;
+    void chat.done
+      .then(async () => {
+        await gateway?.close();
+        if (session.mcpGateway === gateway) session.mcpGateway = undefined;
+      })
+      .catch(() => {});
+    session.chatDisposers = [
+      chat.onEvent((event) => {
+        session.activity.event(event);
+        if (
+          session.plans?.active() &&
+          ((event.type === "status" &&
+            ["failed", "timed_out", "cancelled", "interrupted"].includes(event.status)) ||
+            (event.type === "turnEnd" && event.stopReason !== "end_turn"))
+        ) {
+          this.conversations.pause(session);
+          void this.exclusive(async () => {
+            await this.pausePlan(session, "The plan conversation stopped or failed.");
+            this.changed();
+          }).catch((cause: unknown) => {
+            session.chatError = message(cause);
+            this.changed();
+          });
+        }
+        this.changed();
+        const entry = { revision: this.revision, event };
+        session.chatEvents.push(entry);
+        session.chatPending.push(entry);
+        if (event.type === "turnEnd" && event.stopReason === "end_turn") this.titleChat(session);
+        if (
+          event.type === "turnEnd" ||
+          (event.type === "status" && !ACTIVE_STATUSES.has(event.status))
+        )
+          this.persistChatSoon(session);
+        if (event.type === "status" && event.status === "idle") {
+          this.schedulePlans();
+          this.scheduleFeedback();
+          this.conversations.scheduleUpdates();
+        }
+      }),
+      chat.onChange(() => {
+        if (chat.runs()[0]?.stopping) session.activity.invalidate();
+        this.changed();
+      }),
+      chat.onWarning((warning) => {
+        session.chatError = warning;
+        session.activity.invalidate();
+        this.changed();
+      }),
+    ];
+  }
+
+  private async continueChat(
+    session: ChatSession,
+    text: string,
+    origin: "automatic" | undefined,
+    deliveredText: string | undefined,
+    taskId: string,
+  ): Promise<void> {
+    if (!this.chatStore || !session.saved || !session.chatDirectory || !this.config)
+      throw new Error("Saved chat context is unavailable");
+    const saved = session.saved;
+    this.requireEnabled(saved.provider);
+    const command = this.config.agents[saved.provider]?.command;
+    if (
+      !command ||
+      createHash("sha256").update(JSON.stringify(command)).digest("hex") !== saved.commandHash
+    )
+      throw new Error(
+        "This chat's provider command changed. Restore its verified provider or start a new chat.",
+      );
+    const directory = await this.chatStore.directory(saved.directoryId);
+    const { record, events, agentAlive } = await this.chatHistory(saved);
+    if (ACTIVE_STATUSES.has(record.status) || agentAlive)
+      throw new Error(
+        "The saved chat still has a live owning or agent process. Stop it before continuing.",
+      );
+    const task = session.tasks.find((task) => task.id === taskId);
+    if (!task || task.project !== (this.workspace?.dir ?? null))
+      throw new Error("Open the originating task's project before continuing");
+    if (session.restored) {
+      await this.loadChatHistory(session);
+      session.plans = await PlanStore.open(directory, record.id);
+    }
+    const previousTask = session.taskId;
+    session.taskId = taskId;
+    const deliveries = task.deliveries ? [...task.deliveries] : [];
+    task.deliveries = [...deliveries, record.turns + 1];
+    try {
+      await this.saveChat(session);
+    } catch (cause) {
+      session.taskId = previousTask;
+      task.deliveries = deliveries;
+      throw cause;
+    }
+    let chat: Orchestrator | undefined;
+    try {
+      for (const dispose of session.chatDisposers) dispose();
+      session.chatDisposers = [];
+      await this.closeMcpGateway(session);
+      chat = await prepareOrchestrationChat(this.deps, directory, saved.provider, this.config, {
+        recovery: record,
+        mcpServers: await this.mcpAgentServer(session),
+        promptContext: () =>
+          assembleOperatingContract(
+            effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
+              .operatingContract,
+          ),
+      });
+      this.attachChat(session, chat);
+      session.reviewTask = {
+        title: task.title,
+        turn: task.turn,
+        ...(task.reviewId ? { reviewId: task.reviewId } : {}),
+      };
+      const recovery = await chat.restore(record.id);
+      if (recovery.type === "handoff-required") {
+        const summary = buildHandoffPrompt(
+          record,
+          events,
+          effectivePrompts(this.config.prompts, this.savedPrompts).handoffSummary,
+        );
+        await chat.handoff(
+          record.id,
+          summary,
+          text,
+          recovery.reason,
+          taskDelivery(task, deliveredText ?? text, true),
+          origin,
+        );
+      } else this.conversations.send(session, text, origin, deliveredText, taskId);
+      session.restored = false;
+      session.chatError = null;
+      session.historyRun = undefined;
+      // Recovery does not authorize saved plans, feedback, or historical workers.
+      if (origin === undefined) session.updatesPaused = false;
+    } catch (cause) {
+      // An unstarted recovery retains its historical final status. It has no
+      // process to stop and its live-run completion promise has never started.
+      if (chat?.runs().some((run) => ACTIVE_STATUSES.has(run.status))) await chat.shutdown();
+      for (const dispose of session.chatDisposers) dispose();
+      session.chatDisposers = [];
+      session.chat = undefined;
+      await this.closeMcpGateway(session);
+      session.restored = true;
+      session.taskId = previousTask;
+      task.deliveries = deliveries;
+      this.persistChatSoon(session);
+      throw cause;
+    }
   }
   orchestrationChatAction(value: OrchestrationChatAction): Promise<void> {
     const request = parseOrchestrationChatAction(value);
@@ -1998,24 +2295,50 @@ export class DesktopController {
       const session =
         request.id === null
           ? this.conversations.current
-          : this.conversations.sessions.find((entry) => entry.chat?.runs()[0]?.id === request.id);
-      const run = session?.chat?.runs()[0];
+          : this.conversations.sessions.find((entry) => entry.run?.id === request.id);
+      const run = session?.run;
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
-      if (request.type === "select") {
+      if (request.type === "set-tactic") {
+        if (
+          session !== this.conversations.current ||
+          request.project !== (this.workspace?.dir ?? null)
+        )
+          throw new Error("The chat or project changed. Reopen Tactics and try again.");
+        if (request.tactic && !findTactic(request.tactic))
+          throw new Error("This tactic is unavailable");
+        const previous = session.tactic;
+        session.tactic = request.tactic;
+        try {
+          await this.saveChat(session);
+        } catch (cause) {
+          session.tactic = previous;
+          throw cause;
+        }
+      } else if (request.type === "select") {
         if (session.archived) throw new Error("This chat is archived");
         this.conversations.current = session;
+        await this.loadChatHistory(session).catch(() => {
+          session.chatError =
+            "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
+        });
+        session.selectedAt = Date.now();
+        await this.saveChat(session);
       } else if (request.type === "rename") {
         session.title = request.title.trim();
         session.titleTask?.abort.abort();
+        await this.saveChat(session);
       } else if (request.type === "archive") {
         session.archived = true;
+        await this.saveChat(session);
         if (this.conversations.current === session) {
           const next = this.conversations.sessions.find((entry) => !entry.archived);
           if (next) this.conversations.current = next;
           else await this.startChat(this.conversations.create());
         }
       } else if (request.type === "resume-updates") {
+        if (session.restored || !session.chat)
+          throw new Error("Continue the stopped chat explicitly first");
         this.conversations.resume(session);
         this.schedulePlans();
         this.scheduleFeedback();
@@ -2024,8 +2347,26 @@ export class DesktopController {
         if (!this.orchestration.provider) throw new Error("Select an orchestration provider");
         this.conversations.current = session;
         await this.syncOrchestrationChat(true);
-      } else if (!session.chat || !run) throw new Error("No orchestration session is available");
-      else if (request.type === "send") {
+      } else if (request.type === "continue-task") {
+        const task = session.tasks.find((task) => task.id === request.taskId);
+        if (!task || task.project !== (this.workspace?.dir ?? null))
+          throw new Error("Open this task's project before continuing");
+        if (!session.restored && session.chat && run?.status === "idle")
+          await this.sendTask(
+            session,
+            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
+            "automatic",
+            task.id,
+          );
+        else
+          await this.continueChat(
+            session,
+            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
+            "automatic",
+            undefined,
+            task.id,
+          );
+      } else if (request.type === "send") {
         let deliveredText: string | undefined;
         if (request.command !== undefined) {
           const command =
@@ -2034,9 +2375,35 @@ export class DesktopController {
           if (!command) throw new Error(`Command /${request.command} no longer exists`);
           deliveredText = expandCommand(command, request.text);
         }
-        this.conversations.send(session, request.text, undefined, deliveredText);
-        session.reviewTask = { title: request.text, turn: session.chat.runs()[0]?.turns ?? 0 };
-      } else if (request.type === "cancel") {
+        if (!run) throw new Error("No orchestration session is available");
+        if (!session.restored && run.status !== "idle" && ACTIVE_STATUSES.has(run.status))
+          throw new Error("Wait for the current turn to end before sending");
+        const task = captureTask(
+          session.tactic,
+          request.text,
+          run.turns + 1,
+          this.workspace?.dir ?? null,
+        );
+        const previous = session.taskId;
+        session.tasks.push(task);
+        session.taskId = task.id;
+        session.deliveryPending = true;
+        try {
+          await this.saveChat(session);
+          if (session.restored || !ACTIVE_STATUSES.has(run.status))
+            await this.continueChat(session, request.text, undefined, deliveredText, task.id);
+          else this.conversations.send(session, request.text, undefined, deliveredText, task.id);
+        } catch (cause) {
+          session.tasks = session.tasks.filter((entry) => entry !== task);
+          session.taskId = previous;
+          this.persistChatSoon(session);
+          throw cause;
+        } finally {
+          session.deliveryPending = false;
+          this.conversations.scheduleUpdates();
+        }
+      } else if (!session.chat || !run) throw new Error("No orchestration session is available");
+      else if (request.type === "cancel") {
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
         this.conversations.pause(session);
         await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
@@ -2095,6 +2462,7 @@ export class DesktopController {
         );
         if (!abort.signal.aborted && !session.revoked && !session.title) {
           session.title = title;
+          this.persistChatSoon(session);
           this.changed();
         }
       } finally {
@@ -2135,6 +2503,9 @@ export class DesktopController {
           worker.generation === session.chatGeneration && worker.directory === this.workspace?.dir,
       );
       return {
+        ...(session.tactic === undefined ? {} : { tactic: session.tactic }),
+        restored: session.restored,
+        ...(session.taskId ? { taskId: session.taskId } : {}),
         ...(session.title === undefined ? {} : { title: session.title }),
         archived: session.archived,
         plans: session.plans?.list() ?? [],
@@ -2142,7 +2513,7 @@ export class DesktopController {
         workerLabels: Object.fromEntries(
           owned.flatMap(([id, worker]) => (worker.label ? [[id, worker.label]] : [])),
         ),
-        run: session.chat?.runs()[0] ?? null,
+        run: session.run ?? null,
         directory: session.chatDirectory,
         error: session.chatError,
         events: [...(allEvents ? session.chatEvents : session.chatPending)],
@@ -3230,6 +3601,11 @@ export class DesktopController {
             request,
             this.workspace?.dir ?? null,
           );
+          const task = session.tasks.find((task) => task.id === session.taskId);
+          if (task && !task.planIds.includes(plan.id)) {
+            task.planIds.push(plan.id);
+            await this.saveChat(session);
+          }
           this.changed();
           return { ...plan, markdown: planMarkdown(plan) };
         });
@@ -3367,6 +3743,17 @@ export class DesktopController {
     return this.conversations.deduplicate(session, requestId, key, () =>
       this.chatExclusive(session, async () => {
         this.requireScope(request.scope, session);
+        if (!session.taskId) {
+          const task = captureTask(
+            undefined,
+            session.reviewTask?.title ?? request.prompt,
+            session.reviewTask?.turn ?? 0,
+            this.workspace?.dir ?? null,
+          );
+          session.tasks.push(task);
+          session.taskId = task.id;
+          await this.saveChat(session);
+        }
         const assignment = this.planTask(session, request.planTaskId);
         await this.requireGitRun();
         const workspace = this.requireWorkspace();
@@ -3395,6 +3782,11 @@ export class DesktopController {
             );
           }
           session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
+          const task = session.tasks.find((task) => task.id === session.taskId);
+          if (task) {
+            task.reviewId = review.id;
+            await this.saveChat(session);
+          }
         }
         const loop = reviewStore && this.taskLoop(reviewStore);
         const base =
@@ -3426,6 +3818,13 @@ export class DesktopController {
         if (runId === undefined || workspace !== this.workspace)
           throw new Error("Worker launch did not complete in the current project");
         await this.associatePlanWorker(session, runId, assignment);
+        try {
+          await this.saveChat(session);
+        } catch {
+          this.warnings.push(
+            "The worker started, but its task context could not be saved. Inspect it before continuing; do not dispatch it again.",
+          );
+        }
         if (reviewStore && review) {
           try {
             await reviewStore.addWorker(
@@ -3469,7 +3868,7 @@ export class DesktopController {
   ): Promise<unknown> {
     return this.chatExclusive(session, async () => {
       const workspace = this.requireScope(request.scope, session);
-      this.conversations.ownedWorker(request.runId, session);
+      const worker = this.conversations.ownedWorker(request.runId, session);
       const assignment =
         name === "code60_send_agent" || name === "code60_resume_agent"
           ? this.planTask(session, request.planTaskId, request.runId)
@@ -3481,8 +3880,17 @@ export class DesktopController {
       if (name === "code60_resume_agent") {
         if (live) throw new Error(`Worker ${id} is ${view.status}; resume only ended workers`);
         await this.assertCapacity(session);
-        const result = await this.continueRun(workspace, id, request.prompt as string);
+        const previous = worker.taskId;
+        worker.taskId = session.taskId;
+        let result: RecoveryActionResult;
+        try {
+          result = await this.continueRun(workspace, id, request.prompt as string);
+        } catch (cause) {
+          worker.taskId = previous;
+          throw cause;
+        }
         await this.associatePlanWorker(session, id, assignment);
+        this.persistChatSoon(session);
         return { ...this.workerInfo(id), recovery: result.type };
       }
       if (name === "code60_stop_agent") {
@@ -3504,8 +3912,16 @@ export class DesktopController {
         await this.requireGitRun(id);
         await this.enabledConfig();
         this.requireEnabled(this.conversations.workers.get(id)?.provider ?? "");
-        batch.reply(id, request.prompt as string);
+        const previous = worker.taskId;
+        worker.taskId = session.taskId;
+        try {
+          batch.reply(id, request.prompt as string);
+        } catch (cause) {
+          worker.taskId = previous;
+          throw cause;
+        }
         await this.associatePlanWorker(session, id, assignment);
+        this.persistChatSoon(session);
       } else if (name === "code60_finish_agent") batch.finish(id);
       else if (!batch.cancelTurn(id)) throw new Error(`Worker ${id} has no turn in progress`);
       this.changed();

@@ -25,6 +25,7 @@
     "pretest:coverage": "node scripts/build-windows-helper.mjs",
     "test:coverage": "vitest run --coverage && node scripts/check-coverage.mjs",
     "test:logs:performance": "npm run build && node scripts/benchmark-logs.mjs",
+    "test:tactics:live": "npm run build && node scripts/evaluate-tactics.mjs",
     "check:unused": "knip",
     "lint": "biome check .",
     "scan:secrets": "node scripts/scan-secrets.mjs",

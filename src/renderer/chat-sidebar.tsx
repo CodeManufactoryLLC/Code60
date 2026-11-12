@@ -5,8 +5,6 @@ import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
 import { type Conversation, conversations, reconcileDisclosure } from "./chats.js";
-import clientDeliveryNetworkLight from "./icons/app-icons/ClientDeliveryNetworkPrimary.svg?url&no-inline";
-import clientDeliveryNetworkDark from "./icons/app-icons/ClientDeliveryNetworkPrimary-dark.svg?url&no-inline";
 import { Icon } from "./icons.js";
 import { statusSpec } from "./state.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
@@ -181,38 +179,15 @@ export function ChatSidebar({
               }
             }}
           >
-            {entry.role === "orchestrator" ? (
-              <span className="chat-role-icon chat-orchestrator-icon" aria-hidden="true">
-                <img
-                  className="chat-orchestrator-icon-light"
-                  src={clientDeliveryNetworkLight}
-                  alt=""
-                  width={32}
-                  height={32}
-                />
-                <img
-                  className="chat-orchestrator-icon-dark"
-                  src={clientDeliveryNetworkDark}
-                  alt=""
-                  width={32}
-                  height={32}
-                />
-              </span>
-            ) : (
-              <span className="chat-role-icon" aria-hidden="true">
-                <Icon name="ai-agent" />
-              </span>
-            )}
             <span className="chat-sidebar-label">{entry.label}</span>
             <span className="chat-sidebar-indicators">
               {unread > 0 && (
                 <span className="chat-unread" role="img" aria-label={unreadLabel}>
-                  <Icon name="chat" />
                   <span>{unread}</span>
                 </span>
               )}
               {(error || presentation.icon !== "chat") && (
-                <Icon name={error ? "warning--alt--filled" : presentation.icon} />
+                <span className="chat-sidebar-status">{error ? "Error" : presentation.label}</span>
               )}
               {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
             </span>
@@ -274,6 +249,8 @@ export function ChatSidebar({
             role="group"
             aria-label={`${entry.label} workers`}
             hidden={!expanded}
+            inert={!expanded}
+            aria-hidden={!expanded}
           >
             {children.map(row)}
           </div>

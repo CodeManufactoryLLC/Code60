@@ -297,15 +297,26 @@ export class Run {
    * Starts a fresh ACP session in this run's existing worktree. Its first turn sends the bounded
    * summary with the user's message; the transcript records the summary as a note.
    */
-  async handoff(summary: string, text: string, reason: string): Promise<void> {
+  async handoff(
+    summary: string,
+    text: string,
+    reason: string,
+    deliveredText = text,
+    origin?: "automatic",
+  ): Promise<void> {
     await this.assertRecoverableAndSafe();
     if (summary.trim() === "") throw new Error("the recovery handoff is empty");
     if (summary.length > HANDOFF_PROMPT_LIMIT)
       throw new Error("the recovery handoff exceeds its size limit");
     if (text.trim() === "") throw new Error("the message is empty");
+    const context = this.settings.promptContext?.();
+    const heading =
+      origin === "automatic"
+        ? "--- Automatic Code60 update (not written by the user) ---"
+        : "--- User request ---";
     const sent = renderPrompt("handoffTurn", this.settings.prompts.handoffTurn, {
       summary,
-      message: text,
+      message: context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText,
     });
     this.log("recovery.start", "started");
     let session: AgentSession;
@@ -340,7 +351,7 @@ export class Run {
       detail: summary,
     });
     await this.setStatus("running", "Started a fresh session with a handoff summary.");
-    void this.runTurn(text, true, true, sent);
+    void this.runTurn(text, true, true, sent, origin);
   }
 
   async setMode(value: ModeChange): Promise<void> {

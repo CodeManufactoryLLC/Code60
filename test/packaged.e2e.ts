@@ -103,7 +103,8 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     await expect(page.getByRole("note", { name: "Running Code60 version" })).toHaveText(
       `Code60 ${version}`,
     );
-    await expect(page.locator(".app-footer")).toHaveCSS("height", "20px");
+    await expect(page.locator(".app-footer")).toHaveCSS("height", "24px");
+    await expect(page.locator(".app-footer")).toHaveCSS("padding-bottom", "4px");
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await page.evaluate(() => window.desktop.chooseFolder());
     await page.evaluate(() => window.desktop.setOrchestrationProvider("fake"));
@@ -190,10 +191,19 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     await expect
       .poll(() => page.evaluate(async () => (await window.desktop.snapshot()).database))
       .toBe(database);
-    await expect(page.locator(".splash-prompt").getByRole("heading")).toHaveText(
-      "Continue project?",
-    );
-    await page.locator(".splash-prompt").getByRole("button", { name: "Yes", exact: true }).click();
+    const projects = page.locator(".splash-projects");
+    await expect(
+      projects.getByRole("heading", { name: "Open Project", exact: true }),
+    ).toBeVisible();
+    const recent = projects.locator(".project-item").filter({ hasText: repo });
+    await recent.click();
+    const confirmation = page.getByRole("dialog", { name: "Open project?", exact: true });
+    await expect(confirmation).toContainText(repo);
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(projects).toBeVisible();
+    await recent.click();
+    await confirmation.getByRole("button", { name: "Open project", exact: true }).click();
+    await expect(page.locator(".splash")).toHaveCount(0);
     await expect
       .poll(() =>
         page.evaluate(

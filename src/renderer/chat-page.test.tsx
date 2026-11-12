@@ -24,13 +24,15 @@ function render(
   events: RunEvent[] = [],
   reviews: ReviewSummary[] = [],
   database: string | null = "/db",
+  turns = 1,
+  runChanges: Partial<RunView> = {},
 ) {
   return renderToStaticMarkup(
     <ChatPage
       api={{} as DesktopApi}
       chat={
         {
-          run: run("orchestrator", status),
+          run: { ...run("orchestrator", status), turns, ...runChanges },
           activity: {
             state:
               status === "waiting"
@@ -67,6 +69,78 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("does not duplicate plan tabs with chat-header plan buttons", () => {
+    const html = renderToStaticMarkup(
+      <ChatPage
+        api={{} as DesktopApi}
+        chat={{
+          run: run("orchestrator", "idle"),
+          directory: "/project",
+          error: null,
+          events: [],
+          plans: [
+            {
+              id: "00000000-0000-4000-8000-000000000001",
+              chatId: "orchestrator",
+              project: "/project",
+              revision: 1,
+              proposalRevision: 1,
+              title: "A new plan",
+              state: "draft",
+              completed: 0,
+              total: 1,
+            },
+          ],
+          workers: [],
+          updates: { paused: false, pending: 0 },
+        }}
+        events={[]}
+        database="/db"
+        active
+        onDatabase={() => {}}
+        runs={[]}
+      />,
+    );
+    expect(html).not.toContain('class="chat-plans"');
+    expect(html).not.toContain('aria-label="Plans"');
+    expect(html).not.toContain("Plan · A new plan");
+    expect(html).toContain('class="orchestration-chat-heading"');
+  });
+
+  it("centers connection artwork and hides the empty prompt until the session is ready", () => {
+    for (const status of ["queued", "running"] as const) {
+      const html = render(status, [], [], [], [], "/db", 0);
+      expect(html).toContain('class="chat-connection-frame"');
+      expect(html).toContain('class="chat-connecting" role="status"');
+      expect(html).toContain("communicating.gif");
+      expect(html).toContain(">Connecting...</span>");
+      expect(html).not.toContain("Give Code60 a task.");
+      expect(html).not.toContain('class="chat-progress activity-display"');
+      expect(html).not.toContain('class="activity-timer"');
+    }
+    const ready = render("idle", [], [], [], [], "/db", 0);
+    expect(ready).toContain("Give Code60 a task.");
+    expect(ready).not.toContain('class="chat-connecting"');
+    expect(render("idle", [], [], [], [], "/db", 0, { modeChanging: true })).toContain(
+      "Give Code60 a task.",
+    );
+  });
+
+  it("does not flash the empty prompt before a connected chat snapshot arrives", () => {
+    const html = renderToStaticMarkup(
+      <ChatPage
+        api={{} as DesktopApi}
+        chat={undefined}
+        events={[]}
+        database="/db"
+        active
+        onDatabase={() => {}}
+        runs={[]}
+      />,
+    );
+    expect(html).not.toContain("Give Code60 a task.");
+  });
+
   it("renders only agent replies as Markdown, including adjacent streamed chunks", () => {
     const events: RunEvent[] = [
       {
@@ -137,6 +211,7 @@ describe("orchestration activity presentation", () => {
     expect(active).toContain('class="activity-timer"');
     expect(active).not.toContain('class="turn-timer"');
     expect(active).not.toContain("Working for");
+    expect(active).not.toContain('class="turn-separator"');
     const completed = render(
       "idle",
       [],
@@ -153,6 +228,7 @@ describe("orchestration activity presentation", () => {
       ],
     );
     expect(completed).toContain("Worked for 12s (finished)");
+    expect(completed).toContain('<hr class="turn-separator"/>');
     expect(completed).not.toContain('class="activity-timer"');
   });
   it("uses the status as the live disclosure and timing as the historical disclosure", () => {
@@ -194,6 +270,7 @@ describe("orchestration activity presentation", () => {
       ],
     );
     expect(completed).toContain('class="turn-timer activity-history-toggle"');
+    expect(completed).toMatch(/Worked for 12s \(finished\)<\/button><hr class="turn-separator"/);
     expect(completed).toContain("Checking evidence");
     expect(completed).not.toContain('class="chat-progress activity-display"');
   });
@@ -273,6 +350,35 @@ describe("orchestration activity presentation", () => {
     expect(html).toContain("<svg");
     expect(html).not.toContain(">Copy<");
     expect(html).not.toContain("exact source");
+  });
+  it("places a relative timestamp immediately before Copy without live clock announcements", () => {
+    const at = new Date(Date.now() - 180000).toISOString();
+    const html = renderToStaticMarkup(<MessageCopy text="exact source" at={at} />);
+    expect(html).toMatch(/<time[^>]*datetime="[^"]+"[^>]*aria-live="off"[^>]*>3m ago<\/time>/i);
+    expect(html.indexOf("<time")).toBeLessThan(html.indexOf("<button"));
+    expect(html).toContain('class="message-copy-glyph"');
+    expect(html).not.toContain("data-clicked");
+  });
+  it("keeps missing or invalid message times explicit instead of inventing a receipt time", () => {
+    for (const at of [undefined, "invalid timestamp"]) {
+      const html = renderToStaticMarkup(<MessageCopy text="source" at={at} visible={false} />);
+      expect(html).toContain("Time unavailable");
+      expect(html).not.toMatch(/datetime=/i);
+      expect(html).not.toContain("NaN");
+    }
+  });
+  it("retains original prompt and first-chunk timestamps across streaming and replay", () => {
+    const events = [
+      { at: "2026-01-01T00:00:00Z", type: "prompt", turn: 1, text: "user source" },
+      { at: "2026-01-01T00:00:01Z", type: "message", text: "first" },
+      { at: "2026-01-01T00:00:30Z", type: "message", text: " later" },
+    ].map((event) => ({ runId: "orchestrator", ...event })) as RunEvent[];
+    for (const source of [events, structuredClone(events)]) {
+      const html = render("idle", [], [], source).toLowerCase();
+      expect(html).toContain('datetime="2026-01-01t00:00:00.000z"');
+      expect(html).toContain('datetime="2026-01-01t00:00:01.000z"');
+      expect(html).not.toContain('datetime="2026-01-01t00:00:30.000z"');
+    }
   });
   it("keeps Copy outside user text and automatic prompts distinct from user bubbles", () => {
     const event = (body: object) =>

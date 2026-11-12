@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-/** IBM Carbon 16px icon exports (Apache-2.0; see icons/carbon/LICENSE). Paths are unmodified. */
+/** IBM Carbon icon geometry (Apache-2.0; see icons/carbon/LICENSE). Coordinates are retained. */
 const carbonIcons = {
   "overflow-menu--horizontal": {
     size: 16,
@@ -26,6 +26,17 @@ const carbonIcons = {
         d: "M28,4H4C2.9,4,2,4.9,2,6v20c0,1.1,0.9,2,2,2h24c1.1,0,2-0.9,2-2V6C30,4.9,29.1,4,28,4z M10,26H4V6h6V26z M28,15H17.8l3.6-3.6L20,10l-6,6l6,6l1.4-1.4L17.8,17H28v9H12V6h16V15z",
         transform: "translate(32 0) scale(-1 1)",
       },
+    ],
+  },
+  database: {
+    size: 32,
+    paths: [
+      {
+        d: "M24,3H8A2,2,0,0,0,6,5V27a2,2,0,0,0,2,2H24a2,2,0,0,0,2-2V5A2,2,0,0,0,24,3Zm0,2v6H8V5ZM8,19V13H24v6Zm0,8V21H24v6Z",
+      },
+      { d: "M12 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" },
+      { d: "M12 16a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" },
+      { d: "M12 24a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" },
     ],
   },
   folder: {
@@ -135,6 +146,10 @@ const carbonIcons = {
   "arrow--up": {
     size: 16,
     paths: [{ d: "M3.7 6.7 7.5 2.9 7.5 15 8.5 15 8.5 2.9 12.3 6.7 13 6 8 1 3 6z" }],
+  },
+  "arrow--left": {
+    size: 16,
+    paths: [{ d: "M6.7 12.3 2.9 8.5 15 8.5 15 7.5 2.9 7.5 6.7 3.7 6 3 1 8 6 13z" }],
   },
   draggable: {
     size: 32,

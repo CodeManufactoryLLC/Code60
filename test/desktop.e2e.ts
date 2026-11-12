@@ -1,8 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
 import type { UpdateState } from "../src/bridge/index.js";
@@ -144,34 +153,171 @@ async function selectSettingsPage(page: Page, name: string) {
   await page.locator("#settings-pages").getByRole("tab", { name, exact: true }).click();
 }
 
-async function expectSplashLayout(page: Page) {
+async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light") {
   await page.mouse.move(1, 1);
+  expect(
+    await page.evaluate(async () => {
+      const fonts = await document.fonts.load('400 64px "IBM Plex Sans"', "Code60");
+      return fonts.some((font) => font.status === "loaded");
+    }),
+  ).toBe(true);
+  const foreground = scheme === "dark" ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)";
+  const theme = await page.evaluate(() => localStorage.getItem("code60.theme"));
   const title = await page.locator(".splash-title").boundingBox();
-  const prompt = await page.locator(".splash-prompt").boundingBox();
-  const height = await page.evaluate(() => window.innerHeight);
+  const logo = await page.locator(".splash-logo").boundingBox();
+  const lockup = await page.locator(".splash-lockup").boundingBox();
+  const subtitle = await page.locator(".splash-subtitle").boundingBox();
+  const sidebar = await page.locator(".splash-projects").boundingBox();
+  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   expect(title).not.toBeNull();
-  expect(prompt).not.toBeNull();
-  if (title && prompt) {
-    expect(Math.abs(title.y + title.height / 2 - height / 2)).toBeLessThan(2);
-    expect(Math.abs(prompt.y + prompt.height / 2 - height * 0.75)).toBeLessThan(2);
+  expect(logo).not.toBeNull();
+  expect(lockup).not.toBeNull();
+  expect(subtitle).not.toBeNull();
+  expect(sidebar).not.toBeNull();
+  if (title && logo && sidebar && lockup && subtitle) {
+    expect(Math.abs(title.x + title.width / 2 - logo.x - logo.width / 2)).toBeLessThan(2);
+    const lift = Math.min(48, Math.max(0, (logo.height - lockup.height) / 2));
+    expect(Math.abs(lockup.y + lockup.height / 2 - (logo.y + logo.height / 2 - lift))).toBeLessThan(
+      2,
+    );
+    expect(lockup.y).toBeGreaterThanOrEqual(logo.y - 1);
+    expect(Math.abs(subtitle.x + subtitle.width / 2 - title.x - title.width / 2)).toBeLessThan(2);
+    expect(subtitle.y).toBeGreaterThanOrEqual(title.y + title.height);
+    expect(subtitle.y + subtitle.height).toBeLessThanOrEqual(logo.y + logo.height);
+    expect(sidebar.x).toBe(0);
+    if (viewport.width > 700) {
+      expect(sidebar.y).toBe(0);
+      expect(sidebar.height).toBe(viewport.height);
+      expect(sidebar.width).toBeGreaterThanOrEqual(280);
+      expect(sidebar.width).toBeLessThanOrEqual(400);
+      expect(logo.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width);
+    } else {
+      expect(sidebar.width).toBe(viewport.width);
+      expect(sidebar.y).toBeGreaterThanOrEqual(logo.y + logo.height);
+    }
   }
-  // Primary actions use teal in Light and the existing warm fill in Dark.
-  const dark = await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches);
-  await expect(page.locator(".splash-actions .primary")).toHaveCSS(
+  await expect(page.locator(".splash")).toHaveAttribute("data-theme", theme ?? "system");
+  await expect(page.locator(".splash")).toHaveCSS("color-scheme", scheme);
+  await expect(page.locator("html")).toHaveCSS("color-scheme", scheme);
+  await expect(page.locator(".splash-projects")).toHaveCSS(
     "background-color",
-    dark ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
+    scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
   );
-  await expect(page.locator(".splash-card, .project-preview")).toHaveCount(0);
+  await expect(page.locator(".splash-projects")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".splash-projects")).toHaveCSS("color", foreground);
+  await expect(page.locator(".splash-projects")).toHaveCSS("background-image", "none");
+  await expect(page.locator(".splash-brand")).toHaveCSS(
+    "background-color",
+    scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+  );
+  await expect(page.locator(".splash-brand")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".splash-brand")).toHaveCSS("background-image", "none");
+  await expect(page.locator(".splash")).toHaveCSS("overflow", "hidden");
+  await expect(page.locator(".splash")).toHaveCSS("filter", "none");
+  const background = await page.locator(".splash").evaluate((element) => {
+    const style = getComputedStyle(element, "::before");
+    return {
+      content: style.content,
+      image: style.backgroundImage,
+    };
+  });
+  await expect(page.locator(".splash")).not.toHaveAttribute("data-background");
+  await expect(page.locator(".splash")).toHaveCSS("background-image", "none");
+  expect(background).toEqual({ content: "none", image: "none" });
+  await expect(page.locator(".splash-title")).toHaveCSS("color", foreground);
+  await expect(page.locator(".splash-title")).toHaveCSS("font-family", /^"?IBM Plex Sans"?/);
+  await expect(page.locator(".splash-title")).toHaveCSS("font-weight", "400");
+  await expect(page.locator(".splash-title")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".splash-subtitle")).toHaveText("v0.2 'Paddock' (Beta)");
+  await expect(page.locator(".splash-subtitle")).toHaveCSS("color", foreground);
+  await expect(page.locator(".splash-subtitle")).toHaveCSS("font-family", /^"?D-DIN"?/);
+  await expect(page.locator(".splash-subtitle")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".splash-subtitle")).toHaveCSS("text-transform", "none");
+  await expect(page.locator(".splash-title b")).toHaveCSS(
+    "background-color",
+    scheme === "dark" ? "rgb(119, 204, 200)" : "rgb(67, 179, 174)",
+  );
+  await expect(page.locator(".splash-projects .splash-enter")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(page.locator(".splash-projects .splash-enter")).toHaveCSS("color", foreground);
+  await expect(page.locator(".splash-title")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.locator(".splash-projects > h2")).toHaveCSS("text-align", "center");
+  const heading = await page.locator(".splash-projects > h2").boundingBox();
+  expect(heading).not.toBeNull();
+  if (heading && sidebar)
+    expect(Math.abs(heading.x + heading.width / 2 - sidebar.x - sidebar.width / 2)).toBeLessThan(2);
+  const themes = page.getByRole("group", { name: "Color theme", exact: true });
+  await expect(themes.getByRole("button")).toHaveCount(2);
+  await expect(themes.getByRole("button", { name: "Light mode", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    String(scheme === "light"),
+  );
+  await expect(themes.getByRole("button", { name: "Dark mode", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    String(scheme === "dark"),
+  );
+  const themeBounds = await themes.boundingBox();
+  const stripBounds = await page.locator(".splash > .window-drag-strip").boundingBox();
+  expect(themeBounds).not.toBeNull();
+  expect(stripBounds).not.toBeNull();
+  if (themeBounds && stripBounds) {
+    expect(viewport.width - themeBounds.x - themeBounds.width).toBe(16);
+    expect(themeBounds.y).toBeGreaterThanOrEqual(stripBounds.y + stripBounds.height);
+  }
+  await expect(page.getByRole("group", { name: "Splash background", exact: true })).toHaveCount(0);
+  await expect(
+    page.locator(".splash-background-picker, .splash-background-dot, .splash-background-status"),
+  ).toHaveCount(0);
+  for (const button of await themes.getByRole("button").all()) {
+    await expect(button).toHaveCSS("-webkit-app-region", "no-drag");
+    expect(
+      await button.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          document
+            .elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+            ?.closest("button") === element
+        );
+      }),
+    ).toBe(true);
+  }
+  await expect(page.locator(".splash")).toHaveCSS("-webkit-app-region", "no-drag");
+  await expect(page.locator(".splash-projects")).toHaveCSS("-webkit-app-region", "no-drag");
+  await expect(page.locator(".splash > .window-drag-strip")).toHaveCSS(
+    "-webkit-app-region",
+    "drag",
+  );
+  await expect(
+    page.locator(".splash-projects").getByRole("button", { name: "Clear history" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".splash-projects .modal-footer .project-open-folder")).toHaveCount(0);
+  await expect(page.locator(".splash-projects .project-open-folder svg")).toHaveCount(1);
+  await expect(page.locator(".splash-prompt, .splash-actions")).toHaveCount(0);
+  await expect(
+    page.locator(".splash-projects").getByRole("button", { name: "Start", exact: true }),
+  ).toBeVisible();
 }
 
 async function expectMessageCopy(control: Locator) {
+  await expect(control).toHaveCSS("border-radius", "5px");
   await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(control).toHaveCSS("border-top-width", "0px");
   await expect(control).toHaveCSS("box-shadow", "none");
-  await expect(control.locator("svg")).toHaveCSS("width", "12px");
-  await expect(control.locator("svg")).toHaveCSS("height", "12px");
+  await expect(control.locator("svg")).toHaveCSS("width", "16px");
+  await expect(control.locator("svg")).toHaveCSS("height", "16px");
   await expect(control).toHaveCSS("width", "24px");
   await expect(control).toHaveCSS("height", "24px");
+  const timestamp = control.locator("..").locator(".message-sent-time");
+  await expect(timestamp).toHaveText(/^\d+[smhd] ago$/);
+  await expect(timestamp).toHaveAttribute("datetime", /T.*Z$/);
+  await expect(timestamp).toHaveAttribute("aria-live", "off");
+  const timeBox = await timestamp.boundingBox();
+  const copyBox = await control.boundingBox();
+  expect(timeBox).not.toBeNull();
+  expect(copyBox).not.toBeNull();
+  expect((timeBox?.x ?? 0) + (timeBox?.width ?? 0)).toBeLessThanOrEqual(copyBox?.x ?? 0);
   await control.hover();
   await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(control).toHaveCSS("border-top-width", "0px");
@@ -226,6 +372,7 @@ async function openPollingControls(page: Page) {
   await page.getByRole("button", { name: "Open polling controls", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Polling controls", exact: true });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("border-radius", "5px");
   const dimensions = await dialog.evaluate((element) => {
     const group = element.querySelector(".button-group");
     const buttons = [...element.querySelectorAll(".button-group > button")].map((button) =>
@@ -253,6 +400,46 @@ async function refreshProjectData(page: Page) {
   await dialog.getByRole("button", { name: "Close Polling controls", exact: true }).click();
 }
 
+async function expectComposerShadow(composer: Locator) {
+  const expected = await composer.evaluate(() => {
+    if (matchMedia("(forced-colors: active)").matches) return "none";
+    const probe = document.createElement("span");
+    probe.style.color = "var(--border)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return `${color} 0px 0px 1px 0px`;
+  });
+  await expect(composer).toHaveCSS("box-shadow", expected);
+}
+
+async function expectTurnSeparator(line: Locator) {
+  await expect(line).toHaveCSS("border-top-width", "1px");
+  await expect(line).toHaveCSS("border-top-style", "solid");
+  const geometry = await line.evaluate((element) => {
+    const previous = element.previousElementSibling;
+    const parent = element.parentElement;
+    if (!previous || !parent) throw new Error("Missing completed turn");
+    const style = getComputedStyle(element);
+    const parentStyle = getComputedStyle(parent);
+    const bounds = element.getBoundingClientRect();
+    return {
+      timing: previous.matches(".turn-timer"),
+      below: bounds.top >= previous.getBoundingClientRect().bottom,
+      width: bounds.width,
+      available:
+        parent.clientWidth -
+        Number.parseFloat(parentStyle.paddingLeft) -
+        Number.parseFloat(parentStyle.paddingRight) -
+        Number.parseFloat(style.marginLeft) -
+        Number.parseFloat(style.marginRight),
+    };
+  });
+  expect(geometry.timing).toBe(true);
+  expect(geometry.below).toBe(true);
+  expect(geometry.width).toBeCloseTo(geometry.available, 1);
+}
+
 async function expectChatBorder(composer: Locator, color = "var(--focus-line)") {
   const expected = await composer.evaluate((_, color) => {
     const probe = document.createElement("span");
@@ -265,35 +452,61 @@ async function expectChatBorder(composer: Locator, color = "var(--focus-line)") 
   for (const side of ["top", "right", "bottom", "left"])
     await expect(composer).toHaveCSS(`border-${side}-color`, expected);
   await expect(composer).toHaveCSS("border-top-width", "1px");
+  await expect(composer).toHaveCSS("border-radius", "5px");
   await expect(composer).toHaveCSS("outline-width", "0px");
-  await expect(composer).toHaveCSS("box-shadow", "none");
+  await expectComposerShadow(composer);
 }
 
 async function expectIndustrialSurfaces(page: Page) {
   const surfaces = await page
     .locator(
-      "button, input, select, textarea, .setup-dialog, .composer, .event.toolCall, .approval, .worker-chat-page, .actions-menu",
+      "button, input, select, textarea, dialog:not(.splash), .button-group, .chat-sidebar-row, .segmented, .segmented-option, .settings-card, .settings-group, .composer, .event.prompt:not(.automatic) > pre, .event.toolCall, .approval, .worker-chat-page, .actions-menu",
     )
     .evaluateAll((elements) =>
       elements
         .filter((element) => element.getClientRects().length > 0)
         .map((element) => {
           const style = getComputedStyle(element);
-          const grouped = element.parentElement?.matches(".button-group");
+          const grouped =
+            element.matches("button, select, .segmented-option") &&
+            element.parentElement?.matches(".button-group, .chat-sidebar-row, .segmented");
+          const controls = grouped
+            ? [...(element.parentElement?.children ?? [])].filter(
+                (child) =>
+                  child.matches("button, select, .segmented-option") &&
+                  !child.matches(".table-add-accessible:not(:focus-visible)"),
+              )
+            : [];
+          const leading = controls[0] === element ? 5 : 0;
+          const trailing = controls.at(-1) === element ? 5 : 0;
+          const rounded = element.matches(
+            "button, input[type=button], input[type=submit], input[type=reset], input[type=checkbox], input[type=radio], [role=switch], dialog:not(.splash), [role=dialog], [popover], .app-toast, .button-group, .chat-sidebar-row, .segmented, .settings-card, .settings-group, .approval, .composer, .event.prompt:not(.automatic) > pre",
+          );
           return {
             label: `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 40)}`,
-            expectedRadius: 0,
-            radius: Math.max(
-              ...[
-                style.borderTopLeftRadius,
-                style.borderTopRightRadius,
-                style.borderBottomLeftRadius,
-                style.borderBottomRightRadius,
-              ].map(Number.parseFloat),
-            ),
+            expectedRadii: grouped
+              ? [leading, trailing, trailing, leading]
+              : Array(4).fill(rounded ? 5 : 0),
+            radii: [
+              style.borderTopLeftRadius,
+              style.borderTopRightRadius,
+              style.borderBottomRightRadius,
+              style.borderBottomLeftRadius,
+            ].map(Number.parseFloat),
             corner: style.getPropertyValue("corner-top-right-shape"),
+            indicatorRadius: element.matches("input[role=switch], input[type=radio]:checked")
+              ? getComputedStyle(element, "::before").borderRadius
+              : null,
+            checkboxMarkRadius: element.matches("input[type=checkbox]:checked:not([role=switch])")
+              ? getComputedStyle(element, "::before").borderRadius
+              : null,
+            segmentedChoice: element.matches(".segmented-option"),
+            promptBubble: element.matches(".event.prompt:not(.automatic) > pre"),
+            forcedColors: matchMedia("(forced-colors: active)").matches,
             shadow: style.boxShadow,
-            overlay: element.matches(".setup-dialog, .worker-chat-page, .actions-menu"),
+            overlay: element.matches(
+              "dialog, [role=dialog], [popover], .app-toast, .button-group, .worker-chat-page",
+            ),
             baseline: element.matches(
               "input:not([type=checkbox], [type=radio]), select, textarea, .composer",
             ),
@@ -306,14 +519,16 @@ async function expectIndustrialSurfaces(page: Page) {
             selectedProject: element.matches(".project-card[data-empty=false]"),
             animation: style.animationName,
             height: element.tagName === "BUTTON" ? element.getBoundingClientRect().height : 36,
-            minHeight: element.matches(".app-footer > button, .footer-polling > .poll-timestamp")
+            minHeight: element.matches(
+              ".app-footer > button, .footer-polling > .poll-timestamp, .footer-database, .footer-splash",
+            )
               ? 20
               : element.matches(".table-add-accessible:not(:focus-visible)")
                 ? 0
                 : grouped
                   ? 28
                   : element.matches(
-                        "[role='tab'], .message-copy button, .sidebar button, .info-tip",
+                        "[role='tab'], .message-copy button, .sidebar button, .info-tip, .settings-group-reset",
                       )
                     ? 24
                     : 36,
@@ -322,15 +537,34 @@ async function expectIndustrialSurfaces(page: Page) {
     );
   expect(surfaces.length).toBeGreaterThan(0);
   for (const surface of surfaces) {
-    expect(surface.radius).toBe(surface.expectedRadius);
-    if (!surface.focused && !surface.overlay && !surface.baseline)
-      expect(surface.shadow).toBe("none");
+    expect(surface.radii, surface.label).toEqual(surface.expectedRadii);
+    if (surface.indicatorRadius !== null)
+      expect(surface.indicatorRadius, surface.label).toBe("5px");
+    if (surface.checkboxMarkRadius !== null)
+      expect(surface.checkboxMarkRadius, surface.label).toBe("0px");
+    if (surface.promptBubble && !surface.forcedColors)
+      expect(surface.shadow, surface.label).toMatch(/^rgba?\([^)]+\) 1px 1px 1px 0px$/);
+    else if (!surface.focused && !surface.overlay && !surface.baseline && !surface.segmentedChoice)
+      expect(surface.shadow, surface.label).toBe("none");
     if (surface.disabled && !surface.selectedProject && !surface.emptyProject && !surface.iconOnly)
       expect(surface.image, surface.label).toContain("repeating-linear-gradient");
     else expect(surface.image, surface.label).toBe("none");
     expect(surface.animation).toBe("none");
     expect(surface.height).toBeGreaterThanOrEqual(surface.minHeight);
   }
+  const scrollers = await page.locator("body *").evaluateAll((elements) =>
+    elements
+      .filter(
+        (element) =>
+          element.getClientRects().length > 0 && getComputedStyle(element).overflowY === "auto",
+      )
+      .map((element) => ({
+        label: `${element.tagName.toLowerCase()}.${element.className}`,
+        gutter: getComputedStyle(element).scrollbarGutter,
+      })),
+  );
+  for (const scroller of scrollers)
+    expect(scroller.gutter, scroller.label).toMatch(/^stable(?: both-edges)?$/);
 }
 
 async function expectThemeContrast(page: Page) {
@@ -476,29 +710,21 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
     if (!sidebar) throw new Error("Missing navigation sidebar");
     const bounds = element.getBoundingClientRect();
     const bar = sidebar.getBoundingClientRect();
-    // When navigation overflows, rows end at its vertical scrollbar rather than the divider.
+    // Navigation reserves its vertical gutter even before it overflows.
     let list = element.parentElement;
-    while (list && list !== sidebar && list.scrollHeight <= list.clientHeight)
+    while (list && list !== sidebar && !/^(auto|scroll)$/.test(getComputedStyle(list).overflowY))
       list = list.parentElement;
     const listEdge =
       list && list !== sidebar
         ? list.getBoundingClientRect().left + list.clientLeft + list.clientWidth
         : Number.POSITIVE_INFINITY;
     const line = getComputedStyle(element, "::after");
-    const probe = document.createElement("span");
-    probe.style.color = "var(--primary)";
-    element.append(probe);
-    const primary = getComputedStyle(probe).color;
-    probe.remove();
     return {
       left: bounds.left,
       right: bounds.right,
       edge: Math.min(bar.right - 1, listEdge),
-      lineWidth: Number.parseFloat(line.width),
-      width: bounds.width,
+      content: line.content,
       border: line.borderBottomWidth,
-      color: line.borderBottomColor,
-      primary,
       decoration: getComputedStyle(
         element.querySelector(".page-tab-label, .chat-sidebar-label") ?? element,
       ).textDecorationLine,
@@ -509,12 +735,37 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
   });
   expect(highlight.left).toBe(0);
   expect(highlight.right).toBe(highlight.edge);
-  expect(highlight.lineWidth).toBe(highlight.width);
-  expect(highlight.border).toBe("2px");
-  expect(highlight.color).toBe(highlight.primary);
+  expect(highlight.content).toBe("none");
+  expect(highlight.border).toBe("0px");
   expect(highlight.decoration).toBe("none");
-  expect(highlight.grip).toBe("rgba(0, 0, 0, 0)");
+  expect(highlight.grip).toMatch(/^rgba\(\d+, \d+, \d+, 0\)$/);
   await expect(page.locator(".sidebar [data-nav-active='true']:visible")).toHaveCount(1);
+  if (await row.evaluate((element) => element.classList.contains("chat-sidebar-row"))) {
+    await expect(row).toHaveCSS("border-radius", "5px");
+    const controls = await row.locator(":scope > button").evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const style = getComputedStyle(button);
+        return {
+          fill: style.backgroundColor,
+          corners: [
+            style.borderTopLeftRadius,
+            style.borderTopRightRadius,
+            style.borderBottomRightRadius,
+            style.borderBottomLeftRadius,
+          ],
+        };
+      }),
+    );
+    for (const [index, control] of controls.entries()) {
+      expect(control.fill).toMatch(/^rgba\(\d+, \d+, \d+, 0\)$/);
+      expect(control.corners).toEqual([
+        index === 0 ? "5px" : "0px",
+        index === controls.length - 1 ? "5px" : "0px",
+        index === controls.length - 1 ? "5px" : "0px",
+        index === 0 ? "5px" : "0px",
+      ]);
+    }
+  }
 }
 
 async function expectTabAppearance(page: Page) {
@@ -524,6 +775,17 @@ async function expectTabAppearance(page: Page) {
   const clearPointer = () => page.mouse.move(corner.x, corner.y);
   await clearPointer();
   await expect(page.locator(".sidebar button:hover")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".sidebar")
+        .evaluate((element) =>
+          element
+            .getAnimations({ subtree: true })
+            .every((animation) => animation.playState !== "running"),
+        ),
+    )
+    .toBe(true);
   const appearance = await page.evaluate(() => {
     const active = document.querySelector<HTMLElement>("[role='tab'][aria-selected='true']");
     const inactive = document.querySelector<HTMLElement>("[role='tab'][aria-selected='false']");
@@ -553,7 +815,7 @@ async function expectTabAppearance(page: Page) {
       buttonBackgrounds: [...bar.querySelectorAll("button")].map((button) => ({
         label: button.getAttribute("aria-label") ?? button.textContent,
         background: getComputedStyle(button).backgroundColor,
-        iconOnly: button.matches(".icon-button, .sidebar-resize"),
+        transparent: button.matches(".icon-button, .sidebar-resize, .chat-sidebar-row > button"),
         highlighted: button.matches(
           '[aria-selected="true"]:not(.page-group-toggle), [data-active="true"], [data-nav-active="true"] button',
         ),
@@ -591,7 +853,7 @@ async function expectTabAppearance(page: Page) {
   await expectNavigationHighlight(page, page.locator(".sidebar [data-nav-active='true']:visible"));
   for (const button of appearance.buttonBackgrounds)
     expect(button.background, button.label ?? "Sidebar button").toBe(
-      button.iconOnly
+      button.transparent
         ? "rgba(0, 0, 0, 0)"
         : button.highlighted
           ? appearance.activeBackground
@@ -621,19 +883,28 @@ async function expectTabAppearance(page: Page) {
   await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px 1px 0px 0px");
   const inactive = page.locator('[role="tab"][aria-selected="false"]:visible').first();
   const border = await inactive.evaluate((element) => getComputedStyle(element).borderColor);
+  const glyph = inactive.locator("svg").first();
+  const navigationColor = (await glyph.getAttribute("class"))?.includes("navigation-icon")
+    ? await glyph.evaluate((element) => getComputedStyle(element).color)
+    : undefined;
   async function expectHover(button: Locator) {
+    const paint = (await button.evaluate((element) =>
+      element.matches(".chat-sidebar-row > button"),
+    ))
+      ? button.locator("..")
+      : button;
     await expect(async () => {
       await clearPointer();
       await button.hover();
-      await expect(button).toHaveCSS("background-color", appearance.hoverBackground, {
+      await expect(paint).toHaveCSS("background-color", appearance.hoverBackground, {
         timeout: 500,
       });
     }).toPass({ timeout: 5_000 });
   }
   await expectHover(inactive);
-  await expect(inactive.locator("svg").first()).toHaveCSS(
+  await expect(glyph).toHaveCSS(
     "color",
-    await inactive.evaluate((element) => getComputedStyle(element).color),
+    navigationColor ?? (await inactive.evaluate((element) => getComputedStyle(element).color)),
   );
   await expectIconAction(page.getByRole("button", { name: "New chat", exact: true }));
   await expect(inactive).toHaveCSS("border-color", border);
@@ -658,12 +929,19 @@ async function appendRow(page: Page, table: "sessions" | "configurations" = "ses
   // Project success toasts can arrive during that wait and cover the sticky row.
   const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
   for (let count = 0; count < 3 && (await dismiss.count()); count++) await dismiss.first().click();
-  // The canvas is resized after layout; wait until it matches the grid before aiming at it.
+  // Glide's canvas fills the scroller's client area, excluding its reserved gutter.
   await expect
-    .poll(async () => {
-      const [outer, inner] = await Promise.all([grid.boundingBox(), canvas.boundingBox()]);
-      return !!outer && !!inner && Math.abs(outer.width - inner.width) < 1;
-    })
+    .poll(() =>
+      grid.evaluate((element) => {
+        const canvas = element.querySelector('[data-testid="data-grid-canvas"]');
+        const scroller = element.querySelector(".dvn-scroller");
+        return (
+          !!canvas &&
+          !!scroller &&
+          Math.abs(canvas.getBoundingClientRect().width - scroller.clientWidth) < 1
+        );
+      }),
+    )
     .toBe(true);
   const box = await canvas.boundingBox();
   // Glide receives pointer events on its transparent scroller above the canvas.
@@ -725,6 +1003,178 @@ async function launch(directory: string, folder: string, database: string, confi
   }
   return launchDesktop(directory, folder, database);
 }
+
+test("desktop: Tactics preview, keyboard selection, draft preservation and stopped-chat recovery", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-tactics-ui-"));
+  const project = join(directory, "project");
+  const database = join(directory, "projects.sqlite");
+  await mkdir(project);
+  application = await launch(directory, project, database);
+  try {
+    let page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    let chat = page.locator(".orchestration-chat-page:visible");
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await expect(chat.getByRole("button", { name: "Tactics", exact: true })).toBeEnabled();
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    await composer.fill("Keep this draft");
+    const initial = await page.evaluate(() => window.desktop.snapshot());
+    const id = initial.chat.run?.id as string;
+    await expect(page.getByRole("dialog", { name: "Tactics", exact: true })).toHaveCount(0);
+    await chat.getByRole("button", { name: "Tactics", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Tactics", exact: true });
+    await expect(dialog.getByRole("radio")).toHaveCount(8);
+    await dialog.getByRole("radio", { name: "Independent review", exact: true }).focus();
+    await page.keyboard.press("End");
+    await expect(
+      dialog.getByRole("radio", { name: "Challenge the plan", exact: true }),
+    ).toBeFocused();
+    await expect(
+      dialog.getByRole("heading", { name: "Challenge the plan", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Home");
+    await expect(
+      dialog.getByRole("radio", { name: "Independent review", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      dialog.getByRole("radio", { name: "Implement and review", exact: true }),
+    ).toBeFocused();
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.tactic).toBeUndefined();
+    await dialog.getByRole("searchbox", { name: "Search tactics" }).fill("zz-no-match");
+    await expect(dialog.getByText("No matching tactics.", { exact: true })).toBeVisible();
+    await expect(dialog.locator(".tactics-details h3")).toHaveCount(0);
+    await dialog.getByRole("searchbox", { name: "Search tactics" }).fill("concrete trigger");
+    await expect(dialog.getByRole("radio")).toHaveCount(1);
+    await dialog.getByText("Orchestrator prompt", { exact: true }).click();
+    await dialog.getByText("Shared instructions", { exact: true }).click();
+    await expect(dialog.getByText(/own worktree is not the implementation/)).toBeVisible();
+    for (let n = 0; n < 12; n++) {
+      await page.keyboard.press("Tab");
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(
+        true,
+      );
+    }
+    await page.screenshot({ path: test.info().outputPath("tactics-light.png") });
+    const metadataDirectory = join(directory, ".code60_workspace", "chats");
+    const backup = `${metadataDirectory}.saved`;
+    await rename(metadataDirectory, backup);
+    await writeFile(metadataDirectory, "Intentional storage failure");
+    try {
+      await dialog.getByRole("button", { name: "Apply to chat", exact: true }).click();
+      await expect(dialog.getByRole("alert")).toContainText("could not be saved");
+      await expect(dialog).toBeVisible();
+      expect((await page.evaluate(() => window.desktop.snapshot())).chat.tactic).toBeUndefined();
+      await expect(composer).toHaveValue("Keep this draft");
+    } finally {
+      await unlink(metadataDirectory);
+      await rename(backup, metadataDirectory);
+    }
+    await dialog.getByRole("button", { name: "Apply to chat", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      chat.getByRole("button", { name: "Change tactic: Independent review", exact: true }),
+    ).toBeFocused();
+    await expect(composer).toHaveValue("Keep this draft");
+    const selected = await page.evaluate(() => window.desktop.snapshot());
+    expect(selected.chat.tactic).toBe("independent-review");
+    expect(selected.chat.run?.turns).toBe(0);
+    expect(selected.runs).toEqual([]);
+    await chat
+      .getByRole("button", { name: "Change tactic: Independent review", exact: true })
+      .click();
+    await expect(dialog.getByRole("button", { name: "Applied", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await chat.getByRole("button", { name: "Remove tactic", exact: true }).click();
+    await expect(composer).toHaveValue("Keep this draft");
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.tactic).toBeNull();
+    await chat.getByRole("button", { name: "Tactics", exact: true }).click();
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 520, height: 720 });
+    await expect(
+      dialog.getByRole("button", { name: "Apply to chat", exact: true }),
+    ).toBeInViewport();
+    await page.screenshot({ path: test.info().outputPath("tactics-dark-narrow.png") });
+    const geometry = await dialog.evaluate((element) => ({
+      width: element.clientWidth,
+      overflow: element.scrollWidth - element.clientWidth,
+      padding: getComputedStyle(element).padding,
+      children: [...element.querySelectorAll("*")]
+        .filter((child) => {
+          const rect = child.getBoundingClientRect();
+          const outer = element.getBoundingClientRect();
+          return rect.right > outer.right + 1;
+        })
+        .map((child) => ({ name: child.className, right: child.getBoundingClientRect().right }))
+        .slice(0, 10),
+    }));
+    expect(geometry.overflow, JSON.stringify(geometry)).toBe(0);
+    await dialog.getByRole("button", { name: "Apply to chat", exact: true }).click();
+    await page.setViewportSize({ width: 1200, height: 850 });
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns)
+      .toBe(1);
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.status)
+      .toBe("idle");
+    const sent = await page.evaluate(() => window.desktop.snapshot());
+    expect(
+      sent.chat.events.some(
+        ({ event }) => event.type === "prompt" && event.text === "Keep this draft",
+      ),
+    ).toBe(true);
+    await chat
+      .getByRole("button", { name: "Change tactic: Independent review", exact: true })
+      .click();
+    await dialog.getByRole("searchbox", { name: "Search tactics" }).fill("Explore the codebase");
+    await dialog.getByRole("button", { name: "Apply to chat", exact: true }).click();
+    await application.close();
+    application = await launch(directory, project, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    chat = page.locator(".orchestration-chat-page:visible");
+    await expect(
+      chat.getByRole("button", { name: "Change tactic: Explore the codebase", exact: true }),
+    ).toBeVisible();
+    const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.chat).toMatchObject({
+      restored: true,
+      taskId: sent.chat.taskId,
+      run: { id, turns: 1 },
+      workers: [],
+      updates: { paused: true, pending: 0 },
+    });
+    const metadata = JSON.parse(
+      await readFile(
+        join(
+          directory,
+          ".code60_workspace",
+          "chats",
+          `${basename(sent.chat.directory as string)}.json`,
+        ),
+        "utf8",
+      ),
+    );
+    expect(metadata.tasks[0].tactic).toMatchObject({ id: "independent-review", version: 1 });
+    expect(metadata.tasks[0].tactic.prompt).toContain("Shared instructions");
+    await chat.getByRole("button", { name: "Continue task", exact: true }).click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns)
+      .toBe(2);
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.tactic).toBe(
+      "explore-the-codebase",
+    );
+    expect(errors).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("desktop: read-only task revisions preserve project files and switch reviews", async () => {
   test.setTimeout(90_000);
@@ -1210,12 +1660,19 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
             const line = getComputedStyle(workspace, "::before");
             const bounds = workspace.getBoundingClientRect();
             const edge = element.getBoundingClientRect().right - 1;
+            const database = document.querySelector(".footer-database")?.getBoundingClientRect();
+            const timestamp = document.querySelector(".poll-timestamp")?.getBoundingClientRect();
             return (
               Math.abs(bounds.left + Number.parseFloat(line.left) - edge) < 1 &&
               Math.abs(bounds.top + Number.parseFloat(line.top)) < 1 &&
               Math.abs(bounds.bottom - Number.parseFloat(line.bottom) - innerHeight) < 1 &&
               line.width === "1px" &&
-              line.pointerEvents === "none"
+              line.pointerEvents === "none" &&
+              database !== undefined &&
+              timestamp !== undefined &&
+              Math.abs(database.right - edge + 7) < 1 &&
+              Math.abs(database.top + database.height / 2 - timestamp.top - timestamp.height / 2) <
+                1
             );
           }),
         )
@@ -1227,9 +1684,23 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
     await expectFullHeightDivider();
     const selectedRow = sidebar.locator(".chat-sidebar-row[data-nav-active='true']");
     await expectNavigationHighlight(page, selectedRow);
+    const hoverFill = await selectedRow.evaluate((element) => {
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = "var(--hover-bg)";
+      element.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    });
+    for (const control of await selectedRow.locator(":scope > button").all()) {
+      await control.hover();
+      await expect(selectedRow).toHaveCSS("background-color", hoverFill);
+      await expectNavigationHighlight(page, selectedRow);
+    }
     await grip.focus();
     await grip.press("ArrowRight");
     await expect(sidebar).toHaveCSS("width", "240px");
+    await expectFullHeightDivider();
     await expectNavigationHighlight(page, selectedRow);
     await grip.press("ArrowLeft");
     await expect(sidebar).toHaveCSS("width", "220px");
@@ -1244,9 +1715,11 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
     const resized = await sidebar.evaluate((element) => element.getBoundingClientRect().width);
     expect(resized).toBeGreaterThan(300);
     expect(resized).toBeLessThan(330);
+    await expectFullHeightDivider();
     await expect(composer).toHaveValue("Keep this draft while resizing");
     await page.reload();
     await expect(sidebar).toHaveCSS("width", `${resized}px`);
+    await expectFullHeightDivider();
     await expect(composer).toHaveValue("Keep this draft while resizing");
     await grip.focus();
     for (let i = 0; i < 20; i++) await grip.press("ArrowLeft");
@@ -1306,11 +1779,20 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     if (!firstId) throw new Error("Missing initial conversation");
     // Automatic titles may change the label after a reply; unread state belongs to the ID.
     const first = page.locator(`[id="conversation-${firstId}"]`);
-    await expect(first.locator(".chat-role-icon")).toHaveCount(1);
+    await expect(first.locator(".chat-role-icon")).toHaveCount(0);
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     const second = page.getByRole("button", { name: "Chat 2", exact: true });
     const send = async (text: string) => {
+      // Opening another chat does not wait for this hidden chat's ACP connection.
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+              (chat) => chat.run?.id === firstId,
+            )?.run?.status,
+        )
+        .toBe("idle");
       const turn = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
         (chat) => chat.run?.id === firstId,
       )?.run?.turns;
@@ -1339,7 +1821,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       ]),
     );
     await expect(first.locator(".chat-unread")).toHaveText("1");
-    await expect(first.locator(".chat-unread svg")).toHaveCount(1);
+    await expect(first.locator(".chat-unread svg")).toHaveCount(0);
     await expect(second.locator(".chat-unread")).toHaveCount(0);
     await send("second turn");
     await expect(first.locator(".chat-unread")).toHaveText("2");
@@ -1375,7 +1857,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     await expect(first.locator(".chat-unread")).toHaveText("1");
     await selectSidebarPage(page, "Chat");
     await expect(first.locator(".chat-unread")).toHaveCount(0);
-    await expect(first.locator(".chat-role-icon")).toHaveCount(1);
+    await expect(first.locator(".chat-role-icon")).toHaveCount(0);
     await page.reload();
     await expect(first.locator(".chat-unread")).toHaveCount(0);
     const markers = await page.evaluate(() =>
@@ -1383,7 +1865,113 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     );
     expect(markers.length).toBe(2);
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
-    await expect(page.locator("#tab-chat svg").first()).toBeVisible();
+    await expect(
+      page.locator(
+        ".sidebar svg:not(.navigation-icon):not(.page-group-toggle > svg):not(.icon-button > svg), .sidebar img",
+      ),
+    ).toHaveCount(0);
+    await expect(
+      first
+        .locator("..")
+        .getByRole("button", { name: /^Actions for / })
+        .locator("svg"),
+    ).toHaveCount(1);
+    await expect(page.locator(".sidebar .navigation-icon")).toHaveCount(6);
+    const navigationTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute("data-theme"),
+    );
+    for (const [id, icon, light, dark] of [
+      ["tab-chat", "chats", "rgb(36, 134, 75)", "rgb(108, 206, 150)"],
+      ["tab-prompts", "pencil-line", "rgb(128, 84, 189)", "rgb(189, 156, 244)"],
+      ["tab-commands", "megaphone", "rgb(195, 61, 73)", "rgb(255, 135, 146)"],
+      ["tab-settings", "gear", "rgb(106, 115, 125)", "rgb(173, 181, 189)"],
+      ["tab-search", "magnifying-glass", "rgb(187, 101, 13)", "rgb(245, 175, 87)"],
+      ["tables-toggle", "database", "rgb(40, 120, 184)", "rgb(120, 185, 239)"],
+    ] as const) {
+      const control = page.locator(`#${id}`);
+      const glyph = control.locator(".navigation-icon");
+      await expect(control).toHaveCSS("font-size", "15px");
+      await expect(control).toHaveCSS("font-family", /IBM Plex Sans/);
+      await expect(glyph).toHaveAttribute("data-icon", icon);
+      await expect(glyph).toHaveAttribute("aria-hidden", "true");
+      await expect(glyph).toHaveAttribute("focusable", "false");
+      await expect(glyph.locator('path[opacity="0.2"]')).toHaveCount(1);
+      const iconSize = await control.evaluate(
+        (element) => Number.parseFloat(getComputedStyle(element).fontSize) * 1.5,
+      );
+      await expect(glyph).toHaveCSS("width", `${iconSize}px`);
+      await expect(glyph).toHaveCSS("height", `${iconSize}px`);
+      for (const [theme, color] of [
+        ["light", light],
+        ["dark", dark],
+      ] as const) {
+        await page.evaluate(
+          (theme) => document.documentElement.setAttribute("data-theme", theme),
+          theme,
+        );
+        await expect(glyph).toHaveCSS("color", color);
+        await control.hover();
+        await expect(glyph).toHaveCSS("color", color);
+      }
+    }
+    await page.evaluate((theme) => {
+      if (theme === null) document.documentElement.removeAttribute("data-theme");
+      else document.documentElement.setAttribute("data-theme", theme);
+    }, navigationTheme);
+    const sidebar = page.locator(".sidebar");
+    const originalButtonSize = await sidebar.evaluate((element) => ({
+      value: (element as HTMLElement).style.getPropertyValue("--button-size"),
+      priority: (element as HTMLElement).style.getPropertyPriority("--button-size"),
+    }));
+    try {
+      for (const size of [8, 13, 15, 16, 24, 32, 48]) {
+        await sidebar.evaluate(
+          (element, size) =>
+            (element as HTMLElement).style.setProperty("--button-size", `${size}px`),
+          size,
+        );
+        const geometry = await sidebar.locator(".navigation-icon").evaluateAll((icons) =>
+          icons.map((icon) => {
+            const control = icon.parentElement;
+            const label = control?.querySelector(".page-tab-label");
+            if (!control || !label) throw new Error("Missing navigation label");
+            const glyph = icon.getBoundingClientRect();
+            const button = control.getBoundingClientRect();
+            return {
+              size: glyph.width,
+              height: glyph.height,
+              textSize: Number.parseFloat(getComputedStyle(label).fontSize),
+              leading: glyph.left - button.left,
+              gap: label.getBoundingClientRect().left - glyph.right,
+              top: glyph.top - button.top,
+              bottom: button.bottom - glyph.bottom,
+              row: button.height,
+            };
+          }),
+        );
+        expect(geometry).toHaveLength(6);
+        for (const icon of geometry) {
+          expect(icon.textSize).toBe(size);
+          expect(icon.size).toBe(size * 1.5);
+          expect(icon.height).toBe(icon.size);
+          expect(icon.leading).toBeGreaterThanOrEqual(12);
+          expect(icon.gap).toBeGreaterThanOrEqual(8);
+          expect(icon.top).toBeGreaterThanOrEqual(3);
+          expect(icon.bottom).toBeGreaterThanOrEqual(3);
+          expect(icon.row).toBe(Math.max(40, size * 1.5 + 8));
+        }
+      }
+    } finally {
+      await sidebar.evaluate((element, original) => {
+        const style = (element as HTMLElement).style;
+        if (original.value) style.setProperty("--button-size", original.value, original.priority);
+        else style.removeProperty("--button-size");
+      }, originalButtonSize);
+    }
+    await expect(page.locator("#tab-chat > .carbon-icon")).toHaveCount(1);
+    const newChat = page.getByRole("button", { name: "New chat", exact: true });
+    await expect(newChat).toHaveText("");
+    await expect(newChat.locator("svg")).toHaveCount(1);
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -1436,6 +2024,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       "const value = '<not markup>';\n",
     );
     await expect(chat.locator(".turn-timer")).toHaveCount(0);
+    await expect(chat.locator(".turn-separator")).toHaveCount(0);
     await expect(chat.locator(".activity-display")).toHaveCount(1);
     await expect(chat.locator(".activity-timer")).toBeVisible();
     await expect(age).toHaveText(/Last message \d+s ago/);
@@ -1470,6 +2059,9 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       });
     });
     const agentCopy = chat.locator(".event.message").getByRole("button", { name: "Copy message" });
+    const copyToast = page
+      .getByRole("group", { name: "Done notification", exact: true })
+      .filter({ hasText: "Copied." });
     await expect(agentCopy).toHaveText("");
     await expect(agentCopy.locator("svg")).toHaveCount(1);
     await expectMessageCopy(agentCopy);
@@ -1488,12 +2080,33 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(agentCopy).toHaveAttribute("aria-disabled", "true");
     await expect(agentCopy).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(chat.getByText("Copied.", { exact: true })).toHaveCount(0);
+    await expect(copyToast).toHaveCount(0);
     await expect(chat.locator(".event.message .chat-markdown p")).toHaveText("later chunk");
     const clipboardValues = () =>
       page.evaluate(
         () => (window as unknown as { copyHarness: { values: string[] } }).copyHarness.values,
       );
     expect(await clipboardValues()).toEqual([source]);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const agentMessage = chat.locator(".event.message");
+    const agentControls = agentMessage.locator(".message-copy");
+    await composer.focus();
+    await composer.hover();
+    await expect(agentControls).toHaveCSS("opacity", "0");
+    await expect(agentControls).toHaveCSS("transition-property", "opacity");
+    await expect(agentControls).toHaveCSS("transition-duration", "0.175s");
+    await agentMessage.locator(".chat-markdown").hover();
+    await expect(agentControls).toHaveCSS("opacity", "1");
+    await agentControls.locator("time").hover();
+    await expect(agentControls).toHaveCSS("opacity", "1");
+    await composer.hover();
+    await expect(agentControls).toHaveCSS("opacity", "0");
+    await agentCopy.focus();
+    await expect(agentControls).toHaveCSS("opacity", "1");
+    await composer.focus();
+    await expect(agentControls).toHaveCSS("opacity", "0");
+    await agentCopy.hover();
+    await expect(agentControls).toHaveCSS("opacity", "1");
     // Streaming may legitimately move a following transcript. Measure feedback
     // only after the final chunk, independently of the viewport's available height.
     const beforeFeedback = await chat.locator(".transcript").evaluate((element) => ({
@@ -1509,13 +2122,18 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(retry).toBeVisible();
     await expectMessageCopy(retry);
     await expect(chat.getByRole("status").filter({ hasText: "Copy failed." })).toBeVisible();
+    await expect(copyToast).toHaveCount(0);
     await retry.focus();
     await page.keyboard.press("Enter");
     expect(await clipboardValues()).toEqual([source, `${source}later chunk`]);
     await page.evaluate(() =>
       (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
     );
-    await expect(chat.getByRole("status").filter({ hasText: "Copied." })).toBeVisible();
+    await expect(copyToast).toBeVisible();
+    await expect(copyToast).toHaveCSS("border-radius", "5px");
+    await expect(copyToast).toHaveAttribute("data-tone", "success");
+    await expect(page.locator(".toast-stack").getByRole("status")).toHaveText("Done: Copied.");
+    await expect(chat.getByText("Copied.", { exact: true })).toHaveCount(0);
     await expect(retry).toHaveCount(0);
     await expect(composer).toHaveValue("untouched draft");
     // Feedback is overlaid, not inserted into the transcript's scrolling layout.
@@ -1526,18 +2144,71 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     expect(afterFeedback.height).toBe(beforeFeedback.height);
     // Native focus can round the Windows scroll offset by one CSS pixel.
     expect(Math.abs(afterFeedback.top - beforeFeedback.top)).toBeLessThanOrEqual(1);
+    await copyToast.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(copyToast).toHaveCount(0);
     const userCopy = chat.locator(".event.prompt").getByRole("button", { name: "Copy message" });
     await expectMessageCopy(userCopy);
     const userBubble = await chat.locator(".event.prompt pre").boundingBox();
     const userControl = await userCopy.boundingBox();
     expect(userControl?.y).toBeGreaterThanOrEqual((userBubble?.y ?? 0) + (userBubble?.height ?? 0));
-    await userCopy.click();
+    const userControls = userCopy.locator("..");
+    const userGlyph = userCopy.locator(".message-copy-glyph");
+    const userGeometry = () =>
+      userCopy.evaluate((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      });
+    const beforeCopy = await userGeometry();
+    await userCopy.hover();
+    await page.mouse.down();
+    await expect(userGlyph).not.toHaveCSS("transform", "none");
+    expect(await userGeometry()).toEqual(beforeCopy);
+    await page.mouse.up();
+    await expect(userGlyph).toHaveAttribute("data-clicked", "true");
+    await expect(userGlyph).toHaveCSS("animation-name", "message-copy-depress");
+    expect(await userGeometry()).toEqual(beforeCopy);
     expect((await clipboardValues()).at(-1)).toBe(prompt);
     await page.evaluate(() =>
       (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
     );
+    await expect(copyToast).toBeVisible();
+    await expect(userControls.getByRole("status")).toHaveCount(0);
+    expect(await userGeometry()).toEqual(beforeCopy);
+    await expect(userControls.locator(".message-copy-feedback")).toHaveText("");
+    await copyToast.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(copyToast).toHaveCount(0);
+    expect(await userGeometry()).toEqual(beforeCopy);
+    const firstGlyph = await userGlyph.elementHandle();
+    if (!firstGlyph) throw new Error("Missing copy glyph");
+    await userCopy.click();
+    expect(await firstGlyph.evaluate((element) => element.isConnected)).toBe(false);
+    await expect(userGlyph).toHaveCSS("animation-name", "message-copy-depress");
+    expect(await userGeometry()).toEqual(beforeCopy);
+    await page.evaluate(() =>
+      (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
+    );
+    await expect(copyToast).toBeVisible();
+    await expect(userControls.getByRole("status")).toHaveCount(0);
+    await copyToast.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(copyToast).toHaveCount(0);
+    await composer.focus();
+    await composer.hover();
+    await expect(userControls).toHaveCSS("opacity", "0");
+    await userControls.locator("time").hover();
+    await expect(userControls).toHaveCSS("opacity", "1");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(userControls).toHaveCSS("transition-duration", "0s");
+    await userCopy.focus();
+    await userCopy.press("Enter");
+    await expect(userGlyph).toHaveCSS("animation-name", "none");
+    await page.evaluate(() =>
+      (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
+    );
+    await expect(copyToast).toBeVisible();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await chat.getByRole("button", { name: "Stop", exact: true }).click();
     await expect(chat.locator(".turn-timer")).toContainText(/Worked for .+ \(cancelled\)/);
+    await expectTurnSeparator(chat.locator(".turn-separator"));
     const frozen = await chat.locator(".turn-timer").textContent();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(age).toHaveText("No messages yet");
@@ -1581,9 +2252,11 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     const popup = page.locator(`#chat-${id}`);
     await expect(popup).toBeVisible();
     await expect(popup.locator(".turn-timer")).toContainText("Working for");
+    await expect(popup.locator(".turn-separator")).toHaveCount(0);
     await popup.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(head).toContainText("Awaiting input");
     await expect(popup.locator(".turn-timer")).toContainText(/Worked for .+ \(finished\)/);
+    await expectTurnSeparator(popup.locator(".turn-separator"));
     const worked = await popup.locator(".turn-timer").textContent();
     await page.reload();
     await expect(head).not.toHaveAttribute("aria-current", "true");
@@ -1603,7 +2276,8 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(popup.locator(".event.prompt pre")).toHaveCSS("color", "rgb(0, 0, 0)");
     await expect(historical.getByRole("button", { name: "Copy message" })).toHaveText("");
     await historical.getByRole("button", { name: "Copy message" }).click();
-    await expect(historical.getByRole("status")).toHaveText("Copied.");
+    await expect(copyToast).toBeVisible();
+    await expect(historical.getByRole("status")).toHaveCount(0);
     // Native Windows clipboard text uses CRLF; the write harness above checks exact source.
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
       ["permission qol-approval: opt-allow_once  historical", "```code```", ""].join(
@@ -1613,11 +2287,12 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await selectSidebarPage(page, "Sessions");
     await expect(age).toHaveAttribute("aria-label", /current project sessions/);
     await expect(age).toHaveText(/Last message/);
-    await expect(page.locator(".app-footer")).toHaveCSS("height", "20px");
+    await expect(page.locator(".app-footer")).toHaveCSS("height", "24px");
+    await expect(page.locator(".app-footer")).toHaveCSS("padding-bottom", "4px");
     await page.evaluate(() => document.documentElement.style.setProperty("--button-size", "32px"));
     expect(
       await page.locator(".app-footer").evaluate((element) => element.clientHeight),
-    ).toBeGreaterThan(20);
+    ).toBeGreaterThan(24);
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -1640,10 +2315,11 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     let page = await enter();
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
     await expect(page.locator(".sidebar")).toHaveCSS("width", "220px");
-    // The project card and navigation items have square corners.
+    // Page surfaces stay square; project and navigation buttons use 5px corners.
     const sidebarHeader = page.locator(".sidebar-header");
     await expect(sidebarHeader).toHaveText("Open a project");
-    await expect(sidebarHeader).toHaveCSS("border-top-right-radius", "0px");
+    await expect(sidebarHeader).toHaveClass(/project-card/);
+    await expect(sidebarHeader).toHaveCSS("border-radius", "5px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
     await expect(tabs).toHaveCount(21);
@@ -1654,7 +2330,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
       }),
     );
     for (const [radius, shape] of tabCorners) {
-      expect(radius).toBe("0px");
+      expect(radius).toBe("5px");
       expect(shape).not.toMatch(/^(bevel|superellipse\(0\))$/);
     }
     const tabGaps = await page.locator("#table-pages button:visible").evaluateAll((elements) =>
@@ -1664,8 +2340,8 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         return element.getBoundingClientRect().top - previous.getBoundingClientRect().bottom;
       }),
     );
-    expect(tabGaps).toEqual(Array(6).fill(4));
-    await expect(page.locator(".page-tabs")).toHaveCSS("gap", "4px");
+    expect(tabGaps).toEqual(Array(6).fill(0));
+    await expect(page.locator(".page-tabs")).toHaveCSS("gap", "0px");
     const nativeTitlebarHeight = await page.evaluate(() => {
       const overlay = (
         navigator as Navigator & {
@@ -1681,7 +2357,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Settings", exact: true })).toHaveCSS(
       "border-top-right-radius",
-      "0px",
+      "5px",
     );
     await expectIconAction(page.getByRole("button", { name: "Settings pages", exact: true }));
     await expectTabAppearance(page);
@@ -1880,17 +2556,94 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     page.on("console", (entry) => {
       if (entry.type() === "error") errors.push(entry.text());
     });
-    // Without a previous project, the splash waits for the yellow Start button.
+    // The splash offers the shared project selector and optional entry without a project.
+    await page.emulateMedia({ colorScheme: "light" });
     const splash = page.locator(".splash");
     await expect(splash.locator(".splash-title")).toHaveText("Code60");
     await expect(splash.locator(".database-notice")).toContainText("No database connected");
-    await expect(splash.locator(".splash-title")).toHaveCSS("font-family", /^"?D-DIN"?/);
+    await expect(splash.locator(".splash-title")).toHaveCSS("font-family", /^"?IBM Plex Sans"?/);
     await expect(
       splash.getByRole("button", { name: "Connect to database", exact: true }),
     ).toBeFocused();
-    await expect(splash.getByRole("button")).toHaveCount(2);
+    await expect(splash.getByRole("button")).toHaveCount(7);
     await expectSplashLayout(page);
     await expectIndustrialSurfaces(page);
+    // The photo-free splash shares the application's solid theme surfaces.
+    // Legacy background preferences are ignored without rewriting storage.
+    for (const [theme, systemScheme, scheme] of [
+      ["dark", "light", "dark"],
+      ["system", "dark", "dark"],
+      ["system", "light", "light"],
+      ["light", "dark", "light"],
+    ] as const) {
+      await page.evaluate((value) => {
+        localStorage.setItem("code60.theme", value);
+        localStorage.setItem("code60.splashBackground", "circuit-blue");
+      }, theme);
+      await page.emulateMedia({ colorScheme: systemScheme });
+      await page.reload();
+      await expectSplashLayout(page, scheme);
+      expect(await page.evaluate(() => localStorage.getItem("code60.theme"))).toBe(theme);
+      expect(await page.evaluate(() => localStorage.getItem("code60.splashBackground"))).toBe(
+        "circuit-blue",
+      );
+      await expect(splash.getByRole("button")).toHaveCount(7);
+      await expect(splash.locator(".database-notice")).toHaveCSS(
+        "background-color",
+        scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+      );
+      expect(
+        await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
+      ).toBe(scheme);
+      if (theme === "system") {
+        const nextScheme = scheme === "dark" ? "light" : "dark";
+        await page.emulateMedia({ colorScheme: nextScheme });
+        await expectSplashLayout(page, nextScheme);
+        expect(await page.evaluate(() => localStorage.getItem("code60.theme"))).toBe("system");
+        await page.emulateMedia({ colorScheme: systemScheme });
+        await expectSplashLayout(page, scheme);
+      }
+    }
+    const themes = splash.getByRole("group", { name: "Color theme", exact: true });
+    await themes.getByRole("button", { name: "Dark mode", exact: true }).click();
+    await expectSplashLayout(page, "dark");
+    expect(await page.evaluate(() => localStorage.getItem("code60.theme"))).toBe("dark");
+    expect(await page.evaluate(() => localStorage.getItem("code60.splashBackground"))).toBe(
+      "circuit-blue",
+    );
+    const lightMode = themes.getByRole("button", { name: "Light mode", exact: true });
+    await lightMode.focus();
+    await page.keyboard.press("Space");
+    await expectSplashLayout(page);
+    await expect(lightMode).toBeFocused();
+    expect(await page.evaluate(() => localStorage.getItem("code60.theme"))).toBe("light");
+    await page.emulateMedia({ colorScheme: null });
+    await page.reload();
+    await expect(splash).not.toHaveAttribute("data-background");
+    await expectSplashLayout(page);
+    const originalViewport = await page.evaluate(() => ({
+      width: innerWidth,
+      height: innerHeight,
+    }));
+    for (const viewport of [
+      { width: 1600, height: 650 },
+      { width: 660, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expectSplashLayout(page);
+    }
+    await page.setViewportSize(originalViewport);
+    await page.emulateMedia({ forcedColors: "active" });
+    expect(await splash.evaluate((element) => getComputedStyle(element, "::before").content)).toBe(
+      "none",
+    );
+    expect(
+      await splash.evaluate((element) => getComputedStyle(element, "::before").backgroundImage),
+    ).toBe("none");
+    await expect(splash.getByRole("button")).toHaveCount(7);
+    await expect(splash.locator(".splash-projects")).toHaveCSS("opacity", "1");
+    await page.emulateMedia({ forcedColors: "none" });
+    await expectSplashLayout(page);
     await page.waitForTimeout(1500);
     await expect(splash).toBeVisible();
     await splash.getByRole("button", { name: "Start", exact: true }).click();
@@ -1962,6 +2715,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
     await expect(palette).toBeVisible();
+    await expect(palette).toHaveCSS("border-radius", "5px");
     const searchCommands = palette.getByRole("combobox", { name: "Search commands" });
     await expect(searchCommands).toBeFocused();
     await searchCommands.fill("new agent");
@@ -1971,10 +2725,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("Escape");
     await expect(palette).toHaveCount(0);
     await expect(connect).toBeFocused();
-    // Default interface text uses D-DIN Regular.
+    // Default interface text uses IBM Plex Sans Regular.
     await expect
       .poll(() => page.evaluate(() => getComputedStyle(document.body).fontFamily))
-      .toMatch(/^"?D-DIN"?/);
+      .toMatch(/^"?IBM Plex Sans"?/);
     expect(await page.evaluate(() => localStorage.getItem("code60.appearanceVersion"))).toBe(
       "theme-4",
     );
@@ -2068,7 +2822,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         "background-color",
         dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
       );
-      await expect(chatPopup.locator(".composer")).toHaveCSS("box-shadow", "none");
+      await expectComposerShadow(chatPopup.locator(".composer"));
       await expect(chatPopup.locator(".composer")).toHaveCSS("border-top-width", "1px");
       for (const message of await chatPopup.locator(".event.message").all())
         await expect(message).toHaveCSS("border-top-width", "0px");
@@ -2172,7 +2926,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       widths: ["0px", "0px", "0px", "0px"],
       left: 232,
       right: 12,
-      bottom: 32,
+      bottom: 36,
       clip: "none",
       barRule: ["0px", "none"],
       toolbarPadding: ["16px", "16px"],
@@ -2257,7 +3011,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const stamp = await pollingWidget.locator(".poll-timestamp").boundingBox();
     const footer = await page.locator(".app-footer").boundingBox();
     if (!stamp || !footer) throw new Error("Missing polling timestamp");
-    expect(Math.abs(stamp.y + stamp.height / 2 - footer.y - footer.height / 2)).toBeLessThan(1);
+    expect(Math.abs(stamp.y + stamp.height / 2 - footer.y - (footer.height - 4) / 2)).toBeLessThan(
+      1,
+    );
     await pollingWidget.screenshot({
       path: join(root, "test-results", "footer-polling-paused.png"),
     });
@@ -2287,7 +3043,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(chatHead).toHaveAttribute("aria-description", /1 approvals waiting/);
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
     await expectIndustrialSurfaces(page);
-    await expect(chatHead).toHaveCSS("font-family", /D-DIN/);
+    await expect(chatHead).toHaveCSS("font-family", /IBM Plex Sans/);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.getByLabel("Message", { exact: true })).toBeEnabled();
     await expect(page.locator(".event.message").first()).toContainText(
@@ -2602,11 +3358,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       }
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
-        /^"?D-DIN"?/,
+        /^"?IBM Plex Sans"?/,
       );
       await expect(page.locator(".event.message .chat-markdown").first()).toHaveCSS(
         "font-family",
-        /^"?D-DIN"?/,
+        /^"?IBM Plex Sans"?/,
       );
       // Outlined human messages keep contrasting text and no side rule.
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
@@ -2625,7 +3381,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       if (theme === "dark") {
         await page.mouse.move(1, 1);
         // The open worker conversation uses the shared navigation highlight.
-        await expect(chatHead).toHaveCSS("background-color", "rgb(48, 48, 48)");
+        await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(48, 48, 48)");
+        await expect(chatHead).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
         await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
         await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(0, 0, 0)");
         // Primary buttons stay filled in dark mode.
@@ -2675,16 +3432,18 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(headingCase).not.toBeChecked();
     await headingCase.check();
     await expect(typeface.locator("option")).toHaveText([
-      "Default (D-DIN)",
+      "Default (IBM Plex Sans)",
       "System",
       "Computer Modern",
       "D-DIN",
       "Georgia",
       "IBM Plex Sans",
       "IBM Plex Serif",
+      "Lexend",
       "Shantell Sans",
       "OCR-A",
       "Roboto",
+      "Space Grotesk",
       "Tahoma",
       "Verdana",
     ]);
@@ -2693,9 +3452,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       ["computer-modern", "CMU Serif"],
       ["ibm-plex-sans", "IBM Plex Sans"],
       ["ibm-plex-serif", "IBM Plex Serif"],
+      ["lexend", "Lexend"],
       ["shantell-sans", "Shantell Sans"],
       ["ocr-a", "OCR-A"],
       ["roboto", "Roboto"],
+      ["space-grotesk", "Space Grotesk"],
       ["georgia", "Georgia"],
       ["d-din", "D-DIN"],
     ] as const) {
@@ -2711,7 +3472,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
           }, family),
         )
         .toEqual([family, true]);
-      // Typefaces use normal tracking; data controls keep D-DIN and normal tracking.
+      // Typefaces use normal tracking; data controls keep IBM Plex Sans and normal tracking.
       const spacing = await page.evaluate(() => {
         const body = getComputedStyle(document.body);
         const select = getComputedStyle(document.querySelector("select") ?? document.body);
@@ -2721,7 +3482,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
             : Number.parseFloat(body.letterSpacing) / Number.parseFloat(body.fontSize);
         return [
           Math.round(em * 100) / 100,
-          select.fontFamily.includes("D-DIN") && select.letterSpacing === "normal",
+          select.fontFamily.includes("IBM Plex Sans") && select.letterSpacing === "normal",
         ];
       });
       expect(spacing).toEqual([0, true]);
@@ -2731,6 +3492,23 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         () => JSON.parse(localStorage.getItem("code60.textStyles") ?? "{}").normalText.typeface,
       ),
     ).toBe("d-din");
+    // Navigation defaults to 15px; explicit Button Text sizes still control it.
+    const buttonSize = page
+      .getByRole("group", { name: "Button Text", exact: true })
+      .getByLabel("Font size");
+    const resetText = page.getByRole("button", { name: "Reset text", exact: true });
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "15px");
+    await expect(resetText).toHaveCSS("font-size", "13px");
+    for (const size of [8, 13, 15, 16, 24, 32, 48]) {
+      await buttonSize.fill(String(size));
+      await expect(page.locator("#tab-chat")).toHaveCSS("font-size", `${size}px`);
+      await expect(page.locator("#tab-settings-text")).toHaveCSS("font-size", `${size}px`);
+      await expect(chatHead).toHaveCSS("font-size", `${size}px`);
+      await expect(resetText).toHaveCSS("font-size", `${size}px`);
+    }
+    await buttonSize.fill("");
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "15px");
+    await expect(resetText).toHaveCSS("font-size", "13px");
     // Settings never shows a worker overlay.
     await expect(chatPopup).toBeHidden();
     // Every role has independent controls; the case switches exclude one another.
@@ -2772,6 +3550,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(group.getByLabel("Typeface")).toHaveValue("georgia");
       await expect(group.getByRole("radio", { name: "Lowercase", exact: true })).toBeChecked();
     }
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "17px");
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-family", /Georgia/);
     await sessionsTab.click();
     if (!(await chatPopup.isVisible())) await chatHead.click();
     await expectChatFooterLayout();
@@ -2794,6 +3574,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(group.getByRole("radio", { name: "As written", exact: true })).toBeChecked();
     }
     await expect(page.locator(".settings-page-heading h1")).toHaveCSS("text-transform", "none");
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "15px");
+    await expect(page.locator("#tab-chat")).toHaveCSS("font-family", /IBM Plex Sans/);
+    await expect(page.getByRole("button", { name: "Reset text", exact: true })).toHaveCSS(
+      "font-size",
+      "13px",
+    );
     await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme")).toHaveValue("system");
     await expect(page.locator(".settings-page pre, .settings-page code")).toHaveCount(0);
@@ -2816,7 +3602,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectThemeContrast(page);
     await expectNeutralTheme(page);
     await page.mouse.move(1, 1);
-    await expect(chatHead).toHaveCSS("background-color", "rgb(48, 48, 48)");
+    await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(48, 48, 48)");
+    await expect(chatHead).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
     await expect
@@ -2847,27 +3634,40 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     again.on("console", (entry) => {
       if (entry.type() === "error") errors.push(entry.text());
     });
-    const offer = again.locator(".splash-prompt");
-    await expect(offer.getByRole("heading")).toHaveText("Continue repo?");
-    await expect(offer).toHaveText("Continue repo?NoYes");
-    const splashButtons = await offer.locator(".splash-actions button").evaluateAll((buttons) =>
-      buttons.map((button) => ({
-        label: button.textContent,
-        width: button.getBoundingClientRect().width,
-        x: button.getBoundingClientRect().x,
-      })),
-    );
-    expect(splashButtons.map((button) => button.label)).toEqual(["No", "Yes"]);
-    expect(splashButtons[0]?.width).toBe(splashButtons[1]?.width);
-    expect(splashButtons[0]?.width).toBeGreaterThanOrEqual(160);
-    expect(splashButtons[0]?.x).toBeLessThan(splashButtons[1]?.x ?? 0);
-    await again.screenshot({ path: "test-results/splash-equal-actions.png" });
+    const offer = again.locator(".splash-projects");
+    await expect(offer.getByRole("heading")).toHaveText("Open Project");
+    await expect(offer.getByRole("list", { name: "Recent projects" })).toBeVisible();
+    await expect(offer.locator(".project-item .path")).toHaveText(repo);
+    await expect(offer.getByRole("button", { name: "Open Folder", exact: true })).toBeEnabled();
+    await expect(offer.getByRole("button", { name: "Clear history", exact: true })).toHaveCount(0);
+    await expect(offer.getByRole("button", { name: "Remove repo from history" })).toBeEnabled();
+    await expect(offer.getByRole("button", { name: /^(Yes|No)$/ })).toHaveCount(0);
+    await again.screenshot({ path: "test-results/splash-project-sidebar.png" });
     await expectSplashLayout(again);
-    await expect(offer.getByRole("button", { name: "Yes", exact: true })).toBeFocused();
-    // The splash waits for an answer instead of closing by itself.
+    await expect(offer.locator(".project-item")).toBeFocused();
+    // Cancelling the native folder picker leaves the full selector and history intact.
+    await application.evaluate(({ dialog }) => {
+      const original = dialog.showOpenDialog;
+      dialog.showOpenDialog = async () => {
+        dialog.showOpenDialog = original;
+        return { canceled: true, filePaths: [] };
+      };
+    });
+    await offer.getByRole("button", { name: "Open Folder", exact: true }).click();
+    await expect(offer.locator(".project-item")).toBeEnabled();
+    expect((await again.evaluate(() => window.desktop.snapshot())).directory).toBeNull();
+    // Selecting a project asks for confirmation; Escape cancels without entering.
     await again.waitForTimeout(1500);
     await expect(offer).toBeVisible();
-    await offer.getByRole("button", { name: "Yes", exact: true }).click();
+    await offer.locator(".project-item").click();
+    const projectConfirmation = again.getByRole("dialog", { name: "Open project?", exact: true });
+    await expect(projectConfirmation).toContainText(repo);
+    expect((await again.evaluate(() => window.desktop.snapshot())).directory).toBeNull();
+    await again.keyboard.press("Escape");
+    await expect(projectConfirmation).toHaveCount(0);
+    await expect(offer.locator(".project-item")).toBeFocused();
+    await offer.locator(".project-item").click();
+    await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
     await selectSidebarPage(again, "Sessions");
     await expect(again.locator(".splash")).toHaveCount(0);
     await expect(again.locator("#panel-sessions .table-add-accessible")).toBeEnabled();
@@ -2918,16 +3718,26 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       ).windowControlsOverlay;
       const area = overlay.getTitlebarAreaRect();
       const bar = document.querySelector(".window-drag-strip");
+      const list = document.querySelector(".page-tabs");
+      if (!list) throw new Error("Missing navigation scroller");
+      const clipTop = list.getBoundingClientRect().top + list.clientTop;
       const buttons = [...document.querySelectorAll(".page-tabs button")]
         .filter((button) => button.getClientRects().length > 0)
         .map((button) => button.getBoundingClientRect());
       return {
         visible: overlay.visible,
-        clear: buttons.every((box) => box.top >= area.bottom),
+        // Scrolled rows can have negative bounds; their paint stays inside the native scrollport.
+        clear: buttons.every((box) => Math.max(box.top, clipTop) >= area.bottom),
+        clipping: getComputedStyle(list).overflowY,
         drag: bar ? getComputedStyle(bar).getPropertyValue("app-region") : "",
       };
     });
-    expect(titlebar).toEqual({ visible: true, clear: true, drag: "drag" });
+    expect(titlebar).toEqual({
+      visible: true,
+      clear: true,
+      clipping: "auto",
+      drag: "drag",
+    });
     // Table display settings are local and do not change other tables.
     const tableSettings = again
       .locator("#panel-sessions")
@@ -3078,12 +3888,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       ),
     ).toBe(true);
     if (windowSize) await resize(windowSize[0] ?? 0, windowSize[1] ?? 0);
-    // Answering No (here with Escape) closes the splash and leaves the project closed.
+    // Escape enters without opening a project, just like the sidebar's Start action.
     await application.close();
     application = await launch(directory, join(directory, "unused"), database);
     const third = await application.firstWindow();
-    const declined = third.locator(".splash-prompt");
-    await expect(declined.getByRole("button", { name: "No", exact: true })).toBeVisible();
+    const declined = third.locator(".splash-projects");
+    await expect(declined.getByRole("button", { name: "Start", exact: true })).toBeVisible();
     await third.keyboard.press("Escape");
     await expect(third.locator(".splash")).toHaveCount(0);
     await expect(third.locator("#panel-sessions .table-add-accessible")).toBeDisabled();
@@ -3154,45 +3964,44 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
       "13px",
     );
     await page.screenshot({ path: "test-results/agent-setup-select.png" });
-    await page.keyboard.press("Space");
-    await expect(wizard.getByRole("heading")).toHaveText(
-      "Would you like to connect another agent?",
-    );
-    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
-    expect(JSON.parse(await readFile(file, "utf8")).agentSetup).toBeUndefined();
-    for (const name of ["Codex", "Droid"]) {
-      await wizard.getByRole("button", { name: "Yes, add another", exact: true }).click();
-      await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveCount(0);
-      await wizard.getByRole("button", { name, exact: true }).click();
-      await expect(wizard.getByRole("heading")).toHaveText(
-        "Would you like to connect another agent?",
-      );
-    }
-    // Main process owns the verified set across reloads.
-    await page.reload();
-    await expect(wizard.getByRole("heading")).toHaveText(
-      "Would you like to connect another agent?",
-    );
-    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
-    await expect(wizard.locator(".agent-review li")).toHaveCount(3);
-    await page.screenshot({ path: "test-results/agent-setup-review.png" });
-    // An atomic preference write failure keeps the gate closed and permits retry.
+    // Selecting a connector also saves it, without any confirmation or review step.
+    // A failed atomic save stays on the result screen and Retry saves the verified result.
     const saved = await readFile(file, "utf8");
     await rm(file, { recursive: true });
     await mkdir(file);
-    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await page.keyboard.press("Space");
     await expect(wizard.getByRole("alert")).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).agentSetup?.complete).toBe(false);
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
+    await expect(wizard.getByText("Connected", { exact: true })).toHaveCount(0);
     await rm(file, { recursive: true });
     await writeFile(file, saved);
-    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
-    await expect(wizard).toHaveCount(0);
+    await wizard.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await expect(wizard.getByText("Connected", { exact: true })).toBeVisible();
+    expect(JSON.parse(await readFile(file, "utf8")).agentSetup.enabled).toEqual(["claude"]);
+    for (const name of ["Codex", "Droid"]) {
+      await wizard.getByRole("button", { name: "Add another agent", exact: true }).click();
+      await expect(wizard.getByRole("button", { name, exact: true })).toBeEnabled();
+      await expect(wizard).toHaveCount(1);
+      await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveCount(0);
+      await page.screenshot({ path: "test-results/agent-setup-add-another.png" });
+      await wizard.getByRole("button", { name, exact: true }).click();
+      await expect(wizard.getByRole("status")).toHaveText(`${name} connected`);
+      await expect(wizard.getByText("Connected", { exact: true })).toBeVisible();
+    }
+    await expect(
+      wizard.getByRole("button", { name: /finish setup|Review agents|Yes,|No,/i }),
+    ).toHaveCount(0);
     const record = JSON.parse(await readFile(file, "utf8")).agentSetup;
     expect(record).toMatchObject({
       version: 1,
       primary: "claude",
       enabled: ["claude", "codex", "droid"],
     });
+    await page.screenshot({ path: "test-results/agent-setup-connected.png" });
+    await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.evaluate(() => window.desktop.connectDatabase("create"));
     await expect
@@ -3202,19 +4011,25 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
     await selectSidebarPage(page, "Settings");
     await page.getByRole("button", { name: "Add agents", exact: true }).click();
     await wizard.getByRole("button", { name: "Kiro", exact: true }).click();
-    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
-    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Kiro connected");
+    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual([
+      "claude",
+      "codex",
+      "droid",
+      "kiro",
+    ]);
+    await wizard.getByRole("button", { name: "Close", exact: true }).click();
     await expect(wizard).toHaveCount(0);
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(chatId);
     await page.getByRole("button", { name: "Change primary", exact: true }).click();
     await wizard.getByRole("button", { name: "Codex", exact: true }).click();
-    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Codex connected");
     await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
     await page.screenshot({ path: "test-results/agent-setup-dark.png" });
-    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await page.keyboard.press("Escape");
     await expect(wizard).toHaveCount(0);
     await expect
       .poll(
@@ -3801,11 +4616,15 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
     await toggle.click();
+    await expect(page.locator(`#workers-${owner}`)).toHaveAttribute("inert", "");
+    await expect(page.locator(`#workers-${owner}`)).toHaveAttribute("aria-hidden", "true");
     await expect(children).toBeHidden();
     await expect(worker(a)).toBeVisible();
     await page.evaluate(() => window.desktop.poll(["history"]));
     await expect(children).toBeHidden();
     await row(owner).press("ArrowRight");
+    await expect(page.locator(`#workers-${owner}`)).not.toHaveAttribute("inert", "");
+    await expect(page.locator(`#workers-${owner}`)).toHaveAttribute("aria-hidden", "false");
     await expect(children).toBeVisible();
     await row(owner).press("ArrowRight");
     await expect(row(a)).toBeFocused();
@@ -3861,7 +4680,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
       await selectSettingsPage(page, "Appearance");
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await selectSidebarPage(page, "Chat");
-      await expect(worker(a).locator(".composer")).toHaveCSS("box-shadow", "none");
+      await expectComposerShadow(worker(a).locator(".composer"));
       await expect(worker(a).locator(".event.message").first()).toHaveCSS(
         "border-top-width",
         "0px",
@@ -4204,12 +5023,19 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     });
     const rowLines = tableSettings.getByRole("switch", { name: "Row lines", exact: true });
     await expect(rowLines).not.toBeChecked();
-    await expect(rowLines).toHaveCSS("border-top-right-radius", "0px");
+    await expect(rowLines).toHaveCSS("border-radius", "5px");
+    expect(
+      await rowLines.evaluate((element) => getComputedStyle(element, "::before").borderRadius),
+    ).toBe("5px");
     await tableSettings.getByLabel("Row density").focus();
     await page.keyboard.press("Tab");
     await expect(rowLines).toBeFocused();
     await expect(rowLines).toHaveCSS("outline-width", "0px");
     await rowLines.check();
+    await expect(rowLines).toHaveCSS("border-radius", "5px");
+    expect(
+      await rowLines.evaluate((element) => getComputedStyle(element, "::before").borderRadius),
+    ).toBe("5px");
     const switchState = await rowLines.evaluate(
       (element) => getComputedStyle(element, "::after").content,
     );
@@ -4552,7 +5378,7 @@ test("desktop: MCP badges, saved attribution and Server table controls", async (
   }
 });
 
-test("desktop: Chat landing, automatic ACP conversation, navigation, cancellation, and fresh startup", async () => {
+test("desktop: Chat landing, automatic ACP conversation, navigation, cancellation, and stopped startup", async () => {
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-chat-page-"));
   const firstProject = join(directory, "first-project");
@@ -4911,7 +5737,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(chat.getByRole("status")).toHaveText("Responding...");
     const composer = chat.getByRole("region", { name: "Chat composer" });
-    await expect(composer).toHaveCSS("border-top-right-radius", "0px");
+    await expect(composer).toHaveCSS("border-radius", "5px");
     await idleCard.click();
     await expect(chatList().locator(".chat-loader")).toHaveCount(0);
     await activeCard.click();
@@ -4931,7 +5757,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       await expect(composer).not.toHaveCSS("border-color", "rgba(0, 0, 0, 0)");
       await expect(composer).toHaveCSS("background-color", neutral);
       await expect(page.locator(".sidebar")).toHaveCSS("background-color", neutral);
-      await expect(composer).toHaveCSS("box-shadow", "none");
+      await expectComposerShadow(composer);
       await expect(chat.locator(".event.prompt pre").first()).toHaveCSS(
         "background-color",
         "rgba(0, 0, 0, 0)",
@@ -4949,7 +5775,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       await chat.getByRole("button", { name: "Stop", exact: true }).focus();
       await expectChatBorder(composer);
       await selectSidebarPage(page, "Chat");
-      await expect(composer).toHaveCSS("box-shadow", "none");
+      await expectComposerShadow(composer);
     }
     await page.emulateMedia({ forcedColors: "active" });
     await input().focus();
@@ -5001,6 +5827,9 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     ).rejects.toThrow("Use agent setup");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(unchanged);
     const prior = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id as string;
+    const priorPrompts = (await page.evaluate(() => window.desktop.snapshot())).chat.events.filter(
+      ({ event }) => event.type === "prompt",
+    ).length;
     const priorDirectory = (await page.evaluate(() => window.desktop.snapshot())).chat
       .directory as string;
     const recordFile = join(priorDirectory, ".code60", "runs", prior, "run.json");
@@ -5009,15 +5838,20 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     expect(() => process.kill(record.agentPid, 0)).toThrow();
     application = await launch(directory, firstProject, database);
     page = await application.firstWindow();
-    await page.getByRole("button", { name: "No", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     chat = page.locator("#panel-chat .orchestration-chat-page:visible");
     await expect(page.getByRole("tab", { name: "Chat", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(chat.locator(".activity-display")).toHaveCount(0);
-    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).not.toBe(prior);
-    await expect(chat.locator(".event.prompt, .event.message")).toHaveCount(0);
+    const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.chat.run?.id).toBe(prior);
+    expect(restored.chat.restored).toBe(true);
+    expect(restored.chat.workers).toEqual([]);
+    expect(restored.chat.events.filter(({ event }) => event.type === "prompt")).toHaveLength(
+      priorPrompts,
+    );
     expect(await readFile(join(first.chat.directory as string, "marker.txt"), "utf8")).toBe(
       "kept across launches",
     );
@@ -5442,6 +6276,349 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
   }
 });
 
+test("desktop: sidebar disclosure motion and stable pointer-pressed borders", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-motion-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const toggle = page.locator("#tables-toggle");
+    const group = page.locator("#table-pages");
+    if ((await toggle.getAttribute("aria-expanded")) === "true") {
+      await toggle.click();
+      await expect(group).toHaveCSS("display", "none");
+    }
+    const motion = await page.evaluate(async () => {
+      const control = document.getElementById("tables-toggle");
+      const contents = document.getElementById("table-pages");
+      if (!control || !contents) throw new Error("Missing table disclosure");
+      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const heightTransition = () => {
+        const transitions = contents.getAnimations();
+        const height = transitions.find(
+          (animation) =>
+            animation instanceof CSSTransition && animation.transitionProperty === "height",
+        );
+        if (!height) throw new Error("Missing sidebar height transition");
+        for (const animation of transitions) animation.pause();
+        return { height, transitions };
+      };
+      control.click();
+      await frame();
+      const opening = heightTransition();
+      const timing = opening.height.effect?.getTiming();
+      if (!timing || typeof timing.duration !== "number" || typeof timing.delay !== "number")
+        throw new Error("Missing timing");
+      opening.height.currentTime = timing.delay / 2;
+      const delayed = contents.getBoundingClientRect().height;
+      opening.height.currentTime = timing.delay + timing.duration / 2;
+      const openingMiddle = contents.getBoundingClientRect().height;
+      for (const animation of opening.transitions) animation.finish();
+      const full = contents.getBoundingClientRect().height;
+      control.click();
+      await frame();
+      const closing = heightTransition();
+      closing.height.currentTime = timing.delay / 2;
+      const closingDelayed = contents.getBoundingClientRect().height;
+      closing.height.currentTime = timing.delay + timing.duration / 2;
+      const closingMiddle = contents.getBoundingClientRect().height;
+      const closingInert = contents.inert && contents.getAttribute("aria-hidden") === "true";
+      document.getElementById("tab-logs")?.focus();
+      const closingFocusable = contents.contains(document.activeElement);
+      // Reverse halfway through closing, without waiting for a timer or unmounting children.
+      control.click();
+      await frame();
+      for (const animation of contents.getAnimations()) animation.finish();
+      const reversed = contents.getBoundingClientRect().height;
+      const reversedInert = contents.inert;
+      // Focusing a revealed destination also settles its container immediately.
+      control.click();
+      await frame();
+      control.click();
+      await frame();
+      document.getElementById("tab-logs")?.focus();
+      const focused = contents.getBoundingClientRect().height;
+      const focusTransition = getComputedStyle(contents).transitionProperty;
+      control.focus();
+      control.click();
+      await frame();
+      for (const animation of contents.getAnimations()) animation.finish();
+      return {
+        delay: timing.delay,
+        duration: timing.duration,
+        delayed,
+        openingMiddle,
+        full,
+        closingDelayed,
+        closingMiddle,
+        closingInert,
+        closingFocusable,
+        reversed,
+        reversedInert,
+        focused,
+        focusTransition,
+        closed: contents.getBoundingClientRect().height,
+      };
+    });
+    expect(motion.delay).toBe(20);
+    expect(motion.duration).toBe(175);
+    expect(motion.delayed).toBe(0);
+    expect(motion.openingMiddle).toBeGreaterThan(0);
+    expect(motion.openingMiddle).toBeLessThan(motion.full);
+    expect(motion.closingDelayed).toBe(motion.full);
+    expect(motion.closingMiddle).toBeGreaterThan(0);
+    expect(motion.closingMiddle).toBeLessThan(motion.full);
+    expect(motion.closingInert).toBe(true);
+    expect(motion.closingFocusable).toBe(false);
+    expect(motion.reversed).toBe(motion.full);
+    expect(motion.reversedInert).toBe(false);
+    expect(motion.focused).toBe(motion.full);
+    expect(motion.focusTransition).toBe("none");
+    expect(motion.closed).toBe(0);
+    await expect(group).toHaveCSS("display", "none");
+    for (const media of [
+      { reducedMotion: "reduce" as const, forcedColors: "none" as const },
+      { reducedMotion: "no-preference" as const, forcedColors: "active" as const },
+    ]) {
+      await page.emulateMedia(media);
+      await toggle.click();
+      await expect(group).toHaveCSS("transition-property", "none");
+      await expect(group).toHaveAttribute("aria-hidden", "false");
+      await toggle.click();
+      await expect(group).toHaveCSS("display", "none");
+      await expect(group).toHaveAttribute("inert", "");
+    }
+    await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
+    await page.evaluate(() => {
+      const probes = document.createElement("div");
+      probes.id = "pointer-border-probes";
+      probes.style.cssText = "position:fixed;right:20px;top:40px;z-index:9999";
+      for (const kind of ["regular", "primary"]) {
+        const button = document.createElement("button");
+        button.id = `pointer-border-${kind}`;
+        button.className = kind === "primary" ? "primary" : "";
+        button.textContent = `Border ${kind}`;
+        probes.append(button);
+      }
+      document.body.append(probes);
+    });
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.focusHighlight = "on";
+      }, theme);
+      for (const control of [
+        toggle,
+        page.locator("#pointer-border-regular"),
+        page.locator("#pointer-border-primary"),
+      ]) {
+        await control.hover();
+        const border = await control.evaluate((element) => getComputedStyle(element).borderColor);
+        await page.mouse.down();
+        try {
+          await expect(control).toHaveCSS("border-color", border);
+          // A `none` outline can retain the UA's computed medium width.
+          await expect(control).toHaveCSS("outline-style", "none");
+          await expect(control).toHaveCSS("box-shadow", "none");
+        } finally {
+          await page.mouse.up();
+        }
+      }
+    }
+    await page.evaluate(() => document.getElementById("pointer-border-probes")?.remove());
+    await toggle.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveCSS("outline-width", "2px");
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: transition preferences halve legacy values once and retain subsequent edits", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-halved-transitions-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
+    const labels = ["Reply entrance", "Scroll response", "Activity fade", "Activity dropdown"];
+    for (const label of labels)
+      await expect(page.getByLabel(`${label} in milliseconds`, { exact: true })).toHaveValue("175");
+    await page.evaluate(() => {
+      localStorage.setItem(
+        "code60.transitionTimes",
+        JSON.stringify({
+          replyEntrance: 350,
+          scrollResponse: 1000,
+          activityFade: 0,
+          activityDetails: 30_000,
+        }),
+      );
+    });
+    await page.reload();
+    await selectSettingsPage(page, "Appearance");
+    for (const [index, value] of [175, 500, 0, 15_000].entries())
+      await expect(
+        page.getByLabel(`${labels[index]} in milliseconds`, { exact: true }),
+      ).toHaveValue(String(value));
+    const entrance = page.getByLabel("Reply entrance in milliseconds", { exact: true });
+    await entrance.fill("900");
+    await expect(page.locator("html")).toHaveCSS("--chat-reply-duration", "900ms");
+    await page.reload();
+    await selectSettingsPage(page, "Appearance");
+    await expect(entrance).toHaveValue("900");
+    await expect(page.getByLabel("Scroll response in milliseconds", { exact: true })).toHaveValue(
+      "500",
+    );
+    await page.getByRole("button", { name: "Reset transitions", exact: true }).click();
+    for (const label of labels)
+      await expect(page.getByLabel(`${label} in milliseconds`, { exact: true })).toHaveValue("175");
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: scrollbars keep content geometry stable across wrapping and overflow", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-stable-scrollbars-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
+    for (const [theme, forcedColors] of [
+      ["light", "none"],
+      ["dark", "none"],
+      ["dark", "active"],
+    ] as const) {
+      await page.getByLabel("Theme", { exact: true }).selectOption(theme);
+      await page.emulateMedia({ forcedColors });
+      const measurements = await page.evaluate(() => {
+        const vertical = [
+          "page-tabs",
+          "settings-page",
+          "prompt-editor",
+          "commands-scroll",
+          "transcript",
+          "table-settings-body",
+          "project-list",
+          "file-tree",
+          "agent-setup-body",
+          "harness-mode-menu",
+          "revision-list",
+          "review-panel",
+          "review-files",
+          "git-setup-body",
+          "plan-document",
+          "tactics-list",
+          "tactic-content",
+        ].map((name) => {
+          // Use the shipped scroll-container styles, without changing live app content.
+          const pane = document.createElement("div");
+          pane.className = name;
+          pane.style.cssText =
+            "position:fixed;left:0;top:0;width:400px;height:80px;min-width:0;min-height:0;max-width:none;max-height:none;padding:0;margin:0;flex:none;box-sizing:border-box";
+          const content = document.createElement("div");
+          content.style.cssText =
+            "display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));flex:none";
+          for (let index = 0; index < 6; index++) {
+            const cell = document.createElement("div");
+            cell.style.height = "20px";
+            content.append(cell);
+          }
+          pane.append(content);
+          document.body.append(pane);
+          try {
+            const sample = () => ({
+              reserved: pane.offsetWidth - pane.clientWidth,
+              overflow: pane.scrollHeight > pane.clientHeight,
+            });
+            const wide = sample();
+            pane.style.width = "180px";
+            const narrow = sample();
+            content.style.display = "none";
+            const empty = sample();
+            content.style.display = "grid";
+            const restored = sample();
+            return {
+              name,
+              gutter: getComputedStyle(pane).scrollbarGutter,
+              wide,
+              narrow,
+              empty,
+              restored,
+            };
+          } finally {
+            pane.remove();
+          }
+        });
+        const horizontal = ["file-tabs", "table-control-group", "tactic-workflow", "code"].map(
+          (name) => {
+            const host = document.createElement("div");
+            host.className = "event message";
+            host.style.position = "fixed";
+            const markdown = document.createElement("div");
+            markdown.className = "chat-markdown";
+            const pane = document.createElement(name === "code" ? "pre" : "div");
+            pane.className = name === "code" ? "" : name;
+            pane.style.cssText =
+              "position:fixed;left:0;top:0;width:400px;min-width:0;max-width:none;padding:0;margin:0;flex:none;box-sizing:border-box";
+            const content = document.createElement("div");
+            content.style.cssText = "width:300px;height:20px;flex:none";
+            pane.append(content);
+            markdown.append(pane);
+            host.append(markdown);
+            document.body.append(host);
+            try {
+              const sample = () => ({
+                height: pane.getBoundingClientRect().height,
+                overflow: pane.scrollWidth > pane.clientWidth,
+              });
+              const wide = sample();
+              pane.style.width = "180px";
+              return {
+                name,
+                overflowX: getComputedStyle(pane).overflowX,
+                wide,
+                narrow: sample(),
+              };
+            } finally {
+              host.remove();
+            }
+          },
+        );
+        return { vertical, horizontal };
+      });
+      for (const pane of measurements.vertical) {
+        expect(pane.gutter, pane.name).toBe("stable");
+        expect(pane.wide.overflow, pane.name).toBe(false);
+        expect(pane.narrow.overflow, pane.name).toBe(true);
+        expect(pane.empty.overflow, pane.name).toBe(false);
+        expect(pane.restored.overflow, pane.name).toBe(true);
+        for (const state of [pane.narrow, pane.empty, pane.restored])
+          expect(state.reserved, pane.name).toBe(pane.wide.reserved);
+      }
+      for (const pane of measurements.horizontal) {
+        expect(pane.overflowX, pane.name).toBe("scroll");
+        expect(pane.wide.overflow, pane.name).toBe(false);
+        expect(pane.narrow.overflow, pane.name).toBe(true);
+        expect(pane.narrow.height, pane.name).toBe(pane.wide.height);
+      }
+      await expectNavigationHighlight(
+        page,
+        page.locator(".sidebar [data-nav-active='true']:visible"),
+      );
+    }
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: focus highlight is opt-in, immediate, and persistent", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-focus-highlight-"));
   const database = join(directory, "projects.sqlite");
@@ -5458,6 +6635,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
       await expect(toggle).toBeFocused();
     };
     await expect(toggle).not.toBeChecked();
+    await expectIndustrialSurfaces(page);
     await expect(page.locator("html")).toHaveAttribute("data-focus-highlight", "off");
     await keyboardFocus();
     await expect(toggle).toHaveCSS("outline-width", "0px");
@@ -5470,6 +6648,7 @@ test("desktop: focus highlight is opt-in, immediate, and persistent", async () =
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);
       await keyboardFocus();
       await expect(toggle).toHaveCSS("outline-width", "2px");
+      await expectIndustrialSurfaces(page);
     }
     await page.reload();
     await selectSettingsPage(page, "Appearance");
@@ -5519,6 +6698,7 @@ test("desktop: Text settings preview each role, switch case and reset per role",
     await expect(panel.locator(".text-style")).toHaveCount(6);
     await expect(panel.locator(".settings-group-reset")).toHaveCount(0);
     const group = panel.getByRole("group", { name: "Agent Chat Messages", exact: true });
+    await expectIndustrialSurfaces(page);
     const preview = group.locator(".text-style-preview");
     await expect(preview).toHaveCSS("font-size", "14px");
     await expect(group.getByRole("button", { name: "Reset Agent Chat Messages" })).toHaveCount(0);
@@ -5776,7 +6956,9 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
     const divider = panel.getByRole("button", { name: "Resize files panel", exact: true });
     const chatWidth = (await page.locator(".chat-workspace-body").boundingBox())?.width ?? 0;
-    await expect.poll(async () => (await panel.boundingBox())?.width).toBe(chatWidth / 2);
+    await expect
+      .poll(async () => Math.abs(((await panel.boundingBox())?.width ?? 0) - chatWidth * 0.2))
+      .toBeLessThan(2);
     const initialWidth = (await panel.boundingBox())?.width ?? 0;
     await expect(divider).toHaveCSS("border-left-width", "0px");
     await expect(toggle).toHaveAttribute("title", "Close files panel");
@@ -5787,7 +6969,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       Math.abs((plus?.x ?? 0) - (lastTab?.x ?? 0) - (lastTab?.width ?? 0)),
     ).toBeLessThanOrEqual(5);
     expect(Math.abs((plus?.y ?? 0) - (drawer?.y ?? 0))).toBeLessThan(3);
-    expect(Math.abs(initialWidth - chatWidth / 2)).toBeLessThan(2);
+    expect(Math.abs(initialWidth - chatWidth * 0.2)).toBeLessThan(2);
     await divider.focus();
     await divider.press("ArrowLeft");
     await expect.poll(async () => (await panel.boundingBox())?.width).toBe(initialWidth + 20);
@@ -5822,10 +7004,17 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(files).toHaveCount(0);
     await expect(inspector.locator(".view-lines")).toContainText("row0");
     await expect(inspector.locator("textarea")).toHaveAttribute("readonly", "true");
+    // Monaco hides its find options in narrow panels. Exercise their focus styles at full width.
+    for (let step = 0; step < 10; step++) {
+      const target = ((await panel.boundingBox())?.width ?? 0) + 20;
+      await divider.press("ArrowLeft");
+      await expect.poll(async () => (await panel.boundingBox())?.width).toBe(target);
+    }
     await inspector.getByRole("textbox", { name: "Read-only file content", exact: true }).focus();
     await page.keyboard.press("ControlOrMeta+f");
     const findClose = inspector.locator(".find-widget .codicon-widget-close");
     await expect(findClose).toBeVisible();
+    await expect(inspector.locator(".find-widget .codicon-case-sensitive")).toBeVisible();
     // Test the hover style independently of native window cursor updates. Electron
     // can drop synthetic mouse moves over Monaco on both macOS and Windows.
     const devtools = await page.context().newCDPSession(page);
@@ -5833,6 +7022,92 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await devtools.send("CSS.enable");
     try {
       const { root } = await devtools.send("DOM.getDocument");
+      const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+      await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+      await page.getByRole("note", { name: "Running Code60 version" }).hover();
+      const leftNavigation = page.locator("#tab-prompts");
+      await expect(leftNavigation).toHaveCSS("transition-property", "background-color");
+      await expect(leftNavigation).toHaveCSS("transition-duration", "0.175s");
+      await expect(leftNavigation).toHaveCSS("transition-delay", "0.02s");
+      try {
+        for (const selected of [true, false]) {
+          const selector = `.file-tabs .file-tab[data-selected="${selected}"]`;
+          const row = tabs.locator(`.file-tab[data-selected="${selected}"]`).first();
+          const label = row.getByRole("tab");
+          const close = row.getByRole("button", { name: /^Close / });
+          const { nodeId } = await devtools.send("DOM.querySelector", {
+            nodeId: root.nodeId,
+            selector,
+          });
+          const { nodeId: labelId } = await devtools.send("DOM.querySelector", {
+            nodeId,
+            selector: '[role="tab"]',
+          });
+          const { nodeId: closeId } = await devtools.send("DOM.querySelector", {
+            nodeId,
+            selector: ".file-tab-close",
+          });
+          await expect(row).toHaveCSS("transition-property", "background-color");
+          await expect(row).toHaveCSS("transition-duration", "0.175s");
+          await expect(row).toHaveCSS("transition-delay", "0.02s");
+          for (const theme of ["light", "dark"]) {
+            await page.evaluate((theme) => {
+              document.documentElement.dataset.theme = theme;
+            }, theme);
+            const colors = await row.evaluate((element) => {
+              const probe = document.createElement("span");
+              document.body.append(probe);
+              const read = (token: string) => {
+                probe.style.backgroundColor = `var(${token})`;
+                return getComputedStyle(probe).backgroundColor;
+              };
+              const result = {
+                selected: read("--accent-bg"),
+                hover: read("--hover-bg"),
+                active: element.getAttribute("data-selected") === "true",
+              };
+              probe.remove();
+              return result;
+            });
+            const resting = colors.active ? colors.selected : "rgba(0, 0, 0, 0)";
+            await expect(row).toHaveCSS("background-color", resting);
+            await devtools.send("CSS.forcePseudoState", {
+              nodeId,
+              forcedPseudoClasses: ["hover"],
+            });
+            for (const target of [labelId, closeId]) {
+              await devtools.send("CSS.forcePseudoState", {
+                nodeId: target,
+                forcedPseudoClasses: ["hover"],
+              });
+              await expect(row).toHaveCSS("background-color", colors.hover);
+              await expect(label).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+              await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+              await devtools.send("CSS.forcePseudoState", {
+                nodeId: target,
+                forcedPseudoClasses: [],
+              });
+            }
+            await devtools.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
+            await expect(row).toHaveCSS("background-color", resting);
+            await expect(row).toHaveCSS("transition-delay", "0.02s");
+          }
+        }
+        for (const media of [
+          { reducedMotion: "reduce" as const, forcedColors: "none" as const },
+          { reducedMotion: "no-preference" as const, forcedColors: "active" as const },
+        ]) {
+          await page.emulateMedia(media);
+          await expect(leftNavigation).toHaveCSS("transition-property", "none");
+          await expect(tabs.locator(".file-tab").first()).toHaveCSS("transition-property", "none");
+        }
+      } finally {
+        await page.evaluate((theme) => {
+          if (theme === undefined) delete document.documentElement.dataset.theme;
+          else document.documentElement.dataset.theme = theme;
+        }, originalTheme);
+        await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+      }
       for (const icon of ["widget-close", "case-sensitive"]) {
         const selector = `.find-widget .codicon-${icon}`;
         const control = inspector.locator(selector);
@@ -5863,6 +7138,12 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       await devtools.detach();
     }
     await findClose.click();
+    for (let step = 0; step < 10; step++) {
+      const target = ((await panel.boundingBox())?.width ?? 0) - 20;
+      await divider.press("ArrowRight");
+      await expect.poll(async () => (await panel.boundingBox())?.width).toBe(target);
+    }
+    await expect.poll(async () => (await panel.boundingBox())?.width).toBe(resizedWidth);
     await inspector.getByRole("textbox", { name: "Read-only file content", exact: true }).focus();
     await page.keyboard.press("Shift+ArrowRight");
     await expect(inspector.locator(".selected-text")).toHaveCount(1);
@@ -5933,7 +7214,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     expect(await toggle.evaluate((element) => element.closest(".file-panel") === null)).toBe(true);
     await expect.poll(fileContext).toBeNull();
     await toggle.click();
-    await expect(panel).toHaveCSS("width", `${resizedWidth}px`);
+    await expect.poll(async () => (await panel.boundingBox())?.width).toBe(resizedWidth);
     await expect(panel).toHaveCSS("transition-property", "width");
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(panel).toHaveCSS("transition-duration", "0s");
@@ -6197,10 +7478,95 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     const modal = page.getByRole("dialog", { name: "Open Project", exact: true });
     const done = page.getByRole("group", { name: "Done notification", exact: true });
     await expect(card).toHaveText("Connect to database");
-    await card.click();
+    const databaseAction = page
+      .locator(".app-footer")
+      .getByRole("button", { name: "Select or create database", exact: true });
+    const returnAction = page.getByRole("button", { name: "return to splash page", exact: true });
+    await expect(returnAction).toHaveAttribute("title", "return to splash page");
+    await expect(returnAction.locator("svg")).toHaveCount(1);
+    await expect(card).toHaveCSS("height", "40px");
+    await expect(card).toHaveCSS("justify-content", "center");
+    await expect(card).toHaveCSS("text-align", "center");
+    await expect(card).toHaveCSS("padding-left", "12px");
+    await expect(card).toHaveCSS("padding-right", "12px");
+    const sidebarGaps = await page
+      .locator(
+        ".sidebar-content, .sidebar .page-tab-list, .chat-sidebar-list, .chat-sidebar-group, .chat-worker-children",
+      )
+      .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).rowGap));
+    expect(sidebarGaps.length).toBeGreaterThan(0);
+    expect(sidebarGaps.every((gap) => gap === "0px")).toBe(true);
+    await expect(page.locator("#tab-chat")).toHaveCSS("height", "40px");
+    // 15px labels use 22.5px icons, 12px leading space and an 8px label gap.
+    await expect(page.locator("#tab-chat")).toHaveCSS("padding-left", "42.5px");
+    await expect(databaseAction).toHaveCSS("height", "20px");
+    await expect(returnAction).toHaveCSS("height", "20px");
+    await expect(page.locator(".app-footer")).toHaveCSS("padding-bottom", "4px");
+    const timestampStyle = await page.locator(".poll-timestamp").evaluate((element) => ({
+      color: getComputedStyle(element).color,
+      opacity: getComputedStyle(element).opacity,
+    }));
+    await expect(databaseAction).toHaveCSS("color", timestampStyle.color);
+    await expect(databaseAction.locator("svg")).toHaveCSS("color", timestampStyle.color);
+    await expect(databaseAction).toHaveCSS("opacity", timestampStyle.opacity);
+    const bottomSpace = await page.evaluate(() =>
+      [".poll-timestamp", ".footer-splash", ".footer-database", ".app-version"].map((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error("Missing footer item");
+        return innerHeight - element.getBoundingClientRect().bottom;
+      }),
+    );
+    for (const space of bottomSpace) expect(space).toBeGreaterThanOrEqual(4);
+    await expect(
+      page
+        .getByRole("navigation", { name: "Sidebar" })
+        .getByRole("button", { name: "Select or create database", exact: true }),
+    ).toHaveCount(0);
+    const actionBounds = await databaseAction.boundingBox();
+    const returnBounds = await returnAction.boundingBox();
+    const sidebarBounds = await page.locator(".sidebar").boundingBox();
+    const timestampBounds = await page.locator(".poll-timestamp").boundingBox();
+    expect(actionBounds && sidebarBounds && timestampBounds).toBeTruthy();
+    if (!actionBounds || !returnBounds || !sidebarBounds || !timestampBounds)
+      throw new Error("Footer database action or Last Message indicator is missing");
+    expect(returnBounds.x + returnBounds.width).toBeLessThan(actionBounds.x);
+    expect(returnBounds.x).toBeGreaterThanOrEqual(timestampBounds.x + timestampBounds.width);
+    expect(
+      Math.abs(
+        actionBounds.y + actionBounds.height / 2 - timestampBounds.y - timestampBounds.height / 2,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(actionBounds.x).toBeGreaterThanOrEqual(timestampBounds.x + timestampBounds.width);
+    expect(
+      Math.abs(actionBounds.x + actionBounds.width - sidebarBounds.x - sidebarBounds.width),
+    ).toBeLessThanOrEqual(10);
+    const resizeSidebar = page.getByRole("button", {
+      name: "Resize navigation sidebar",
+      exact: true,
+    });
+    await resizeSidebar.press("ArrowRight");
+    await expect
+      .poll(async () => (await databaseAction.boundingBox())?.x)
+      .toBe(actionBounds.x + 20);
+    await resizeSidebar.press("ArrowLeft");
+    await expect.poll(() => databaseAction.boundingBox()).toEqual(actionBounds);
+    await page.locator(".page-tabs").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    expect(await databaseAction.boundingBox()).toEqual(actionBounds);
+    await databaseAction.focus();
+    await databaseAction.press("Enter");
     const databaseModal = page.getByRole("dialog", { name: "Select database", exact: true });
+    await expect(
+      databaseModal.getByRole("button", { name: "Open existing database…", exact: true }),
+    ).toBeVisible();
     await databaseModal.getByRole("button", { name: "Create database…", exact: true }).click();
     await expect(databaseModal).toHaveCount(0);
+    await databaseAction.click();
+    await expect(databaseModal).toContainText("Connected to");
+    await databaseModal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(databaseModal).toHaveCount(0);
+    await expect(databaseAction).toBeFocused();
     await expect(card).toHaveText("Open a project");
     await expect(card).toHaveCSS("border-top-width", "0px");
     await expect(card).toHaveCSS("background-image", "none");
@@ -6209,12 +7575,13 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
       .locator(".sidebar")
       .evaluate((element) => getComputedStyle(element).backgroundColor);
     await expect(card).toHaveCSS("background-color", sidebarFill);
-    await expect(card.locator("svg")).toHaveCount(1);
+    await expect(card.locator("svg")).toHaveCount(0);
     await page.screenshot({ path: "test-results/project-card-empty.png" });
     await card.focus();
     await card.press("Enter");
     await expect(modal).toBeVisible();
     await expect(modal.getByText("No recent projects.")).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Clear history", exact: true })).toHaveCount(0);
     await expect(modal.getByRole("button", { name: "Close Open Project" })).toBeEnabled();
     await page.keyboard.press("Escape");
     await expect(modal).toHaveCount(0);
@@ -6230,6 +7597,17 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, folder);
+    // Cancelling the native confirmation also leaves the current project/history untouched.
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
+    await expect(modal).toBeVisible();
+    await expect(card).toHaveText("Open a project");
+    await expect(modal.getByText("No recent projects.")).toBeVisible();
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
     await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveText("project-one");
@@ -6249,12 +7627,88 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await done.getByRole("button", { name: "Dismiss notification" }).click();
     await card.click();
     await modal.locator(".project-item").filter({ hasText: "project-one" }).click();
+    const projectConfirmation = page.getByRole("dialog", { name: "Open project?", exact: true });
+    await expect(projectConfirmation).toContainText(folder);
+    await projectConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(card).toHaveText("project-two");
+    await expect(modal).toBeVisible();
+    await modal.locator(".project-item").filter({ hasText: "project-one" }).click();
+    const temporarilyMissing = `${folder}-missing`;
+    await rename(folder, temporarilyMissing);
+    await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
+    await expect(projectConfirmation.getByRole("alert")).toBeVisible();
+    await expect(card).toHaveText("project-two");
+    await rename(temporarilyMissing, folder);
+    await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
     await expect(card).toHaveText("project-one");
     await expect(done).toContainText("Opened project-one.");
+    await done.getByRole("button", { name: "Dismiss notification" }).click();
+    const beforeReturn = await page.evaluate(() => window.desktop.snapshot());
+    await returnAction.click();
+    await expect(page.locator(".splash-projects")).toBeVisible();
+    await expect(page.locator(".splash-projects .project-list > li")).toHaveCount(2);
+    const afterReturn = await page.evaluate(() => window.desktop.snapshot());
+    expect(afterReturn.directory).toBe(beforeReturn.directory);
+    expect(afterReturn.chats.map((chat) => chat.directory)).toEqual(
+      beforeReturn.chats.map((chat) => chat.directory),
+    );
+    // Confirming the already-open folder must re-enter even without a directory change.
+    await page.locator(".splash-projects .project-item").filter({ hasText: "project-one" }).click();
+    await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
+    await expect(page.locator(".splash")).toHaveCount(0);
+    await done.getByRole("button", { name: "Dismiss notification" }).click();
+    await returnAction.click();
+    // The open project and reload marker must not immediately dismiss an explicit return.
+    await page.reload();
+    await expect(page.locator(".splash-projects")).toBeVisible();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.locator(".splash")).toHaveCount(0);
+    await expect(card).toHaveText("project-one");
+    await page.getByRole("button", { name: "Tables", exact: true }).click();
+    await expect(page.locator("#tab-sessions")).toHaveCSS("padding-left", "66.5px");
+    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    await expect(page.locator("#tab-settings-appearance")).toHaveCSS("padding-left", "66.5px");
+    await page.getByRole("button", { name: "Advanced", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Experiments", exact: true })).toHaveCSS(
+      "padding-left",
+      "90.5px",
+    );
+    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await expect(page.locator("#tab-episodic-memory")).toHaveCSS("padding-left", "114.5px");
     await page.evaluate(() =>
       window.desktop.start({ agents: ["claude"], allow: [], allowAll: false }),
     );
     await expect(card).toBeDisabled();
+    await expect(databaseAction).toBeDisabled();
+    await expect(returnAction).toBeEnabled();
+    await returnAction.click();
+    const activeSplash = page.locator(".splash-projects");
+    await expect(activeSplash.getByRole("status")).toContainText(
+      "Finish or stop all runs before switching projects.",
+    );
+    await expect(activeSplash.locator(".project-item").first()).toBeEnabled();
+    await expect(activeSplash.locator(".project-remove").first()).toBeEnabled();
+    await activeSplash.getByRole("button", { name: "Open Folder", exact: true }).click();
+    await expect(activeSplash.getByRole("alert")).toHaveText(
+      "Finish or stop all runs before switching projects.",
+    );
+    await activeSplash.locator(".project-item").filter({ hasText: "project-two" }).click();
+    await expect(projectConfirmation).toBeVisible();
+    await expect(projectConfirmation).toContainText(
+      "Finish or stop all runs before switching projects.",
+    );
+    await expect(
+      projectConfirmation.getByRole("button", { name: "Open project", exact: true }),
+    ).toBeDisabled();
+    await projectConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await activeSplash.getByRole("button", { name: "Remove project-two from history" }).click();
+    await expect(activeSplash.locator(".project-item")).toHaveCount(1);
+    await expect(activeSplash.locator(".project-item")).toContainText("project-one");
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
+    const activeAfterWelcomeActions = await page.evaluate(() => window.desktop.snapshot());
+    expect(activeAfterWelcomeActions.active).toBe(true);
+    expect(activeAfterWelcomeActions.directory).toBe(beforeReturn.directory);
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     await card.hover();
     await expect(card).toHaveCSS("background-color", sidebarFill);
     await expect(card).toHaveCSS("background-image", "none");
@@ -6311,11 +7765,12 @@ test("desktop: agent setup wizard handles missing agents, authentication, timeou
     agents.codex.command = command;
     await writeFile(configFile, JSON.stringify({ agents }));
     await wizard.getByRole("button", { name: "Retry", exact: true }).click();
-    await expect(wizard.getByRole("heading")).toHaveText(
-      "Would you like to connect another agent?",
-    );
-    await wizard.getByRole("button", { name: "No, finish setup", exact: true }).click();
-    await wizard.getByRole("button", { name: "Finish setup", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Codex connected");
+    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
+    await wizard.getByRole("button", { name: "Add another agent", exact: true }).click();
+    await connect("Claude");
+    await expect(wizard.getByRole("alert")).toContainText("log in");
+    await wizard.getByRole("button", { name: "Close", exact: true }).click();
     await expect(wizard).toHaveCount(0);
     expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
   } finally {
@@ -6767,14 +8222,16 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
       "Regression",
     );
     const modified = review.getByRole("textbox", { name: "Modified review version" });
-    const beforeTyping = await review
-      .locator(".modified .view-lines:not([monaco-view-zone])")
-      .textContent();
     await modified.focus();
     await modified.press("ControlOrMeta+Home");
+    // Monaco virtualizes horizontally. Wait for the complete fixture after revealing its start.
+    const beforeTyping = "export const source = 'Regression tests';export const optional = false;";
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
+      beforeTyping,
+    );
     await modified.press("x");
     await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
-      beforeTyping ?? "",
+      beforeTyping,
     );
     await expect(
       review.locator("form, .review-feedback, .task-actions, .review-heading"),
@@ -6806,7 +8263,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
       "true",
     );
     await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toHaveText(
-      beforeTyping ?? "",
+      beforeTyping,
     );
     await page.getByRole("tab", { name: "Changes", exact: true }).click();
     const revisions = page.getByRole("navigation", { name: "Task revisions" }).getByRole("button");
@@ -6860,7 +8317,11 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await application.close();
     application = await launch(directory, repo, database);
     page = await application.firstWindow();
-    await page.getByRole("button", { name: "Yes", exact: true }).click();
+    await page.locator(".splash-projects .project-item").filter({ hasText: repo }).click();
+    await page
+      .getByRole("dialog", { name: "Open project?", exact: true })
+      .getByRole("button", { name: "Open project", exact: true })
+      .click();
     const changesTab = page.getByRole("tab", { name: "Changes", exact: true });
     if (!(await changesTab.isVisible()))
       await page.getByRole("button", { name: "Toggle files panel" }).first().click();
@@ -6897,6 +8358,201 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await page.screenshot({ path: "test-results/chat-review-readonly.png" });
   } finally {
     await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: incoming message height moves status smoothly and keeps it anchored while following", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-status-motion-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.setViewportSize({ width: 1000, height: 850 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    const chat = page.locator("#panel-chat .orchestration-chat-page:visible");
+    const input = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    for (const overflowing of [false, true]) {
+      const message = overflowing
+        ? Array.from({ length: 100 }, (_, index) => `Result line ${index} shows progress.`).join(
+            "\n",
+          )
+        : "Short reply stays below the message.";
+      await input.fill(
+        JSON.stringify([
+          { activity: { activityType: "verifying", label: "Checking motion" } },
+          { sleep: 1200 },
+          { message },
+          { hang: "cancellable" },
+        ]),
+      );
+      const count = await chat.locator(".event.message").count();
+      const [motion] = await Promise.all([
+        page.evaluate(
+          (previousMessages) =>
+            new Promise<{ before: number; overflow: boolean; rows: number[] }>(
+              (resolve, reject) => {
+                const started = performance.now();
+                let entered: number | undefined;
+                let before: number | undefined;
+                let overflow = false;
+                const rows: number[] = [];
+                const sample = () => {
+                  const chat = document.querySelector(".orchestration-chat-page:not([hidden])");
+                  const status = chat?.querySelector(".activity-display");
+                  const viewport = chat?.querySelector(".transcript");
+                  if (status && viewport) {
+                    const top = status.getBoundingClientRect().top;
+                    if (
+                      (chat?.querySelectorAll(".event.message").length ?? 0) <= previousMessages
+                    ) {
+                      before = top;
+                      overflow = viewport.scrollHeight > viewport.clientHeight + 1;
+                    } else {
+                      entered ??= performance.now();
+                      rows.push(top);
+                      if (performance.now() - entered > 600 && before !== undefined) {
+                        resolve({ before, overflow, rows });
+                        return;
+                      }
+                    }
+                  }
+                  if (performance.now() - started > 6000) {
+                    reject(new Error("Could not sample status movement around the incoming reply"));
+                    return;
+                  }
+                  // Sample after layout observers have synchronized scrolling for the painted frame.
+                  requestAnimationFrame(() => setTimeout(sample, 0));
+                };
+                sample();
+              },
+            ),
+          count,
+        ),
+        input.press("Enter"),
+      ]);
+      expect(motion.overflow).toBe(overflowing);
+      if (overflowing) {
+        expect(Math.max(...motion.rows.map((top) => Math.abs(top - motion.before)))).toBeLessThan(
+          2,
+        );
+      } else {
+        const distance = (motion.rows.at(-1) ?? motion.before) - motion.before;
+        expect(distance).toBeGreaterThan(40);
+        expect(new Set(motion.rows.map((top) => Math.round(top))).size).toBeGreaterThan(3);
+        const positions = [motion.before, ...motion.rows];
+        const steps = positions
+          .slice(1)
+          .map((top, index) => Math.abs(top - (positions[index] ?? top)));
+        expect(Math.max(...steps)).toBeLessThan(distance * 0.95);
+      }
+      await chat.getByRole("button", { name: "Stop", exact: true }).click();
+      await expect(chat.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+    }
+  } finally {
+    await application?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: main Chat eases new replies once and preserves streaming, history and reduced motion", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-chat-motion-"));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.setViewportSize({ width: 1000, height: 650 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    const chat = page.locator("#panel-chat .orchestration-chat-page");
+    const input = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const messages = chat.locator(".event.message");
+    await page.evaluate(() => {
+      document.body.dataset.chatEntries = "0";
+      document.addEventListener("animationstart", (event) => {
+        if (event.animationName === "chat-reply-enter")
+          document.body.dataset.chatEntries = String(Number(document.body.dataset.chatEntries) + 1);
+      });
+    });
+    const chunks = [
+      "## A smoother reply\n\n**Stream",
+      "ing** stays readable.\n\n",
+      ...Array.from({ length: 25 }, (_, index) => `Paragraph ${index} arrives intact.\n\n`),
+      "End marker.",
+    ];
+    await input.fill(
+      JSON.stringify([
+        { sleep: 600 },
+        ...chunks.flatMap((message) => [{ message }, { sleep: 80 }]),
+      ]),
+    );
+    const entrance = page.waitForFunction(() => {
+      const reply = document.querySelector(".orchestration-chat-page .event.message");
+      if (!reply?.getAnimations().length) return false;
+      const style = getComputedStyle(reply);
+      const opacity = Number(style.opacity);
+      return opacity > 0 && opacity < 1
+        ? { opacity, transform: style.transform, animation: style.animationName }
+        : false;
+    });
+    await input.press("Enter");
+    const entry = await (await entrance).jsonValue();
+    if (!entry) throw new Error("Reply entrance was not observed");
+    expect(entry).toMatchObject({ animation: "chat-reply-enter" });
+    expect(entry.transform).not.toBe("none");
+    await expect(messages).toHaveCount(1);
+    await expect(messages.last()).toContainText("End marker.");
+    await expect(messages.last().locator("strong")).toHaveText("Streaming");
+    await expect(messages.last()).toHaveCSS("opacity", "1");
+    await expect(messages.last()).toHaveCSS("animation-name", "none");
+    await expect(chat.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.dataset.chatEntries)).toBe("1");
+    await messages.last().getByRole("button", { name: "Copy message", exact: true }).click();
+    await expect(page.locator(".toast-stack").getByRole("status")).toHaveText("Done: Copied.");
+    expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
+      chunks.join("").replaceAll("\n", process.platform === "win32" ? "\r\n" : "\n"),
+    );
+    await selectSidebarPage(page, "Settings");
+    await selectSidebarPage(page, "Chat");
+    expect(await page.evaluate(() => document.body.dataset.chatEntries)).toBe("1");
+    await expect(messages.last()).toHaveCSS("animation-name", "none");
+    // A reply received off-screen must not replay an entrance when its chat is reopened.
+    await input.fill(JSON.stringify([{ sleep: 1200 }, { message: "Background reply." }]));
+    await input.press("Enter");
+    await expect(input).toHaveValue("");
+    await selectSidebarPage(page, "Settings");
+    await expect(messages).toHaveCount(2);
+    await selectSidebarPage(page, "Chat");
+    await expect(messages.last()).toHaveCSS("animation-name", "none");
+    expect(await page.evaluate(() => document.body.dataset.chatEntries)).toBe("1");
+    await expect(chat.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await input.fill(JSON.stringify([{ message: "Reduced-motion reply." }]));
+    await input.press("Enter");
+    await expect(messages).toHaveCount(3);
+    await expect(messages.last()).toHaveCSS("animation-name", "none");
+    expect(await page.evaluate(() => document.body.dataset.chatEntries)).toBe("1");
+    const gap = await chat.locator(".transcript").evaluate(async (element) => {
+      const spacer = document.createElement("div");
+      spacer.style.height = "300px";
+      element.querySelector(".chat-transcript-content")?.append(spacer);
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      const gap = element.scrollHeight - element.clientHeight - element.scrollTop;
+      spacer.remove();
+      return gap;
+    });
+    expect(gap).toBeLessThanOrEqual(1);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(messages).toHaveCount(3);
+    await expect(chat.locator("[data-entering='true']")).toHaveCount(0);
+  } finally {
+    await application?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -7035,7 +8691,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     // An older programmatic scroll event may arrive after streamed content grows but before
     // ResizeObserver runs. It must keep following, while a deliberate scroll still pauses it.
     const viewport = chat.locator(".transcript");
-    const race = await viewport.evaluate((element) => {
+    const race = await viewport.evaluate(async (element) => {
       const content = element.querySelector(".chat-transcript-content") as HTMLElement;
       const grow = () => {
         const spacer = document.createElement("div");
@@ -7047,6 +8703,17 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       element.dispatchEvent(new Event("scroll"));
       const first = grow();
       element.dispatchEvent(new Event("scroll"));
+      const initialGap = element.scrollHeight - element.scrollTop - element.clientHeight;
+      const samples = [element.scrollTop];
+      await new Promise<void>((resolve, reject) => {
+        const sample = () => {
+          samples.push(element.scrollTop);
+          if (element.scrollHeight - element.scrollTop - element.clientHeight <= 1) resolve();
+          else if (samples.length > 240) reject(new Error("Chat did not settle at the bottom"));
+          else requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
       const followedGrowth = element.scrollHeight - element.scrollTop - element.clientHeight;
       element.scrollTop = 0;
       element.dispatchEvent(new Event("scroll"));
@@ -7057,8 +8724,13 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       second.remove();
       element.scrollTop = element.scrollHeight;
       element.dispatchEvent(new Event("scroll"));
-      return { followedGrowth, preservedReadingPosition };
+      return { initialGap, samples, followedGrowth, preservedReadingPosition };
     });
+    expect(race.initialGap).toBeGreaterThan(250);
+    expect(new Set(race.samples).size).toBeGreaterThan(3);
+    expect(
+      Math.max(...race.samples.slice(1).map((top, index) => top - (race.samples[index] ?? top))),
+    ).toBeLessThan(250);
     expect(race.followedGrowth).toBeLessThanOrEqual(1);
     expect(race.preservedReadingPosition).toBe(0);
     expect(
@@ -7090,7 +8762,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await status.locator(".activity-visual").click();
     await expect(status).toHaveAttribute("aria-expanded", "true");
     const activityDetails = chat.getByRole("region", { name: "Activity details", exact: true });
-    await expect(activityDetails).toHaveCSS("transition-duration", "0.25s, 0.2s, 0s");
+    await expect(activityDetails).toHaveCSS("transition-duration", "0.175s, 0.175s, 0s");
     await expect(activityDetails).toContainText("Checking evidence line 59");
     await expect(activityDetails).toHaveCSS("overflow-y", "visible");
     await expect(activityDetails).toHaveCSS("max-height", "none");
@@ -7175,7 +8847,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(status).toHaveAttribute("data-activity", "executing");
     await expect(status).toHaveText(/^Executing\.\.\. \d+s$/);
     await expect(status.locator(".activity-name")).toHaveCSS("text-align", "left");
-    await expect(status).toHaveCSS("transition-duration", "0.2s");
+    await expect(status).toHaveCSS("transition-duration", "0.175s");
     const labelLeft = await status
       .locator(".activity-name")
       .evaluate((element) => element.getBoundingClientRect().left);
@@ -7294,6 +8966,10 @@ test("desktop: accepted plans show task progress outside their Markdown document
     await expect(
       page.getByRole("tab", { name: "Plan · Planned change", exact: true }),
     ).toBeVisible();
+    await expect(page.locator(".orchestration-chat-heading .chat-plans")).toHaveCount(0);
+    await expect(
+      page.locator(".orchestration-chat-heading").getByRole("button", { name: /^Plan · / }),
+    ).toHaveCount(0);
     await expect(panel.getByRole("progressbar", { name: "Tasks completed" })).toHaveAttribute(
       "value",
       "0",
@@ -7363,11 +9039,10 @@ test("desktop: accepted plans show task progress outside their Markdown document
     await page.getByRole("tab", { name: "Plan · Revised change", exact: true }).focus();
     await page.keyboard.press("Delete");
     await expect(panel).toHaveCount(0);
-    await page
-      .locator(".chat-plans")
-      .getByRole("button", { name: "Plan · Revised change", exact: true })
-      .click();
-    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    await expect(page.locator(".chat-plans")).toHaveCount(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.[0]?.state).toBe(
+      "completed",
+    );
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

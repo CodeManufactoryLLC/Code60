@@ -220,9 +220,11 @@ export const typefaces = [
   { id: "georgia", label: "Georgia", family: "Georgia, serif" },
   { id: "ibm-plex-sans", label: "IBM Plex Sans", family: `"IBM Plex Sans", ${systemFont}` },
   { id: "ibm-plex-serif", label: "IBM Plex Serif", family: '"IBM Plex Serif", Georgia, serif' },
+  { id: "lexend", label: "Lexend", family: `"Lexend", ${systemFont}` },
   { id: "shantell-sans", label: "Shantell Sans", family: '"Shantell Sans", sans-serif' },
   { id: "ocr-a", label: "OCR-A", family: '"OCR-A", ui-monospace, monospace' },
   { id: "roboto", label: "Roboto", family: `Roboto, ${systemFont}` },
+  { id: "space-grotesk", label: "Space Grotesk", family: `"Space Grotesk", ${systemFont}` },
   { id: "tahoma", label: "Tahoma", family: `Tahoma, Verdana, ${systemFont}` },
   { id: "verdana", label: "Verdana", family: `Verdana, ${systemFont}` },
 ] as const;
@@ -302,7 +304,7 @@ export function parseTextStyles(value: string | null): TextStyles {
   }
   return styles;
 }
-/** Apply D-DIN Regular once, preserving sizes, case, theme and later user choices. */
+/** Legacy one-time typography reset, preserving sizes, case, theme and later choices. */
 export function migrateTypography(storage: Pick<Storage, "getItem" | "setItem">): void {
   if (storage.getItem("code60.typographyVersion") === "d-din-regular-1") return;
   const styles = parseTextStyles(storage.getItem("code60.textStyles"));
@@ -324,7 +326,7 @@ export type ResolvedText = {
 export function resolveText(styles: TextStyles, role: TextRole): ResolvedText {
   const style = styles[role];
   const defaults = textRoles.find((entry) => entry.id === role) ?? textRoles[5];
-  const typeface = style.typeface ?? "d-din";
+  const typeface = style.typeface ?? "ibm-plex-sans";
   return {
     family: fontFamily(typeface),
     spacing: letterSpacing(typeface),
@@ -363,6 +365,8 @@ export function textStyleProperties(styles: TextStyles): Record<string, string |
   }
   const human = styles.humanMessages.weight;
   properties["--human-prompt-weight"] = human ? String(human) : undefined;
+  // Navigation has its own default size, but still honors an explicit Button Text size.
+  properties["--nav-font-size"] = `${styles.buttons.size ?? 15}px`;
   return properties;
 }
 export const rowDensities = [

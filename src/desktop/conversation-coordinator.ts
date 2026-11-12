@@ -1,16 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { MCP_CONTROL_LIMITS, type SequencedEvent } from "../bridge/index.js";
+import {
+  MCP_CONTROL_LIMITS,
+  type SavedChat,
+  type SequencedEvent,
+  type TaskContext,
+} from "../bridge/index.js";
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
 import type { PlanStore } from "./plans.js";
+import { taskDelivery } from "./tactic-context.js";
 
 const message = diagnosticMessage;
 
 /** A worker run dispatched by the orchestration chat. Ownership is held only in memory. */
 export interface Worker {
+  taskId?: string | undefined;
   planId?: string;
   planTaskId?: string;
   /** The chat generation that dispatched it; only that chat may control it. */
@@ -30,6 +37,19 @@ const UPDATE_BATCH = 20;
 
 /** All mutable state and capabilities belong to one orchestration conversation. */
 export class ChatSession {
+  tactic: string | null | undefined;
+  tasks: TaskContext[] = [];
+  taskId: string | undefined;
+  saved: SavedChat | undefined;
+  historyRun: RunView | undefined;
+  historyLoaded = false;
+  restored = false;
+  selectedAt = 0;
+  deliveryPending = false;
+  updatesDelivering = false;
+  get run(): RunView | undefined {
+    return this.chat?.runs()[0] ?? this.historyRun;
+  }
   title: string | undefined;
   archived = false;
   titleAttempted = false;
@@ -67,6 +87,7 @@ interface CoordinationDeps {
   changed(): void;
   formatUpdates(updates: WorkerUpdate[]): string;
   deliver(session: ChatSession, text: string, origin?: "automatic", deliveredText?: string): void;
+  sendAutomatic?(session: ChatSession, text: string, taskId: string | undefined): Promise<void>;
 }
 
 /** In-memory conversation authority and delivery; process lifecycle stays in the controller. */
@@ -134,6 +155,7 @@ export class ConversationCoordinator {
     label?: string,
   ): void {
     this.registry.set(id, {
+      ...(session.taskId ? { taskId: session.taskId } : {}),
       generation: session.chatGeneration,
       directory,
       provider,
@@ -178,12 +200,46 @@ export class ConversationCoordinator {
     return result;
   }
 
-  send(session: ChatSession, text: string, origin?: "automatic", deliveredText?: string): void {
+  send(
+    session: ChatSession,
+    text: string,
+    origin?: "automatic",
+    deliveredText?: string,
+    taskId: string | null | undefined = session.taskId,
+  ): void {
     this.assertCurrent(session);
     const run = session.chat?.runs()[0];
     if (!run || !session.chat) throw new Error("No orchestration session is available");
     // The core retains the authoritative readiness checks and their existing errors.
-    this.deps.deliver(session, text, origin, deliveredText);
+    const task = session.tasks.find((task) => task.id === taskId);
+    if (taskId && !task) throw new Error("The originating task context is unavailable");
+    const previous = session.taskId;
+    const previousReview = session.reviewTask;
+    session.taskId = taskId ?? undefined;
+    if (task)
+      session.reviewTask = {
+        title: task.title,
+        turn: task.turn,
+        ...(task.reviewId ? { reviewId: task.reviewId } : {}),
+      };
+    try {
+      this.deps.deliver(
+        session,
+        text,
+        origin,
+        task
+          ? taskDelivery(
+              task,
+              deliveredText ?? text,
+              session.tasks.some((task) => !!task.tactic),
+            )
+          : deliveredText,
+      );
+    } catch (cause) {
+      session.taskId = previous;
+      session.reviewTask = previousReview;
+      throw cause;
+    }
     if (origin === undefined) session.updatesPaused = false;
   }
 
@@ -226,6 +282,19 @@ export class ConversationCoordinator {
     if (!worker) return;
     if (event.type === "prompt") {
       worker.reply = "";
+      const session = this.sessions.find((session) => session.chatGeneration === worker.generation);
+      const task = session?.tasks.find((task) => task.id === worker.taskId);
+      if (
+        task &&
+        !task.workers.some((entry) => entry.runId === event.runId && entry.turn === event.turn)
+      ) {
+        task.workers.push({
+          runId: event.runId,
+          turn: event.turn,
+          ...(worker.label ? { label: worker.label } : {}),
+          ...(worker.planTaskId ? { planTaskId: worker.planTaskId } : {}),
+        });
+      }
       return;
     }
     if (event.type === "message") {
@@ -242,6 +311,7 @@ export class ConversationCoordinator {
     if (!(turnEnded && turn > worker.reportedTurn) && !exited) return;
     worker.reportedTurn = turn;
     session.inbox.push({
+      ...(worker.taskId ? { taskId: worker.taskId } : {}),
       runId: event.runId,
       provider: worker.provider,
       status: event.status,
@@ -258,24 +328,39 @@ export class ConversationCoordinator {
     // A short delay coalesces several workers ending together into one prompt.
     this.updateTimer = setTimeout(() => {
       this.updateTimer = undefined;
-      for (const session of this.sessions) this.deliverUpdates(session);
+      for (const session of this.sessions) void this.deliverUpdates(session);
     }, 50);
   }
 
   /** Sends queued worker updates only between the chat's turns, never overlapping a prompt. */
-  private deliverUpdates(session: ChatSession): void {
+  private async deliverUpdates(session: ChatSession): Promise<void> {
     if (this.deps.hasPendingFeedback?.(session)) return;
-    if (this.deps.closing() || session.updatesPaused || session.inbox.length === 0) return;
+    if (
+      this.deps.closing() ||
+      session.deliveryPending ||
+      session.updatesDelivering ||
+      session.updatesPaused ||
+      session.inbox.length === 0
+    )
+      return;
     const chat = session.chat;
     const run = chat?.runs()[0];
     if (!chat || !run || run.status !== "idle" || run.stopping || run.modeChanging) return;
-    const updates = session.inbox.slice(0, UPDATE_BATCH);
+    const taskId = session.inbox[0]?.taskId;
+    const updates = session.inbox
+      .filter((update) => update.taskId === taskId)
+      .slice(0, UPDATE_BATCH);
+    session.updatesDelivering = true;
     try {
-      this.send(session, this.deps.formatUpdates(updates), "automatic");
+      const text = this.deps.formatUpdates(updates);
+      if (this.deps.sendAutomatic) await this.deps.sendAutomatic(session, text, taskId);
+      else this.send(session, text, "automatic", undefined, taskId ?? null);
       session.activity.received();
-      session.inbox.splice(0, updates.length);
+      session.inbox = session.inbox.filter((update) => !updates.includes(update));
     } catch (error) {
       session.chatError = `Could not send worker updates: ${message(error)}`;
+    } finally {
+      session.updatesDelivering = false;
     }
     this.deps.changed();
   }

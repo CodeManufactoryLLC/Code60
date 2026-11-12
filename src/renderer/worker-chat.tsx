@@ -24,6 +24,7 @@ export function WorkerChat({
   loading,
   historyError,
   onRetry,
+  onCopied,
 }: {
   api: DesktopApi;
   run: DesktopRun;
@@ -36,6 +37,7 @@ export function WorkerChat({
   loading: boolean;
   historyError: string | undefined;
   onRetry(): void;
+  onCopied?: (() => void) | undefined;
 }) {
   const id = run.record.id;
   const titleId = useId();
@@ -271,7 +273,12 @@ export function WorkerChat({
                       ))}
                     {(block.type === "message" ||
                       (block.type === "prompt" && !block.automatic)) && (
-                      <MessageCopy text={block.text} />
+                      <MessageCopy
+                        text={block.text}
+                        at={events[Number(block.key)]?.at}
+                        visible={active}
+                        onCopied={onCopied}
+                      />
                     )}
                     {block.detail && (
                       <details>

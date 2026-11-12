@@ -4,6 +4,7 @@ import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import {
   delegatedActivity,
   durationText,
+  messageAgeText,
   newestMessage,
   sessionStatus,
   timingText,
@@ -73,6 +74,30 @@ describe("authoritative activity", () => {
 });
 
 describe("message ages and turn history", () => {
+  it.each([
+    [0, "0s ago"],
+    [999, "0s ago"],
+    [59000, "59s ago"],
+    [60000, "1m ago"],
+    [3599999, "59m ago"],
+    [3600000, "1h ago"],
+    [86399999, "23h ago"],
+    [86400000, "1d ago"],
+    [172800000, "2d ago"],
+    [-1000, "0s ago"],
+  ])("formats compact message ages at %i ms", (elapsed, expected) => {
+    const now = Date.parse("2026-01-04T00:00:00Z");
+    expect(messageAgeText(now - elapsed, now)).toBe(expected);
+  });
+  it("does not fabricate a message age from invalid timestamps or clocks", () => {
+    for (const [timestamp, now] of [
+      [NaN, 1000],
+      [Infinity, 1000],
+      [1000, NaN],
+      [1000, Infinity],
+    ] as const)
+      expect(messageAgeText(timestamp, now)).toBe("Time unavailable");
+  });
   it("uses only original response chunk times, not replay or other event types", () => {
     const events = [
       prompt(1),

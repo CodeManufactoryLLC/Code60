@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Orchestrator, RunView } from "../core/index.js";
 import { ConversationCoordinator } from "./conversation-coordinator.js";
+import { captureTask } from "./tactic-context.js";
 
 function harness() {
   let directory = "/project";
@@ -12,7 +13,7 @@ function harness() {
   });
   const coordinator = new ConversationCoordinator({
     directory: () => directory,
-    view: (id) => (id === "worker" ? worker : undefined),
+    view: (id) => (id === "worker" || id === "other" ? worker : undefined),
     closing: () => false,
     changed: vi.fn(),
     formatUpdates: JSON.stringify,
@@ -44,6 +45,109 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe("conversation coordination", () => {
+  it("retains task tactics across new human requests and groups interleaved updates by originating task", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    const original = captureTask("implement-and-review", "Original implementation", 1, "/project");
+    const newer = captureTask("explore-the-codebase", "New exploration", 2, "/project");
+    h.session.tasks.push(original, newer);
+    h.session.taskId = original.id;
+    h.coordinator.register("worker", h.session, "/project", "claude", "Implementer");
+    h.coordinator.trackWorker({
+      type: "prompt",
+      runId: "worker",
+      at: "now",
+      turn: 1,
+      text: "Build",
+    });
+    h.end();
+    h.session.taskId = newer.id;
+    h.session.tactic = null;
+    h.coordinator.register("other", h.session, "/project", "claude", "Code scout");
+    h.coordinator.trackWorker({
+      type: "status",
+      runId: "other",
+      at: "now",
+      status: "failed",
+      reason: "unavailable",
+    });
+    h.coordinator.trackWorker({
+      type: "prompt",
+      runId: "worker",
+      at: "now",
+      turn: 2,
+      text: "Correct",
+    });
+    h.worker.turns = 2;
+    h.coordinator.trackWorker({
+      type: "status",
+      runId: "worker",
+      at: "now",
+      status: "idle",
+      reason: "turn 2 ended",
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.deliver).toHaveBeenNthCalledWith(
+      1,
+      h.session,
+      expect.any(String),
+      "automatic",
+      expect.stringContaining("Original implementation"),
+    );
+    expect(h.deliver).toHaveBeenNthCalledWith(
+      1,
+      h.session,
+      expect.any(String),
+      "automatic",
+      expect.stringContaining("two correction rounds"),
+    );
+    expect(h.deliver).toHaveBeenNthCalledWith(
+      1,
+      h.session,
+      expect.any(String),
+      "automatic",
+      expect.not.stringContaining("New exploration"),
+    );
+    expect(h.session.inbox).toHaveLength(1);
+    expect(h.session.taskId).toBe(original.id);
+    expect(original.workers).toMatchObject([
+      { runId: "worker", turn: 1, label: "Implementer" },
+      { runId: "worker", turn: 2 },
+    ]);
+    h.chat.status = "idle";
+    h.coordinator.scheduleUpdates();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.deliver).toHaveBeenNthCalledWith(
+      2,
+      h.session,
+      expect.any(String),
+      "automatic",
+      expect.stringContaining("New exploration"),
+    );
+    expect(h.deliver).toHaveBeenNthCalledWith(
+      2,
+      h.session,
+      expect.any(String),
+      "automatic",
+      expect.stringContaining("unavailable"),
+    );
+    expect(h.session.taskId).toBe(newer.id);
+    h.coordinator.stop();
+  });
+
+  it("holds worker updates while task context is being persisted", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.session.deliveryPending = true;
+    h.end();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.deliver).not.toHaveBeenCalled();
+    h.session.deliveryPending = false;
+    h.coordinator.scheduleUpdates();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.deliver).toHaveBeenCalledOnce();
+    h.coordinator.stop();
+  });
   it("retains dispatch role labels without inventing labels for older workers", () => {
     const h = harness();
     expect(h.coordinator.ownedWorker("worker", h.session)).not.toHaveProperty("label");
