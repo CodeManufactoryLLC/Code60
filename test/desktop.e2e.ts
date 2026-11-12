@@ -1784,6 +1784,15 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     const second = page.getByRole("button", { name: "Chat 2", exact: true });
     const send = async (text: string) => {
+      // Opening another chat does not wait for this hidden chat's ACP connection.
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+              (chat) => chat.run?.id === firstId,
+            )?.run?.status,
+        )
+        .toBe("idle");
       const turn = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
         (chat) => chat.run?.id === firstId,
       )?.run?.turns;
