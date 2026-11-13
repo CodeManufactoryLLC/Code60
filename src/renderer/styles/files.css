@@ -180,8 +180,9 @@ button.file-open-link {
 }
 
 .file-panel :is(button, select):focus-visible {
-  outline: 2px solid var(--text);
+  outline: 2px solid var(--focus-outline);
   outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
 }
 
 .file-panel button:hover:not(:disabled, [aria-disabled="true"]) {
@@ -206,15 +207,26 @@ button.file-open-link {
 
 @media (max-width: 1200px) {
   .chat-workspace-body[data-file-panel-open="true"] > .chat-conversations {
-    flex: 1 0
-      max(
-        300px,
-        calc(
-          8 *
-          max(var(--human-size, 14px), var(--button-size, 13px), var(--text-size, 13px)) +
-          140px
-        )
-      );
+    --stacked-transcript-min: 120px;
+    flex: 1 0 auto;
+    min-height: 300px;
+
+    > .orchestration-chat-page,
+    .orchestration-chat-body {
+      flex: 1 0 auto;
+      height: auto;
+    }
+
+    /* Reserve reading space without letting message history size the workspace. */
+    :is(.chat-connection-frame, .worker-chat-page .transcript) {
+      flex: 1 0 var(--stacked-transcript-min);
+      min-height: var(--stacked-transcript-min);
+      contain: size;
+    }
+
+    .worker-chat-page .approvals {
+      max-height: min(45dvh, 240px);
+    }
   }
 }
 
@@ -426,8 +438,9 @@ button.file-open-link {
 .file-column-resize:focus-visible,
 .files-title button:focus-visible,
 .setup-dialog .files-hidden input:focus-visible {
-  outline: 2px solid var(--text);
+  outline: 2px solid var(--focus-outline);
   outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
 }
 
 /* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */

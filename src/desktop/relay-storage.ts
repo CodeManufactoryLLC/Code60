@@ -11,6 +11,7 @@ import {
   privateDirectory,
   writePrivateFile,
 } from "../platform/index.js";
+import { changedJournalFields, RelayPersistenceError } from "./relay-persistence.js";
 
 export const storageCode = (error: unknown) => (error as NodeJS.ErrnoException)?.code;
 
@@ -48,10 +49,15 @@ export async function relayFile(path: string, writable = false) {
       (process.platform !== "win32" &&
         ((current.mode & 0o077n) !== 0n || current.uid !== BigInt(process.getuid?.() ?? -1)))
     )
-      throw new Error("Relay storage changed while opening");
+      throw new RelayPersistenceError("open", "identity", undefined, [
+        ...new Set([
+          ...changedJournalFields(checked, current),
+          ...changedJournalFields(current, entry),
+        ]),
+      ]);
     return handle;
   } catch (error) {
-    await handle.close();
+    await handle.close().catch(() => {});
     throw error;
   }
 }

@@ -6,6 +6,7 @@ import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
+import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
 import { MessagesPage } from "./messages.js";
 import { type RenderedPageId, renderedPages } from "./navigation.js";
@@ -93,6 +94,14 @@ export function AppPages(props: AppPagesProps) {
   const run = snapshot?.runs.find((item) => item.record.id === selected);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
   const views = {
+    home: (
+      <HomePage
+        database={database}
+        relayAvailable={Boolean(snapshot?.chats.some((chat) => chat.kind === "relay"))}
+        onOpenRelay={props.openRelay}
+        onOpenTool={(id) => setTabs((current) => updateTabs(current, { type: "select", id }))}
+      />
+    ),
     chat: <ChatWorkspace {...props} />,
     settings: (
       <>

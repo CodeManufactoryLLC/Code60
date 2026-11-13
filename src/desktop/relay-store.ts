@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { privateDirectory, writePrivateFile } from "../platform/index.js";
 import { type RelayMessage, relayHistoryWindow } from "./relay-history.js";
+import { changedJournalFields, RelayPersistenceError } from "./relay-persistence.js";
 import {
   lockRelay,
   readRelayState,
@@ -46,6 +47,11 @@ export interface RelaySourceCursor {
   direction: "backward" | "forward";
   position: number;
   bound: number;
+}
+
+export interface RelayAppend {
+  message: RelayMessage;
+  start: boolean;
 }
 
 async function sourceFrame(file: Awaited<ReturnType<typeof relayFile>>, cursor: RelaySourceCursor) {
@@ -217,8 +223,18 @@ export class RelayStore {
   }
 
   append(message: RelayMessage, start = true): Promise<void> {
+    return this.appendBatch([{ message, start }]);
+  }
+
+  appendBatch(records: readonly RelayAppend[]): Promise<void> {
     return this.serial(async () => {
-      const file = await relayFile(this.journal, true);
+      const file = await relayFile(this.journal, true).catch((cause) => {
+        throw cause instanceof RelayPersistenceError
+          ? cause
+          : new RelayPersistenceError("open", "io", cause);
+      });
+      let stage: "validate" | "write" | "sync" = "validate";
+      let failed = false;
       try {
         this.checkJournal(await file.stat({ bigint: true }));
         let size = (await file.stat()).size;
@@ -227,37 +243,40 @@ export class RelayStore {
           const footer = Buffer.alloc(FOOTER_BYTES);
           await file.read(footer, 0, FOOTER_BYTES, size - FOOTER_BYTES);
           if (!/^\n[0-9a-f]{8}\n$/.test(footer.toString("ascii")))
-            throw new Error("Relay history has an incomplete tail. Recover it before writing.");
+            throw new RelayPersistenceError("validate", "invalid-frame");
         }
-        let offset = 0;
-        do {
-          let end = offset;
-          for (let count = 0; end < message.text.length && count < 16_000; count++) {
-            const point = message.text.codePointAt(end);
-            end += point !== undefined && point > 0xffff ? 2 : 1;
-          }
-          const part = fragmentSchema.parse({
-            id: message.id,
-            role: message.role,
-            at: message.at,
-            text: message.text.slice(offset, end),
-            start: start && offset === 0,
-          });
-          const bytes = Buffer.from(JSON.stringify(part));
-          const data = Buffer.concat([
-            bytes,
-            Buffer.from(`\n${bytes.length.toString(16).padStart(8, "0")}\n`),
-          ]);
-          let written = 0;
-          while (written < data.length) {
-            const result = await file.write(data, written, data.length - written, size + written);
-            if (!result.bytesWritten) throw new Error("Relay history write was incomplete");
-            written += result.bytesWritten;
-          }
-          size += data.length;
-          offset = end;
-        } while (offset < message.text.length);
-        await file.sync();
+        for (const { message, start } of records) {
+          let offset = 0;
+          do {
+            let end = offset;
+            for (let count = 0; end < message.text.length && count < 16_000; count++) {
+              const point = message.text.codePointAt(end);
+              end += point !== undefined && point > 0xffff ? 2 : 1;
+            }
+            const part = fragmentSchema.parse({
+              id: message.id,
+              role: message.role,
+              at: message.at,
+              text: message.text.slice(offset, end),
+              start: start && offset === 0,
+            });
+            const bytes = Buffer.from(JSON.stringify(part));
+            const data = Buffer.concat([
+              bytes,
+              Buffer.from(`\n${bytes.length.toString(16).padStart(8, "0")}\n`),
+            ]);
+            let written = 0;
+            stage = "write";
+            while (written < data.length) {
+              const result = await file.write(data, written, data.length - written, size + written);
+              if (!result.bytesWritten) throw new Error("Relay history write was incomplete");
+              written += result.bytesWritten;
+            }
+            size += data.length;
+            offset = end;
+          } while (offset < message.text.length);
+        }
+        stage = "validate";
         const written = await file.stat({ bigint: true });
         const entry = await verifyRelayStorage(this.journal, false);
         if (
@@ -266,10 +285,32 @@ export class RelayStore {
           written.ino !== this.journalIdentity.ino ||
           journalStamp(written) !== journalStamp(entry)
         )
-          throw new Error("Relay journal changed while writing. History was preserved.");
+          throw new RelayPersistenceError("validate", "identity", undefined, [
+            ...new Set([
+              ...changedJournalFields(written, entry),
+              ...(written.size !== BigInt(size) ? ["size" as const] : []),
+              ...(written.dev !== this.journalIdentity.dev ? ["dev" as const] : []),
+              ...(written.ino !== this.journalIdentity.ino ? ["ino" as const] : []),
+            ]),
+          ]);
+        // These complete frames are verified owned writes, even if the durability
+        // barrier fails. Keep their exact stamp so Retry can validate them without
+        // replaying the batch; partial writes and outside changes stay rejected.
         this.journalIdentity = written;
+        stage = "sync";
+        await file.sync();
+        stage = "validate";
+        this.checkJournal(await file.stat({ bigint: true }));
+        this.checkJournal(await verifyRelayStorage(this.journal, false));
+      } catch (cause) {
+        failed = true;
+        throw cause instanceof RelayPersistenceError
+          ? cause
+          : new RelayPersistenceError(stage, "io", cause);
       } finally {
-        await file.close();
+        await file.close().catch((cause) => {
+          if (!failed) throw new RelayPersistenceError("close", "io", cause);
+        });
       }
     });
   }
@@ -280,28 +321,38 @@ export class RelayStore {
   }
   private checkJournal(info: BigIntStats): void {
     if (journalStamp(info) !== journalStamp(this.journalIdentity))
-      throw new Error(
-        "Relay history has an incomplete tail or outside changes. Recover it before reading or writing.",
+      throw new RelayPersistenceError(
+        "validate",
+        "identity",
+        undefined,
+        changedJournalFields(this.journalIdentity, info),
       );
   }
   private async readHistory(before?: number) {
     const file = await relayFile(this.journal);
     let bytesRead = 0;
     const messages: RelayMessage[] = [];
-    let incomplete = this.state.incomplete === true;
+    let damaged = false;
     let position = 0;
     try {
       if (journalStamp(await file.stat({ bigint: true })) !== journalStamp(this.journalIdentity))
-        return { ...relayHistoryWindow([], false, true), cursor: 0, sourceBound: 0, bytesRead: 0 };
+        return {
+          ...relayHistoryWindow([], false, true),
+          damaged: true,
+          cursor: 0,
+          sourceBound: 0,
+          bytesRead: 0,
+        };
       const size = (await file.stat()).size;
       position = before ?? size;
       if (!Number.isSafeInteger(position) || position < 0 || position > size)
         throw new Error("Invalid Relay history cursor");
       for (let count = 0; position > 0 && count < MAX_READ_FRAMES; count++) {
-        if (position < FOOTER_BYTES || bytesRead + FOOTER_BYTES > MAX_READ_BYTES) {
-          incomplete = true;
+        if (position < FOOTER_BYTES) {
+          damaged = true;
           break;
         }
+        if (bytesRead + FOOTER_BYTES > MAX_READ_BYTES) break;
         const footer = Buffer.alloc(FOOTER_BYTES);
         const tail = await file.read(footer, 0, FOOTER_BYTES, position - FOOTER_BYTES);
         bytesRead += tail.bytesRead;
@@ -309,12 +360,12 @@ export class RelayStore {
           tail.bytesRead !== FOOTER_BYTES ||
           !/^\n[0-9a-f]{8}\n$/.test(footer.toString("ascii"))
         ) {
-          incomplete = true;
+          damaged = true;
           break;
         }
         const length = Number.parseInt(footer.subarray(1, 9).toString("ascii"), 16);
         if (length <= 0 || length > MAX_FRAME_BYTES || length + FOOTER_BYTES > position) {
-          incomplete = true;
+          damaged = true;
           break;
         }
         if (bytesRead + length > MAX_READ_BYTES) break;
@@ -326,7 +377,7 @@ export class RelayStore {
           if (body.bytesRead !== length || !isUtf8(data)) throw new Error("Incomplete frame");
           fragment = fragmentSchema.parse(JSON.parse(data.toString("utf8")));
         } catch {
-          incomplete = true;
+          damaged = true;
           break;
         }
         const previous = messages[0];
@@ -364,7 +415,8 @@ export class RelayStore {
       this.checkJournal(await file.stat({ bigint: true }));
       this.checkJournal(await verifyRelayStorage(this.journal, false));
       return {
-        ...relayHistoryWindow(messages, position > 0, incomplete),
+        ...relayHistoryWindow(messages, position > 0, damaged || this.state.incomplete === true),
+        damaged,
         cursor: position,
         sourceBound: size,
         bytesRead,

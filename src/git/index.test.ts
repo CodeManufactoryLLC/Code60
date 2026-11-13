@@ -169,7 +169,9 @@ describe("git", () => {
     await g.addWorktree({ repoDir: repo, path: wt, branch: "code60/r2", base });
     await rm(wt, { recursive: true, force: true });
     await g.removeWorktree(repo, wt, "code60/r2");
-    expect(git(repo, "worktree", "list")).not.toMatch(/r2/);
+    expect(
+      parseWorktrees(git(repo, "worktree", "list", "--porcelain", "-z")).map((entry) => entry.path),
+    ).not.toContain(wt);
     expect(git(repo, "branch", "--list", "code60/r2").trim()).toBe("");
   });
 

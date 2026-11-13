@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ChatMenu } from "./chat-menu.js";
@@ -6,6 +6,8 @@ import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
 import { type Conversation, conversationId, conversations, reconcileDisclosure } from "./chats.js";
 import { Icon } from "./icons.js";
+import { NavigationIcon } from "./navigation-icons.js";
+import { RelayNavigationIcon } from "./relay-navigation-icon.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
@@ -20,6 +22,8 @@ export function ChatSidebar({
   pending,
   onSelect,
   onAction,
+  relayNavigation = false,
+  onKeyDown,
 }: {
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -31,6 +35,8 @@ export function ChatSidebar({
   pending: boolean;
   onSelect(id: string): void;
   onAction?(request: OrchestrationChatAction): Promise<boolean>;
+  relayNavigation?: boolean;
+  onKeyDown?(event: KeyboardEvent<HTMLElement>): void;
 }) {
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
@@ -136,6 +142,9 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
+    const relayHeading = relayNavigation && chat?.kind === "relay";
+    const relayWorking =
+      relayHeading && view?.status === "running" && view.turns > 0 && !view.stopping;
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
@@ -207,6 +216,11 @@ export function ChatSidebar({
               }
             }}
           >
+            {relayHeading && <RelayNavigationIcon working={relayWorking} />}
+            {entry.role === "orchestrator" && chat?.kind !== "relay" && (
+              <NavigationIcon name="chat-circle" />
+            )}
+            {entry.role === "worker" && <NavigationIcon name="arrow-elbow-down-right" />}
             <span className="chat-sidebar-label">{entry.label}</span>
             <span className="chat-sidebar-indicators">
               {unread > 0 && (
@@ -265,7 +279,7 @@ export function ChatSidebar({
                 document.getElementById(`conversation-${entry.id}`)?.focus();
               }}
             >
-              <Icon name={expanded ? "chevron--down" : "chevron--right"} />
+              <Icon name="ai-agent" />
             </button>
           )}
         </div>
@@ -287,7 +301,11 @@ export function ChatSidebar({
     );
   }
   return (
-    <nav className="chat-sidebar" aria-label="Chat conversations">
+    <nav
+      className={relayNavigation ? "chat-sidebar relay-sidebar" : "chat-sidebar"}
+      aria-label={relayNavigation ? "Relay conversations" : "Chat conversations"}
+      onKeyDown={onKeyDown}
+    >
       <div className="chat-sidebar-list">
         {entries.filter(({ parentId }) => !parentId).map(row)}
       </div>

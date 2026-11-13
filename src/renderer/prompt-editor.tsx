@@ -17,6 +17,7 @@ import {
   promptLabels,
   sourceLabels,
 } from "./prompt-editor-model.js";
+import { TableControlGroup } from "./table-controls.js";
 
 export function PromptEditorPage({
   prompts,
@@ -81,14 +82,9 @@ export function PromptEditorPage({
     <main className="prompt-editor" aria-labelledby={`${id}-title`}>
       <div className="table-controls">
         <h1 className="table-title" id={`${id}-title`}>
-          Prompt Editor
+          Prompt Builder
         </h1>
-        {/* biome-ignore lint/a11y/useSemanticElements: these groups contain page actions, not form fields. */}
-        <div
-          className="button-group table-control-group"
-          role="group"
-          aria-label="Template actions"
-        >
+        <TableControlGroup label="Template actions">
           <button
             type="button"
             className="primary"
@@ -127,7 +123,7 @@ export function PromptEditorPage({
             <Icon name="renew" />
             Reset to default
           </button>
-        </div>
+        </TableControlGroup>
       </div>
       <div className="prompt-editor-body">
         <nav className="prompt-editor-list" aria-label="Prompt templates">

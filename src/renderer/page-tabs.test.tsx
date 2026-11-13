@@ -8,7 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 function navigation(
   database: string | null,
-  directory?: string,
+  _directory?: string,
   settingsSection: SettingsSectionId = "agents",
   active = initialTabs.active,
   expanded = true,
@@ -18,7 +18,6 @@ function navigation(
     <PageTabBar
       tabs={{ ...initialTabs, active }}
       settingsSection={settingsSection}
-      directory={directory}
       database={database}
       onSelect={() => {}}
       onSettingsSectionSelect={() => {}}
@@ -37,6 +36,19 @@ function navigation(
 }
 
 describe("database connection navigation", () => {
+  it("opens Search from a labelled icon above the page list with its selected state", () => {
+    const html = navigation("/database.sqlite", undefined, "agents", "search");
+    const search = html.match(/<button[^>]*id="tab-search"[\s\S]*?<\/button>/)?.[0];
+    expect(search).toContain('class="icon-button sidebar-search"');
+    expect(search).toContain('aria-label="Search"');
+    expect(search).toContain('aria-pressed="true"');
+    expect(search).toContain('aria-controls="panel-search"');
+    expect(search).not.toContain('role="tab"');
+    expect(search).not.toContain("disabled");
+    expect(html.match(/id="tab-search"/g)).toHaveLength(1);
+    expect(html.indexOf('id="tab-search"')).toBeLessThan(html.indexOf('class="page-tabs"'));
+  });
+
   it("leaves the separate database action to the application footer", () => {
     for (const database of [null, "/database.sqlite"]) {
       const html = navigation(database);
@@ -48,7 +60,7 @@ describe("database connection navigation", () => {
   it("replaces project identity with database connection and disables workspace destinations", () => {
     const html = navigation(null, "/old-project");
     const card = html.match(
-      /<button[^>]*class="sidebar-header project-card"[\s\S]*?<\/button>/,
+      /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
     )?.[0];
     expect(card).toContain("Connect to database");
     expect(card).not.toContain("old-project");
@@ -79,7 +91,8 @@ describe("database connection navigation", () => {
   it("keeps the Open Project action and workspace controls independent of the selected folder", () => {
     for (const directory of [undefined, "/project"]) {
       const html = navigation("/database.sqlite", directory);
-      expect(html).toContain(">Open Project</span>");
+      expect(html).toContain('aria-label="Open Project"');
+      expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Open Project"');
       expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
@@ -130,6 +143,7 @@ describe("sidebar labels and disclosure icons", () => {
       );
       for (const id of [
         "chat-pages",
+        "tool-pages",
         "table-pages",
         "settings-pages",
         "advanced-pages",
@@ -156,21 +170,29 @@ describe("sidebar labels and disclosure icons", () => {
       const html = navigation(database, undefined, "agents", initialTabs.active, expanded);
       const promptTab = html.match(/<button[^>]*id="tab-prompts"[\s\S]*?<\/button>/)?.[0];
       const project = html.match(
-        /<button[^>]*class="sidebar-header project-card"[\s\S]*?<\/button>/,
+        /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
       )?.[0];
-      expect(promptTab).toContain("Prompt Editor");
+      expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="pencil-line"');
-      expect(project).not.toContain("<svg");
+      expect(project).toContain("<svg");
       expect(html).not.toContain("<img");
-      expect(html.match(/<svg/g)).toHaveLength(12);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(6);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(2);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(25);
       for (const [id, icon, label] of [
-        ["tab-chat", "chats", "Chat"],
-        ["tab-prompts", "pencil-line", "Prompt Editor"],
+        ["tab-home", "house", "Home"],
+        ["tab-chat", "clipboard", "Projects"],
+        ["tab-prompts", "pencil-line", "Prompt Builder"],
         ["tab-commands", "megaphone", "Commands"],
         ["tab-settings", "gear", "Settings"],
-        ["tab-search", "magnifying-glass", "Search"],
+        ["tools-toggle", "wrench", "Tools"],
         ["tables-toggle", "database", "Tables"],
+        ["tab-configurations", "sliders-horizontal", "Configurations"],
+        ["tab-logs", "list-bullets", "Logs"],
+        ["tab-settings-agents", "robot", "Agents"],
+        ["advanced-toggle", "wrench", "Advanced"],
+        ["experiments-toggle", "flask", "Experiments"],
+        ["tab-episodic-memory", "brain", "Episodic Memory"],
+        ["tab-contributor-tools", "code", "Contributor Tools"],
       ]) {
         const tab = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
         expect(tab).toContain(`data-icon="${icon}"`);
@@ -178,23 +200,23 @@ describe("sidebar labels and disclosure icons", () => {
         expect(tab).toMatch(/class="navigation-icon"[^>]*aria-hidden="true"[^>]*focusable="false"/);
         expect(tab).toContain('opacity="0.2"');
       }
-      for (const id of ["tab-settings-agents", "tab-configurations", "tab-logs"]) {
-        const tab = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
-        expect(tab).not.toContain("navigation-icon");
-      }
-      const newChat = html.match(/<button[^>]*aria-label="New chat"[\s\S]*?<\/button>/)?.[0];
-      expect(newChat).toContain('class="icon-button chat-sidebar-new"');
-      expect(newChat?.match(/<svg/g)).toHaveLength(1);
-      expect(newChat).not.toContain(">New<");
-      const settingsToggle = html.match(
-        /<button[^>]*aria-label="Settings pages"[\s\S]*?<\/button>/,
-      )?.[0];
+      expect(project).toContain('class="icon-button project-sidebar-open"');
+      expect(project?.match(/<svg/g)).toHaveLength(1);
+      expect(project).toContain('aria-haspopup="dialog"');
+      expect(html).not.toContain('aria-label="New chat"');
+      const settingsToggle = html.match(/<button[^>]*id="tab-settings"[\s\S]*?<\/button>/)?.[0];
       expect(settingsToggle).toContain("<svg");
       expect(settingsToggle).toContain(`aria-expanded="${expanded}"`);
-      for (const id of ["tab-chat", "tables-toggle", "advanced-toggle", "experiments-toggle"]) {
+      for (const id of [
+        "tab-chat",
+        "tools-toggle",
+        "tables-toggle",
+        "advanced-toggle",
+        "experiments-toggle",
+      ]) {
         const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
         expect(toggle).toContain(`aria-expanded="${expanded}"`);
-        expect(toggle?.match(/class="carbon-icon"/g)).toHaveLength(1);
+        expect(toggle).not.toContain('class="carbon-icon"');
       }
     }
   });

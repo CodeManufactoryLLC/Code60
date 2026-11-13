@@ -27,7 +27,7 @@ import {
   useSavedFilters,
 } from "./saved-filters.js";
 import { useTableAppearance } from "./table-appearance.js";
-import { ColumnMenu } from "./table-controls.js";
+import { ColumnMenu, TableControlGroup } from "./table-controls.js";
 import { fitWidths, type RowDensity, rowHeight, type TableLines } from "./table-preferences.js";
 import { type SettingsColumn, TableSettings } from "./table-settings.js";
 import {
@@ -459,8 +459,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
     <div className="data-table" data-heading-lines={lines.heading}>
       <div className="table-controls">
         <h1 className="table-title">{tableTitles[tableId]}</h1>
-        {/* biome-ignore lint/a11y/useSemanticElements: these groups contain table actions, not form fields. */}
-        <div className="button-group table-control-group" role="group" aria-label="Table controls">
+        <TableControlGroup label="Table controls">
           <button
             type="button"
             onClick={() => setShowSearch(true)}
@@ -539,7 +538,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
               {addLabel}
             </button>
           )}
-        </div>
+        </TableControlGroup>
       </div>
       {incompatibility && (
         <p role="alert">Saved filter is incompatible and has not been applied: {incompatibility}</p>

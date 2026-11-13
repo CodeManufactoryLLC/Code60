@@ -1,14 +1,15 @@
 /* Accessibility styles. Imported into its declared layer by style.css. */
 
-@media (prefers-reduced-motion: reduce) {
-  input[type="checkbox"][role="switch"]::before {
-    transition: none;
+@media (forced-colors: active) {
+  :root {
+    --focus-line: Highlight;
+    --focus-outline: Highlight;
   }
 }
 
-@media (forced-colors: active) {
-  .navigation-icon[data-icon] {
-    color: ButtonText;
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"][role="switch"]::before {
+    transition: none;
   }
 }
 
@@ -36,8 +37,7 @@
 
 @media (forced-colors: active) {
   .segmented-option:has(input:checked) {
-    outline: 2px solid Highlight;
-    outline-offset: -3px;
+    text-decoration: underline;
   }
 }
 
@@ -67,11 +67,7 @@
   }
   .splash-brand {
     background: Canvas;
-  }
-  .splash-projects {
     --bg: Canvas;
-    --splash-panel-bg: Canvas;
-    --splash-panel-text: CanvasText;
     --text: CanvasText;
     --muted: CanvasText;
     --border: CanvasText;
@@ -79,7 +75,6 @@
     --primary: Highlight;
     --primary-text: HighlightText;
     --focus-line: Highlight;
-    border-right: 1px solid CanvasText;
   }
 }
 
@@ -185,12 +180,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .search-page,
-  .search-entry,
-  .search-wordmark {
+  .search-entry {
     transition: none;
-  }
-  .search-content .search-body {
-    animation: none;
   }
 }
 
@@ -206,18 +197,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .chat-loader {
-    animation: none;
-  }
-}
-
 @media (forced-colors: active) {
-  .chat-loader {
-    forced-color-adjust: none;
-    --color-1: Canvas;
-    --color-2: CanvasText;
-  }
   .event.prompt:not(.automatic) pre {
     border: 1px solid CanvasText;
   }

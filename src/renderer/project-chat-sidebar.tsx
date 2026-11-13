@@ -53,15 +53,16 @@ export function ProjectChatSidebar({
     });
   return (
     <>
-      <ChatSidebar
-        {...props}
-        chats={props.chats.filter((chat) => chat.kind === "relay")}
-        runs={props.runs.filter((run) => run.relay)}
-      />
       {projects.map((project) => {
         const open = expanded.has(project.id);
+        const panelId = `project-chats-${project.id}`;
         const name = pathLabel(project.path);
         const workerIds = new Set(project.workerIds);
+        const toggleProject = () => {
+          if (props.pending) return;
+          toggle(project.id);
+          if (!open) void onProjectAction({ type: "select", projectId: project.id });
+        };
         return (
           <section
             key={project.id}
@@ -74,6 +75,9 @@ export function ProjectChatSidebar({
               aria-label={`Project controls for ${project.path}`}
               className="project-chat-heading"
               data-project-selected={selectedProjectId === project.id}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) toggleProject();
+              }}
               onKeyDown={(event) => {
                 if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
                 event.preventDefault();
@@ -91,10 +95,15 @@ export function ProjectChatSidebar({
                 className="project-chat-name"
                 title={project.path}
                 aria-current={selectedProjectId === project.id || undefined}
+                aria-expanded={open}
+                aria-controls={panelId}
                 disabled={props.pending}
-                onClick={() => void onProjectAction({ type: "select", projectId: project.id })}
+                onClick={toggleProject}
               >
-                <span>{name}</span>
+                <span className="project-chat-label">
+                  <Icon name="folder" />
+                  <span className="project-chat-title">{name}</span>
+                </span>
                 {project.active && <span className="project-chat-activity">Active</span>}
               </button>
               <button
@@ -122,19 +131,9 @@ export function ProjectChatSidebar({
               >
                 <Icon name="overflow-menu--horizontal" />
               </button>
-              <button
-                type="button"
-                className="icon-button project-chats-toggle"
-                aria-label={`Toggle chats for ${project.path}`}
-                aria-expanded={open}
-                aria-controls={`project-chats-${project.id}`}
-                onClick={() => toggle(project.id)}
-              >
-                <Icon name={open ? "chevron--down" : "chevron--right"} />
-              </button>
             </div>
             <div
-              id={`project-chats-${project.id}`}
+              id={panelId}
               className="project-chat-pages"
               hidden={!open}
               inert={!open}

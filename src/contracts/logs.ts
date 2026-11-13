@@ -74,6 +74,16 @@ export const logInputSchema = z.strictObject({
   errorCode: z
     .enum(["EACCES", "EPERM", "ENOSPC", "EIO", "ENOENT", "EBUSY", "ETIMEDOUT", "UNKNOWN"])
     .optional(),
+  persistenceStage: z
+    .enum(["queue", "open", "validate", "write", "sync", "close", "mark-incomplete"])
+    .optional(),
+  persistenceFailure: z.enum(["io", "identity", "invalid-frame", "capacity", "unknown"]).optional(),
+  queuedCharacters: z.number().int().min(0).max(1_048_576).optional(),
+  queuedRecords: z.number().int().min(0).max(1024).optional(),
+  changedIdentityFields: z
+    .array(z.enum(["dev", "ino", "size", "mtimeNs", "ctimeNs"]))
+    .max(5)
+    .optional(),
 });
 export type LogInput = z.infer<typeof logInputSchema>;
 export type LogSink = (input: LogInput) => void;

@@ -18,7 +18,6 @@ import { CommandComposer, CommandMessage, invokedCommand } from "./command-compo
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
-import { RelayHistoryMessages } from "./relay-history.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
@@ -347,6 +346,16 @@ export function ChatPage({
           {failure}
         </div>
       )}
+      {relay && chat?.historySaving === "unavailable" && (
+        <div className="warning-banner" role="status">
+          History isn’t being saved. Recent messages may be unavailable after restart.
+        </div>
+      )}
+      {relay && chat?.historySaving !== "unavailable" && chat?.history?.incomplete && (
+        <div className="warning-banner" role="status">
+          Some earlier Relay messages weren’t saved. Available history is incomplete.
+        </div>
+      )}
       {chat?.restored && (
         <div className="warning-banner" role="status">
           <span>
@@ -384,56 +393,6 @@ export function ChatPage({
         </div>
       )}
       <div className="orchestration-chat-body">
-        {relay && chat.history && (
-          <section className="relay-history" aria-label="Previous Relay conversation">
-            {chat.history.incomplete && (
-              <p role="alert">History is incomplete. Original files were preserved.</p>
-            )}
-            {chat.history.older && (
-              <p>
-                Older history remains on disk. This is a bounded excerpt, not a retention limit.
-              </p>
-            )}
-            <RelayHistoryMessages
-              history={chat.history}
-              conversationId={chat.conversationId}
-              readMessage={api.readRelayMessage}
-              openLink={api.openWebLink}
-              visible={active && !hidden}
-              onCopied={onCopied}
-            />
-            {chat.history.older && chat.history.cursor && run && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void action({
-                    type: "history",
-                    id: run.id,
-                    before: chat.history?.cursor ?? null,
-                  })
-                }
-              >
-                Read older history
-              </button>
-            )}
-            {run && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void action({
-                    type: "history",
-                    id: run.id,
-                    before: null,
-                  })
-                }
-              >
-                Latest history
-              </button>
-            )}
-          </section>
-        )}
         <div className="chat-connection-frame">
           <ActivityDisplay
             key={run?.id ?? "empty"}

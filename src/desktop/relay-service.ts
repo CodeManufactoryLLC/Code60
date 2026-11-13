@@ -51,6 +51,7 @@ import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
 import { RelayReviews } from "./relay-reviews.js";
 import { type RelaySourceCursor, RelayStore } from "./relay-store.js";
+import { RelayWriter } from "./relay-writer.js";
 import { summarizeRun } from "./run-summary.js";
 import { WorkerEventWindows } from "./worker-event-windows.js";
 
@@ -116,7 +117,7 @@ export class RelayService {
   private readonly workerReplies = new Map<string, ConversationReplies>();
   private revision = 0;
   private disposers: (() => void)[] = [];
-  private writes: Promise<unknown> = Promise.resolve();
+  private writer: RelayWriter | undefined;
   private readonly activity: ActivityDisplay;
   private assistant: { id: string; at: string; start: boolean } | undefined;
   private readonly inbox: WorkerUpdate[] = [];
@@ -127,8 +128,6 @@ export class RelayService {
   private turns: Promise<unknown> = Promise.resolve();
   private closing = false;
   private storageFailed = false;
-  private pendingWriteCharacters = 0;
-  private pendingWrites = 0;
 
   constructor(
     private readonly deps: CoreDeps,
@@ -484,7 +483,7 @@ export class RelayService {
     if (results[1]?.status === "fulfilled" && this.gateway === gateway) this.gateway = undefined;
     if (results.some((result) => result.status === "rejected"))
       throw new Error("Relay cleanup failed. History and workspace were preserved.");
-    await this.writes;
+    await this.writer?.flush();
     for (const dispose of disposers) dispose();
     if (this.disposers === disposers) this.disposers = [];
     if (this.chat === chat) this.chat = undefined;
@@ -583,10 +582,12 @@ export class RelayService {
       this.setHistory(history);
       this.initialHistory = history.serialized;
       this.historyPending = true;
-      if (history.incomplete)
+      if (history.damaged)
         throw new Error(
-          "Relay history is incomplete. Recover the preserved journal before reconnecting.",
+          "Relay history is damaged or has changed outside Code60. Check storage before reconnecting.",
         );
+      this.storageFailed = false;
+      this.writer = new RelayWriter(store, this.deps.log, () => this.changed());
       gateway = await createMcpGateway((name, args) => {
         if (!current()) return Promise.reject(new Error("Relay gateway is closed"));
         return this.tool(name, args);
@@ -672,6 +673,7 @@ export class RelayService {
       run: this.chat?.runs()[0] ?? null,
       directory: this.store?.workspace ?? null,
       error: this.error,
+      historySaving: this.writer?.failed ? "unavailable" : "available",
       events: summary ? [] : [...this.events],
       workers: this.currentWorkers().map((worker) => worker.id),
       workerLabels: Object.fromEntries(
@@ -765,13 +767,13 @@ export class RelayService {
         if (request.type === "cancel") chat.cancelTurn(run.id);
         else await this.stopChat();
       } else if (request.type === "resume-updates") {
-        if (this.storageFailed) throw new Error("Recover Relay history storage before resuming.");
+        if (this.storageFailed) throw new Error("Retry the Relay connection before resuming.");
         if (!this.task) throw new Error("Send a human request before resuming worker updates");
         this.paused = false;
         this.scheduleDelivery();
       } else if (request.type === "send") {
         if (this.storageFailed)
-          throw new Error("Relay history could not be saved. Recover storage before sending.");
+          throw new Error("Relay history could not be saved. Retry the connection before sending.");
         if (request.command) throw new Error("Relay does not use database command overrides.");
         if (run.status !== "idle" || run.stopping || run.modeChanging)
           throw new Error("Wait for Relay to be idle before sending.");
@@ -818,7 +820,7 @@ export class RelayService {
     this.storageFailed = true;
     this.paused = true;
     this.error =
-      "Relay history could not be saved. Work was not repeated; inspect storage before continuing.";
+      "Relay run records could not be saved. Retry the connection to start a fresh session.";
     this.changed();
   }
   private event(event: RunEvent): void {
@@ -844,33 +846,10 @@ export class RelayService {
               : ("human" as const),
         text: event.text,
       };
-      if (!this.storageFailed) {
-        if (
-          this.pendingWrites >= 256 ||
-          this.pendingWriteCharacters + record.text.length > 1_048_576
-        ) {
-          this.persistenceFailure();
-          this.chat?.cancelTurn(event.runId);
-          // Core originals remain on disk. Never present a journal with dropped source as complete.
-          this.writes = this.writes
-            .then(() => this.store?.markIncomplete())
-            .catch(() => this.persistenceFailure());
-        } else {
-          this.pendingWrites++;
-          this.pendingWriteCharacters += record.text.length;
-          this.writes = this.writes
-            .then(() => this.store?.append(record, start))
-            .catch(async () => {
-              this.persistenceFailure();
-              await this.store?.markIncomplete().catch(() => {});
-            })
-            .finally(() => {
-              this.pendingWrites--;
-              this.pendingWriteCharacters -= record.text.length;
-            });
-        }
-      }
+      this.writer?.enqueue(record, start);
     }
+    if (event.type === "turnEnd") void this.writer?.flush();
+
     if (event.type !== "acp") {
       const entry = { revision: ++this.revision, event };
       this.events.push(entry);
@@ -1283,7 +1262,7 @@ export class RelayService {
       ...this.connections,
     ]);
     if (this.orphans.size) await this.stopChat(force);
-    await this.writes;
+    await this.writer?.flush();
     // Do not release writer ownership while cleanup is unverified.
     if (results.some((result) => result.status === "rejected"))
       throw new Error("Relay cleanup failed; its writer lock was retained.");

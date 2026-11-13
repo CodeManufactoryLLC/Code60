@@ -30,17 +30,31 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-type SubmittedSearch = {
+const typeLabels = {
+  all: "All types",
+  file: "File",
+  project: "Project",
+  run: "Run",
+  prompt: "Prompt",
+  message: "Message",
+  thought: "Thought",
+} satisfies Record<SearchKind | "all", string>;
+const sortLabels = { relevance: "Relevance", newest: "Newest" };
+const unappliedLabel = "Unapplied Search Changes";
+
+type SearchCriteria = {
   query: string;
+  kind: keyof typeof typeLabels;
+  sort: keyof typeof sortLabels;
+};
+type SubmittedSearch = SearchCriteria & {
   results: SearchResult[] | null;
   evidence: SearchResult[];
-  includeFiles: boolean;
 };
 type Overview =
   | { status: "generating" }
   | { status: "complete"; text: string; sources: SearchSummarySource[] }
-  | { status: "error"; error: string }
-  | { status: "stopped" };
+  | { status: "error"; error: string };
 
 export function SearchPage({
   api,
@@ -58,13 +72,17 @@ export function SearchPage({
   onOpen(result: SearchResult): void;
 }) {
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<SearchKind | "all">("all");
-  const [sort, setSort] = useState<"relevance" | "newest">("relevance");
+  const [kind, setKind] = useState<SearchCriteria["kind"]>("all");
+  const [sort, setSort] = useState<SearchCriteria["sort"]>("relevance");
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const active = useRef<string | undefined>(undefined);
   const list = useRef<HTMLUListElement>(null);
   const expanded = submitted !== null;
+  const loading = submitted?.results === null || overview?.status === "generating";
+  const unapplied =
+    submitted !== null &&
+    (query.trim() !== submitted.query || kind !== submitted.kind || sort !== submitted.sort);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: provider changes invalidate an in-flight helper even though the provider is resolved in main.
   useEffect(() => {
@@ -92,7 +110,7 @@ export function SearchPage({
         directory,
         query: search.query,
         sources: summarySources(search.evidence, search.query),
-        includeFiles: search.includeFiles,
+        includeFiles: search.kind === "all" || search.kind === "file",
       });
       if (active.current === id && result.requestId === id) {
         setOverview({ status: "complete", text: result.text, sources: result.sources });
@@ -121,30 +139,28 @@ export function SearchPage({
   }
 
   async function submit() {
-    if (!directory || !query.trim()) return;
+    const criteria = { query: query.trim(), kind, sort };
+    if (!directory || !criteria.query) return;
     cancel();
     const id = crypto.randomUUID();
     active.current = id;
-    const searchQuery = query.trim();
-    const includeFiles = kind === "all" || kind === "file";
-    setSubmitted({ query: searchQuery, results: null, evidence: [], includeFiles });
+    setSubmitted({ ...criteria, results: null, evidence: [] });
     setOverview(null);
     try {
       const events = await data.read();
       if (active.current !== id) return;
       const index = searchIndex(directory, runs, events);
-      const results = searchResults(index, searchQuery, kind, sort);
+      const results = searchResults(index, criteria.query, criteria.kind, criteria.sort);
       const search = {
-        query: searchQuery,
+        ...criteria,
         results,
-        includeFiles,
-        evidence: results.length ? results : searchContext(index, searchQuery, kind),
+        evidence: results.length ? results : searchContext(index, criteria.query, criteria.kind),
       };
       setSubmitted(search);
       await generate(id, search);
     } catch (error) {
       if (active.current === id) {
-        setSubmitted({ query: searchQuery, results: [], evidence: [], includeFiles });
+        setSubmitted({ ...criteria, results: [], evidence: [] });
         setOverview({
           status: "error",
           error: error instanceof Error ? error.message : String(error),
@@ -172,13 +188,8 @@ export function SearchPage({
             void submit();
           }}
         >
-          <div className="search-wordmark" aria-hidden={expanded}>
-            <span className="wordmark">
-              Code<b>60</b>
-            </span>
-          </div>
           <div className="search-query-row">
-            <div className="search-query-shell">
+            <div className="search-query-action">
               <input
                 className="search-query"
                 aria-label="Query"
@@ -202,89 +213,108 @@ export function SearchPage({
                   }
                 }}
               />
-              {overview?.status === "generating" && (
-                <span className="chat-loader" aria-hidden="true" />
-              )}
+              <button
+                className="primary search-submit"
+                type="submit"
+                disabled={!directory || !query.trim()}
+              >
+                <Icon name="search" />
+                Search
+              </button>
             </div>
-            <button
-              className="primary search-submit"
-              type="submit"
-              disabled={!directory || !query.trim()}
-            >
-              <Icon name="search" />
-              Search
-            </button>
-          </div>
-          <div className="search-controls" hidden={!expanded}>
-            <label>
-              Type
+            <div className="search-controls">
               <select
                 aria-label="Type"
                 value={kind}
-                onChange={(event) => setKind(event.target.value as SearchKind | "all")}
+                onChange={(event) => setKind(event.target.value as SearchCriteria["kind"])}
               >
-                {(["all", "file", "project", "run", "prompt", "message", "thought"] as const).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value === "all" ? "All types" : value[0]?.toUpperCase() + value.slice(1)}
-                    </option>
-                  ),
-                )}
+                {Object.entries(typeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
-            </label>
-            <label>
-              Sort
               <select
                 aria-label="Sort"
                 value={sort}
-                onChange={(event) => setSort(event.target.value as typeof sort)}
+                onChange={(event) => setSort(event.target.value as SearchCriteria["sort"])}
               >
-                <option value="relevance">Relevance</option>
-                <option value="newest">Newest</option>
+                {Object.entries(sortLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
-            </label>
+              {unapplied && (
+                <span
+                  className="search-unapplied"
+                  role="img"
+                  aria-label={unappliedLabel}
+                  data-tooltip={unappliedLabel}
+                  // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the status tooltip.
+                  tabIndex={0}
+                >
+                  <Icon name="information" />
+                </span>
+              )}
+              <p className="sr-only" role="status">
+                {unapplied ? unappliedLabel : ""}
+              </p>
+            </div>
           </div>
         </form>
       </search>
       <div className="search-content" hidden={!expanded && !!directory}>
+        {!directory && <p>Open a project to search.</p>}
+        {expanded && (
+          <div className="search-pending" hidden={!loading} inert={!loading}>
+            <div className="search-loading" role="status">
+              <span className="search-loading-art" aria-hidden="true">
+                <Icon name="search" />
+              </span>
+              <span className="search-loading-label">Searching...</span>
+            </div>
+          </div>
+        )}
         {expanded && <TranscriptNotice data={data} />}
-        {!directory ? (
-          <p>Open a project to search.</p>
-        ) : submitted?.results === null ? (
-          <p role="status">Searching saved transcripts…</p>
-        ) : (
-          submitted?.results && (
-            <div className="search-body">
-              <section
-                className="search-overview"
-                aria-labelledby="search-overview-heading"
-                aria-busy={overview?.status === "generating"}
-              >
+        {expanded && (
+          <div className="search-pending search-placeholders" hidden={!loading} aria-hidden="true">
+            <div className="search-overview search-summary-skeleton">
+              <span className="search-skeleton-title" />
+              <div className="search-skeleton-paragraph">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="search-skeleton-paragraph">
+                <span />
+                <span />
+              </div>
+            </div>
+            <ul className="search-skeleton">
+              {[1, 2].map((row) => (
+                <li key={row}>
+                  <span className="search-skeleton-timestamp" />
+                  <span className="search-skeleton-title" />
+                  <span className="search-skeleton-snippet" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {submitted?.results && (
+          <div className="search-body">
+            {!loading && (
+              <section className="search-overview" aria-labelledby="search-overview-heading">
                 <div className="search-overview-heading">
                   <h2 id="search-overview-heading">AI overview</h2>
-                  {overview?.status === "generating" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        cancel();
-                        setOverview({ status: "stopped" });
-                      }}
-                    >
-                      Stop
+                  {overview?.status !== "complete" && (
+                    <button type="button" onClick={retry}>
+                      Retry overview
                     </button>
-                  ) : (
-                    overview?.status !== "complete" && (
-                      <button type="button" onClick={retry}>
-                        Retry overview
-                      </button>
-                    )
                   )}
                 </div>
-                {overview?.status === "generating" ? (
-                  <span className="sr-only" role="status">
-                    Generating overview…
-                  </span>
-                ) : overview?.status === "complete" ? (
+                {overview?.status === "complete" ? (
                   <div className="search-overview-text">
                     {summaryParts(overview.text, overview.sources.length).map((part) =>
                       part.source === undefined ? (
@@ -308,52 +338,51 @@ export function SearchPage({
                 ) : overview?.status === "error" ? (
                   <p role="alert">{overview.error}</p>
                 ) : (
-                  <p role="status">
-                    {overview?.status === "stopped" ? "Overview stopped." : "Overview unavailable."}
-                  </p>
+                  <p role="status">Overview unavailable.</p>
                 )}
               </section>
-              {!submitted.results.length && overview?.status !== "generating" && (
-                <p role="status">No matching results.</p>
-              )}
-              <ul
-                className="search-results"
-                aria-label="Search results"
-                ref={list}
-                onKeyDown={(event) => {
-                  const buttons = [
-                    ...(list.current?.querySelectorAll<HTMLButtonElement>(
-                      "button[data-result-index]",
-                    ) ?? []),
-                  ];
-                  const index = buttons.indexOf(event.target as HTMLButtonElement);
-                  const next =
-                    event.key === "ArrowDown"
-                      ? Math.min(buttons.length - 1, index + 1)
-                      : event.key === "ArrowUp"
-                        ? Math.max(0, index - 1)
-                        : event.key === "Home"
-                          ? 0
-                          : event.key === "End"
-                            ? buttons.length - 1
-                            : undefined;
-                  if (next !== undefined) {
-                    event.preventDefault();
-                    buttons[next]?.focus();
-                  }
-                }}
-              >
-                {submitted.results.map((result, i) => (
+            )}
+            {!submitted.results.length && !loading && <p role="status">No matching results.</p>}
+            <ul
+              className="search-results"
+              aria-label="Search results"
+              ref={list}
+              onKeyDown={(event) => {
+                const buttons = [
+                  ...(list.current?.querySelectorAll<HTMLButtonElement>(
+                    "button[data-result-index]",
+                  ) ?? []),
+                ];
+                const index = buttons.indexOf(event.target as HTMLButtonElement);
+                const next =
+                  event.key === "ArrowDown"
+                    ? Math.min(buttons.length - 1, index + 1)
+                    : event.key === "ArrowUp"
+                      ? Math.max(0, index - 1)
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? buttons.length - 1
+                          : undefined;
+                if (next !== undefined) {
+                  event.preventDefault();
+                  buttons[next]?.focus();
+                }
+              }}
+            >
+              {submitted.results.map((result, i) => {
+                const type = typeLabels[result.kind];
+                const showType = !result.title.startsWith(`${type} / `);
+                return (
                   <li key={result.id}>
-                    <div className="search-result-meta">
-                      <span>
-                        {result.kind[0]?.toUpperCase()}
-                        {result.kind.slice(1)}
-                      </span>
-                      {result.at && (
-                        <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
-                      )}
-                    </div>
+                    {(showType || result.at) && (
+                      <div className="search-result-meta">
+                        {showType && <span>{type}</span>}
+                        {result.at && (
+                          <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
+                        )}
+                      </div>
+                    )}
                     <h2>
                       <button
                         type="button"
@@ -371,10 +400,10 @@ export function SearchPage({
                       />
                     </p>
                   </li>
-                ))}
-              </ul>
-            </div>
-          )
+                );
+              })}
+            </ul>
+          </div>
         )}
       </div>
     </main>

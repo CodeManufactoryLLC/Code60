@@ -462,6 +462,7 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  historySaving?: "available" | "unavailable";
   projectId?: string;
   kind?: "relay" | "project";
   conversationId?: string;

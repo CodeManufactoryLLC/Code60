@@ -2,8 +2,6 @@
 
 /* Splash and logo */
 .splash {
-  --splash-panel-bg: var(--bg);
-  --splash-panel-text: var(--text);
   --splash-logo-text: var(--text);
   position: fixed;
   inset: 0;
@@ -24,7 +22,7 @@
 
 .splash[open] {
   display: grid;
-  grid-template-columns: clamp(280px, 32vw, 400px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -40,7 +38,7 @@
 
 .splash-brand {
   position: relative;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   display: flex;
   flex-direction: column;
@@ -93,118 +91,24 @@
   --letter-spacing: normal;
   margin: 0;
   color: var(--splash-logo-text);
-  font-family: var(--logo);
+  font-family: var(--font);
   font-size: 18px;
   font-weight: 400;
   text-align: center;
   text-transform: none;
 }
 
-.splash-projects {
-  --text: var(--splash-panel-text);
-  --muted: var(--splash-panel-text);
-  --surface: transparent;
-  --control-fill: transparent;
-  --control-hover: var(--hover-bg);
-  --group-fill: transparent;
-  --group-hover: var(--hover-bg);
-  --group-border: var(--control-border);
-  --group-shadow: none;
-  --border: color-mix(in srgb, var(--splash-panel-text) 35%, transparent);
-  --control-border: color-mix(in srgb, var(--splash-panel-text) 65%, transparent);
-  --accent: var(--splash-panel-text);
-  --hover-bg: color-mix(in srgb, var(--splash-panel-text) 12%, transparent);
-  --primary: var(--splash-panel-text);
-  --primary-text: var(--bg);
-  --primary-hover: color-mix(in srgb, var(--splash-panel-text) 85%, var(--bg));
-  --disabled-fill: transparent;
-  --destructive: var(--splash-panel-text);
-  --on-destructive: var(--bg);
-  --danger: var(--splash-panel-text);
-  --focus-line: var(--splash-panel-text);
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable both-edges;
-  padding: max(48px, var(--app-titlebar-height)) 24px 24px;
-  background: var(--splash-panel-bg);
+.splash-enter {
+  min-width: 120px;
+  margin-top: 24px;
+  padding: 10px 32px;
+  background: transparent;
   color: var(--text);
   -webkit-app-region: no-drag;
 }
 
-.splash-projects h2 {
-  margin: 0 0 20px;
-  font-size: 18px;
-  font-weight: 400;
-  text-align: center;
-}
-
-.splash-projects .project-list {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: none;
-  margin: 0 -12px;
-}
-
-.splash-projects .project-remove {
-  opacity: 1;
-  font-size: 11px;
-}
-
-:where(.splash-projects) .button-group {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.splash-projects .modal-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 20px;
-}
-
-:where(.splash-projects) .modal-footer > button {
-  width: 100%;
-  white-space: normal;
-}
-
-.splash-projects button:focus-visible {
-  outline: 2px solid var(--focus-line);
-  outline-offset: -2px;
-}
-
-.splash-projects button:active:not(:disabled) {
-  --muted: var(--bg);
-}
-
-@media (max-width: 700px) {
-  .splash[open] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 700px) {
-  .splash-brand {
-    grid-column: 1;
-    grid-row: 1;
-  }
-}
-
-@media (max-width: 700px) {
-  .splash-projects {
-    grid-row: 2;
-    padding-top: 24px;
-  }
-}
-
 .wordmark {
-  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font);
   font-weight: 400;
   --letter-spacing: 0.02em;
   text-transform: none;

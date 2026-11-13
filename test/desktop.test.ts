@@ -394,6 +394,8 @@ describe("retained project runtimes", () => {
         ]),
       );
     });
+    // The running summary can arrive before the fake agent starts its prompt.
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
     const worker = agents.sessions.at(-1);
     worker?.update({ type: "message", text: "Not a summary transcript" });
     worker?.endTurn("end_turn");
@@ -3947,6 +3949,8 @@ describe("orchestrated workers over ACP", () => {
     expect(chatPrompts().at(-1)).toContain("Verifier unavailable");
     expect(chatPrompts().at(-1)).toContain("not proof that the task succeeded");
     expect(controller.snapshot().chat.tactic).toBe("explore-the-codebase");
+    // Delivery precedes queued metadata writes; drain them before reading another store.
+    await controller.shutdown(true);
     const store = new ChatStore(join(directory, ".code60_workspace"));
     const saved = (await store.load()).chats.find((chat) => chat.runId === chatId);
     expect(
@@ -4460,6 +4464,11 @@ describe("orchestrated workers over ACP", () => {
       const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
       const operationId = prepared.operation?.id;
       if (!operationId) throw new Error("Missing application");
+      // Prepare schedules a refresh. Finish that unchanged capture before simulating file drift.
+      await vi.waitFor(() => {
+        // biome-ignore lint/complexity/useLiteralKeys: Observe fixture quiescence without changing production capture behavior.
+        expect(controller["reviewCaptures"].size).toBe(0);
+      });
       tasks.snapshot.mockResolvedValue("c".repeat(40));
       await expect(
         controller.taskAction({ ...identity, type: "apply", operationId }),

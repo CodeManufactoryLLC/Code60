@@ -9,7 +9,6 @@
   flex: 1;
 }
 
-.search-controls label,
 .filter-content label {
   display: flex;
   flex-direction: column;
@@ -18,15 +17,16 @@
 
 .search-query-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 8px;
 }
 
-.search-query-shell {
-  position: relative;
+.search-query-action {
   display: flex;
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
+  gap: 8px;
 }
 
 .search-query {
@@ -43,7 +43,14 @@
 }
 
 .search-controls {
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-controls select {
+  border-radius: var(--ui-radius);
 }
 
 .search-body {
@@ -76,13 +83,15 @@
   line-height: 1.65;
 }
 
-.search-results {
+.search-results,
+.search-skeleton {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.search-results li {
+.search-results li,
+.search-skeleton li {
   margin-bottom: 28px;
   min-width: 0;
 }
@@ -120,8 +129,9 @@
 
 .search-results .search-result-title:focus-visible,
 .search-overview .search-citation:focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--focus-outline);
   outline-offset: 3px;
+  box-shadow: var(--focus-shadow);
 }
 
 .search-overview .search-citation {
@@ -163,16 +173,10 @@
   }
 }
 
-.search-query-shell > .chat-loader {
-  top: 1px;
-  left: 1px;
-  width: calc(100% - 2px);
-}
-
 /* Search opens around a single field, then makes room for the working results view. */
 .search-page {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.45fr) auto minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
   scrollbar-gutter: auto;
@@ -180,7 +184,7 @@
 }
 
 .search-page[data-expanded="true"] {
-  grid-template-rows: minmax(0, 0fr) auto minmax(0, 1fr);
+  grid-template-rows: minmax(clamp(24px, 8dvh, 64px), 0fr) auto minmax(0, 1fr);
 }
 
 .search-lead-space {
@@ -200,27 +204,6 @@
   margin-inline: 0;
 }
 
-.search-wordmark {
-  display: flex;
-  justify-content: center;
-  max-height: 64px;
-  margin-bottom: 28px;
-  overflow: hidden;
-  font-size: 32px;
-  line-height: 1.35;
-  opacity: 1;
-  transition:
-    max-height var(--motion) ease,
-    margin-bottom var(--motion) ease,
-    opacity var(--motion) ease;
-}
-
-.search-page[data-expanded="true"] .search-wordmark {
-  max-height: 0;
-  margin-bottom: 0;
-  opacity: 0;
-}
-
 .search-entry .search-query {
   min-width: 0;
   min-height: 48px;
@@ -228,14 +211,153 @@
   font-size: var(--text-size, 16px);
 }
 
-.search-controls[hidden] {
-  display: none;
+.search-unapplied {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+}
+
+.search-loading {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-bottom: 20px;
+  text-align: center;
+}
+
+.search-loading-label {
+  font-size: max(18px, 1.25em);
+}
+
+.search-loading-art {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: var(--primary);
+}
+
+.search-placeholders {
+  --skeleton-fill: color-mix(in srgb, var(--text) 8%, var(--bg));
+}
+
+.search-placeholders span {
+  display: block;
+  border-radius: var(--ui-radius);
+  background-color: var(--skeleton-fill);
+}
+
+.search-skeleton-paragraph {
+  display: grid;
+  gap: 0.45em;
+}
+
+.search-skeleton-paragraph + .search-skeleton-paragraph {
+  margin-top: 1em;
+}
+
+.search-skeleton-paragraph > span {
+  height: 0.85em;
+}
+
+.search-skeleton-paragraph > span:last-child {
+  width: 62%;
+}
+
+.search-skeleton-timestamp {
+  width: min(152px, 42%);
+  height: 0.8em;
+  margin-bottom: 4px;
+}
+
+.search-skeleton-title {
+  width: min(236px, 64%);
+  height: var(--title-size, 18px);
+}
+
+.search-summary-skeleton > .search-skeleton-title {
+  width: min(118px, 60%);
+  margin-bottom: 12px;
+}
+
+.search-skeleton-snippet {
+  width: min(412px, 88%);
+  height: 1em;
+  margin-top: 6px;
+}
+
+.search-skeleton li:nth-child(2) .search-skeleton-snippet {
+  width: min(326px, 74%);
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  /* Tint the animated frames with the primary color and blend out the paper. */
+  .search-loading-art {
+    isolation: isolate;
+    background-color: var(--primary);
+    mix-blend-mode: multiply;
+  }
+
+  .search-loading-art::before {
+    content: "";
+    width: 100%;
+    height: 100%;
+    background: url("../search-engine.gif") center / contain no-repeat;
+    filter: grayscale(1) contrast(1.12);
+    mix-blend-mode: screen;
+  }
+
+  :root[data-color-scheme="dark"] .search-loading-art {
+    mix-blend-mode: screen;
+  }
+
+  :root[data-color-scheme="dark"] .search-loading-art::before {
+    filter: grayscale(1) invert(1) contrast(1.12);
+    mix-blend-mode: multiply;
+  }
+
+  .search-loading-art .carbon-icon {
+    display: none;
+  }
+
+  .search-placeholders span {
+    background-image: linear-gradient(
+      100deg,
+      var(--skeleton-fill) 40%,
+      color-mix(in srgb, var(--text) 15%, var(--bg)) 50%,
+      var(--skeleton-fill) 60%
+    );
+    background-size: 200% 100%;
+    animation: search-skeleton-shimmer 1.8s linear infinite;
+  }
+}
+
+@media (forced-colors: active) {
+  .search-loading-art {
+    color: CanvasText;
+  }
+
+  .search-placeholders span {
+    border: 1px solid GrayText;
+  }
+}
+
+@keyframes search-skeleton-shimmer {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -25% 0;
+  }
 }
 
 .search-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
   min-height: 0;
   overflow: hidden;
   padding-top: 24px;
@@ -249,18 +371,45 @@
   display: none;
 }
 
-.search-content .search-body {
-  animation: search-reveal var(--motion) 120ms both ease-out;
+.search-content > :is(p, .transcript-errors) {
+  margin-bottom: 20px;
 }
 
-@keyframes search-reveal {
+.search-pending {
+  display: flow-root;
+  flex-shrink: 0;
+  overflow: clip;
+}
+
+.search-pending[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  /* Keep placeholders painted as their space closes around the incoming results. */
+  .search-pending {
+    interpolate-size: allow-keywords;
+    height: auto;
+    opacity: 1;
+    transition:
+      height var(--motion) var(--ease),
+      opacity var(--motion) var(--ease),
+      display var(--motion) allow-discrete;
+  }
+
+  .search-pending[hidden] {
+    height: 0;
+    opacity: 0;
+  }
+
+  .search-body :is(.search-overview, .search-results > li) {
+    animation: search-result-reveal var(--motion) ease-out both;
+  }
+}
+
+@keyframes search-result-reveal {
   from {
     opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 

@@ -1,0 +1,149 @@
+/* Home is a compact launchpad; cards share the application's typography and colors. */
+.home-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.home-page > .table-controls {
+  min-height: 38px;
+}
+
+.home-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 24px var(--page-padding);
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, max(240px, calc(var(--text-size, 13px) * 16))), 1fr)
+    );
+  gap: 16px;
+  width: 100%;
+  max-width: 840px;
+  margin: auto;
+  flex-shrink: 0;
+}
+
+.home-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--group-shadow);
+  text-align: left;
+  white-space: normal;
+  transition:
+    background-color var(--motion) var(--ease),
+    box-shadow var(--motion) var(--ease);
+}
+
+.home-card-art {
+  display: flex;
+  align-items: center;
+  padding: 24px 20px;
+  min-height: 100px;
+  box-sizing: border-box;
+  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--primary) 14%, var(--surface)),
+    var(--surface)
+  );
+  color: var(--accent);
+}
+
+.home-card-art .navigation-icon {
+  position: static;
+  width: 48px;
+  height: 48px;
+  transform: none;
+}
+
+.home-card-art .relay-navigation-icon {
+  width: 57px;
+  height: 51px;
+}
+
+.home-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 20px 48px;
+  overflow-wrap: anywhere;
+}
+
+.home-card-name {
+  font: var(--title-weight, 400) max(22px, var(--title-size, 18px)) var(--title-font, var(--font));
+  text-transform: var(--title-case, none);
+  --letter-spacing: var(--title-spacing, normal);
+}
+
+.home-card-description {
+  font:
+    var(--text-weight, 400) max(15px, var(--text-size, 13px)) / 1.5 var(--text-font, var(--font));
+  text-transform: var(--text-case, none);
+  --letter-spacing: var(--text-spacing, normal);
+  color: var(--muted);
+}
+
+.home-card-arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  color: var(--accent);
+  transform: rotate(180deg);
+}
+
+.home-card:hover:not(:disabled),
+.home-card:active:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  color: var(--text);
+  box-shadow: var(--overlay-shadow);
+}
+
+.home-card:disabled .home-card-art {
+  opacity: 0.45;
+}
+
+.home-card:focus-visible {
+  box-shadow: var(--focus-shadow), var(--group-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-card {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .home-card,
+  .home-card:focus-visible {
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+  .home-card-art {
+    background: Canvas;
+    color: ButtonText;
+  }
+  .home-card-arrow {
+    color: ButtonText;
+  }
+}

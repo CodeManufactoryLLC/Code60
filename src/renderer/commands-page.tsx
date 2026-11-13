@@ -11,6 +11,7 @@ import {
 import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
+import { TableControlGroup } from "./table-controls.js";
 
 export function CommandsPage({
   commands,
@@ -93,7 +94,7 @@ export function CommandsPage({
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with /name to use one.
         </InfoTip>
-        <div className="button-group table-control-group">
+        <TableControlGroup label="Command actions">
           <button
             type="button"
             disabled={busy || commands.length >= COMMAND_LIMIT}
@@ -104,7 +105,7 @@ export function CommandsPage({
           >
             <Icon name="add" /> New command
           </button>
-        </div>
+        </TableControlGroup>
       </header>
       <div className="commands-scroll">
         <div className="prompt-editor-body">

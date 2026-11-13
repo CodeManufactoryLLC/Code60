@@ -49,6 +49,7 @@ describe("conversation hierarchy", () => {
         chats={[failed]}
         runs={[]}
         selectedId="relay-id"
+        relayNavigation
         database={null}
         eventsByRun={{}}
         navigationSerial={undefined}
@@ -58,9 +59,12 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('id="conversation-relay-id"');
+    expect(html).toContain("relay-navigation-icon");
+    expect(html).not.toContain('data-icon="chat-circle"');
+    expect(html).not.toContain('data-icon="arrow-elbow-down-right"');
     expect(html).not.toContain("disabled");
   });
-  it("renders Relay and project groups as siblings with only each project's own conversations", () => {
+  it("renders only project-bound conversations inside project groups", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const projects = ["a", "b", "c"].map((id) => ({
       id,
@@ -95,7 +99,7 @@ describe("conversation hierarchy", () => {
     );
     const sections = html.match(/<section[\s\S]*?<\/section>/g) ?? [];
     expect(sections).toHaveLength(3);
-    expect(html.indexOf("Relay")).toBeLessThan(html.indexOf("<section"));
+    expect(html).not.toContain('id="conversation-relay"');
     expect(html).not.toContain("Legacy history");
     sections.forEach((section, index) => {
       const project = projects[index];
@@ -103,7 +107,8 @@ describe("conversation hierarchy", () => {
       expect(section).not.toContain('id="conversation-relay"');
       expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
       expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
-      expect(section.indexOf("More for")).toBeLessThan(section.indexOf("Toggle chats"));
+      expect(section).not.toContain("Toggle chats");
+      expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
@@ -225,7 +230,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("keeps names and status text-only with separate menu and disclosure icons", () => {
+  it("marks conversation roles with icons while retaining text status and separate actions", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -259,15 +264,20 @@ describe("conversation hierarchy", () => {
       expect(button).toContain('class="icon-button');
       expect(button?.match(/<svg/g)).toHaveLength(1);
     }
-    for (const entry of html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/g) ??
-      [])
-      expect(entry).not.toContain("<svg");
-    expect(html).not.toContain("chat-role-icon");
-    expect(html.match(/<svg/g)).toHaveLength(2);
+    const entries = html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/g) ?? [];
+    expect(entries).toHaveLength(3);
+    for (const entry of entries) {
+      expect(entry).toContain(
+        entry.includes('data-role="orchestrator"')
+          ? 'data-icon="chat-circle"'
+          : 'data-icon="arrow-elbow-down-right"',
+      );
+      expect(entry).toContain('aria-hidden="true" focusable="false"');
+    }
     expect(html).not.toContain("<img");
     expect(html).not.toContain('role="dialog"');
   });
-  it("keeps errors and approval counts visible without icons", () => {
+  it("keeps errors and approval counts visible as text", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const owner = chat("a");
     owner.error = "Connection failed";
@@ -294,9 +304,7 @@ describe("conversation hierarchy", () => {
     expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
       "disabled",
     );
-    expect(
-      html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/)?.[0],
-    ).not.toContain("<svg");
+    expect(html.match(/<svg/g)).toHaveLength(2);
     expect(html).not.toContain("<img");
   });
   it("clears unread for the selected worker without clearing its siblings", () => {

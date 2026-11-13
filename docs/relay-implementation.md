@@ -33,8 +33,23 @@ This branch implements Relay and retained project runtimes as described in
   serialized labels. The first human Send attaches that window once. Reading older
   history uses bounded, expiring opaque cursors and never sends a prompt.
 - Private framed source storage, exclusive writer ownership, metadata validation,
-  atomic updates and explicit incomplete/recovery errors. Original core records
-  remain on disk. Unsafe or missing metadata is not silently recreated.
+  atomic updates and recorded incomplete-history metadata. A history gap permits
+  a fresh connection and new messages when the journal passes validation. Retry
+  clears transient write-failure state after validation. Damaged or externally
+  changed storage still blocks connection. Original core records remain on disk.
+  Unsafe or missing metadata is not silently recreated.
+- Buffered journal writes merge adjacent chunks and flush within 50 ms, at
+  64 KiB, at turn end and before reconnect/shutdown. Queued and in-flight text
+  share a 1,048,576-code-unit limit, with up to 1,024 records. Each batch syncs
+  once. Saving failure shows a warning while the live conversation continues.
+  That session stops saving and releases queued buffers; explicit reconnect
+  validates storage before saving again. Complete owned frames retain their verified
+  file identity even if sync fails, so Retry can validate them without replay.
+  Partial writes and outside changes remain rejected. Failed batches are never replayed.
+  A separate warning about earlier missing messages remains after saving resumes
+  or the app restarts while the persisted incomplete-history marker is present.
+  Logs retain fixed persistence-stage, code, queue-size and identity-change
+  metadata, including separate incomplete-marker failures.
 - Relay-only authenticated dispatch with required absolute `cwd` and explicit
   `direct` or `worktree` mode. Targets are canonicalized and rechecked before agent
   launch. Direct mode never silently becomes isolated work, or vice versa.
@@ -131,14 +146,16 @@ This branch implements Relay and retained project runtimes as described in
   preserve plan tabs and discard file tabs. A real development-React StrictMode
   fixture checks effect replay, release/re-registration, stale sequence frames,
   root changes and ignored responses for released subscriptions.
-- Shared historical message presentation, safe assistant Markdown, labelled
-  excerpts and exact-source Copy for complete messages and partial excerpts.
+- The Relay screen shows the live transcript and composer without a historical
+  transcript panel or its paging and Copy controls. Live-message Copy remains
+  available. Stored history continues to supply bounded first-Send context.
+  The backend retains bounded original-source reads for compatibility.
   Original-source reads use pinned, expiring opaque cursors outside lifecycle
-  queues, with at most two concurrent bounded reads. Copy never sends a prompt
-  or grants task authority. Explicit full-message Copy does not enlarge display pages.
+  queues, with at most two concurrent bounded reads. Source requests never send
+  a prompt or grant task authority, and full-message reads do not enlarge history windows.
   Journal reads pin exact native identity and nanosecond change stamps across
   calls. Verified owned appends preserve existing source bounds; outside edits
-  or pathname replacement invalidate Copy rather than returning altered source.
+  or pathname replacement invalidate source reads.
 - Relay's worker transcript tool reads the bounded live target event window,
   never a lifetime worker journal. It returns window revision and incompleteness;
   numeric page positions belong to that window. Original run records stay on disk.
@@ -297,10 +314,14 @@ unchanged. Project persistence, the CLI and SQLite schema 5 are unchanged.
 The desktop regression opens three projects and creates six conversations plus
 two owned workers. It checks actual label coordinates: every project aligns with
 Relay, project chats add 24px and their owned workers add another 24px.
-It also checks right-edge chevrons, separate actions, anchored and viewport-clamped
+It also checks label-based disclosures without chevrons, separate actions, anchored and viewport-clamped
 menus, outside/Escape/scroll/resize dismissal, focus restoration, project
 collapse/reopen, project close/reopen, retained drafts and unchanged idle workers.
-The connected opener remains Open Project throughout.
+The Projects heading uses the Phosphor clipboard icon and a separate plus action
+labelled Open Project. That action opens the existing project modal; there is no
+standalone opener above the heading. Archiving the currently displayed project
+chat shows a “Chat archived.” toast and selects Relay. Archiving other chats
+leaves the displayed conversation unchanged.
 
 Screenshot inspection covers Light and Dark at 180px, 220px and 480px sidebar
 widths, including 24px navigation text and reduced motion. The expanded checks

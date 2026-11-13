@@ -76,12 +76,24 @@
   --letter-spacing: var(--title-spacing, normal);
 }
 
-.table-control-group {
+.table-control-scroll {
+  --shadow-space: 4px;
+  display: flex;
   min-width: 0;
-  flex: 0 0 auto;
+  max-width: calc(100% + var(--shadow-space));
+  margin: calc(-1 * var(--shadow-space));
   margin-inline-start: auto;
-  overflow-x: scroll;
+  /* Leave room for the group's shadow inside the scroll clip. */
+  padding: var(--shadow-space);
+  overflow-x: auto;
   overflow-y: hidden;
+}
+
+.table-control-group {
+  position: relative;
+  flex: none;
+  width: max-content;
+  max-width: none;
 }
 
 .button-group.table-control-group > button {
@@ -110,8 +122,8 @@
   background-color: var(--group-hover);
 }
 
-:where(:root[data-focus-highlight="on"]) .table-control-group > select:focus-visible {
-  box-shadow: inset 0 0 0 5px var(--focus-band);
+.table-control-group > select:focus-visible {
+  box-shadow: var(--focus-inset-shadow);
 }
 
 .filter-trigger-label {
@@ -407,8 +419,7 @@
   overflow-wrap: anywhere;
 }
 
-.filter-library,
-.search-controls {
+.filter-library {
   display: flex;
   align-items: end;
   flex-wrap: wrap;

@@ -1,8 +1,13 @@
 const systemFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+export const defaultTypeface = {
+  id: "d-din",
+  label: "D-DIN",
+  family: `"D-DIN", ${systemFont}`,
+} as const;
 export const typefaces = [
   { id: "system", label: "System", family: systemFont },
   { id: "computer-modern", label: "Computer Modern", family: '"CMU Serif", Georgia, serif' },
-  { id: "d-din", label: "D-DIN", family: `"D-DIN", ${systemFont}` },
+  defaultTypeface,
   { id: "georgia", label: "Georgia", family: "Georgia, serif" },
   { id: "ibm-plex-sans", label: "IBM Plex Sans", family: `"IBM Plex Sans", ${systemFont}` },
   { id: "ibm-plex-serif", label: "IBM Plex Serif", family: '"IBM Plex Serif", Georgia, serif' },
@@ -112,7 +117,7 @@ export type ResolvedText = {
 export function resolveText(styles: TextStyles, role: TextRole): ResolvedText {
   const style = styles[role];
   const defaults = textRoles.find((entry) => entry.id === role) ?? textRoles[5];
-  const typeface = style.typeface ?? "ibm-plex-sans";
+  const typeface = style.typeface ?? defaultTypeface.id;
   return {
     family: fontFamily(typeface),
     spacing: letterSpacing(typeface),

@@ -10,6 +10,16 @@
   Pin journal identity and nanosecond change stamps. Bounded source reads and
   owned appends share storage I/O serialization, never the conversation queue.
   Outside changes invalidate exact Copy; only verified owned appends advance stamps.
+- Keep historical gaps distinct from damaged storage. A valid journal with the
+  persisted incomplete flag can connect and accept new messages. Preserve its
+  warning and clear transient write-failure state only after successful validation.
+- Batch Relay journal fragments with a single bounded writer. Flush at 50 ms,
+  64 KiB, turn completion and lifecycle shutdown. Count in-flight data toward
+  capacity. Journal failure disables only saving for that generation, exposes
+  historySaving, and preserves live Send and worker delivery. Never replay an
+  uncertain batch. Keep first-error diagnostics typed and source-free and report
+  marker failures separately. Core run records and authoritative plan/review
+  persistence retain their existing failure handling.
 - Connect a fresh idle ACP session after verified setup, with zero startup prompts
   or restored worker/plan authority. Attach the shared bounded history window only
   to the first human Send. Never resume a native Relay session on restart.

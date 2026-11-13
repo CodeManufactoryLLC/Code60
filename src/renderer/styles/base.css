@@ -151,10 +151,9 @@ textarea {
 }
 
 /* Paint field baselines inside the fill. */
-input:not([type="checkbox"], [type="radio"]),
-select,
-textarea {
-  box-shadow: inset 0 -1px var(--control-border);
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  --focus-rest-shadow: inset 0 -1px var(--control-border);
+  box-shadow: var(--focus-rest-shadow);
 }
 
 input[type="number"] {
@@ -262,16 +261,15 @@ input[type="checkbox"][role="switch"]:checked::after {
   color: var(--primary-text);
 }
 
-/* Focus remains functional; its optional border/glow is off until explicitly enabled. */
+/* Keep an outline for the enhanced preference and forced colors. */
 :focus-visible {
-  outline: 0;
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: var(--focus-shadow), var(--focus-rest-shadow, 0 0 transparent);
 }
 
-/* A blue-gray line with a neutral band, outset on controls. Filled controls get a gap. */
 :where(:root[data-focus-highlight="on"]) :focus-visible {
-  outline: 2px solid var(--focus-line);
   outline-offset: 3px;
-  box-shadow: 0 0 0 3px var(--focus-band);
 }
 
 :where(:root[data-focus-highlight="on"])
@@ -280,19 +278,17 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 
 /* Rows, menu items, and anything in a clipping or scrolling region use inset focus. */
-:where(:root[data-focus-highlight="on"])
-  :is(
-    [role="menuitem"],
-    [role="option"],
-    .project-item,
-    .modal-heading button,
-    .page-tab [role="tab"],
-    .button-group > button,
-    .table-control-group > select
-  ):focus-visible {
-  outline: 2px solid var(--focus-line);
+:is(
+  [role="menuitem"],
+  [role="option"],
+  .project-item,
+  .modal-heading button,
+  .page-tab [role="tab"],
+  .button-group > button,
+  .table-control-group > select
+):focus-visible {
   outline-offset: -3px;
-  box-shadow: inset 0 0 0 5px var(--focus-band);
+  box-shadow: var(--focus-inset-shadow);
 }
 
 pre {
@@ -351,8 +347,9 @@ kbd {
 }
 
 .segmented-option:has(input:checked) {
+  --segmented-selection: inset 0 -2px var(--primary);
   background: var(--accent-bg);
-  box-shadow: inset 0 -2px var(--primary);
+  box-shadow: var(--segmented-selection);
 }
 
 .segmented-option input[type="radio"] {
@@ -367,9 +364,10 @@ kbd {
   cursor: pointer;
 }
 
-:where(:root[data-focus-highlight="on"]) .segmented-option:has(input:focus-visible) {
-  outline: 2px solid var(--focus-line);
+.segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-outline);
   outline-offset: -3px;
+  box-shadow: var(--segmented-selection, 0 0 transparent), var(--focus-inset-shadow);
 }
 
 /* Status label, matching the grid's canvas drawing for chat titles and palette hints. */
