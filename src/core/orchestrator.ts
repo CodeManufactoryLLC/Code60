@@ -30,6 +30,7 @@ const CANCEL_GRACE_MS = 10_000;
 const KILL_GRACE_MS = 5_000;
 
 export interface OrchestratorDeps {
+  memory?: import("./agent-memory.js").MemoryFactory;
   log?: LogSink;
   agents: Agents;
   git: Git;
@@ -130,6 +131,7 @@ export async function createOrchestrator(
     for (const listener of changeListeners) listener();
   };
   const runDeps = {
+    ...(options.mode === "interactive" && deps.memory ? { memory: deps.memory } : {}),
     ...(deps.log ? { log: deps.log } : {}),
     agents: deps.agents,
     git: deps.git,

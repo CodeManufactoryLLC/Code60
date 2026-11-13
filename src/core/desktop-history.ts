@@ -2,8 +2,8 @@ import type { RecordStore } from "./records.js";
 
 /** Existing IDs keep their original store; only newly created runs use the repository store. */
 export function withDirectoryHistory(primary: RecordStore, legacy: RecordStore): RecordStore {
-  const sources = async () => {
-    const [current, previous] = await Promise.all([primary.list(), legacy.list()]);
+  const sources = async (strict = false) => {
+    const [current, previous] = await Promise.all([primary.list(strict), legacy.list(strict)]);
     const ids = new Set(current.map((record) => record.id));
     if (previous.some((record) => ids.has(record.id)))
       throw new Error("Conflicting run IDs in project history stores");
@@ -19,8 +19,8 @@ export function withDirectoryHistory(primary: RecordStore, legacy: RecordStore):
     appendEvent: async (event) => (await owner(event.runId)).appendEvent(event),
     read: async (id) => (await owner(id)).read(id),
     readEvents: async (id) => (await owner(id)).readEvents(id),
-    list: async () => {
-      const { current, previous } = await sources();
+    list: async (strict = false) => {
+      const { current, previous } = await sources(strict);
       return [...current, ...previous].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     },
   };

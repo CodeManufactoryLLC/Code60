@@ -45,7 +45,7 @@ export type {
   ReviewSnapshotFile,
 } from "../git/index.js";
 export { diagnosticMessage, diagnosticText } from "../platform/index.js";
-
+export * from "./agent-memory.js";
 export {
   diffRun,
   discardRun,
@@ -66,6 +66,7 @@ export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
 export { CODE60_VERSION, RUN_RECORD_FORMAT } from "./version.js";
 
 export interface CoreDeps {
+  memory?: import("./agent-memory.js").MemoryFactory;
   log?: LogSink;
   agents: Agents;
   git: Git;
@@ -141,12 +142,14 @@ export async function readOrchestrationChat(
   directory: string,
   id: string,
   includeEvents = true,
+  options: { readOnly?: boolean } = {},
 ) {
   const store = createRecordStore(deps.fs, join(directory, ".code60", "runs"));
   const record = await store.read(id);
   if (record.branch !== null || record.base !== null || record.worktree !== directory)
     throw new RefusedError("The saved orchestration directory does not match its run");
-  await markInterrupted({ store, processes: deps.processes, clock: deps.clock }, [record]);
+  if (!options.readOnly)
+    await markInterrupted({ store, processes: deps.processes, clock: deps.clock }, [record]);
   return {
     record,
     events: includeEvents ? await store.readEvents(id) : [],
@@ -436,6 +439,16 @@ export async function prepareRecovery(
 
 export { generateChatTitle } from "./chat-title.js";
 export { extractEpisodicMemory } from "./episodic-memory.js";
+export {
+  checkedVector,
+  chunkText,
+  conversationMessages,
+  embedMessages,
+  RAG_CHUNKER,
+  type RagEmbedder,
+  type RagSource,
+  topMatches,
+} from "./rag.js";
 export { summarizeSearch } from "./search-summary.js";
 
 async function preparePrivateRecords(

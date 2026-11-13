@@ -23,6 +23,7 @@ import {
 } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import { diagnosticMessage, diagnosticText } from "../platform/index.js";
+import type { MemoryFactory, MemoryPreparation, RunMemory } from "./agent-memory.js";
 import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
@@ -44,6 +45,7 @@ import type {
 import { ACTIVE_STATUSES, RefusedError } from "./types.js";
 
 export interface RunDeps {
+  memory?: MemoryFactory;
   log?: LogSink;
   agents: Agents;
   git: Git;
@@ -111,6 +113,7 @@ function message(error: unknown): string {
 
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
 export class Run {
+  private readonly memory: RunMemory | undefined;
   private readonly lifecycleOperation = randomUUID();
   private turnOperation = this.lifecycleOperation;
   private turnStarted = 0;
@@ -132,12 +135,15 @@ export class Run {
   private forced = false;
   private ending = false;
   private readonly startAbort = new AbortController();
+  private preparationAbort: AbortController | undefined;
 
   constructor(
     readonly record: RunRecord,
     private readonly deps: RunDeps,
     private readonly settings: RunSettings,
   ) {
+    this.memory =
+      settings.mode === "interactive" ? deps.memory?.(record, settings.repoDir) : undefined;
     this.finished = new Promise((resolve) => {
       this.resolveFinished = resolve;
     });
@@ -415,6 +421,7 @@ export class Run {
     if (!this.turnActive || session === undefined) return false;
     if (this.cancelCause !== undefined) return true;
     this.cancelCause = cause;
+    this.preparationAbort?.abort();
     this.log("cancel.requested", cause === "timeout" ? "timed_out" : "cancelled");
     this.withdrawPending();
     if (this.status === "waiting") void this.setStatus("running");
@@ -566,6 +573,7 @@ export class Run {
     });
     session.onPermission((request, signal) => this.onPermission(request, signal));
     void session.exited.then(() => {
+      if (this.session !== session) return;
       this.sessionExited = true;
       if (this.status === "idle" && !this.ending) {
         void this.end({ status: "failed", reason: "the agent exited while idle" });
@@ -637,7 +645,7 @@ export class Run {
     sent = text,
     origin?: "automatic",
   ): Promise<void> {
-    const session = this.session as AgentSession;
+    let session = this.session as AgentSession;
     const { clock } = this.deps;
     const { settings } = this;
     this.record.turns += 1;
@@ -648,13 +656,80 @@ export class Run {
     if (setInitialPrompt && this.record.firstPrompt === "") this.record.firstPrompt = text;
     this.cancelCause = undefined;
     this.turnActive = true;
-    this.emit({ type: "prompt", turn, text, ...(origin === undefined ? {} : { origin }) });
     const statusSaved = this.status === "running" ? Promise.resolve() : this.setStatus("running");
     this.turnTimer = clock.setTimeout(() => this.cancelTurn("timeout"), settings.turnTimeoutMs);
 
     let stopReason: StopReason | undefined;
     let failure: unknown;
+    let memoryUsed: string[] = [];
     try {
+      if (this.memory) {
+        let preparation: MemoryPreparation;
+        const abort = new AbortController();
+        this.preparationAbort = abort;
+        try {
+          preparation = await this.memory.prepare(
+            {
+              text,
+              delivered: sent,
+              turn,
+              usage: this.record.sessionState?.usage ?? null,
+              automatic: origin === "automatic",
+            },
+            AbortSignal.any([this.startAbort.signal, abort.signal]),
+          );
+        } catch {
+          clock.clearTimeout(this.turnTimer);
+          clock.clearTimeout(this.graceTimer);
+          this.turnActive = false;
+          await statusSaved;
+          this.emit({
+            type: "note",
+            text: "Memory preparation failed. This message was not sent. Open Settings → Memory, resolve the warning and try again. Unsent request:",
+            detail: text,
+          });
+          if (this.shutdownRequested)
+            return this.end({ status: "cancelled", reason: "cancelled before dispatch" });
+          await this.setStatus("idle", "Memory handoff unavailable; message not sent.");
+          return;
+        } finally {
+          this.preparationAbort = undefined;
+        }
+        if (this.cancelCause || this.shutdownRequested)
+          throw new Error("Cancelled before dispatch");
+        if (preparation.rollover) {
+          // Retire an idle physical session only. Logical task/gateway ownership stays in host.
+          this.session = undefined;
+          await session.stop(this.settings.killGraceMs);
+          session = await this.startRecoveryAgent((signal) =>
+            this.deps.agents.start(
+              {
+                name: this.record.agent,
+                command: settings.command,
+                cwd: this.record.worktree,
+                ...(settings.env === undefined ? {} : { env: settings.env }),
+                ...(settings.mcpServers === undefined ? {} : { mcpServers: settings.mcpServers }),
+              },
+              signal,
+            ),
+          );
+          await this.installSession(session);
+          this.emit({
+            type: "note",
+            text: "Context handoff: continued in a fresh agent session. Historical memory is evidence, not restored authority.",
+          });
+        }
+        if (preparation.warning) this.emit({ type: "note", text: preparation.warning });
+        if (preparation.context) sent = `${preparation.context}\n\n${sent}`;
+        memoryUsed = preparation.used;
+      }
+      this.emit({ type: "prompt", turn, text, ...(origin === undefined ? {} : { origin }) });
+      if (memoryUsed.length)
+        this.emit({
+          type: "note",
+          text: `Memory used (${memoryUsed.length}). Inspect Settings → Memory for sources.`,
+          detail: JSON.stringify(memoryUsed),
+        });
       stopReason = await session.prompt(sent);
     } catch (error) {
       failure = error;
@@ -801,6 +876,7 @@ export class Run {
     if (outcome.status === "interrupted") delete this.record.endedAt;
     else this.record.endedAt = clock.now().toISOString();
     await this.setStatus(outcome.status, outcome.reason, timing);
+    this.memory?.dispose();
     this.resolveFinished();
   }
 
@@ -842,5 +918,10 @@ export class Run {
       this.deps.warn(`could not write events for run ${this.id}: ${message(error)}`);
     });
     this.deps.onEvent(event);
+    try {
+      this.memory?.event(event);
+    } catch {
+      this.deps.warn("Memory capture is unavailable.");
+    }
   }
 }

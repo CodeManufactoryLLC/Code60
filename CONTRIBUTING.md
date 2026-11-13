@@ -72,6 +72,13 @@ Useful scripts:
 - `npm run format`: apply formatting and safe lint fixes.
 - `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
 - `npm run build`: compile the CLI and desktop main process and build the renderer.
+- `npm run prepare:models`: download and verify the pinned Jina INT8 assets into
+  ignored `models/` (about 164.5 MB). Run once before using RAG or packaging.
+  `node scripts/prepare-models.mjs --verify` verifies existing assets without downloads.
+- `npm run test:rag:model`: build and exercise the actual model offline in fresh
+  processes, with fixed conversation/code relevance fixtures, upstream model-card
+  comparison, maximum-size batches, exact chunk coverage and persistence checks.
+  It prints load/index/query latency and peak RSS. Routine unit tests use fakes.
 - `npm run dev`: build and start the desktop app with rebuilds on changes.
 - `npm run test:desktop:container`: build and run the Electron Playwright tests in a Linux container with Xvfb, without opening windows on your machine. Use this for local desktop testing.
 - `npm run test:desktop`: build and run the same tests directly on the host. A display is required. Use it only in CI and for native-platform validation (macOS, Windows, packaged and installer tests).

@@ -44,12 +44,27 @@ describe("sandboxed diagnostic preload", () => {
     expect(listener).toHaveBeenCalledOnce();
     unsubscribe();
     expect(removeListener).toHaveBeenCalledWith(channel, handler);
+    const memoryListener = vi.fn();
+    const offMemory = api.onMemoryChanged?.(memoryListener) as () => void;
+    const memoryHandler = on.mock.lastCall?.[1] as () => void;
+    expect(on).toHaveBeenLastCalledWith("desktop:memory-changed", memoryHandler);
+    memoryHandler();
+    expect(memoryListener).toHaveBeenCalledOnce();
+    offMemory();
+    expect(removeListener).toHaveBeenLastCalledWith("desktop:memory-changed", memoryHandler);
     expect(api).not.toHaveProperty("ipcRenderer");
     expect(api).not.toHaveProperty("readFile");
     expect(await api.appSummary?.()).toBe("result");
     expect(invoke).toHaveBeenLastCalledWith("desktop:snapshot-summary");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
+      browseMemories: "memory-browse",
+      memoryDetail: "memory-detail",
+      memoryAction: "memory-action",
+      rebuildRag: "rag-rebuild",
+      retrieveRag: "rag-retrieve",
+      cancelRag: "rag-cancel",
+      clearRag: "rag-clear",
       openWebLink: "web-link",
       checkGit: "git-check",
       beginGitSetup: "git-begin",
@@ -153,6 +168,8 @@ describe("sandboxed diagnostic preload", () => {
     }
     for (const [method, channel] of Object.entries({
       snapshot: "snapshot",
+      memorySnapshot: "memory-snapshot",
+      ragStatus: "rag-status",
       windowAppearance: "window-appearance",
       testOrchestrationProvider: "orchestration-test",
       cancelOrchestrationTest: "orchestration-test-cancel",
@@ -164,6 +181,7 @@ describe("sandboxed diagnostic preload", () => {
     for (const [method, channel] of [
       ["subscribe", "desktop:update"],
       ["onUpdate", "desktop:app-update-state"],
+      ["onRagStatus", "desktop:rag-status"],
       ["onMenu", "desktop:menu"],
     ]) {
       const callback = vi.fn();

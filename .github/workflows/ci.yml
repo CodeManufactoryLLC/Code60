@@ -41,6 +41,8 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
       - run: npm run build
+      - run: npm run prepare:models
+      - run: node scripts/test-rag-model.mjs
       - name: CLI smoke checks
         run: |
           node dist/cli/main.js --help
@@ -63,6 +65,7 @@ jobs:
       - uses: ./.github/actions/setup-linux-desktop
       - run: npm ci
       - run: node scripts/install-electron.mjs
+      - run: npm run prepare:models
       - run: xvfb-run -a npm run test:desktop
       - run: npm run package:linux
       - run: xvfb-run -a npm run test:installers

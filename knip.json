@@ -5,6 +5,7 @@
     "src/desktop/main.ts",
     "src/desktop/preload.cts",
     "src/desktop/mcp-server.ts",
+    "src/desktop/rag-worker.ts",
     "scripts/generate-icon.mjs",
     "src/**/*.test.{ts,tsx}",
     "test/**/*.{test,e2e}.{ts,mjs}",

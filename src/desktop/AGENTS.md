@@ -1,5 +1,26 @@
 # Desktop
 
+## Application agent memory
+
+- MemoryService owns optional desktop-only capture, scoped recall and coalesced
+  extraction. SQLite, incremental vector indexing and search run in a bounded
+  Node sidecar. Keep `memory.sqlite` private under application state, separate
+  from project databases, transcripts and the manual RAG generations.
+- Resolve durable project identities from canonical paths and full native
+  directory identities. Workers receive only their assignment's project,
+  conversation and human-promoted global records. Relay's current host-owned
+  task targets, never sidebar selection, can widen its project recall.
+  Mixed or unassigned Relay claims remain conversation-local.
+- Only completed source ranges can publish a checkpoint, memories and cursor in
+  one transaction. Preserve source attribution, contradictory evidence and human
+  edits. Bound capture, extraction pages, provider calls, context and retrieval.
+  Cancel generators on owner disposal, provider changes, Stop all and shutdown.
+- Main validates every memory request. Confirm global promotion and forgetting
+  natively. Suppress forgotten source ranges and invalidate stale generation and
+  recall. Keep content out of diagnostics and memory capabilities out of MCP.
+  Ordinary sends may continue without unavailable memory while context fits;
+  a required but unavailable handoff must pause before dispatch.
+
 ## Relay exceptions and ownership
 
 - The Relay section of ARCHITECTURE.md supersedes single-project/database-wide
@@ -32,8 +53,10 @@
 - Keep project chats bound to their own target with mandatory isolation. Project
   navigation preserves owners and views; actual close and database replacement
   dispose only their own work. Relay and its workers must survive those changes.
-- In Relay mode, never load database-wide legacy chat metadata or expose a global
-  compatibility conversation. Only retained project runtimes load project chats.
+- In Relay mode, never restore database-wide legacy chat metadata or expose a global
+  compatibility conversation. Explicit RAG is a read-only history-search exception,
+  not a Relay history reader or a way to restore conversation authority.
+  Only retained project runtimes load interactive project chats.
   Leave existing legacy files untouched, without migration or automatic deletion.
 - Stop/shutdown every execution owner, even invisible targets; attempt all cleanup
   and preserve failures and force escalation. Never remove Relay's workspace.
@@ -55,6 +78,21 @@
   Historical evidence reads cannot reconnect workers or replay feedback.
   Pin each review worker's accepted worktree identity, branch and base; recheck
   before capture/application so editable run records cannot redirect evidence.
+- RAG discovery is database-wide and read-only, including archived/stopped chats
+  and legacy/current project histories. Read saved chats for registered projects
+  even when closed, and capture live events from all retained project owners.
+  Exclude the application-owned Relay and its independent workers. Require the
+  captured database epoch in Relay mode, including after A → B → A replacement.
+  Missing or corrupt sources fail the
+  entire rebuild. Keep private derived generations isolated by database beneath
+  `.code60_workspace/rag`, with atomic publication and explicit size limits.
+  Load bundled offline CPU inference only in the dedicated Node sidecar. Cancel
+  and await it on database replacement, renderer reload/loss, Stop all and shutdown.
+  No automatic indexing, agent/MCP access or provider requests. Clear requires
+  native confirmation and touches only derived data.
+  Reuse ChatStore for the same storage root and reserve RAG metadata snapshots
+  between its writes; never queue RAG cancellation behind a controller action
+  that is waiting for that same operation.
 
 - ChatStore owns bounded private orchestration metadata beneath `.code60_workspace/chats`,
   not SQLite or CLI records. Persist tactic selection/explicit null without execution.

@@ -9,6 +9,9 @@ release
 release-assets
 native/win32
 media
+output
+reports
+research_notes
 **/.env
 **/.env.*
 **/.npmrc

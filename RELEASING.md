@@ -194,6 +194,15 @@ including after reinstall. A missing or invalid signature blocks staging.
 
 ## CI and release validation
 
+Run `npm run prepare:models` before packaging. Package preparation verifies every
+pinned model asset and fails if any are absent or changed. Model weights,
+tokenizer, provenance and license notices ship outside ASAR; target-specific
+ONNX CPU and sharp binaries are unpacked. Linux CI runs the fresh-process offline
+model smoke; installed-app tests exercise the actual bundled sidecar and inference
+runtime on Linux x64, macOS arm64 and Windows x64. No runtime model download or
+external inference service is permitted. Installer-size measurements require
+actual release builds; do not build full local installers on a disk-constrained host.
+
 PRs and pushes to main run checks, builds, and CLI smoke tests on Linux with
 Node 22.12 and 24. Node 24 additionally runs the Electron suite under Xvfb,
 builds both Linux installers, installs the DEB, and launches both the installed

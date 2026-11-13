@@ -77,6 +77,7 @@ For source development, use Node.js 22.12 or later and npm:
 
 ```sh
 npm ci
+npm run prepare:models
 npm run dev
 ```
 
@@ -84,6 +85,54 @@ Install and authenticate your chosen agent through its own CLI. See
 [contributing](CONTRIBUTING.md#setup-and-checks) for development and validation,
 [architecture](ARCHITECTURE.md#cli) for CLI usage and configuration, and
 [Windows setup](WINDOWS.md) for Windows-specific requirements.
+
+## Agent memory and long conversations
+
+**Settings → Memory** controls automatic memory for Relay, project chats and
+workers. Memory and automatic continuity are on by default. Completed exchanges
+produce cited Episodic, Semantic, Lesson and History records through your verified
+orchestration provider, which can incur normal provider usage. Embeddings and
+search run locally using the bundled Jina model.
+
+Project knowledge stays with its durable project identity. Relay's ambiguous
+knowledge stays private to Relay; its workers use their explicitly assigned
+targets. Only a confirmed **Promote to global** shares a memory across projects.
+The Memories browser shows attribution, exact evidence, conflicts, revisions and
+last use, and supports edits, pinning and forgetting.
+
+Before context reaches its configured threshold (initially 70%), Code60 prepares
+a checkpoint and continues between turns in a fresh agent session. The logical
+conversation and transcript stay intact. An oversized request or unavailable
+required checkpoint pauses the send, never silently truncates or replays it.
+Context capacity falls back to a configurable 32,000-token estimate when the
+provider does not report one.
+
+Capture, automatic generation and recall have separate switches. Per-conversation
+**Do not remember** stops new capture and recall for that conversation. Forgetting
+suppresses future recall and recreation from the same source ranges, but does not
+erase original transcripts or context already sent to a provider. See
+[memory behavior and validation](docs/memory-validation.md).
+
+## RAG experiment
+
+Open **Settings → Advanced → Experiments → RAG** and select **Index conversations**.
+This creates a local snapshot of orchestration chats and worker conversations
+across the connected database, including archived chats and registered projects.
+This includes project-bound and legacy chats, even when their project is closed.
+The application-owned Relay conversation is independent of the database and is
+not indexed.
+Type a message and press **Enter** or **Retrieve** to see the ten closest chunks.
+Similarity scores are not confidence percentages.
+
+The bundled Jina Embeddings v2 Base Code INT8 model runs offline on CPU. Nothing
+is sent to a provider. **Rebuild index** includes newer messages; it never runs
+automatically. **Clear index** asks for confirmation and preserves original chats.
+The index is private derived data beside the database under `.code60_workspace/rag`.
+Missing projects, unreadable histories and size limits fail a rebuild while
+preserving the previous snapshot. Repository indexing and generated answers are
+not part of this experiment.
+
+See [offline validation and measured resource use](docs/rag-validation.md).
 
 ## Chat formatting
 

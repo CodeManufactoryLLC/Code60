@@ -320,6 +320,13 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
+  browseMemories(
+    request: import("../contracts/index.js").MemoryBrowse,
+  ): Promise<import("../contracts/index.js").MemoryPage>;
+  memoryDetail(request: { id: string }): Promise<import("../contracts/index.js").MemoryDetail>;
+  memoryAction(request: import("../contracts/index.js").MemoryAction): Promise<boolean>;
+  onMemoryChanged(listener: () => void): () => void;
   subscribeDetails(request: import("./details.js").DetailRequest): Promise<void>;
   readDetails(
     request: import("./details.js").DetailRequest,
@@ -334,6 +341,12 @@ export interface DesktopApi {
     request: import("./relay-reviews.js").RelayReviewRequest,
   ): Promise<import("./relay-reviews.js").RelayReviewResponse>;
   projectAction(request: import("./projects.js").ProjectAction): Promise<void>;
+  ragStatus(): Promise<import("./rag.js").RagStatus>;
+  rebuildRag(request: import("./rag.js").RagIdentity): Promise<void>;
+  retrieveRag(request: import("./rag.js").RagQuery): Promise<import("./rag.js").RagResults>;
+  cancelRag(requestId: string): Promise<void>;
+  clearRag(request: import("./rag.js").RagIdentity): Promise<boolean>;
+  onRagStatus(listener: (status: import("./rag.js").RagStatus) => void): () => void;
   /** Confirms an HTTP(S) destination natively; false means cancelled or already pending. */
   openWebLink(request: WebLink): Promise<boolean>;
   queryLogs(request: import("./logs.js").LogQuery): Promise<import("./logs.js").LogPage>;
@@ -868,7 +881,28 @@ export const parseDatabaseMode = (value: unknown) => parseValue(databaseModeSche
 export const parseProjectPath = (value: unknown) => parseValue(projectPathSchema, value);
 export const parseAction = (value: unknown) => parseValue(actionSchema, value);
 
-export { DEFAULT_EPISODIC_MEMORY_PROMPT } from "../contracts/index.js";
+export type {
+  MemoryAction,
+  MemoryBrowse,
+  MemoryCandidate,
+  MemoryDetail,
+  MemoryGeneration,
+  MemoryPage,
+  MemoryRecord,
+  MemorySettings,
+  MemorySnapshot,
+  MemorySource,
+} from "../contracts/index.js";
+export {
+  DEFAULT_EPISODIC_MEMORY_PROMPT,
+  DEFAULT_MEMORY_SETTINGS,
+  MEMORY_TYPES,
+  memoryRecordSchema,
+  memorySettingsSchema,
+  memorySourceSchema,
+} from "../contracts/index.js";
+export * from "./memory.js";
+export * from "./rag.js";
 
 const memoryRequestIdSchema = z.string().uuid();
 const memoryExtractionSchema = z

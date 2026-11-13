@@ -46,6 +46,7 @@ import {
   workerTranscript,
 } from "./mcp-control.js";
 import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
+import type { MemoryService } from "./memory-service.js";
 import type { RelayFileRoot } from "./relay-files.js";
 import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
@@ -136,10 +137,11 @@ export class RelayService {
     private readonly dialogs: { confirm(title: string, detail: string): Promise<boolean> } = {
       confirm: async () => false,
     },
+    private readonly memory?: MemoryService,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
-    this.execution = new ExecutionHost(deps, env, {
+    this.execution = new ExecutionHost(memory?.attach(deps, "worker") ?? deps, env, {
       authorize: (owner) => this.authorize(owner),
       authorizeTarget: (owner, request, target) => {
         this.plans?.validate(owner, request, target);
@@ -596,7 +598,14 @@ export class RelayService {
       this.gateway = gateway;
       chat = await prepareOrchestrationChat(
         {
-          ...this.deps,
+          ...(this.memory?.attach(this.deps, "relay", null, store.id, () => {
+            const task = this.task;
+            if (!task || !current()) return [];
+            return this.execution
+              .list(task)
+              .filter((worker) => worker.owner.taskId === task.taskId)
+              .map((worker) => worker.target);
+          }) ?? this.deps),
           agents: {
             start: async (spec, signal) => {
               if (!current()) throw new Error("Relay connection was superseded");

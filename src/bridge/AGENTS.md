@@ -1,5 +1,11 @@
 # Bridge
 
+- Application memory accepts only opaque record/conversation/project IDs, strict
+  bounded settings and revision-checked actions. Expose snapshot, paged browsing,
+  cited detail, fixed actions and payload-free change notices. Never accept paths,
+  provider commands, arbitrary SQL or worker memory authority. Manual RAG retains
+  its separate identity, lifecycle and Clear action.
+
 - Relay is application-owned and usable without a database. Carry explicit
   conversation/target/project identities, lifecycle generations and revisions.
   Desktop chat kinds are Relay and project only; no legacy-chat presentation type.
@@ -17,6 +23,10 @@
   the current presentation generation, with no cwd or project-path fallback.
   Worker evidence may include a pinned checkout identity, canonical directory,
   branch and base. These are main-produced provenance, never request fields.
+- RAG requests accept only opaque database identity, request UUID, captured
+  database epoch and bounded query text. Relay-enabled main requires the epoch.
+  Expose status/rebuild/retrieve/cancel/clear and pushed progress,
+  never paths, model IDs, URLs or commands. Retrieval is text-only.
 
 - Tactic selection accepts only chat/project identity and a catalog ID or explicit
   null. Continue task accepts only existing chat/task identity. Never accept

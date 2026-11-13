@@ -132,6 +132,16 @@ describe("shared record-store coordination", () => {
     expect(fs.readdir).toHaveBeenCalledTimes(2);
   });
 
+  it("does not coalesce strict indexing with tolerant history listings", async () => {
+    const fs = memoryFs();
+    const store = createRecordStore(fs, root);
+    await store.save(record());
+    fs.readFile.mockRejectedValue(new Error("Corrupt record"));
+    const [normal, strict] = await Promise.allSettled([store.list(), store.list(true)]);
+    expect(normal).toEqual({ status: "fulfilled", value: [] });
+    expect(strict.status).toBe("rejected");
+  });
+
   it.each(["readFile", "readdir"] as const)(
     "does not bypass a different injected %s policy through listing deduplication",
     async (method) => {

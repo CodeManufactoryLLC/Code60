@@ -7778,7 +7778,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await settings.press("ArrowRight");
     await advanced.focus();
     await advanced.press("ArrowRight");
-    await expect(advancedPages).toHaveText("ExperimentsEpisodic MemoryContributor Tools");
+    await expect(advancedPages).toHaveText("ExperimentsEpisodic MemoryRAGContributor Tools");
     await expect(advancedPages).toBeVisible();
     await expect(page.locator("#panel-settings-agents")).toBeVisible();
     await advanced.press("ArrowLeft");
@@ -8189,6 +8189,178 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     expect(errors).toEqual([]);
   } finally {
     await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: scoped memory settings, automatic capture, inspection and confirmed forgetting", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-scoped-memory-e2e-"));
+  const project = join(directory, "project");
+  await mkdir(project);
+  try {
+    application = await launch(directory, project, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    await expect(composer).toBeEnabled();
+    await composer.fill("The cache service is Redis, running on this project only.");
+    await composer.press("Enter");
+    await expect(composer).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await window.desktop.memorySnapshot()).conversations.length),
+      )
+      .toBeGreaterThan(0);
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("tab", { name: "Memory", exact: true }).click();
+    const memory = page.locator("#panel-settings-memory");
+    await expect(memory.getByRole("switch", { name: "Memory on", exact: true })).toBeChecked();
+    await expect(memory.getByText("Generation provider", { exact: true })).toBeVisible();
+    const conversation = await page.evaluate(
+      async () => (await window.desktop.memorySnapshot()).conversations[0]?.id,
+    );
+    await memory.getByLabel("Conversation", { exact: true }).selectOption(conversation ?? "");
+    await memory.getByRole("button", { name: "Generate now", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await window.desktop.browseMemories({})).records.length),
+      )
+      .toBe(4);
+    await memory.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(memory.locator(".memory-list li")).toHaveCount(4);
+    await memory.locator(".memory-list button").first().click();
+    await expect(memory.getByText("Memory evidence and revisions", { exact: true })).toBeVisible();
+    await expect(memory.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
+      /cache service/,
+    );
+    await memory
+      .getByRole("textbox", { name: "Memory text", exact: true })
+      .fill("Human corrected cache evidence.");
+    await memory.getByRole("button", { name: "Save edit", exact: true }).click();
+    await expect(memory.locator(".memory-list")).toContainText("Human corrected cache evidence.");
+    await memory.locator(".memory-list button").filter({ hasText: "Human corrected" }).click();
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await memory.getByRole("button", { name: "Forget", exact: true }).click();
+    await expect(memory.locator(".memory-list li")).toHaveCount(4);
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await memory.getByRole("button", { name: "Forget", exact: true }).click();
+    await expect(memory.locator(".memory-list li")).toHaveCount(3);
+    await memory.getByRole("button", { name: "Generate now", exact: true }).click();
+    await expect(memory.locator(".memory-list")).not.toContainText(
+      "Human corrected cache evidence.",
+    );
+    await memory.getByRole("switch", { name: "Automatic generation", exact: true }).uncheck();
+    await memory.getByRole("button", { name: "Save memory settings", exact: true }).click();
+    expect(
+      await page.evaluate(async () => (await window.desktop.memorySnapshot()).settings.generation),
+    ).toBe(false);
+    expect(errors).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: RAG manually indexes, retrieves and retains its database snapshot", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-rag-e2e-"));
+  const project = join(directory, "project");
+  const database = join(directory, "projects.sqlite");
+  execFileSync("git", ["init", "-q", project]);
+  commitFixture(project);
+  try {
+    application = await launch(directory, project, database);
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+    );
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch)),
+    );
+    const ids = await page.evaluate(() =>
+      window.desktop.start({
+        agents: ["claude"],
+        allow: [],
+        allowAll: false,
+        prompt: JSON.stringify([
+          { message: "Our private conversation index runs locally and is rebuilt manually." },
+        ]),
+      }),
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          async (id) =>
+            (await window.desktop.snapshot()).runs.find((run) => run.record.id === id)?.view
+              ?.status,
+          ids[0],
+        ),
+      )
+      .toBe("idle");
+    await page.evaluate((id) => window.desktop.action({ type: "finish", id }), ids[0] ?? "");
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("button", { name: "Advanced", exact: true }).click();
+    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("tab", { name: "RAG", exact: true }).click();
+    const rag = page.locator("#panel-rag");
+    await expect(rag.locator(".settings-card")).toHaveCount(2);
+    for (const card of await rag.locator(".settings-card").all()) {
+      await expect(card).toHaveCSS("padding", "12px 16px");
+    }
+    await expect(rag.locator('label[for="rag-message"]')).toHaveCount(0);
+    await rag.getByRole("button", { name: "Index conversations", exact: true }).click();
+    await expect(rag.getByRole("button", { name: "Rebuild index", exact: true })).toBeEnabled({
+      timeout: 30_000,
+    });
+    const message = rag.getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("How does our private conversation search get updated?");
+    await message.press("Enter");
+    await expect(rag.locator(".rag-results li")).not.toHaveCount(0, { timeout: 30_000 });
+    await expect(rag.locator(".rag-results")).toContainText("rebuilt manually");
+    const saved = await rag.locator(".rag-results").textContent();
+    await selectSidebarPage(page, "Chat");
+    await page.getByRole("tab", { name: "RAG", exact: true }).click();
+    await expect(message).toHaveValue("How does our private conversation search get updated?");
+    expect(await rag.locator(".rag-results").textContent()).toBe(saved);
+    await message.fill("x".repeat(8193));
+    await message.press("Enter");
+    await expect(rag.getByRole("alert")).toContainText("8,192 characters");
+    await expect(message).toHaveValue("x".repeat(8193));
+    expect(await rag.locator(".rag-results").textContent()).toBe(saved);
+    await message.fill(" token".repeat(511));
+    await message.press("Enter");
+    await expect(rag.getByRole("alert")).toContainText("512 tokens");
+    expect(await rag.locator(".rag-results").textContent()).toBe(saved);
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await rag.getByRole("button", { name: "Clear index", exact: true }).click();
+    await expect(rag.getByRole("button", { name: "Rebuild index", exact: true })).toBeEnabled();
+    expect(await rag.locator(".rag-results").textContent()).toBe(saved);
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await rag.getByRole("button", { name: "Clear index", exact: true }).click();
+    await expect(
+      rag.getByRole("button", { name: "Index conversations", exact: true }),
+    ).toBeEnabled();
+    await expect(rag.locator(".rag-results")).toHaveCount(0);
+    await expect(rag.getByRole("button", { name: "Retrieve", exact: true })).toBeDisabled();
+  } finally {
+    await application?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

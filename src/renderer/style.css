@@ -9,6 +9,8 @@
 @import "./styles/home.css" layer(components);
 @import "./styles/editors.css" layer(components);
 @import "./styles/settings.css" layer(components);
+@import "./styles/rag.css" layer(components);
+@import "./styles/memory.css" layer(components);
 @import "./styles/tables.css" layer(components);
 @import "./styles/footer.css" layer(components);
 @import "./styles/chat.css" layer(components);

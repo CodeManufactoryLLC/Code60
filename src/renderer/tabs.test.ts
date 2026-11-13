@@ -6,6 +6,7 @@ describe("page tabs", () => {
     expect(initialTabs).toEqual({
       open: [
         "home",
+        "rag",
         "logs",
         "contributor-tools",
         "chat",

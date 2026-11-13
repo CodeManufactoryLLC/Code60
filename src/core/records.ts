@@ -27,7 +27,7 @@ export interface RecordStore {
   appendEvent(event: RunEvent): Promise<void>;
   read(id: string): Promise<RunRecord>;
   readEvents(id: string): Promise<RunEvent[]>;
-  list(): Promise<RunRecord[]>;
+  list(strict?: boolean): Promise<RunRecord[]>;
 }
 
 export function assertRunId(id: string): void {
@@ -205,11 +205,11 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       }
       return events;
     },
-    async list() {
-      const key = await canonical();
+    async list(strict = false) {
+      const key = strict ? JSON.stringify([await canonical(), "strict"]) : await canonical();
       let pending = listings.get(key);
       if (!pending) {
-        pending = listRecords(fs, dir);
+        pending = listRecords(fs, dir, strict);
         listings.set(key, pending);
         const release = () => {
           if (listings.get(key) === pending) listings.delete(key);
@@ -221,7 +221,7 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
   };
 }
 
-async function listRecords(fs: RecordFs, dir: string): Promise<RunRecord[]> {
+async function listRecords(fs: RecordFs, dir: string, strict: boolean): Promise<RunRecord[]> {
   let ids: string[];
   try {
     ids = await fs.readdir(dir);
@@ -233,7 +233,8 @@ async function listRecords(fs: RecordFs, dir: string): Promise<RunRecord[]> {
   for (const id of ids.filter((name) => runIdSchema.safeParse(name).success)) {
     try {
       records.push(parseRecord(await fs.readFile(join(dir, id, "run.json"), "utf8"), id));
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       // A directory without a readable run.json is not a run the tool can show.
     }
   }

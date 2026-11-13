@@ -70,6 +70,13 @@ export class ChatStore {
     await safeDirectory(this.records);
   }
 
+  /** Reserve a read-only metadata snapshot between this store's atomic writes. */
+  snapshot(): Promise<{ chats: SavedChat[]; errors: string[] }> {
+    const result = this.writes.then(() => this.load());
+    this.writes = result.catch(() => {});
+    return result;
+  }
+
   async load(): Promise<{ chats: SavedChat[]; errors: string[] }> {
     await this.directories();
     const names = (await readdir(this.records)).filter((name) => filename.test(name));

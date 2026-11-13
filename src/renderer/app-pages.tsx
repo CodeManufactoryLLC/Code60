@@ -8,11 +8,13 @@ import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
+import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
 import { type RenderedPageId, renderedPages } from "./navigation.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
 import { PollingControls, PollingPage } from "./polling.js";
 import { PromptEditorPage } from "./prompt-editor.js";
+import { RagPage } from "./rag.js";
 import { SearchPage } from "./search-page.js";
 import { sessionRows } from "./session-presentation.js";
 import { SessionsTable } from "./sessions.js";
@@ -103,10 +105,19 @@ export function AppPages(props: AppPagesProps) {
       />
     ),
     chat: <ChatWorkspace {...props} />,
+    rag: (
+      <RagPage
+        key={databaseKey}
+        api={api}
+        database={database}
+        databaseEpoch={snapshot?.databaseEpoch}
+      />
+    ),
     settings: (
       <>
         <SettingsPage
           section={settingsSection}
+          memory={<MemoryPage api={api} />}
           updates={<UpdatesSection updates={updates} />}
           versions={snapshot?.versions}
           orchestration={

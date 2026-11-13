@@ -16,6 +16,8 @@
     "mcp.default.json"
   ],
   "scripts": {
+    "prepare:models": "node scripts/prepare-models.mjs",
+    "test:rag:model": "node scripts/prepare-models.mjs --verify && npm run build && node scripts/test-rag-model.mjs",
     "build:helper": "node scripts/build-windows-helper.mjs",
     "build": "node scripts/build-windows-helper.mjs && tsc -p tsconfig.build.json && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -43,7 +45,8 @@
     "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
     "package:win": "node scripts/package-windows.mjs",
     "test:packaged": "playwright test --config playwright.packaged.config.ts",
-    "test:installers": "node scripts/test-installers.mjs"
+    "test:installers": "node scripts/test-installers.mjs",
+    "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
@@ -53,6 +56,7 @@
     "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "@headless-tree/core": "1.8.0",
     "@headless-tree/react": "1.8.0",
+    "@huggingface/transformers": "4.3.2",
     "electron-updater": "^6.8.11",
     "monaco-editor": "0.57.0",
     "react": "19.3.1",

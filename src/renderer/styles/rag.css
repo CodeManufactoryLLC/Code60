@@ -1,0 +1,59 @@
+/* RAG experiment */
+.rag-page {
+  padding: 0 var(--page-padding) 16px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  min-height: 0;
+}
+.rag-page > .settings-card {
+  padding: 12px 16px;
+}
+.rag-page .settings-card-title {
+  padding: 0 0 8px;
+}
+.rag-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.rag-summary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rag-summary dd {
+  margin: 0;
+}
+.rag-query {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rag-query-input {
+  flex: 1;
+  min-width: 120px;
+}
+.rag-results {
+  padding-inline-start: 24px;
+}
+.rag-results li {
+  margin-block: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.rag-results h3 {
+  font-weight: 400;
+  margin: 0 0 8px;
+}
+.rag-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  overflow-wrap: anywhere;
+}
+.rag-results pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}

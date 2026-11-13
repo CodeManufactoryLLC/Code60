@@ -53,6 +53,11 @@ module.exports = {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: electron-builder expands these macros.
   artifactName: "Code60-${version}-${os}-${arch}.${ext}",
   asar: true,
+  asarUnpack: [
+    "node_modules/onnxruntime-node/**/*",
+    "node_modules/sharp/**/*",
+    "node_modules/@img/**/*",
+  ],
   files: [
     "dist/**/*",
     "!**/*.map",
@@ -61,10 +66,43 @@ module.exports = {
     "LICENSE",
     "NOTICE",
     "TRADEMARKS.md",
+    "!node_modules/onnxruntime-web/**/*",
+    "!node_modules/onnxruntime-node/bin/napi-v6/darwin/x64/**/*",
+    ...(process.platform === "darwin"
+      ? [
+          "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+          "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
+        ]
+      : process.platform === "win32"
+        ? [
+            "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+            "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+            "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*",
+          ]
+        : [
+            "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+            "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
+            "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**/*",
+          ]),
   ],
   extraResources: [
     { from: "mcp.default.json", to: "mcp.default.json" },
     { from: "release/licenses", to: "licenses" },
+    {
+      from: "models",
+      to: "models",
+      filter: [
+        "provenance.json",
+        ...[
+          "config.json",
+          "tokenizer.json",
+          "tokenizer_config.json",
+          "special_tokens_map.json",
+          "README.md",
+          "onnx/model_quantized.onnx",
+        ].map((name) => `jinaai/jina-embeddings-v2-base-code/${name}`),
+      ],
+    },
     ...(process.platform === "win32"
       ? [
           {
