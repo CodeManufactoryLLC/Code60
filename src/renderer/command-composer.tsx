@@ -116,7 +116,9 @@ export function CommandComposer({
           // Selection events can arrive after input, so read the caret directly rather than
           // risk sending an unexpanded command from a stale closed picker.
           const element = event.currentTarget;
-          const matches = matchingCommands(commands, element.value, element.selectionStart);
+          const matches = commandsEnabled
+            ? matchingCommands(commands, element.value, element.selectionStart)
+            : [];
           const index = Math.min(selected, matches.length - 1);
           if (element.selectionStart !== cursor) setCursor(element.selectionStart);
           if (!disabled && !dismissed && matches.length > 0) {

@@ -15,4 +15,5 @@ export interface OpenProject {
   active: boolean;
   chatIds: string[];
   workerIds: string[];
+  workerSummaries?: import("./index.js").DesktopRun[];
 }

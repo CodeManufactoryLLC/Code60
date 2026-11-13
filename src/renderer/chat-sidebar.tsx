@@ -4,7 +4,7 @@ import type { RunEvent } from "../core/index.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
-import { type Conversation, conversations, reconcileDisclosure } from "./chats.js";
+import { type Conversation, conversationId, conversations, reconcileDisclosure } from "./chats.js";
 import { Icon } from "./icons.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
@@ -51,7 +51,7 @@ export function ChatSidebar({
   const markers = useRef(new Map<string, number>());
   const relay = chats.find((chat) => chat.kind === "relay");
   const markerScope = (id: string) =>
-    relay?.run?.id === id || relay?.workers?.includes(id)
+    (relay && conversationId(relay) === id) || relay?.workers?.includes(id)
       ? `relay:${relay.conversationId ?? id}`
       : database;
   const selectedMarkerScope =
@@ -119,7 +119,7 @@ export function ChatSidebar({
     }
   }, [selectedMarkerKey, open, selectedId, replies, selectedReplies]);
 
-  const chatById = new Map(chats.map((chat) => [chat.run?.id, chat]));
+  const chatById = new Map(chats.map((chat) => [conversationId(chat), chat]));
   const runById = new Map(runs.map((run) => [run.record.id, run]));
   const childrenById = new Map<string, Conversation[]>();
   for (const entry of entries) {

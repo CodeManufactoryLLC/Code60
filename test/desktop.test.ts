@@ -289,6 +289,132 @@ async function configureMcp(version = "first") {
 }
 
 describe("retained project runtimes", () => {
+  it.each(["search", "memory"] as const)(
+    "cancels an originating %s helper after switching projects",
+    async (kind) => {
+      await prepareRelay();
+      const a = await project("a");
+      const [id] = await controller.start({
+        ...request,
+        prompt: "Source evidence",
+        allowAll: true,
+      });
+      if (!id) throw new Error("Missing worker");
+      await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+      await controller.action({ type: "finish", id });
+      const requestId = randomUUID();
+      agents.script = () => "hang";
+      const pending =
+        kind === "search"
+          ? controller.summarizeSearch({
+              requestId,
+              directory: a.path,
+              query: "evidence",
+              includeFiles: false,
+              sources: [{ id: a.path, kind: "project", title: "A", text: "Evidence" }],
+            })
+          : controller.extractMemory({
+              requestId,
+              directory: a.path,
+              prompt: "Remember",
+              runs: [{ id, count: 1 }],
+            });
+      const rejected = expect(pending).rejects.toThrow(/cancelled/i);
+      await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+      const helper = agents.sessions.at(-1);
+      const b = await project("b");
+      if (kind === "search") await controller.cancelSearchSummary(requestId);
+      else await controller.cancelMemoryExtraction(requestId);
+      expect(helper?.turnActive).toBe(false);
+      await rejected;
+      expect(controller.snapshot().directory).toBe(b.path);
+    },
+  );
+  it("loads visible restored project history and plans on reopen without starting its provider", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "Preserved project request",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await call(id, "code60_create_plan", {
+      requestId: "restore-plan",
+      title: "Saved plan",
+      description: "Preserved",
+      tasks: [{ text: "Do the work" }],
+    });
+    await controller.projectAction({ type: "close", projectId: a.id });
+    const launches = agents.specs.length;
+    await controller.open(a.path);
+    expect(controller.snapshot().chat.run?.id).toBe(id);
+    expect(
+      controller
+        .snapshot()
+        .chat.events.some(
+          ({ event }) => event.type === "prompt" && event.text === "Preserved project request",
+        ),
+    ).toBe(true);
+    expect(controller.snapshot().chat.plans).toMatchObject([{ title: "Saved plan" }]);
+    expect(agents.specs).toHaveLength(launches);
+  });
+  it("pushes compact worker summaries for inactive projects without selecting them", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Background task" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const { scope } = await call(id, "code60_get_context");
+    const b = await project("b");
+    agents.script = () => "hang";
+    const accepted = await call(id, "code60_dispatch_agent", {
+      scope,
+      requestId: "background",
+      provider: "claude",
+      prompt: "Private prompt body",
+    });
+    await vi.waitFor(() => {
+      const owner = controller
+        .snapshot(false, true)
+        .openProjects?.find((owner) => owner.id === a.id);
+      expect(owner).toHaveProperty(
+        "workerSummaries",
+        expect.arrayContaining([
+          expect.objectContaining({
+            record: expect.objectContaining({
+              id: accepted.runId,
+              status: "running",
+              firstPrompt: "",
+            }),
+          }),
+        ]),
+      );
+    });
+    const worker = agents.sessions.at(-1);
+    worker?.update({ type: "message", text: "Not a summary transcript" });
+    worker?.endTurn("end_turn");
+    await vi.waitFor(() => {
+      const owner = controller
+        .snapshot(false, true)
+        .openProjects?.find((owner) => owner.id === a.id);
+      expect(owner).toHaveProperty(
+        "workerSummaries",
+        expect.arrayContaining([
+          expect.objectContaining({
+            record: expect.objectContaining({ id: accepted.runId, status: "idle" }),
+          }),
+        ]),
+      );
+    });
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(JSON.stringify(controller.snapshot(false, true))).not.toContain(
+      "Not a summary transcript",
+    );
+  });
   it("keeps Relay workspace file reads independent of databases and invalidates contexts on reload", async () => {
     await prepareRelay();
     const relay = controller.snapshot().chat;

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { RelayReviewEntry, Review } from "../bridge/index.js";
 import { type CoreDeps, TaskLoop } from "../core/index.js";
@@ -85,12 +86,14 @@ export class RelayReviewStore {
     this.assignments.clear();
     this.liveSubmissions.clear();
   }
-  loop(review: Review): TaskLoop | undefined {
+  async loop(review: Review): Promise<TaskLoop | undefined> {
     const origin = review.relay;
     const git = this.deps.git.tasks;
     if (!origin || origin.conversationId !== this.id || origin.workspaceMode !== "worktree" || !git)
       return undefined;
-    return new TaskLoop(origin.cwd, join(this.root, "tasks", origin.targetId), git, undefined, [
+    const repo = await this.deps.git.repoInfo(origin.cwd);
+    const checkout = await realpath(repo.topLevel);
+    return new TaskLoop(checkout, join(this.root, "tasks", origin.targetId), git, undefined, [
       this.root,
     ]);
   }
@@ -169,7 +172,8 @@ export class RelayReviewStore {
       const review = store.get(id);
       if (baseline && review.relay?.baseline !== baseline)
         throw new Error("Relay task target already has another baseline");
-      if (review.relay?.baseline) await this.loop(review)?.baseline(id, review.relay.baseline);
+      if (review.relay?.baseline)
+        await (await this.loop(review))?.baseline(id, review.relay.baseline);
       valid();
       if (!worker.record.base || !worker.record.branch)
         throw new Error("Relay review requires the accepted isolated worker checkout");

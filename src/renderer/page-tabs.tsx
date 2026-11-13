@@ -9,6 +9,7 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
+import { conversationId } from "./chats.js";
 import { Icon } from "./icons.js";
 import {
   groups,
@@ -220,8 +221,9 @@ function PageTabList({
           openProjects
             ? ((request.type === "new"
                 ? request.projectId
-                : chats.find((chat) => chat.run?.id === ("id" in request ? request.id : undefined))
-                    ?.projectId) ?? null)
+                : chats.find(
+                    (chat) => conversationId(chat) === ("id" in request ? request.id : undefined),
+                  )?.projectId) ?? null)
             : undefined,
         );
       return true;
@@ -636,7 +638,7 @@ function PageTabList({
             open={tabs.active === "chat"}
             pending={chatPending}
             onSelect={(id) => {
-              if (chats.some((chat) => chat.run?.id === id))
+              if (chats.some((chat) => conversationId(chat) === id))
                 void chatAction({ type: "select", id });
               else {
                 onWorkerSelect(id);
@@ -656,7 +658,7 @@ function PageTabList({
             open={tabs.active === "chat"}
             pending={chatPending}
             onSelect={(id) => {
-              if (chats.some((chat) => chat.run?.id === id))
+              if (chats.some((chat) => conversationId(chat) === id))
                 void chatAction({ type: "select", id });
               else {
                 onWorkerSelect(id);

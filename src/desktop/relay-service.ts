@@ -545,6 +545,8 @@ export class RelayService {
       );
       const store = await this.storeOpening;
       if (!current()) return;
+      await store.validateWorkspace();
+      if (!current()) return;
       const plans = await RelayPlans.open(
         join(store.root, "documents"),
         store.id,
@@ -592,7 +594,17 @@ export class RelayService {
       if (!current()) return await retire();
       this.gateway = gateway;
       chat = await prepareOrchestrationChat(
-        this.deps,
+        {
+          ...this.deps,
+          agents: {
+            start: async (spec, signal) => {
+              if (!current()) throw new Error("Relay connection was superseded");
+              await store.validateWorkspace();
+              if (!current()) throw new Error("Relay connection was superseded");
+              return this.deps.agents.start(spec, signal);
+            },
+          },
+        },
         store.workspace,
         provider,
         {
@@ -963,8 +975,10 @@ export class RelayService {
       const config = this.tasks.get(owner.taskId)?.config;
       if (
         !provider ||
-        !config?.agents[provider] ||
-        !this.config?.agents[provider] ||
+        !config ||
+        !Object.hasOwn(config.agents, provider) ||
+        !this.config ||
+        !Object.hasOwn(this.config.agents, provider) ||
         JSON.stringify(config.agents[provider]?.command) !==
           JSON.stringify(this.config.agents[provider]?.command)
       )
@@ -977,7 +991,7 @@ export class RelayService {
           "Worker started but plan association could not be saved. Inspect the worker; do not dispatch it again.";
         this.changed();
       }
-      await this.associateReview(worker, 1);
+      await this.associateReview(worker, Math.max(1, worker.orchestrator.runs()[0]?.turns ?? 1));
       return this.workerInfo(worker);
     }
     if (name === "code60_read_agent") {
@@ -1056,8 +1070,16 @@ export class RelayService {
     }
   }
   private requireWorkerProvider(worker: ExecutionWorker): void {
-    const verified = this.config?.agents[worker.provider];
-    const frozen = this.tasks.get(worker.owner.taskId)?.config.agents[worker.provider];
+    const config = this.config;
+    const task = this.tasks.get(worker.owner.taskId)?.config;
+    const verified =
+      config && Object.hasOwn(config.agents, worker.provider)
+        ? config.agents[worker.provider]
+        : undefined;
+    const frozen =
+      task && Object.hasOwn(task.agents, worker.provider)
+        ? task.agents[worker.provider]
+        : undefined;
     if (!verified || JSON.stringify(verified.command) !== JSON.stringify(frozen?.command))
       throw new Error("Unavailable verified provider");
   }

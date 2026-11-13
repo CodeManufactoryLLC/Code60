@@ -122,24 +122,18 @@ export function applyDetails(
     const payload = frame.payload;
     if (payload.kind === "conversation" && scope.kind === "conversation") {
       const generation = scope.generation;
-      const id = payload.chat.run?.id;
-      if (!id) continue;
+      const relay = payload.chat.kind === "relay";
+      const matches = (chat: OrchestrationChat) =>
+        chat.generation === generation &&
+        (relay
+          ? chat.kind === "relay" && chat.conversationId === scope.conversationId
+          : chat.run?.id === scope.conversationId);
       const overlay = (chat: OrchestrationChat) =>
-        chat.run?.id === id && chat.generation === generation
-          ? {
-              ...chat,
-              ...(payload.chat.history &&
-              (state.snapshot.summaryOnly ||
-                frame.revision >= state.snapshot.revision ||
-                !chat.history)
-                ? { history: payload.chat.history }
-                : {}),
-            }
+        matches(chat) &&
+        payload.chat.history &&
+        (state.snapshot.summaryOnly || frame.revision >= state.snapshot.revision || !chat.history)
+          ? { ...chat, history: payload.chat.history }
           : chat;
-      const events =
-        frame.revision >= (state.chatEventRevisions?.[id] ?? -1)
-          ? payload.chat.events.map((entry) => entry.event)
-          : (state.chatEventsByRun[id] ?? []);
       next = {
         ...next,
         snapshot: {
@@ -147,6 +141,15 @@ export function applyDetails(
           chat: overlay(next.snapshot.chat),
           chats: next.snapshot.chats.map(overlay),
         },
+      };
+      const id = payload.chat.run?.id;
+      if (!id) continue;
+      const events =
+        frame.revision >= (state.chatEventRevisions?.[id] ?? -1)
+          ? payload.chat.events.map((entry) => entry.event)
+          : (state.chatEventsByRun[id] ?? []);
+      next = {
+        ...next,
         chatEventsByRun: { ...next.chatEventsByRun, [id]: events },
         chatEvents: next.snapshot.chat.run?.id === id ? events : next.chatEvents,
       };
@@ -186,7 +189,16 @@ export function applyDetails(
           : {}),
         projectViews: {
           ...next.projectViews,
-          [payload.projectId]: { runs: payload.runs, events: own, revision: frame.revision },
+          [payload.projectId]: {
+            runs: state.snapshot.summaryOnly
+              ? withRunDetails(
+                  next.projectViews?.[payload.projectId]?.runs ?? payload.runs,
+                  payload.runs,
+                )
+              : payload.runs,
+            events: own,
+            revision: frame.revision,
+          },
         },
       };
     } else if (payload.kind === "target" && scope.kind === "target") {

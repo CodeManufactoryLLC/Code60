@@ -2017,7 +2017,18 @@ export class DesktopController {
 
   cancelSearchSummary(requestId?: string): Promise<void> {
     const id = requestId === undefined ? undefined : parseSearchSummaryRequestId(requestId);
-    return this.exclusive(() => this.stopSearchSummary(id));
+    const owners = this.projectHost
+      .all()
+      .filter(
+        (owner) =>
+          owner.state.searchSummary &&
+          (id === undefined || owner.state.searchSummary.requestId === id),
+      );
+    return Promise.all(
+      owners.map((owner) =>
+        this.projectHost.run(owner, () => this.exclusive(() => this.stopSearchSummary(id))),
+      ),
+    ).then(() => {});
   }
 
   private async stopSearchSummary(requestId?: string): Promise<void> {
@@ -2097,7 +2108,11 @@ export class DesktopController {
 
   cancelMemoryExtraction(requestId: string): Promise<void> {
     const id = parseMemoryRequestId(requestId);
-    return this.exclusive(() => this.stopMemoryExtraction(id));
+    const owner = this.projectHost
+      .all()
+      .find((owner) => owner.state.memoryExtraction?.requestId === id);
+    if (!owner) return Promise.resolve();
+    return this.projectHost.run(owner, () => this.exclusive(() => this.stopMemoryExtraction(id)));
   }
 
   private async stopMemoryExtraction(requestId?: string): Promise<void> {
@@ -2483,11 +2498,10 @@ export class DesktopController {
         const selected = available[0];
         if (selected) {
           this.conversations.current = selected;
-          if (!this.relay)
-            await this.loadChatHistory(selected).catch(() => {
-              selected.chatError =
-                "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
-            });
+          await this.loadChatHistory(selected).catch(() => {
+            selected.chatError =
+              "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
+          });
           this.changed();
           return;
         }
@@ -3301,6 +3315,10 @@ export class DesktopController {
                         session.run ? [session.run.id] : [],
                       ),
                       workerIds: owner.state.history.map((run) => run.record.id),
+                      workerSummaries: this.projectHost.run(
+                        owner,
+                        () => this.projectSnapshot(false, true).runs,
+                      ),
                     },
                   ]
                 : [],

@@ -1257,11 +1257,27 @@ test("desktop: Relay connects without a database and retains identity, draft and
     ).toBeEnabled();
     await expect(page.locator("#relay-plan-panel")).toHaveAttribute("aria-hidden", "true");
     expect(connected.files).toBeNull();
-    await composer.fill("/review literal Relay request 😀");
+    await composer.fill("/p");
+    await composer.press("Tab");
+    await expect(composer).toHaveValue("/p");
+    await composer.focus();
     await composer.press("Enter");
     await expect
       .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns)
       .toBe(1);
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.status)
+      .toBe("idle");
+    const literal = await page.evaluate(() => window.desktop.snapshot());
+    expect(
+      literal.chat.events.some(({ event }) => event.type === "prompt" && event.text === "/p"),
+    ).toBe(true);
+    await composer.fill("/review literal Relay request 😀");
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    await composer.press("Enter");
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns)
+      .toBe(2);
     await expect
       .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.status)
       .toBe("idle");
@@ -1286,6 +1302,57 @@ test("desktop: Relay connects without a database and retains identity, draft and
     expect(restarted.chat.workers).toEqual([]);
     expect(restarted.chat.history?.characters).toBeLessThanOrEqual(64_000);
     expect(restarted.chats.filter((entry) => entry.kind === "relay")).toHaveLength(1);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: failed Relay startup preserves history and remains navigable from a project", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-relay-failed-"));
+  const project = join(directory, "project");
+  await mkdir(project);
+  const store = await RelayStore.open(join(directory, "state", "code60", "relay"));
+  try {
+    await store.append({
+      id: randomUUID(),
+      role: "human",
+      at: new Date().toISOString(),
+      text: "Preserved recovery evidence",
+    });
+    await store.markIncomplete();
+  } finally {
+    await store.close();
+  }
+  try {
+    application = await launch(directory, project, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const relay = page.getByRole("button", { name: "Relay", exact: true });
+    await expect(relay).toBeEnabled();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    await expect(chat.getByRole("region", { name: "Previous Relay conversation" })).toContainText(
+      "Preserved recovery evidence",
+    );
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run).toBeNull();
+    await page.evaluate(async () => {
+      await window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch));
+      await window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch));
+    });
+    await selectProjectConversation(page);
+    await expect(chat.getByRole("combobox")).toBeEnabled();
+    await relay.click();
+    await expect(relay).toHaveAttribute("aria-current", "true");
+    await expect(chat.getByRole("region", { name: "Previous Relay conversation" })).toContainText(
+      "Preserved recovery evidence",
+    );
+    await expect(chat.getByRole("button", { name: "Retry connection", exact: true })).toBeEnabled();
+    await chat.getByRole("button", { name: "Retry connection", exact: true }).click();
+    await expect(chat.locator(".error-banner")).toContainText("history is incomplete");
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -1894,6 +1961,11 @@ test("desktop: Relay project accordions retain independent chat and file views",
       .toBe(true);
     await page.locator(`[id="conversation-${worker}"]`).click();
     await expect(page.locator(".worker-chat-page:visible")).toBeVisible();
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(0);
+    await expect(composer()).toHaveValue("Relay draft remains independent");
+    await page.locator(`[id="conversation-${worker}"]`).click();
+    await expect(page.locator(".worker-chat-page:visible")).toBeVisible();
     await application.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
     }, b);
@@ -2074,6 +2146,40 @@ test("desktop: Relay files explicitly browse workspace or owned targets without 
     await panel.getByRole("treeitem", { name: "note.txt", exact: true }).click();
     await expect(inspector.locator(".view-lines")).toContainText("workspace version");
     await expect(composer).toHaveValue("Still my Relay draft");
+    const relayWorkerId = (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+      (run) => run.relay,
+    )?.record.id;
+    if (!relayWorkerId) throw new Error("Missing Relay worker");
+    const unrelated = join(directory, "unrelated-project");
+    await mkdir(unrelated);
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    }, unrelated);
+    await page.evaluate(async () => {
+      await window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch));
+    });
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).directory)
+      .toBe(unrelated);
+    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    const search = page.locator("#panel-search");
+    await search.getByRole("searchbox", { name: "Query", exact: true }).fill(relayWorkerId);
+    await search.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(search.getByRole("list", { name: "Search results" })).not.toContainText(
+      relayWorkerId,
+    );
+    await expect(search).not.toContainText("A search source is no longer in the open project");
+    await page.getByRole("button", { name: "Settings pages", exact: true }).click();
+    await page.getByRole("button", { name: "Advanced", exact: true }).click();
+    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("tab", { name: "Episodic Memory", exact: true }).click();
+    await expect(
+      page
+        .locator("#panel-episodic-memory")
+        .getByRole("button", { name: "Extract from 0 events", exact: true }),
+    ).toBeDisabled();
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

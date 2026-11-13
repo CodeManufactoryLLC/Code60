@@ -338,7 +338,7 @@ export class RelayReviews {
     const targets = await this.sources(review, valid, signal);
     const git = this.deps.git.tasks;
     if (!git || !this.deps.git.reviewSnapshot) throw new Error("Structured review is unavailable");
-    const applied = (await this.store.loop(review)?.state(review.id))?.appliedSources ?? [];
+    const applied = (await (await this.store.loop(review))?.state(review.id))?.appliedSources ?? [];
     const results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[] = [];
     const sources: TaskSource[] = [];
     let fileCount = 0;
@@ -516,7 +516,9 @@ export class RelayReviews {
     try {
       const store = await this.load(request, valid);
       const review = this.checked(store, request);
-      const loop = this.store.loop(review);
+      if (lease) await this.identity(review, valid);
+      const loop = await this.store.loop(review);
+      valid();
       const git = this.deps.git.tasks;
       if (!loop || !git)
         return {

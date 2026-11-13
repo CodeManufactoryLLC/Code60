@@ -7,6 +7,7 @@ import { AppFooter } from "./app-footer.js";
 import { AppMenus } from "./app-menus.js";
 import { AppPages } from "./app-pages.js";
 import { useAppPreferences } from "./app-preferences.js";
+import { conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
@@ -254,7 +255,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
             openProjects={snapshot?.openProjects}
             selectedProjectId={snapshot?.projectInstanceId}
             chats={snapshot?.chats ?? []}
-            selectedId={workerId ?? snapshot?.chat.run?.id}
+            selectedId={workerId ?? (snapshot && conversationId(snapshot.chat))}
             navigationSerial={chatRequest?.serial}
             runs={[
               ...new Map(

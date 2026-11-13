@@ -33,6 +33,33 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("keeps a failed Relay connection navigable by its stable identity", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const failed = {
+      ...chat("old"),
+      kind: "relay" as const,
+      conversationId: "relay-id",
+      run: null,
+    };
+    expect(conversations([failed], [])).toEqual([
+      { id: "relay-id", label: "Relay", role: "orchestrator" },
+    ]);
+    const html = renderToStaticMarkup(
+      <ChatSidebar
+        chats={[failed]}
+        runs={[]}
+        selectedId="relay-id"
+        database={null}
+        eventsByRun={{}}
+        navigationSerial={undefined}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('id="conversation-relay-id"');
+    expect(html).not.toContain("disabled");
+  });
   it("renders Relay and project groups as siblings with only each project's own conversations", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const projects = ["a", "b", "c"].map((id) => ({

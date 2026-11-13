@@ -175,6 +175,10 @@ features, resource bounds and remaining native-platform validation.
   by the complete owner address and pruned on close/generation replacement.
   Inactive conversation summaries carry constant-size reply counters and compact
   plan status/progress summaries, not transcripts or full plan documents.
+  Each open-project entry also carries compact worker summaries, so inactive
+  sidebar workers receive new IDs and status changes without transcript reads.
+  Cached project detail frames may fill prompt/event data, but cannot rewind
+  newer worker metadata from app summaries.
   Reply counters preserve unread badges without history reads. Plan status
   comes from the app summary, atomically with selection, never ahead of it
   through a detail frame that could reopen a background conversation's plan.

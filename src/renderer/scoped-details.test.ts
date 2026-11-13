@@ -72,6 +72,89 @@ const worker = (id = "worker-a", targetId = "target-a"): DesktopRun =>
       workspaceMode: "direct",
     },
   }) as DesktopRun;
+it("hydrates Relay history when provider startup failed without a run", () => {
+  const failed = { ...relay, run: null, error: "Provider failed" };
+  const state = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    chat: failed,
+    chats: [failed],
+  });
+  const scope = requestedDetails(state).find((scope) => scope.kind === "conversation");
+  if (!scope) throw new Error("Missing Relay scope");
+  const history = {
+    serialized: "Preserved history",
+    characters: 17,
+    older: false,
+    incomplete: true,
+    cursor: null,
+  };
+  const frame: DetailFrame = {
+    subscriptionId: "history",
+    scope,
+    revision: 100,
+    previousRevision: null,
+    closed: false,
+    payload: { kind: "conversation", chat: { ...failed, history } },
+  };
+  const result = applyDetails(state, { [detailScopeKey(scope)]: frame });
+  expect(result?.snapshot.chat.history).toEqual(history);
+  expect(result?.snapshot.chats[0]?.history).toEqual(history);
+});
+it("refreshes inactive worker metadata without letting cached detail frames rewind it", () => {
+  const a: DesktopRun = worker("background");
+  delete a.relay;
+  const inactive = {
+    id: "inactive",
+    path: "/inactive",
+    active: true,
+    chatIds: [],
+    workerIds: ["background"],
+    workerSummaries: [a],
+  };
+  const initial = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    openProjects: [inactive],
+  });
+  const scope = { kind: "project" as const, projectId: inactive.id, databaseEpoch: 2 };
+  const frame: DetailFrame = {
+    subscriptionId: "cached",
+    scope,
+    revision: 5,
+    previousRevision: null,
+    closed: false,
+    payload: {
+      kind: "project",
+      projectId: inactive.id,
+      databaseEpoch: 2,
+      directory: inactive.path,
+      runs: [a],
+      liveIds: [],
+      events: [],
+      files: null,
+      worktrees: null,
+      reviews: [],
+    },
+  };
+  const complete = { ...a, record: { ...a.record, status: "finished" as const } };
+  const added = { ...a, record: { ...a.record, id: "new-worker" } };
+  const next = applyUpdate(initial, {
+    ...initial.snapshot,
+    revision: 101,
+    openProjects: [
+      { ...inactive, workerIds: ["background", "new-worker"], workerSummaries: [complete, added] },
+    ],
+  });
+  const merged = applyDetails(next, { [detailScopeKey(scope)]: frame });
+  expect(
+    merged?.projectViews?.inactive?.runs.map((run) => [run.record.id, run.record.status]),
+  ).toEqual([
+    ["background", "finished"],
+    ["new-worker", "running"],
+  ]);
+  expect(requestedDetails(next)).not.toContainEqual(scope);
+});
 it("requests only the selected Relay worker target and refuses historical generations", () => {
   const state = applyUpdate(undefined, {
     ...snapshot,

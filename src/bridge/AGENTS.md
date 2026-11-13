@@ -42,6 +42,8 @@
   transcripts/history/file/worktree/review detail, including the selected view.
   Explicit snapshot reads retain compatibility. Run summaries include constant-size
   reply counts, not prompt bodies; details carry full requested view data.
+  Open-project workerSummaries carry the same compact run metadata for inactive
+  sidebar groups; do not put transcripts, prompts or file payloads in them.
   App summaries may include bounded subscription UUID/revision hints only, never
   detail payloads, so a dropped final detail frame can recover independently.
 - Detail requests use strict project/epoch, conversation/generation or opaque

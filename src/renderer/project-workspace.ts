@@ -80,6 +80,7 @@ export function useProjectWorkspace({
     setRequestedProjectWorker(undefined);
     if (id === undefined && projectId !== undefined) {
       setRelayWorkerSelection(undefined);
+      if (projectId === null) setWorkerSelection(undefined);
       const owner = snapshot?.openProjects?.find((owner) => owner.id === projectId);
       if (owner)
         project.retainedScopes

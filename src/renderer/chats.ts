@@ -21,6 +21,9 @@ export function conversationTitle(
   return `Chat ${Math.max(0, peers.indexOf(chat)) + 1}`;
 }
 
+export const conversationId = (chat: OrchestrationChat): string | undefined =>
+  chat.run?.id ?? (chat.kind === "relay" ? chat.conversationId : undefined);
+
 /** The orchestrator's role name for a worker, or its provider and short run ID. */
 export function workerLabel(chats: readonly OrchestrationChat[], run: DesktopRun): string {
   for (const chat of chats) {
@@ -44,9 +47,10 @@ export function conversations(
   const owned = new Set<string>();
   const available = new Map(runs.map((run) => [run.record.id, run]));
   for (const chat of chats) {
-    if (!chat.run || chat.archived) continue;
+    const chatId = conversationId(chat);
+    if (!chatId || chat.archived) continue;
     result.push({
-      id: chat.run.id,
+      id: chatId,
       label: conversationTitle(chats, chat),
       role: "orchestrator",
     });
@@ -59,7 +63,7 @@ export function conversations(
         id,
         label: chat.workerLabels?.[id] || fallbackLabel(run),
         role: "worker",
-        parentId: chat.run.id,
+        parentId: chatId,
       });
     }
   }

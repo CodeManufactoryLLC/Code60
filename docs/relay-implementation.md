@@ -1,5 +1,25 @@
 # Relay implementation status
 
+## PR review correctness follow-up
+
+Reconnect validates the retained private workspace before preparation and again
+at process launch. Failed target controls do not cancel later queued controls.
+Accepted dispatch retries preserve worker-turn review provenance; explicit Git
+bases resolve anew for each distinct dispatch, while default task baselines remain
+shared. Only own configured provider entries authorize execution.
+
+Review application uses the canonical Git checkout root for repository-relative
+paths, retaining the requested target directory and its identity checks.
+Project helper cancellation follows the originating request, not view selection.
+Opening a restored project loads the conversation made visible, without starting
+its provider. Search and Episodic Memory accept project runs only.
+
+Relay navigation and historical display use its stable conversation identity even
+when startup fails without a live run. Relay keyboard input does not complete
+slash commands. Selecting Relay leaves project drafts intact but clears the
+effective worker selection. All open projects push compact worker summaries;
+inactive views do not subscribe to transcripts merely to refresh sidebar status.
+
 This branch implements Relay and retained project runtimes as described in
 `ARCHITECTURE.md`. Validation status and native-platform gaps are listed below.
 

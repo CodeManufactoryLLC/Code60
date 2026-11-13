@@ -13,6 +13,7 @@ export class ExecutionBaselines {
     signal: AbortSignal,
   ): Promise<string> {
     signal.throwIfAborted();
+    if (base !== undefined) return this.prepare(target, base, signal);
     const key = JSON.stringify([owner.id, owner.generation, owner.taskId, target.id, base ?? null]);
     const previous = this.captures.get(key);
     if (previous) return previous;

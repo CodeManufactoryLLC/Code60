@@ -377,10 +377,12 @@ export class ExecutionHost {
   ): Promise<T> {
     const worker = this.owned(owner, id);
     const key = worker.target.id;
-    const result = (this.controls.get(key) ?? Promise.resolve()).then(() => {
-      this.owned(owner, id);
-      return work(worker);
-    });
+    const result = (this.controls.get(key) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => {
+        this.owned(owner, id);
+        return work(worker);
+      });
     this.controls.set(key, result);
     void result
       .finally(() => {

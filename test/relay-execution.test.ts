@@ -58,6 +58,29 @@ const request = (cwd: string, requestId = "one") => ({
   provider: "claude",
   prompt: "task",
 });
+it("runs an already queued Stop after a rejected target control", async () => {
+  const worker = await host.dispatch(owner, request(join(root, "a")), DEFAULT_CONFIG);
+  await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));
+  const rejected = host.control(owner, worker.id, async () => {
+    throw new Error("Worker busy");
+  });
+  const stopped = host.control(owner, worker.id, async (worker) => worker.orchestrator.shutdown());
+  await expect(rejected).rejects.toThrow("Worker busy");
+  await expect(stopped).resolves.toBeUndefined();
+  expect(worker.orchestrator.runs()[0]?.status).toBe("finished");
+});
+it("resolves a symbolic base again for distinct dispatches but not accepted retries", async () => {
+  let head = "a".repeat(40);
+  git.repoInfo = async (cwd = root) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
+  git.resolveCommit = async (_cwd, base) => (base === "HEAD" ? head : base);
+  const req = { ...request(join(root, "a")), workspaceMode: "worktree" as const, base: "HEAD" };
+  const first = await host.dispatch(owner, req, DEFAULT_CONFIG);
+  head = "b".repeat(40);
+  const second = await host.dispatch(owner, { ...req, requestId: "next" }, DEFAULT_CONFIG);
+  expect(second.record.base).toBe(head);
+  expect(await host.dispatch(owner, req, DEFAULT_CONFIG)).toBe(first);
+  expect(first.record.base).toBe("a".repeat(40));
+});
 it("freezes current files by task and target while resolving explicit bases independently", async () => {
   const initial = "a".repeat(40);
   let current = "b".repeat(40);

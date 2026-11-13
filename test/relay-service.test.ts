@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -61,6 +71,62 @@ async function connect() {
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
 }
+it.each(["removed", "replaced", "symlink"])(
+  "refuses a %s workspace on in-process Retry",
+  async (kind) => {
+    if (kind === "symlink" && process.platform === "win32") return;
+    await connect();
+    const workspace = required(relay.snapshot().directory);
+    await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
+    await rename(workspace, `${workspace}-saved`);
+    if (kind === "replaced") await mkdir(workspace, { mode: 0o700 });
+    if (kind === "symlink") await symlink(join(root, "target"), workspace);
+    const launches = agents.specs.length;
+    await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+    expect(relay.snapshot().error).toBeTruthy();
+    expect(agents.specs).toHaveLength(launches);
+    if (kind === "removed") await expect(stat(workspace)).rejects.toMatchObject({ code: "ENOENT" });
+  },
+);
+it("revalidates workspace identity between preparation and agent launch", async () => {
+  let replace = false;
+  relay = create(async () => {
+    if (!replace) return;
+    replace = false;
+    const workspace = required(relay.snapshot().directory);
+    await rename(workspace, `${workspace}-saved`);
+    await mkdir(workspace, { mode: 0o700 });
+  });
+  await connect();
+  await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
+  const launches = agents.specs.length;
+  replace = true;
+  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("failed"));
+  expect(agents.specs).toHaveLength(launches);
+});
+it.each(["constructor", "__proto__", "toString"])(
+  "rejects inherited provider %s before preparation",
+  async (provider) => {
+    await connect();
+    await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Task" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    const { scope } = await tool("code60_get_context");
+    const launches = agents.specs.length;
+    await expect(
+      tool("code60_dispatch_agent", {
+        scope,
+        requestId: provider,
+        cwd: join(root, "target"),
+        workspaceMode: "direct",
+        provider,
+        prompt: "Must not start",
+      }),
+    ).rejects.toThrow("Unavailable verified provider");
+    expect(relay.execution.list()).toEqual([]);
+    expect(agents.specs).toHaveLength(launches);
+  },
+);
 it("keeps observer failures outside accepted prompts, worker dispatch and cleanup", async () => {
   relay = create(undefined, () => {
     throw new Error("Observer failed");

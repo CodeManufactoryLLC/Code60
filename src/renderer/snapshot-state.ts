@@ -87,6 +87,22 @@ export function applyUpdate(state: DesktopState | undefined, update: Snapshot): 
   if (update.openProjects) {
     const open = new Set(update.openProjects.map((project) => project.id));
     for (const id of Object.keys(projectViews)) if (!open.has(id)) delete projectViews[id];
+    for (const project of update.openProjects) {
+      if (project.id === update.projectInstanceId || !project.workerSummaries) continue;
+      const previous = projectViews[project.id];
+      const byId = new Map(previous?.runs.map((run) => [run.record.id, run]));
+      projectViews[project.id] = {
+        runs: project.workerSummaries.map((run) => ({
+          ...run,
+          record: {
+            ...run.record,
+            firstPrompt: byId.get(run.record.id)?.record.firstPrompt ?? run.record.firstPrompt,
+          },
+        })),
+        events: previous?.events ?? {},
+        revision: previous?.revision ?? -1,
+      };
+    }
   }
   return {
     projectViews,

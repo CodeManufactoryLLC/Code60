@@ -278,6 +278,67 @@ async function task(
   if (result.type !== "task") throw new Error("Missing task response");
   return result.task;
 }
+it("applies repository-relative additions and modifications from a subdirectory target and undoes them", async () => {
+  const repo = join(root, "a");
+  await mkdir(join(repo, "src"));
+  await writeFile(join(repo, "src", "existing.ts"), "before\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  commitFixture(repo);
+  const source = await ready(join(repo, "src"));
+  const checkout = source.accepted.record.worktree;
+  await writeFile(join(checkout, "src", "existing.ts"), "after\n");
+  await writeFile(join(checkout, "src", "new.ts"), "added\n");
+  const review = await capture(source);
+  const prepared = await task(source, {
+    type: "prepare",
+    revisionId: required(review.revisions.at(-1)?.id),
+  });
+  expect(prepared.operation?.conflicts).toEqual([]);
+  const operationId = required(prepared.operation?.id);
+  await task(source, { type: "apply", operationId });
+  expect(await readFile(join(repo, "src", "new.ts"), "utf8")).toBe("added\n");
+  expect(await readFile(join(repo, "src", "existing.ts"), "utf8")).toBe("after\n");
+  await expect(readFile(join(repo, "src", "src", "new.ts"))).rejects.toThrow();
+  expect(review.relay?.cwd).toBe(join(repo, "src"));
+  await task(source, { type: "undo", operationId });
+  expect(await readFile(join(repo, "src", "existing.ts"), "utf8")).toBe("before\n");
+  await expect(readFile(join(repo, "src", "new.ts"))).rejects.toThrow();
+});
+it("preserves review turn ownership when retrying dispatch after a human follow-up", async () => {
+  service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
+    confirm,
+  });
+  await service.sync("claude", DEFAULT_CONFIG);
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  await service.action({ type: "send", id: required(service.snapshot().run?.id), text: "Task" });
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  await service.action({ type: "cancel", id: required(service.snapshot().run?.id) });
+  const { scope } = await relayTool("code60_get_context");
+  const request = {
+    scope,
+    requestId: "retry-turn",
+    cwd: join(root, "a"),
+    workspaceMode: "worktree",
+    prompt: "Task",
+  };
+  const accepted = await relayTool("code60_dispatch_agent", request);
+  const worker = required(service.execution.list()[0]);
+  await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));
+  await service.workerAction({ type: "reply", id: worker.id, text: "Follow-up" });
+  await vi.waitFor(() =>
+    expect(worker.orchestrator.runs()[0]).toMatchObject({ status: "idle", turns: 2 }),
+  );
+  expect((await relayTool("code60_dispatch_agent", request)).runId).toBe(accepted.runId);
+  const result = await service.reviewRequest({
+    type: "capture",
+    conversationId: required(service.snapshot().conversationId),
+    generation: required(service.snapshot().generation),
+    targetId: String(accepted.targetId),
+    reviewId: String(accepted.reviewId),
+    requestId: randomUUID(),
+  });
+  expect(result).toMatchObject({ type: "review", live: true, review: { workers: [{ turn: 2 }] } });
+});
 it("captures, previews, confirms, applies and undoes only the addressed checkout without a database", async () => {
   const a = await ready();
   const b = await ready(join(root, "b"), "two");
@@ -515,7 +576,7 @@ it("binds an accepted worker to its target and already frozen baseline without r
     inode: accepted.target.inode.toString(),
     device: accepted.target.device.toString(),
   });
-  expect((await required(reviews.loop(review)).state(id)).baseline).toBe(baseline);
+  expect((await required(await reviews.loop(review)).state(id)).baseline).toBe(baseline);
   expect(review.workers).toMatchObject([{ runId: accepted.id, turn: 1 }]);
   await reviews.associate(accepted, 1, baseline);
   expect((await reviews.index.read()).entries).toHaveLength(1);
