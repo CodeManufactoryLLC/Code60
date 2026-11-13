@@ -4464,6 +4464,11 @@ describe("orchestrated workers over ACP", () => {
       const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
       const operationId = prepared.operation?.id;
       if (!operationId) throw new Error("Missing application");
+      // Prepare schedules a refresh. Finish that unchanged capture before simulating file drift.
+      await vi.waitFor(() => {
+        // biome-ignore lint/complexity/useLiteralKeys: Observe fixture quiescence without changing production capture behavior.
+        expect(controller["reviewCaptures"].size).toBe(0);
+      });
       tasks.snapshot.mockResolvedValue("c".repeat(40));
       await expect(
         controller.taskAction({ ...identity, type: "apply", operationId }),
