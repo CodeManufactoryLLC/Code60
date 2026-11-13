@@ -9,6 +9,7 @@ release
 release-assets
 native/win32
 media
+models
 output
 reports
 research_notes

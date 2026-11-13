@@ -9,6 +9,23 @@ import {
 import type { RunEvent } from "./types.js";
 
 describe("conversation retrieval", () => {
+  it("covers large trailing whitespace without retrying every suffix", () => {
+    const text = `${"word ".repeat(600)}${" ".repeat(1_000_000)}`;
+    const count = (s: string) => s.trim().split(/\s+/).filter(Boolean).length + 2;
+    const started = performance.now();
+    const spans = chunkText(text, count);
+    expect(spans.at(-1)?.end).toBe(text.length);
+    expect(spans[0]?.start).toBe(0);
+    for (const span of spans)
+      expect(count(text.slice(span.start, span.end))).toBeLessThanOrEqual(512);
+    expect(performance.now() - started).toBeLessThan(1000);
+    const bytes = (value: string) => value.length + 2;
+    const compact = `${"word ".repeat(120)}${" ".repeat(20000)}`;
+    const bounded = chunkText(compact, bytes);
+    expect(bounded.at(-1)?.end).toBe(compact.length);
+    for (const span of bounded)
+      expect(bytes(compact.slice(span.start, span.end))).toBeLessThanOrEqual(512);
+  });
   it("merges streamed replies and omits automatic prompts and internal events", () => {
     const at = "2026-01-01T00:00:00Z";
     const events = [

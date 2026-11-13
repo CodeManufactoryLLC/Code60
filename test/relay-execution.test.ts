@@ -58,6 +58,26 @@ const request = (cwd: string, requestId = "one") => ({
   provider: "claude",
   prompt: "task",
 });
+it("binds each worker's memory to its canonical subfolder target, not the Git root", async () => {
+  git.repoInfo = async () => ({ topLevel: root, commonDir: join(root, ".git") });
+  const memory = vi.fn(() => ({
+    event: () => {},
+    prepare: async () => ({ context: "", rollover: false, used: [] }),
+    dispose: () => {},
+  }));
+  host = new ExecutionHost(
+    { ...defaultDeps(), agents, git, processes: new FakeProcesses(), memory },
+    { XDG_STATE_HOME: join(root, "state") },
+    { authorize: () => {}, event: () => {}, changed: () => {}, warning: () => {} },
+  );
+  for (const folder of ["a", "b"])
+    await host.dispatch(owner, request(join(root, folder), folder), DEFAULT_CONFIG);
+  expect(memory.mock.calls.map((call) => (call as unknown[])[1])).toEqual([
+    join(root, "a"),
+    join(root, "b"),
+  ]);
+  expect(host.list().every((worker) => worker.record.owner === "relay")).toBe(true);
+});
 it("runs an already queued Stop after a rejected target control", async () => {
   const worker = await host.dispatch(owner, request(join(root, "a")), DEFAULT_CONFIG);
   await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));

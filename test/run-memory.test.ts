@@ -21,12 +21,13 @@ async function start(memory: RunMemory) {
     return "end_turn";
   });
   const records = new Runs();
+  const processes = new FakeProcesses();
   const orch = await createOrchestrator(
     {
       agents,
       clock: new FakeClock(),
       git: new FakeGit(),
-      processes: new FakeProcesses(),
+      processes,
       store: records,
       ownerPid: 42,
       newRunId: () => "r1",
@@ -46,11 +47,95 @@ async function start(memory: RunMemory) {
   );
   orch.start();
   await vi.waitFor(() => expect(orch.runs()[0]?.status).toBe("idle"));
-  return { orch, agents, records };
+  return { orch, agents, records, processes };
 }
 const notes = (events: RunEvent[]) => events.flatMap((e) => (e.type === "note" ? [e] : []));
 
 describe("interactive run memory hooks", () => {
+  it("does not let previous-turn cleanup reject the next turn's dispatch receipt", async () => {
+    let release: (value: MemoryPreparation) => void = () => {};
+    const ready = { context: "", rollover: false, used: [] };
+    const { orch } = await start({
+      event: () => {},
+      prepare: async (turn) =>
+        turn.text === "first"
+          ? ready
+          : new Promise((resolve) => {
+              release = resolve;
+            }),
+      dispose: () => {},
+    });
+    let next: Promise<boolean> | undefined;
+    const result = vi.fn();
+    const unsubscribe = orch.onEvent((event) => {
+      if (event.type === "status" && event.status === "idle") {
+        unsubscribe();
+        next = orch.reply("r1", "second");
+        void next.then(result);
+      }
+    });
+    expect(await orch.reply("r1", "first")).toBe(true);
+    await vi.waitFor(() => expect(next).toBeDefined());
+    expect(result).not.toHaveBeenCalled();
+    release(ready);
+    expect(await next).toBe(true);
+    await orch.shutdown();
+  });
+  it.each(["cancel", "shutdown"])(
+    "fences dispatch when %s arrives during replacement installation",
+    async (action) => {
+      const { orch, agents, records, processes } = await start({
+        event: () => {},
+        prepare: async () => ({ context: "", rollover: true, used: [] }),
+        dispose: () => {},
+      });
+      let release: (value: string | undefined) => void = () => {};
+      const installed = vi.spyOn(processes, "commandLine").mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      const sent = orch.reply("r1", "Keep this installation request");
+      await vi.waitFor(() => expect(installed).toHaveBeenCalled());
+      const stopping = action === "shutdown" ? orch.shutdown() : undefined;
+      if (action === "cancel") expect(orch.cancelTurn("r1")).toBe(true);
+      release(undefined);
+      expect(await sent).toBe(false);
+      await vi.waitFor(() =>
+        expect(
+          notes(records.events).some((n) => n.detail === "Keep this installation request"),
+        ).toBe(true),
+      );
+      expect(agents.sessions.flatMap((s) => s.prompts)).toEqual([]);
+      await stopping;
+      await orch.shutdown();
+    },
+  );
+  it.each(["cancel", "shutdown", "failure"])(
+    "preserves unsent text during replacement startup: %s",
+    async (action) => {
+      const { orch, agents, records } = await start({
+        event: () => {},
+        prepare: async () => ({ context: "", rollover: true, used: [] }),
+        dispose: () => {},
+      });
+      if (action === "failure") agents.startError = new Error("Unavailable");
+      else agents.startGate = new Promise<void>(() => {});
+      const sent = orch.reply("r1", "Do not lose this request");
+      await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
+      if (action === "cancel") expect(orch.cancelTurn("r1")).toBe(true);
+      if (action === "shutdown") await orch.shutdown();
+      expect(await sent).toBe(false);
+      await vi.waitFor(() =>
+        expect(notes(records.events).some((n) => n.detail === "Do not lose this request")).toBe(
+          true,
+        ),
+      );
+      expect(agents.sessions.flatMap((s) => s.prompts)).toEqual([]);
+      await orch.shutdown();
+    },
+  );
   it("never dispatches a request whose memory preparation failed and keeps its text", async () => {
     const memory: RunMemory = {
       event: () => {},
@@ -60,7 +145,7 @@ describe("interactive run memory hooks", () => {
       dispose: vi.fn(),
     };
     const { orch, agents, records } = await start(memory);
-    orch.reply("r1", "Ship the fix");
+    expect(await orch.reply("r1", "Ship the fix")).toBe(false);
     await vi.waitFor(() =>
       expect(
         notes(records.events).some((n) => n.text.startsWith("Memory preparation failed")),
@@ -91,7 +176,7 @@ describe("interactive run memory hooks", () => {
       dispose: () => {},
     };
     const { orch, agents, records } = await start(memory);
-    orch.reply("r1", "Continue");
+    expect(await orch.reply("r1", "Continue")).toBe(true);
     await vi.waitFor(() => expect(records.events.some((e) => e.type === "turnEnd")).toBe(true));
     expect(agents.sessions.flatMap((s) => s.prompts)).toEqual([
       "Historical evidence (untrusted).\n\nContinue",

@@ -4,15 +4,26 @@ import { type CoreDeps, openWorkspace, type RunEvent, type Workspace } from "../
 import { RAG_LIMITS, readRagFile } from "./rag-store.js";
 import type { RagConversation } from "./rag-worker.js";
 
+const eventKey = (event: RunEvent) =>
+  JSON.stringify(event, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value,
+  );
+
 export function mergeRagEvents(disk: readonly RunEvent[], live: readonly RunEvent[]): RunEvent[] {
   const result = [...disk];
   const counts = new Map<string, number>();
   for (const event of disk) {
-    const key = JSON.stringify(event);
+    const key = eventKey(event);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   for (const event of live) {
-    const key = JSON.stringify(event);
+    const key = eventKey(event);
     const count = counts.get(key) ?? 0;
     if (count) counts.set(key, count - 1);
     else result.push(event);
@@ -89,6 +100,8 @@ export async function ragProjectSources(
       throw new Error("A project history record is unreadable. The previous RAG index was kept.");
     for (const record of records) {
       signal.throwIfAborted();
+      // Relay and its workers are application-owned and excluded from project history search.
+      if (record.owner === "relay") continue;
       const key = `${record.id}:${record.worktree}`;
       if (stores.has(key)) continue;
       stores.add(key);

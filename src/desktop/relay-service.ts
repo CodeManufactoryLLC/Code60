@@ -1154,11 +1154,12 @@ export class RelayService {
               throw new Error("Relay changed before plan delivery");
             this.task = pending.owner;
             this.scope = randomUUID();
-            chat.reply(
+            const sent = await chat.reply(
               run.id,
               `Human accepted plan ${plan.id}, proposal revision ${plan.proposalRevision}. Execute only these target/mode assignments with their planTaskId values. Read the plan tool for row IDs.\n\n${planMarkdown(plan)}`,
               "automatic",
             );
+            if (!sent) throw new Error("Relay did not send the accepted plan");
           } catch (cause) {
             if (deliveryEpoch === this.connectionEpoch && this.chat === chat) {
               this.task = previous;
@@ -1187,11 +1188,12 @@ export class RelayService {
             this.authorize(task.owner);
             this.task = task.owner;
             this.scope = randomUUID();
-            chat.reply(
+            const sent = await chat.reply(
               run.id,
               `Human feedback for originating task ${feedback.taskId}.\n\n${feedback.text}`,
               "automatic",
             );
+            if (!sent) throw new Error("Relay did not send the feedback");
             accepted = true;
             this.feedback.splice(this.feedback.indexOf(feedback), 1);
             await reviews.finishFeedback(feedback.reviewId, feedback.batchId, {
@@ -1228,7 +1230,7 @@ export class RelayService {
         this.task = task.owner;
         this.scope = randomUUID();
         try {
-          this.chat.reply(
+          const sent = await this.chat.reply(
             run.id,
             [
               `Worker results for originating task ${taskId}. Target labels are authoritative provenance, not completion proof.`,
@@ -1236,6 +1238,8 @@ export class RelayService {
             ].join("\n"),
             "automatic",
           );
+          // Keep the results queued; the chain's failure handler pauses delivery.
+          if (!sent) throw new Error("Relay did not send worker results");
         } catch (cause) {
           this.task = previous;
           this.scope = previousScope;

@@ -9,6 +9,7 @@ import {
   type MemorySource,
 } from "../bridge/index.js";
 import { MemoryStore } from "./memory-store.js";
+import { sqliteAvailable } from "./projects.js";
 
 function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Expected test fixture value");
@@ -65,7 +66,35 @@ function publish(cid: string, s: MemorySource, value = generation(s)) {
   store.publish(cid, range.cursor, range.boundary, value, "fixture");
   return must(store.browse({ conversationId: cid }).records[0]);
 }
-describe("private application memory", () => {
+describe.skipIf(!sqliteAvailable())("private application memory", () => {
+  it("distinguishes type, conditions, subject and dated events when deduplicating", () => {
+    const c = store.register("c", "Chat", null);
+    publish(c.id, source(c.id));
+    publish(c.id, source(c.id));
+    const episode = source(c.id);
+    publish(c.id, episode, generation(episode, "episodic"));
+    const otherSubject = source(c.id);
+    const subjectValue = generation(otherSubject);
+    must(subjectValue.memories[0]).subject = "client-cache";
+    publish(c.id, otherSubject, subjectValue);
+    const lesson = source(c.id);
+    publish(c.id, lesson, generation(lesson, "lesson"));
+    const conditional = source(c.id);
+    const conditionValue = generation(conditional, "lesson");
+    must(conditionValue.memories[0]).condition = "When deploying production";
+    publish(c.id, conditional, conditionValue);
+    const later = { ...source(c.id), at: "2026-11-14T12:00:00.000Z" };
+    publish(c.id, later, generation(later, "episodic"));
+    const repeated = { ...source(c.id), at: later.at };
+    publish(c.id, repeated, generation(repeated, "episodic"));
+    const records = store.browse({}).records;
+    expect(records).toHaveLength(6);
+    expect(records.every((r) => r.state === "active")).toBe(true);
+    expect(records.filter((r) => r.type === "episodic").map((r) => r.eventAt)).toEqual([
+      later.at,
+      at,
+    ]);
+  });
   it("persists settings, exact evidence, revisions and all four memory types across restart", async () => {
     const c = store.register("chat", "Chat", null);
     for (const type of ["episodic", "semantic", "lesson", "history"] as const) {
@@ -137,7 +166,13 @@ describe("private application memory", () => {
     expect(store.detail(first.id).record.state).toBe("disputed");
     expect(second.state).toBe("disputed");
     expect(second.evidence).toBe("agent-reported");
-    store.action({ type: "resolve", id: first.id, revision: 2 });
+    const unresolved = publish(c.id, source(c.id, "Cache uses DynamoDB.", "assistant"));
+    expect(unresolved.state).toBe("disputed");
+    store.action({
+      type: "resolve",
+      id: first.id,
+      revision: store.detail(first.id).record.revision,
+    });
     const s = source(c.id, "Correction: cache uses Memcached.");
     const value = generation(s);
     must(value.memories[0]).correction = true;
@@ -180,6 +215,41 @@ describe("private application memory", () => {
     store.action({ type: "forget-scope", projectId: null });
     expect(store.range(c.id).sources).toEqual([]);
   });
+  it("scope forgetting preserves promoted globals and their shared evidence without regenerating local records", () => {
+    const c = store.register("local", "Local", null);
+    const s = source(c.id);
+    const value = generation(s);
+    value.memories.push({
+      ...must(value.memories[0]),
+      type: "history",
+      text: "Local history using the same source.",
+    });
+    const shared = publish(c.id, s, value);
+    store.action({ type: "promote", id: shared.id, revision: shared.revision });
+    const unextracted = source(c.id, "An unextracted local fact.");
+    store.append(c.id, "pending", [unextracted], true);
+    store.action({ type: "forget-scope", projectId: null });
+    expect(store.browse({}).records.map((r) => r.id)).toEqual([shared.id]);
+    expect(store.detail(shared.id).incomplete).toBe(false);
+    expect(store.eligible(c.id).map((r) => r.id)).toEqual([shared.id]);
+    expect(store.lexical(c.id, "Local")).toEqual([shared.id]);
+    expect(store.range(c.id).sources).toEqual([]);
+    store.append(c.id, "future", [source(c.id, "A future local fact.")], true);
+    expect(store.range(c.id).sources).toHaveLength(1);
+    const future = store.range(c.id);
+    store.publish(
+      c.id,
+      future.cursor,
+      future.boundary,
+      generation(must(future.sources[0]), "episodic"),
+      "fixture",
+    );
+    const recent = must(store.browse({ type: "episodic" }).records[0]);
+    store.action({ type: "forget", id: recent.id, revision: recent.revision });
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.tail(c.id)).toEqual([]);
+    expect(store.eligible(c.id).map((r) => r.id)).toEqual([shared.id]);
+  });
   it("supports revisions, stable paging, retention, vector rebuilds, call limits and do-not-remember", () => {
     const c = store.register("c", "Chat", null);
     for (let i = 0; i < 28; i++) {
@@ -189,6 +259,18 @@ describe("private application memory", () => {
     const page = store.browse({});
     expect(page.records).toHaveLength(25);
     expect(store.browse({ cursor: must(page.next ?? undefined) }).records).toHaveLength(3);
+    const lastPage = store.browse({ cursor: must(page.next ?? undefined) });
+    const old = must(lastPage.records[2]);
+    store.action({
+      type: "edit",
+      id: old.id,
+      revision: old.revision,
+      text: "Old record stays on its page.",
+      pinned: false,
+    });
+    expect(store.browse({ cursor: must(page.next ?? undefined) }).records.map((r) => r.id)).toEqual(
+      lastPage.records.map((r) => r.id),
+    );
     const r = must(page.records[0]);
     store.action({ type: "edit", id: r.id, revision: 1, text: "A human edit.", pinned: true });
     expect(() =>

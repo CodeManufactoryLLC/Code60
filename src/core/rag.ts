@@ -3,7 +3,7 @@ import type { RunEvent } from "./types.js";
 /** Bump the version whenever chunk boundaries or embedded text change. */
 export const RAG_CHUNKER = {
   id: "message-tokens",
-  version: 1,
+  version: 2,
   maxTokens: 512,
   overlapTokens: 64,
 } as const;
@@ -103,14 +103,13 @@ export function chunkText(
     return known;
   };
   const pieces: Piece[] = [];
-  for (const match of text.matchAll(/\s*\S+/g)) {
-    let start = match.index;
-    const end = start + match[0].length;
+  const appendPieces = (from: number, end: number) => {
+    let start = from;
     while (start < end) {
       // Bound tokenizer work for unbroken strings; use overlap-sized pieces so code also overlaps.
       const candidateEnd = codePointBoundary(text, Math.min(end, start + 4096));
       const pieceBudget =
-        candidateEnd < end || match[0].length > 256
+        candidateEnd < end || end - from > 256
           ? Math.min(budget, Math.max(1, overlapTokens))
           : budget;
       const whole = cost(text.slice(start, candidateEnd));
@@ -134,11 +133,14 @@ export function chunkText(
       pieces.push({ start, end: cut, cost: cost(text.slice(start, cut)) });
       start = cut;
     }
+  };
+  let previousEnd = 0;
+  for (const match of text.matchAll(/\S+/g)) {
+    const end = match.index + match[0].length;
+    appendPieces(previousEnd, end);
+    previousEnd = end;
   }
-  const tail = pieces.at(-1);
-  if (tail && tail.end < text.length) {
-    pieces.push({ start: tail.end, end: text.length, cost: cost(text.slice(tail.end)) });
-  }
+  appendPieces(previousEnd, text.length);
   const spans: RagSpan[] = [];
   let first = 0;
   while (first < pieces.length) {

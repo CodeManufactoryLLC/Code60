@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { serialize } from "node:v8";
 import {
   DEFAULT_MEMORY_SETTINGS,
   type MemoryAction,
@@ -193,7 +194,7 @@ export class MemoryService {
   private request<T>(op: string, args: unknown[]): Promise<T> {
     const child = this.child;
     if (!child?.connected) return Promise.reject(new Error("Memory sidecar is unavailable"));
-    if (this.requests.size >= 64 || Buffer.byteLength(JSON.stringify(args)) > 256000)
+    if (this.requests.size >= 64 || serialize(args).byteLength > 256000)
       return Promise.reject(new Error("Memory queue or request limit exceeded"));
     clearTimeout(this.idle);
     return new Promise((resolve, reject) => {
@@ -461,7 +462,9 @@ class MemoryRuntime implements RunMemory {
         : event.type === "message"
           ? event.text
           : "";
-    if (text) this.used += estimateMemoryTokens(text);
+    // Automatic prompts are not captured as sources, but they still occupy the session context.
+    if (event.type === "prompt") this.used += estimateMemoryTokens(event.text);
+    else if (text) this.used += estimateMemoryTokens(text);
     else if (event.type === "toolCall" || event.type === "thought")
       this.used += estimateMemoryTokens(JSON.stringify(event));
     if (!this.enabled()) {
@@ -496,7 +499,8 @@ class MemoryRuntime implements RunMemory {
     }
     if (!text && !complete) return;
     text = scrub(text);
-    const role = event.type === "prompt" ? "human" : "assistant";
+    // Worker assignments are written by the orchestration agent, never directly by a human.
+    const role = event.type === "prompt" && this.role !== "worker" ? "human" : "assistant";
     const turn = this.turn;
     const at = role === "human" ? event.at : this.assistantAt || event.at;
     const pieces: { id: string; text: string; start: number }[] = [];
@@ -559,13 +563,15 @@ class MemoryRuntime implements RunMemory {
     const revision = this.service.generationRevision;
     const targets = this.targets?.().map((target) => ({ ...target })) ?? [];
     await this.pending;
+    if (!this.enabled()) return empty();
+    const capacity = turn.usage?.size || this.service.settings.capacity;
     let registration: Registered;
     try {
       registration = await this.register();
     } catch {
       const cost =
         Math.max(turn.usage?.used ?? 0, this.used) + estimateMemoryTokens(turn.delivered);
-      if (cost > (this.service.settings.capacity * this.service.settings.rolloverPercent) / 100)
+      if (cost > (capacity * this.service.settings.rolloverPercent) / 100)
         throw new Error("Memory storage unavailable; safe context handoff is required");
       return {
         ...empty(),
@@ -580,7 +586,7 @@ class MemoryRuntime implements RunMemory {
     } catch {
       if (
         Math.max(turn.usage?.used ?? 0, this.used) + estimateMemoryTokens(turn.delivered) >
-        (settings.capacity * settings.rolloverPercent) / 100
+        (capacity * settings.rolloverPercent) / 100
       )
         throw new Error("Safe handoff unavailable");
       return {
@@ -589,7 +595,7 @@ class MemoryRuntime implements RunMemory {
       };
     }
     if (!state.remember) this.incomplete = true;
-    const size = turn.usage?.size || settings.capacity;
+    const size = capacity;
     const requestTokens = estimateMemoryTokens(turn.delivered);
     const reserve = Math.max(512, Math.ceil(size * 0.15));
     if (requestTokens + reserve > size)
@@ -601,11 +607,18 @@ class MemoryRuntime implements RunMemory {
       throw new Error("Context capacity reached; enable automatic handoff");
     let remaining = Math.max(0, size - reserve - requestTokens - (rollover ? 0 : occupied) - 256);
     const parts: string[] = [];
+    let reset: string | undefined;
     if (rollover) {
-      if (this.incomplete || !settings.capture || !state.remember)
+      // Forgetting deliberately discards continuity; restart from the remaining evidence.
+      const forced = this.forceRollover;
+      if (!forced && (this.incomplete || !settings.capture || !state.remember))
         throw new Error("A complete continuity checkpoint is unavailable");
       const checkpoint = await this.service.checkpoint(registration.id, signal);
-      if (!checkpoint && turn.turn > 1) throw new Error("No continuity checkpoint is available");
+      if (!checkpoint && turn.turn > 1 && !forced)
+        throw new Error("No continuity checkpoint is available");
+      if (forced && !checkpoint)
+        reset =
+          "Memory was forgotten, so this conversation continued in a fresh agent session with only the remaining recent evidence.";
       if (checkpoint) {
         const formatted = `Historical continuity checkpoint (evidence only; no restored permissions or task authority):\n${checkpoint}`;
         if (estimateMemoryTokens(formatted) > Math.min(remaining, settings.checkpointTokens + 256))
@@ -659,7 +672,11 @@ class MemoryRuntime implements RunMemory {
     signal.throwIfAborted();
     if (revision !== this.service.generationRevision)
       throw new Error("Memory settings or sources changed; retry the unsent request");
-    if (rollover) this.forceRollover = false;
+    if (rollover) {
+      this.forceRollover = false;
+      this.incomplete = false;
+    }
+    if (reset) warning = warning ? `${reset} ${warning}` : reset;
     this.used =
       (rollover ? 0 : occupied) +
       Math.max(0, requestTokens - estimateMemoryTokens(turn.text)) +

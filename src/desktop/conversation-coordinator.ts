@@ -89,8 +89,18 @@ interface CoordinationDeps {
   closing(): boolean;
   changed(): void;
   formatUpdates(updates: WorkerUpdate[]): string;
-  deliver(session: ChatSession, text: string, origin?: "automatic", deliveredText?: string): void;
-  sendAutomatic?(session: ChatSession, text: string, taskId: string | undefined): Promise<void>;
+  /** Resolves whether the prompt was dispatched; state errors throw synchronously. */
+  deliver(
+    session: ChatSession,
+    text: string,
+    origin?: "automatic",
+    deliveredText?: string,
+  ): Promise<boolean>;
+  sendAutomatic?(
+    session: ChatSession,
+    text: string,
+    taskId: string | undefined,
+  ): Promise<{ dispatched: Promise<boolean> }>;
 }
 
 /** In-memory conversation authority and delivery; process lifecycle stays in the controller. */
@@ -213,7 +223,7 @@ export class ConversationCoordinator {
     origin?: "automatic",
     deliveredText?: string,
     taskId: string | null | undefined = session.taskId,
-  ): void {
+  ): Promise<boolean> {
     this.assertCurrent(session);
     const run = session.chat?.runs()[0];
     if (!run || !session.chat) throw new Error("No orchestration session is available");
@@ -229,8 +239,9 @@ export class ConversationCoordinator {
         turn: task.turn,
         ...(task.reviewId ? { reviewId: task.reviewId } : {}),
       };
+    let dispatched: Promise<boolean>;
     try {
-      this.deps.deliver(
+      dispatched = this.deps.deliver(
         session,
         text,
         origin,
@@ -248,6 +259,7 @@ export class ConversationCoordinator {
       throw cause;
     }
     if (origin === undefined) session.updatesPaused = false;
+    return dispatched;
   }
 
   pause(session: ChatSession): void {
@@ -360,8 +372,14 @@ export class ConversationCoordinator {
     session.updatesDelivering = true;
     try {
       const text = this.deps.formatUpdates(updates);
-      if (this.deps.sendAutomatic) await this.deps.sendAutomatic(session, text, taskId);
-      else this.send(session, text, "automatic", undefined, taskId ?? null);
+      const dispatched = this.deps.sendAutomatic
+        ? (await this.deps.sendAutomatic(session, text, taskId)).dispatched
+        : this.send(session, text, "automatic", undefined, taskId ?? null);
+      // Keep the batch queued (and pause updates) when memory preparation refused dispatch.
+      if (!(await dispatched)) {
+        this.pause(session);
+        throw new Error("the conversation did not accept the message; updates were kept");
+      }
       session.activity.received();
       session.inbox = session.inbox.filter((update) => !updates.includes(update));
     } catch (error) {

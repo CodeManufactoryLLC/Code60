@@ -2529,6 +2529,30 @@ describe("desktop orchestration", () => {
     expect(agents.sessions).toHaveLength(1);
   });
 
+  it.each(["stop all", "shutdown", "force"])(
+    "starts worker cleanup without awaiting slow memory cleanup: %s",
+    async (action) => {
+      await start();
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const cleanup = vi
+        .spyOn(controller.memory, action === "stop all" ? "stop" : "close")
+        .mockReturnValue(gate);
+      const stopping =
+        action === "stop all" ? controller.stopAll() : controller.shutdown(action === "force");
+      try {
+        await vi.waitFor(() =>
+          expect(agents.sessions.every((session) => session.stops.length > 0)).toBe(true),
+        );
+      } finally {
+        release();
+        await stopping;
+        cleanup.mockRestore();
+      }
+    },
+  );
   it.each([false, true])("shuts down every batch (force=%s)", async (force) => {
     await start();
     await controller.start(request);

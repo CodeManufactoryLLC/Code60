@@ -21,6 +21,7 @@ export function MemoryPage({ api }: { api: Api }) {
   const [draft, setDraft] = useState<MemorySettings>();
   const [query, setQuery] = useState<MemoryBrowse>({});
   const [page, setPage] = useState<RecordsPage>({ records: [], next: null });
+  const [previousPages, setPreviousPages] = useState<(string | undefined)[]>([]);
   const [detail, setDetail] = useState<MemoryDetail>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,7 @@ export function MemoryPage({ api }: { api: Api }) {
       const accepted = await api.memoryAction(value);
       if (!alive.current) return;
       if (accepted) {
-        setDraft(undefined);
+        if (value.type === "configure") setDraft(undefined);
         setDetail(undefined);
       }
       refresh.current();
@@ -96,19 +97,16 @@ export function MemoryPage({ api }: { api: Api }) {
         setError("Memory changed or is unavailable. Refresh and try again.");
     }
   }
-  async function more() {
+  function changeQuery(next: MemoryBrowse) {
+    setPreviousPages([]);
+    setQuery({ ...next, cursor: undefined });
+    setDetail(undefined);
+  }
+  function more() {
     if (!page.next || busy) return;
-    const token = ++request.current;
-    setBusy(true);
-    try {
-      const next = await api.browseMemories({ ...query, cursor: page.next });
-      if (alive.current && token === request.current)
-        setPage((old) => ({ records: [...old.records, ...next.records], next: next.next }));
-    } catch {
-      if (alive.current) setError("Could not load more memories.");
-    } finally {
-      if (alive.current) setBusy(false);
-    }
+    setPreviousPages((old) => [...old, query.cursor]);
+    setQuery({ ...query, cursor: page.next });
+    setDetail(undefined);
   }
   const settings = draft ?? snapshot?.settings;
   const update = (change: Partial<MemorySettings>) => {
@@ -179,19 +177,15 @@ export function MemoryPage({ api }: { api: Api }) {
                 ["dailyCalls", "Daily generation call limit", 1, 1000],
               ] as const
             ).map(([key, label, min, max]) => (
-              <label className="settings-row" key={key}>
+              <label className="settings-row" key={key} htmlFor={`memory-${key}`}>
                 {label}
-                <input
-                  type="number"
+                <MemoryNumber
+                  id={`memory-${key}`}
                   min={min}
                   max={max}
                   value={settings[key]}
                   disabled={busy}
-                  onChange={(e) => {
-                    const value = e.target.valueAsNumber;
-                    if (Number.isInteger(value) && value >= min && value <= max)
-                      update({ [key]: value });
-                  }}
+                  onChange={(value) => update({ [key]: value })}
                 />
               </label>
             ))}
@@ -238,19 +232,17 @@ export function MemoryPage({ api }: { api: Api }) {
                   />{" "}
                   Recall {type}
                 </label>
-                <label>
+                <label htmlFor={`memory-retention-${type}`}>
                   Retention days (0 = no expiry){" "}
-                  <input
-                    type="number"
+                  <MemoryNumber
+                    id={`memory-retention-${type}`}
                     min={0}
                     max={3650}
                     value={settings.retentionDays[type]}
                     disabled={busy}
-                    onChange={(e) => {
-                      const days = e.target.valueAsNumber;
-                      if (Number.isInteger(days) && days >= 0 && days <= 3650)
-                        update({ retentionDays: { ...settings.retentionDays, [type]: days } });
-                    }}
+                    onChange={(days) =>
+                      update({ retentionDays: { ...settings.retentionDays, [type]: days } })
+                    }
                   />
                 </label>
               </div>
@@ -350,7 +342,7 @@ export function MemoryPage({ api }: { api: Api }) {
               value={query.projectId ?? ""}
               onChange={(e) => {
                 setDetail(undefined);
-                setQuery({ ...query, projectId: e.target.value || undefined });
+                changeQuery({ ...query, projectId: e.target.value || undefined });
               }}
             >
               <option value="">All projects</option>
@@ -366,7 +358,10 @@ export function MemoryPage({ api }: { api: Api }) {
             <select
               value={query.type ?? ""}
               onChange={(e) =>
-                setQuery({ ...query, type: (e.target.value as MemoryBrowse["type"]) || undefined })
+                changeQuery({
+                  ...query,
+                  type: (e.target.value as MemoryBrowse["type"]) || undefined,
+                })
               }
             >
               <option value="">All types</option>
@@ -380,7 +375,7 @@ export function MemoryPage({ api }: { api: Api }) {
             <select
               value={query.state ?? ""}
               onChange={(e) =>
-                setQuery({
+                changeQuery({
                   ...query,
                   state: (e.target.value as MemoryBrowse["state"]) || undefined,
                 })
@@ -392,7 +387,7 @@ export function MemoryPage({ api }: { api: Api }) {
               ))}
             </select>
           </label>
-          <button type="button" onClick={() => setQuery({ ...query, state: "disputed" })}>
+          <button type="button" onClick={() => changeQuery({ ...query, state: "disputed" })}>
             Review conflicts
           </button>
           <button
@@ -415,12 +410,21 @@ export function MemoryPage({ api }: { api: Api }) {
           ))}
         </ul>
         {!page.records.length && <div>No memories in this view.</div>}
-        {page.next && (
+        {previousPages.length > 0 && (
           <button
             type="button"
-            disabled={busy || page.records.length >= 500}
-            onClick={() => void more()}
+            disabled={busy}
+            onClick={() => {
+              setQuery({ ...query, cursor: previousPages.at(-1) });
+              setPreviousPages((old) => old.slice(0, -1));
+              setDetail(undefined);
+            }}
           >
+            Previous page
+          </button>
+        )}
+        {page.next && (
+          <button type="button" disabled={busy} onClick={more}>
             Load more
           </button>
         )}
@@ -434,6 +438,47 @@ export function MemoryPage({ api }: { api: Api }) {
         />
       )}
     </section>
+  );
+}
+
+function MemoryNumber({
+  id,
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onChange(value: number): void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const number = text.trim() ? Number(text) : NaN;
+  const valid = Number.isInteger(number) && number >= min && number <= max;
+  return (
+    <input
+      id={id}
+      type="number"
+      min={min}
+      max={max}
+      value={text}
+      disabled={disabled}
+      aria-invalid={!valid}
+      onChange={(event) => {
+        const next = event.target.value;
+        setText(next);
+        const parsed = next.trim() ? Number(next) : NaN;
+        if (Number.isInteger(parsed) && parsed >= min && parsed <= max) onChange(parsed);
+      }}
+      onBlur={() => {
+        if (!valid) setText(String(value));
+      }}
+    />
   );
 }
 

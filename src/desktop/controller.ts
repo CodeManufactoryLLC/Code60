@@ -689,7 +689,7 @@ export class DesktopController {
     text: string,
     origin?: "automatic",
     taskId: string | null | undefined = session.taskId,
-  ): Promise<void> {
+  ): Promise<{ dispatched: Promise<boolean> }> {
     const task = session.tasks.find((task) => task.id === taskId);
     if (task && task.project !== (this.workspace?.dir ?? null))
       throw new Error("Open the originating task's project before delivering its updates");
@@ -700,7 +700,9 @@ export class DesktopController {
     session.deliveryPending = true;
     try {
       await this.saveChat(session);
-      this.conversations.send(session, text, origin, undefined, taskId ?? null);
+      return {
+        dispatched: this.conversations.send(session, text, origin, undefined, taskId ?? null),
+      };
     } catch (cause) {
       session.taskId = previous;
       if (task) task.deliveries = deliveries;
@@ -715,7 +717,7 @@ export class DesktopController {
       sendAutomatic: (session, text, taskId) =>
         this.exclusive(async () => {
           if (session.updatesPaused || this.closing) throw new Error("Worker updates are paused");
-          await this.sendTask(session, text, "automatic", taskId ?? null);
+          return this.sendTask(session, text, "automatic", taskId ?? null);
         }),
       hasPendingFeedback: (session) =>
         (!!session.plans?.active() && session.plans.active()?.state !== "running") ||
@@ -743,7 +745,7 @@ export class DesktopController {
       deliver: (session, text, origin, deliveredText) => {
         const run = session.chat?.runs()[0];
         if (!session.chat || !run) throw new Error("No orchestration session is available");
-        session.chat.reply(run.id, text, origin, deliveredText);
+        return session.chat.reply(run.id, text, origin, deliveredText);
       },
     });
   }
@@ -1145,12 +1147,30 @@ export class DesktopController {
             delete current.error;
           });
           deliveryAttempted = true;
-          await this.sendTask(
+          const { dispatched } = await this.sendTask(
             session,
             `Code60: the user accepted plan ${plan.id}. Read it with code60_read_plan, inspect any previous work, and execute the remaining tasks. Report each task's progress with evidence and responsible workerIds. Do not repeat completed work.`,
             "automatic",
             session.tasks.find((task) => task.planIds.includes(plan.id))?.id ?? null,
           );
+          void dispatched
+            .then(async (sent) => {
+              if (sent) return;
+              await this.exclusive(async () => {
+                this.conversations.pause(session);
+                session.planScope = undefined;
+                await store.mutate(plan.id, (current) => {
+                  if (current.state !== "running") return;
+                  current.state = "failed";
+                  current.error =
+                    "The plan was not sent because memory preparation or a context handoff failed. Resolve the memory warning, then resume.";
+                });
+              });
+            })
+            .catch((cause) => {
+              this.warnings.push(`Could not save plan delivery failure: ${message(cause)}`);
+            })
+            .finally(() => this.changed());
         } catch (cause) {
           this.conversations.pause(session);
           session.planScope = undefined;
@@ -1669,7 +1689,7 @@ export class DesktopController {
             const item = current.submissions.find((item) => item.id === batch.id);
             if (item) item.state = "delivering";
           });
-          await this.sendTask(
+          const { dispatched } = await this.sendTask(
             session,
             text,
             undefined,
@@ -1677,16 +1697,31 @@ export class DesktopController {
           );
           delivered = true;
           session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
-          await store.mutate(review.id, (current) => {
-            const item = current.submissions.find((item) => item.id === batch.id);
-            if (item) {
-              item.state = "delivered";
-              item.deliveredTurn = session.chat?.runs()[0]?.turns ?? 1;
-              item.deliveredChatId = run.id;
-            }
-            for (const comment of current.comments)
-              if (batch.commentIds.includes(comment.id)) comment.state = "sent";
-          });
+          // Memory preparation can still refuse dispatch; record the receipt only once sent.
+          void dispatched
+            .then((sent) =>
+              this.exclusive(() =>
+                store.mutate(review.id, (current) => {
+                  const item = current.submissions.find((item) => item.id === batch.id);
+                  if (item?.state !== "delivering") return;
+                  if (!sent) {
+                    item.state = "failed";
+                    item.error =
+                      "Feedback was not sent because memory preparation or a context handoff failed. Resolve the memory warning, then retry.";
+                    return;
+                  }
+                  item.state = "delivered";
+                  item.deliveredTurn = session.chat?.runs()[0]?.turns ?? 1;
+                  item.deliveredChatId = run.id;
+                  for (const comment of current.comments)
+                    if (batch.commentIds.includes(comment.id)) comment.state = "sent";
+                }),
+              ),
+            )
+            .catch((cause) => {
+              this.warnings.push(`Could not save review feedback receipt: ${message(cause)}`);
+            })
+            .finally(() => this.changed());
         } catch (cause) {
           await store.mutate(review.id, (current) => {
             const item = current.submissions.find((item) => item.id === batch.id);
@@ -5163,8 +5198,18 @@ export class DesktopController {
     });
   }
   async stopAll(): Promise<void> {
-    await this.memory.stop();
-    await this.cancelRag();
+    const results = await Promise.allSettled([
+      this.memory.stop(),
+      this.cancelRag(),
+      this.stopAllAgents(),
+    ]);
+    if (results.some((result) => result.status === "rejected"))
+      throw new Error(
+        "Some agents or memory operations could not be stopped. Inspect retained work before continuing.",
+      );
+  }
+
+  private async stopAllAgents(): Promise<void> {
     if (this.relay) {
       const owners = this.projectHost.all();
       const results = await Promise.allSettled([
@@ -5209,8 +5254,18 @@ export class DesktopController {
   async shutdown(force = false): Promise<void> {
     this.details.clear();
     this.closing = true;
-    await this.memory.close();
-    await this.cancelRag();
+    const results = await Promise.allSettled([
+      this.memory.close(),
+      this.cancelRag(),
+      this.shutdownAgents(force),
+    ]);
+    if (results.some((result) => result.status === "rejected"))
+      throw new Error(
+        "Some agents or memory operations could not be stopped. Workspaces and Relay ownership were retained.",
+      );
+  }
+
+  private async shutdownAgents(force: boolean): Promise<void> {
     if (this.relay) return this.shutdownOwners(force);
     const active = this.taskOperation;
     active?.abort.abort(new Error("Application is stopping"));

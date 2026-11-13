@@ -16,6 +16,7 @@ import { createOrchestrator } from "../src/core/orchestrator.js";
 import { MemoryService } from "../src/desktop/memory-service.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
 import { memorySearch } from "../src/desktop/memory-worker.js";
+import { sqliteAvailable } from "../src/desktop/projects.js";
 import {
   FakeAgents,
   FakeClock,
@@ -155,7 +156,6 @@ const turn = (text = "Continue"): MemoryTurn => ({
   delivered: text,
   turn: 2,
   usage: null,
-  automatic: false,
 });
 function emit(memory: RunMemory, body: Omit<RunEvent, "runId" | "at"> | Record<string, unknown>) {
   memory.event({ ...body, at, runId: "fixture" } as RunEvent);
@@ -165,7 +165,48 @@ function exchange(memory: RunMemory, text = "Redis cache uses local storage.") {
   emit(memory, { type: "message", text: "a".repeat(1500) });
   emit(memory, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
 }
-describe("scoped runtime memory and handoff", () => {
+describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
+  it("continues after forgetting without requiring deleted checkpoints", async () => {
+    const m = runtime();
+    exchange(m);
+    await m.prepare(turn(), new AbortController().signal);
+    await service.action({ type: "forget-scope", projectId: null }, async () => true);
+    const next = await m.prepare(turn(), new AbortController().signal);
+    expect(next.rollover).toBe(true);
+    expect(next.warning).toContain("forgotten");
+    expect(next.context).toBe("");
+    exchange(m);
+    expect((await m.prepare(turn(), new AbortController().signal)).rollover).toBe(true);
+    m.dispose();
+  });
+  it("counts automatic updates toward fallback capacity without capturing their text", async () => {
+    const m = runtime();
+    emit(m, { type: "prompt", turn: 1, origin: "automatic", text: "x".repeat(1500) });
+    emit(m, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
+    await expect(m.prepare(turn(), new AbortController().signal)).rejects.toThrow("checkpoint");
+    expect(store.range(must(store.snapshot().conversations[0]).id).sources).toEqual([]);
+    m.dispose();
+  });
+  it.each(["register", "range"])(
+    "uses reported capacity when %s fails and bypasses disabled memory",
+    async (failed) => {
+      const original = must(vi.mocked(service.call).getMockImplementation());
+      vi.spyOn(service, "call").mockImplementation(async (op, ...args) => {
+        if (op === failed) throw new Error("storage unavailable");
+        return original(op, ...args);
+      });
+      const m = runtime();
+      const request = { ...turn(), usage: { used: 8000, size: 8192, reportedAt: at } };
+      await expect(m.prepare(request, new AbortController().signal)).rejects.toThrow();
+      service.settings.enabled = false;
+      expect(await m.prepare(request, new AbortController().signal)).toEqual({
+        context: "",
+        rollover: false,
+        used: [],
+      });
+      m.dispose();
+    },
+  );
   it("checkpoints committed ranges before rollover and rejects oversized requests without truncation", async () => {
     const m = runtime();
     exchange(m);

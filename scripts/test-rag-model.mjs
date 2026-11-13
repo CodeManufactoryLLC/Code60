@@ -15,7 +15,9 @@ if (process.argv.includes("--model")) {
   };
   const started = performance.now();
   const { loadRagModel } = await import("../dist/desktop/rag-model.js");
-  const { topMatches, embedMessages, checkedVector } = await import("../dist/core/index.js");
+  const { topMatches, embedMessages, checkedVector, chunkText } = await import(
+    "../dist/core/index.js"
+  );
   const embedder = await loadRagModel(models);
   const loaded = performance.now();
   const documents = [
@@ -77,6 +79,16 @@ if (process.argv.includes("--model")) {
     covered.every((n) => n === 1),
     "Chunking truncated source text",
   );
+  const whitespaceStarted = performance.now();
+  const whitespaceText = `${"word ".repeat(600)}${" ".repeat(1_000_000)}`;
+  const whitespaceChunks = chunkText(whitespaceText, embedder.countTokens);
+  assert.equal(whitespaceChunks[0].start, 0);
+  assert.equal(whitespaceChunks.at(-1).end, whitespaceText.length);
+  for (const [index, span] of whitespaceChunks.entries()) {
+    assert.ok(embedder.countTokens(whitespaceText.slice(span.start, span.end)) <= 512);
+    if (index) assert.ok(span.start <= whitespaceChunks[index - 1].end);
+  }
+  const whitespaceChunkMs = performance.now() - whitespaceStarted;
   console.log(
     JSON.stringify(
       {
@@ -90,6 +102,8 @@ if (process.argv.includes("--model")) {
         batch8x512Ms: heavyMs,
         peakRssMiB: process.resourceUsage().maxRSS / 1024,
         longMessageChunks: chunked.chunks.length,
+        whitespaceChunks: whitespaceChunks.length,
+        whitespaceChunkMs,
       },
       null,
       2,

@@ -243,6 +243,8 @@ export interface RunRequest {
   parallel?: string;
   allow?: readonly string[];
   allowAll?: boolean;
+  /** Internal desktop marker for Relay-owned workers. */
+  owner?: "relay";
 }
 
 /** Why runs go directly into the workspace directory instead of worktrees. */
@@ -374,6 +376,7 @@ export async function prepareRuns(
       overrides: { allow, allowAll: request.allowAll === true },
       prompts: config.prompts,
       ...(mcpServers.length ? { mcpServers } : {}),
+      ...(request.owner === undefined ? {} : { owner: request.owner }),
     },
   );
   return {

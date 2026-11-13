@@ -136,6 +136,7 @@ export class Run {
   private ending = false;
   private readonly startAbort = new AbortController();
   private preparationAbort: AbortController | undefined;
+  private dispatchSettle: ((sent: boolean) => void) | undefined;
 
   constructor(
     readonly record: RunRecord,
@@ -388,8 +389,11 @@ export class Run {
     }
   }
 
-  /** Sends a follow-up prompt to an idle run (desktop app only). */
-  reply(text: string, origin?: "automatic", deliveredText = text): void {
+  /**
+   * Sends a follow-up prompt to an idle run (desktop app only). State errors throw synchronously;
+   * the promise resolves true once the prompt is dispatched and false if it never will be.
+   */
+  reply(text: string, origin?: "automatic", deliveredText = text): Promise<boolean> {
     if (this.settings.mode !== "interactive")
       throw new Error("follow-up prompts are only available in the desktop app");
     if (this.status !== "idle" || this.ending || this.modeChanging) {
@@ -402,9 +406,17 @@ export class Run {
         ? "--- Automatic Code60 update (not written by the user) ---"
         : "--- User request ---";
     const sent = context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText;
-    this.runTurn(text, true, false, sent, origin).catch((error) =>
-      this.end({ status: "failed", reason: message(error) }),
-    );
+    this.settleDispatch(false);
+    const dispatched = new Promise<boolean>((resolve) => {
+      this.dispatchSettle = resolve;
+    });
+    const receipt = this.dispatchSettle;
+    this.runTurn(text, true, false, sent, origin)
+      .catch((error) => this.end({ status: "failed", reason: message(error) }))
+      .finally(() => {
+        if (this.dispatchSettle === receipt) this.settleDispatch(false);
+      });
+    return dispatched;
   }
 
   /** Ends an idle run. Its final status comes from the last turn. */
@@ -418,12 +430,17 @@ export class Run {
   /** Cancels the current turn. Returns false when no turn is in progress. */
   cancelTurn(cause: CancelCause = "user"): boolean {
     const session = this.session;
-    if (!this.turnActive || session === undefined) return false;
+    const preparing = this.preparationAbort;
+    if (!this.turnActive || (session === undefined && preparing === undefined)) return false;
     if (this.cancelCause !== undefined) return true;
     this.cancelCause = cause;
-    this.preparationAbort?.abort();
     this.log("cancel.requested", cause === "timeout" ? "timed_out" : "cancelled");
     this.withdrawPending();
+    // Before dispatch there is no agent turn to cancel; abort preparation or handoff startup.
+    if (preparing !== undefined || session === undefined) {
+      preparing?.abort();
+      return true;
+    }
     if (this.status === "waiting") void this.setStatus("running");
     session.cancel().catch(() => {});
     this.graceTimer = this.deps.clock.setTimeout(
@@ -606,11 +623,12 @@ export class Run {
 
   private async startRecoveryAgent(
     start: (signal: AbortSignal) => Promise<AgentSession>,
+    cancel: AbortSignal = this.startAbort.signal,
   ): Promise<AgentSession> {
     const controller = new AbortController();
     const abort = () => controller.abort();
-    this.startAbort.signal.addEventListener("abort", abort, { once: true });
-    if (this.startAbort.signal.aborted) abort();
+    cancel.addEventListener("abort", abort, { once: true });
+    if (cancel.aborted) abort();
     let timedOut = false;
     const timer = this.deps.clock.setTimeout(() => {
       timedOut = true;
@@ -634,8 +652,35 @@ export class Run {
       throw error;
     } finally {
       this.deps.clock.clearTimeout(timer);
-      this.startAbort.signal.removeEventListener("abort", abort);
+      cancel.removeEventListener("abort", abort);
     }
+  }
+
+  /** Ends a turn whose request was never dispatched, keeping its text visible. */
+  private async notSent(statusSaved: Promise<void>, note: string, text: string): Promise<void> {
+    const { clock } = this.deps;
+    clock.clearTimeout(this.turnTimer);
+    clock.clearTimeout(this.graceTimer);
+    this.turnActive = false;
+    this.withdrawPending();
+    this.settleDispatch(false);
+    await statusSaved;
+    this.emit({ type: "note", text: note, detail: text });
+    if (this.shutdownRequested)
+      return this.end({ status: "cancelled", reason: "cancelled before dispatch" });
+    if (this.session === undefined)
+      return this.end(
+        this.cancelCause
+          ? { status: "cancelled", reason: "cancelled during context handoff" }
+          : { status: "failed", reason: "the context handoff session could not start" },
+      );
+    await this.setStatus("idle", "Message not sent.");
+  }
+
+  private settleDispatch(sent: boolean): void {
+    const settle = this.dispatchSettle;
+    this.dispatchSettle = undefined;
+    settle?.(sent);
   }
 
   private async runTurn(
@@ -664,66 +709,86 @@ export class Run {
     let memoryUsed: string[] = [];
     try {
       if (this.memory) {
-        let preparation: MemoryPreparation;
         const abort = new AbortController();
         this.preparationAbort = abort;
+        const signal = AbortSignal.any([this.startAbort.signal, abort.signal]);
+        const stopped = () => this.cancelCause !== undefined || this.shutdownRequested;
         try {
-          preparation = await this.memory.prepare(
-            {
+          let preparation: MemoryPreparation;
+          try {
+            preparation = await this.memory.prepare(
+              {
+                text,
+                delivered: sent,
+                turn,
+                usage: this.record.sessionState?.usage ?? null,
+              },
+              signal,
+            );
+          } catch {
+            return await this.notSent(
+              statusSaved,
+              "Memory preparation failed. This message was not sent. Open Settings → Memory, resolve the warning and try again. Unsent request:",
               text,
-              delivered: sent,
-              turn,
-              usage: this.record.sessionState?.usage ?? null,
-              automatic: origin === "automatic",
-            },
-            AbortSignal.any([this.startAbort.signal, abort.signal]),
-          );
-        } catch {
-          clock.clearTimeout(this.turnTimer);
-          clock.clearTimeout(this.graceTimer);
-          this.turnActive = false;
-          await statusSaved;
-          this.emit({
-            type: "note",
-            text: "Memory preparation failed. This message was not sent. Open Settings → Memory, resolve the warning and try again. Unsent request:",
-            detail: text,
-          });
-          if (this.shutdownRequested)
-            return this.end({ status: "cancelled", reason: "cancelled before dispatch" });
-          await this.setStatus("idle", "Memory handoff unavailable; message not sent.");
-          return;
+            );
+          }
+          if (stopped())
+            return await this.notSent(
+              statusSaved,
+              "Cancelled before this message was sent. Unsent request:",
+              text,
+            );
+          if (preparation.rollover) {
+            // Retire an idle physical session only. Logical task/gateway ownership stays in host.
+            this.session = undefined;
+            try {
+              await session.stop(this.settings.killGraceMs);
+              session = await this.startRecoveryAgent(
+                (start) =>
+                  this.deps.agents.start(
+                    {
+                      name: this.record.agent,
+                      command: settings.command,
+                      cwd: this.record.worktree,
+                      ...(settings.env === undefined ? {} : { env: settings.env }),
+                      ...(settings.mcpServers === undefined
+                        ? {}
+                        : { mcpServers: settings.mcpServers }),
+                    },
+                    start,
+                  ),
+                signal,
+              );
+              await this.installSession(session);
+            } catch (error) {
+              return await this.notSent(
+                statusSaved,
+                stopped()
+                  ? "Cancelled during context handoff before this message was sent. Unsent request:"
+                  : `Context handoff failed (${message(error)}). This message was not sent. Unsent request:`,
+                text,
+              );
+            }
+            if (stopped())
+              return await this.notSent(
+                statusSaved,
+                "Cancelled during context handoff before this message was sent. Unsent request:",
+                text,
+              );
+            this.emit({
+              type: "note",
+              text: "Context handoff: continued in a fresh agent session. Historical memory is evidence, not restored authority.",
+            });
+          }
+          if (preparation.warning) this.emit({ type: "note", text: preparation.warning });
+          if (preparation.context) sent = `${preparation.context}\n\n${sent}`;
+          memoryUsed = preparation.used;
         } finally {
           this.preparationAbort = undefined;
         }
-        if (this.cancelCause || this.shutdownRequested)
-          throw new Error("Cancelled before dispatch");
-        if (preparation.rollover) {
-          // Retire an idle physical session only. Logical task/gateway ownership stays in host.
-          this.session = undefined;
-          await session.stop(this.settings.killGraceMs);
-          session = await this.startRecoveryAgent((signal) =>
-            this.deps.agents.start(
-              {
-                name: this.record.agent,
-                command: settings.command,
-                cwd: this.record.worktree,
-                ...(settings.env === undefined ? {} : { env: settings.env }),
-                ...(settings.mcpServers === undefined ? {} : { mcpServers: settings.mcpServers }),
-              },
-              signal,
-            ),
-          );
-          await this.installSession(session);
-          this.emit({
-            type: "note",
-            text: "Context handoff: continued in a fresh agent session. Historical memory is evidence, not restored authority.",
-          });
-        }
-        if (preparation.warning) this.emit({ type: "note", text: preparation.warning });
-        if (preparation.context) sent = `${preparation.context}\n\n${sent}`;
-        memoryUsed = preparation.used;
       }
       this.emit({ type: "prompt", turn, text, ...(origin === undefined ? {} : { origin }) });
+      this.settleDispatch(true);
       if (memoryUsed.length)
         this.emit({
           type: "note",

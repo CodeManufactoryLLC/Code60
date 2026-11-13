@@ -81,6 +81,7 @@ describe("CI and release gates", () => {
       "npm ci",
       "node scripts/install-electron.mjs",
       "npm run check",
+      "npm run prepare:models",
       "npm run test:desktop",
     ]);
     expect(JSON.stringify(native)).not.toContain("secrets.");

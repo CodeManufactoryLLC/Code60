@@ -17,6 +17,21 @@ describe("RAG history snapshot", () => {
   it("deduplicates disk/live copies by multiplicity without dropping repeated chunks", () => {
     const event: RunEvent = { type: "message", runId: "run", at: "now", text: "same" };
     expect(mergeRagEvents([event], [event, event])).toEqual([event, event]);
+    const live = {
+      type: "acp",
+      runId: "run",
+      at: "now",
+      size: 3,
+      payload: { z: 1, a: { b: 2, a: 1 } },
+    } as unknown as RunEvent;
+    const disk = {
+      at: "now",
+      runId: "run",
+      type: "acp",
+      payload: { a: { a: 1, b: 2 }, z: 1 },
+      size: 3,
+    } as unknown as RunEvent;
+    expect(mergeRagEvents([disk], [live, live])).toEqual([disk, live]);
   });
   it("reads all projects plus legacy directory records without reconciling statuses", async () => {
     const deps = defaultDeps();
@@ -73,6 +88,8 @@ describe("RAG history snapshot", () => {
         at: "2026-01-02T00:00:00Z",
         text: "reply",
       });
+      const record = await workspace.store.read(`git-${n}`);
+      await workspace.store.save({ ...record, id: `relay-${n}`, owner: "relay" });
     }
     const sources: RagConversation[] = [];
     await ragProjectSources(deps, env, projects, [], new AbortController().signal, (s) =>

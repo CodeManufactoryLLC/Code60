@@ -62,9 +62,7 @@ export interface RagIndex {
 
 /** Bounded same-handle reads, refusing links, special files and concurrent growth. */
 export async function readRagFile(path: string, limit: number): Promise<string> {
-  const entry = await lstat(path);
-  if (!entry.isFile() || entry.isSymbolicLink() || entry.size > limit)
-    throw new Error("RAG source is unsafe or too large");
+  // Validate the opened handle, not the path, so a swapped file cannot pass the checks.
   const file = await open(
     path,
     constants.O_RDONLY |
@@ -73,8 +71,13 @@ export async function readRagFile(path: string, limit: number): Promise<string> 
   );
   try {
     const info = await file.stat();
-    if (!info.isFile() || info.dev !== entry.dev || info.ino !== entry.ino || info.size > limit)
-      throw new Error("RAG source changed while opening");
+    if (!info.isFile() || info.size > limit) throw new Error("RAG source is unsafe or too large");
+    if (process.platform === "win32") {
+      // Windows has no O_NOFOLLOW: refuse a link, or a path that no longer names this handle.
+      const entry = await lstat(path);
+      if (entry.isSymbolicLink() || entry.dev !== info.dev || entry.ino !== info.ino)
+        throw new Error("RAG source changed while opening");
+    }
     const data = Buffer.alloc(info.size + 1);
     let count = 0;
     while (count < data.length) {

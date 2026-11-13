@@ -45,6 +45,7 @@ jobs:
           path: coverage/
           retention-days: 7
           if-no-files-found: warn
+      - run: npm run prepare:models
       - run: npm run test:desktop
       - uses: actions/upload-artifact@v7.0.2
         if: failure()

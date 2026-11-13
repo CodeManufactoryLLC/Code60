@@ -16,8 +16,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
-import type { Snapshot, UpdateState } from "../src/bridge/index.js";
+import type { MemoryGeneration, MemorySource, Snapshot, UpdateState } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG } from "../src/core/index.js";
+import { MemoryStore } from "../src/desktop/memory-store.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
@@ -8224,12 +8225,30 @@ test("desktop: scoped memory settings, automatic capture, inspection and confirm
       async () => (await window.desktop.memorySnapshot()).conversations[0]?.id,
     );
     await memory.getByLabel("Conversation", { exact: true }).selectOption(conversation ?? "");
+    const threshold = memory.getByRole("spinbutton", {
+      name: "Rollover threshold (%)",
+      exact: true,
+    });
+    await threshold.fill("");
+    await threshold.pressSequentially("50");
+    await expect(threshold).toHaveValue("50");
+    const capacity = memory.getByRole("spinbutton", {
+      name: "Unknown model capacity (estimated tokens)",
+      exact: true,
+    });
+    await capacity.fill("");
+    await capacity.pressSequentially("4096");
+    await expect(capacity).toHaveValue("4096");
     await memory.getByRole("button", { name: "Generate now", exact: true }).click();
     await expect
       .poll(() =>
         page.evaluate(async () => (await window.desktop.browseMemories({})).records.length),
       )
       .toBe(4);
+    await expect(threshold).toHaveValue("50");
+    await expect(capacity).toHaveValue("4096");
+    await memory.getByRole("button", { name: "Rebuild search index", exact: true }).click();
+    await expect(threshold).toHaveValue("50");
     await memory.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(memory.locator(".memory-list li")).toHaveCount(4);
     await memory.locator(".memory-list button").first().click();
@@ -8262,7 +8281,91 @@ test("desktop: scoped memory settings, automatic capture, inspection and confirm
     expect(
       await page.evaluate(async () => (await window.desktop.memorySnapshot()).settings.generation),
     ).toBe(false);
+    expect(
+      await page.evaluate(
+        async () => (await window.desktop.memorySnapshot()).settings.rolloverPercent,
+      ),
+    ).toBe(50);
     expect(errors).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: memory browser reaches records older than 500 without unbounded rendering", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-memory-pages-e2e-"));
+  const project = join(directory, "project");
+  await mkdir(project);
+  const store = new MemoryStore(join(directory, "state", "code60", "memory"));
+  try {
+    const conversation = store.register("paging-fixture", "Paging fixture", null);
+    for (let offset = 0; offset < 525; offset += 32) {
+      const source: MemorySource = {
+        id: randomUUID(),
+        conversationId: conversation.id,
+        role: "human",
+        at: new Date().toISOString(),
+        ordinal: offset,
+        start: 0,
+        text: "Paging evidence.",
+      };
+      store.append(conversation.id, String(offset), [source], true);
+      const citations = [
+        { sourceId: source.id, start: 0, end: source.text.length, quote: source.text },
+      ];
+      const value: MemoryGeneration = {
+        goal: "",
+        constraints: [],
+        decisions: [],
+        attempts: [],
+        questions: [],
+        next: "",
+        citations,
+        memories: Array.from({ length: Math.min(32, 525 - offset) }, (_, index) => ({
+          type: "episodic",
+          text: `Fixture memory ${offset + index}`,
+          subject: `event-${offset + index}`,
+          condition: "",
+          correction: false,
+          citations,
+        })),
+      };
+      const range = store.range(conversation.id);
+      store.publish(conversation.id, range.cursor, range.boundary, value, "fixture");
+    }
+  } finally {
+    store.close();
+  }
+  try {
+    application = await launch(directory, project, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("tab", { name: "Memory", exact: true }).click();
+    const memory = page.locator("#panel-settings-memory");
+    for (let index = 0; index < 21; index++) {
+      await expect(memory.locator(".memory-list li")).toHaveCount(25);
+      await expect(memory.locator(".memory-list button").first()).toContainText(
+        `Fixture memory ${524 - index * 25}`,
+      );
+      if (index < 20) await memory.getByRole("button", { name: "Load more", exact: true }).click();
+    }
+    await memory
+      .locator(".memory-list button")
+      .filter({ hasText: /Fixture memory 0$/ })
+      .click();
+    await expect(memory.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
+      "Fixture memory 0",
+    );
+    await memory
+      .getByRole("textbox", { name: "Memory text", exact: true })
+      .fill("Edited oldest memory.");
+    await memory.getByRole("button", { name: "Save edit", exact: true }).click();
+    await expect(memory.locator(".memory-list")).toContainText("Edited oldest memory.");
+    await memory.getByRole("button", { name: "Previous page", exact: true }).click();
+    await expect(memory.locator(".memory-list button").first()).toContainText("Fixture memory 49");
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

@@ -89,6 +89,7 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS memory_subject ON memories(json_extract(value,'$.subject'));
       CREATE TABLE IF NOT EXISTS revisions (id TEXT NOT NULL, revision INTEGER NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS suppressed (source TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS suppressed_capture (source TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS vectors (id TEXT NOT NULL, part INTEGER NOT NULL, model TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY(id, part));
       CREATE TABLE IF NOT EXISTS calls (day TEXT PRIMARY KEY, count INTEGER NOT NULL);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(id UNINDEXED, text);
@@ -183,7 +184,8 @@ export class MemoryStore {
       .get(cid);
     const rows = this.db
       .prepare(`SELECT seq,value FROM sources s WHERE cid=? AND committed=1 AND seq>?
-      AND NOT EXISTS (SELECT 1 FROM suppressed WHERE source=s.id) ORDER BY seq LIMIT 64`)
+      AND NOT EXISTS (SELECT 1 FROM suppressed WHERE source=s.id)
+      AND NOT EXISTS (SELECT 1 FROM suppressed_capture WHERE source=s.id) ORDER BY seq LIMIT 64`)
       .all(cid, Number(conversation.cursor));
     const sources: MemorySource[] = [];
     let bytes = 0;
@@ -236,19 +238,28 @@ export class MemoryStore {
     provider: string,
   ) {
     const fingerprint = normalize(candidate.text);
+    const eventAt = sources.find((s) => s.id === candidate.citations[0]?.sourceId)?.at ?? now();
     const duplicate = this.db
       .prepare(
-        "SELECT id FROM memories WHERE fingerprint=? AND project IS ? AND (scope='project' OR cid=?)",
+        "SELECT id FROM memories WHERE fingerprint=? AND project IS ? AND (scope='project' OR cid=?) AND type=? AND json_extract(value,'$.condition') IS ? AND json_extract(value,'$.subject')=? AND (type NOT IN ('episodic','history') OR json_extract(value,'$.eventAt')=?)",
       )
-      .get(fingerprint, project, cid);
+      .get(
+        fingerprint,
+        project,
+        cid,
+        candidate.type,
+        candidate.condition,
+        candidate.subject,
+        eventAt,
+      );
     if (duplicate) return;
     if (Number(this.db.prepare("SELECT count(*) AS n FROM memories").get()?.n) >= 100000)
       throw new Error("Memory record limit reached");
     const previous = this.db
       .prepare(
-        "SELECT value FROM memories WHERE project IS ? AND (scope='project' OR cid=?) AND state='active' AND json_extract(value,'$.subject')=? AND type=? LIMIT 65",
+        "SELECT value FROM memories WHERE project IS ? AND (scope='project' OR cid=?) AND state IN ('active','disputed') AND json_extract(value,'$.subject')=? AND type=? AND json_extract(value,'$.condition') IS ? AND fingerprint<>? LIMIT 65",
       )
-      .all(project, cid, candidate.subject, candidate.type)
+      .all(project, cid, candidate.subject, candidate.type, candidate.condition, fingerprint)
       .map((row) => parseValue(memoryRecordSchema, decode(row.value)));
     if (previous.length > 64) throw new Error("Too many conflicting memories for this subject");
     const human = candidate.citations.every(
@@ -268,7 +279,7 @@ export class MemoryStore {
       pinned: false,
       createdAt: stamp,
       updatedAt: stamp,
-      eventAt: sources.find((s) => s.id === candidate.citations[0]?.sourceId)?.at ?? stamp,
+      eventAt,
       provider,
       promptVersion: 1,
       supersedes: null,
@@ -291,7 +302,10 @@ export class MemoryStore {
   private write(value: MemoryRecord) {
     const record = parseValue(memoryRecordSchema, value);
     this.db
-      .prepare("INSERT OR REPLACE INTO memories VALUES (?,?,?,?,?,?,?,?,?)")
+      .prepare(`INSERT INTO memories VALUES (?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET project=excluded.project,cid=excluded.cid,scope=excluded.scope,
+        type=excluded.type,state=excluded.state,created=excluded.created,
+        fingerprint=excluded.fingerprint,value=excluded.value`)
       .run(
         record.id,
         record.projectId,
@@ -366,9 +380,17 @@ export class MemoryStore {
     }
     if (action.type === "forget-scope") {
       return this.transaction(() => {
+        // Shared evidence retained for explicit global memories must never regenerate local ones.
         this.db
           .prepare(
-            "INSERT OR IGNORE INTO suppressed SELECT s.id FROM sources s JOIN conversations c ON c.id=s.cid WHERE c.project IS ?",
+            "INSERT OR IGNORE INTO suppressed_capture SELECT s.id FROM sources s JOIN conversations c ON c.id=s.cid WHERE c.project IS ?",
+          )
+          .run(action.projectId);
+        this.db
+          .prepare(
+            `INSERT OR IGNORE INTO suppressed SELECT s.id FROM sources s JOIN conversations c ON c.id=s.cid WHERE c.project IS ?
+            AND NOT EXISTS(SELECT 1 FROM memories m,json_each(m.value,'$.citations') citation
+              WHERE m.scope='global' AND json_extract(citation.value,'$.sourceId')=s.id)`,
           )
           .run(action.projectId);
         this.db
@@ -377,19 +399,21 @@ export class MemoryStore {
           )
           .run(action.projectId);
         this.db
-          .prepare("UPDATE conversations SET cursor=0 WHERE project IS ?")
+          .prepare(
+            "UPDATE conversations SET cursor=COALESCE((SELECT MAX(seq) FROM sources WHERE cid=conversations.id),cursor) WHERE project IS ?",
+          )
           .run(action.projectId);
         this.db
           .prepare(
-            "DELETE FROM sources WHERE cid IN (SELECT id FROM conversations WHERE project IS ?)",
+            "DELETE FROM sources WHERE cid IN (SELECT id FROM conversations WHERE project IS ?) AND id IN (SELECT source FROM suppressed)",
           )
           .run(action.projectId);
         for (;;) {
           const rows = this.db
-            .prepare("SELECT id FROM memories WHERE project IS ? LIMIT 100")
+            .prepare("SELECT id FROM memories WHERE project IS ? AND scope!='global' LIMIT 100")
             .all(action.projectId);
           if (!rows.length) break;
-          for (const row of rows) this.forget(String(row.id));
+          for (const row of rows) this.forget(String(row.id), true);
         }
       });
     }
@@ -414,14 +438,25 @@ export class MemoryStore {
       this.write(next);
     });
   }
-  private forget(id: string) {
+  private forget(id: string, preserveGlobal = false) {
     const record = this.detail(id).record;
-    for (const citation of record.citations)
+    const citations = record.citations.filter(
+      (citation) =>
+        !preserveGlobal ||
+        !this.db
+          .prepare(
+            `SELECT 1 FROM memories m,json_each(m.value,'$.citations') c
+      WHERE m.scope='global' AND json_extract(c.value,'$.sourceId')=? LIMIT 1`,
+          )
+          .get(citation.sourceId),
+    );
+    for (const citation of citations)
       this.db.prepare("INSERT OR IGNORE INTO suppressed VALUES (?)").run(citation.sourceId);
-    for (const citation of record.citations)
+    for (const citation of citations)
       this.db.prepare("DELETE FROM sources WHERE id=?").run(citation.sourceId);
     this.db.prepare("DELETE FROM checkpoints WHERE cid=?").run(record.conversationId);
-    this.db.prepare("UPDATE conversations SET cursor=0 WHERE id=?").run(record.conversationId);
+    if (!preserveGlobal)
+      this.db.prepare("UPDATE conversations SET cursor=0 WHERE id=?").run(record.conversationId);
     this.db.prepare("DELETE FROM memories WHERE id=?").run(id);
     this.db.prepare("DELETE FROM revisions WHERE id=?").run(id);
     this.db.prepare("DELETE FROM vectors WHERE id=?").run(id);
@@ -448,14 +483,25 @@ export class MemoryStore {
     if (!terms?.length) return [];
     const match = terms.map((s) => `"${s.replaceAll('"', '""')}"`).join(" OR ");
     const conversation = this.conversation(cid);
+    const settings = this.settings();
+    const cutoffs = Object.fromEntries(
+      Object.entries(settings.retentionDays).map(([type, days]) => [
+        type,
+        days ? new Date(Date.now() - days * 86400000).toISOString() : "",
+      ]),
+    );
     return this.db
       .prepare(`SELECT m.id FROM memory_fts JOIN memories m ON m.id=memory_fts.id
       WHERE memory_fts MATCH ? AND m.state='active' AND
+      json_extract(?, '$.' || m.type)=1 AND
+      (json_extract(m.value,'$.pinned')=1 OR m.created>=json_extract(?, '$.' || m.type)) AND
       NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) AND
       (m.scope='global' OR (m.scope='conversation' AND m.cid=?) OR (m.scope='project' AND (m.project=? OR m.project IN (SELECT value FROM json_each(?)))))
       ORDER BY rank,m.id LIMIT 100`)
       .all(
         match,
+        json(settings.types),
+        json(cutoffs),
         cid,
         conversation.project == null ? null : String(conversation.project),
         json(projects),
@@ -508,7 +554,8 @@ export class MemoryStore {
   tail(cid: string): MemorySource[] {
     return this.db
       .prepare(`SELECT value FROM sources s WHERE cid=? AND committed=1 AND
-      NOT EXISTS(SELECT 1 FROM suppressed WHERE source=s.id) ORDER BY seq DESC LIMIT 8`)
+      NOT EXISTS(SELECT 1 FROM suppressed WHERE source=s.id) AND
+      NOT EXISTS(SELECT 1 FROM suppressed_capture WHERE source=s.id) ORDER BY seq DESC LIMIT 8`)
       .all(cid)
       .reverse()
       .map((row) => parseValue(memorySourceSchema, decode(row.value)));

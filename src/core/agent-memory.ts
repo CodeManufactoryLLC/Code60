@@ -8,7 +8,6 @@ export interface MemoryTurn {
   delivered: string;
   turn: number;
   usage: SessionState["usage"];
-  automatic: boolean;
 }
 export interface MemoryPreparation {
   context: string;

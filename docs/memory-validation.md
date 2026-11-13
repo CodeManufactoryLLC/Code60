@@ -75,6 +75,12 @@ transcript note. Unavailable recall alone is nonblocking while context fits.
 Oversized requests are rejected rather than truncated. Missing or overflowed
 capture cannot silently become a complete checkpoint.
 
+Cancellation remains effective during replacement startup and installation.
+Automatic deliveries keep worker updates and feedback pending until the run
+confirms dispatch; a preparation failure pauses delivery rather than consuming it.
+Forgetting permits a fresh session without the intentionally deleted checkpoint,
+with an explicit continuity-reset warning.
+
 ## Search and limits
 
 Search filters authorized scopes and active state before lexical/vector ranking.
@@ -112,6 +118,9 @@ and suppresses recreation from the same source IDs. Shared-source siblings are
 also excluded from recall. Scope forgetting includes not-yet-extracted sources.
 Original transcripts and already-running provider context are not erased.
 Global promotion is explicit and natively confirmed with a sharing preview.
+Scope forgetting excludes global records. Evidence shared with those records is
+retained for their provenance, but suppressed from future extraction and recent
+continuity so it cannot recreate forgotten local records.
 
 The memory bridge is available only to the checked renderer. No MCP memory tools,
 cross-project worker browser or memory-write authority is added.
@@ -130,6 +139,19 @@ warning, Relay multi-target filtering before ranking, native identity rechecks,
 rank fusion, run-level preparation failure (the request is not sent and its text
 is kept), prompt-then-`Memory used` ordering and shutdown during preparation.
 
+Review regressions also cover cancellation during replacement startup/installation,
+delivery refusal, repeated contradictions, automatic-update usage estimates,
+reported capacity during storage failure, recovery after forgetting, Relay-owned
+worker exclusion from manual RAG, and exact bigint identities in sidecar requests.
+SQLite-dependent tests follow the existing Node.js 22.12 availability guard;
+Node.js 24 and the Electron container exercise their complete behavior.
+The browser keeps 25 records per page with forward/back navigation beyond 500
+records; edits preserve cursor ordering. Numeric controls permit intermediate
+typing, and non-settings actions preserve unsaved settings drafts.
+Duplicate detection distinguishes types, applicability conditions and subjects;
+episodic/history records also preserve distinct source dates. Equivalent semantic
+claims do not become contradictions merely because they recur.
+
 ### Measurements
 
 `npm run test:memory:performance` builds the app and runs
@@ -142,11 +164,19 @@ with synthetic vectors to measure scan cost. One run on an Apple Silicon Mac
 | Measurement | Result |
 |---|---|
 | Cold model load | 303 ms |
-| Index lag, 982 records (123 batches) | 8.0 s; worst batch 73 ms |
-| Cold / warm query, ~1,000 records | 60 ms / 50 ms max |
-| Query scan, 10,000 records | 456 ms max |
+| Index lag, 982 records (123 batches) | 8.0 s; worst batch 80 ms |
+| Cold / warm query, ~1,000 records | 56 ms / 65 ms max |
+| Query scan, 10,000 records | 502 ms max |
 | Paraphrased recall of a 90-day-old memory | rank 2 of ~1,000; other project excluded |
-| Peak RSS (model loaded) | 664 MiB |
+| Peak RSS (model loaded) | 727 MiB |
+
+A fresh-process disk snapshot of the maximum 2,000 conversations split between
+legacy/current stores took 340 ms and two directory listings (104 MiB RSS).
+The offline real-model smoke also verifies complete, token-bounded chunks for a
+1,003,000-character message with a million-character whitespace suffix: 11 chunks,
+7.0 s including repeated token-limit checks. That broader smoke peaked at
+1,313 MiB RSS. Chunker identity version 2 invalidates older manual snapshots;
+memory vectors carry the matching chunker revision and rebuild incrementally.
 
 These are single-machine results, not guarantees. Generation call counts are
 bounded by coalescing (one helper call per pending conversation range) and the

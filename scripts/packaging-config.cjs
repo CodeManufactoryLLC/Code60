@@ -67,6 +67,8 @@ module.exports = {
     "NOTICE",
     "TRADEMARKS.md",
     "!node_modules/onnxruntime-web/**/*",
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/libonnxruntime_providers_cuda.so",
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/libonnxruntime_providers_tensorrt.so",
     "!node_modules/onnxruntime-node/bin/napi-v6/darwin/x64/**/*",
     ...(process.platform === "darwin"
       ? [

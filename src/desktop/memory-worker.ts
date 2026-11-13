@@ -10,7 +10,7 @@ import { MemoryStore } from "./memory-store.js";
 import { loadRagModel } from "./rag-model.js";
 
 export const MEMORY_MODEL =
-  "jina-v2-base-code:516f4baf13dec4ddddda8631e019b5737c8bc250:q8:mean:normalized:768:512:64";
+  "jina-v2-base-code:516f4baf13dec4ddddda8631e019b5737c8bc250:q8:mean:normalized:768:512:64:chunks-v2";
 let store: MemoryStore | undefined;
 let model: Promise<RagEmbedder> | undefined;
 let root = "";

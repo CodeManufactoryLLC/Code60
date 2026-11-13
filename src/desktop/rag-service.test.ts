@@ -38,6 +38,26 @@ function setup(worker: RagExecutor = execute) {
   return { service, identity };
 }
 describe("RAG lifecycle", () => {
+  it("cancels Clear while confirmation is pending and ignores a late approval", async () => {
+    const { service, identity } = setup();
+    await service.rebuild(identity(), empty);
+    let approve: (value: boolean) => void = () => {};
+    const confirm = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          approve = resolve;
+        }),
+    );
+    const clearing = service.clear(identity(), confirm);
+    const rejected = expect(clearing).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+    await service.cancel();
+    await rejected;
+    expect(service.snapshot().operation).toBeNull();
+    approve(true);
+    await Promise.resolve();
+    expect((await service.status()).index).toEqual(summary);
+  });
   it("publishes repeated snapshots, restores status and clears with native approval only", async () => {
     const { service, identity } = setup();
     const notices = vi.fn();

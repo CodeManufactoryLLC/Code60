@@ -70,6 +70,8 @@ export interface OrchestratorOptions {
   mcpServers?: readonly AgentMcpServer[];
   /** Dynamic context prepended to each user turn without changing recorded user text. */
   promptContext?: () => string;
+  /** Recorded on new runs so project history readers can exclude Relay-owned workers. */
+  owner?: "relay";
 }
 
 /** Drives a set of runs. The CLI renders it; nothing here needs a terminal. */
@@ -85,7 +87,13 @@ export interface Orchestrator {
   /** Problems that do not change a run's outcome, such as a failed record write. */
   onWarning(listener: (message: string) => void): () => void;
   /** `origin` marks a prompt Code60 generated instead of the user. */
-  reply(runId: string, text: string, origin?: "automatic", deliveredText?: string): void;
+  /** Throws on state errors; resolves whether the prompt was actually dispatched. */
+  reply(
+    runId: string,
+    text: string,
+    origin?: "automatic",
+    deliveredText?: string,
+  ): Promise<boolean>;
   /** Attempts ACP restoration; a handoff offer does not mutate the ended run. */
   restore(runId: string): Promise<RecoveryResult>;
   /** Starts a fresh ACP session whose first turn sends the summary and the user's message. */
@@ -204,6 +212,7 @@ export async function createOrchestrator(
             : { base: null, branch: null, worktree: options.directory }),
           ownerPid: deps.ownerPid,
           ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
+          ...(options.owner === undefined ? {} : { owner: options.owner }),
           startedAt,
         };
         return new Run(record, runDeps, runSettings(config));

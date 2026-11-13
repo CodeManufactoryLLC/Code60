@@ -236,7 +236,19 @@ export class RagService {
   }
   clear(request: RagIdentity, confirm: () => Promise<boolean>) {
     return this.operation(request, async (store, signal) => {
-      if (!(await confirm())) return false;
+      const accepted = await new Promise<boolean>((resolve, reject) => {
+        const abort = () => reject(new Error("RAG operation cancelled"));
+        signal.addEventListener("abort", abort, { once: true });
+        Promise.resolve()
+          .then(() => {
+            signal.throwIfAborted();
+            return confirm();
+          })
+          .then(resolve, reject)
+          .finally(() => signal.removeEventListener("abort", abort));
+        if (signal.aborted) abort();
+      });
+      if (!accepted) return false;
       signal.throwIfAborted();
       await store.clear();
       this.index = null;
