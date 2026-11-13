@@ -43,7 +43,11 @@ This branch implements Relay and retained project runtimes as described in
   share a 1,048,576-code-unit limit, with up to 1,024 records. Each batch syncs
   once. Saving failure shows a warning while the live conversation continues.
   That session stops saving and releases queued buffers; explicit reconnect
-  validates storage before saving again. Failed batches are never replayed.
+  validates storage before saving again. Complete owned frames retain their verified
+  file identity even if sync fails, so Retry can validate them without replay.
+  Partial writes and outside changes remain rejected. Failed batches are never replayed.
+  A separate warning about earlier missing messages remains after saving resumes
+  or the app restarts while the persisted incomplete-history marker is present.
   Logs retain fixed persistence-stage, code, queue-size and identity-change
   metadata, including separate incomplete-marker failures.
 - Relay-only authenticated dispatch with required absolute `cwd` and explicit

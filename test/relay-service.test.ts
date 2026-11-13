@@ -17,6 +17,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Plan } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import { RelayService } from "../src/desktop/relay-service.js";
+import * as storage from "../src/desktop/relay-storage.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
 
@@ -764,41 +765,58 @@ it("saves thousands of streaming chunks without failing or cancelling the conver
   expect(agents.sessions[0]?.cancels).toBe(0);
 });
 
-it("keeps Send and worker delivery operational after a journal failure and saves again after Retry", async () => {
-  await connect();
-  const append = vi.spyOn(RelayStore.prototype, "appendBatch");
-  append.mockRejectedValueOnce(new Error("Transient write failure"));
-  await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "First" });
-  await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
-  expect(relay.snapshot().error).toBeNull();
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-  await relay.action({
-    type: "send",
-    id: required(relay.snapshot().run).id,
-    text: "Still chatting",
-  });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-  const { scope } = await tool("code60_get_context");
-  await tool("code60_dispatch_agent", {
-    scope,
-    requestId: "history-failure-worker",
-    cwd: join(root, "target"),
-    workspaceMode: "direct",
-    prompt: "Worker remains operational",
-  });
-  await vi.waitFor(() => expect(agents.sessions[0]?.prompts.length).toBeGreaterThan(2));
-  expect(append).toHaveBeenCalledTimes(1);
-  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-  expect(relay.snapshot().historySaving).toBe("available");
-  expect(relay.snapshot().history?.incomplete).toBe(true);
-  expect(agents.sessions.at(-1)?.prompts).toEqual([]);
-  await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Second" });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
-  expect(relay.snapshot().history?.serialized).toContain("Second");
-  expect(relay.snapshot().error).toBeNull();
-});
+it.each(["write", "sync"] as const)(
+  "keeps Send and worker delivery operational after a %s failure and saves again after Retry",
+  async (stage) => {
+    await connect();
+    const append = vi.spyOn(RelayStore.prototype, "appendBatch");
+    if (stage === "write") append.mockRejectedValueOnce(new Error("Transient write failure"));
+    else {
+      const original = storage.relayFile;
+      vi.spyOn(storage, "relayFile").mockImplementationOnce(async (...args) => {
+        const handle = await original(...args);
+        vi.spyOn(handle, "sync").mockRejectedValueOnce(
+          Object.assign(new Error("sync failed"), { code: "EIO" }),
+        );
+        return handle;
+      });
+    }
+    await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "First" });
+    await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+    expect(relay.snapshot().error).toBeNull();
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await relay.action({
+      type: "send",
+      id: required(relay.snapshot().run).id,
+      text: "Still chatting",
+    });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    const { scope } = await tool("code60_get_context");
+    await tool("code60_dispatch_agent", {
+      scope,
+      requestId: "history-failure-worker",
+      cwd: join(root, "target"),
+      workspaceMode: "direct",
+      prompt: "Worker remains operational",
+    });
+    await vi.waitFor(() => expect(agents.sessions[0]?.prompts.length).toBeGreaterThan(2));
+    expect(append).toHaveBeenCalledTimes(1);
+    await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    expect(relay.snapshot().historySaving).toBe("available");
+    expect(relay.snapshot().history?.incomplete).toBe(true);
+    expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+    await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Second" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+    expect(relay.snapshot().history?.serialized).toContain("Second");
+    if (stage === "sync")
+      expect(
+        relay.snapshot().history?.messages?.filter((message) => message.text === "First"),
+      ).toHaveLength(1);
+    expect(relay.snapshot().error).toBeNull();
+  },
+);
 
 it("preserves a damaged journal and rejects connection before launching an agent", async () => {
   const path = join(root, "state", "code60", "relay");

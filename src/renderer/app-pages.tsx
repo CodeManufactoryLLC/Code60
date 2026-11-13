@@ -96,7 +96,7 @@ export function AppPages(props: AppPagesProps) {
   const views = {
     home: (
       <HomePage
-        database={Boolean(database)}
+        database={database}
         relayAvailable={Boolean(snapshot?.chats.some((chat) => chat.kind === "relay"))}
         onOpenRelay={props.openRelay}
         onOpenTool={(id) => setTabs((current) => updateTabs(current, { type: "select", id }))}

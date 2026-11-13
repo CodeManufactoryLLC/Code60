@@ -276,8 +276,6 @@ export class RelayStore {
             offset = end;
           } while (offset < message.text.length);
         }
-        stage = "sync";
-        await file.sync();
         stage = "validate";
         const written = await file.stat({ bigint: true });
         const entry = await verifyRelayStorage(this.journal, false);
@@ -295,7 +293,15 @@ export class RelayStore {
               ...(written.ino !== this.journalIdentity.ino ? ["ino" as const] : []),
             ]),
           ]);
+        // These complete frames are verified owned writes, even if the durability
+        // barrier fails. Keep their exact stamp so Retry can validate them without
+        // replaying the batch; partial writes and outside changes stay rejected.
         this.journalIdentity = written;
+        stage = "sync";
+        await file.sync();
+        stage = "validate";
+        this.checkJournal(await file.stat({ bigint: true }));
+        this.checkJournal(await verifyRelayStorage(this.journal, false));
       } catch (cause) {
         failed = true;
         throw cause instanceof RelayPersistenceError

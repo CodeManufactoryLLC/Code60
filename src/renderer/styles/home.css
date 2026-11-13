@@ -123,6 +123,10 @@
   opacity: 0.45;
 }
 
+.home-card:focus-visible {
+  box-shadow: var(--focus-shadow), var(--group-shadow);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-card {
     transition: none;
@@ -130,7 +134,8 @@
 }
 
 @media (forced-colors: active) {
-  .home-card {
+  .home-card,
+  .home-card:focus-visible {
     border-color: ButtonText;
     box-shadow: none;
   }

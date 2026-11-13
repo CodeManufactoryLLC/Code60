@@ -73,6 +73,51 @@ const clickMenu = (id: string) =>
 // The row-number column, Agent width, and half the Actions width.
 const actionsColumnX = 40 + 95 + 45;
 
+// Check controls whose component styles can override the shared keyboard treatment.
+async function expectActionFocus(page: Page, controls: Locator[]) {
+  const saved = await page.locator("html").evaluate((element) => ({
+    theme: element.dataset.colorScheme,
+    focus: element.dataset.focusHighlight,
+  }));
+  try {
+    for (const theme of ["light", "dark"]) {
+      for (const enhanced of [false, true]) {
+        await page.locator("html").evaluate(
+          (element, state) => {
+            element.dataset.colorScheme = state.theme;
+            element.dataset.focusHighlight = state.enhanced ? "on" : "off";
+          },
+          { theme, enhanced },
+        );
+        for (const forcedColors of ["none", "active"] as const) {
+          await page.emulateMedia({ forcedColors });
+          for (const control of controls) {
+            await control.focus();
+            await page.keyboard.press("Tab");
+            await page.keyboard.press("Shift+Tab");
+            await expect(control).toBeFocused();
+            await expect(control).toHaveCSS("outline-width", "2px");
+            if (forcedColors === "active") {
+              await expect(control).toHaveCSS("box-shadow", "none");
+              await expect(control).not.toHaveCSS("outline-color", "rgba(0, 0, 0, 0)");
+            } else {
+              await expect(control).toHaveCSS("box-shadow", enhanced ? /3px/ : /4px/);
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    await page.emulateMedia({ forcedColors: "none" });
+    await page.locator("html").evaluate((element, state) => {
+      if (state.theme) element.dataset.colorScheme = state.theme;
+      else delete element.dataset.colorScheme;
+      if (state.focus) element.dataset.focusHighlight = state.focus;
+      else delete element.dataset.focusHighlight;
+    }, saved);
+  }
+}
+
 async function expectSelectedProject(page: Page, directory: string) {
   await expect(page.locator(".project-sidebar-open")).toHaveAttribute("aria-label", "Open Project");
   await expect(
@@ -1501,6 +1546,13 @@ test("desktop: incomplete Relay history remains usable and navigable from a proj
     await relay.click();
     await expect(relay).toHaveAttribute("aria-current", "true");
     await expect(chat.getByRole("region", { name: "Previous Relay conversation" })).toHaveCount(0);
+    const gap = chat.getByText(
+      "Some earlier Relay messages weren’t saved. Available history is incomplete.",
+      { exact: true },
+    );
+    await expect(gap).toBeVisible();
+    await page.reload();
+    await expect(gap).toBeVisible();
     await chat.getByRole("combobox", { name: "Message to orchestrator" }).fill("Continue chatting");
     await chat.getByRole("button", { name: "Send", exact: true }).click();
     await expect
@@ -3300,11 +3352,16 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     const background = await page.evaluate(() => window.desktop.snapshot());
     const backgroundId = background.chat.run?.id;
     await page.getByRole("button", { name: "Relay", exact: true }).click();
-    const relayComposer = page.getByRole("combobox", {
+    const relayChat = page.locator(
+      `.orchestration-chat-page[data-chat-id="${archived.chat.run?.id}"]`,
+    );
+    await expect(relayChat).toBeVisible();
+    const relayComposer = relayChat.getByRole("combobox", {
       name: "Message to orchestrator",
       exact: true,
     });
     await relayComposer.fill("Keep this Relay draft");
+    await expect(relayComposer).toHaveValue("Keep this Relay draft");
     await page.locator(`#conversation-${backgroundId}`).click({ button: "right" });
     await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(page.locator(`#conversation-${backgroundId}`)).toHaveCount(0);
@@ -3635,7 +3692,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     if (!firstId) throw new Error("Missing initial conversation");
     // Automatic titles may change the label after a reply; unread state belongs to the ID.
     const first = page.locator(`[id="conversation-${firstId}"]`);
-    await expect(first.locator("svg")).toHaveCount(0);
+    await expect(first.locator('[data-icon="chat-circle"]')).toHaveCount(1);
     await page.getByRole("button", { name: /^New chat in / }).click();
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     const second = page.getByRole("button", { name: "Chat 2", exact: true });
@@ -3713,7 +3770,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     await expect(first.locator(".chat-unread")).toHaveText("1");
     await selectSidebarPage(page, "Chat");
     await expect(first.locator(".chat-unread")).toHaveCount(0);
-    await expect(first.locator("svg")).toHaveCount(0);
+    await expect(first.locator('[data-icon="chat-circle"]')).toHaveCount(1);
     await page.reload();
     await expect(first.locator(".chat-unread")).toHaveCount(0);
     const markers = await page.evaluate(() =>
@@ -3738,6 +3795,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
         .locator("svg"),
     ).toHaveCount(1);
     for (const disclosure of [
+      page.locator("#tools-toggle"),
       page.locator("#tables-toggle"),
       page.getByRole("tab", { name: "Settings", exact: true }),
       page.locator("#advanced-toggle"),
@@ -3745,6 +3803,8 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     ])
       if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
     const pageIcons = [
+      ["tab-home", "house"],
+      ["tools-toggle", "wrench"],
       ["tab-chat", "clipboard"],
       ["tab-prompts", "pencil-line"],
       ["tab-commands", "megaphone"],
@@ -3832,6 +3892,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
             const text = label.getBoundingClientRect();
             return {
               control: control.id,
+              scale: icon.classList.contains("relay-navigation-icon") ? 1.25 : 1,
               size: glyph.width,
               height: glyph.height,
               textSize: Number.parseFloat(getComputedStyle(label).fontSize),
@@ -3845,10 +3906,12 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
             };
           }),
         );
-        expect(geometry).toHaveLength(pageIcons.length + 1);
+        expect(geometry).toHaveLength(
+          pageIcons.length + (await sidebar.locator(".chat-sidebar-entry:visible").count()),
+        );
         for (const icon of geometry) {
           expect(icon.textSize).toBe(size);
-          expect(icon.size).toBe(size);
+          expect(icon.size).toBe(size * icon.scale);
           expect(icon.height).toBe(icon.size);
           expect(icon.labelHeight).toBeLessThan(size);
           expect(icon.leading).toBeGreaterThanOrEqual(12);
@@ -3858,7 +3921,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           );
           expect(icon.top).toBeGreaterThanOrEqual(3);
           expect(icon.bottom).toBeGreaterThanOrEqual(3);
-          expect(icon.row).toBe(Math.max(40, size + 8));
+          expect(icon.row).toBe(Math.max(40, size * 1.25 + 8));
         }
         const actionSizes = await sidebar.locator(".carbon-icon:visible").evaluateAll((icons) =>
           icons.map((icon) => ({
@@ -3869,11 +3932,13 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
         expect(actionSizes.length).toBeGreaterThan(0);
         for (const action of actionSizes) expect(action).toEqual({ width: size, height: size });
         const leading = await sidebar.locator("#tab-chat > .navigation-icon").boundingBox();
-        const chevron = await sidebar.locator(".project-sidebar-open > .carbon-icon").boundingBox();
-        if (!leading || !chevron) throw new Error("Missing Chat row controls");
+        const projectAction = await sidebar
+          .locator(".project-sidebar-open > .carbon-icon")
+          .boundingBox();
+        if (!leading || !projectAction) throw new Error("Missing Projects row controls");
         const center = (box: { y: number; height: number }) => box.y + box.height / 2;
-        expect(Math.abs(center(leading) - center(chevron))).toBeLessThan(1);
-        expect(leading.x + leading.width).toBeLessThanOrEqual(chevron.x);
+        expect(Math.abs(center(leading) - center(projectAction))).toBeLessThan(1);
+        expect(leading.x + leading.width).toBeLessThanOrEqual(projectAction.x);
       }
     } finally {
       await sidebar.evaluate((element, original) => {
@@ -3882,7 +3947,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
         else style.removeProperty("--button-size");
       }, originalButtonSize);
     }
-    await expect(page.locator("#tab-chat > .carbon-icon")).toHaveCount(1);
+    await expect(page.locator("#tab-chat > .carbon-icon")).toHaveCount(0);
     const newChat = page.getByRole("button", { name: /^New chat in / });
     await expect(newChat).toHaveText("");
     await expect(newChat.locator("svg")).toHaveCount(1);
@@ -4267,8 +4332,10 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         (scheme) => document.documentElement.setAttribute("data-color-scheme", scheme ?? "light"),
         scheme,
       );
-      await expect(page.locator(".relay-track")).toHaveCSS("stroke", color as string);
-      await expect(page.locator(".relay-track-edge")).toHaveCSS("stroke", color as string);
+      for (const icon of await page.locator(".relay-navigation-icon").all()) {
+        await expect(icon.locator(".relay-track")).toHaveCSS("stroke", color as string);
+        await expect(icon.locator(".relay-track-edge")).toHaveCSS("stroke", color as string);
+      }
     }
     await page.evaluate(
       (scheme) => document.documentElement.setAttribute("data-color-scheme", scheme ?? "light"),
@@ -7045,6 +7112,10 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(pending).toHaveCount(0);
     await expect(overview).toContainText("The recorded sessions report");
 
+    await expectActionFocus(page, [
+      search.locator(".search-result-title").first(),
+      overview.getByRole("button", { name: /^Source 1:/ }),
+    ]);
     // A citation opens the exact captured source through existing event navigation.
     await overview.getByRole("button", { name: /^Source 1:/ }).click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
@@ -7656,8 +7727,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       const hover = getComputedStyle(probe).backgroundColor;
       probe.style.backgroundColor = "var(--accent-bg)";
       const active = getComputedStyle(probe).backgroundColor;
+      probe.style.backgroundColor = "var(--control-fill)";
+      const resting = getComputedStyle(probe).backgroundColor;
       probe.remove();
-      return { hover, active };
+      return { hover, active, resting };
     });
     // The drag strip can retain stale native hover, so reset the pointer into the footer.
     const resetPointer = async () => {
@@ -7689,7 +7762,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "background-color",
       settingsFills.active,
     );
-    await expect(settingsPages).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(settingsPages).toHaveCSS("background-color", settingsFills.resting);
     await expectSettingsHover(settingsPages);
     await settings.click();
     await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
@@ -7732,7 +7805,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(advanced).toHaveAttribute("aria-expanded", "true");
     await expect(advancedPages).toBeVisible();
     await advanced.click();
-    await settingsPages.click();
+    await settingsPages.press("ArrowLeft");
     await expect(advanced).toBeHidden();
     const tables = page.getByRole("button", { name: "Tables", exact: true });
     await expect(tables).toHaveAttribute("aria-expanded", "false");
@@ -8254,7 +8327,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
       "true",
     );
     const settingsPages = page.getByRole("tab", { name: "Settings", exact: true });
-    await settingsPages.press("Space");
+    await settingsPages.press("ArrowLeft");
     await expect(settingsPages).toHaveAttribute("aria-expanded", "false");
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("combobox", { name: "Search commands" }).fill("Episodic Memory");
@@ -9006,6 +9079,11 @@ test("desktop: keyboard focus is visible and enhanced focus is persistent", asyn
         .snapshot()
         .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch)),
     );
+    await selectSidebarPage(page, "Home");
+    await expectActionFocus(page, [
+      page.locator(".home-card").first(),
+      page.locator(".poll-timestamp"),
+    ]);
     const expectWrappedFocus = async (enhanced: boolean) => {
       await selectSettingsPage(page, "Table defaults");
       const density = page.getByRole("radio", { name: "High", exact: true });

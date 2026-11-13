@@ -351,6 +351,11 @@ export function ChatPage({
           History isn’t being saved. Recent messages may be unavailable after restart.
         </div>
       )}
+      {relay && chat?.historySaving !== "unavailable" && chat?.history?.incomplete && (
+        <div className="warning-banner" role="status">
+          Some earlier Relay messages weren’t saved. Available history is incomplete.
+        </div>
+      )}
       {chat?.restored && (
         <div className="warning-banner" role="status">
           <span>

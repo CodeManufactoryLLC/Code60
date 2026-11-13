@@ -1,5 +1,5 @@
 import type { BigIntStats } from "node:fs";
-import type { LogInput } from "../bridge/index.js";
+import { type LogInput, logInputSchema } from "../bridge/index.js";
 
 const identityFields = ["dev", "ino", "size", "mtimeNs", "ctimeNs"] as const;
 export function changedJournalFields(previous: BigIntStats, current: BigIntStats) {
@@ -23,15 +23,7 @@ export class RelayPersistenceError extends Error {
           : "Relay history persistence failed",
     );
     const code = (cause as { code?: unknown } | null)?.code;
-    this.code =
-      code === "EACCES" ||
-      code === "EPERM" ||
-      code === "ENOSPC" ||
-      code === "EIO" ||
-      code === "ENOENT" ||
-      code === "EBUSY" ||
-      code === "ETIMEDOUT"
-        ? code
-        : "UNKNOWN";
+    const parsed = logInputSchema.shape.errorCode.safeParse(code);
+    this.code = parsed.success ? (parsed.data ?? "UNKNOWN") : "UNKNOWN";
   }
 }

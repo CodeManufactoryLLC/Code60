@@ -61,6 +61,44 @@ it.each(["open", "validate", "write", "sync", "close"] as const)(
   },
 );
 
+it("revalidates complete owned frames after sync failure without replaying or accepting outside edits", async () => {
+  const store = await open();
+  const id = randomUUID();
+  const at = new Date().toISOString();
+  await store.append({ id, role: "human", at, text: "Original\n" });
+  const before = await store.history();
+  const position = before.messages[0]?.sourceEnd;
+  if (!position) throw new Error("Missing source fixture");
+  const cursor: RelaySourceCursor = { direction: "backward", position, bound: before.sourceBound };
+  const original = storage.relayFile;
+  const spy = vi.spyOn(storage, "relayFile").mockImplementationOnce(async (...args) => {
+    const handle = await original(...args);
+    vi.spyOn(handle, "sync").mockRejectedValueOnce(
+      Object.assign(new Error("sync failed"), { code: "EIO" }),
+    );
+    return handle;
+  });
+  await expect(
+    store.append({ id: randomUUID(), role: "assistant", at, text: "Complete 😀文" }),
+  ).rejects.toMatchObject({ stage: "sync", code: "EIO" });
+  spy.mockRestore();
+  await store.markIncomplete();
+  const after = await store.history();
+  expect(after.damaged).toBe(false);
+  expect(after.incomplete).toBe(true);
+  expect(after.messages.map((message) => message.text)).toEqual(["Original\n", "Complete 😀文"]);
+  expect(await store.source(id, cursor)).toMatchObject({ text: "Original\n", next: null });
+  await store.append({ id: randomUUID(), role: "human", at, text: "Next turn" });
+  expect((await store.history()).messages.map((message) => message.text)).toEqual([
+    "Original\n",
+    "Complete 😀文",
+    "Next turn",
+  ]);
+  await appendFile(join(store.root, "history.frames"), "outside");
+  expect((await store.history()).damaged).toBe(true);
+  await expect(store.source(id, cursor)).rejects.toThrow("outside changes");
+});
+
 it("preserves a partial write and never accepts a retry over its changed journal", async () => {
   const store = await open();
   const original = storage.relayFile;

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Icon } from "./icons.js";
+import { pageAvailable, pageDefinitions } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { RelayNavigationIcon } from "./relay-navigation-icon.js";
 
@@ -9,7 +10,7 @@ export function HomePage({
   onOpenRelay,
   onOpenTool,
 }: {
-  database: boolean;
+  database: string | null;
   relayAvailable: boolean;
   onOpenRelay(): Promise<void>;
   onOpenTool(id: "commands" | "prompts"): void;
@@ -40,22 +41,18 @@ export function HomePage({
       disabled: !relayAvailable || pending,
       action: () => void openRelay(),
     },
-    {
-      id: "commands",
-      name: "Commands",
-      description: "Create Custom Commands",
-      icon: <NavigationIcon name="megaphone" />,
-      disabled: !database || pending,
-      action: () => onOpenTool("commands"),
-    },
-    {
-      id: "prompts",
-      name: "Prompt Builder",
-      description: "Adjust Code60's built-in Prompts",
-      icon: <NavigationIcon name="pencil-line" />,
-      disabled: !database || pending,
-      action: () => onOpenTool("prompts"),
-    },
+    ...(["commands", "prompts"] as const).map((id) => {
+      const page = pageDefinitions[id];
+      return {
+        id,
+        name: page.label,
+        description:
+          id === "commands" ? "Create Custom Commands" : "Adjust Code60's built-in Prompts",
+        icon: page.icon && <NavigationIcon name={page.icon} />,
+        disabled: !pageAvailable(id, database) || pending,
+        action: () => onOpenTool(id),
+      };
+    }),
   ];
   return (
     <main className="home-page" aria-labelledby="home-title">
