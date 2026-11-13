@@ -199,10 +199,11 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
     await expect
       .poll(() => page.evaluate(async () => (await window.desktop.snapshot()).database))
       .toBe(database);
-    const projects = page.locator(".splash-projects");
-    await expect(
-      projects.getByRole("heading", { name: "Open Project", exact: true }),
-    ).toBeVisible();
+    await expect(page.locator(".splash-projects")).toHaveCount(0);
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Open Project", exact: true }).click();
+    const projects = page.getByRole("dialog", { name: "Open Project", exact: true });
+    await expect(projects).toBeVisible();
     const recent = projects.locator(".project-item").filter({ hasText: repo });
     await recent.click();
     const confirmation = page.getByRole("dialog", { name: "Open project?", exact: true });
