@@ -9071,7 +9071,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     });
     const layout = await page.evaluate(() => ({
       chat: document.querySelector(".chat-conversations")?.getBoundingClientRect().bottom,
-      panel: document.querySelector(".file-panel")?.getBoundingClientRect().top,
+      panel: document.querySelector("#chat-file-panel")?.getBoundingClientRect().top,
       overflow: document.documentElement.scrollWidth > innerWidth,
     }));
     expect(layout.chat).toBeLessThanOrEqual(layout.panel ?? 0);

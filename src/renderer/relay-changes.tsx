@@ -228,7 +228,6 @@ function RelayReview({
   const [end, setEnd] = useState(1);
   const [attempt, retry] = useState(0);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const acting = useRef(false);
   const alive = useRef(true);
@@ -256,7 +255,6 @@ function RelayReview({
     if (!active || busy) return;
     let current = true;
     const requestId = crypto.randomUUID();
-    setLoading(true);
     void (async () => {
       const result = await api.relayReview({ type: "read", ...address, requestId });
       if (!current) return;
@@ -277,13 +275,9 @@ function RelayReview({
             ? { file: previous.file }
             : {}),
         }));
-    })()
-      .catch((cause: unknown) => {
-        if (current) setError(message(cause));
-      })
-      .finally(() => {
-        if (current) setLoading(false);
-      });
+    })().catch((cause: unknown) => {
+      if (current) setError(message(cause));
+    });
     return () => {
       current = false;
       void api.relayReview({ type: "cancel", ...address, requestId }).catch(() => {});
@@ -310,7 +304,9 @@ function RelayReview({
   const review = loaded?.review;
   const revision = review?.revisions.find((revision) => revision.id === revisionId);
   const file = revision?.files.find((file) => file.key === fileKey) ?? revision?.files[0];
-  const disabled = busy || loading;
+  // Background refreshes rerun after every action and revision hint. An action
+  // cancels them, so disabling controls here would only drop clicks mid-refresh.
+  const disabled = busy;
   if (!review)
     return (
       <section aria-label="Selected Relay review">
