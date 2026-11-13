@@ -49,8 +49,10 @@ const value = (): MemoryGeneration => {
   };
 };
 describe("evidence-only memory generation", () => {
-  it("counts UTF-8 bytes conservatively and builds bounded typed evidence prompts", () => {
-    expect(estimateMemoryTokens("a😀")).toBe(5);
+  it("estimates tokens conservatively and builds bounded typed evidence prompts", () => {
+    expect(estimateMemoryTokens("a😀")).toBe(3);
+    expect(estimateMemoryTokens("abcdef文")).toBe(4);
+    expect(estimateMemoryTokens("\ud800x")).toBe(3);
     expect(memoryGenerationPrompt([source], "previous")).toContain("untrusted evidence");
     expect(checkpointText(value())).not.toContain('"memories"');
     expect(validateMemoryGeneration(value(), [source])).toEqual(value());

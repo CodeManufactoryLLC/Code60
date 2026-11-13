@@ -510,7 +510,7 @@ class MemoryRuntime implements RunMemory {
       pieces.push({ id: randomUUID(), text: text.slice(at, end), start: at });
       at = end;
     }
-    const bytes = estimateMemoryTokens(text);
+    const bytes = Buffer.byteLength(text);
     if (pieces.length > 64 || this.queuedBytes + bytes > 1_048_576) {
       this.incomplete = true;
       this.service.report(

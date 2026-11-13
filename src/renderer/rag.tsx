@@ -156,7 +156,7 @@ export function RagPage({
             <input
               className="rag-query-input"
               id="rag-message"
-              aria-label="Message"
+              aria-label="Retrieval query"
               value={text}
               onChange={(event) => setText(event.target.value)}
             />

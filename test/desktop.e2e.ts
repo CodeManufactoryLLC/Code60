@@ -1430,6 +1430,7 @@ test("desktop: Relay connects without a database and retains identity, draft and
       literal.chat.events.some(({ event }) => event.type === "prompt" && event.text === "/p"),
     ).toBe(true);
     await composer.fill(JSON.stringify([{ hang: "cancellable" }]));
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.press("Enter");
     await expect(mark).toHaveAttribute("data-state", "working");
     const car = mark.locator(".relay-car").first();
@@ -3819,6 +3820,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       ["tab-sessions", "terminal-window"],
       ["tab-worktrees", "git-branch"],
       ["tab-settings-agents", "robot"],
+      ["tab-settings-memory", "brain"],
       ["tab-settings-appearance", "palette"],
       ["tab-settings-table-defaults", "table"],
       ["tab-settings-text", "text-aa"],
@@ -3828,6 +3830,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       ["advanced-toggle", "wrench"],
       ["experiments-toggle", "flask"],
       ["tab-episodic-memory", "brain"],
+      ["tab-rag", "flask"],
       ["tab-contributor-tools", "code"],
     ] as const;
     for (const [id, icon] of pageIcons) {
@@ -4309,7 +4312,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-radius", "0px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(21);
+    await expect(tabs).toHaveCount(23);
     const searchAction = page.locator(".sidebar-search");
     await expect(searchAction).toHaveAccessibleName("Search");
     await expect(page.locator(".page-tabs #tab-search")).toHaveCount(0);
@@ -4773,7 +4776,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(19);
+    await expect(page.getByRole("tab")).toHaveCount(20);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -5193,7 +5196,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(19);
+    await expect(page.getByRole("tab")).toHaveCount(20);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await selectSettingsPage(page, "Text");
@@ -5237,6 +5240,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Worktrees",
       "Settings",
       "Agents",
+      "Memory",
       "Appearance",
       "Table defaults",
       "Text",
@@ -5293,7 +5297,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Projects", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(19);
+    await expect(page.getByRole("tab")).toHaveCount(20);
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -8428,7 +8432,7 @@ test("desktop: RAG manually indexes, retrieves and retains its database snapshot
     await expect(rag.getByRole("button", { name: "Rebuild index", exact: true })).toBeEnabled({
       timeout: 30_000,
     });
-    const message = rag.getByRole("textbox", { name: "Message", exact: true });
+    const message = rag.getByRole("textbox", { name: "Retrieval query", exact: true });
     await message.fill("How does our private conversation search get updated?");
     await message.press("Enter");
     await expect(rag.locator(".rag-results li")).not.toHaveCount(0, { timeout: 30_000 });

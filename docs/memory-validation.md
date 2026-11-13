@@ -17,7 +17,7 @@ recall and between-turn continuity enabled. The initial settings are:
 | Setting | Initial value |
 | --- | --- |
 | Rollover threshold | 70% |
-| Unknown model capacity | 32,000 estimated tokens |
+| Unknown model capacity | 128,000 estimated tokens |
 | Checkpoint context cap | 2,000 estimated tokens |
 | Retrieved memory cap | 4,000 estimated tokens |
 | Coalescing delay | 30 seconds after a completed turn |
@@ -25,8 +25,10 @@ recall and between-turn continuity enabled. The initial settings are:
 | Types | Generate and recall all four types |
 | Retention | No automatic expiry |
 
-Provider-reported usage takes priority as a capacity source. The fallback counts
-UTF-8 bytes conservatively, not embedding-model tokens. Trusted operating context
+Provider-reported usage takes priority as a capacity source. The fallback
+estimate is not the embedding-model tokenizer: it counts one token per three
+ASCII characters and two per other code point, above typical provider averages.
+Dense encoded data such as base64 can exceed it; lower the capacity if needed. Trusted operating context
 and the current request are reserved first, with at least 512 tokens or 15% of
 capacity for output. Numeric defaults are tuning values, not performance promises.
 

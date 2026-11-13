@@ -162,7 +162,7 @@ function emit(memory: RunMemory, body: Omit<RunEvent, "runId" | "at"> | Record<s
 }
 function exchange(memory: RunMemory, text = "Redis cache uses local storage.") {
   emit(memory, { type: "prompt", turn: 1, text });
-  emit(memory, { type: "message", text: "a".repeat(1500) });
+  emit(memory, { type: "message", text: "a".repeat(4500) });
   emit(memory, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
 }
 describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
@@ -179,9 +179,30 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     expect((await m.prepare(turn(), new AbortController().signal)).rollover).toBe(true);
     m.dispose();
   });
+  it("fits a full Relay history window and many contract-bearing turns at default capacity", async () => {
+    service.settings = { ...service.settings, capacity: DEFAULT_MEMORY_SETTINGS.capacity };
+    const m = runtime();
+    const contract = "Operating contract line.\n".repeat(240);
+    const history = "😀文line\n".repeat(8000);
+    const first = await m.prepare(
+      { text: "Hello", delivered: `${contract}${history}Hello`, turn: 1, usage: null },
+      new AbortController().signal,
+    );
+    expect(first.rollover).toBe(false);
+    emit(m, { type: "prompt", turn: 1, text: "Hello" });
+    for (let index = 2; index <= 12; index++) {
+      const next = await m.prepare(
+        { text: "Next", delivered: `${contract}Next`, turn: index, usage: null },
+        new AbortController().signal,
+      );
+      expect(next.rollover).toBe(false);
+      emit(m, { type: "prompt", turn: index, origin: "automatic", text: "Next" });
+    }
+    m.dispose();
+  });
   it("counts automatic updates toward fallback capacity without capturing their text", async () => {
     const m = runtime();
-    emit(m, { type: "prompt", turn: 1, origin: "automatic", text: "x".repeat(1500) });
+    emit(m, { type: "prompt", turn: 1, origin: "automatic", text: "x".repeat(4500) });
     emit(m, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
     await expect(m.prepare(turn(), new AbortController().signal)).rejects.toThrow("checkpoint");
     expect(store.range(must(store.snapshot().conversations[0]).id).sources).toEqual([]);
@@ -215,7 +236,7 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     expect(prepared.context).toContain("Historical continuity checkpoint");
     expect(helpers.sessions).toHaveLength(1);
     expect(store.range(must(store.snapshot().conversations[0]).id).sources).toEqual([]);
-    await expect(m.prepare(turn("x".repeat(2000)), new AbortController().signal)).rejects.toThrow(
+    await expect(m.prepare(turn("x".repeat(6000)), new AbortController().signal)).rejects.toThrow(
       "exceeds",
     );
     m.dispose();

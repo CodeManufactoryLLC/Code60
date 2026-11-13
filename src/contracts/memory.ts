@@ -50,7 +50,7 @@ export const DEFAULT_MEMORY_SETTINGS: MemorySettings = {
   recall: true,
   generation: true,
   rolloverPercent: 70,
-  capacity: 32000,
+  capacity: 128000,
   checkpointTokens: 2000,
   recallTokens: 4000,
   cadenceSeconds: 30,

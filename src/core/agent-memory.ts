@@ -22,9 +22,23 @@ export interface RunMemory {
 }
 export type MemoryFactory = (record: RunRecord, repository: string) => RunMemory;
 
-/** Deliberately conservative fallback, not the embedding model's tokenizer. */
+/**
+ * Conservative fallback, not the embedding model's tokenizer: one token per three ASCII
+ * characters (typical BPE averages about four) and two per other code point (CJK, emoji).
+ */
 export function estimateMemoryTokens(text: string): number {
-  return new TextEncoder().encode(text).length;
+  let ascii = 0;
+  let other = 0;
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    if (code < 0x80) ascii++;
+    else {
+      other++;
+      const next = text.charCodeAt(index + 1);
+      if (code >= 0xd800 && code < 0xdc00 && next >= 0xdc00 && next < 0xe000) index++;
+    }
+  }
+  return Math.ceil(ascii / 3) + other * 2;
 }
 export function validateMemoryGeneration(
   value: unknown,

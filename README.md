@@ -104,7 +104,7 @@ Before context reaches its configured threshold (initially 70%), Code60 prepares
 a checkpoint and continues between turns in a fresh agent session. The logical
 conversation and transcript stay intact. An oversized request or unavailable
 required checkpoint pauses the send, never silently truncates or replays it.
-Context capacity falls back to a configurable 32,000-token estimate when the
+Context capacity falls back to a configurable 128,000-token estimate when the
 provider does not report one.
 
 Capture, automatic generation and recall have separate switches. Per-conversation
