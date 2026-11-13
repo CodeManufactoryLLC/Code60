@@ -4,6 +4,7 @@ import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
+import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const view = (id: string, status: RunStatus = "idle"): RunView => ({
@@ -32,6 +33,55 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("renders Relay and project groups as siblings with only each project's own conversations", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const projects = ["a", "b", "c"].map((id) => ({
+      id,
+      path: `/project-${id}`,
+      active: id === "a",
+      chatIds: [id],
+      workerIds: id === "a" ? ["one"] : [],
+    }));
+    const html = renderToStaticMarkup(
+      <ProjectChatSidebar
+        projects={projects}
+        selectedProjectId="b"
+        onProjectAction={async () => true}
+        chats={[
+          { ...chat("relay"), kind: "relay" },
+          { ...chat("unbound"), title: "Legacy history" },
+          ...projects.map((project) => ({
+            ...chat(project.id, project.workerIds),
+            kind: "project" as const,
+            projectId: project.id,
+          })),
+        ]}
+        runs={[run("one")]}
+        navigationSerial={undefined}
+        selectedId="b"
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    const sections = html.match(/<section[\s\S]*?<\/section>/g) ?? [];
+    expect(sections).toHaveLength(3);
+    expect(html.indexOf("Relay")).toBeLessThan(html.indexOf("<section"));
+    expect(html).not.toContain("Legacy history");
+    sections.forEach((section, index) => {
+      const project = projects[index];
+      expect(section).toContain(`id="conversation-${project?.id}"`);
+      expect(section).not.toContain('id="conversation-relay"');
+      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
+      expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("More for")).toBeLessThan(section.indexOf("Toggle chats"));
+      expect(section).toContain('aria-hidden="false"');
+    });
+    expect(sections[0]).toContain('id="conversation-one"');
+    expect(sections[1]).not.toContain('id="conversation-one"');
+  });
   it("numbers project chats within their owner, consistently with a filtered sidebar", () => {
     const relay = { ...chat("relay"), kind: "relay" as const };
     const a = { ...chat("a"), kind: "project" as const, projectId: "a" };

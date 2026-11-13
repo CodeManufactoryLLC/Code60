@@ -1696,13 +1696,22 @@ describe("retained project runtimes", () => {
 });
 
 describe("desktop orchestration", () => {
-  it("keeps database-wide chats as labelled stopped history without starting another global chat under Relay", async () => {
+  it("does not load or expose database-wide legacy chats under Relay and leaves their files untouched", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     const id = controller.snapshot().chat.run?.id as string;
     await controller.orchestrationChatAction({ type: "send", id, text: "Legacy source" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     await controller.shutdown();
+    const legacyRoot = join(directory, ".code60_workspace", "chats");
+    const originals = await Promise.all(
+      (await fs.readdir(legacyRoot)).map(async (name) => ({
+        name,
+        content: await fs.readFile(join(legacyRoot, name), "utf8"),
+      })),
+    );
+    expect(originals.length).toBeGreaterThan(0);
+    const load = vi.spyOn(ChatStore.prototype, "load");
     const before = agents.specs.length;
     controller = new DesktopController(
       controllerDeps(),
@@ -1714,23 +1723,22 @@ describe("desktop orchestration", () => {
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(controller.snapshot().chat.kind).toBe("relay");
     expect(agents.specs).toHaveLength(before + 1);
-    const legacy = controller.snapshot().chats.find((chat) => chat.run?.id === id);
-    expect(legacy?.title).toMatch(/^Legacy history:/);
-    expect(legacy?.events).toEqual([]);
-    await controller.orchestrationChatAction({ type: "select", id });
-    expect(controller.snapshot().chat.kind).toBe("legacy");
-    expect(controller.snapshot().chat.events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          event: expect.objectContaining({ type: "prompt", text: "Legacy source" }),
-        }),
-      ]),
+    expect(load).not.toHaveBeenCalled();
+    load.mockRestore();
+    expect(controller.snapshot().chats.map((chat) => chat.kind)).toEqual(["relay"]);
+    await expect(controller.orchestrationChatAction({ type: "select", id })).rejects.toThrow(
+      "no longer current",
     );
     await expect(
       controller.orchestrationChatAction({ type: "send", id, text: "Do not resume" }),
-    ).rejects.toThrow("read-only");
-    await expect(controller.orchestrationChatAction({ type: "new" })).rejects.toThrow("read-only");
+    ).rejects.toThrow("no longer current");
+    await expect(controller.orchestrationChatAction({ type: "new" })).rejects.toThrow(
+      "Open a project",
+    );
+    expect(controller.snapshot().chat.kind).toBe("relay");
     expect(agents.specs).toHaveLength(before + 1);
+    for (const original of originals)
+      expect(await fs.readFile(join(legacyRoot, original.name), "utf8")).toBe(original.content);
   });
 
   it.each(["stop all", "shutdown"])(

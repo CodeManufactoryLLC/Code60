@@ -463,7 +463,7 @@ export interface OrchestrationProvider {
 
 export interface OrchestrationChat {
   projectId?: string;
-  kind?: "relay" | "project" | "legacy";
+  kind?: "relay" | "project";
   conversationId?: string;
   generation?: number;
   /** Constant-size change hint; review collections remain explicit bounded reads. */

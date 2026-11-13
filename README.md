@@ -36,7 +36,8 @@ Project accordions retain independent chats, drafts and file views. Project chat
 remain database-backed and bound to their project. Navigation and database changes
 do not retarget Relay. Closing a project stops its own work, not Relay workers in
 that folder. **Stop workers in folder** includes those Relay workers; **Stop all**
-stops every owner. Existing database-wide chats remain labelled legacy history.
+stops every owner. Database-wide legacy chat files are not loaded or migrated;
+existing files remain untouched.
 
 See [implementation and validation notes](docs/relay-implementation.md) for limits
 and platform-validation status.

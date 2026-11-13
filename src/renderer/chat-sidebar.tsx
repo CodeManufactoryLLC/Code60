@@ -172,13 +172,7 @@ export function ChatSidebar({
             disabled={disabled}
             onClick={() => onSelect(entry.id)}
             onContextMenu={(event) => {
-              if (
-                entry.role !== "orchestrator" ||
-                chat?.kind === "relay" ||
-                chat?.kind === "legacy" ||
-                disabled
-              )
-                return;
+              if (entry.role !== "orchestrator" || chat?.kind === "relay" || disabled) return;
               event.preventDefault();
               event.currentTarget.focus();
               setMenu({ ...entry, x: event.clientX, y: event.clientY });
@@ -188,7 +182,6 @@ export function ChatSidebar({
               if (
                 entry.role === "orchestrator" &&
                 chat?.kind !== "relay" &&
-                chat?.kind !== "legacy" &&
                 (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
               ) {
                 event.preventDefault();
@@ -228,7 +221,7 @@ export function ChatSidebar({
             </span>
             <span className="sr-only">{description}</span>
           </button>
-          {entry.role === "orchestrator" && chat?.kind !== "relay" && chat?.kind !== "legacy" && (
+          {entry.role === "orchestrator" && chat?.kind !== "relay" && (
             <button
               type="button"
               className="icon-button"

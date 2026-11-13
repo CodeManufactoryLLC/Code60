@@ -28,7 +28,7 @@ export function showsProjectFiles(
     const worker = snapshot.runs.find((run) => run.record.id === workerId);
     return !!worker && !worker.relay;
   }
-  return snapshot.chat.kind !== "relay" && snapshot.chat.kind !== "legacy";
+  return snapshot.chat.kind !== "relay";
 }
 
 /** Legacy links always browse the project; discard navigation if its scope changed. */

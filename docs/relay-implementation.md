@@ -43,9 +43,8 @@ This branch implements Relay and retained project runtimes as described in
   scanning lifetime history or restoring execution authority.
 - Stop/shutdown attempt every owner even when helper cleanup fails. Connection
   epochs prevent delayed preparation from starting an ACP session after Stop all.
-- Existing database-wide chats are labelled, read-only legacy history. They are
-  not merged into Relay, assigned a project or reconnected automatically. The old
-  global New chat action is not offered.
+- Database-wide legacy chat files are not loaded, migrated or exposed in the UI.
+  Existing files remain untouched. The old global New chat action is not offered.
 - Multiple open project runtimes, with project-bound chat creation, sidebar
   accordions, retained chat drafts, transcript caches, explorers and file tabs.
   Navigation does not stop another project's work or retarget its chat gateway.
@@ -238,7 +237,7 @@ These service-only measurements do not measure desktop rendering or clipboard
 assembly. They measure the final audited implementation, including pinned journal
 change stamps, checkout provenance and bounded worker transcript tools.
 
-### Latest complete checks
+### Relay baseline checks (before the sidebar follow-up)
 
 `npm run check` passed: 1,575 tests passed, 16 skipped, 174 test files passed
 and one platform-specific file skipped. Typecheck, Biome, Knip and all four
@@ -267,3 +266,48 @@ Native Windows/macOS desktop, packaged and installer tests remain unrun.
 All session test containers and images were removed, verified with both container
 and image listings. BuildKit cache and host artifacts are retained. Final desktop
 artifacts are under `test-results/container/2026-11-12T22-10-10.282Z-aPAMeL`.
+
+### Sidebar UI follow-up
+
+Relay no longer reads or exposes database-wide legacy chats. The regression
+creates existing legacy metadata, verifies `ChatStore.load` is never called,
+rejects old conversation actions and verifies the stored file contents are
+unchanged. Project persistence, the CLI and SQLite schema 5 are unchanged.
+
+The desktop regression opens three projects and creates six conversations plus
+two owned workers. It checks actual label coordinates: every project aligns with
+Relay, project chats add 24px and their owned workers add another 24px.
+It also checks right-edge chevrons, separate actions, anchored and viewport-clamped
+menus, outside/Escape/scroll/resize dismissal, focus restoration, project
+collapse/reopen, project close/reopen, retained drafts and unchanged idle workers.
+The connected opener remains Open Project throughout.
+
+Screenshot inspection covers Light and Dark at 180px, 220px and 480px sidebar
+widths, including 24px navigation text and reduced motion. The expanded checks
+exposed narrow-row label drift and large-text activity clipping; both were fixed.
+Normal navigation retains its existing row-height formula, while two-line project
+headings grow independently to fit their activity label.
+
+`npm run check` passed: 1,576 tests passed, 16 skipped, 174 files passed and one
+platform-specific file skipped. Typecheck, Biome, Knip and all four unchanged
+coverage gates passed. Coverage was 67.05% statements, 60.48% branches, 60.99%
+functions and 69.18% lines. Biome retains 14 warnings and three informational notices.
+
+The first full desktop run passed 54/61. Six failures expected the old opener or
+left-side chevron; their replacements also verify selected-project identity in
+the project heading. One failure caught the normal-navigation row-height change,
+which was fixed without weakening its numeric checks. All seven and the expanded
+sidebar scenario then passed together (8/8).
+
+The final complete Linux desktop run passed all 61 tests in 4.5 minutes, including
+the production build. Artifacts and screenshots are under
+`test-results/container/2026-11-12T23-19-03.885Z-zwlWya`.
+All session-owned test containers and images were removed. Container, labeled
+image and tagged image listings were empty; BuildKit cache and host artifacts
+remain intentionally retained. `git diff --check` passed.
+
+Native Windows/macOS desktop, packaged and installer validation remain unrun.
+The earlier Relay performance results above are baseline measurements, not a new
+performance run for this UI-only follow-up.
+The sidebar fixes remain uncommitted for review; no push, PR update or automatic
+host-app launch was performed.

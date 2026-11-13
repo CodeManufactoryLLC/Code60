@@ -44,9 +44,6 @@ describe("project-root file navigation", () => {
     expect(showsProjectFiles(state, "missing")).toBe(false);
     expect(showsProjectFiles(state, "project-worker")).toBe(true);
     expect(
-      showsProjectFiles({ ...state, chat: { ...state.chat, kind: "legacy" } }, undefined),
-    ).toBe(false);
-    expect(
       showsProjectFiles({ ...state, chat: { ...state.chat, kind: "project" } }, undefined),
     ).toBe(true);
   });

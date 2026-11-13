@@ -175,11 +175,11 @@ it("does not let summary metadata advance a project detail fence or clear reques
   expect(merged?.snapshot.worktrees?.repository).toBe("/a");
   expect(merged?.snapshot.revision).toBe(200);
 });
-it("requests explicit selected project/conversation identities and never invents an epoch or legacy authority", () => {
+it("requests explicit selected project/conversation identities and never invents missing ownership", () => {
   expect(requestedDetails(undefined)).toEqual([]);
   const state = applyUpdate(undefined, snapshot);
-  const legacy: OrchestrationChat = { ...chat, kind: "legacy" };
-  delete legacy.projectId;
+  const unbound: OrchestrationChat = { ...chat };
+  delete unbound.projectId;
   expect(requestedDetails(state)).toEqual([
     { kind: "project", projectId, databaseEpoch: 2 },
     { kind: "conversation", conversationId: "chat", generation: 1, projectId, databaseEpoch: 2 },
@@ -190,7 +190,7 @@ it("requests explicit selected project/conversation identities and never invents
       snapshot: {
         ...snapshot,
         projectInstanceId: null,
-        chat: legacy,
+        chat: unbound,
       },
     }),
   ).toEqual([]);

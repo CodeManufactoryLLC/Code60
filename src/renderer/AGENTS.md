@@ -24,6 +24,13 @@
   Project accordions contain project-bound chats and workers, with a separate
   New chat action per project. Selecting a project never retargets Relay.
   Closing a project and stopping a folder are distinct confirmed operations.
+- Show only Relay and project-bound conversations, not database-wide legacy chats.
+  Align every project heading with Relay. Use shared 24px indentation steps for
+  project chats and owned workers, inside labels rather than padded containers.
+  Put project chevrons at the right edge and keep New chat and More independent.
+  Reuse anchored menu behavior, including bounds, dismissal and keyboard focus.
+  The connected sidebar opener always says Open Project; selection remains visible
+  in the project groups and content, not in that action's label.
 
 ## Ownership and style boundaries
 
@@ -145,7 +152,7 @@
 
 - Files uses borderless page and inspector surfaces with `--chat-neutral` fill, neutral selection and viridian hover. A plus immediately after the last tab creates blank tabs with a centered Open Files link that replaces the blank with Explorer; multiple Explorers are allowed and share expansions and hidden-file preferences. Deduplicate file tabs by relative path. Every tab is closable and draggable; support arrow/Home/End selection, Delete close and Alt+Left/Right reorder, restoring focus after close/reorder. Closing the last tab returns to the empty panel. Keep file names and code case-preserving; resolve Monaco preview colors from the app theme tokens, including System appearance.
 
-- Without a database, replace project identity/selectors with Connect to database on both splash and sidebar. Show the large, non-dismissable database warning at the top of both surfaces. Disable workspace navigation, chats, files, and polling until connection succeeds, including command-palette alternatives; keep connection, app entry, setup, Logs, settings, and updates available. Cancellation/failure must leave the warning and disabled state intact. Once connected, the sidebar becomes the text-only project card: show Open a project or the selected folder, without borders or hatching, and open the project modal on activation. Keep cancellation/errors in the modal, show a success toast after project selection, and disable switching while project runs are active.
+- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. Once connected, the text-only sidebar action always says Open Project, without borders or hatching, and opens the project modal. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
 
 - Chat File Explorer always opens the current project root. Route legacy Files, palette and Browse project files through Chat to an existing or newly created Explorer tab; Search file sources open or select file tabs directly. Never select a worktree/private orchestration root; offer Open project when absent. Clear stale selections on project changes and discard stale reads. Put Show hidden files only in the native modal opened by the settings icon beside the Explorer title; changes apply immediately, Escape/Done closes and restores trigger focus, and workspace/page/tab changes and hiding the panel dismiss it. Do not show a Reveal in Files preview button.
 - Show current-project worker sessions, including history, in the normal Chat hierarchy. Nest only known owned workers beneath their controlling orchestrator; unknown/manual sessions stay directly beneath Chat, except finished ones, which are hidden unless a current orchestrator owns them or the user opened them. Name workers, in rows and their chat heading, by the role label the orchestrator assigned at dispatch, falling back to provider / short run ID. Keep sidebar names text-only, with role provenance in accessible descriptions and independent status text/unread counts. Separate worker disclosures expand on new children without changing selection; otherwise retain manual collapse. External navigation reveals ancestors. Preserve visible-row keyboard navigation, drafts, scroll, permissions, recovery, Copy, timing and shared file panel. No popup, dock, fullscreen, close/minimize or reorder controls. Worker selection must not change backend orchestrator selection. Load history on demand through the shared cache, never merely to populate rows.

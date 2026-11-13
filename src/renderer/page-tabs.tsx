@@ -20,7 +20,6 @@ import {
   settingsLabels,
 } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { pathLabel } from "./path-label.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds } from "./tabs.js";
 
@@ -64,7 +63,6 @@ export function PageTabBar({
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
 }) {
-  const repository = directory ? pathLabel(directory) : directory;
   const sidebar = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(() => {
     const saved = Number(localStorage.getItem("code60.sidebarWidth"));
@@ -117,10 +115,10 @@ export function PageTabBar({
           disabled={projectDisabled}
           onClick={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
           aria-haspopup="dialog"
-          title={!database ? "Connect to database" : (directory ?? "Open a project")}
+          title={!database ? "Connect to database" : "Open Project"}
         >
           <span className="sidebar-title">
-            {!database ? "Connect to database" : (repository ?? "Open a project")}
+            {!database ? "Connect to database" : "Open Project"}
           </span>
         </button>
         <PageTabList

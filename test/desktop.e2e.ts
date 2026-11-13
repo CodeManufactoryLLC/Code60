@@ -72,6 +72,13 @@ const clickMenu = (id: string) =>
 // The row-number column, Agent width, and half the Actions width.
 const actionsColumnX = 40 + 95 + 45;
 
+async function expectSelectedProject(page: Page, directory: string) {
+  await expect(page.locator(".project-card")).toHaveText("Open Project");
+  await expect(
+    page.locator('.project-chat-heading[data-project-selected="true"] .project-chat-name'),
+  ).toHaveAttribute("title", directory);
+}
+
 async function scrollGrid(grid: Locator, left: number) {
   await grid.locator(".dvn-scroller").evaluate(async (element, position) => {
     element.scrollLeft = position;
@@ -1545,6 +1552,288 @@ for (const stage of ["database", "folder", "confirmation"] as const) {
   });
 }
 
+test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-layout-"));
+  const folders = ["project-a", "project-b", "project-c"].map((name) => join(directory, name));
+  for (const folder of folders) {
+    await mkdir(folder);
+    execFileSync("git", ["init", "-q", folder]);
+    commitFixture(folder);
+  }
+  const configFile = join(directory, "config", "code60", "config.json");
+  await mkdir(dirname(configFile), { recursive: true });
+  await writeFile(
+    configFile,
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--review"],
+        },
+      },
+    }),
+  );
+  try {
+    application = await launch(directory, folders[0] ?? "", join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+    );
+    const composer = () => page.locator(".orchestration-chat-page:visible").getByRole("combobox");
+    await expect(page.locator(".project-card")).not.toHaveText("Connect to database");
+    for (const [index, folder] of folders.entries()) {
+      await application.evaluate(({ dialog }, path) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+      }, folder);
+      await page.locator(".project-card").click();
+      await page
+        .getByRole("dialog", { name: "Open Project", exact: true })
+        .getByRole("button", { name: "Open Folder", exact: true })
+        .click();
+      const group = page.getByRole("region", { name: `Project ${folder}`, exact: true });
+      for (let chat = 0; chat < (index === 0 ? 2 : index === 1 ? 3 : 1); chat++) {
+        const previous = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+        await group
+          .getByRole("button", { name: `New chat in ${basename(folder)}`, exact: true })
+          .click();
+        await expect
+          .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
+          .not.toBe(previous);
+        const selected = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+        await expect(
+          page.locator(`.orchestration-chat-page[data-chat-id="${selected}"]`),
+        ).toBeVisible();
+        await expect(composer()).toBeEnabled();
+        if (index === 0 && chat === 0) {
+          await composer().fill("Implement validation");
+          await composer().press("Enter");
+          await expect(
+            group.getByRole("button", { name: "Validation", exact: true }),
+          ).toBeVisible();
+          await expect(composer()).toBeEnabled();
+        }
+        await composer().fill(`${basename(folder)} draft ${chat}`);
+      }
+    }
+    await expect(page.locator(".project-chat-group")).toHaveCount(3);
+    const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
+    while (await dismiss.count()) await dismiss.first().click();
+    await page.screenshot({ path: join(root, "test-results", "multi-project-sidebar.png") });
+    const expectHierarchy = async () => {
+      const positions = await page.locator("#chat-pages").evaluate((element) => {
+        const x = (node: Element | null) => node?.getBoundingClientRect().x ?? -1;
+        return {
+          relay: x(element.querySelector(".chat-sidebar-label")),
+          projects: [...element.querySelectorAll(".project-chat-name > span:first-child")].map(x),
+          clipped: [...element.querySelectorAll(".project-chat-name > span")].some(
+            (label) => label.scrollHeight > label.clientHeight + 1,
+          ),
+          chats: [
+            ...element.querySelectorAll(
+              ".project-chat-pages [data-role='orchestrator'] .chat-sidebar-label",
+            ),
+          ].map(x),
+          workers: [
+            ...element.querySelectorAll(
+              ".project-chat-pages [data-role='worker'] .chat-sidebar-label",
+            ),
+          ].map(x),
+          toggles: [...element.querySelectorAll(".project-chat-heading")].map((heading) => ({
+            label: x(heading.querySelector(".project-chat-name")),
+            more: x(heading.querySelector("[aria-haspopup='menu']")),
+            toggle: x(heading.querySelector("[aria-controls]")),
+            right: heading.querySelector("[aria-controls]")?.getBoundingClientRect().right,
+            edge: heading.getBoundingClientRect().right,
+          })),
+        };
+      });
+      expect.soft(positions.projects).toEqual([positions.relay, positions.relay, positions.relay]);
+      expect.soft(positions.chats).toEqual(Array(6).fill(positions.relay + 24));
+      expect.soft(positions.workers).toEqual(Array(2).fill(positions.relay + 48));
+      expect.soft(positions.clipped).toBe(false);
+      for (const row of positions.toggles) {
+        expect.soft(row.toggle).toBeGreaterThan(row.more);
+        expect.soft(row.more).toBeGreaterThan(row.label);
+        expect.soft(row.right).toBe(row.edge);
+      }
+    };
+    await expectHierarchy();
+    await expect.soft(page.locator(".project-card")).toHaveText("Open Project");
+    await expect.soft(page.locator("#chat-pages")).not.toContainText("Legacy history:");
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    expect
+      .soft(snapshot.chats.every((chat) => chat.kind === "relay" || chat.kind === "project"))
+      .toBe(true);
+
+    const group = page.getByRole("region", { name: `Project ${folders[0]}`, exact: true });
+    const more = group.getByRole("button", { name: `More for ${folders[0]}`, exact: true });
+    await more.click();
+    const menu = page.getByRole("menu", { name: `Actions for ${folders[0]}`, exact: true });
+    await expect(menu).toBeVisible();
+    const anchor = await more.boundingBox();
+    const popup = await menu.boundingBox();
+    expect(anchor).not.toBeNull();
+    expect(popup).not.toBeNull();
+    if (anchor && popup) {
+      expect.soft(Math.abs(popup.y - anchor.y - anchor.height)).toBeLessThanOrEqual(8);
+      expect.soft(Math.abs(popup.x - anchor.x)).toBeLessThanOrEqual(8);
+    }
+    await page.screenshot({ path: join(root, "test-results", "multi-project-menu.png") });
+    await expect
+      .soft(menu.getByRole("menuitem", { name: "Stop folder", exact: true }))
+      .toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect
+      .soft(menu.getByRole("menuitem", { name: "Close project", exact: true }))
+      .toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(more).toBeFocused();
+    await more.click();
+    await page.locator(".orchestration-chat-page:visible .chat-title").click();
+    await expect(menu).toBeHidden();
+    // The title's own action is unrelated to the menu; cancel its rename dialog.
+    await page.keyboard.press("Escape");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1100, 650),
+    );
+    await more.click();
+    await page.locator(".page-tabs").evaluate((element) => {
+      element.scrollTop += 20;
+    });
+    await expect(menu).toBeHidden();
+    await more.click();
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1100, 780),
+    );
+    await expect(menu).toBeHidden();
+    const aChat = group.getByRole("button", { name: "Chat 2", exact: true });
+    await aChat.click();
+    await expect(composer()).toHaveValue("project-a draft 1");
+    const beforeClose = await page.evaluate(() => window.desktop.snapshot());
+    const selected = beforeClose.chat.run?.id;
+    const toggle = group.getByRole("button", {
+      name: `Toggle chats for ${folders[0]}`,
+      exact: true,
+    });
+    await toggle.click();
+    await expect(group.locator(".project-chat-pages")).toHaveAttribute("inert", "");
+    await toggle.press("ArrowRight");
+    await expect(aChat).toBeVisible();
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(selected);
+    const cGroup = page.getByRole("region", { name: `Project ${folders[2]}`, exact: true });
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1100, 500),
+    );
+    const cMore = cGroup.getByRole("button", { name: `More for ${folders[2]}`, exact: true });
+    await cMore.evaluate((element) => {
+      const scroller = element.closest(".page-tabs");
+      if (scroller)
+        scroller.scrollTop +=
+          element.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 1;
+    });
+    await cMore.click();
+    const clamped = page.getByRole("menu", { name: `Actions for ${folders[2]}`, exact: true });
+    await expect(clamped).toBeVisible();
+    const clampedBox = await clamped.boundingBox();
+    const cAnchor = await cMore.boundingBox();
+    const viewportHeight = await page.evaluate(() => innerHeight);
+    expect(clampedBox).not.toBeNull();
+    expect(cAnchor).not.toBeNull();
+    if (clampedBox && cAnchor) {
+      expect(clampedBox.y + clampedBox.height).toBeLessThanOrEqual(viewportHeight - 8);
+      expect(clampedBox.y).toBeLessThan(cAnchor.y + cAnchor.height);
+    }
+    await page.screenshot({ path: join(root, "test-results", "multi-project-menu-clamped.png") });
+    await page.getByRole("menuitem", { name: "Close project", exact: true }).click();
+    await expect(cGroup).toHaveCount(0);
+    await expect(composer()).toHaveValue("project-a draft 1");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1100, 780),
+    );
+    await page.locator(".project-card").click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .locator(".project-item")
+      .filter({ hasText: join(directory, "project-c") })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Open project?", exact: true })
+      .getByRole("button", { name: "Open project", exact: true })
+      .click();
+    await cGroup.getByRole("button", { name: "Chat 1", exact: true }).click();
+    await expect(composer()).toHaveValue("project-c draft 0");
+    await aChat.click();
+    await expect(composer()).toHaveValue("project-a draft 1");
+    const retained = await page.evaluate(() => window.desktop.snapshot());
+    const workerIds = retained.chats.find((chat) => chat.run?.id === selected)?.workers;
+    // The first conversation, not Chat 2, owns the workers.
+    expect(workerIds).toEqual([]);
+    expect(retained.runs.filter((run) => run.view?.status === "idle")).toHaveLength(2);
+    expect(retained.runs.map((run) => run.record.id).sort()).toEqual(
+      beforeClose.runs.map((run) => run.record.id).sort(),
+    );
+    while (await dismiss.count()) await dismiss.first().click();
+    for (const theme of ["light", "dark"]) {
+      for (const [width, size] of [
+        [180, 15],
+        [220, 15],
+        [480, 24],
+      ] as const) {
+        const resizer = page.getByRole("button", {
+          name: "Resize navigation sidebar",
+          exact: true,
+        });
+        const current = await page.evaluate(() =>
+          Number(localStorage.getItem("code60.sidebarWidth")),
+        );
+        for (let remaining = Math.abs(width - current); remaining > 0; remaining -= 20)
+          await resizer.press(width > current ? "ArrowRight" : "ArrowLeft");
+        await page.evaluate((size) => {
+          const style = document.documentElement.style;
+          style.setProperty("--nav-font-size", `${size}px`);
+          if (size === 15) style.removeProperty("--button-size");
+          else style.setProperty("--button-size", `${size}px`);
+        }, size);
+        await page.evaluate(
+          (theme) => document.documentElement.setAttribute("data-color-scheme", theme),
+          theme,
+        );
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await expectHierarchy();
+        await expect(page.locator(".project-card")).toHaveText("Open Project");
+        await more.click();
+        const bounds = await menu.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: innerWidth,
+            height: innerHeight,
+          };
+        });
+        expect(bounds.left).toBeGreaterThanOrEqual(8);
+        expect(bounds.top).toBeGreaterThanOrEqual(8);
+        expect(bounds.right).toBeLessThanOrEqual(bounds.width - 8);
+        expect(bounds.bottom).toBeLessThanOrEqual(bounds.height - 8);
+        await page.screenshot({
+          path: join(root, "test-results", `multi-project-${theme}-${width}-${size}.png`),
+        });
+        await page.keyboard.press("Escape");
+        await expect(more).toBeFocused();
+      }
+    }
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: Relay project accordions retain independent chat and file views", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-relay-projects-"));
   const a = join(directory, "project-a");
@@ -2130,7 +2419,10 @@ test("desktop: renderer scopes retain Relay and database drafts and project view
       const picker = page.getByRole("dialog", { name: "Open Project", exact: true });
       await picker.getByRole("button", { name: "Open Folder", exact: true }).click();
       await expect(picker).toHaveCount(0);
-      await expect(page.locator(".project-card")).toHaveText(basename(project));
+      await expect(page.locator(".project-card")).toHaveText("Open Project");
+      await expect
+        .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).directory)
+        .toBe(project);
       await expect(fileTabs.getByRole("tab", { includeHidden: true })).toHaveCount(
         project === first ? 1 : 0,
       );
@@ -2575,7 +2867,7 @@ test("desktop: database connection gates splash and workspace controls", async (
     await modal.getByRole("button", { name: "Create database…", exact: true }).click();
     await expect(modal).toHaveCount(0);
     await expect(notice).toHaveCount(0);
-    await expect(card).toHaveText("Open a project");
+    await expect(card).toHaveText("Open Project");
     await expect(page.getByRole("tab", { name: "Prompt Editor", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "New chat", exact: true })).toHaveCount(0);
     await page.getByRole("tab", { name: "Chat", exact: true }).click();
@@ -2604,7 +2896,7 @@ test("desktop: database connection from splash restores normal entry", async () 
       .click();
     await expect(splash.locator(".database-notice")).toHaveCount(0);
     await splash.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.locator(".sidebar .project-card")).toHaveText("Open a project");
+    await expect(page.locator(".sidebar .project-card")).toHaveText("Open Project");
     await expect(page.locator(".database-notice")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "New chat", exact: true })).toHaveCount(0);
     await expect(
@@ -2778,7 +3070,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
         .snapshot()
         .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
     );
-    await expect(page.locator(".sidebar-header")).toHaveText("Open a project");
+    await expect(page.locator(".sidebar-header")).toHaveText("Open Project");
     await page.locator(".sidebar-header").click();
     const project = page.getByRole("dialog", { name: "Open Project", exact: true });
     await expect(project).toBeVisible();
@@ -3216,7 +3508,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
         .snapshot()
         .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
     );
-    await page.getByRole("button", { name: "Open a project", exact: true }).click();
+    await page.getByRole("button", { name: "Open Project", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Open Project", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await page.evaluate(async () => {
@@ -3544,7 +3836,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(page.locator(".sidebar")).toHaveCSS("width", "220px");
     // Page surfaces stay square; project and navigation buttons use 5px corners.
     const sidebarHeader = page.locator(".sidebar-header");
-    await expect(sidebarHeader).toHaveText("Open a project");
+    await expect(sidebarHeader).toHaveText("Open Project");
     await expect(sidebarHeader).toHaveClass(/project-card/);
     await expect(sidebarHeader).toHaveCSS("border-radius", "5px");
 
@@ -4110,7 +4402,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       .allTextContents();
     expect(listedPaths.some((path) => path.includes(".worktrees"))).toBe(true);
     expect(listedBranches.some((branch) => branch.startsWith("code60/"))).toBe(true);
-    await expect(page.locator(".sidebar-title")).toHaveText("repo");
+    await expectSelectedProject(page, repo);
     await worktreesGrid.locator(".dvn-scroller").evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
     });
@@ -6480,7 +6772,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
         .snapshot()
         .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch)),
     );
-    await expect(page.locator(".sidebar-title")).toHaveText("other-project");
+    await expectSelectedProject(page, other);
     await search.getByLabel("Query", { exact: true }).fill("parser");
     await search.getByLabel("Query", { exact: true }).press("Enter");
     await expect(search.getByRole("region", { name: "AI overview" })).toContainText(
@@ -6514,7 +6806,7 @@ test("desktop: project questions use files without saved sessions", async () => 
         .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch));
     });
     // Opening a project remounts Search; wait for the renderer to apply that workspace.
-    await expect(page.locator(".sidebar-title")).toHaveText("palette-project");
+    await expectSelectedProject(page, repo);
     await selectSidebarPage(page, "Search");
     const search = page.locator("#panel-search");
     await search.getByLabel("Query", { exact: true }).fill("What is this project about?");
@@ -6932,7 +7224,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const plus = await newChat.boundingBox();
     const projectToggle = newChat.locator("..").getByRole("button", { name: /^Toggle chats for / });
     const chevron = await projectToggle.boundingBox();
-    expect(plus?.x ?? 0).toBeGreaterThan((chevron?.x ?? 0) + (chevron?.width ?? 0));
+    expect(chevron?.x ?? 0).toBeGreaterThan((plus?.x ?? 0) + (plus?.width ?? 0));
     expect((plus?.y ?? 0) + (plus?.height ?? 0) / 2).toBeCloseTo(
       (chevron?.y ?? 0) + (chevron?.height ?? 0) / 2,
       0,
@@ -8844,10 +9136,8 @@ test("desktop: Browse project files from sessions and worktrees", async () => {
     expect(current.directory).toBe(await realpath(plain));
     // chooseFolder resolves before the batched snapshot reaches the renderer.
     // Wait for the new workspace and its tab reset, not the old Explorer tab.
-    await expect(page.locator(".project-card")).toHaveAttribute(
-      "title",
-      current.directory as string,
-    );
+    await expect(page.locator(".project-card")).toHaveAttribute("title", "Open Project");
+    await expectSelectedProject(page, current.directory as string);
     await expect(page.locator(".file-tabs").getByRole("tab")).toHaveCount(0);
     await selectSidebarPage(page, "Files");
     await expect(files).toBeVisible();
@@ -8964,7 +9254,7 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await databaseModal.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(databaseModal).toHaveCount(0);
     await expect(databaseAction).toBeFocused();
-    await expect(card).toHaveText("Open a project");
+    await expect(card).toHaveText("Open Project");
     await expect(card).toHaveCSS("border-top-width", "0px");
     await expect(card).toHaveCSS("background-image", "none");
     await page.mouse.move(1, 1);
@@ -8989,7 +9279,7 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     });
     await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toBeVisible();
-    await expect(card).toHaveText("Open a project");
+    await expect(card).toHaveText("Open Project");
     await expect(done).toHaveCount(0);
     await application.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
@@ -9000,14 +9290,14 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     });
     await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toBeVisible();
-    await expect(card).toHaveText("Open a project");
+    await expect(card).toHaveText("Open Project");
     await expect(modal.getByText("No recent projects.")).toBeVisible();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
     await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(modal).toHaveCount(0);
-    await expect(card).toHaveText("project-one");
+    await expectSelectedProject(page, folder);
     await expect(card).toHaveCSS("border-top-width", "0px");
     await expect(card).toHaveCSS("background-image", "none");
     await page.mouse.move(1, 1);
@@ -9020,24 +9310,24 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
     }, second);
     await modal.getByRole("button", { name: "Open Folder", exact: true }).click();
-    await expect(card).toHaveText("project-two");
+    await expectSelectedProject(page, second);
     await done.getByRole("button", { name: "Dismiss notification" }).click();
     await card.click();
     await modal.locator(".project-item").filter({ hasText: "project-one" }).click();
     const projectConfirmation = page.getByRole("dialog", { name: "Open project?", exact: true });
     await expect(projectConfirmation).toContainText(folder);
     await projectConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(card).toHaveText("project-two");
+    await expectSelectedProject(page, second);
     await expect(modal).toBeVisible();
     await modal.locator(".project-item").filter({ hasText: "project-one" }).click();
     const temporarilyMissing = `${folder}-missing`;
     await rename(folder, temporarilyMissing);
     await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
     await expect(projectConfirmation.getByRole("alert")).toBeVisible();
-    await expect(card).toHaveText("project-two");
+    await expectSelectedProject(page, second);
     await rename(temporarilyMissing, folder);
     await projectConfirmation.getByRole("button", { name: "Open project", exact: true }).click();
-    await expect(card).toHaveText("project-one");
+    await expectSelectedProject(page, folder);
     await expect(done).toContainText("Opened project-one.");
     await done.getByRole("button", { name: "Dismiss notification" }).click();
     const beforeReturn = await page.evaluate(() => window.desktop.snapshot());
@@ -9060,7 +9350,7 @@ test("desktop: project header card opens projects, cancels, and confirms selecti
     await expect(page.locator(".splash-projects")).toBeVisible();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.locator(".splash")).toHaveCount(0);
-    await expect(card).toHaveText("project-one");
+    await expectSelectedProject(page, folder);
     await page.getByRole("button", { name: "Tables", exact: true }).click();
     await expect(page.locator("#tab-sessions")).toHaveCSS("padding-left", "66.5px");
     await page.getByRole("button", { name: "Settings pages", exact: true }).click();

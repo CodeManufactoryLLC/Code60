@@ -1,5 +1,6 @@
 import { type ComponentProps, useLayoutEffect, useRef, useState } from "react";
 import type { OpenProject, ProjectAction } from "../bridge/index.js";
+import { AnchoredMenu } from "./anchored-menu.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
 import { pathLabel } from "./path-label.js";
@@ -16,6 +17,7 @@ export function ProjectChatSidebar({
   onProjectAction,
   ...props
 }: Props) {
+  const [menu, setMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(projects.map((project) => project.id)),
   );
@@ -53,17 +55,12 @@ export function ProjectChatSidebar({
     <>
       <ChatSidebar
         {...props}
-        chats={props.chats.filter((chat) => chat.kind !== "project")}
+        chats={props.chats.filter((chat) => chat.kind === "relay")}
         runs={props.runs.filter((run) => run.relay)}
       />
       {projects.map((project) => {
         const open = expanded.has(project.id);
         const name = pathLabel(project.path);
-        const menuId = `project-menu-${project.id}`;
-        const action = (type: "close" | "stop-folder") => {
-          document.getElementById(menuId)?.hidePopover();
-          void onProjectAction({ type, projectId: project.id });
-        };
         const workerIds = new Set(project.workerIds);
         return (
           <section
@@ -91,16 +88,6 @@ export function ProjectChatSidebar({
             >
               <button
                 type="button"
-                className="icon-button"
-                aria-label={`Toggle chats for ${project.path}`}
-                aria-expanded={open}
-                aria-controls={`project-chats-${project.id}`}
-                onClick={() => toggle(project.id)}
-              >
-                <Icon name={open ? "chevron--down" : "chevron--right"} />
-              </button>
-              <button
-                type="button"
                 className="project-chat-name"
                 title={project.path}
                 aria-current={selectedProjectId === project.id || undefined}
@@ -125,32 +112,33 @@ export function ProjectChatSidebar({
                 className="icon-button"
                 aria-label={`More for ${project.path}`}
                 title={`More for ${project.path}`}
-                popoverTarget={menuId}
                 aria-haspopup="menu"
+                aria-expanded={menu?.projectId === project.id}
                 disabled={props.pending}
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setMenu({ projectId: project.id, x: rect.left, y: rect.bottom });
+                }}
               >
                 <Icon name="overflow-menu--horizontal" />
               </button>
-              <div
-                id={menuId}
-                popover="auto"
-                className="project-chat-menu"
-                role="menu"
-                aria-label={`Actions for ${project.path}`}
+              <button
+                type="button"
+                className="icon-button project-chats-toggle"
+                aria-label={`Toggle chats for ${project.path}`}
+                aria-expanded={open}
+                aria-controls={`project-chats-${project.id}`}
+                onClick={() => toggle(project.id)}
               >
-                <button type="button" role="menuitem" onClick={() => action("stop-folder")}>
-                  Stop folder
-                </button>
-                <button type="button" role="menuitem" onClick={() => action("close")}>
-                  Close project
-                </button>
-              </div>
+                <Icon name={open ? "chevron--down" : "chevron--right"} />
+              </button>
             </div>
             <div
               id={`project-chats-${project.id}`}
               className="project-chat-pages"
               hidden={!open}
               inert={!open}
+              aria-hidden={!open}
             >
               <ChatSidebar
                 {...props}
@@ -158,6 +146,24 @@ export function ProjectChatSidebar({
                 runs={props.runs.filter((run) => !run.relay && workerIds.has(run.record.id))}
               />
             </div>
+            {menu?.projectId === project.id && (
+              <AnchoredMenu
+                x={menu.x}
+                y={menu.y}
+                label={`Actions for ${project.path}`}
+                onClose={() => setMenu(null)}
+                items={[
+                  {
+                    label: "Stop folder",
+                    run: () => void onProjectAction({ type: "stop-folder", projectId: project.id }),
+                  },
+                  {
+                    label: "Close project",
+                    run: () => void onProjectAction({ type: "close", projectId: project.id }),
+                  },
+                ]}
+              />
+            )}
           </section>
         );
       })}

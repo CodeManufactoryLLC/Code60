@@ -2388,6 +2388,7 @@ export class DesktopController {
   }
 
   private async syncProjectChat(restart: boolean): Promise<void> {
+    if (this.relay && !this.workspace) return;
     const provider = this.orchestration.provider;
     const agent = provider ? this.config?.agents[provider] : undefined;
     const key = JSON.stringify([
@@ -2497,7 +2498,7 @@ export class DesktopController {
         return;
       }
     }
-    // Database-wide sessions are history under Relay, never new live global chats.
+    // Project chats start only on explicit creation or restart under Relay.
     if (!this.relay || (restart && this.workspace))
       await this.startChat(this.conversations.current);
   }
@@ -2750,12 +2751,14 @@ export class DesktopController {
                 ),
               )
           : this.projectHost.current;
+    if (this.relay && !owner)
+      return Promise.reject(new Error("This orchestration chat is no longer current"));
     if (owner && (request.type === "select" || request.type === "new"))
       this.projectHost.select(owner);
     if (owner && owner !== this.projectHost.current)
       return this.projectHost.run(owner, () => this.orchestrationChatAction(request));
-    if (this.relay && !this.workspace && request.type !== "select")
-      return Promise.reject(new Error("Legacy database-wide chats are read-only history."));
+    if (this.relay && !this.workspace)
+      return Promise.reject(new Error("Open a project to create or use a project chat."));
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true);
@@ -3134,12 +3137,6 @@ export class DesktopController {
       restored: session.restored,
       ...(session.taskId ? { taskId: session.taskId } : {}),
       ...(session.title === undefined ? {} : { title: session.title }),
-      ...(this.relay && !this.workspace
-        ? {
-            kind: "legacy" as const,
-            title: `Legacy history: ${session.title ?? "Chat"}`,
-          }
-        : {}),
       ...(this.relay && this.workspace
         ? {
             kind: "project" as const,
@@ -3271,6 +3268,7 @@ export class DesktopController {
         ...(this.relay ? [this.relay.snapshot(summaries)] : []),
         ...this.projectHost
           .all()
+          .filter((owner) => !this.relay || owner.state.workspace)
           .flatMap((owner) =>
             this.projectHost.run(owner, () =>
               this.conversations.sessions

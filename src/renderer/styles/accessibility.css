@@ -13,7 +13,7 @@
 }
 
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
-  .sidebar :is(.page-group-pages, .chat-worker-children) {
+  .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
     transition: none;
   }
 }

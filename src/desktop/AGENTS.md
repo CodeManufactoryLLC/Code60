@@ -22,6 +22,9 @@
 - Keep project chats bound to their own target with mandatory isolation. Project
   navigation preserves owners and views; actual close and database replacement
   dispose only their own work. Relay and its workers must survive those changes.
+- In Relay mode, never load database-wide legacy chat metadata or expose a global
+  compatibility conversation. Only retained project runtimes load project chats.
+  Leave existing legacy files untouched, without migration or automatic deletion.
 - Stop/shutdown every execution owner, even invisible targets; attempt all cleanup
   and preserve failures and force escalation. Never remove Relay's workspace.
 - Capture scoped detail owners synchronously on subscription. Recheck identity

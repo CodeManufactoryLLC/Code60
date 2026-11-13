@@ -2,6 +2,7 @@
 
 - Relay is application-owned and usable without a database. Carry explicit
   conversation/target/project identities, lifecycle generations and revisions.
+  Desktop chat kinds are Relay and project only; no legacy-chat presentation type.
   Relay history paging accepts only bounded opaque cursors, never paths.
   Explicit-directory dispatch is restricted to the authenticated main-process MCP
   gateway; it adds no generic renderer filesystem or process capability.
