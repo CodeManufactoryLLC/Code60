@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -102,6 +102,50 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (options.relayWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split("--- User request ---\n").at(-1);
+        if (request.startsWith("Relay plan: ")) {
+          const target = JSON.parse(request.slice("Relay plan: ".length));
+          const plan = await tool("code60_create_plan", {
+            requestId: "relay-fixture-plan",
+            title: "Relay target plan",
+            description: "Accept only the displayed target and execution mode.",
+            tasks: [{ text: "Create a target result", target }],
+          });
+          planId = plan.id;
+          steps = [{ message: "Relay plan awaits human acceptance." }];
+        } else if (planId && text.includes("Human accepted plan ")) {
+          const plan = await tool("code60_read_plan", { planId });
+          const context = await tool("code60_get_context");
+          const task = plan.tasks[0];
+          await tool("code60_dispatch_agent", {
+            scope: context.scope,
+            requestId: "relay-planned-worker",
+            planTaskId: task.id,
+            label: "Relay planned worker",
+            cwd: task.target.cwd,
+            workspaceMode: task.target.workspaceMode,
+            prompt: JSON.stringify([
+              { write: { path: "result.txt", content: "human accepted target\n" } },
+              { message: "Target result created." },
+            ]),
+          });
+          steps = [{ message: "Dispatched accepted target work." }];
+        } else if (request.startsWith("Relay target: ")) {
+          const target = JSON.parse(request.slice("Relay target: ".length));
+          const context = await tool("code60_get_context");
+          const worker = await tool("code60_dispatch_agent", {
+            scope: context.scope,
+            requestId: target.requestId ?? "relay-fixture-worker",
+            label: target.label ?? "Relay fixture worker",
+            cwd: target.cwd,
+            workspaceMode: target.workspaceMode,
+            ...(target.provider ? { provider: target.provider } : {}),
+            prompt: target.prompt ?? "Worker fixture",
+          });
+          steps = [{ message: `Dispatched ${worker.runId} in ${worker.cwd}` }];
+        }
+      }
       if (options.planWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
         if (request === "Plan a change") {

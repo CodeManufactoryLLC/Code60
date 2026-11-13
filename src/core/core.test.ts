@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configPath, DEFAULT_CONFIG, loadConfig, parseConfig, parseDuration } from "./config.js";
 import { decide, parseToolKinds } from "./policy.js";
 import { createRecordStore, directoryRunsDir, type RecordFs, runsDir } from "./records.js";
@@ -171,6 +171,49 @@ describe("record store", () => {
       Array.from({ length: 20 }, (_, i) => String(i)),
     );
     expect(JSON.parse(await readFile(join(runDir, "run.json"), "utf8")).id).toBe("r1");
+  });
+
+  it("coordinates independent stores through a real filesystem directory alias", async () => {
+    const alias = join(dir, "alias");
+    await fs.symlink(dir, alias, "junction");
+    let entered = () => {};
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const scope = {};
+    const native: RecordFs = { ...fs, recordStoreScope: scope };
+    const a = createRecordStore(
+      {
+        ...native,
+        rename: async (from, to) => {
+          entered();
+          await blocked;
+          await fs.rename(from, to);
+        },
+      },
+      runsDir(dir),
+    );
+    const write = vi.fn(native.writeFile);
+    const b = createRecordStore({ ...native, writeFile: write }, runsDir(alias));
+    const r = record("r1", "2026-01-01T00:00:00Z");
+    const first = a.save(r);
+    await ready;
+    const second = b.save({ ...r, status: "running" });
+    try {
+      await b.appendEvent({ runId: "other", at: "t", type: "message", text: "independent" });
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      release();
+      await Promise.allSettled([first, second]);
+    }
+    await Promise.all([first, second]);
+    expect((await a.read("r1")).status).toBe("running");
+    expect(await readdir(join(runsDir(dir), "r1"))).toEqual(["run.json"]);
+    expect(await b.readEvents("other")).toHaveLength(1);
   });
 
   it("reports missing transcripts instead of treating a failed read as empty history", async () => {

@@ -58,8 +58,11 @@ export function WorkerChat({
   const composed = useRef<number | undefined>(undefined);
   const status = run.view?.status ?? run.record.status;
   const ended = endedStatuses.has(status);
-  const blocker =
-    run.record.base === null
+  const blocker = run.relay
+    ? ended
+      ? "This Relay worker has ended. Ask Relay to dispatch a new worker explicitly."
+      : undefined
+    : run.record.base === null
       ? "No baseline was captured for this run. Start a new isolated worker after setting up Git."
       : ended
         ? continueBlocker(run)
@@ -171,6 +174,16 @@ export function WorkerChat({
           </span>
         )}
       </header>
+      {run.relay && (
+        <p role="status">
+          {run.relay.cwd} ({run.relay.workspaceMode}).
+          {run.relay.workspaceMode === "direct"
+            ? " Direct edits have no isolated apply, undo or discard."
+            : ""}{" "}
+          Showing a bounded live transcript; original source remains on disk.
+          {run.historyIncomplete ? " Earlier activity is omitted from this view." : ""}
+        </p>
+      )}
       {failure && (
         <div className="error-banner" role="alert">
           {failure}

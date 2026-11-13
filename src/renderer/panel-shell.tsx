@@ -80,7 +80,11 @@ export function PanelShell({
     focus.current = onAction(action) ?? "add";
   };
   const resize = (value: number) => {
-    const available = panel.current?.parentElement?.getBoundingClientRect().width ?? 600;
+    let container = panel.current?.parentElement;
+    // Retained owners use display:contents wrappers, which have no layout box.
+    while (container && container.getClientRects().length === 0)
+      container = container.parentElement;
+    const available = container?.getBoundingClientRect().width ?? 600;
     setWidth(Math.max(120, Math.min(available - 300, value)));
   };
   const toggle = (
@@ -250,7 +254,7 @@ export function PanelShell({
               <Icon name="add" />
             </button>
           </div>
-          {open && toggle}
+          {active && open && toggle}
         </div>
         <div
           className="file-panel-content"
@@ -269,7 +273,7 @@ export function PanelShell({
           {announcement}
         </span>
       </aside>
-      {!open && toggle}
+      {active && !open && toggle}
     </>
   );
 }

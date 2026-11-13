@@ -479,16 +479,20 @@ export class Run {
     await this.setStatus("running");
     if (record.branch !== null && record.base !== null) {
       try {
-        await git.addWorktree({
+        const spec = {
           repoDir: settings.repoDir,
           path: record.worktree,
           branch: record.branch,
           base: record.base,
-        });
+        };
+        if (settings.mode === "interactive") await git.addWorktree(spec, this.startAbort.signal);
+        else await git.addWorktree(spec);
         this.worktreeCreated = true;
         this.log("worktree.create", "succeeded");
       } catch (error) {
         this.log("worktree.create", "failed");
+        if (settings.mode === "interactive" && this.shutdownRequested)
+          return this.end({ status: "cancelled", reason: "cancelled before the agent started" });
         return this.end({
           status: "failed",
           reason: `could not create the worktree: ${message(error)}`,

@@ -58,6 +58,7 @@ export {
 export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
 export { ExitCode, exitCodeFor } from "./exit-code.js";
 export type { Orchestrator } from "./orchestrator.js";
+export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";
 export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
@@ -75,6 +76,8 @@ export interface CoreDeps {
   ownerPid: number;
 }
 
+const recordStoreScope = {};
+
 export function defaultDeps(log?: LogSink): CoreDeps {
   return {
     ...(log ? { log } : {}),
@@ -82,6 +85,7 @@ export function defaultDeps(log?: LogSink): CoreDeps {
     git: createGit(),
     fs: {
       ...fsPromises,
+      recordStoreScope,
       mkdir: async (path: string) => privateDirectory(path),
       rename: renameFile,
       writeFile: writePrivateFile,
@@ -159,8 +163,15 @@ export interface Workspace {
 }
 
 /** Lists worktrees registered to the workspace's repository, or none for a non-Git folder. */
-export function listWorktrees(deps: CoreDeps, workspace: Workspace) {
-  return workspace.repo ? deps.git.listWorktrees(workspace.repo.topLevel) : Promise.resolve([]);
+export function listWorktrees(
+  deps: CoreDeps,
+  workspace: Workspace,
+  options?: Parameters<CoreDeps["git"]["listWorktrees"]>[1],
+) {
+  if (!workspace.repo) return Promise.resolve([]);
+  return options
+    ? deps.git.listWorktrees(workspace.repo.topLevel, options)
+    : deps.git.listWorktrees(workspace.repo.topLevel);
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -213,6 +224,8 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 }
 
 export interface RunRequest {
+  /** Explicit desktop execution policy. Omitted preserves CLI auto-detection. */
+  workspaceMode?: "direct" | "worktree";
   /** Desktop workers must never fall back to editing the shared directory. */
   requireIsolation?: boolean;
   cwd: string;
@@ -271,6 +284,11 @@ export async function prepareRuns(
   request: RunRequest,
   configuration?: Config,
 ): Promise<PreparedRuns> {
+  if (
+    request.workspaceMode === "direct" &&
+    (request.requireIsolation || request.base !== undefined)
+  )
+    throw new RefusedError("Direct execution cannot use isolation or a Git base.");
   const config = configuration ?? (await loadConfig(deps.fs, request.env));
   const mcpServers = configuredMcpServers(config);
   let maxParallel = config.maxParallel;
@@ -309,7 +327,9 @@ export async function prepareRuns(
   const { repo } = workspace;
   let base = "";
   let noWorktree: NoWorktreeReason | undefined;
-  if (repo === null) {
+  if (request.workspaceMode === "direct") {
+    // Explicit direct execution must also stay direct inside a committed repository.
+  } else if (repo === null) {
     if (request.base !== undefined) {
       throw new UsageError(`--base needs a Git repository, and ${workspace.dir} is not in one`);
     }
@@ -325,7 +345,7 @@ export async function prepareRuns(
       noWorktree = "no_commits";
     }
   }
-  if (request.requireIsolation && noWorktree)
+  if ((request.requireIsolation || request.workspaceMode === "worktree") && noWorktree)
     throw new RefusedError("Set up Git with an initial commit before starting desktop workers.");
   await preparePrivateRecords(deps, workspace, request.env);
   const interrupted = await markInterrupted(
@@ -342,7 +362,9 @@ export async function prepareRuns(
       base,
       repoDir: repo?.topLevel ?? workspace.dir,
       worktreeRoot: repo === null ? workspace.dir : worktreeRoot(config, repo, request.env),
-      ...(noWorktree === undefined ? {} : { directory: workspace.dir }),
+      ...(noWorktree === undefined && request.workspaceMode !== "direct"
+        ? {}
+        : { directory: workspace.dir }),
       turnTimeoutMs,
       maxParallel,
       policy: config.permissions,

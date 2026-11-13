@@ -114,7 +114,13 @@ export function AppMenus({
                 reason: busy
                   ? "Wait for the current action to finish"
                   : "Open a project to poll this source",
-                run: () => void attempt(() => api.poll([menuSource.key])),
+                run: () =>
+                  void attempt(() =>
+                    api.poll([menuSource.key], {
+                      projectId: snapshot?.projectInstanceId ?? undefined,
+                      databaseEpoch: snapshot?.databaseEpoch,
+                    }),
+                  ),
               },
             ],
             [

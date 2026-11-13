@@ -9,13 +9,18 @@ export function ReviewPanel({
   review,
   project,
   revisionId,
+  relay,
+  onFile,
 }: {
   api: DesktopApi;
   review: Review;
   project: string;
   revisionId: string;
+  relay?: { conversationId: string; generation: number; targetId: string };
+  onFile?(key: string): void;
 }) {
-  const storageKey = `code60.review:${project}:${review.id}:${revisionId}`;
+  const owner = review.projectId ? `${review.projectId}:${review.databaseEpoch}:` : "";
+  const storageKey = `code60.review:${project}:${owner}${review.id}:${revisionId}`;
   const [fileKey, setFileKey] = useState(() => sessionStorage.getItem(`${storageKey}:file`) ?? "");
   const revision = review.revisions.find((item) => item.id === revisionId);
   useEffect(() => {
@@ -23,6 +28,9 @@ export function ReviewPanel({
   }, [fileKey, storageKey]);
   const files = revision?.files ?? [];
   const file = files.find((entry) => entry.key === fileKey) ?? files[0];
+  useEffect(() => {
+    if (file) onFile?.(file.key);
+  }, [file, onFile]);
   const label = (runId: string) =>
     review.workers.find((worker) => worker.runId === runId)?.label ?? runId;
   const content = useReviewFile(
@@ -31,9 +39,16 @@ export function ReviewPanel({
     file && revision
       ? {
           reviewId: review.id,
+          ...(review.projectId
+            ? {
+                projectId: review.projectId,
+                databaseEpoch: review.databaseEpoch,
+              }
+            : {}),
           revisionId: revision.id,
           fileKey: file.key,
           label: label(file.runId),
+          ...(relay ? { relay } : {}),
         }
       : undefined,
   );
@@ -79,7 +94,7 @@ export function ReviewPanel({
             ) : (
               <Suspense fallback={<p role="status">Loading diff editor…</p>}>
                 <MonacoDiff
-                  address={`${project}:${review.id}:${revision?.id}:${file.key}`}
+                  address={`${storageKey}:${file.key}`}
                   path={content.content.file.path}
                   original={content.content.original}
                   modified={content.content.modified}
@@ -100,7 +115,7 @@ export function ReviewPanelLoader({
   const [review, setReview] = useState<Review>();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const version = `${summary.id}:${summary.version}:${attempt}`;
+  const version = `${summary.projectId}:${summary.databaseEpoch}:${summary.id}:${summary.version}:${attempt}`;
   useEffect(() => {
     let current = true;
     if (!version) return;
@@ -108,6 +123,8 @@ export function ReviewPanelLoader({
     void props.api
       .readReview({
         project: props.project,
+        projectId: summary.projectId,
+        databaseEpoch: summary.databaseEpoch,
         reviewId: summary.id,
         requestId: crypto.randomUUID(),
       })
@@ -122,7 +139,7 @@ export function ReviewPanelLoader({
     return () => {
       current = false;
     };
-  }, [props.api, props.project, summary.id, version]);
+  }, [props.api, props.project, summary.projectId, summary.databaseEpoch, summary.id, version]);
   if (error)
     return (
       <div role="alert">
@@ -132,6 +149,12 @@ export function ReviewPanelLoader({
         </button>
       </div>
     );
-  if (!review || review.id !== summary.id) return <p role="status">Loading review…</p>;
+  if (
+    !review ||
+    review.id !== summary.id ||
+    review.projectId !== summary.projectId ||
+    review.databaseEpoch !== summary.databaseEpoch
+  )
+    return <p role="status">Loading review…</p>;
   return <ReviewPanel {...props} review={review} />;
 }

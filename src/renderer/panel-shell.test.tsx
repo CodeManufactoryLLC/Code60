@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PanelShell } from "./panel-shell.js";
 
-const render = (open: boolean, disabled = false) =>
+const render = (open: boolean, disabled = false, active = true) =>
   renderToStaticMarkup(
     <PanelShell
       disabled={disabled}
@@ -10,7 +10,7 @@ const render = (open: boolean, disabled = false) =>
       selectedId={1}
       onAction={() => 1}
       open={open}
-      active
+      active={active}
       onToggle={() => {}}
       name="Files"
       id="files"
@@ -21,6 +21,13 @@ const render = (open: boolean, disabled = false) =>
   );
 
 describe("file panel shell", () => {
+  it("retains inactive contents without exposing a second panel toggle", () => {
+    for (const open of [true, false]) {
+      const html = render(open, false, false);
+      expect(html).toContain("Retained preview");
+      expect(html).not.toContain('aria-label="Toggle files panel"');
+    }
+  });
   it("disables file controls without a connected database", () => {
     for (const open of [true, false]) {
       const html = render(open, true);

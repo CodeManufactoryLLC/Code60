@@ -1,5 +1,37 @@
 # Renderer
 
+- Relay is application-owned, database-independent and singleton. Its history,
+  draft and selected identity must not inherit a database/project view lifetime.
+  Relay never offers New global chat, rename or archive. Connection Retry does
+  not resume tasks. Show bounded history and incomplete/partial evidence honestly.
+  Its file panel must not silently follow the selected project; hide that panel
+  until an explicit Relay workspace/target view is selected.
+- Relay file roots use the workspace/opaque-target choices supplied by main.
+  Bind each visible file context to its detail subscription and increasing
+  sequence; never synthesize a project FileContext or send an absolute root.
+  Keep Relay tabs and file state outside database/project lifetimes.
+- Retained inactive panels keep their content but expose no toggle action. Only
+  the active panel offers a Files toggle, including Relay without a database.
+- Relay Changes groups bounded review pages by target and labels direct edits
+  separately. Send only opaque review/revision/file IDs with its captured Relay
+  generation. Keep historical evidence readable, disable historical feedback,
+  and require the human-only confirmed checkout-local apply/undo flow. Read
+  review details only while requested and active; revision hints are not payloads.
+
+- When `openProjects` is present, project-instance identities supersede the old
+  single-project disposal rules below. Retain each open project's views on
+  navigation; dispose only on actual close or database-instance replacement.
+  Project accordions contain project-bound chats and workers, with a separate
+  New chat action per project. Selecting a project never retargets Relay.
+  Closing a project and stopping a folder are distinct confirmed operations.
+- Show only Relay and project-bound conversations, not database-wide legacy chats.
+  Align every project heading with Relay. Use shared 24px indentation steps for
+  project chats and owned workers, inside labels rather than padded containers.
+  Put project chevrons at the right edge and keep New chat and More independent.
+  Reuse anchored menu behavior, including bounds, dismissal and keyboard focus.
+  The connected sidebar opener always says Open Project; selection remains visible
+  in the project groups and content, not in that action's label.
+
 ## Ownership and style boundaries
 
 - Keep `main.tsx` as bootstrap and `App` as composition, not another monolithic
@@ -43,6 +75,20 @@
 - Reach the main process only through `window.desktop`. Import only types from `core`, and nothing from Node.js or Electron.
 - Render prompts, activity, tool output, and diffs as text. Agent replies in both chats alone may use ChatMarkdown (react-markdown and remark-gfm) to render safe React elements, including semantic emphasis. Never use `dangerouslySetInnerHTML`, raw-HTML plugins, or remote images/embeds. Links allow only validated HTTP(S) destinations through openWebLink and native confirmation; never navigate Electron. Copy retains exact source. Preserve the CSP.
 - Merge updates by revision with `applyUpdate`, so reloads and startup never lose or duplicate events.
+  Subscribe before the initial snapshot. Bound the pending frame buffer; overflow
+  and a gap in previous-broadcast revisions require a single-flight full read.
+  Keep recovery attempts bounded and discard all late work after disposal.
+- Detail streams use the same bounded recovery protocol with independent owner
+  revisions. Retain caches across navigation, prune closed/replaced addresses,
+  and never use a newer unrelated app revision to drop conversation events.
+  Compact conversation reply counters use count-based session read markers;
+  legacy event-only snapshots retain their turn-based markers.
+  App detail-revision hints request bounded resynchronization only for the
+  addressed subscription. Check hints received during a read before installing
+  that response; never use a global app revision as a detail-data fence.
+- Use appSummary for startup/recovery when supplied, and scoped details for
+  selected views. Summary revisions never advance detail-data fences. Selected
+  Relay workers subscribe to their own target, never the selected project.
 - Show status as text, not only as color. Keep controls labelled, keyboard reachable, and their shortcuts visible.
 - Support Light, Dark, and System appearance, and the opt-in Signal colors (`data-signals`), with the CSS variables in `style.css`. Light uses white surfaces with subtle borders and restrained shadows to distinguish them, with teal actions (`#43b3ae`) and pale viridian hover fills; selection uses neutral gray; saved Paper selections migrate to Light. Dark and System dark use jet black (`#000000`) wherever Light uses white for neutral resting surfaces, with white text, `#aaaaaa` muted text, `#444444` subtle borders, `#888888` control borders, and `#303030` selected fills. Use lighter verdigris actions and user bubbles (`#77ccc8`), related focus and hover colors, and opt-in signals; separate fields and controls with fine borders and keep disabled stripes transparent. The Code60 wordmark’s colored 60 block has a small upper-right, 45-degree chamfer. The main Chat composer has 5px rounded corners, a visible 1px border, a subtle 1px outer shadow retained on focus, and focus that replaces the normal border color without a separate inset outline, including system colors in forced colors. The composer and both sidebars blend into the main app surface: white in Light and steel-gray (`#242b33`) in Dark/System dark, including file previews and resting controls. Buttons, modal/popup windows and both new-message composers use the shared 5px border radius. Joined button groups round only their outside corners. Human message bubbles also use 5px corners. Other fields, agent messages, page surfaces and vendor editor/table internals stay square; retain the existing full-window splash and native window frame geometry.
 - Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline even when Focus highlight border is enabled. Preserve hit targets, accessible labels, disabled semantics and visible keyboard focus. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
@@ -106,7 +152,7 @@
 
 - Files uses borderless page and inspector surfaces with `--chat-neutral` fill, neutral selection and viridian hover. A plus immediately after the last tab creates blank tabs with a centered Open Files link that replaces the blank with Explorer; multiple Explorers are allowed and share expansions and hidden-file preferences. Deduplicate file tabs by relative path. Every tab is closable and draggable; support arrow/Home/End selection, Delete close and Alt+Left/Right reorder, restoring focus after close/reorder. Closing the last tab returns to the empty panel. Keep file names and code case-preserving; resolve Monaco preview colors from the app theme tokens, including System appearance.
 
-- Without a database, replace project identity/selectors with Connect to database on both splash and sidebar. Show the large, non-dismissable database warning at the top of both surfaces. Disable workspace navigation, chats, files, and polling until connection succeeds, including command-palette alternatives; keep connection, app entry, setup, Logs, settings, and updates available. Cancellation/failure must leave the warning and disabled state intact. Once connected, the sidebar becomes the text-only project card: show Open a project or the selected folder, without borders or hatching, and open the project modal on activation. Keep cancellation/errors in the modal, show a success toast after project selection, and disable switching while project runs are active.
+- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. Once connected, the text-only sidebar action always says Open Project, without borders or hatching, and opens the project modal. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
 
 - Chat File Explorer always opens the current project root. Route legacy Files, palette and Browse project files through Chat to an existing or newly created Explorer tab; Search file sources open or select file tabs directly. Never select a worktree/private orchestration root; offer Open project when absent. Clear stale selections on project changes and discard stale reads. Put Show hidden files only in the native modal opened by the settings icon beside the Explorer title; changes apply immediately, Escape/Done closes and restores trigger focus, and workspace/page/tab changes and hiding the panel dismiss it. Do not show a Reveal in Files preview button.
 - Show current-project worker sessions, including history, in the normal Chat hierarchy. Nest only known owned workers beneath their controlling orchestrator; unknown/manual sessions stay directly beneath Chat, except finished ones, which are hidden unless a current orchestrator owns them or the user opened them. Name workers, in rows and their chat heading, by the role label the orchestrator assigned at dispatch, falling back to provider / short run ID. Keep sidebar names text-only, with role provenance in accessible descriptions and independent status text/unread counts. Separate worker disclosures expand on new children without changing selection; otherwise retain manual collapse. External navigation reveals ancestors. Preserve visible-row keyboard navigation, drafts, scroll, permissions, recovery, Copy, timing and shared file panel. No popup, dock, fullscreen, close/minimize or reorder controls. Worker selection must not change backend orchestrator selection. Load history on demand through the shared cache, never merely to populate rows.

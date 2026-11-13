@@ -8,6 +8,9 @@
 }
 
 .chat-sidebar-row > .icon-button {
+  flex: 0 0 24px;
+  width: 24px;
+  padding: 4px;
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
@@ -19,6 +22,7 @@
   position: relative;
   --button-size: var(--nav-font-size, 15px);
   --nav-row-height: max(40px, calc(var(--button-size, 15px) * 1.5 + 8px));
+  --nav-step: 24px;
   --nav-inset: max(40px, calc(var(--button-size, 15px) * 1.5 + 20px));
   --control-fill: var(--chat-neutral);
   --disabled-fill: var(--chat-neutral);
@@ -253,15 +257,15 @@ button.sidebar-settings-toggle {
 }
 
 .page-group-pages {
-  --nav-indent: 24px;
+  --nav-indent: var(--nav-step);
 }
 
 #advanced-pages {
-  --nav-indent: 48px;
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 #experiment-pages {
-  --nav-indent: 72px;
+  --nav-indent: calc(var(--nav-step) * 3);
 }
 
 .page-group-pages[hidden] {
@@ -269,7 +273,7 @@ button.sidebar-settings-toggle {
 }
 
 /* Keep closing groups painted for the transition, but inert as soon as they close. */
-.sidebar :is(.page-group-pages, .chat-worker-children) {
+.sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
   --sidebar-disclosure-delay: 20ms;
   interpolate-size: allow-keywords;
   height: auto;
@@ -283,19 +287,19 @@ button.sidebar-settings-toggle {
     display calc(var(--motion) + var(--sidebar-disclosure-delay)) allow-discrete;
 }
 
-.sidebar :is(.page-group-pages, .chat-worker-children)[hidden] {
+.sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children)[hidden] {
   display: none;
   height: 0;
   opacity: 0;
 }
 
 /* Keyboard and external navigation must reveal focused destinations without clipping. */
-.sidebar :is(.page-group-pages, .chat-worker-children):has(:focus) {
+.sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children):has(:focus) {
   transition: none;
 }
 
 @starting-style {
-  .sidebar :is(.page-group-pages, .chat-worker-children):not([hidden]) {
+  .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children):not([hidden]) {
     height: 0;
     opacity: 0;
   }
@@ -375,17 +379,9 @@ button.sidebar-settings-toggle {
 }
 
 .chat-workers-toggle {
-  width: 36px;
+  width: 24px;
   min-height: var(--nav-row-height);
   padding: 4px 6px;
-}
-
-.chat-worker-children {
-  --nav-indent: 48px;
-}
-
-.chat-worker-children[hidden] {
-  display: none;
 }
 
 .chat-sidebar-group,
@@ -393,6 +389,81 @@ button.sidebar-settings-toggle {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+.chat-worker-children {
+  --nav-indent: calc(var(--nav-step) * 2);
+}
+
+.project-chat-pages {
+  --nav-indent: calc(var(--nav-step) * 2);
+}
+
+.project-chat-pages .chat-worker-children {
+  --nav-indent: calc(var(--nav-step) * 3);
+}
+
+.project-chat-group {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.project-chat-heading {
+  --nav-row-height: max(
+    40px,
+    calc(var(--button-size, 15px) * 1.5 + 8px),
+    calc(var(--button-size, 15px) * 1.2 + 22px)
+  );
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: var(--nav-row-height);
+}
+
+.project-chat-heading:hover {
+  background: var(--hover-bg);
+}
+
+.project-chat-name {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  height: var(--nav-row-height);
+  padding: 4px 4px 4px calc(var(--nav-inset) - 4px + var(--nav-indent));
+  border: 0;
+  background: transparent;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.project-chat-name > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.project-chat-activity {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.project-chat-heading > .icon-button {
+  flex: 0 0 24px;
+  width: 24px;
+  padding: 4px;
+  height: var(--nav-row-height);
+}
+
+.chat-worker-children[hidden] {
+  display: none;
 }
 
 .sidebar-resize {
@@ -413,8 +484,6 @@ button.sidebar-settings-toggle {
 }
 
 .chat-sidebar {
-  grid-column: 2;
-  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -444,8 +513,6 @@ button.sidebar-settings-toggle {
   flex-direction: column;
   gap: 0;
   min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .chat-sidebar-entry {
@@ -502,6 +569,7 @@ button.sidebar-settings-toggle {
 #chat-pages .chat-sidebar-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  justify-content: start;
   align-items: center;
   gap: 8px;
   overflow-wrap: anywhere;

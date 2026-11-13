@@ -2,6 +2,7 @@ import { lstat, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { GitError, runGit, runSetupGit } from "./exec.js";
+import { coordinateMetadata } from "./metadata.js";
 
 export type GitReadiness = {
   status: "ready" | "not_repository" | "no_commits" | "missing" | "unavailable";
@@ -199,48 +200,58 @@ export const gitSetup: GitSetupOps = {
     await runSetupGit(["init", "--quiet"], directory, signal);
   },
   async commit(directory, files, author, signal) {
-    const state = await readiness(directory, signal);
-    if (state.status !== "no_commits" || resolve(state.root ?? "") !== resolve(directory))
-      throw new Error("Initial commit requires this project to be an uncommitted repository.");
-    for (const file of files) {
-      if ((await fingerprint(directory, file.path, signal)).fingerprint !== file.fingerprint)
-        throw new Error("Selected files changed. Refresh the setup preview before committing.");
-    }
-    const configured = async (key: string, value: string) => {
-      let current = "";
-      try {
-        current = (await runGit(["config", "--get", key], directory, { signal })).trim();
-      } catch (cause) {
-        if (!(cause instanceof GitError && cause.exitCode === 1)) throw cause;
-      }
-      if (!current) await runGit(["config", "--local", key, value], directory, { signal });
-    };
-    await configured("user.name", author.name);
-    await configured("user.email", author.email);
-    const temporary = await mkdtemp(join(tmpdir(), "code60-git-commit-"));
-    try {
-      const paths = join(temporary, "paths");
-      await writeFile(
-        paths,
-        files.map((file) => file.path).join("\0") + (files.length ? "\0" : ""),
-        { mode: 0o600 },
-      );
-      if (files.length) {
-        const pathspec = [`--pathspec-from-file=${paths}`, "--pathspec-file-nul"];
-        await runSetupGit(["--literal-pathspecs", "add", ...pathspec], directory, signal);
-        await runSetupGit(
-          ["--literal-pathspecs", "commit", "--only", "-m", "Initial commit", ...pathspec],
-          directory,
-          signal,
-        );
-      } else {
-        const staged = await runGit(["ls-files", "-z"], directory, { signal });
-        if (staged)
-          throw new Error("Staged files exist. Refresh the setup preview before committing.");
-        await runSetupGit(["commit", "--allow-empty", "-m", "Initial commit"], directory, signal);
-      }
-    } finally {
-      await rm(temporary, { recursive: true, force: true });
-    }
+    return coordinateMetadata(
+      directory,
+      async () => {
+        const state = await readiness(directory, signal);
+        if (state.status !== "no_commits" || resolve(state.root ?? "") !== resolve(directory))
+          throw new Error("Initial commit requires this project to be an uncommitted repository.");
+        for (const file of files) {
+          if ((await fingerprint(directory, file.path, signal)).fingerprint !== file.fingerprint)
+            throw new Error("Selected files changed. Refresh the setup preview before committing.");
+        }
+        const configured = async (key: string, value: string) => {
+          let current = "";
+          try {
+            current = (await runGit(["config", "--get", key], directory, { signal })).trim();
+          } catch (cause) {
+            if (!(cause instanceof GitError && cause.exitCode === 1)) throw cause;
+          }
+          if (!current) await runGit(["config", "--local", key, value], directory, { signal });
+        };
+        await configured("user.name", author.name);
+        await configured("user.email", author.email);
+        const temporary = await mkdtemp(join(tmpdir(), "code60-git-commit-"));
+        try {
+          const paths = join(temporary, "paths");
+          await writeFile(
+            paths,
+            files.map((file) => file.path).join("\0") + (files.length ? "\0" : ""),
+            { mode: 0o600 },
+          );
+          if (files.length) {
+            const pathspec = [`--pathspec-from-file=${paths}`, "--pathspec-file-nul"];
+            await runSetupGit(["--literal-pathspecs", "add", ...pathspec], directory, signal);
+            await runSetupGit(
+              ["--literal-pathspecs", "commit", "--only", "-m", "Initial commit", ...pathspec],
+              directory,
+              signal,
+            );
+          } else {
+            const staged = await runGit(["ls-files", "-z"], directory, { signal });
+            if (staged)
+              throw new Error("Staged files exist. Refresh the setup preview before committing.");
+            await runSetupGit(
+              ["commit", "--allow-empty", "-m", "Initial commit"],
+              directory,
+              signal,
+            );
+          }
+        } finally {
+          await rm(temporary, { recursive: true, force: true });
+        }
+      },
+      signal,
+    );
   },
 };

@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 import { ProjectScope } from "./project-scope.js";
 
 describe("project scope ownership", () => {
+  it("retains explorer and transcript owners until the project is actually closed", () => {
+    const scope = new ProjectScope("/db", "/a", "instance-a");
+    const other = new ProjectScope("/db", "/b", "instance-b");
+    const api = { action: vi.fn(async () => []) };
+    const files = scope.files();
+    const transcripts = scope.transcripts(api);
+    files.selectFile("src/a.ts");
+    files.setExpanded(["src"]);
+    other.files().selectFile("b.ts");
+    expect(scope.files()).toBe(files);
+    expect(scope.transcripts(api)).toBe(transcripts);
+    expect(files.snapshot()).toMatchObject({ selected: "src/a.ts", expanded: ["src"] });
+    const fileLifetime = files.capture();
+    const transcriptLifetime = transcripts.capture();
+    scope.dispose();
+    expect(fileLifetime()).toBe(false);
+    expect(transcriptLifetime()).toBe(false);
+    files.selectFile("late.ts");
+    expect(files.snapshot().selected).toBe("src/a.ts");
+    expect(other.files().snapshot().selected).toBe("b.ts");
+  });
   it("keeps UI state when a view is hidden; only disposal invalidates its work", () => {
     const scope = new ProjectScope("/db", "/a");
     const current = scope.capture();

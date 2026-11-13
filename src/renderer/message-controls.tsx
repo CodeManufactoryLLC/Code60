@@ -31,11 +31,13 @@ export function MessageCopy({
   at,
   visible = true,
   onCopied,
+  readSource,
 }: {
   text: string;
   at?: string | undefined;
   visible?: boolean;
   onCopied?: (() => void) | undefined;
+  readSource?: (() => Promise<string>) | undefined;
 }) {
   const [state, setState] = useState<"idle" | "copying" | "failed">("idle");
   const [press, setPress] = useState(0);
@@ -54,7 +56,8 @@ export function MessageCopy({
     setPress((current) => current + 1);
     setState("copying");
     try {
-      await copyMessage(text, (source) => navigator.clipboard.writeText(source));
+      const source = readSource ? await readSource() : text;
+      await copyMessage(source, (source) => navigator.clipboard.writeText(source));
     } catch {
       if (mounted.current) setState("failed");
       return;
@@ -72,8 +75,8 @@ export function MessageCopy({
       <button
         type="button"
         className="icon-button"
-        title={state === "failed" ? "Retry Copy message" : "Copy message"}
-        aria-label={state === "failed" ? "Retry Copy message" : "Copy message"}
+        title={`${state === "failed" ? "Retry Copy" : "Copy"} ${readSource ? "original message" : "message"}`}
+        aria-label={`${state === "failed" ? "Retry Copy" : "Copy"} ${readSource ? "original message" : "message"}`}
         aria-disabled={state === "copying"}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => void copy()}
@@ -83,7 +86,11 @@ export function MessageCopy({
         </span>
       </button>
       <span className="message-copy-feedback" role={state === "failed" ? "status" : undefined}>
-        {state === "failed" ? "Copy failed. Check clipboard access and retry." : ""}
+        {state === "failed"
+          ? readSource
+            ? "Copy failed. Refresh history or check clipboard access, then retry."
+            : "Copy failed. Check clipboard access and retry."
+          : ""}
       </span>
     </div>
   );

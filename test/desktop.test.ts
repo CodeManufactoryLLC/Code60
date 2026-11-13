@@ -9,8 +9,11 @@ import {
   COMMAND_LIMIT,
   type Command,
   DEFAULT_PROMPT_TEMPLATES,
+  type DetailFrame,
+  type DetailRequest,
   type Plan,
   type PollSettingsPatch,
+  type ProjectRequestIdentity,
   type PromptTemplates,
   type RunConfiguration,
 } from "../src/bridge/index.js";
@@ -23,9 +26,14 @@ import {
 } from "../src/core/index.js";
 import { ChatStore } from "../src/desktop/chat-store.js";
 import { DesktopController } from "../src/desktop/controller.js";
+import type {
+  ChatSession,
+  ConversationCoordinator,
+} from "../src/desktop/conversation-coordinator.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
-import type { TaskGit } from "../src/git/index.js";
+import type { ReviewStore } from "../src/desktop/reviews.js";
+import type { Git, TaskGit } from "../src/git/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -280,7 +288,1609 @@ async function configureMcp(version = "first") {
   ];
 }
 
+describe("retained project runtimes", () => {
+  it.each(["search", "memory"] as const)(
+    "cancels an originating %s helper after switching projects",
+    async (kind) => {
+      await prepareRelay();
+      const a = await project("a");
+      const [id] = await controller.start({
+        ...request,
+        prompt: "Source evidence",
+        allowAll: true,
+      });
+      if (!id) throw new Error("Missing worker");
+      await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+      await controller.action({ type: "finish", id });
+      const requestId = randomUUID();
+      agents.script = () => "hang";
+      const pending =
+        kind === "search"
+          ? controller.summarizeSearch({
+              requestId,
+              directory: a.path,
+              query: "evidence",
+              includeFiles: false,
+              sources: [{ id: a.path, kind: "project", title: "A", text: "Evidence" }],
+            })
+          : controller.extractMemory({
+              requestId,
+              directory: a.path,
+              prompt: "Remember",
+              runs: [{ id, count: 1 }],
+            });
+      const rejected = expect(pending).rejects.toThrow(/cancelled/i);
+      await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+      const helper = agents.sessions.at(-1);
+      const b = await project("b");
+      if (kind === "search") await controller.cancelSearchSummary(requestId);
+      else await controller.cancelMemoryExtraction(requestId);
+      expect(helper?.turnActive).toBe(false);
+      await rejected;
+      expect(controller.snapshot().directory).toBe(b.path);
+    },
+  );
+  it("loads visible restored project history and plans on reopen without starting its provider", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "Preserved project request",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await call(id, "code60_create_plan", {
+      requestId: "restore-plan",
+      title: "Saved plan",
+      description: "Preserved",
+      tasks: [{ text: "Do the work" }],
+    });
+    await controller.projectAction({ type: "close", projectId: a.id });
+    const launches = agents.specs.length;
+    await controller.open(a.path);
+    expect(controller.snapshot().chat.run?.id).toBe(id);
+    expect(
+      controller
+        .snapshot()
+        .chat.events.some(
+          ({ event }) => event.type === "prompt" && event.text === "Preserved project request",
+        ),
+    ).toBe(true);
+    expect(controller.snapshot().chat.plans).toMatchObject([{ title: "Saved plan" }]);
+    expect(agents.specs).toHaveLength(launches);
+  });
+  it("pushes compact worker summaries for inactive projects without selecting them", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Background task" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const { scope } = await call(id, "code60_get_context");
+    const b = await project("b");
+    agents.script = () => "hang";
+    const accepted = await call(id, "code60_dispatch_agent", {
+      scope,
+      requestId: "background",
+      provider: "claude",
+      prompt: "Private prompt body",
+    });
+    await vi.waitFor(() => {
+      const owner = controller
+        .snapshot(false, true)
+        .openProjects?.find((owner) => owner.id === a.id);
+      expect(owner).toHaveProperty(
+        "workerSummaries",
+        expect.arrayContaining([
+          expect.objectContaining({
+            record: expect.objectContaining({
+              id: accepted.runId,
+              status: "running",
+              firstPrompt: "",
+            }),
+          }),
+        ]),
+      );
+    });
+    const worker = agents.sessions.at(-1);
+    worker?.update({ type: "message", text: "Not a summary transcript" });
+    worker?.endTurn("end_turn");
+    await vi.waitFor(() => {
+      const owner = controller
+        .snapshot(false, true)
+        .openProjects?.find((owner) => owner.id === a.id);
+      expect(owner).toHaveProperty(
+        "workerSummaries",
+        expect.arrayContaining([
+          expect.objectContaining({
+            record: expect.objectContaining({ id: accepted.runId, status: "idle" }),
+          }),
+        ]),
+      );
+    });
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(JSON.stringify(controller.snapshot(false, true))).not.toContain(
+      "Not a summary transcript",
+    );
+  });
+  it("keeps Relay workspace file reads independent of databases and invalidates contexts on reload", async () => {
+    await prepareRelay();
+    const relay = controller.snapshot().chat;
+    const details: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation",
+        conversationId: relay.conversationId as string,
+        generation: relay.generation as number,
+      },
+    };
+    await fs.writeFile(join(relay.directory as string, "relay-note.txt"), "Relay workspace only");
+    const frames: DetailFrame[] = [];
+    controller.subscribeDetails(details, (frame) => frames.push(frame));
+    controller.setVisibility({ visible: true, worktrees: false });
+    const context = {
+      subscriptionId: details.subscriptionId,
+      sequence: 1,
+      active: true,
+      directories: [""],
+      preview: "relay-note.txt",
+    };
+    controller.setRelayFileContext(context);
+    await vi.waitFor(() =>
+      expect(controller.readDetails(details)).toMatchObject({
+        payload: { files: { context, preview: { text: "Relay workspace only" } } },
+      }),
+    );
+    const a = await project("a");
+    await fs.writeFile(join(a.path, "relay-note.txt"), "Not Relay");
+    await controller.connect(join(directory, "replacement.sqlite"), true);
+    expect(controller.readDetails(details)).toMatchObject({
+      payload: { files: { preview: { text: "Relay workspace only" } } },
+    });
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+    expect(controller.snapshot().files).toBeNull();
+    expect(frames.every((frame) => !frame.closed)).toBe(true);
+    controller.clearDetailSubscriptions();
+    expect(() => controller.setRelayFileContext({ ...context, sequence: 2 })).toThrow(
+      "no longer available",
+    );
+    expect(() => controller.readDetails(details)).toThrow("no longer available");
+    expect(() => controller.setRelayFileContext({ ...context, root: a.path })).toThrow();
+  });
+
+  it("binds Relay target files to an owned target and refuses a replaced root or project subscription", async () => {
+    await prepareRelay();
+    const relay = controller.snapshot().chat;
+    const relayId = relay.run?.id as string;
+    const a = await project("a");
+    await fs.writeFile(join(a.path, "target-note.txt"), "Owned target");
+    await controller.orchestrationChatAction({ type: "send", id: relayId, text: "Work in A" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const authority = await call(relayId, "code60_get_context");
+    await call(relayId, "code60_dispatch_agent", {
+      scope: authority.scope,
+      requestId: "target-files",
+      cwd: a.path,
+      workspaceMode: "direct",
+      prompt: "A work",
+    });
+    await vi.waitFor(() =>
+      expect(controller.snapshot().runs.find((run) => run.relay)?.view?.status).toBe("idle"),
+    );
+    const target = controller.snapshot().runs.find((run) => run.relay)?.relay;
+    if (!target) throw new Error("Missing target");
+    const details: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "target",
+        targetId: target.targetId,
+        conversationId: target.conversationId,
+        generation: target.generation,
+      },
+    };
+    controller.subscribeDetails(details, () => {});
+    controller.setVisibility({ visible: true, worktrees: false });
+    const context = {
+      subscriptionId: details.subscriptionId,
+      sequence: 1,
+      active: true,
+      directories: [""],
+      preview: "target-note.txt",
+    };
+    controller.setRelayFileContext(context);
+    await vi.waitFor(() =>
+      expect(controller.readDetails(details)).toMatchObject({
+        payload: { files: { preview: { text: "Owned target" } } },
+      }),
+    );
+    const projectDetails: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "project",
+        projectId: a.id,
+        databaseEpoch: controller.snapshot().databaseEpoch as number,
+      },
+    };
+    controller.subscribeDetails(projectDetails, () => {});
+    expect(() =>
+      controller.setRelayFileContext({ ...context, subscriptionId: projectDetails.subscriptionId }),
+    ).toThrow("Relay file generation");
+    await controller.projectAction({ type: "close", projectId: a.id });
+    expect(controller.readDetails(details)).toMatchObject({
+      payload: { files: { preview: { text: "Owned target" } } },
+    });
+    await fs.rename(a.path, `${a.path}-original`);
+    await fs.mkdir(a.path);
+    await fs.writeFile(join(a.path, "target-note.txt"), "Unauthorized replacement");
+    controller.setRelayFileContext({ ...context, sequence: 2 });
+    await vi.waitFor(() =>
+      expect(controller.readDetails(details)).toMatchObject({
+        payload: {
+          filePolling: { failures: 1, lastError: expect.stringContaining("identity changed") },
+        },
+      }),
+    );
+    expect(JSON.stringify(controller.readDetails(details))).not.toContain(
+      "Unauthorized replacement",
+    );
+  });
+
+  it("keeps project and conversation detail subscriptions bound across navigation and rejects reopened owners", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chatA = await newChat(a.id);
+    const [workerA] = await controller.start(request);
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const projectDetails: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: { kind: "project", projectId: a.id, databaseEpoch: epoch },
+    };
+    const conversationDetails: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation",
+        conversationId: chatA.run?.id as string,
+        generation: chatA.generation as number,
+        projectId: a.id,
+        databaseEpoch: epoch,
+      },
+    };
+    const projectFrames: DetailFrame[] = [];
+    const chatFrames: DetailFrame[] = [];
+    controller.subscribeDetails(projectDetails, (frame) => projectFrames.push(frame));
+    controller.subscribeDetails(conversationDetails, (frame) => chatFrames.push(frame));
+    expect(controller.readDetails(projectDetails)).toMatchObject({
+      previousRevision: null,
+      payload: {
+        kind: "project",
+        projectId: a.id,
+        directory: a.path,
+        runs: [{ record: { id: workerA } }],
+      },
+    });
+    const b = await project("b");
+    await newChat(b.id);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatA.run?.id as string,
+      text: "Background A detail",
+    });
+    await vi.waitFor(() =>
+      expect(
+        chatFrames.some(
+          (frame) =>
+            !frame.closed &&
+            frame.payload.kind === "conversation" &&
+            frame.payload.chat.events.some(
+              ({ event }) => event.type === "prompt" && event.text === "Background A detail",
+            ),
+        ),
+      ).toBe(true),
+    );
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(controller.readDetails(conversationDetails)).toMatchObject({
+      payload: { kind: "conversation", chat: { projectId: a.id, generation: chatA.generation } },
+    });
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await vi.waitFor(() => {
+      expect(projectFrames.at(-1)).toMatchObject({ closed: true });
+      expect(chatFrames.at(-1)).toMatchObject({ closed: true });
+    });
+    await controller.open(a.path, epoch);
+    expect(controller.snapshot().projectInstanceId).not.toBe(a.id);
+    expect(() => controller.readDetails(projectDetails)).toThrow("no longer available");
+    expect(() =>
+      controller.subscribeDetails({ ...projectDetails, subscriptionId: randomUUID() }, () => {}),
+    ).toThrow("no longer open");
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("keeps Relay details across database replacement and clears all subscriptions on renderer reload", async () => {
+    await prepareRelay();
+    const relay = controller.snapshot().chat;
+    const relayDetails: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation",
+        conversationId: relay.conversationId as string,
+        generation: relay.generation as number,
+      },
+    };
+    controller.subscribeDetails(relayDetails, () => {});
+    const a = await project("a");
+    const projectDetails: DetailRequest = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "project",
+        projectId: a.id,
+        databaseEpoch: controller.snapshot().databaseEpoch as number,
+      },
+    };
+    controller.subscribeDetails(projectDetails, () => {});
+    await controller.connect(
+      join(directory, "second.sqlite"),
+      true,
+      projectDetails.scope.kind === "project" ? projectDetails.scope.databaseEpoch : undefined,
+    );
+    expect(controller.readDetails(relayDetails)).toMatchObject({
+      payload: {
+        kind: "conversation",
+        chat: { conversationId: relay.conversationId, generation: relay.generation },
+      },
+    });
+    expect(() => controller.readDetails(projectDetails)).toThrow(
+      /no longer open|no longer available/,
+    );
+    controller.clearDetailSubscriptions();
+    expect(() => controller.readDetails(relayDetails)).toThrow("no longer available");
+    controller.subscribeDetails({ ...relayDetails, subscriptionId: randomUUID() }, () => {});
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("publishes only the polled project's details and isolates failed app listeners", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const b = await project("b");
+    controller.setPollingPaused(true);
+    const epoch = controller.snapshot().databaseEpoch as number;
+    await new Promise<void>((resolve) => {
+      const release = controller.subscribe(() => {
+        release();
+        resolve();
+      }, true);
+    });
+    vi.useFakeTimers();
+    try {
+      await vi.advanceTimersByTimeAsync(100);
+      const aFrames = vi.fn();
+      const bFrames = vi.fn();
+      const good = vi.fn();
+      const bad = vi.fn(() => {
+        throw new Error("Listener gone");
+      });
+      controller.subscribe(bad, true);
+      controller.subscribe(good, true);
+      for (const [projectId, emit] of [
+        [a.id, aFrames],
+        [b.id, bFrames],
+      ] as const)
+        controller.subscribeDetails(
+          {
+            subscriptionId: randomUUID(),
+            scope: { kind: "project", projectId, databaseEpoch: epoch },
+          },
+          emit,
+        );
+      await controller.poll(["history"], { projectId: b.id, databaseEpoch: epoch });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(aFrames).not.toHaveBeenCalled();
+      expect(bFrames).toHaveBeenCalledOnce();
+      expect(good).toHaveBeenCalledOnce();
+      expect(bad).toHaveBeenCalledOnce();
+      await controller.poll(["history"], { projectId: a.id, databaseEpoch: epoch });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(aFrames).toHaveBeenCalledOnce();
+      expect(bFrames).toHaveBeenCalledOnce();
+      expect(good).toHaveBeenCalledTimes(2);
+      expect(bad).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("omits hidden worktree sizes and invalidates an in-flight size scan on hide", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    controller.setPollingPaused(true);
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const listing = vi.spyOn(git as Git, "listWorktrees");
+    await controller.poll(["worktrees"], { projectId: a.id, databaseEpoch: epoch });
+    expect(listing).toHaveBeenLastCalledWith(a.path, expect.objectContaining({ sizes: false }));
+    controller.setVisibility({ visible: true, files: false, worktrees: true });
+    listing.mockImplementationOnce(async (_root, options) => {
+      expect(options?.sizes).toBe(true);
+      expect(options?.current?.()).toBe(true);
+      controller.setVisibility({ visible: true, files: false, worktrees: false });
+      expect(options?.current?.()).toBe(false);
+      return [];
+    });
+    await controller.poll(["worktrees"], { projectId: a.id, databaseEpoch: epoch });
+    expect(controller.snapshot().worktrees?.worktrees).toEqual([]);
+  });
+
+  it("publishes compact inactive chat summaries without transcripts or plan documents and preserves progress/reply counts", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    agents.script = () => "hang";
+    const chatA = await newChat(a.id);
+    const session = agents.sessions.at(-1);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatA.run?.id as string,
+      text: "Background task",
+    });
+    await vi.waitFor(() => expect(session?.turnActive).toBe(true));
+    await call(chatA.run?.id as string, "code60_create_plan", {
+      requestId: "compact-plan",
+      title: "Compact progress",
+      description: "p".repeat(16_000),
+      tasks: [{ text: "t".repeat(2_000) }],
+    });
+    const b = await project("b");
+    await newChat(b.id);
+    const summaries = vi.fn();
+    const off = controller.subscribe(summaries, true);
+    try {
+      session?.update({ type: "message", text: "😀".repeat(64_000) });
+      session?.update({ type: "message", text: "Additional chunk" });
+      const full = controller.snapshot().chats.find((chat) => chat.run?.id === chatA.run?.id);
+      expect(full?.events.length).toBeGreaterThan(0);
+      const compact = controller
+        .snapshot(true, true)
+        .chats.find((chat) => chat.run?.id === chatA.run?.id);
+      expect(compact).toMatchObject({
+        events: [],
+        plans: [{ title: "Compact progress", proposalRevision: 1, completed: 0, total: 1 }],
+        replies: { count: 1, lastTurn: 1 },
+      });
+      expect(compact?.plans?.[0]).not.toHaveProperty("description");
+      expect(compact?.plans?.[0]).not.toHaveProperty("tasks");
+      expect(JSON.stringify(compact).length).toBeLessThan(8_000);
+      await vi.waitFor(() => expect(summaries).toHaveBeenCalled());
+      expect(
+        summaries.mock.lastCall?.[0].chats.find(
+          (chat: { projectId?: string }) => chat.projectId === a.id,
+        ),
+      ).toMatchObject({
+        events: [],
+        plans: [{ title: "Compact progress", proposalRevision: 1, completed: 0, total: 1 }],
+        replies: { count: 1, lastTurn: 1 },
+      });
+      await controller.projectAction({ type: "select", projectId: a.id });
+      expect(controller.snapshot(true, true)).toMatchObject({
+        summaryOnly: true,
+        events: [],
+        files: null,
+        worktrees: null,
+        reviews: [],
+        chat: { events: [], replies: { count: 1 } },
+      });
+      expect(JSON.stringify(controller.snapshot(true, true))).not.toContain("Additional chunk");
+      expect(controller.snapshot().chat.events.length).toBeGreaterThan(0);
+    } finally {
+      off();
+    }
+  });
+
+  it.each(["chat", "worker"] as const)(
+    "resumes only the originating project's delivery after a slow %s mode change",
+    async (kind) => {
+      await prepareRelay();
+      const a = await project("a");
+      const chat = await newChat(a.id);
+      let id = chat.run?.id as string;
+      if (kind === "worker") {
+        [id] = (await controller.start(request)) as [string];
+        await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+      }
+      const primary = agents.sessions.at(-1);
+      if (!primary) throw new Error("Missing mode session");
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      Object.assign(primary, { setMode: () => gate });
+      primary.update({
+        type: "sessionState",
+        state: {
+          model: null,
+          usage: null,
+          modes: {
+            source: "config",
+            confirmed: true,
+            reportedAt: "2026-11-07T12:00:00.000Z",
+            controls: [
+              {
+                id: "permissions",
+                name: "Permissions",
+                currentValue: "ask",
+                options: [{ value: "ask", name: "Ask" }],
+              },
+            ],
+          },
+        },
+      });
+      const coordinator = () =>
+        (controller as unknown as { conversations: ConversationCoordinator }).conversations;
+      const aCoordinator = coordinator();
+      const change = { source: "config" as const, configId: "permissions", value: "ask" };
+      const pending =
+        kind === "chat"
+          ? controller.orchestrationChatAction({ type: "set-mode", id, change })
+          : controller.action({ type: "set-mode", id, change });
+      try {
+        await vi.waitFor(() =>
+          expect(
+            kind === "chat"
+              ? controller.snapshot().chat.run?.modeChanging
+              : controller.snapshot().runs[0]?.view?.modeChanging,
+          ).toBe(true),
+        );
+        const b = await project("b");
+        const aUpdates = vi.spyOn(aCoordinator, "scheduleUpdates");
+        const bUpdates = vi.spyOn(coordinator(), "scheduleUpdates");
+        release();
+        await pending;
+        expect(aUpdates).toHaveBeenCalled();
+        expect(bUpdates).not.toHaveBeenCalled();
+        expect(controller.snapshot().directory).toBe(b.path);
+      } finally {
+        release();
+        await pending;
+      }
+    },
+  );
+
+  it("finishes a selected project's diff after navigating without changing its owner", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const [worker] = await controller.start(request);
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+    const b = await project("b");
+    await controller.projectAction({ type: "select", projectId: a.id });
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi.spyOn(git, "diff").mockImplementation(async () => {
+      await blocked;
+      return "A diff";
+    });
+    const pending = controller
+      .readDiff({ requestId: randomUUID(), id: worker as string })
+      .catch((error: unknown) => error);
+    try {
+      await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      await controller.projectAction({ type: "select", projectId: b.id });
+      release();
+      expect(await pending).toBe("A diff");
+      expect(controller.snapshot().directory).toBe(b.path);
+    } finally {
+      release();
+      await pending;
+    }
+  });
+
+  it.each(["close", "stop-folder", "discard"] as const)(
+    "%s settles only the affected project's diff reads",
+    async (type) => {
+      await prepareRelay();
+      const a = await project("a");
+      const [aWorker] = await controller.start(request);
+      await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+      await controller.action({ type: "finish", id: aWorker as string });
+      const b = await project("b");
+      const [bWorker] = await controller.start(request);
+      await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+      await controller.action({ type: "finish", id: bWorker as string });
+      const signals: AbortSignal[] = [];
+      const releases: (() => void)[] = [];
+      vi.spyOn(git, "diff").mockImplementation(
+        async (_worktree, _base, signal) =>
+          new Promise<string>((resolve, reject) => {
+            if (!signal) throw new Error("Missing read cancellation");
+            signals.push(signal);
+            const abort = () => reject(signal.reason);
+            signal.addEventListener("abort", abort, { once: true });
+            releases.push(() => {
+              signal.removeEventListener("abort", abort);
+              resolve("Other project's diff");
+            });
+          }),
+      );
+      const first = controller
+        .readDiff({ requestId: randomUUID(), id: aWorker as string })
+        .catch((error: unknown) => error);
+      await vi.waitFor(() => expect(signals).toHaveLength(1));
+      const second = controller
+        .readDiff({ requestId: randomUUID(), id: bWorker as string })
+        .catch((error: unknown) => error);
+      try {
+        await vi.waitFor(() => expect(signals).toHaveLength(2));
+        if (type === "discard") await controller.action({ type, id: aWorker as string });
+        else await controller.projectAction({ type, projectId: a.id });
+        expect(signals[0]?.aborted).toBe(true);
+        expect(signals[1]?.aborted).toBe(false);
+        expect(await first).toBeInstanceOf(Error);
+        releases[1]?.();
+        expect(await second).toBe("Other project's diff");
+        expect(controller.snapshot().directory).toBe(b.path);
+      } finally {
+        for (const release of releases) release();
+        await Promise.allSettled([first, second]);
+      }
+    },
+  );
+
+  it("closing a project cancels its review capture without cancelling another project's diff", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const [worker] = await controller.start(request);
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+    const store = (controller as unknown as { reviews: ReviewStore }).reviews;
+    const review = await store.create(null, 0, "A review");
+    await store.addWorker(review.id, worker as string, "A worker");
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch,
+      reviewId: review.id,
+      requestId: randomUUID(),
+    };
+    const b = await project("b");
+    const [other] = await controller.start(request);
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+    const signals: AbortSignal[] = [];
+    const releases: (() => void)[] = [];
+    const blocked = (signal?: AbortSignal) =>
+      new Promise<void>((resolve, reject) => {
+        if (!signal) throw new Error("Missing read cancellation");
+        signals.push(signal);
+        const abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        releases.push(() => {
+          signal.removeEventListener("abort", abort);
+          resolve();
+        });
+      });
+    const adapter: CoreDeps["git"] = git;
+    adapter.reviewSnapshot = async (_worktree, _base, signal) => {
+      await blocked(signal);
+      return { files: [], truncated: false };
+    };
+    vi.spyOn(git, "diff").mockImplementation(async (_worktree, _base, signal) => {
+      await blocked(signal);
+      return "B diff";
+    });
+    const capture = controller.captureReview(identity).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
+    const diff = controller
+      .readDiff({ requestId: randomUUID(), id: other as string })
+      .catch((error: unknown) => error);
+    try {
+      await vi.waitFor(() => expect(signals).toHaveLength(2));
+      await controller.projectAction({ type: "close", projectId: a.id });
+      expect(signals[0]?.aborted).toBe(true);
+      expect(signals[1]?.aborted).toBe(false);
+      expect(await capture).toBeInstanceOf(Error);
+      releases[1]?.();
+      expect(await diff).toBe("B diff");
+      expect(store.get(review.id).revisions).toEqual([]);
+      expect(controller.snapshot().directory).toBe(b.path);
+    } finally {
+      for (const release of releases) release();
+      await Promise.allSettled([capture, diff]);
+    }
+  });
+
+  it("does not hold the control queue across slow history reads and discards a closed owner's result", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    await fs.mkdir(join(a.path, ".git", "code60", "runs"), { recursive: true });
+    const epoch = controller.snapshot().databaseEpoch as number;
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = vi.fn();
+    listGate = async () => {
+      entered();
+      await blocked;
+    };
+    try {
+      const pending = controller.poll(["history"], { projectId: a.id, databaseEpoch: epoch });
+      await vi.waitFor(() => expect(entered).toHaveBeenCalled());
+      await controller.projectAction({ type: "close", projectId: a.id });
+      expect(controller.snapshot().openProjects).toEqual([]);
+      listGate = undefined;
+      release();
+      await pending;
+      await controller.open(a.path, epoch);
+      expect(controller.snapshot().projectInstanceId).not.toBe(a.id);
+      expect(
+        controller.snapshot().polling.sources.find((source) => source.key === "history")?.history,
+      ).toEqual([]);
+    } finally {
+      listGate = undefined;
+      release();
+    }
+  });
+
+  it("keeps explicit polling bound before deferred reads and preserves independent target histories", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const b = await project("b");
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const address = (projectId: string) => ({ projectId, databaseEpoch: epoch });
+    await controller.projectAction({ type: "select", projectId: a.id });
+    const adapter: CoreDeps["git"] = git;
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi.spyOn(adapter, "listWorktrees").mockImplementation(async (root) => {
+      if (root === a.path) await blocked;
+      return [];
+    });
+    try {
+      const pending = controller.poll(["worktrees"], address(a.id));
+      await controller.projectAction({ type: "select", projectId: b.id });
+      await vi.waitFor(() =>
+        expect(read).toHaveBeenCalledWith(a.path, expect.objectContaining({ sizes: false })),
+      );
+      await controller.poll(["worktrees"], address(b.id));
+      expect(controller.snapshot().worktrees?.repository).toBe("b");
+      release();
+      await pending;
+      expect(controller.snapshot().worktrees?.repository).toBe("b");
+      await controller.projectAction({ type: "select", projectId: a.id });
+      expect(controller.snapshot().worktrees?.repository).toBe("a");
+      expect(
+        controller.snapshot().polling.sources.find((source) => source.key === "worktrees"),
+      ).toMatchObject({ scope: { kind: "target", id: a.id }, history: [expect.anything()] });
+      await expect(controller.poll(["history"], {})).rejects.toThrow("database epoch");
+      await expect(controller.poll(["history"], { databaseEpoch: epoch })).rejects.toThrow(
+        "project identity",
+      );
+      await expect(
+        controller.poll(["history"], { projectId: b.id, databaseEpoch: epoch + 1 }),
+      ).rejects.toThrow("instance changed");
+      await controller.poll(["config"], {});
+      await controller.poll(["configurations"], { databaseEpoch: epoch });
+      await controller.projectAction({ type: "close", projectId: a.id });
+      await controller.open(a.path, epoch);
+      await expect(controller.poll(["worktrees"], address(a.id))).rejects.toThrow("no longer open");
+      expect(agents.sessions[0]?.prompts).toEqual([]);
+    } finally {
+      release();
+      read.mockRestore();
+    }
+  });
+
+  it("fences native-picker results and project history across queued replacement and same-path reopen", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const firstPath = controller.snapshot().database as string;
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const relayId = controller.snapshot().chat.conversationId;
+    expect(controller.assertDatabaseRequest(epoch)).toBe(epoch);
+    for (const bad of [undefined, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, epoch + 1]) {
+      expect(() => controller.assertDatabaseRequest(bad)).toThrow(/epoch|instance changed/);
+      await expect(controller.openProject(a.path, bad)).rejects.toThrow(/epoch|instance changed/);
+      await expect(controller.removeProject(a.path, bad)).rejects.toThrow(/epoch|instance changed/);
+      await expect(controller.clearProjects(bad)).rejects.toThrow(/epoch|instance changed/);
+    }
+    const original = structuredClone(databases.get(firstPath));
+    const replacement = join(directory, "history-replacement.sqlite");
+    const replacing = controller.connect(replacement, true, epoch);
+    const queued = [
+      controller.connect(join(directory, "must-not-create.sqlite"), true, epoch),
+      controller.open(a.path, epoch),
+      controller.openProject(a.path, epoch),
+      controller.removeProject(a.path, epoch),
+      controller.clearProjects(epoch),
+    ];
+    const rejected = Promise.all(
+      queued.map((request) => expect(request).rejects.toThrow(/instance|database/)),
+    );
+    await replacing;
+    await rejected;
+    expect(databases.has(join(directory, "must-not-create.sqlite"))).toBe(false);
+    expect(databases.get(firstPath)).toEqual(original);
+    expect(controller.snapshot().projects).toEqual([]);
+    expect(() => controller.assertDatabaseRequest(epoch)).toThrow("database instance changed");
+    await controller.connect(firstPath, false, controller.snapshot().databaseEpoch);
+    expect(controller.snapshot().database).toBe(firstPath);
+    await expect(controller.open(a.path, epoch)).rejects.toThrow("database instance changed");
+    await expect(controller.openProject(a.path, epoch)).rejects.toThrow(
+      "database instance changed",
+    );
+    await expect(controller.removeProject(a.path, epoch)).rejects.toThrow(
+      "database instance changed",
+    );
+    await expect(controller.clearProjects(epoch)).rejects.toThrow("database instance changed");
+    const current = controller.snapshot().databaseEpoch as number;
+    await controller.openProject(a.path, current);
+    await controller.removeProject(a.path, current);
+    expect(controller.snapshot().projects).toEqual([]);
+    await controller.open(a.path, current);
+    expect(await controller.clearProjects(current)).toBe(true);
+    expect(controller.snapshot().projects).toEqual([]);
+    expect(controller.snapshot().chat.conversationId).toBe(relayId);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("fences database writes after replacement without changing Relay or either saved database", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id;
+    const firstPath = controller.snapshot().database as string;
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const command = { name: "epoch-check", title: "First", prompt: "Original" };
+    const template = { id: "handoffTurn" as const, template: "Edit {{message}}" };
+    await controller.saveCommand(command, epoch);
+    await controller.saveConfiguration({ name: "First", settings: request }, epoch);
+    await controller.savePromptTemplate(template, epoch);
+    const commandId = controller.snapshot().commands[0]?.id as string;
+    const configurationId = controller.snapshot().configurations[0]?.id as string;
+    const operations = (databaseEpoch?: number) => [
+      () => controller.saveCommand(command, databaseEpoch),
+      () => controller.deleteCommand({ id: commandId }, databaseEpoch),
+      () => controller.saveConfiguration({ name: "Stale", settings: request }, databaseEpoch),
+      () => controller.deleteConfiguration(configurationId, databaseEpoch),
+      () => controller.savePromptTemplate(template, databaseEpoch),
+      () => controller.resetPromptTemplate(template.id, databaseEpoch),
+    ];
+    for (const bad of [undefined, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, epoch + 1])
+      for (const operation of operations(bad))
+        await expect(operation()).rejects.toThrow(/epoch|database instance changed/);
+    const first = structuredClone(databases.get(firstPath));
+    const secondPath = join(directory, "epoch-replacement.sqlite");
+    const replacing = controller.connect(secondPath, true);
+    const queued = controller.saveCommand({ ...command, name: "queued" }, epoch);
+    const rejected = expect(queued).rejects.toThrow(/instance|database/);
+    await replacing;
+    await rejected;
+    for (const operation of operations(epoch))
+      await expect(operation()).rejects.toThrow("database instance changed");
+    expect(databases.get(firstPath)).toEqual(first);
+    expect(controller.snapshot().commands).toEqual([]);
+    expect(controller.snapshot().configurations).toEqual([]);
+    expect(databases.get(secondPath)?.prompts).toEqual({});
+    const current = controller.snapshot().databaseEpoch as number;
+    await controller.saveCommand({ ...command, name: "current" }, current);
+    await controller.saveConfiguration({ name: "Current", settings: request }, current);
+    await controller.savePromptTemplate(template, current);
+    await controller.deleteCommand(
+      { id: controller.snapshot().commands[0]?.id as string },
+      current,
+    );
+    await controller.deleteConfiguration(
+      controller.snapshot().configurations[0]?.id as string,
+      current,
+    );
+    await controller.resetPromptTemplate(template.id, current);
+    expect(controller.snapshot().commands).toEqual([]);
+    expect(controller.snapshot().configurations).toEqual([]);
+    expect(databases.get(secondPath)?.prompts).toEqual({});
+    expect(controller.snapshot().chat.run?.id).toBe(relayId);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("keeps selected-owner review and file reads bound across navigation during awaits", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const store = (controller as unknown as { reviews: ReviewStore }).reviews;
+    const review = await store.create(null, 0, "A review");
+    await store.capture(review.id, [
+      {
+        runId: "worker",
+        files: [
+          {
+            path: "a.txt",
+            oldPath: "a.txt",
+            status: "modified",
+            original: "before",
+            modified: "after",
+            fingerprint: "a",
+          },
+        ],
+      },
+    ]);
+    const revisionId = store.get(review.id).revisions[0]?.id as string;
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+      reviewId: review.id,
+    };
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stats = store.withLineStats.bind(store);
+    const content = store.content.bind(store);
+    const statsRead = vi.spyOn(store, "withLineStats").mockImplementation(async (...args) => {
+      await gate;
+      return stats(...args);
+    });
+    const fileRead = vi.spyOn(store, "content").mockImplementation(async (...args) => {
+      await gate;
+      return content(...args);
+    });
+    const reading = controller.readReview({ ...identity, revisionId, requestId: randomUUID() });
+    const readingFile = controller.readReviewFile({
+      ...identity,
+      revisionId,
+      requestId: randomUUID(),
+      fileKey: "worker:a.txt",
+    });
+    await vi.waitFor(() => {
+      expect(statsRead).toHaveBeenCalled();
+      expect(fileRead).toHaveBeenCalled();
+    });
+    const b = await project("b");
+    release();
+    expect(await reading).toMatchObject({
+      id: review.id,
+      projectId: a.id,
+      databaseEpoch: identity.databaseEpoch,
+    });
+    expect(await readingFile).toMatchObject({ original: "before", modified: "after" });
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(controller.snapshot().reviews).toEqual([]);
+  });
+
+  it("rejects stale review, task and Git identities without remapping reopened paths", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const store = (controller as unknown as { reviews: ReviewStore }).reviews;
+    const review = await store.create(null, 0, "Historical evidence");
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+    };
+    expect(controller.snapshot().reviews?.[0]).toMatchObject(identity);
+    const requests = (scope: ProjectRequestIdentity & { project: string }) => [
+      () => controller.readReview({ ...scope, reviewId: review.id, requestId: randomUUID() }),
+      () =>
+        controller.readReviewFile({
+          ...scope,
+          reviewId: review.id,
+          revisionId: randomUUID(),
+          requestId: randomUUID(),
+          fileKey: "worker:a.txt",
+        }),
+      () => controller.captureReview({ ...scope, reviewId: review.id, requestId: randomUUID() }),
+      () => controller.reviewAction({ ...scope, type: "open-run", runId: "worker" }),
+      () =>
+        controller.reviewAction({
+          ...scope,
+          type: "delete-comment",
+          reviewId: review.id,
+          id: randomUUID(),
+        }),
+      () => controller.taskAction({ ...scope, type: "status", reviewId: review.id }),
+      () => controller.taskAction({ ...scope, type: "cancel", reviewId: review.id }),
+      () =>
+        controller.taskAction({
+          ...scope,
+          type: "apply",
+          reviewId: review.id,
+          operationId: randomUUID(),
+        }),
+      () => controller.checkGit(scope),
+      () => controller.beginGitSetup(scope),
+      () =>
+        controller.previewGitSetupFile({
+          ...scope,
+          sessionId: randomUUID(),
+          fileId: randomUUID(),
+        }),
+      () => controller.initializeGit({ ...scope, sessionId: randomUUID() }),
+      () =>
+        controller.commitGitSetup({
+          ...scope,
+          sessionId: randomUUID(),
+          fileIds: [],
+          name: "Test",
+          email: "test@example.invalid",
+        }),
+      () => controller.cancelGitSetup(scope),
+    ];
+    for (const bad of [
+      { ...identity, databaseEpoch: identity.databaseEpoch + 1 },
+      { ...identity, project: join(directory, "different") },
+      { ...identity, projectId: randomUUID() },
+      { project: a.path },
+    ])
+      for (const operation of requests(bad))
+        await expect(operation()).rejects.toThrow(/identity|no longer open/);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await controller.open(a.path);
+    const reopened = controller.snapshot().projectInstanceId as string;
+    expect(reopened).not.toBe(a.id);
+    for (const operation of requests(identity))
+      await expect(operation()).rejects.toThrow("no longer open");
+    expect(
+      await controller.readReview({
+        ...identity,
+        projectId: reopened,
+        reviewId: review.id,
+        requestId: randomUUID(),
+      }),
+    ).toMatchObject({ title: "Historical evidence", projectId: reopened });
+    const saved = JSON.parse(await fs.readFile(join(store.root, `${review.id}.json`), "utf8"));
+    expect(saved).not.toHaveProperty("projectId");
+    expect(saved).not.toHaveProperty("databaseEpoch");
+    expect(agents.sessions.every((session) => session.prompts.length === 0)).toBe(true);
+  });
+
+  it("rejects a delayed review read when its owner closes and the same path reopens", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const store = (controller as unknown as { reviews: ReviewStore }).reviews;
+    const review = await store.create(null, 0, "A");
+    await store.capture(review.id, []);
+    const revisionId = store.get(review.id).revisions[0]?.id as string;
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+    };
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = store.withLineStats.bind(store);
+    const read = vi.spyOn(store, "withLineStats").mockImplementation(async (...args) => {
+      await gate;
+      return original(...args);
+    });
+    const reading = controller.readReview({
+      ...identity,
+      reviewId: review.id,
+      revisionId,
+      requestId: randomUUID(),
+    });
+    const rejected = expect(reading).rejects.toThrow("no longer open");
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await controller.open(a.path);
+    release();
+    await rejected;
+  });
+
+  it("publishes a delayed Git check only to its captured selected owner", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const b = await project("b");
+    await controller.projectAction({ type: "select", projectId: a.id });
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+    };
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi.spyOn(git, "repoInfo").mockImplementationOnce(async () => {
+      await gate;
+      throw new Error("Not a Git repository");
+    });
+    const checking = controller.checkGit(identity);
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
+    await controller.projectAction({ type: "select", projectId: b.id });
+    release();
+    expect(await checking).toMatchObject({ status: "not_repository" });
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(controller.snapshot().gitReadiness?.status).toBe("ready");
+    await controller.projectAction({ type: "select", projectId: a.id });
+    expect(controller.snapshot().gitReadiness?.status).toBe("not_repository");
+  });
+
+  it("fences file activation and inactive cleanup by project instance and database epoch", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const epoch = controller.snapshot().databaseEpoch as number;
+    const context = {
+      project: a.path,
+      root: a.path,
+      projectId: a.id,
+      databaseEpoch: epoch,
+      directories: [""],
+      preview: null,
+    };
+    await controller.setFileContext(context);
+    expect(controller.snapshot().files?.context.projectId).toBe(a.id);
+    await expect(
+      controller.setFileContext({ ...context, databaseEpoch: epoch + 1 }),
+    ).rejects.toThrow("database changed");
+    const b = await project("b");
+    const second = { ...context, project: b.path, root: b.path, projectId: b.id };
+    await controller.setFileContext(second);
+    await expect(controller.setFileContext(context)).rejects.toThrow("inactive");
+    await controller.setFileContext({ ...context, active: false });
+    expect(controller.snapshot().files?.context.projectId).toBe(b.id);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await controller.open(a.path);
+    expect(controller.snapshot().projectInstanceId).not.toBe(a.id);
+    await expect(controller.setFileContext(context)).rejects.toThrow("no longer open");
+    await expect(
+      controller.setFileContext({ ...context, projectId: undefined, databaseEpoch: undefined }),
+    ).rejects.toThrow("instance");
+  });
+  it("rejects a pending file context after closing and reopening its identical path", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const context = {
+      project: a.path,
+      root: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+      directories: [""],
+      preview: null,
+    };
+    type FileValidation = { validateFileRoot(value: typeof context): Promise<void> };
+    const implementation = controller as unknown as FileValidation;
+    const validate = implementation.validateFileRoot.bind(controller);
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi.spyOn(implementation, "validateFileRoot").mockImplementation(async (value) => {
+      await blocked;
+      await validate(value);
+    });
+    const pending = controller.setFileContext(context);
+    const rejected = expect(pending).rejects.toThrow("no longer open");
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await controller.open(a.path);
+    release();
+    await rejected;
+    expect(controller.snapshot().files).toBeNull();
+    read.mockRestore();
+  });
+  it("rejects file activation when navigation changes during filesystem validation", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const context = {
+      project: a.path,
+      root: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+      directories: [""],
+      preview: null,
+    };
+    type FileValidation = { validateFileRoot(value: typeof context): Promise<void> };
+    const implementation = controller as unknown as FileValidation;
+    const validate = implementation.validateFileRoot.bind(controller);
+    let release = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi.spyOn(implementation, "validateFileRoot").mockImplementation(async (value) => {
+      await validate(value);
+      await blocked;
+    });
+    try {
+      const pending = controller.setFileContext(context);
+      const rejected = expect(pending).rejects.toThrow("inactive");
+      await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      const b = await project("b");
+      release();
+      await rejected;
+      expect(controller.snapshot().directory).toBe(b.path);
+      expect(controller.snapshot().files).toBeNull();
+      await controller.projectAction({ type: "select", projectId: a.id });
+      expect(controller.snapshot().files).toBeNull();
+    } finally {
+      release();
+      read.mockRestore();
+    }
+  });
+  it("captures manual launch identity before navigation and rejects closed or replaced owners", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const identity = {
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+    };
+    const b = await project("b");
+    const [id] = await controller.start({ ...request, ...identity });
+    await vi.waitFor(() => expect(git.worktrees[0]?.repoDir).toBe(a.path));
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(controller.snapshot().runs.some((run) => run.record.id === id)).toBe(false);
+    await expect(
+      controller.start({ ...request, ...identity, databaseEpoch: identity.databaseEpoch + 1 }),
+    ).rejects.toThrow("database changed");
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await expect(controller.start({ ...request, ...identity })).rejects.toThrow("no longer open");
+  });
+  async function prepareRelay() {
+    await controller.shutdown(true);
+    orchestrationProvider = "claude";
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences, relay: true },
+    );
+    const adapter: CoreDeps["git"] = git;
+    adapter.repoInfo = async (cwd) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
+    await controller.restore();
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  }
+
+  async function project(name: string) {
+    const path = join(directory, name);
+    await fs.mkdir(path);
+    await controller.open(path);
+    const opened = controller
+      .snapshot()
+      .openProjects?.find((entry) => entry.path === controller.snapshot().directory);
+    if (!opened) throw new Error("Project did not open");
+    return opened;
+  }
+
+  async function newChat(projectId: string) {
+    await controller.orchestrationChatAction({ type: "new", projectId });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const chat = controller.snapshot().chat;
+    if (!chat.run) throw new Error("No project chat");
+    expect(chat.kind).toBe("project");
+    expect(chat.projectId).toBe(projectId);
+    return chat;
+  }
+
+  async function call(chatId: string, name: string, args: unknown = {}) {
+    const chat = controller.snapshot().chats.find((chat) => chat.run?.id === chatId);
+    const spec = agents.specs.find((spec) => spec.cwd === chat?.directory);
+    const server = spec?.mcpServers?.find((server) => server.name === "code60");
+    if (!server || !("env" in server)) throw new Error("No chat gateway");
+    const env = Object.fromEntries(server.env?.map(({ name, value }) => [name, value]) ?? []);
+    const response = await fetch(String(env.CODE60_MCP_GATEWAY_URL), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.CODE60_MCP_GATEWAY_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name, arguments: args }),
+    });
+    const body = (await response.json()) as { result: Record<string, unknown>; error?: string };
+    if (!response.ok) throw new Error(body.error ?? "Tool failed");
+    return body.result;
+  }
+
+  it("keeps project chats bound while navigating and routes background events to their owner", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id;
+    const a = await project("a");
+    const chatA = await newChat(a.id);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chatA.run?.id as string,
+      text: "A task",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const b = await project("b");
+    const chatB = await newChat(b.id);
+    expect(controller.snapshot().openProjects).toHaveLength(2);
+    expect(controller.snapshot().chats.some((chat) => chat.run?.id === chatA.run?.id)).toBe(true);
+    const contextA = await call(chatA.run?.id as string, "code60_get_context");
+    expect(contextA.project).toBe(a.path);
+    agents.script = () => "hang";
+    const worker = await call(chatA.run?.id as string, "code60_dispatch_agent", {
+      scope: contextA.scope,
+      requestId: "background-a",
+      prompt: "Only A",
+      provider: "claude",
+    });
+    expect(controller.snapshot().directory).toBe(b.path);
+    expect(controller.snapshot().runs.some((run) => run.record.id === worker.runId)).toBe(false);
+    const session = agents.sessions.at(-1);
+    await vi.waitFor(() => expect(session?.turnActive).toBe(true));
+    session?.update({ type: "message", text: "A result while B is selected" });
+    await controller.projectAction({ type: "select", projectId: a.id });
+    expect(
+      controller
+        .snapshot()
+        .events.some(
+          ({ event }) => event.type === "message" && event.text === "A result while B is selected",
+        ),
+    ).toBe(true);
+    expect(controller.snapshot().runs.some((run) => run.record.id === worker.runId)).toBe(true);
+    expect(git.worktrees).toHaveLength(1);
+    expect(git.worktrees[0]?.repoDir).toBe(a.path);
+    await controller.projectAction({ type: "close", projectId: b.id });
+    expect(session?.stops).toEqual([]);
+    expect(controller.snapshot().chats.some((chat) => chat.run?.id === chatB.run?.id)).toBe(false);
+    expect(controller.snapshot().chats.find((chat) => chat.kind === "relay")?.run?.id).toBe(
+      relayId,
+    );
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("restores the retained project conversation after visiting an empty project", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id;
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    await project("empty");
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    await controller.projectAction({ type: "select", projectId: a.id });
+    expect(controller.snapshot().chat.run?.id).toBe(chat.run?.id);
+    expect(controller.snapshot().chats.filter((chat) => chat.kind === "project")).toHaveLength(1);
+    expect(controller.snapshot().chats.find((chat) => chat.kind === "relay")?.run?.id).toBe(
+      relayId,
+    );
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+
+  it("stops every database-owned runtime while retaining Relay across database replacement", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id;
+    const a = await project("a");
+    await newChat(a.id);
+    const b = await project("b");
+    await newChat(b.id);
+    const projectSessions = agents.sessions.slice(1);
+    await controller.connect(join(directory, "replacement.sqlite"), true);
+    expect(controller.snapshot().openProjects).toEqual([]);
+    expect(controller.snapshot().projectInstanceId).toBeNull();
+    expect(controller.snapshot().chat.run?.id).toBe(relayId);
+    expect(agents.sessions[0]?.stops).toEqual([]);
+    expect(projectSessions.every((session) => session.stops.length > 0)).toBe(true);
+    expect(() => controller.projectAction({ type: "select", projectId: a.id })).toThrow(
+      "no longer open",
+    );
+  });
+
+  it("refuses project dispatch before a human Send and preserves a failed close for retry", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const context = await call(chat.run?.id as string, "code60_get_context");
+    await expect(
+      call(chat.run?.id as string, "code60_dispatch_agent", {
+        scope: context.scope,
+        requestId: "not-authorized",
+        prompt: "Do not execute",
+      }),
+    ).rejects.toThrow("human task");
+    expect(git.worktrees).toEqual([]);
+    const shutdown = vi
+      .spyOn(controller as unknown as { shutdownBatches(): Promise<void> }, "shutdownBatches")
+      .mockRejectedValueOnce(new Error("Could not stop"));
+    await expect(controller.projectAction({ type: "close", projectId: a.id })).rejects.toThrow(
+      "kept open",
+    );
+    expect(controller.snapshot().openProjects?.some((project) => project.id === a.id)).toBe(true);
+    shutdown.mockRestore();
+    await controller.projectAction({ type: "close", projectId: a.id });
+    expect(controller.snapshot().openProjects).toEqual([]);
+  });
+
+  it("keeps Relay workers on project close and stops them only with explicit folder stop", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id as string;
+    const a = await project("a");
+    const b = await project("b");
+    await controller.orchestrationChatAction({ type: "send", id: relayId, text: "Work in A" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const context = await call(relayId, "code60_get_context");
+    agents.script = () => "hang";
+    await call(relayId, "code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "relay-a",
+      cwd: a.path,
+      workspaceMode: "direct",
+      prompt: "A work",
+    });
+    await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
+    const worker = agents.sessions[1];
+    await vi.waitFor(() => expect(worker?.turnActive).toBe(true));
+    await controller.projectAction({ type: "close", projectId: a.id });
+    expect(worker?.stops).toEqual([]);
+    await controller.open(a.path);
+    const reopened = controller.snapshot().openProjects?.find((project) => project.path === a.path);
+    expect(reopened?.id).not.toBe(a.id);
+    await controller.projectAction({ type: "stop-folder", projectId: reopened?.id as string });
+    expect(worker?.stops.length).toBeGreaterThan(0);
+    expect(controller.snapshot().openProjects?.some((project) => project.id === b.id)).toBe(true);
+    expect(agents.sessions[0]?.stops).toEqual([]);
+  });
+
+  it("cancels pending project preparation on Stop all without starting a worker", async () => {
+    await prepareRelay();
+    await project("a");
+    const before = agents.specs.length;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resolve = vi.spyOn(git, "resolveCommit").mockImplementation(async () => {
+      await gate;
+      return "c0ffee";
+    });
+    const starting = controller.start({ ...request, prompt: "Must not run" });
+    void starting.catch(() => {});
+    await vi.waitFor(() => expect(resolve).toHaveBeenCalled());
+    const stopping = controller.stopAll();
+    release();
+    await expect(starting).rejects.toThrow("cancelled");
+    await stopping;
+    expect(agents.specs).toHaveLength(before);
+    resolve.mockRestore();
+  });
+
+  it("routes background plan, review, diff and Git requests without selecting their project", async () => {
+    await prepareRelay();
+    const a = await project("a");
+    const chat = await newChat(a.id);
+    const plan = (await call(chat.run?.id as string, "code60_create_plan", {
+      requestId: "a-plan",
+      title: "A plan",
+      description: "",
+      tasks: [{ text: "Only A" }],
+    })) as unknown as Plan;
+    Object.assign(git, {
+      reviewSnapshot: async () => ({
+        files: [
+          {
+            path: "a.txt",
+            oldPath: "a.txt",
+            status: "modified",
+            original: "A before",
+            modified: "A after",
+            fingerprint: "A",
+          },
+        ],
+        truncated: false,
+      }),
+    });
+    const [worker] = await controller.start(request);
+    await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
+    const identity = {
+      project: a.path,
+      projectId: a.id,
+      databaseEpoch: controller.snapshot().databaseEpoch as number,
+    };
+    const reviewId = await controller.reviewAction({
+      type: "open-run",
+      ...identity,
+      runId: worker as string,
+    });
+    await controller.captureReview({ ...identity, reviewId, requestId: randomUUID() });
+    const b = await project("b");
+    expect(
+      (await controller.readPlan({ chatId: chat.run?.id as string, planId: plan.id })).title,
+    ).toBe("A plan");
+    await controller.planAction({
+      type: "dismiss",
+      chatId: chat.run?.id as string,
+      planId: plan.id,
+      revision: plan.revision,
+    });
+    const review = await controller.readReview({
+      ...identity,
+      reviewId,
+      requestId: randomUUID(),
+    });
+    const revision = review.revisions.at(-1);
+    if (!revision) throw new Error("Missing revision");
+    const content = await controller.readReviewFile({
+      ...identity,
+      reviewId,
+      requestId: randomUUID(),
+      revisionId: revision.id,
+      fileKey: `${worker}:a.txt`,
+    });
+    expect(content.modified).toBe("A after");
+    await controller.reviewAction({ type: "open-run", ...identity, runId: worker as string });
+    expect(await controller.taskAction({ type: "status", ...identity, reviewId })).toMatchObject({
+      available: false,
+    });
+    expect(await controller.readDiff({ requestId: randomUUID(), id: worker as string })).toBeTypeOf(
+      "string",
+    );
+    expect((await controller.checkGit(identity)).status).toBe("ready");
+    expect(controller.snapshot().directory).toBe(b.path);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    await expect(
+      controller.readPlan({ chatId: chat.run?.id as string, planId: plan.id }),
+    ).rejects.toThrow("no longer available");
+    await expect(
+      controller.readReview({ ...identity, reviewId, requestId: randomUUID() }),
+    ).rejects.toThrow("no longer open");
+  });
+});
+
 describe("desktop orchestration", () => {
+  it("does not load or expose database-wide legacy chats under Relay and leaves their files untouched", async () => {
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Legacy source" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.shutdown();
+    const legacyRoot = join(directory, ".code60_workspace", "chats");
+    const originals = await Promise.all(
+      (await fs.readdir(legacyRoot)).map(async (name) => ({
+        name,
+        content: await fs.readFile(join(legacyRoot, name), "utf8"),
+      })),
+    );
+    expect(originals.length).toBeGreaterThan(0);
+    const load = vi.spyOn(ChatStore.prototype, "load");
+    const before = agents.specs.length;
+    controller = new DesktopController(
+      controllerDeps(),
+      { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
+      { confirm },
+      { openDatabase, preferences, relay: true },
+    );
+    await controller.restore();
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(agents.specs).toHaveLength(before + 1);
+    expect(load).not.toHaveBeenCalled();
+    load.mockRestore();
+    expect(controller.snapshot().chats.map((chat) => chat.kind)).toEqual(["relay"]);
+    await expect(controller.orchestrationChatAction({ type: "select", id })).rejects.toThrow(
+      "no longer current",
+    );
+    await expect(
+      controller.orchestrationChatAction({ type: "send", id, text: "Do not resume" }),
+    ).rejects.toThrow("no longer current");
+    await expect(controller.orchestrationChatAction({ type: "new" })).rejects.toThrow(
+      "Open a project",
+    );
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(agents.specs).toHaveLength(before + 1);
+    for (const original of originals)
+      expect(await fs.readFile(join(legacyRoot, original.name), "utf8")).toBe(original.content);
+  });
+
+  it.each(["stop all", "shutdown"])(
+    "attempts every batch when helper cleanup fails during %s",
+    async (action) => {
+      await start();
+      await controller.start(request);
+      await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
+      const helper = vi
+        .spyOn(
+          controller as unknown as { stopMemoryExtraction(): Promise<void> },
+          "stopMemoryExtraction",
+        )
+        .mockRejectedValueOnce(new Error("Helper cleanup failed"));
+      try {
+        await expect(
+          action === "shutdown" ? controller.shutdown() : controller.stopAll(),
+        ).rejects.toThrow();
+        expect(agents.sessions.every((session) => session.stops.length > 0)).toBe(true);
+        expect(controller.active).toBe(false);
+      } finally {
+        helper.mockRestore();
+      }
+    },
+  );
+
   it("scrubs connection-test failures before exposing them in a desktop snapshot", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -408,7 +2018,7 @@ describe("desktop orchestration", () => {
       repository: basename(directory),
       worktrees,
     });
-    expect(list).toHaveBeenCalledWith(directory);
+    expect(list).toHaveBeenCalledWith(directory, expect.objectContaining({ sizes: false }));
     list.mockRejectedValueOnce(new Error("Cannot list worktrees"));
     await expect(controller.poll(["worktrees"])).rejects.toThrow("Cannot list worktrees");
     // A failed poll keeps the last successful listing and records the error.
@@ -876,9 +2486,17 @@ describe("desktop orchestration", () => {
 
   it("sends batched updates and stops idle agents on shutdown", async () => {
     const updates: number[] = [];
-    controller.subscribe((snapshot) => updates.push(snapshot.revision));
+    const previous: (number | undefined)[] = [];
+    controller.subscribe((snapshot) => {
+      updates.push(snapshot.revision);
+      previous.push(snapshot.previousRevision);
+    });
     await start();
     await vi.waitFor(() => expect(updates.length).toBeGreaterThan(0));
+    await controller.poll(["config"]);
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(1));
+    expect(previous.slice(1)).toEqual(updates.slice(0, -1));
+    expect(controller.snapshot().previousRevision).toBeUndefined();
     await controller.shutdown();
     expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
     expect(controller.active).toBe(false);
@@ -2948,6 +4566,34 @@ describe("orchestrated workers over ACP", () => {
       await expect(
         controller.taskAction({ ...identity, type: "revise", operationId }),
       ).rejects.toThrow("Reconnect this review");
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("human edit\n");
+    });
+    it("settles project cleanup ahead of queued conflict feedback without later writing it", async () => {
+      const { identity, revisionId, tasks } = await taskFixture();
+      await fs.writeFile(join(identity.project, "task.txt"), "human edit\n");
+      tasks.merge.mockResolvedValue(null);
+      const prepared = await controller.taskAction({ ...identity, type: "prepare", revisionId });
+      const operationId = prepared.operation?.id;
+      if (!operationId) throw new Error("Missing conflict preview");
+      const internal = controller as unknown as {
+        exclusive<T>(operation: () => Promise<T>): Promise<T>;
+        chatExclusive<T>(session: ChatSession, operation: () => Promise<T>): Promise<T>;
+        stopProject(): Promise<void>;
+      };
+      const chatExclusive = internal.chatExclusive.bind(internal);
+      let cleanup: Promise<void> | undefined;
+      vi.spyOn(internal, "chatExclusive").mockImplementationOnce((session, operation) => {
+        cleanup = internal.exclusive(() => internal.stopProject());
+        return chatExclusive(session, operation);
+      });
+      await expect(
+        controller.taskAction({ ...identity, type: "revise", operationId }),
+      ).rejects.toThrow("stopping");
+      expect(cleanup).toBeDefined();
+      await cleanup;
+      const review = await controller.readReview({ ...identity, requestId: randomUUID() });
+      expect(review.comments).toEqual([]);
+      expect(review.submissions).toEqual([]);
       expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("human edit\n");
     });
   });

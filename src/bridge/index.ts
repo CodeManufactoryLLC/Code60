@@ -1,5 +1,12 @@
+export * from "./database.js";
+export * from "./details.js";
 export * from "./logs.js";
 export * from "./plans.js";
+export type { ProjectRequestIdentity } from "./project-identity.js";
+export * from "./projects.js";
+export * from "./relay.js";
+export * from "./relay-files.js";
+export * from "./relay-reviews.js";
 export * from "./tactics.js";
 export * from "./web-links.js";
 
@@ -36,6 +43,7 @@ import {
   validatePromptTemplate,
 } from "../contracts/index.js";
 import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js";
+import { projectRequestFields } from "./project-identity.js";
 import type { WebLink } from "./web-links.js";
 
 export {
@@ -110,6 +118,18 @@ export interface PromptTemplateState {
 
 export interface DesktopRun extends ListedRun {
   view?: RunView;
+  replies?: { count: number; lastTurn: number };
+  historyIncomplete?: boolean;
+  /** Application-owned Relay workers are never implicitly bound to the selected project. */
+  relay?: {
+    conversationId: string;
+    generation: number;
+    taskId: string;
+    targetId: string;
+    cwd: string;
+    workspaceMode: "direct" | "worktree";
+    reviewId?: string;
+  };
 }
 
 export interface SequencedEvent {
@@ -157,8 +177,13 @@ export interface PollResult {
   ok: boolean;
   error: string | null;
 }
+export interface PollScope {
+  kind: "application" | "database" | "target";
+  id: string;
+}
 export interface PollState {
   key: PollKey;
+  scope?: PollScope;
   setting: PollSetting;
   status:
     | "unavailable"
@@ -228,6 +253,13 @@ export interface Versions {
 }
 
 export interface Snapshot {
+  /** App metadata only. Detail revisions and caches are independent. */
+  summaryOnly?: true;
+  /** At most 128 active subscription UUIDs, with their last publication revisions. */
+  detailRevisions?: Record<string, number>;
+  openProjects?: import("./projects.js").OpenProject[];
+  projectInstanceId?: string | null;
+  databaseEpoch?: number;
   gitReadiness?: import("./git-setup.js").GitReadiness;
   reviews?: import("./reviews.js").ReviewSummary[];
   agentSetup?: AgentSetupSnapshot;
@@ -236,6 +268,8 @@ export interface Snapshot {
   chats: OrchestrationChat[];
   orchestration: OrchestrationProvider;
   revision: number;
+  /** Delta broadcasts only. Full snapshot reads have no predecessor. */
+  previousRevision?: number;
   database: string | null;
   databaseError: string | null;
   projects: ProjectEntry[];
@@ -286,6 +320,20 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  subscribeDetails(request: import("./details.js").DetailRequest): Promise<void>;
+  readDetails(
+    request: import("./details.js").DetailRequest,
+  ): Promise<import("./details.js").DetailFrame>;
+  unsubscribeDetails(request: import("./details.js").DetailIdentity): Promise<void>;
+  setRelayFileContext(context: import("./relay-files.js").RelayFileContext): Promise<void>;
+  onDetails(listener: (frame: import("./details.js").DetailFrame) => void): () => void;
+  readRelayMessage(
+    request: import("./relay.js").RelayMessageRead,
+  ): Promise<import("./relay.js").RelayMessageSource>;
+  relayReview(
+    request: import("./relay-reviews.js").RelayReviewRequest,
+  ): Promise<import("./relay-reviews.js").RelayReviewResponse>;
+  projectAction(request: import("./projects.js").ProjectAction): Promise<void>;
   /** Confirms an HTTP(S) destination natively; false means cancelled or already pending. */
   openWebLink(request: WebLink): Promise<boolean>;
   queryLogs(request: import("./logs.js").LogQuery): Promise<import("./logs.js").LogPage>;
@@ -337,15 +385,20 @@ export interface DesktopApi {
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;
+  /** Initial app state and gap recovery without transcript/file payloads. */
+  appSummary?(): Promise<Snapshot>;
   /** Resolves false when the native picker is cancelled. */
-  connectDatabase(mode: DatabaseMode): Promise<boolean>;
+  connectDatabase(mode: DatabaseMode, databaseEpoch?: number): Promise<boolean>;
   /** Resolves false when the native picker is cancelled. */
-  chooseFolder(): Promise<boolean>;
-  openProject(path: string): Promise<void>;
-  removeProject(path: string): Promise<void>;
+  chooseFolder(databaseEpoch?: number): Promise<boolean>;
+  openProject(path: string, databaseEpoch?: number): Promise<void>;
+  removeProject(path: string, databaseEpoch?: number): Promise<void>;
   /** Asks for confirmation first; resolves false when declined. */
-  clearProjects(): Promise<boolean>;
-  poll(keys: PollKey[]): Promise<void>;
+  clearProjects(databaseEpoch?: number): Promise<boolean>;
+  poll(
+    keys: PollKey[],
+    identity?: import("./project-identity.js").ProjectRequestIdentity,
+  ): Promise<void>;
   setPollSettings(settings: PollSettingsPatch): Promise<void>;
   setPollingPaused(paused: boolean): Promise<void>;
   setVisibility(visibility: PollVisibility): Promise<void>;
@@ -354,15 +407,15 @@ export interface DesktopApi {
   cancelOrchestrationTest(): Promise<void>;
   /** New session IDs in batch order; empty when confirmation is declined. */
   start(request: StartRequest): Promise<string[]>;
-  saveConfiguration(request: SaveConfiguration): Promise<void>;
-  saveCommand(request: SaveCommand): Promise<void>;
+  saveConfiguration(request: SaveConfiguration, databaseEpoch?: number): Promise<void>;
+  saveCommand(request: SaveCommand, databaseEpoch?: number): Promise<void>;
   /** Asks for native confirmation; false when declined. */
-  deleteCommand(request: DeleteCommand): Promise<boolean>;
-  deleteConfiguration(id: string): Promise<boolean>;
+  deleteCommand(request: DeleteCommand, databaseEpoch?: number): Promise<boolean>;
+  deleteConfiguration(id: string, databaseEpoch?: number): Promise<boolean>;
   /** Saves an edited template in the connected database. */
-  savePromptTemplate(request: SavePromptTemplate): Promise<void>;
+  savePromptTemplate(request: SavePromptTemplate, databaseEpoch?: number): Promise<void>;
   /** Asks for confirmation, then removes the saved edit; resolves false when declined. */
-  resetPromptTemplate(id: PromptId): Promise<boolean>;
+  resetPromptTemplate(id: PromptId, databaseEpoch?: number): Promise<boolean>;
   action(action: Action): Promise<ActionResult>;
   stopAll(): Promise<void>;
   subscribe(listener: (update: Snapshot) => void): () => void;
@@ -409,6 +462,29 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  projectId?: string;
+  kind?: "relay" | "project";
+  conversationId?: string;
+  generation?: number;
+  /** Constant-size change hint; review collections remain explicit bounded reads. */
+  reviewRevision?: number;
+  /** Constant-size unread summary, independent of transcript/detail subscriptions. */
+  replies?: { count: number; lastTurn: number };
+  history?: {
+    messages?: {
+      id: string;
+      role: "human" | "assistant" | "activity";
+      at: string;
+      text: string;
+      partial?: boolean;
+      source?: string;
+    }[];
+    serialized: string;
+    characters: number;
+    older: boolean;
+    incomplete: boolean;
+    cursor: string | null;
+  };
   /** Absent only for legacy/disconnected snapshots; null is an explicit removal. */
   tactic?: string | null;
   restored?: boolean;
@@ -438,6 +514,11 @@ const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({
+    type: z.literal("history"),
+    id: runIdSchema,
+    before: z.string().uuid().nullable(),
+  }),
+  z.strictObject({
     type: z.literal("set-tactic"),
     id: runIdSchema,
     project: z.string().max(32_768).nullable(),
@@ -445,7 +526,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("continue-task"), id: runIdSchema, taskId: z.string().uuid() }),
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
-  z.strictObject({ type: z.literal("new") }),
+  z.strictObject({ type: z.literal("new"), projectId: z.string().uuid().optional() }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
   z.strictObject({ type: z.literal("archive"), id: configurationIdSchema }),
   z.strictObject({
@@ -483,6 +564,8 @@ const stringList = (label: string, max: number) =>
 
 const startFieldsSchema = z.strictObject(
   {
+    projectId: z.string().uuid().optional(),
+    databaseEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     prompt: boundedString("prompt", 1_000_000).optional(),
     agents: stringList("agents", 32),
     parallel: boundedString("parallel", 256).optional(),
@@ -496,19 +579,35 @@ const startFieldsSchema = z.strictObject(
 );
 
 // Omit absent optional properties, preserving the exact optional request contract.
-const startSchema = startFieldsSchema.transform(
-  ({ prompt, parallel, base, turnTimeout, configurationId, ...required }) => ({
-    ...required,
-    ...(prompt === undefined ? {} : { prompt }),
-    ...(parallel === undefined ? {} : { parallel }),
-    ...(base === undefined ? {} : { base }),
-    ...(turnTimeout === undefined ? {} : { turnTimeout }),
-    ...(configurationId === undefined ? {} : { configurationId }),
-  }),
-);
+const startSchema = startFieldsSchema
+  .transform(
+    ({
+      prompt,
+      parallel,
+      base,
+      turnTimeout,
+      configurationId,
+      projectId,
+      databaseEpoch,
+      ...required
+    }) => ({
+      ...required,
+      ...(projectId === undefined ? {} : { projectId }),
+      ...(databaseEpoch === undefined ? {} : { databaseEpoch }),
+      ...(prompt === undefined ? {} : { prompt }),
+      ...(parallel === undefined ? {} : { parallel }),
+      ...(base === undefined ? {} : { base }),
+      ...(turnTimeout === undefined ? {} : { turnTimeout }),
+      ...(configurationId === undefined ? {} : { configurationId }),
+    }),
+  )
+  .refine(
+    (request) => (request.projectId === undefined) === (request.databaseEpoch === undefined),
+    "Project identity and database epoch must be supplied together",
+  );
 
 const runSettingsSchema = startFieldsSchema
-  .omit({ prompt: true, configurationId: true })
+  .omit({ prompt: true, configurationId: true, projectId: true, databaseEpoch: true })
   .extend({
     agents: stringList("agents", 32).refine(
       (names) => names.length > 0 && names.every((name) => name.trim().length > 0),
@@ -629,6 +728,15 @@ const pollKeysSchema = z
   .min(1, "Invalid polling sources")
   .max(pollKeys.length, "Invalid polling sources")
   .refine((keys) => new Set(keys).size === keys.length, "Invalid polling sources");
+const pollRequestSchema = z
+  .strictObject({
+    keys: pollKeysSchema,
+    ...projectRequestFields,
+  })
+  .refine(
+    (request) => request.projectId === undefined || request.databaseEpoch !== undefined,
+    "Project polling requires a database epoch",
+  );
 
 function pollSettingSchema(key: PollKey) {
   const [min, max] = pollRanges[key];
@@ -685,6 +793,9 @@ const relativeFilePathSchema = z
   );
 const fileContextSchema = z
   .strictObject({
+    projectId: z.string().uuid().optional(),
+    databaseEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    active: z.boolean().optional(),
     project: projectPathSchema,
     root: projectPathSchema,
     directories: z
@@ -697,6 +808,10 @@ const fileContextSchema = z
       ),
     preview: relativeFilePathSchema.refine((path) => path !== "", "Expected a file").nullable(),
   })
+  .refine(
+    (context) => (context.projectId === undefined) === (context.databaseEpoch === undefined),
+    "Project identity and database epoch are required together",
+  )
   .refine(
     (context) =>
       !/^[a-z]:[\\/]/i.test(context.root) ||
@@ -735,6 +850,7 @@ export const parseOrchestrationProvider = (value: unknown): string | null =>
     value,
   );
 export const parsePollKeys = (value: unknown) => parseValue(pollKeysSchema, value);
+export const parsePollRequest = (value: unknown) => parseValue(pollRequestSchema, value);
 export const parsePollSettings = (value: unknown) => parseValue(pollSettingsSchema, value);
 export const parsePollVisibility = (value: unknown) => parseValue(visibilitySchema, value);
 export const parseStart = (value: unknown) => parseValue(startSchema, value);

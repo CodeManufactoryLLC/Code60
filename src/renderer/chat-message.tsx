@@ -16,6 +16,8 @@ export function ChatMessage({
   incoming = false,
   visible = true,
   onCopied,
+  copyable = true,
+  readSource,
 }: {
   block: Block;
   at?: string | undefined;
@@ -28,6 +30,8 @@ export function ChatMessage({
   incoming?: boolean;
   visible?: boolean;
   onCopied?: (() => void) | undefined;
+  copyable?: boolean;
+  readSource?: (() => Promise<string>) | undefined;
 }) {
   const [entering, setEntering] = useState(incoming);
   useEffect(() => {
@@ -83,8 +87,14 @@ export function ChatMessage({
           {block.type === "prompt" && !block.automatic ? (prompt ?? block.text) : block.text}
         </pre>
       )}
-      {(block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
-        <MessageCopy text={block.text} at={at} visible={visible} onCopied={onCopied} />
+      {copyable && (block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
+        <MessageCopy
+          text={block.text}
+          at={at}
+          visible={visible}
+          onCopied={onCopied}
+          readSource={readSource}
+        />
       )}
       {detail ?? (block.detail && <pre>{block.detail}</pre>)}
     </article>

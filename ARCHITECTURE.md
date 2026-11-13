@@ -10,6 +10,244 @@ Git is not required for headless CLI runs. Desktop project workers require a Git
 
 That is the whole product. The tool talks to agents over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), runs them from an Electron and React desktop app or headless from the CLI, and keeps only the plain files it needs to show what happened.
 
+## Relay and multi-project architecture
+
+The Relay architecture replaces database-wide orchestration.
+The rules in this section take precedence over the single-project descriptions
+below. Desktop conversations are Relay or project-bound chats. Database-wide
+legacy chat files are not loaded, migrated, assigned to projects or deleted.
+See [Relay implementation status](docs/relay-implementation.md) for available
+features, resource bounds and remaining native-platform validation.
+
+- Relay is one application-owned logical conversation, available without a database.
+  Project chats belong to individual open projects. Selecting or expanding a
+  project changes presentation, never Relay's authority.
+  Relay and project headings are equal-depth siblings beneath Chat. Project chats
+  indent one 24px step beneath their project; owned workers indent one more step
+  beneath their conversation. Disclosures sit on the right, with separate New chat
+  and More actions. Rows retain full-width highlights. Project menus anchor to
+  their trigger and remain within the viewport. The connected sidebar opener is
+  always labelled Open Project, never the last-selected project's name.
+- Desktop host, Relay service, project host, execution host and database services
+  remain in `src/desktop`. Do not construct a DesktopController per project.
+  Core stays Electron-independent and receives explicit workspaces/dependencies.
+  ProjectHost owns retained runtime identities and database-instance epochs.
+  Each runtime owns its workspace, batches, history, review/task state, file
+  context and project conversations. Async work captures its runtime before
+  yielding; callbacks bind that owner explicitly, never the selected directory.
+  Selection changes presentation only. Closed or replaced runtime identities
+  cannot acquire authority again, even when the same path is reopened.
+  Project review/task/Git requests carry the runtime UUID and database epoch.
+  Bind the owner unconditionally before asynchronous work, including requests
+  for the currently selected project; a path alone cannot identify a live owner.
+  Command, configuration and prompt-template writes carry the database epoch
+  captured by the originating view. Validate it again inside the action queue;
+  never obtain a fresh epoch to make a stale action succeed.
+  Database selection and project-history actions use that same captured epoch.
+  Native pickers run outside the queue and recheck it after every dialog, then
+  again inside the queued operation. A delayed picker cannot replace or modify
+  a newer database, including a reopened instance of the same SQLite path.
+  Relay activity never blocks database selection or becomes database-owned work.
+- An execution target is a canonical directory with an opaque identity, independent
+  of Git, database membership and open-project history. Project chats may use only
+  their bound target and must use isolated worktrees.
+- Relay alone may accept a required, bounded absolute `cwd` through its
+  authenticated MCP gateway, with explicit `direct` or `worktree` mode. Main
+  canonicalizes and rechecks directory identity before launch. No renderer process,
+  command, environment or arbitrary filesystem capability is added. The configured
+  verified provider and the harness's permission decisions remain authoritative.
+  Never fall back between modes or retry in a different directory.
+  Keep filesystem device/inode comparisons at full integer precision, including
+  Windows file identities above JavaScript's safe-number range. These internal
+  identities are not renderer capabilities or persisted execution authority.
+- Explicit direct mode runs in the exact directory, even inside Git, and has no
+  isolated apply/undo/discard semantics. Worktree mode requires a valid Git base.
+  CLI defaults and existing run-record format remain unchanged.
+- Relay lives in `$XDG_STATE_HOME/code60/relay` (default
+  `~/.local/state/code60/relay`). `state.json` sits outside `workspace/`, its
+  persistent ACP/process directory. Validate private permissions, Windows ACLs,
+  same-handle bounded reads and atomic writes. Never initialize Git, associate it
+  with a database, or remove it on shutdown. Missing workspace data, malformed
+  metadata and unsafe storage require explicit recovery. An exclusive writer
+  lock never displaces a live or unverifiable owner.
+- After verified setup, startup creates a fresh ACP session automatically, without
+  any prompt. It never restores native provider context, worker ownership, task
+  authority, gateways, pending plans or feedback. Only a human Send creates live
+  authority and attaches prepared history, once. Failed connection exposes Retry,
+  not an unbounded reconnect loop.
+- One history-window builder supplies initial display and first-Send context.
+  Historical labels, summaries and partial-excerpt markers count toward 64,000
+  Unicode characters. Prefer complete recent messages, preserve structured records,
+  omit duplicate raw ACP/tool payloads and never split a Unicode character.
+  Older source stays on disk, with explicit bounded paging and exact-source Copy.
+  Copy may read only a pinned message through expiring opaque source cursors.
+  Pin the journal's exact native identity and nanosecond change stamps for the
+  lifetime of the reader. Serialize bounded journal I/O with its own appends,
+  not conversation turns. Only verified local appends advance that stamp;
+  replacement or outside modification invalidates Copy, even for valid UTF-8
+  with unchanged size. Check the handle and directory entry after each read.
+  Each source read is bounded and runs outside lifecycle/turn queues; it never
+  grants filesystem paths or execution authority. Renderer clipboard access stays
+  unchanged. An explicit full-message Copy is separate from bounded display pages.
+  Tail reads/indexes, event buffers and UI pages must remain bounded; incomplete
+  evidence is visibly incomplete. This is not transcript retention or a cap on
+  the uninterrupted harness session's own context.
+- Worker authority is conversation identity, live generation, human-authorized
+  task, target and owned run. Scope tokens are ephemeral. Capacity is reserved
+  before asynchronous preparation and includes idle workers across all targets.
+  Deduplication includes target and mode; metadata failures after acceptance never
+  permit redispatch. Manual batches and project chats retain independent limits.
+- Serialize lifecycle changes briefly, controls per target and turns per
+  conversation. Expensive reads run outside control queues. Git record writes
+  coordinate by canonical common directory; apply/undo remains checkout-local.
+  Worktree create/remove, internal task snapshots and initial-commit metadata
+  operations share an in-process queue keyed by canonical Git common directory,
+  across Git instances and linked checkouts. Independent repositories proceed
+  independently. Revalidate directory identity after waiting. Queued cancellation
+  performs no mutation; cancellation after starting awaits subprocess cleanup.
+  Git's own filesystem locks remain authoritative across processes. Never remove
+  a Git lock or hold this metadata queue over human apply/undo file writes.
+  Interactive run shutdown cancels queued worktree creation without waiting for
+  another owner's metadata operation. Started worktree commands use owned process
+  trees and settle cleanup before shutdown returns. Headless CLI execution keeps
+  its existing subprocess behavior.
+- Freeze instructions per human request. Baselines, worker assignments, plan rows,
+  results and reviews are target-qualified. Human Accept authorizes the specific
+  plan revision and target assignments. A target change requires new acceptance.
+  Relay operating instructions never follow database prompt overrides.
+  Relay review workers pin their accepted canonical worktree, native directory
+  identity, branch and base. Capture and application reject record redirection
+  or directory replacement, even within the same Git common directory. Older
+  unpinned evidence remains readable but cannot be recaptured or applied.
+  Review index rollover writes one new page before advancing its manifest. A
+  validated single-entry next page after a full page completes that interrupted
+  publication on reopen or append. Invalid or ambiguous pages fail visibly and
+  remain untouched; recovery never reinstates execution authority.
+- Open-project views survive navigation and dispose on actual close. Closing a
+  project stops only project-owned work after confirmation, not Relay workers in
+  that folder. Folder stop explicitly includes them and pauses replacement for
+  that task/target; other targets continue. Stop all pauses automation and stops
+  orchestrator turns and all workers.
+- Database replacement disposes database-owned work only. Database tool requests
+  carry an instance epoch and reject stale requests. Shutdown, renderer crash,
+  signals and updates attempt cleanup for every owner, collect failures and retain
+  forced escalation. Relay is not a detached daemon.
+- App summaries and scoped detail subscriptions carry explicit identities,
+  generations and monotonic revisions. Subscribe before reading, buffer updates
+  and resynchronize on gaps. Inactive summaries stay small. Relay's file view
+  explicitly selects its own workspace or a target, never the selected project.
+  Poll by application/database/target keys, deduplicate shared stores and read
+  previews/sizes only for visible requested views; agent results stay pushed.
+  Relay worker transcript tools page the same bounded live target event window,
+  not a lifetime `events.jsonl` read. Responses identify the window revision and
+  incompleteness; cursor positions belong to that window. Original run evidence
+  stays on disk. Project and headless record-reader contracts remain unchanged.
+  The polling registry partitions application configuration, database-instance
+  tables and target-runtime sources. It resolves the owner synchronously before
+  installing a flight. Each scope retains its own single-flight, failure history
+  and timers; navigating never invalidates another live target's reads.
+  Closed scopes stop scheduling and discard late results. Visibility gates
+  target previews and worktree-size scans without retargeting their callbacks.
+  Detail subscriptions use a generated subscription UUID plus an explicit
+  project-instance/database epoch, conversation/generation, or execution-target/
+  Relay-generation address. Main captures that owner when subscribing, before
+  any initial read. Detail frames carry their own predecessor revision; full
+  reads use no predecessor. Closing/replacing an owner emits a terminal frame,
+  never a frame for its replacement. The registry is bounded to 128 concurrent
+  subscriptions, clears on renderer reload/shutdown and isolates listener errors.
+  Subscribing and reading never select a project or grant execution authority.
+  Detail publication checks owner-local change versions before constructing
+  payloads. Unrelated project, Relay-target and file-root updates do not reread
+  or rebroadcast an unchanged owner. Still check validity on every app publication
+  so a closed owner emits its terminal frame. Listener and release failures cannot
+  prevent publication or cleanup for other owners.
+  App summaries include only each active detail subscription's last publication
+  revision (at most 128 UUID/number pairs). A missing final detail frame therefore
+  triggers that subscription's bounded full-read recovery, without copying an
+  unchanged owner on unrelated updates. Hints received during an initial or
+  recovery read are checked before installing its result.
+  Explicit hidden worktree inventory reads omit recursive sizes. A visible size
+  scan checks its captured owner and visibility throughout traversal, stopping
+  on navigation, hide or close rather than finishing an unwanted filesystem scan.
+  Existing CLI worktree listing defaults remain unchanged.
+  Renderer detail readers share the app stream's bounded subscribe-before-read
+  recovery protocol, but merge on their own revisions. Retained caches are keyed
+  by the complete owner address and pruned on close/generation replacement.
+  Inactive conversation summaries carry constant-size reply counters and compact
+  plan status/progress summaries, not transcripts or full plan documents.
+  Each open-project entry also carries compact worker summaries, so inactive
+  sidebar workers receive new IDs and status changes without transcript reads.
+  Cached project detail frames may fill prompt/event data, but cannot rewind
+  newer worker metadata from app summaries.
+  Reply counters preserve unread badges without history reads. Plan status
+  comes from the app summary, atomically with selection, never ahead of it
+  through a detail frame that could reopen a background conversation's plan.
+  The production app stream is summary-only, including the selected conversation.
+  Its fixed summary read supports initial load and gap recovery; explicit legacy
+  snapshot reads remain full for existing callers. Summaries omit transcripts,
+  history windows, worker prompt bodies, files, worktree listings and review data.
+  Selected project/conversation/Relay-target details supply those views. Worker
+  reply counters are pushed with run summaries, without transcript reads. App
+  revisions cannot advance detail-data fences or replace retained detail content.
+  A selected Relay worker subscribes to its exact target/conversation/generation;
+  navigation releases that subscription, while cached data has the same complete
+  address and is pruned on generation replacement. Status and plan selection stay
+  authoritative on the app stream, even if a detail frame arrives first.
+  Relay worker windows are bounded separately per target (512 events and 256,000
+  serialized UTF-16 code units each), with at most 256 targets. Activity in one
+  folder cannot evict another folder's visible history. Compatibility full reads
+  retain one bounded aggregate window. Truncated target evidence is labelled;
+  original worker records remain on disk. Clear windows on generation replacement.
+  Relay file views explicitly select its workspace or an owned execution target.
+  A file context names an existing Relay conversation/target detail subscription,
+  an increasing view sequence, expanded relative folders and one optional relative
+  preview. It accepts no root path, project address or filesystem capability.
+  Main resolves and rechecks the canonical root and generation before and after
+  reads. Unsubscribe/reload invalidates the file context, including in-flight
+  requests; late context changes cannot overwrite a newer sequence.
+  Cache and schedule file reads per root through the existing Poller, with shared
+  single flights, bounded listings/previews and independent failure history.
+  Only active, visible requested file views schedule previews. App pause/settings
+  apply to those pollers; project/database navigation does not retarget them.
+  Files travel on the addressed detail stream, not inactive app summaries.
+  File contexts are bounded to 16 concurrent views. Identical requests to the
+  same canonical root share a read; different roots retain independent failures.
+  Explicitly opening Files chooses Relay workspace initially and offers only
+  currently owned targets. A root change replaces file tabs, never plan tabs.
+- Relay reviews belong to its private application store, not a project database.
+  Persist conversation/generation/task, opaque target, canonical cwd, exact native
+  directory identity, workspace mode and the already captured default baseline.
+  For Relay records the legacy `project` key is the logical Relay UUID, never a
+  path capability. Keep worker-turn assignments with their originating task.
+  Saved provenance permits evidence reads, not restored worker authority.
+  Load individual bounded review records on demand through private same-handle
+  readers. A paged compact creation index must not turn the complete lifetime
+  review collection into startup work or an in-memory collection. Preserve old
+  records on disk. Reuse immutable review contents and checkout-local TaskLoop
+  journals, seeding its baseline from first-default-dispatch capture rather than
+  recapturing at Accept or human application.
+  Relay-only review requests carry current conversation/generation plus generated
+  target/review/revision/file IDs, never a renderer-supplied cwd or project fallback.
+  Historical reviews remain readable; feedback requires live originating task,
+  generation and worker-turn ownership. Restart fails pending delivery and never
+  reconnects saved workers or feedback automatically.
+  Group Changes by target, splitting bounded worker groups rather than silently
+  dropping assignments. Direct targets show their actual cwd and transcripts,
+  with no isolated apply/undo/discard. Human application remains checkout-local,
+  revalidates target identity, immutable sources, workers and affected files, and
+  requires confirmation. Navigation and database replacement do not retarget it.
+  Push a constant-size review revision hint with Relay metadata, not review
+  collections or file contents. Only an active Changes view reads its bounded
+  index page or selected review. Renderer reload cancels human reads/operations
+  without revoking Relay's worker assignments or replaying feedback.
+  Worker summaries may retain an opaque review link even if creation-index
+  persistence failed. It identifies saved evidence only, never a path capability.
+
+Deferred: workspace relocation, durable recovery, automatic task continuation,
+RAG, semantic retrieval and automatic history retrieval outside the window.
+SQLite remains schema 5. No bulk transcript moves/deletions or implicit legacy
+imports are permitted.
+
 ## Non-goals
 
 Exception for Tactics and stopped orchestration chats: a browser-safe versioned
@@ -710,7 +948,7 @@ One selected conversation fills the normal Chat workspace beside the shared file
 - **Worktrees.** A permanent Worktrees tab lists every existing Git worktree registered with the currently open repository, including worktrees created outside Code60. Each row shows its path, an Actions menu with Browse project files, branch (or detached), filesystem creation time, repository name, and logical size. Creation time uses the directory's birth time when available. Size is the sum of regular-file byte sizes, excluding symlinks and the top-level `.git` entry so shared Git objects are not attributed to one worktree; inaccessible or missing values show as unknown. The shared table header names the page; refresh uses the application footer. The tab scans when selected and then polls in the background while it and the window stay visible; the listing arrives in the revisioned snapshot. A failed scan keeps the last listing and shows the error. It never changes, removes, or prunes worktrees. A non-Git project shows an explanatory empty state.
 - **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Search and Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
 - **Messages.** A permanent Messages tab lists every prompt, agent message, and thought from every run in the open project. Adjacent streamed message and thought updates are combined into one row. The table shows time, agent, session ID, type, and message text; tool calls, status events, permissions, and stderr are not message rows.
-- **Page tabs.** After the splash, a 220px left navigation container with only a subtle 1px theme-aware right divider, square corners, full-width rows and wider in-row label indents, and a main app surface shared with the composer wraps its repository header and page tabs. Its top and bottom align with the desktop right file panel, with a 12px bottom inset above the footer; the native-control drag strip remains separate from its fill. The sidebar stays open and has no collapse toggle or hover expansion. Its right edge is a keyboard-accessible resize handle (Left/Right arrows adjust by 20px). Width defaults to 220px, is bounded between 180px and 480px while reserving 360px for content, and persists locally as code60.sidebarWidth. Window resizing clamps the displayed width to available space. Resizing preserves page selection, conversations, drafts and disclosure state. The tab list scrolls within the remaining sidebar height, with its gutter reserved even before overflow. Its centered, clickable text-only header card names the open project (the full path is in its tooltip), without a border or hatching. Before a project is opened, it reads Open a project with the same borderless sidebar fill. Clicking opens the project-selection modal for recent projects or a folder picker; without a database, the modal offers database connection first. Successful selection updates the card and shows a success toast. Cancelling leaves the card unchanged; errors stay in the modal. Switching is disabled while project runs are active. Below it are Chat (with a separate labelled plus action and nested conversations), Prompt Editor, Search, and Tables (Configurations, Events, Logs, Messages, Polling, Sessions and Worktrees). Settings follows Tables as the last normal navigation item. Its Advanced disclosure contains Experiments → Episodic Memory and the sibling Contributor Tools placeholder. Project identity, nested page labels and conversation roles/status stay text-only; only the six top-level navigation entries have their dedicated Phosphor duotone icons. Carbon chevrons restore show/hide disclosure icons, and More uses the horizontal overflow icon. Independent icon actions retain accessible labels; New chat uses a separate icon-only Carbon plus button. Keyboard, selection, expansion and disabled semantics are preserved. The database icon remains in the separate application footer, with an independent Carbon back arrow immediately to its left. Its tooltip is “return to splash page”; it preserves the open project and active work and remains usable while project runs block database switching. No tab has a close button. Sessions shows the start screen before a database is connected and the sessions table afterward. Page labels use a 40px minimum base left inset, growing to fit larger icons, and 24px hierarchy steps (conversation labels retain their 4px alignment offset), without changing the splash selector's insets or narrowing full-row highlights. Full-width, left-aligned tab buttons stack vertically, wrap long labels, have 5px corners with no gaps between sidebar items, 4px vertical padding and 40px minimum rows that grow with larger button text, and have no side rules. Resting labeled controls use the sidebar background. Enabled hover uses viridian. The selected page has a contrasting fill at regular text weight, without an underline or bottom border, with selection also exposed to assistive technology. Preserve system selection outlines in forced colors. Up/Down wrap through the visible navigation order. Home and End move to the first and last visible destination. Switching tabs preserves table state, session selection, chat drafts, and Settings scroll position. A separate 28px draggable strip above the workspace reserves space for native window controls. The active page fills the remaining space to the right of the sidebar, separated by 12px; the workspace has matching 12px left and right insets and a 12px bottom inset. Each main page has no outer border and uses square corners. Page headers have a small bottom margin. Content uses consistent spacing: toolbars, the chat footer, and banners are inset 16px from the sides, the workspace sits above the application-wide footer with no footer reserved inside individual pages, Settings scrolls between 20px top and bottom margins, and conversations fill the Chat workspace. Toasts and actions menus render outside the page frame so they are never clipped. Every launch and renderer reload starts on Chat; saved preferences are unaffected. Chats use the normal Chat workspace; change reviews share its side panel with project files.
+- **Page tabs.** After the splash, a 220px left navigation container with only a subtle 1px theme-aware right divider, square corners, full-width rows and wider in-row label indents, and a main app surface shared with the composer wraps its project-opening action and page tabs. Its top and bottom align with the desktop right file panel, with a 12px bottom inset above the footer; the native-control drag strip remains separate from its fill. The sidebar stays open and has no collapse toggle or hover expansion. Its right edge is a keyboard-accessible resize handle (Left/Right arrows adjust by 20px). Width defaults to 220px, is bounded between 180px and 480px while reserving 360px for content, and persists locally as code60.sidebarWidth. Window resizing clamps the displayed width to available space. Resizing preserves page selection, conversations, drafts and disclosure state. The tab list scrolls within the remaining sidebar height, with its gutter reserved even before overflow. Its centered, clickable text-only header action always reads Open Project when connected, without a border or hatching. Without a database it reads Connect to database and opens the database dialog. When connected it opens the project-selection modal for recent projects or a folder picker. Successful opening adds or selects a retained project and shows a success toast; the action label remains unchanged. Cancelling preserves selection; errors stay in the modal. Other projects may remain active while opening or selecting a project. Below it are Chat (with Relay and equal-depth project headings, independent per-project New chat actions and owned conversations), Prompt Editor, Search, and Tables (Configurations, Events, Logs, Messages, Polling, Sessions and Worktrees). Settings follows Tables as the last normal navigation item. Its Advanced disclosure contains Experiments → Episodic Memory and the sibling Contributor Tools placeholder. Project identity, nested page labels and conversation roles/status stay text-only; only the six top-level navigation entries have their dedicated Phosphor duotone icons. Carbon chevrons restore show/hide disclosure icons, and More uses the horizontal overflow icon. Independent icon actions retain accessible labels; New chat uses a separate icon-only Carbon plus button. Keyboard, selection, expansion and disabled semantics are preserved. The database icon remains in the separate application footer, with an independent Carbon back arrow immediately to its left. Its tooltip is “return to splash page”; it preserves every open project and active work. No tab has a close button. Sessions shows the start screen before a database is connected and the sessions table afterward. Page labels use a 40px minimum base left inset, growing to fit larger icons, and 24px hierarchy steps (conversation labels retain their 4px alignment offset), without changing the splash selector's insets or narrowing full-row highlights. Full-width, left-aligned tab buttons stack vertically, wrap long labels, have 5px corners with no gaps between sidebar items, 4px vertical padding and 40px minimum rows that grow with larger button text, and have no side rules. Resting labeled controls use the sidebar background. Enabled hover uses viridian. The selected page has a contrasting fill at regular text weight, without an underline or bottom border, with selection also exposed to assistive technology. Preserve system selection outlines in forced colors. Up/Down wrap through the visible navigation order. Home and End move to the first and last visible destination. Switching tabs preserves table state, session selection, chat drafts, and Settings scroll position. A separate 28px draggable strip above the workspace reserves space for native window controls. The active page fills the remaining space to the right of the sidebar, separated by 12px; the workspace has matching 12px left and right insets and a 12px bottom inset. Each main page has no outer border and uses square corners. Page headers have a small bottom margin. Content uses consistent spacing: toolbars, the chat footer, and banners are inset 16px from the sides, the workspace sits above the application-wide footer with no footer reserved inside individual pages, Settings scrolls between 20px top and bottom margins, and conversations fill the Chat workspace. Toasts and actions menus render outside the page frame so they are never clipped. Every launch and renderer reload starts on Chat; saved preferences are unaffected. Chats use the normal Chat workspace; change reviews share its side panel with project files.
 - **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. On Windows, the native caption controls remain native, and their overlay background and symbols follow the effective app theme, including changes to System appearance. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
 - **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. The page's content is centered in the window, and only its heading drags the window so the page can scroll. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), a Transparent background switch (off by default), and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. The switch is saved in the main process's desktop.json alongside the database path, and applies only after restarting the app, not on renderer reload. When enabled, the window is created transparent without a native shadow; the area outside the content frame and opaque tabs is fully transparent instead of the solid theme surface. On macOS, mouse movement over these transparent areas enables click-through to the desktop, restoring interaction over content, overlays, tabs, and native controls. Linux keeps the window clickable. The splash stays opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, and Normal Text: font size (8 to 48px), weight (Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, OCR-A, Roboto, Space Grotesk, Tahoma, or Verdana). All categories default to IBM Plex Sans Regular in sentence case: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Page Titles 18px, and Normal Text 13px. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses IBM Plex Sans Regular; the regular 18px D-DIN splash subtitle remains unchanged. IBM Plex Sans includes bundled bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Navigation, headings, labels, status text and the wordmark have no fixed bold styling. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows, the default), Medium (32px), or Low (44px). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, OCR-A, Roboto, and Space Grotesk are bundled for offline use (OCR-A has only a regular weight, and bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
 - **Polling.** See [Polling](#polling). Settings has a Polling section after Text for intervals and reset controls, and a button that opens the Polling page.
@@ -808,6 +1046,13 @@ Desktop diff requests use `readDiff({ requestId, id })` and `cancelDiff({ reques
 
 Cancellation targets only the matching request. Workspace/database replacement, renderer reload, and shutdown cancel outstanding reads; discard settles reads for its run before removing the worktree. Cancelled queued preparations cannot later start Git, and results from an obsolete workspace/database are rejected. Git receives an optional abort signal through temporary-index preparation and diff execution. Cancellation waits for the subprocess completion callback before removing the temporary index; the worktree's real index remains unchanged. CLI patch output, default timeouts, and exit behavior are unchanged.
 
+In retained-project mode every diff, review capture and review-file read captures
+its runtime before yielding, including the selected runtime. Navigation does not
+invalidate that read. Project close, folder stop, workspace reset and discard
+settle only that owner's reads. Database replacement stops all database owners;
+renderer reload and shutdown cancel every read. The shared two-read admission
+limit remains bounded across projects.
+
 Chat review uses the same bounded read manager through `captureReview` and `readReviewFile`.
 The controller serializes capture preparation, then captures immutable Git trees outside the
 control queue. Turn-end and terminal worker events request captures; overlapping events coalesce.
@@ -862,7 +1107,14 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - The preload script exposes a fixed set of methods (`windowAppearance`, `setWindowTheme`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `readDiff`, `cancelDiff`, `readReview`, `readReviewFile`, `captureReview`, `reviewAction`, `checkGit`, `beginGitSetup`, `previewGitSetupFile`, `initializeGit`, `commitGitSetup`, `cancelGitSetup`, `beginAgentSetup`, `attemptAgentSetup`, `cancelAgentSetup`, `finishAgentSetup`, `abandonAgentSetup`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
 - The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
 - The orchestration chat receives one built-in Code60 MCP stdio server, in addition to user-configured MCP servers. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive configured servers but no Code60 MCP server. User servers cannot replace the reserved `code60` entry or inherit its gateway credentials. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No built-in tool accepts SQL, arbitrary commands, environment settings or target directories.
-- Updates are batched about every 40 ms. Each carries a revision number, and the renderer merges snapshots and buffered updates by revision, so starting up or reloading never loses or duplicates events.
+- Updates are batched about every 40 ms. Each carries a revision number and the
+  previous broadcast revision. The renderer subscribes before reading its initial
+  snapshot and buffers at most 32 update frames during each read. A buffer
+  overflow or missing broadcast triggers a fresh full snapshot, not a silently
+  incomplete event merge. Recovery keeps the subscription and permits only one
+  snapshot read at a time, with three attempts per recovery before an actionable
+  reload error. Disposal ignores late reads. This protects the current app stream;
+  selected-view detail compatibility remains until the app stream is summary-only.
 
 
 ## Runtime
@@ -886,7 +1138,7 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 
 ### Shared chat timing and Copy
 
-Orchestrator and worker chats use borderless agent text and solid user bubbles: verdigris in Light and lighter verdigris in Dark/System dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies without icons. A separate indicators column reserves space for counts and plain-text status; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn numbers only, without backend polling or new IPC.
+Orchestrator and worker chats use borderless agent text and solid user bubbles: verdigris in Light and lighter verdigris in Dark/System dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies without icons. A separate indicators column reserves space for counts and plain-text status; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
 
 Both chat interfaces group response/activity by prompt turns. The orchestrator uses its live animation, status and activity timer instead of a separate Working for line. Worker chats retain the local Working for timer after the prompt, above the agent turn. Completed turns freeze as Worked for with their recorded outcome, not a success claim. Prompt dispatch and completion timestamps exclude queue, startup and idle time but include permission waits. Optional turnEnd outcome/completedAt metadata distinguishes cancellation from timeout; terminal status events may carry turn/completedAt for transport failures before process cleanup. Older records remain readable. Missing crash/history boundaries and clock anomalies show timing unavailable/incomplete, never invented duration. Small display components use the existing visibility-aware local ticker, with no backend polling, per-tick live announcements, focus changes or transcript scroll resets.
 

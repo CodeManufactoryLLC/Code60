@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReviewSnapshotFile } from "../core/index.js";
 import { privateDirectory } from "../platform/index.js";
+import { readRelayState } from "./relay-storage.js";
 import { ReviewStore } from "./reviews.js";
 
 let root: string;
@@ -36,6 +37,66 @@ async function fixture() {
   if (!revision) throw new Error("Missing revision");
   return { review, revision, identity: { project: "/project", reviewId: review.id } };
 }
+it("loads one Relay review and its immutable contents without scanning sibling records", async () => {
+  const conversationId = randomUUID();
+  const recordId = randomUUID();
+  const read = vi.fn((path: string) => readRelayState(path, 16 * 1_048_576));
+  const options = { recordId, read };
+  const selected = await ReviewStore.open(root, conversationId, { ...options, create: true });
+  const provenance = {
+    conversationId,
+    generation: 4,
+    taskId: randomUUID(),
+    targetId: randomUUID(),
+    cwd: "/target",
+    device: "1",
+    inode: "9007199254740993",
+    workspaceMode: "worktree" as const,
+    baseline: "a".repeat(40),
+  };
+  const created = await selected.create(conversationId, 2, "Target changes", provenance);
+  expect(created.id).toBe(recordId);
+  await selected.addWorker(recordId, "worker", "Target worker", 1);
+  await selected.capture(recordId, [{ runId: "worker", files: [file("captured\n")] }]);
+  const revision = selected.get(recordId).revisions[0];
+  if (!revision) throw new Error("Missing revision");
+  await writeFile(join(selected.root, `${randomUUID()}.json`), "Malformed sibling", {
+    mode: 0o600,
+  });
+  read.mockClear();
+  const reopened = await ReviewStore.open(root, conversationId, options);
+  expect(read).toHaveBeenCalledExactlyOnceWith(join(selected.root, `${recordId}.json`));
+  expect(reopened.list()).toHaveLength(1);
+  expect(reopened.get(recordId)).toMatchObject({
+    relay: provenance,
+    workers: [{ runId: "worker", turn: 1 }],
+  });
+  expect((await reopened.content(recordId, revision.id, "worker:same.ts")).modified).toBe(
+    "captured\n",
+  );
+  expect(read).toHaveBeenLastCalledWith(join(selected.root, `${revision.id}.rev`));
+  await reopened.addWorker(recordId, "worker", "Target worker", 2);
+  expect(reopened.get(recordId).workers).toMatchObject([{ runId: "worker", turn: 2 }]);
+  expect((await reopened.content(recordId, revision.id, "worker:same.ts")).modified).toBe(
+    "captured\n",
+  );
+  await expect(reopened.create(conversationId, 3, "Overwrite")).rejects.toThrow("already exists");
+});
+it("requires an explicit scoped creation and refuses malformed or stale record identities", async () => {
+  const recordId = randomUUID();
+  await expect(ReviewStore.open(root, "/project", { recordId })).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  await expect(ReviewStore.open(root, "/project", { recordId: "" })).rejects.toThrow();
+  await expect(ReviewStore.open(root, "/project", { recordId: "../escape" })).rejects.toThrow();
+  const first = await ReviewStore.open(root, "/project", { recordId, create: true });
+  const stale = await ReviewStore.open(root, "/project", { recordId, create: true });
+  await first.create(null, 1, "Preserve");
+  await expect(stale.create(null, 2, "Overwrite")).rejects.toThrow("already exists");
+  expect((await ReviewStore.open(root, "/project", { recordId })).get(recordId).title).toBe(
+    "Preserve",
+  );
+});
 it("persists separate worker versions and keeps immutable content after later captures and restart", async () => {
   const { review, revision } = await fixture();
   expect(revision.files.map((file) => file.key)).toEqual(["worker-a:same.ts", "worker-b:same.ts"]);

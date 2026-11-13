@@ -1,23 +1,39 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, readdir, rm } from "node:fs/promises";
+import { lstat, open, opendir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   type Plan,
   type PlanAction,
   type PlanCreate,
+  type PlanTarget,
   type PlanUpdate,
   planMarkdown,
   planSchema,
   planSummary,
 } from "../bridge/index.js";
 import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
+import {
+  readRelayState,
+  storageCode,
+  verifyRelayStorage,
+  writeRelayState,
+} from "./relay-storage.js";
 
 const MAX_BYTES = 1_048_576;
-async function directory(path: string) {
+async function directory(path: string, strict: boolean) {
+  if (strict) {
+    try {
+      await verifyRelayStorage(path, true);
+      return;
+    } catch (error) {
+      if (storageCode(error) !== "ENOENT") throw error;
+    }
+  }
   await privateDirectory(path);
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Unsafe plan directory");
+  if (strict) await verifyRelayStorage(path, true);
 }
 async function regular(path: string) {
   const info = await lstat(path).catch((error: NodeJS.ErrnoException) => {
@@ -58,9 +74,13 @@ async function read(path: string): Promise<unknown> {
     await file.close();
   }
 }
-async function write(path: string, data: string) {
+async function write(path: string, data: string, strict = false) {
   if (Buffer.byteLength(data) > MAX_BYTES) throw new Error("Plan storage limit reached");
   await regular(path);
+  if (strict)
+    await verifyRelayStorage(path, false).catch((error) => {
+      if (storageCode(error) !== "ENOENT") throw error;
+    });
   const temporary = join(dirname(path), `${randomUUID()}.tmp`);
   try {
     await writePrivateFile(temporary, data, { flag: "wx", mode: 0o600 });
@@ -79,25 +99,37 @@ export class PlanStore {
   private constructor(
     readonly root: string,
     readonly chatId: string,
+    private readonly strict: boolean,
   ) {
     this.markdownRoot = join(root, "plans");
     this.recordRoot = join(root, ".code60", "plans");
   }
   private async directories() {
     for (const path of [this.root, join(this.root, ".code60"), this.recordRoot, this.markdownRoot])
-      await directory(path);
+      await directory(path, this.strict);
   }
-  static async open(root: string, chatId: string) {
-    const store = new PlanStore(root, chatId);
+  static async open(root: string, chatId: string, strict = false) {
+    const store = new PlanStore(root, chatId, strict);
     await store.directories();
-    const entries = (await readdir(store.recordRoot)).filter((name) =>
-      /^[a-f0-9-]{36}\.json$/.test(name),
-    );
+    const entries: string[] = [];
+    if (strict) {
+      for await (const entry of await opendir(store.recordRoot)) {
+        if (!/^[a-f0-9-]{36}\.json$/.test(entry.name))
+          throw new Error("Unrecognized Relay plan metadata");
+        entries.push(entry.name);
+        if (entries.length > 100) throw new Error("Plan limit reached");
+      }
+    } else
+      entries.push(
+        ...(await readdir(store.recordRoot)).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name)),
+      );
     if (entries.length > 100) throw new Error("Plan limit reached");
     for (const entry of entries) {
-      const plan = planSchema.parse(await read(join(store.recordRoot, entry)));
+      const path = join(store.recordRoot, entry);
+      const plan = planSchema.parse(await (strict ? readRelayState(path, MAX_BYTES) : read(path)));
       if (plan.chatId !== chatId || entry !== `${plan.id}.json`)
         throw new Error("Invalid plan identity");
+      store.records.set(plan.id, structuredClone(plan));
       if (["queued", "running"].includes(plan.state)) {
         plan.state = "paused";
         plan.error = "Execution interrupted. Inspect previous work before continuing.";
@@ -129,23 +161,32 @@ export class PlanStore {
     planSchema.parse(plan);
     await this.directories();
     // The record is the commit point; reopening regenerates any interrupted projection.
-    await write(join(this.markdownRoot, `${plan.id}.md`), planMarkdown(plan));
+    await write(join(this.markdownRoot, `${plan.id}.md`), planMarkdown(plan), this.strict);
     try {
-      await write(join(this.recordRoot, `${plan.id}.json`), JSON.stringify(plan));
+      const path = join(this.recordRoot, `${plan.id}.json`);
+      if (this.strict) await writeRelayState(path, plan, this.records.get(plan.id), MAX_BYTES);
+      else await write(path, JSON.stringify(plan));
     } catch (error) {
       const previous = this.records.get(plan.id);
       if (previous)
-        await write(join(this.markdownRoot, `${plan.id}.md`), planMarkdown(previous)).catch(
-          () => {},
-        );
+        await write(
+          join(this.markdownRoot, `${plan.id}.md`),
+          planMarkdown(previous),
+          this.strict,
+        ).catch(() => {});
       throw error;
     }
     this.records.set(plan.id, structuredClone(plan));
     return this.get(plan.id);
   }
-  create(request: PlanCreate, project: string | null) {
+  create(request: PlanCreate, project: string | null, targets?: readonly PlanTarget[]) {
     return this.serialized(async () => {
-      const key = JSON.stringify({ ...request, project });
+      if (
+        request.tasks.some((task) => task.target) &&
+        (!targets || targets.length !== request.tasks.length)
+      )
+        throw new Error("Explicit plan targets are only available in Relay");
+      const key = JSON.stringify({ ...request, project, ...(targets ? { targets } : {}) });
       const previous = [...this.records.values()].find(
         (plan) => plan.requestId === request.requestId,
       );
@@ -168,12 +209,13 @@ export class PlanStore {
         title: request.title,
         description: request.description,
         state: "draft",
-        tasks: request.tasks.map((task) => ({
+        tasks: request.tasks.map((task, index) => ({
           id: randomUUID(),
           text: task.text,
           state: "pending",
           note: "",
           workerIds: [],
+          ...(targets?.[index] ? { target: targets[index] } : {}),
         })),
       });
     });
@@ -186,11 +228,16 @@ export class PlanStore {
       return this.save(plan);
     });
   }
-  update(request: PlanUpdate) {
+  update(request: PlanUpdate, targets?: readonly PlanTarget[]) {
     return this.mutate(request.planId, (plan) => {
       if (plan.revision !== request.revision)
         throw new Error("Plan changed; read the latest revision");
       if (request.operation === "revise") {
+        if (
+          request.draft.tasks.some((task) => task.target) &&
+          (!targets || targets.length !== request.draft.tasks.length)
+        )
+          throw new Error("Explicit plan targets are only available in Relay");
         if (plan.state !== "draft") throw new Error("Only draft plans can be revised");
         const ids = request.draft.tasks.flatMap((task) => (task.id ? [task.id] : []));
         if (
@@ -200,12 +247,13 @@ export class PlanStore {
           throw new Error("Invalid task identity");
         plan.title = request.draft.title;
         plan.description = request.draft.description;
-        plan.tasks = request.draft.tasks.map((task) => ({
+        plan.tasks = request.draft.tasks.map((task, index) => ({
           id: task.id ?? randomUUID(),
           text: task.text,
           state: "pending",
           note: "",
           workerIds: [],
+          ...(targets?.[index] ? { target: targets[index] } : {}),
         }));
         plan.proposalRevision++;
       } else {

@@ -47,6 +47,22 @@ beforeEach(async () => {
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
+it("binds a previously captured Relay baseline without recapturing later project edits", async () => {
+  const captured = await tasks.snapshot(project);
+  await fs.writeFile(join(project, "file.txt"), "Edited after dispatch\n");
+  const snapshot = vi.fn(async () => {
+    throw new Error("Must not recapture");
+  });
+  const seeded = new TaskLoop(project, join(root, "relay-task"), { ...tasks, snapshot });
+  await expect(seeded.baseline(task, captured)).resolves.toBe(captured);
+  await expect(seeded.baseline(task)).resolves.toBe(captured);
+  await expect(seeded.baseline(task, "b".repeat(40))).rejects.toThrow("already bound");
+  await expect(seeded.baseline(randomUUID(), "HEAD")).rejects.toThrow();
+  expect(snapshot).not.toHaveBeenCalled();
+  const reopened = new TaskLoop(project, join(root, "relay-task"), { ...tasks, snapshot });
+  expect((await reopened.state(task)).baseline).toBe(captured);
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe("Edited after dispatch\n");
+});
 async function worker(name: string) {
   const base = await loop.baseline(task);
   const path = join(root, name);

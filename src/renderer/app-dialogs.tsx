@@ -109,14 +109,14 @@ export function AppDialogs({
           <ProjectConfirmation
             path={projectChoice.path}
             busy={busy}
-            blocked={Boolean(snapshot?.active)}
+            blocked={Boolean(snapshot?.active && !snapshot.openProjects)}
             error={error}
             onCancel={() => {
               setProjectChoice(undefined);
               setError("");
             }}
             onConfirm={() => {
-              if (snapshot?.active) return;
+              if (snapshot?.active && !snapshot.openProjects) return;
               confirmProject(projectChoice.path);
             }}
           />
@@ -129,7 +129,15 @@ export function AppDialogs({
           onClose={() => setSetup(false)}
           onStart={async (request) => {
             await attempt(async () => {
-              const ids = await api.start(request);
+              const ids = await api.start({
+                ...request,
+                ...(snapshot.projectInstanceId
+                  ? {
+                      projectId: snapshot.projectInstanceId,
+                      databaseEpoch: snapshot.databaseEpoch ?? 0,
+                    }
+                  : {}),
+              });
               const first = ids[0];
               if (!first) return;
               setSelected(first);

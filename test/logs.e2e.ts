@@ -116,7 +116,11 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     });
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await logs.getByRole("button", { name: "Pause viewing", exact: true }).click();
-    await page.evaluate(() => window.desktop.connectDatabase("create"));
+    await page.evaluate(() =>
+      window.desktop
+        .snapshot()
+        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+    );
     await expect(logs.getByText("Viewing paused. Diagnostic capture continues.")).toBeVisible();
     await expect(
       logs.getByRole("button", { name: "New records available, show latest" }),

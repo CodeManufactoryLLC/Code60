@@ -7,6 +7,16 @@ const prompt = (turn: number) => event({ type: "prompt", turn, text: "private pr
 const message = (text: string) => event({ type: "message", text });
 
 describe("unread replies", () => {
+  it("keeps compact count markers distinct from legacy turn markers while storing identifiers only", () => {
+    const counter = readMarkerKey("/db", "chat", "reply-count");
+    expect(counter).not.toBe(readMarkerKey("/db", "chat"));
+    expect(JSON.parse(counter.slice("code60.chatRead:".length))).toEqual([
+      "/db",
+      "chat",
+      "reply-count",
+    ]);
+    expect(loadReadMarker({ getItem: () => "12" }, counter)).toBe(12);
+  });
   it("starts at the first nonempty text and counts a turn once across chunks and activity", () => {
     const events = [
       prompt(1),

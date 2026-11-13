@@ -17,8 +17,8 @@ export function unreadCount(turns: readonly number[], read: number): number {
   return turns.filter((turn) => turn > read).length;
 }
 
-export function readMarkerKey(database: string, runId: string): string {
-  return `code60.chatRead:${JSON.stringify([database, runId])}`;
+export function readMarkerKey(database: string, runId: string, kind?: "reply-count"): string {
+  return `code60.chatRead:${JSON.stringify(kind ? [database, runId, kind] : [database, runId])}`;
 }
 
 export function loadReadMarker(storage: Pick<Storage, "getItem">, key: string): number {

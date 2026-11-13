@@ -1,14 +1,46 @@
 # Code60
 
 Code60 is an Electron desktop app and headless CLI for running coding agents
-in parallel. In a Git repository with a commit, each run gets its own worktree
-so you can review its changes independently. Outside one, agents work directly
-in the selected directory.
+in parallel. The CLI uses isolated worktrees in Git repositories with a commit
+and runs directly in the current directory otherwise. Desktop project workers
+require Git isolation; Relay workers explicitly choose isolated or direct work.
 
 In desktop Chat, open **Review changes** to inspect a task revision. **Use these changes…**
 opens a preview before applying the worker's result to your project. **Ask workers to revise**
 sends application conflicts back through Chat. **Undo application** restores the previous
 contents if the applied files still match. Applying and undoing preserve Git staging.
+
+## Relay and projects
+
+**Relay** is one persistent, application-wide conversation. It works without a
+database or open project and connects idle after agent setup. Restart restores
+history, not tasks or workers, and sends no prompt until you press Send. The first
+Send includes at most 64,000 Unicode characters of labelled history, once.
+Older messages stay on disk; bounded paging and exact-source Copy do not send prompts.
+Relay state lives under `$XDG_STATE_HOME/code60/relay` (by default
+`~/.local/state/code60/relay`), separately from project databases.
+
+Give Relay each intended target directory explicitly. It can dispatch to unopened
+Git repositories and, in **direct** mode, non-Git folders the harness permits.
+Direct changes are not isolated or automatically reversible. Relay never silently
+switches modes or redirects a refused launch to another folder.
+
+Open Relay's Files panel and choose **Open Changes** to review isolated results
+grouped by target. Capture a revision, inspect its diff, send feedback or preview
+checkout-local application. Apply and undo require confirmation and recheck newer
+edits. Saved reviews remain historical evidence after restart, without reconnecting
+workers or replaying feedback. Human **Accept** authorizes the displayed plan
+revision and target assignments, not later target changes.
+
+Project accordions retain independent chats, drafts and file views. Project chats
+remain database-backed and bound to their project. Navigation and database changes
+do not retarget Relay. Closing a project stops its own work, not Relay workers in
+that folder. **Stop workers in folder** includes those Relay workers; **Stop all**
+stops every owner. Database-wide legacy chat files are not loaded or migrated;
+existing files remain untouched.
+
+See [implementation and validation notes](docs/relay-implementation.md) for limits
+and platform-validation status.
 
 ## Security and privacy
 
@@ -61,12 +93,12 @@ before opening your browser; HTML and images are not loaded.
 
 ## Reusable commands
 
-Open **Commands** after connecting a database to save a reusable prompt. In an
-orchestrator chat, type `/` at the start of your message. Use Up/Down to choose
+Open **Commands** after connecting a database to save a reusable prompt. In a
+project orchestrator chat, type `/` at the start of your message. Use Up/Down to choose
 and Enter or Tab to insert the command, then add optional instructions and send.
 Escape closes the list. Unknown commands and paths such as `/tmp` are sent as
 plain text. Commands are shared across projects in the same database; worker
-chats do not expand them.
+chats and Relay do not expand them.
 
 Use the built-in `/create-command` to have the orchestrator create one for you:
 

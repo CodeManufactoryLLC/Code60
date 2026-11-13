@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -22,6 +22,35 @@ const draft = {
   description: "A small change",
   tasks: [{ text: "Implement" }, { text: "Verify" }],
 };
+it("keeps Relay target assignments and rejects private-record changes instead of overwriting them", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "code60-private-plan-"));
+  roots.push(parent);
+  const root = join(parent, "documents");
+  const store = await PlanStore.open(root, "relay", true);
+  const target = { id: randomUUID(), cwd: "/absolute/target", workspaceMode: "direct" as const };
+  const request = {
+    ...draft,
+    tasks: [
+      { text: "Direct task", target: { cwd: target.cwd, workspaceMode: target.workspaceMode } },
+    ],
+  };
+  const plan = await store.create(request, null, [target]);
+  expect(plan.tasks[0]?.target).toEqual(target);
+  const path = join(root, ".code60", "plans", `${plan.id}.json`);
+  const data = await readFile(path, "utf8");
+  await writeFile(path, data.replace('"Build"', '"Changed outside Code60"'));
+  await expect(
+    store.action({ type: "accept", chatId: "relay", planId: plan.id, revision: plan.revision }),
+  ).rejects.toThrow("metadata changed");
+  expect(store.get(plan.id).state).toBe("draft");
+  expect(await readFile(path, "utf8")).toContain("Changed outside Code60");
+  await writeFile(path, data);
+  expect((await PlanStore.open(root, "relay", true)).get(plan.id).tasks[0]?.target).toEqual(target);
+  if (process.platform !== "win32") {
+    await chmod(path, 0o644);
+    await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
+  }
+});
 it("creates one draft, preserves task identities on revision and deduplicates creation", async () => {
   const { root, store } = await setup();
   const plan = await store.create(draft, "/project");

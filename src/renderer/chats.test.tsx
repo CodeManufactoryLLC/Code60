@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
-import { conversations, reconcileDisclosure, workerLabel } from "./chats.js";
+import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
+import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const view = (id: string, status: RunStatus = "idle"): RunView => ({
@@ -32,6 +33,98 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("keeps a failed Relay connection navigable by its stable identity", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const failed = {
+      ...chat("old"),
+      kind: "relay" as const,
+      conversationId: "relay-id",
+      run: null,
+    };
+    expect(conversations([failed], [])).toEqual([
+      { id: "relay-id", label: "Relay", role: "orchestrator" },
+    ]);
+    const html = renderToStaticMarkup(
+      <ChatSidebar
+        chats={[failed]}
+        runs={[]}
+        selectedId="relay-id"
+        database={null}
+        eventsByRun={{}}
+        navigationSerial={undefined}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('id="conversation-relay-id"');
+    expect(html).not.toContain("disabled");
+  });
+  it("renders Relay and project groups as siblings with only each project's own conversations", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const projects = ["a", "b", "c"].map((id) => ({
+      id,
+      path: `/project-${id}`,
+      active: id === "a",
+      chatIds: [id],
+      workerIds: id === "a" ? ["one"] : [],
+    }));
+    const html = renderToStaticMarkup(
+      <ProjectChatSidebar
+        projects={projects}
+        selectedProjectId="b"
+        onProjectAction={async () => true}
+        chats={[
+          { ...chat("relay"), kind: "relay" },
+          { ...chat("unbound"), title: "Legacy history" },
+          ...projects.map((project) => ({
+            ...chat(project.id, project.workerIds),
+            kind: "project" as const,
+            projectId: project.id,
+          })),
+        ]}
+        runs={[run("one")]}
+        navigationSerial={undefined}
+        selectedId="b"
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    const sections = html.match(/<section[\s\S]*?<\/section>/g) ?? [];
+    expect(sections).toHaveLength(3);
+    expect(html.indexOf("Relay")).toBeLessThan(html.indexOf("<section"));
+    expect(html).not.toContain("Legacy history");
+    sections.forEach((section, index) => {
+      const project = projects[index];
+      expect(section).toContain(`id="conversation-${project?.id}"`);
+      expect(section).not.toContain('id="conversation-relay"');
+      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
+      expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("More for")).toBeLessThan(section.indexOf("Toggle chats"));
+      expect(section).toContain('aria-hidden="false"');
+    });
+    expect(sections[0]).toContain('id="conversation-one"');
+    expect(sections[1]).not.toContain('id="conversation-one"');
+  });
+  it("numbers project chats within their owner, consistently with a filtered sidebar", () => {
+    const relay = { ...chat("relay"), kind: "relay" as const };
+    const a = { ...chat("a"), kind: "project" as const, projectId: "a" };
+    const b = { ...chat("b"), kind: "project" as const, projectId: "b" };
+    const next = { ...chat("next"), kind: "project" as const, projectId: "a" };
+    const all = [relay, a, b, next];
+    expect(all.map((item) => conversationTitle(all, item))).toEqual([
+      "Relay",
+      "Chat 1",
+      "Chat 1",
+      "Chat 2",
+    ]);
+    expect(conversations(all, []).find((item) => item.id === next.run?.id)?.label).toBe(
+      conversations([a, next], [])[1]?.label,
+    );
+  });
   it.each([true, false])("marks only the opened conversation current (Chat open: %s)", (open) => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     for (const selectedId of ["a", "one", "manual"]) {

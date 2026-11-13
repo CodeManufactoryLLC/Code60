@@ -13,12 +13,14 @@ import {
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
   parsePollKeys,
+  parsePollRequest,
   parsePollSettings,
   parsePollVisibility,
   parseProjectPath,
   parsePromptTemplateId,
   parseReviewAction,
   parseReviewFileRead,
+  parseReviewRead,
   parseRunSettings,
   parseSaveCommand,
   parseSaveConfiguration,
@@ -28,6 +30,27 @@ import {
 } from "./index.js";
 
 describe("desktop IPC validation", () => {
+  it("validates explicit polling addresses without granting paths or task authority", () => {
+    const projectId = crypto.randomUUID();
+    const request = { keys: ["history"], projectId, databaseEpoch: 1 };
+    expect(parsePollRequest(request)).toEqual(request);
+    expect(parsePollRequest({ keys: ["config"] })).toEqual({ keys: ["config"] });
+    expect(parsePollRequest({ keys: ["configurations"], databaseEpoch: 1 })).toEqual({
+      keys: ["configurations"],
+      databaseEpoch: 1,
+    });
+    for (const value of [
+      ["history"],
+      { ...request, keys: [] },
+      { ...request, keys: ["history", "history"] },
+      { ...request, databaseEpoch: undefined },
+      { ...request, databaseEpoch: -1 },
+      { ...request, databaseEpoch: Number.MAX_SAFE_INTEGER + 1 },
+      { ...request, projectId: "not-a-uuid" },
+      { ...request, cwd: "/outside" },
+    ])
+      expect(() => parsePollRequest(value)).toThrow();
+  });
   it("validates narrow command saves, deletes and orchestrator invocations", () => {
     const id = "01900000-0000-4000-8000-000000000001";
     const fields = { name: "review", title: "Review", prompt: "Inspect changes." };
@@ -136,6 +159,35 @@ describe("desktop IPC validation", () => {
       ).toThrow();
     expect(() => parseReviewAction({ ...comment, text: "x".repeat(8_001) })).toThrow();
     expect(() => parseReviewAction({ ...comment, execute: true })).toThrow();
+  });
+  it("requires paired project UUID and database epoch on every review request", () => {
+    const id = crypto.randomUUID();
+    const identity = { project: "/project", projectId: id, databaseEpoch: 0 };
+    const requests = [
+      { parse: parseReviewRead, value: { ...identity, reviewId: id, requestId: id } },
+      {
+        parse: parseReviewFileRead,
+        value: { ...identity, reviewId: id, requestId: id, revisionId: id, fileKey: "worker:a.ts" },
+      },
+      { parse: parseReviewAction, value: { ...identity, type: "open-run", runId: "worker" } },
+      {
+        parse: parseReviewAction,
+        value: { ...identity, reviewId: id, type: "delete-comment", id },
+      },
+    ];
+    for (const { parse, value } of requests) {
+      expect(parse(value)).toEqual(value);
+      for (const extra of [
+        { projectId: undefined },
+        { databaseEpoch: undefined },
+        { projectId: "../project" },
+        { databaseEpoch: -1 },
+        { databaseEpoch: 0.5 },
+        { databaseEpoch: Number.MAX_SAFE_INTEGER + 1 },
+        { cwd: "/outside" },
+      ])
+        expect(() => parse({ ...value, ...extra })).toThrow("Invalid review request");
+    }
   });
   it("preserves POSIX file names while rejecting Windows devices, streams and ambiguous names", () => {
     const context = (root: string, preview: string) => ({
@@ -253,6 +305,21 @@ describe("desktop IPC validation", () => {
       expect(() => parseBoolean(value)).toThrow();
   });
   const settings = { agents: ["claude", "codex"], allow: ["execute"], allowAll: false };
+  it("validates project-instance launch fences without saving them as run settings", () => {
+    const projectId = "3a3bde35-fcb2-4d3e-bf22-a6b0a61591e3";
+    expect(parseStart({ ...settings, projectId, databaseEpoch: 0 })).toMatchObject({
+      projectId,
+      databaseEpoch: 0,
+    });
+    for (const fence of [
+      { projectId },
+      { databaseEpoch: 0 },
+      { projectId, databaseEpoch: -1 },
+      { projectId: "path", databaseEpoch: 0 },
+    ])
+      expect(() => parseStart({ ...settings, ...fence })).toThrow();
+    expect(() => parseRunSettings({ ...settings, projectId, databaseEpoch: 0 })).toThrow();
+  });
   it("validates named settings and launch-backed saves without accepting prompts", () => {
     expect(parseSaveConfiguration({ name: " Team ", settings })).toEqual({
       name: "Team",

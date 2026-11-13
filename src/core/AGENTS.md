@@ -32,3 +32,12 @@
 - Diff preparation owns run validation and interrupted-run reconciliation; diff execution accepts a prepared worktree/base and optional abort signal without mutating run records. Keep `diffRun` as the CLI-compatible composition.
 
 - The internal requireIsolation preparation option rejects direct-folder fallback before records or agents are created. CLI defaults stay unchanged. Optional desktop history composition retains both stores without migration or schema changes.
+- Explicit internal workspaceMode selects direct or required worktree preparation
+  for Relay. Direct always uses the supplied directory, including inside Git;
+  worktree never falls back. Reject direct together with requireIsolation or base.
+  Omitting workspaceMode retains all existing CLI defaults.
+- Interactive runs pass their startup cancellation signal into worktree creation.
+  Shutdown before the agent starts is cancellation, not a failed task. Preserve
+  headless Git calls and wait for started subprocess cleanup before settling.
+- TaskLoop may bind an already captured baseline for a Relay task/target. Validate
+  the commit identity, refuse rebinding, and never snapshot again for that binding.

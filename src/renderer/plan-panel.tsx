@@ -133,6 +133,15 @@ export function PlanPanel({
               <span className="plan-task-status">
                 <span className="plan-task-badge">{taskStates[task.state]}</span>
               </span>
+              {task.target && (
+                <p className="plan-task-note">
+                  Target: <code>{task.target.cwd}</code> (
+                  {task.target.workspaceMode === "direct"
+                    ? "direct edits, no isolated apply or undo"
+                    : "isolated worktree"}
+                  )
+                </p>
+              )}
               {task.note && <p className="plan-task-note">{task.note}</p>}
             </li>
           ))}

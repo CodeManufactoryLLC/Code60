@@ -139,6 +139,23 @@ it("leaves empty revisions blank and never substitutes a different revision", ()
   expect(read).toHaveBeenLastCalledWith(expect.anything(), "/project", undefined);
 });
 
+it("qualifies file reads and remembered selection by the project instance", () => {
+  const projectId = crypto.randomUUID();
+  const other = { ...file, key: "worker:other.ts", path: "other.ts" };
+  render(
+    { projectId, databaseEpoch: 7, revisions: [{ ...revision, files: [file, other] }] },
+    { "code60.review:/project:review:revision:file": other.key },
+  );
+  expect(read).toHaveBeenLastCalledWith(expect.anything(), "/project", {
+    reviewId: "review",
+    revisionId: revision.id,
+    fileKey: file.key,
+    label: "Worker",
+    projectId,
+    databaseEpoch: 7,
+  });
+});
+
 it("reports saved capture failures without mutation or capture retry controls", () => {
   const html = render({
     error: "Capture failed",

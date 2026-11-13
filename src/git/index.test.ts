@@ -101,6 +101,18 @@ describe("git", () => {
     expect(worktrees[1]?.branch).toBeNull();
   });
 
+  it("omits unrequested sizes and stops a hidden scan without returning a partial total", async () => {
+    const unrequested = vi.fn(() => true);
+    const inventory = await g.listWorktrees(repo, { sizes: false, current: unrequested });
+    expect(inventory).toMatchObject([{ path: repo, sizeBytes: null }]);
+    expect(unrequested).not.toHaveBeenCalled();
+    let checks = 0;
+    const interrupted = await g.listWorktrees(repo, { current: () => ++checks < 3 });
+    expect(checks).toBe(3);
+    expect(interrupted).toMatchObject([{ path: repo, sizeBytes: null }]);
+    expect((await g.listWorktrees(repo))[0]?.sizeBytes).toBeGreaterThan(0);
+  });
+
   it("parses NUL-delimited worktree fields, ignoring bare entries", () => {
     expect(
       parseWorktrees(

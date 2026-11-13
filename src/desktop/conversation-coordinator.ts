@@ -8,6 +8,7 @@ import {
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import { ConversationReplies } from "./conversation-replies.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
 import type { PlanStore } from "./plans.js";
@@ -37,6 +38,8 @@ const UPDATE_BATCH = 20;
 
 /** All mutable state and capabilities belong to one orchestration conversation. */
 export class ChatSession {
+  readonly replies = new ConversationReplies();
+  reservations = 0;
   tactic: string | null | undefined;
   tasks: TaskContext[] = [];
   taskId: string | undefined;
@@ -172,9 +175,9 @@ export class ConversationCoordinator {
     }).length;
   }
 
-  assertCapacity(session: ChatSession, maxParallel: number): void {
+  assertCapacity(session: ChatSession, maxParallel: number, ownReservation = 0): void {
     this.assertCurrent(session);
-    if (this.liveWorkerCount(session) >= maxParallel)
+    if (this.liveWorkerCount(session) + session.reservations - ownReservation >= maxParallel)
       throw new Error(
         `All ${maxParallel} worker slots are in use. Finish or stop an idle worker first.`,
       );
@@ -191,6 +194,10 @@ export class ConversationCoordinator {
       return previous.key === key
         ? previous.result
         : Promise.reject(new Error("This requestId was already used with other arguments"));
+    if (session.dispatches.size >= 4096)
+      return Promise.reject(
+        new Error("This chat reached its lifetime dispatch limit. Start a new project chat."),
+      );
     const result = start();
     session.dispatches.set(requestId, { key, result });
     void result.catch(() => {

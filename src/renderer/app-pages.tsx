@@ -48,6 +48,10 @@ export function AppPages(props: AppPagesProps) {
     accept,
   } = props;
   const snapshot = state?.snapshot;
+  const projectRuns = useMemo(
+    () => snapshot?.runs.filter((run) => !run.relay) ?? [],
+    [snapshot?.runs],
+  );
   const {
     scope,
     selected,
@@ -89,7 +93,7 @@ export function AppPages(props: AppPagesProps) {
   const run = snapshot?.runs.find((item) => item.record.id === selected);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
   const views = {
-    chat: <ChatWorkspace key={databaseKey} {...props} />,
+    chat: <ChatWorkspace {...props} />,
     settings: (
       <>
         <SettingsPage
@@ -322,7 +326,7 @@ export function AppPages(props: AppPagesProps) {
           key={scope.viewKey}
           api={api}
           directory={directory ?? null}
-          runs={snapshot?.runs ?? []}
+          runs={projectRuns}
           data={transcripts}
           provider={orchestratorConfigured ? (snapshot?.orchestration.provider ?? null) : null}
         />
@@ -354,7 +358,7 @@ export function AppPages(props: AppPagesProps) {
           api={api}
           provider={snapshot?.orchestration.provider ?? null}
           directory={directory ?? null}
-          runs={snapshot?.runs ?? []}
+          runs={projectRuns}
           data={transcripts}
           onOpen={(result) => {
             if (result.kind === "file" && result.path) {

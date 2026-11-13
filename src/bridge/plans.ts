@@ -5,11 +5,17 @@ const uuid = z.string().uuid();
 const revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const title = z.string().trim().min(1).max(160);
 const taskText = z.string().trim().min(1).max(2_000);
+const targetDraft = z.strictObject({
+  cwd: z.string().min(1).max(32_768),
+  workspaceMode: z.enum(["direct", "worktree"]),
+});
+const planTargetSchema = targetDraft.extend({ id: uuid });
+export type PlanTarget = z.infer<typeof planTargetSchema>;
 const planDraftSchema = z.strictObject({
   title,
   description: z.string().max(16_000),
   tasks: z
-    .array(z.strictObject({ id: uuid.optional(), text: taskText }))
+    .array(z.strictObject({ id: uuid.optional(), text: taskText, target: targetDraft.optional() }))
     .min(1)
     .max(100),
 });
@@ -55,6 +61,7 @@ export const planSchema = z.strictObject({
         state: z.enum(["pending", "in_progress", "completed", "blocked"]),
         note: z.string().max(2_000),
         workerIds: z.array(runIdSchema).max(100),
+        target: planTargetSchema.optional(),
       }),
     )
     .min(1)
@@ -99,6 +106,9 @@ export function planMarkdown(plan: Plan): string {
     "",
     ...plan.tasks.flatMap((task) => [
       `- [${task.state === "completed" ? "x" : " "}] ${task.text.replace(/\n/g, "\n  ")}`,
+      ...(task.target
+        ? [`  Target: ${JSON.stringify(task.target.cwd)} (${task.target.workspaceMode})`]
+        : []),
       ...(task.note ? [`  ${task.state}: ${task.note.replace(/\n/g, "\n  ")}`] : []),
     ]),
     "",

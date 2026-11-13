@@ -20,7 +20,10 @@ import {
   parseBoolean,
   parseConfigurationId,
   parseDatabaseMode,
+  parseDatabaseWrite,
   parseDeleteCommand,
+  parseDetailIdentity,
+  parseDetailRequest,
   parseDiffIdentity,
   parseDiffRequest,
   parseFileContext,
@@ -37,9 +40,10 @@ import {
   parseOrchestrationProvider,
   parsePlanAction,
   parsePlanRead,
-  parsePollKeys,
+  parsePollRequest,
   parsePollSettings,
   parsePollVisibility,
+  parseProjectAction,
   parseProjectPath,
   parsePromptTemplateId,
   parseReviewAction,
@@ -125,6 +129,7 @@ const controller = new DesktopController(
   },
   {
     openDatabase: openProjectDatabase,
+    relay: true,
     preferences,
     refreshPath: async (signal) => {
       setEnvironmentPath(process.env, await desktopPath({ signal }));
@@ -423,10 +428,23 @@ async function ready(): Promise<void> {
     return true;
   });
   handle("desktop:snapshot", () => controller.snapshot());
+  handle("desktop:snapshot-summary", () => controller.snapshot(true, true));
+  handle("desktop:detail-subscribe", (value) => {
+    controller.subscribeDetails(parseDetailRequest(value), (frame) => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send("desktop:detail", frame);
+    });
+  });
+  handle("desktop:detail-read", (value) => controller.readDetails(parseDetailRequest(value)));
+  handle("desktop:relay-files", (value) => controller.setRelayFileContext(value));
+  handle("desktop:detail-unsubscribe", (value) =>
+    controller.unsubscribeDetails(parseDetailIdentity(value)),
+  );
   handle("desktop:web-link", (value) => webLinks.open(value));
   handle("desktop:database", async (value) => {
-    const mode = parseDatabaseMode(value);
-    if (controller.active) throw new Error("Finish or stop all runs before switching databases");
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    const mode = parseDatabaseMode(request);
+    const epoch = controller.assertDatabaseRequest(databaseEpoch);
     const path =
       mode === "create"
         ? (
@@ -444,17 +462,21 @@ async function ready(): Promise<void> {
               filters: databaseFilters,
             })
           ).filePaths[0];
+    controller.assertDatabaseRequest(epoch);
     if (!path) return false;
-    await controller.connect(path, mode === "create");
+    await controller.connect(path, mode === "create", epoch);
     return true;
   });
-  handle("desktop:folder", async () => {
+  handle("desktop:folder", async (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    if (request !== undefined) throw new Error("Invalid request");
+    const epoch = controller.assertDatabaseRequest(databaseEpoch);
     if (!controller.connected) throw new Error("Connect to a database first");
-    if (controller.active) throw new Error("Finish or stop all runs before switching folders");
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory"],
       title: "Open project",
     });
+    controller.assertDatabaseRequest(epoch);
     if (result.canceled || !result.filePaths[0]) return false;
     if (!window || window.isDestroyed()) return false;
     const confirmation = await dialog.showMessageBox(window, {
@@ -467,18 +489,30 @@ async function ready(): Promise<void> {
       cancelId: 0,
       noLink: true,
     });
+    controller.assertDatabaseRequest(epoch);
     if (confirmation.response !== 1) return false;
-    await controller.open(result.filePaths[0]);
+    await controller.open(result.filePaths[0], epoch);
     return true;
   });
-  handle("desktop:project", (value) => controller.openProject(parseProjectPath(value)));
-  handle("desktop:project-remove", (value) => controller.removeProject(parseProjectPath(value)));
+  handle("desktop:project", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.openProject(parseProjectPath(request), databaseEpoch);
+  });
+  handle("desktop:project-action", (value) => controller.projectAction(parseProjectAction(value)));
+  handle("desktop:project-remove", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.removeProject(parseProjectPath(request), databaseEpoch);
+  });
   handle("desktop:project-clear", (value) => {
-    if (value !== undefined) throw new Error("Invalid request");
-    return controller.clearProjects();
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    if (request !== undefined) throw new Error("Invalid request");
+    return controller.clearProjects(databaseEpoch);
   });
   handle("desktop:files", (value) => controller.setFileContext(parseFileContext(value)));
-  handle("desktop:poll", (value) => controller.poll(parsePollKeys(value)));
+  handle("desktop:poll", (value) => {
+    const { keys, ...identity } = parsePollRequest(value);
+    return controller.poll(keys, identity);
+  });
   handle("desktop:poll-settings", (value) => controller.setPollSettings(parsePollSettings(value)));
   handle("desktop:poll-paused", (value) => controller.setPollingPaused(parseBoolean(value)));
   handle("desktop:visibility", (value) => controller.setVisibility(parsePollVisibility(value)));
@@ -518,20 +552,30 @@ async function ready(): Promise<void> {
     controller.cancelMemoryExtraction(parseMemoryRequestId(value)),
   );
   handle("desktop:start", (value) => controller.start(parseStart(value)));
-  handle("desktop:configuration-save", (value) =>
-    controller.saveConfiguration(parseSaveConfiguration(value)),
-  );
-  handle("desktop:configuration-delete", (value) =>
-    controller.deleteConfiguration(parseConfigurationId(value)),
-  );
-  handle("desktop:prompt-save", (value) =>
-    controller.savePromptTemplate(parseSavePromptTemplate(value)),
-  );
-  handle("desktop:command-save", (value) => controller.saveCommand(parseSaveCommand(value)));
-  handle("desktop:command-delete", (value) => controller.deleteCommand(parseDeleteCommand(value)));
-  handle("desktop:prompt-reset", (value) =>
-    controller.resetPromptTemplate(parsePromptTemplateId(value)),
-  );
+  handle("desktop:configuration-save", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.saveConfiguration(parseSaveConfiguration(request), databaseEpoch);
+  });
+  handle("desktop:configuration-delete", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.deleteConfiguration(parseConfigurationId(request), databaseEpoch);
+  });
+  handle("desktop:prompt-save", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.savePromptTemplate(parseSavePromptTemplate(request), databaseEpoch);
+  });
+  handle("desktop:command-save", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.saveCommand(parseSaveCommand(request), databaseEpoch);
+  });
+  handle("desktop:command-delete", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.deleteCommand(parseDeleteCommand(request), databaseEpoch);
+  });
+  handle("desktop:prompt-reset", (value) => {
+    const { request, databaseEpoch } = parseDatabaseWrite(value);
+    return controller.resetPromptTemplate(parsePromptTemplateId(request), databaseEpoch);
+  });
   handle("desktop:git-check", (value) => controller.checkGit(parseGitProject(value)));
   handle("desktop:git-begin", (value) => controller.beginGitSetup(parseGitProject(value)));
   handle("desktop:git-file", (value) => controller.previewGitSetupFile(parseGitSetupFile(value)));
@@ -542,6 +586,8 @@ async function ready(): Promise<void> {
   handle("desktop:git-cancel", (value) => controller.cancelGitSetup(parseGitProject(value)));
   handle("desktop:diff-read", (value) => controller.readDiff(parseDiffRequest(value)));
   handle("desktop:plan-read", (value) => controller.readPlan(parsePlanRead(value)));
+  handle("desktop:relay-message", (value) => controller.readRelayMessage(value));
+  handle("desktop:relay-review", (value) => controller.relayReview(value));
   handle("desktop:plan-action", (value) => controller.planAction(parsePlanAction(value)));
   handle("desktop:task-action", (value) => controller.taskAction(parseTaskAction(value)));
   handle("desktop:review-action", (value) => controller.reviewAction(parseReviewAction(value)));
@@ -565,10 +611,10 @@ async function ready(): Promise<void> {
   controller.subscribe((snapshot) => {
     // Mirrors the renderer's rule for opening projects: a database is connected and no batch is active.
     const openProject = Menu.getApplicationMenu()?.getMenuItemById("open-project");
-    if (openProject) openProject.enabled = snapshot.database !== null && !snapshot.active;
+    if (openProject) openProject.enabled = snapshot.database !== null;
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
       window.webContents.send("desktop:update", snapshot);
-  });
+  }, true);
 
   window = new BrowserWindow({
     width: 1280,
@@ -602,6 +648,7 @@ async function ready(): Promise<void> {
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
+    controller.clearDetailSubscriptions();
     void controller.cancelDiffReads().catch(() => {});
     void controller.cancelGitSetup().catch(() => {});
     void controller.cancelAgentSetup().catch(() => {});

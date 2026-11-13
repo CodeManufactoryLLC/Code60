@@ -76,10 +76,12 @@ describe("database connection navigation", () => {
     }
     expect(html.match(/<button[^>]*id="tab-chat"[^>]*>/)?.[0]).not.toContain("disabled");
   });
-  it("restores the project selector and workspace controls with a database", () => {
+  it("keeps the Open Project action and workspace controls independent of the selected folder", () => {
     for (const directory of [undefined, "/project"]) {
       const html = navigation("/database.sqlite", directory);
-      expect(html).toContain(directory ? ">project</span>" : "Open a project");
+      expect(html).toContain(">Open Project</span>");
+      expect(html).toContain('title="Open Project"');
+      expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
       expect(html.match(/<button[^>]*id="tab-prompts"[^>]*>/)?.[0]).not.toContain("disabled");
       expect(html.match(/<button[^>]*id="tables-toggle"[^>]*>/)?.[0]).not.toContain("disabled");
