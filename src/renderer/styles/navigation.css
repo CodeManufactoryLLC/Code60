@@ -8,22 +8,23 @@
 }
 
 .chat-sidebar-row > .icon-button {
-  flex: 0 0 24px;
-  width: 24px;
-  padding: 4px;
+  flex: 0 0 var(--nav-action-width);
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
+  padding-inline: 0;
   align-self: stretch;
+  color: inherit;
 }
 
-/* Repository identity above the interactive page tabs. */
+/* Shared container for project and page navigation. */
 .sidebar {
   position: relative;
   --button-size: var(--nav-font-size, 15px);
-  --nav-row-height: max(40px, calc(var(--button-size, 15px) * 1.5 + 8px));
   --nav-step: 24px;
-  --nav-inset: max(40px, calc(var(--button-size, 15px) * 1.5 + 20px));
+  --nav-row-height: max(40px, calc(1.25 * var(--button-size) + 8px));
+  --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
+  --nav-action-width: max(24px, calc(var(--button-size) + 4px));
   --control-fill: var(--chat-neutral);
   --disabled-fill: var(--chat-neutral);
   grid-column: 1;
@@ -42,6 +43,21 @@
   min-height: 0;
 }
 
+.sidebar-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 var(--nav-row-height);
+  padding-right: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-search {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: var(--nav-action-width);
+  height: var(--nav-row-height);
+}
+
 .sidebar-content {
   --nav-indent: 0px;
   flex: 1;
@@ -53,52 +69,8 @@
   min-height: 0;
 }
 
-.sidebar-header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex-shrink: 0;
-  height: var(--nav-row-height);
-  min-height: var(--nav-row-height);
-  max-height: var(--nav-row-height);
-  padding: 4px 12px;
-  border: 0;
-  background: transparent;
-}
-
-button.project-card {
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 0;
-  border-radius: var(--ui-radius);
-  background-color: var(--control-fill);
-  text-align: center;
-}
-
-.app button.project-card[data-empty] {
-  border: 0;
-  background-image: none;
-}
-
-.sidebar-title {
-  margin: 0;
-  font-family: var(--title-font, var(--font));
-  --letter-spacing: var(--title-spacing, normal);
-  letter-spacing: var(--title-tracking, normal);
-  font-size: 15px;
-  font-weight: var(--title-weight, 400);
-  text-transform: var(--title-case, none);
-  color: var(--text);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.project-card .sidebar-title {
-  min-width: 0;
+.sidebar button {
+  border-radius: 0;
 }
 
 /* Vertical page tabs */
@@ -111,7 +83,7 @@ button.project-card {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
   background: transparent;
 }
 
@@ -125,11 +97,12 @@ button.project-card {
 
 .page-tab [role="tab"],
 .page-tab .page-group-toggle {
+  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent));
   width: 100%;
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
-  padding: 4px 12px 4px calc(var(--nav-inset) + var(--nav-indent));
+  padding: 4px 12px 4px var(--nav-label-inset);
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
@@ -141,47 +114,32 @@ button.project-card {
   gap: 8px;
 }
 
-.page-tab-label {
+/* Center the visible letterforms with the icons and clip only at the end of the label. */
+.page-tab-label,
+.chat-sidebar-label,
+.project-chat-title {
+  display: block;
   min-width: 0;
-  overflow: hidden;
+  overflow: clip visible;
+  text-box: trim-both cap alphabetic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Scale Phosphor icons with labels; the gutter and rows grow only when needed. */
+/* Match the navigation text size for leading icons and row actions. */
+.sidebar :is(.page-group-toggle, .icon-button, .project-chat-label) > .carbon-icon {
+  --icon-size: 1em;
+}
+
 .navigation-icon {
   position: absolute;
-  left: calc(var(--nav-inset) + var(--nav-indent) - 1.5em - 8px);
+  left: calc(var(--nav-label-inset) - 1em - 8px);
   top: 50%;
   transform: translateY(-50%);
-  width: 1.5em;
-  height: 1.5em;
+  width: 1em;
+  height: 1em;
   flex-shrink: 0;
   pointer-events: none;
-}
-
-.navigation-icon[data-icon="chats"] {
-  color: light-dark(#24864b, #6cce96);
-}
-
-.navigation-icon[data-icon="pencil-line"] {
-  color: light-dark(#8054bd, #bd9cf4);
-}
-
-.navigation-icon[data-icon="megaphone"] {
-  color: light-dark(#c33d49, #ff8792);
-}
-
-.navigation-icon[data-icon="gear"] {
-  color: light-dark(#6a737d, #adb5bd);
-}
-
-.navigation-icon[data-icon="magnifying-glass"] {
-  color: light-dark(#bb650d, #f5af57);
-}
-
-.navigation-icon[data-icon="database"] {
-  color: light-dark(#2878b8, #78b9ef);
 }
 
 .page-tab[data-closable="true"] [role="tab"] {
@@ -233,20 +191,12 @@ button.project-card {
 
 .sidebar-settings-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  color: var(--muted);
 }
 
 .sidebar-settings-heading[data-active="true"] :where(.page-tab) [role="tab"] {
   color: var(--text);
-}
-
-button.sidebar-settings-toggle {
-  height: var(--nav-row-height);
-  min-height: var(--nav-row-height);
-  max-height: var(--nav-row-height);
-  align-self: stretch;
-  padding-inline: 6px;
-  color: inherit;
 }
 
 .page-tab-list {
@@ -322,41 +272,29 @@ button.sidebar-settings-toggle {
 }
 
 .sidebar-resize:focus-visible {
-  outline: 2px solid var(--focus-line);
+  outline: 2px solid var(--focus-outline);
   outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
 }
 
 .chat-sidebar-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   min-width: 0;
-
-  border-radius: var(--ui-radius);
 }
 
-#chat-pages .chat-sidebar-row:has(> .chat-sidebar-entry:enabled):hover {
+.sidebar .chat-sidebar-row:has(> .chat-sidebar-entry:enabled):hover {
   background: var(--hover-bg);
 }
 
-#chat-pages .chat-sidebar-row > .chat-sidebar-entry {
+.sidebar .chat-sidebar-row > button.chat-sidebar-entry {
   background-color: transparent;
 }
 
-#chat-pages .chat-sidebar-row > .chat-sidebar-entry:not(:disabled) {
+.sidebar .chat-sidebar-row > .chat-sidebar-entry:not(:disabled) {
   color: inherit;
-}
-
-#chat-pages .chat-sidebar-row:has(> .chat-sidebar-entry:enabled:active) {
-  background: var(--text);
-  color: var(--bg);
-}
-
-#chat-pages .chat-sidebar-entry > .chat-sidebar-label {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .chat-sidebar-indicators {
@@ -373,15 +311,8 @@ button.sidebar-settings-toggle {
   font-size: 11px;
 }
 
-.chat-unread,
-.chat-workers-toggle {
+.chat-unread {
   flex-shrink: 0;
-}
-
-.chat-workers-toggle {
-  width: 24px;
-  min-height: var(--nav-row-height);
-  padding: 4px 6px;
 }
 
 .chat-sidebar-group,
@@ -413,12 +344,11 @@ button.sidebar-settings-toggle {
 }
 
 .project-chat-heading {
-  --nav-row-height: max(
-    40px,
-    calc(var(--button-size, 15px) * 1.5 + 8px),
-    calc(var(--button-size, 15px) * 1.2 + 22px)
-  );
+  --project-label-inset: calc(var(--nav-inset) + var(--nav-indent) - 4px);
+  --nav-row-height: max(40px, calc(var(--button-size) * 1.2 + 22px));
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: stretch;
   min-width: 0;
   min-height: var(--nav-row-height);
@@ -428,6 +358,10 @@ button.sidebar-settings-toggle {
   background: var(--hover-bg);
 }
 
+.project-chat-heading:has(.project-chat-name:enabled) {
+  cursor: pointer;
+}
+
 .project-chat-name {
   display: flex;
   flex-direction: column;
@@ -435,30 +369,32 @@ button.sidebar-settings-toggle {
   justify-content: center;
   gap: 0;
   flex: 1;
-  min-width: 0;
+  min-width: min(100%, calc(var(--project-label-inset) + 2ch));
   height: var(--nav-row-height);
-  padding: 4px 4px 4px calc(var(--nav-inset) - 4px + var(--nav-indent));
+  padding: 4px 4px 4px calc(var(--project-label-inset) - 1em - 8px);
   border: 0;
   background: transparent;
   text-align: left;
   line-height: 1.2;
 }
 
-.project-chat-name > span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.project-chat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .project-chat-activity {
+  overflow: hidden;
+  padding-left: calc(var(--button-size) + 8px);
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .project-chat-heading > .icon-button {
-  flex: 0 0 24px;
-  width: 24px;
-  padding: 4px;
+  flex: 0 0 var(--nav-action-width);
+  padding-inline: 0;
   height: var(--nav-row-height);
 }
 
@@ -475,7 +411,6 @@ button.sidebar-settings-toggle {
   min-width: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--ui-radius);
   background: transparent;
   box-shadow: none;
   cursor: col-resize;
@@ -494,18 +429,29 @@ button.sidebar-settings-toggle {
   background: transparent;
 }
 
-.chat-sidebar-new {
+.chat-page-heading {
+  position: relative;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.chat-page-heading:has(.project-sidebar-open) .page-group-toggle {
+  padding-right: calc(var(--nav-action-width) + 8px);
+}
+
+.project-sidebar-open {
   position: absolute;
   top: 50%;
-  right: 32px;
+  right: 4px;
   transform: translateY(-50%);
-  width: 36px;
+  width: var(--nav-action-width);
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
-  padding: 4px 6px;
+  padding: 4px 0;
   margin: 0;
   border: 0;
   background: var(--control-fill);
+  color: inherit;
 }
 
 .chat-sidebar-list {
@@ -516,8 +462,9 @@ button.sidebar-settings-toggle {
 }
 
 .chat-sidebar-entry {
+  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent) - 4px);
   flex: 1;
-  min-width: 0;
+  min-width: min(100%, calc(var(--nav-label-inset) + 2ch));
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -528,7 +475,7 @@ button.sidebar-settings-toggle {
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
-  padding: 4px 8px 4px calc(var(--nav-inset) - 4px + var(--nav-indent));
+  padding: 4px 8px 4px var(--nav-label-inset);
   margin: 0;
   border: 0;
   text-align: left;
@@ -538,12 +485,6 @@ button.sidebar-settings-toggle {
   background: var(--control-fill);
   color: var(--text);
   font-weight: 400;
-}
-
-.chat-sidebar-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .chat-unread {
@@ -562,11 +503,15 @@ button.sidebar-settings-toggle {
   text-align: center;
 }
 
-#chat-pages .chat-sidebar {
+.sidebar .chat-sidebar {
   background: transparent;
 }
 
-#chat-pages .chat-sidebar-entry {
+.relay-sidebar {
+  flex-shrink: 0;
+}
+
+.sidebar .chat-sidebar-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   justify-content: start;
@@ -575,26 +520,91 @@ button.sidebar-settings-toggle {
   overflow-wrap: anywhere;
 }
 
+.relay-sidebar
+  > .chat-sidebar-list
+  > .chat-sidebar-group
+  > .chat-sidebar-row
+  > .chat-sidebar-entry {
+  --nav-label-inset: var(--nav-inset);
+}
+
+.relay-sidebar .chat-worker-children {
+  --nav-indent: var(--nav-step);
+}
+
+.relay-navigation-icon {
+  --relay-track-color: #000000;
+  width: 1.25em;
+  height: 1.25em;
+  left: calc(var(--nav-label-inset) - 1.25em - 8px);
+}
+
+:root[data-color-scheme="dark"] .relay-navigation-icon {
+  --relay-track-color: #aaaaaa;
+}
+
+.relay-track-edge,
+.relay-track {
+  fill: none;
+  stroke: var(--relay-track-color);
+}
+
+.relay-track-edge {
+  /* The 81-unit roadway leaves a 12-unit edge on each side (previously 3). */
+  stroke-width: 105;
+}
+
+.relay-track {
+  stroke-width: 81;
+}
+
+.relay-start-line {
+  stroke: #b8b8b8;
+  stroke-width: 5;
+}
+
+.relay-car {
+  offset-distance: var(--relay-car-parked);
+  offset-anchor: center;
+  transform-box: fill-box;
+}
+
+.relay-navigation-icon[data-state="working"] .relay-car {
+  offset-distance: var(--relay-car-lap);
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .relay-navigation-icon[data-state="working"] .relay-car {
+    animation: relay-lap 3s linear infinite;
+  }
+}
+
+@keyframes relay-lap {
+  to {
+    offset-distance: calc(var(--relay-car-lap) + 100%);
+  }
+}
+
+@media (forced-colors: active) {
+  .relay-track-edge,
+  .relay-start-line {
+    stroke: ButtonText;
+  }
+  .relay-track {
+    stroke: ButtonFace;
+  }
+  .relay-car {
+    fill: ButtonText;
+  }
+}
+
 .sidebar :is(button, [role="tab"]):focus-visible,
 .message-copy button:focus-visible {
-  outline: 2px solid var(--text);
+  outline: 2px solid var(--focus-outline);
   outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
 }
 
-.sidebar button:hover:not(:disabled) {
+.sidebar button:hover:not(:disabled, .chat-sidebar-entry) {
   background: var(--hover-bg);
-}
-
-.chat-sidebar-row > button {
-  border-radius: 0;
-}
-
-.chat-sidebar-row > button:first-child {
-  border-top-left-radius: var(--ui-radius);
-  border-bottom-left-radius: var(--ui-radius);
-}
-
-.chat-sidebar-row > button:last-child {
-  border-top-right-radius: var(--ui-radius);
-  border-bottom-right-radius: var(--ui-radius);
 }

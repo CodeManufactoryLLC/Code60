@@ -18,6 +18,7 @@ import {
   pageDefinitions,
   pageGroup,
   pagesInGroup,
+  settingsIcons,
   settingsLabels,
 } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
@@ -27,9 +28,9 @@ import { type PageId, type PageTabs, type SettingsSectionId, settingsSectionIds 
 export function PageTabBar({
   tabs,
   settingsSection,
-  directory,
   onSelect,
   onSettingsSectionSelect,
+  onChatArchived,
   onOpenProject,
   onConnectDatabase,
   projectDisabled,
@@ -46,10 +47,9 @@ export function PageTabBar({
 }: {
   tabs: PageTabs;
   settingsSection: SettingsSectionId;
-  /** The open project folder, if any. */
-  directory?: string | undefined;
   onSelect(id: PageId): void;
   onSettingsSectionSelect(id: SettingsSectionId): void;
+  onChatArchived?: (() => void) | undefined;
   onOpenProject(): void;
   onConnectDatabase?(): void;
   projectDisabled: boolean;
@@ -108,21 +108,26 @@ export function PageTabBar({
           event.currentTarget.releasePointerCapture(event.pointerId);
         }}
       />
-      <div id="navigation-sidebar-content" className="sidebar-content">
+      <div className="sidebar-toolbar">
         <button
           type="button"
-          className="sidebar-header project-card"
-          data-empty={!database || !directory}
-          disabled={projectDisabled}
-          onClick={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
-          aria-haspopup="dialog"
-          title={!database ? "Connect to database" : "Open Project"}
+          id="tab-search"
+          className="icon-button sidebar-search"
+          aria-label="Search"
+          title="Search"
+          aria-controls="panel-search"
+          aria-pressed={tabs.active === "search"}
+          disabled={!pageAvailable("search", database)}
+          onClick={() => onSelect("search")}
         >
-          <span className="sidebar-title">
-            {!database ? "Connect to database" : "Open Project"}
-          </span>
+          <Icon name="search" />
         </button>
+      </div>
+      <div id="navigation-sidebar-content" className="sidebar-content">
         <PageTabList
+          onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
+          projectDisabled={projectDisabled}
+          onChatArchived={onChatArchived}
           tabs={tabs}
           settingsSection={settingsSection}
           onSelect={onSelect}
@@ -143,14 +148,18 @@ export function PageTabBar({
   );
 }
 
+const toolPages = pagesInGroup("tools");
 const tablePages = pagesInGroup("tables");
 const experimentPages = pagesInGroup("experiments");
 
 function PageTabList({
+  onOpenProject,
+  projectDisabled,
   tabs,
   settingsSection,
   onSelect,
   onSettingsSectionSelect,
+  onChatArchived,
   api,
   chats,
   runs,
@@ -162,10 +171,13 @@ function PageTabList({
   openProjects,
   selectedProjectId,
 }: {
+  onOpenProject(): void;
+  projectDisabled: boolean;
   tabs: PageTabs;
   settingsSection: SettingsSectionId;
   onSelect(id: PageId): void;
   onSettingsSectionSelect(id: SettingsSectionId): void;
+  onChatArchived?: (() => void) | undefined;
   api: DesktopApi;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -180,6 +192,16 @@ function PageTabList({
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState("");
   const chatInFlight = useRef(false);
+  const archivedDestination = useRef<string | undefined>(undefined);
+  const relay = chats.find((chat) => chat.kind === "relay");
+  const relayId = relay && conversationId(relay);
+  const relaySelected = relayId !== undefined && relayId === selectedId;
+  useLayoutEffect(() => {
+    if (!chatPending && archivedDestination.current === selectedId && selectedId) {
+      document.getElementById(`conversation-${selectedId}`)?.focus();
+      archivedDestination.current = undefined;
+    }
+  }, [chatPending, selectedId]);
   async function projectAction(request: ProjectAction) {
     if (chatInFlight.current) return false;
     chatInFlight.current = true;
@@ -212,9 +234,20 @@ function PageTabList({
     setChatPending(true);
     setChatError("");
     const navigate = request.type === "new" || request.type === "select";
+    const archiveCurrent =
+      request.type === "archive" && request.id === selectedId && tabs.active === "chat";
     if (navigate) onSelect("chat");
     try {
       await api.orchestrationChatAction(request);
+      if (archiveCurrent) {
+        onChatArchived?.();
+        if (relayId) {
+          await api.orchestrationChatAction({ type: "select", id: relayId });
+          archivedDestination.current = relayId;
+          onWorkerSelect(undefined, null);
+          onSelect("chat");
+        }
+      }
       if (navigate)
         onWorkerSelect(
           undefined,
@@ -242,22 +275,23 @@ function PageTabList({
     localStorage.setItem("code60.chatExpanded", String(chatExpanded));
   }, [chatExpanded]);
   useLayoutEffect(() => {
-    if (chatExpanded && selectedId)
+    if (chatExpanded && selectedId && !relaySelected)
       document.querySelector("#chat-pages [aria-current='true']")?.scrollIntoView({
         block: "nearest",
       });
-  }, [chatExpanded, selectedId]);
+  }, [chatExpanded, selectedId, relaySelected]);
   const previousNavigation = useRef({ tabs, selectedId });
   useLayoutEffect(() => {
     const previous = previousNavigation.current;
     if (
       tabs.active === "chat" &&
+      !relaySelected &&
       (previous.tabs !== tabs ||
         (previous.selectedId !== undefined && previous.selectedId !== selectedId))
     )
       setChatExpanded(true);
     previousNavigation.current = { tabs, selectedId };
-  }, [tabs, selectedId]);
+  }, [tabs, selectedId, relaySelected]);
   const [settingsExpanded, setSettingsExpanded] = useState(
     () => localStorage.getItem("code60.settingsExpanded") === "true",
   );
@@ -269,6 +303,9 @@ function PageTabList({
   const [experimentsExpanded, setExperimentsExpanded] = useState(
     () => localStorage.getItem("code60.experimentsExpanded") === "true",
   );
+  const [toolsExpanded, setToolsExpanded] = useState(
+    () => localStorage.getItem("code60.toolsExpanded") !== "false",
+  );
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem("code60.tablesExpanded") === "true",
   );
@@ -276,6 +313,7 @@ function PageTabList({
   const previousActivePage = useRef<PageId | undefined>(undefined);
   const experimentActive = experimentPages.includes(tabs.active);
   const advancedActive = experimentActive || tabs.active === "contributor-tools";
+  const toolActive = toolPages.includes(tabs.active);
   const tableActive = tablePages.includes(tabs.active);
   useLayoutEffect(() => {
     const activeChanged = previousActivePage.current !== tabs.active;
@@ -283,7 +321,8 @@ function PageTabList({
     if (tabs.active === "settings" || (activeChanged && pageGroup(tabs.active) === "advanced")) {
       setSettingsExpanded(true);
     }
-    if (tablePages.includes(tabs.active)) setExpanded(true);
+    if (toolPages.includes(tabs.active)) setToolsExpanded(true);
+    else if (tablePages.includes(tabs.active)) setExpanded(true);
     else if (pageGroup(tabs.active) === "advanced") {
       setAdvancedExpanded(true);
       if (experimentPages.includes(tabs.active)) setExperimentsExpanded(true);
@@ -291,6 +330,8 @@ function PageTabList({
     // Expansion and modal focus restoration must finish before focusing the revealed page.
     navigationFrame.current = requestAnimationFrame(() => {
       navigationFrame.current = undefined;
+      // Do not steal focus if the user has already entered the newly opened page.
+      if (document.getElementById(`panel-${tabs.active}`)?.contains(document.activeElement)) return;
       document.getElementById(`tab-${tabs.active}`)?.focus();
     });
     return () => {
@@ -311,12 +352,26 @@ function PageTabList({
   }, [experimentsExpanded]);
   const openPages = (group: Parameters<typeof pagesInGroup>[0]) =>
     pagesInGroup(group).filter((id) => tabs.open.includes(id));
-  const primary = openPages("primary");
+  useEffect(() => {
+    localStorage.setItem("code60.toolsExpanded", String(toolsExpanded));
+  }, [toolsExpanded]);
+  const toolDestinations = openPages("tools");
   const experiments = openPages("experiments");
   const tables = openPages("tables");
-  const destinations: (PageId | SettingsSectionId | "tables" | "advanced" | "experiments")[] = [
+  const destinations: (
+    | PageId
+    | SettingsSectionId
+    | "relay"
+    | "tables"
+    | "tools"
+    | "advanced"
+    | "experiments"
+  )[] = [
+    "home",
+    ...(relay && !chatPending ? (["relay"] as const) : []),
     "chat",
-    ...primary,
+    "tools",
+    ...(toolsExpanded ? toolDestinations : []),
     "tables",
     ...(expanded ? tables : []),
     "settings",
@@ -337,13 +392,38 @@ function PageTabList({
   const visible = destinations.filter(
     (id) =>
       database ||
+      id === "relay" ||
       id === "tables" ||
+      id === "tools" ||
       id === "advanced" ||
       isSettingsSection(id) ||
       (id !== "experiments" && pageAvailable(id, database)),
   );
+  const afterChat = visible[visible.indexOf("chat") + 1];
+  const relayButtons = () =>
+    [...document.querySelectorAll<HTMLButtonElement>(".relay-sidebar button:enabled")].filter(
+      (button) => !button.closest("[hidden]"),
+    );
+  const chatButtons = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("#chat-pages button:enabled")].filter(
+      (button) => !button.closest("[hidden]"),
+    );
+  const selectConversation = (id: string) => {
+    if (chats.some((chat) => conversationId(chat) === id)) void chatAction({ type: "select", id });
+    else {
+      onWorkerSelect(id);
+      onSelect("chat");
+    }
+  };
   function moveTo(target: (typeof visible)[number] | undefined) {
-    if (target === "tables" || target === "advanced" || target === "experiments") {
+    if (target === "relay") {
+      relayButtons()[0]?.focus();
+    } else if (
+      target === "tools" ||
+      target === "tables" ||
+      target === "advanced" ||
+      target === "experiments"
+    ) {
       document.getElementById(`${target}-toggle`)?.focus();
     } else if (target && isSettingsSection(target)) {
       onSelect("settings");
@@ -360,18 +440,24 @@ function PageTabList({
       cancelAnimationFrame(navigationFrame.current);
       navigationFrame.current = undefined;
     }
-    if (id === visible[1] && event.key === "ArrowUp" && chatExpanded) {
-      const children = [
-        ...document.querySelectorAll<HTMLButtonElement>("#chat-pages button:not(:disabled)"),
-      ].filter((button) => !button.closest("[hidden]"));
-      if (children.length) {
+    if (id === "chat" && event.key === "ArrowUp") {
+      const lastRelayButton = relayButtons().at(-1);
+      if (lastRelayButton) {
         event.preventDefault();
-        children[children.length - 1]?.focus();
+        lastRelayButton.focus();
+        return;
+      }
+    }
+    if (id === afterChat && event.key === "ArrowUp" && chatExpanded) {
+      const lastChild = chatButtons().at(-1);
+      if (lastChild) {
+        event.preventDefault();
+        lastChild.focus();
         return;
       }
     }
     if (id === "chat" && event.key === "ArrowDown" && chatExpanded) {
-      const child = document.querySelector<HTMLButtonElement>("#chat-pages button:not(:disabled)");
+      const child = chatButtons()[0];
       if (child) {
         event.preventDefault();
         child.focus();
@@ -442,6 +528,21 @@ function PageTabList({
     }
     if (
       event.key === "ArrowLeft" &&
+      (id === "tools" || toolPages.some((pageId) => pageId === id))
+    ) {
+      event.preventDefault();
+      setToolsExpanded(false);
+      document.getElementById("tools-toggle")?.focus();
+      return;
+    }
+    if (event.key === "ArrowRight" && id === "tools") {
+      event.preventDefault();
+      if (toolsExpanded && database && toolDestinations[0]) moveTo(toolDestinations[0]);
+      else setToolsExpanded(true);
+      return;
+    }
+    if (
+      event.key === "ArrowLeft" &&
       (id === "tables" || tablePages.some((pageId) => pageId === id))
     ) {
       event.preventDefault();
@@ -483,7 +584,8 @@ function PageTabList({
           type="button"
           role="tab"
           id={`tab-${id}`}
-          aria-controls={`panel-${id}`}
+          aria-controls={id === "settings" ? "panel-settings settings-pages" : `panel-${id}`}
+          aria-expanded={id === "settings" ? settingsExpanded : undefined}
           aria-selected={tabs.active === id && (id !== "settings" || !settingsExpanded)}
           title={pageDefinitions[id].label}
           disabled={!pageAvailable(id, database)}
@@ -523,6 +625,7 @@ function PageTabList({
           }}
           onKeyDown={(event) => navigate(event, id)}
         >
+          <NavigationIcon name={settingsIcons[id]} />
           <span className="page-tab-label">{settingsLabels[id]}</span>
         </button>
       </div>
@@ -530,13 +633,50 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
+      <div role="tablist" aria-label="Home page" aria-orientation="vertical">
+        {page("home", true)}
+      </div>
+      {relay && (
+        <ChatSidebar
+          relayNavigation
+          chats={[relay]}
+          runs={runs.filter((run) => run.relay)}
+          selectedId={selectedId}
+          navigationSerial={navigationSerial}
+          database={database}
+          eventsByRun={eventsByRun}
+          open={tabs.active === "chat"}
+          pending={chatPending}
+          onSelect={selectConversation}
+          onKeyDown={(event) => {
+            if (event.defaultPrevented) return;
+            const buttons = relayButtons();
+            const index = buttons.indexOf(event.target as HTMLButtonElement);
+            if (index < 0) return;
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+              event.preventDefault();
+              const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+              if (next) next.focus();
+              else moveTo(event.key === "ArrowDown" ? "chat" : "home");
+            } else if (event.key === "Home" || event.key === "End") {
+              event.preventDefault();
+              moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
+            }
+          }}
+        />
+      )}
       <div className="chat-page-heading" data-nav-active={tabs.active === "chat" && !selectedId}>
-        <div className="page-tab" role="tablist" aria-label="Chat page" aria-orientation="vertical">
+        <div
+          className="page-tab"
+          role="tablist"
+          aria-label="Projects page"
+          aria-orientation="vertical"
+        >
           <button
             type="button"
             role="tab"
             aria-selected={tabs.active === "chat"}
-            title="Chat"
+            title="Projects"
             id="tab-chat"
             className="page-group-toggle"
             aria-expanded={chatExpanded}
@@ -550,33 +690,26 @@ function PageTabList({
           >
             {pageDefinitions.chat.icon && <NavigationIcon name={pageDefinitions.chat.icon} />}
             <span className="page-tab-label">{pageDefinitions.chat.label}</span>
-            <Icon name={chatExpanded ? "chevron--down" : "chevron--right"} />
           </button>
         </div>
-        {!chats.some((chat) => chat.kind === "relay") && (
-          <button
-            type="button"
-            className="icon-button chat-sidebar-new"
-            aria-label="New chat"
-            title="New chat"
-            disabled={chatPending || !database}
-            onClick={() => {
-              setChatExpanded(true);
-              void chatAction({ type: "new" });
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                document.getElementById("tab-chat")?.focus();
-              } else if (
-                ["ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-              )
-                navigate(event, "chat");
-            }}
-          >
-            <Icon name="add" />
-          </button>
-        )}
+        <button
+          type="button"
+          className="icon-button project-sidebar-open"
+          aria-label={database ? "Open Project" : "Connect to database"}
+          title={database ? "Open Project" : "Connect to database"}
+          aria-haspopup="dialog"
+          disabled={projectDisabled}
+          onClick={onOpenProject}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              document.getElementById("tab-chat")?.focus();
+            } else if (["ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              navigate(event, "chat");
+          }}
+        >
+          <Icon name="add" />
+        </button>
       </div>
       {chatError && (
         <p className="error-banner" role="alert">
@@ -610,7 +743,7 @@ function PageTabList({
           ) {
             event.preventDefault();
             if (event.key === "Home") {
-              moveTo("chat");
+              moveTo(visible[0]);
               return;
             }
             if (event.key === "End") {
@@ -618,7 +751,7 @@ function PageTabList({
               return;
             }
             const next = index + (event.key === "ArrowDown" ? 1 : -1);
-            if (next >= buttons.length) moveTo(visible[1]);
+            if (next >= buttons.length) moveTo(afterChat);
             else buttons[next]?.focus();
           }
         }}
@@ -637,39 +770,50 @@ function PageTabList({
             eventsByRun={eventsByRun}
             open={tabs.active === "chat"}
             pending={chatPending}
-            onSelect={(id) => {
-              if (chats.some((chat) => conversationId(chat) === id))
-                void chatAction({ type: "select", id });
-              else {
-                onWorkerSelect(id);
-                onSelect("chat");
-              }
-            }}
+            onSelect={selectConversation}
           />
         ) : (
           <ChatSidebar
             onAction={chatAction}
-            chats={chats}
-            runs={runs}
+            chats={chats.filter((chat) => chat.kind !== "relay")}
+            runs={runs.filter((run) => !run.relay)}
             selectedId={selectedId}
             navigationSerial={navigationSerial}
             database={database}
             eventsByRun={eventsByRun}
             open={tabs.active === "chat"}
             pending={chatPending}
-            onSelect={(id) => {
-              if (chats.some((chat) => conversationId(chat) === id))
-                void chatAction({ type: "select", id });
-              else {
-                onWorkerSelect(id);
-                onSelect("chat");
-              }
-            }}
+            onSelect={selectConversation}
           />
         )}
       </div>
-      <div className="page-tab-list" role="tablist" aria-label="Pages" aria-orientation="vertical">
-        {primary.map((id, index) => page(id, index === 0))}
+      <div className="page-tab" data-nav-active={toolActive && !toolsExpanded}>
+        <button
+          type="button"
+          id="tools-toggle"
+          title="Tools"
+          className="page-group-toggle"
+          aria-expanded={toolsExpanded}
+          aria-controls="tool-pages"
+          data-active={toolActive && !toolsExpanded}
+          onClick={() => setToolsExpanded((value) => !value)}
+          onKeyDown={(event) => navigate(event, "tools")}
+        >
+          <NavigationIcon name={groups.tools.icon} />
+          <span className="page-tab-label">{groups.tools.label}</span>
+        </button>
+      </div>
+      <div
+        id="tool-pages"
+        className="page-tab-list page-group-pages"
+        role="tablist"
+        aria-label="Tools"
+        aria-orientation="vertical"
+        hidden={!toolsExpanded}
+        inert={!toolsExpanded}
+        aria-hidden={!toolsExpanded}
+      >
+        {toolDestinations.map((id, index) => page(id, index === 0))}
       </div>
       <div className="page-tab" data-nav-active={tableActive && !expanded}>
         <button
@@ -687,7 +831,6 @@ function PageTabList({
         >
           <NavigationIcon name={groups.tables.icon} />
           <span className="page-tab-label">{groups.tables.label}</span>
-          <Icon name={expanded ? "chevron--down" : "chevron--right"} />
         </button>
       </div>
       <div
@@ -716,17 +859,6 @@ function PageTabList({
           >
             {page("settings", true)}
           </div>
-          <button
-            type="button"
-            className="icon-button sidebar-settings-toggle"
-            aria-label="Settings pages"
-            aria-controls="settings-pages"
-            aria-expanded={settingsExpanded}
-            onClick={() => setSettingsExpanded((value) => !value)}
-            onKeyDown={(event) => navigate(event, "settings")}
-          >
-            <Icon name={settingsExpanded ? "chevron--down" : "chevron--right"} />
-          </button>
         </div>
         <div
           id="settings-pages"
@@ -754,8 +886,8 @@ function PageTabList({
               onClick={() => setAdvancedExpanded((value) => !value)}
               onKeyDown={(event) => navigate(event, "advanced")}
             >
+              <NavigationIcon name={groups.advanced.icon} />
               <span className="page-tab-label">{groups.advanced.label}</span>
-              <Icon name={advancedExpanded ? "chevron--down" : "chevron--right"} />
             </button>
           </div>
           <div
@@ -777,8 +909,8 @@ function PageTabList({
                 onClick={() => setExperimentsExpanded((value) => !value)}
                 onKeyDown={(event) => navigate(event, "experiments")}
               >
+                <NavigationIcon name={groups.experiments.icon} />
                 <span className="page-tab-label">{groups.experiments.label}</span>
-                <Icon name={experimentsExpanded ? "chevron--down" : "chevron--right"} />
               </button>
             </div>
             <div

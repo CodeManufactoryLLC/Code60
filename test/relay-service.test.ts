@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  appendFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -62,6 +63,7 @@ function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn())
 }
 afterEach(async () => {
   await Promise.allSettled(services.map((service) => service.shutdown(true)));
+  vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });
 });
 async function connect() {
@@ -738,22 +740,75 @@ it("pages through bounded opaque cursors without replacing first-Send history or
   expect(agents.sessions[0]?.prompts[0]).toContain(initial.serialized);
 });
 
-it("bounds streaming history writes and persists an explicit incomplete state on overflow", async () => {
+it("saves thousands of streaming chunks without failing or cancelling the conversation", async () => {
   agents.script = (_text, session) => {
-    for (let index = 0; index < 300; index++)
-      session.update({ type: "message", text: `chunk ${index}\n` });
+    for (let index = 0; index < 3000; index++)
+      session.update({ type: "message", text: `chunk ${index} 😀\n` });
     return "end_turn";
   };
   await connect();
   await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Stream" });
-  await vi.waitFor(() => expect(relay.snapshot().error).toContain("could not be saved"));
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
   await relay.shutdown();
-  agents = new FakeAgents();
-  relay = create();
-  await relay.sync("claude", DEFAULT_CONFIG);
+  const store = await RelayStore.open(join(root, "state", "code60", "relay"));
+  try {
+    const history = await store.history();
+    expect(history.incomplete).toBe(false);
+    expect(history.messages.at(-1)?.text).toBe(
+      Array.from({ length: 3000 }, (_, index) => `chunk ${index} 😀\n`).join(""),
+    );
+  } finally {
+    await store.close();
+  }
+  expect(relay.snapshot().error).toBeNull();
+  expect(agents.sessions[0]?.cancels).toBe(0);
+});
+
+it("keeps Send and worker delivery operational after a journal failure and saves again after Retry", async () => {
+  await connect();
+  const append = vi.spyOn(RelayStore.prototype, "appendBatch");
+  append.mockRejectedValueOnce(new Error("Transient write failure"));
+  await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "First" });
+  await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+  expect(relay.snapshot().error).toBeNull();
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "Still chatting",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const { scope } = await tool("code60_get_context");
+  await tool("code60_dispatch_agent", {
+    scope,
+    requestId: "history-failure-worker",
+    cwd: join(root, "target"),
+    workspaceMode: "direct",
+    prompt: "Worker remains operational",
+  });
+  await vi.waitFor(() => expect(agents.sessions[0]?.prompts.length).toBeGreaterThan(2));
+  expect(append).toHaveBeenCalledTimes(1);
+  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect(relay.snapshot().historySaving).toBe("available");
   expect(relay.snapshot().history?.incomplete).toBe(true);
-  expect(relay.snapshot().error).toContain("history is incomplete");
+  expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+  await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Second" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+  expect(relay.snapshot().history?.serialized).toContain("Second");
+  expect(relay.snapshot().error).toBeNull();
+});
+
+it("preserves a damaged journal and rejects connection before launching an agent", async () => {
+  const path = join(root, "state", "code60", "relay");
+  const store = await RelayStore.open(path);
+  await store.close();
+  await appendFile(join(path, "history.frames"), "unfinished");
+  await relay.sync("claude", DEFAULT_CONFIG);
+  expect(relay.snapshot().error).toContain("damaged");
   expect(agents.specs).toHaveLength(0);
+  expect(await readFile(join(path, "history.frames"), "utf8")).toBe("unfinished");
 });
 
 it("reads original excerpt sources through bounded opaque cursors without prompts or authority", async () => {

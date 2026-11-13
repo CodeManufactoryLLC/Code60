@@ -24,7 +24,8 @@ describe("navigation registry", () => {
   it("keeps tables alphabetical and primary navigation in its documented order", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
-    expect(pagesInGroup("primary")).toEqual(["prompts", "commands", "search"]);
+    expect(pagesInGroup("tools")).toEqual(["prompts", "commands"]);
+    expect(pagesInGroup("primary")).toEqual(["home", "search"]);
   });
   it("uses the same availability for palette and sidebar, including database-free Logs", () => {
     for (const database of [null, "/db"]) {

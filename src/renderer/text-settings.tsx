@@ -2,6 +2,7 @@ import { useId } from "react";
 import { SettingsHeader } from "./settings-layout.js";
 import {
   defaultTextStyles,
+  defaultTypeface,
   fontSizes,
   fontWeights,
   parseTypeface,
@@ -102,7 +103,7 @@ export function TextSettings({
                       })
                     }
                   >
-                    <option value="">Default (IBM Plex Sans)</option>
+                    <option value="">Default ({defaultTypeface.label})</option>
                     {typefaces.map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.label}

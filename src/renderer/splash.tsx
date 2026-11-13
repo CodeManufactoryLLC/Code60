@@ -3,7 +3,6 @@ import type { DesktopApi, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
 import { DatabaseNotice } from "./database-notice.js";
-import { ProjectSelector, type ProjectSelectorProps } from "./project-selector.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
@@ -14,7 +13,6 @@ export function Splash({
   error,
   theme,
   onThemeChange,
-  projectActions,
   onEnter,
   onConnectDatabase,
 }: {
@@ -25,7 +23,6 @@ export function Splash({
   error: string;
   theme: Theme;
   onThemeChange(theme: Theme): void;
-  projectActions: Pick<ProjectSelectorProps, "onConnect" | "onOpen" | "onCreate" | "onRemove">;
   onEnter(): void;
   onConnectDatabase(): void;
 }) {
@@ -43,12 +40,7 @@ export function Splash({
     if (!ready || setup) return;
     if (configured && !snapshot?.database)
       dialog.current?.querySelector<HTMLButtonElement>(".database-notice button")?.focus();
-    else if (configured)
-      dialog.current
-        ?.querySelector<HTMLButtonElement>(
-          ".splash-projects .project-item:not(:disabled), .splash-projects .project-open-folder:not(:disabled)",
-        )
-        ?.focus();
+    else if (configured) dialog.current?.querySelector<HTMLButtonElement>(".splash-enter")?.focus();
     else setupButton.current?.focus();
   }, [ready, configured, snapshot?.database, setup]);
   useEffect(() => {
@@ -90,47 +82,33 @@ export function Splash({
               <p id={`${id}-subtitle`} className="splash-subtitle">
                 v0.2 'Paddock' (Beta)
               </p>
+              {ready && (
+                <>
+                  {error && (
+                    <p className="error-banner" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  {configured ? (
+                    <button type="button" className="splash-enter" disabled={busy} onClick={enter}>
+                      Start
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="splash-enter"
+                      ref={setupButton}
+                      disabled={busy}
+                      onClick={enter}
+                    >
+                      Set up agents
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
-        {ready && (
-          <aside className="splash-projects" aria-labelledby={`${id}-projects`}>
-            <h2 id={`${id}-projects`}>Open Project</h2>
-            {configured && snapshot?.active && !snapshot.openProjects && (
-              <p className="muted" role="status">
-                Finish or stop all runs before switching projects. Choose Start to return to your
-                workspace.
-              </p>
-            )}
-            {configured ? (
-              <ProjectSelector
-                {...projectActions}
-                projects={snapshot?.projects ?? []}
-                database={snapshot?.database ?? null}
-                busy={busy}
-                error={error}
-                footerAction={
-                  <button
-                    type="button"
-                    className="splash-enter"
-                    disabled={busy}
-                    title="Start without opening a project"
-                    onClick={enter}
-                  >
-                    Start
-                  </button>
-                }
-              />
-            ) : (
-              <>
-                {error && <p role="alert">{error}</p>}
-                <button type="button" className="primary" ref={setupButton} onClick={enter}>
-                  Set up agents
-                </button>
-              </>
-            )}
-          </aside>
-        )}
         <div className="window-drag-strip" aria-hidden="true" />
         {ready && <SplashThemeToggle theme={theme} onChange={onThemeChange} />}
       </dialog>

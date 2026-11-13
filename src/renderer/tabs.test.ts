@@ -5,6 +5,7 @@ describe("page tabs", () => {
   it("starts on Chat with permanent tabs including app-wide Logs and Commands", () => {
     expect(initialTabs).toEqual({
       open: [
+        "home",
         "logs",
         "contributor-tools",
         "chat",

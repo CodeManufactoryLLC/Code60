@@ -1,7 +1,18 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { operators as filterOperators } from "./saved-filters.js";
 import { type ColumnFilter, type FilterKind, filterLabels } from "./table-view.js";
+
+export function TableControlGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="table-control-scroll">
+      {/* biome-ignore lint/a11y/useSemanticElements: these controls are page actions. */}
+      <div className="button-group table-control-group" role="group" aria-label={label}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function ColumnMenu({
   title,

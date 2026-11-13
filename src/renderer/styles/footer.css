@@ -75,7 +75,7 @@
 }
 
 .poll-timestamp:focus-visible {
-  outline: 1px solid var(--focus-line);
+  outline: 1px solid var(--focus-outline);
   outline-offset: 2px;
 }
 

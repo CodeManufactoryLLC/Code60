@@ -39,6 +39,7 @@ export interface AppPagesProps {
   notify(text: string, tone?: ToastTone, action?: ToastMessage["action"]): void;
   openChat(id: string, compose?: boolean, eventIndex?: number): void;
   openReview(id: string): void;
+  openRelay(): Promise<void>;
   act(action: Action): Promise<boolean>;
   fileAction(action: FileTabAction): void;
   accept: (snapshot: import("../bridge/index.js").Snapshot) => void;

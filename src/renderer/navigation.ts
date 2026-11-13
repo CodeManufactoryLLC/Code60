@@ -2,7 +2,15 @@ import type { IconName } from "./icons.js";
 import type { NavigationIconName } from "./navigation-icons.js";
 import type { Command } from "./overlays.js";
 
-type Group = "chat" | "primary" | "tables" | "settings" | "advanced" | "experiments" | "legacy";
+type Group =
+  | "chat"
+  | "primary"
+  | "tools"
+  | "tables"
+  | "settings"
+  | "advanced"
+  | "experiments"
+  | "legacy";
 interface PageDefinition {
   id: string;
   label: string;
@@ -16,13 +24,22 @@ interface PageDefinition {
 }
 export const pages = [
   {
+    id: "home",
+    initialOrder: -2,
+    label: "Home",
+    group: "primary",
+    order: -1,
+    database: false,
+    icon: "house",
+  },
+  {
     id: "chat",
     initialOrder: 2,
-    label: "Chat",
+    label: "Projects",
     group: "chat",
     order: 0,
     database: false,
-    icon: "chats",
+    icon: "clipboard",
   },
   {
     id: "episodic-memory",
@@ -31,6 +48,7 @@ export const pages = [
     group: "experiments",
     order: 0,
     database: true,
+    icon: "brain",
   },
   {
     id: "contributor-tools",
@@ -39,6 +57,7 @@ export const pages = [
     group: "advanced",
     order: 1,
     database: false,
+    icon: "code",
   },
   {
     id: "files",
@@ -49,7 +68,15 @@ export const pages = [
     order: 0,
     database: true,
   },
-  { id: "sessions", initialOrder: 4, label: "Sessions", group: "tables", order: 5, database: true },
+  {
+    id: "sessions",
+    initialOrder: 4,
+    label: "Sessions",
+    group: "tables",
+    order: 5,
+    database: true,
+    icon: "terminal-window",
+  },
   {
     id: "configurations",
     initialOrder: 8,
@@ -57,10 +84,35 @@ export const pages = [
     group: "tables",
     order: 0,
     database: true,
+    icon: "sliders-horizontal",
   },
-  { id: "messages", initialOrder: 5, label: "Messages", group: "tables", order: 3, database: true },
-  { id: "events", initialOrder: 6, label: "Events", group: "tables", order: 1, database: true },
-  { id: "logs", initialOrder: 0, label: "Logs", group: "tables", order: 2, database: false },
+  {
+    id: "messages",
+    initialOrder: 5,
+    label: "Messages",
+    group: "tables",
+    order: 3,
+    database: true,
+    icon: "chat-text",
+  },
+  {
+    id: "events",
+    initialOrder: 6,
+    label: "Events",
+    group: "tables",
+    order: 1,
+    database: true,
+    icon: "lightning",
+  },
+  {
+    id: "logs",
+    initialOrder: 0,
+    label: "Logs",
+    group: "tables",
+    order: 2,
+    database: false,
+    icon: "list-bullets",
+  },
   {
     id: "search",
     initialOrder: 7,
@@ -77,13 +129,22 @@ export const pages = [
     group: "tables",
     order: 6,
     database: true,
+    icon: "git-branch",
   },
-  { id: "polling", initialOrder: 10, label: "Polling", group: "tables", order: 4, database: true },
+  {
+    id: "polling",
+    initialOrder: 10,
+    label: "Polling",
+    group: "tables",
+    order: 4,
+    database: true,
+    icon: "arrows-clockwise",
+  },
   {
     id: "prompts",
     initialOrder: 11,
-    label: "Prompt Editor",
-    group: "primary",
+    label: "Prompt Builder",
+    group: "tools",
     order: 0,
     database: true,
     icon: "pencil-line",
@@ -92,7 +153,7 @@ export const pages = [
     id: "commands",
     initialOrder: 12,
     label: "Commands",
-    group: "primary",
+    group: "tools",
     order: 1,
     database: true,
     icon: "megaphone",
@@ -118,23 +179,27 @@ export const renderedPages = pages.filter(
   (page) => page.id !== "files",
 ) as readonly (PageDefinition & { id: RenderedPageId })[];
 const settingsSections = [
-  { id: "agents", label: "Agents" },
-  { id: "appearance", label: "Appearance" },
-  { id: "table-defaults", label: "Table defaults" },
-  { id: "text", label: "Text" },
-  { id: "polling-settings", label: "Polling" },
-  { id: "updates", label: "Updates" },
-  { id: "about", label: "About" },
-] as const;
+  { id: "agents", label: "Agents", icon: "robot" },
+  { id: "appearance", label: "Appearance", icon: "palette" },
+  { id: "table-defaults", label: "Table defaults", icon: "table" },
+  { id: "text", label: "Text", icon: "text-aa" },
+  { id: "polling-settings", label: "Polling", icon: "arrows-clockwise" },
+  { id: "updates", label: "Updates", icon: "download-simple" },
+  { id: "about", label: "About", icon: "info" },
+] as const satisfies readonly { id: string; label: string; icon: NavigationIconName }[];
 export type SettingsSectionId = (typeof settingsSections)[number]["id"];
 export const settingsSectionIds = settingsSections.map((section) => section.id);
 export const settingsLabels = Object.fromEntries(
   settingsSections.map((section) => [section.id, section.label]),
 ) as Record<SettingsSectionId, string>;
+export const settingsIcons = Object.fromEntries(
+  settingsSections.map((section) => [section.id, section.icon]),
+) as Record<SettingsSectionId, NavigationIconName>;
 export const groups = {
+  tools: { label: "Tools", icon: "wrench" },
   tables: { label: "Tables", icon: "database" },
-  advanced: { label: "Advanced" },
-  experiments: { label: "Experiments" },
+  advanced: { label: "Advanced", icon: "wrench" },
+  experiments: { label: "Experiments", icon: "flask" },
 } as const;
 export function isSettingsSection(id: string): id is SettingsSectionId {
   return settingsSectionIds.some((section) => section === id);

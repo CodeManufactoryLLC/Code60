@@ -1,8 +1,7 @@
 /* Tokens styles. Imported into its declared layer by style.css. */
 
 :root {
-  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --logo: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--text-font, var(--font));
   --letter-spacing: var(--text-spacing, normal);
@@ -137,6 +136,22 @@
   --on-destructive: #000000;
   --focus-line: var(--accent);
   --focus-band: var(--hover-bg);
+}
+
+/* A light shadow marks focus; the optional treatment adds a solid outline and wider halo. */
+:root {
+  --focus-outline: transparent;
+  --focus-shadow-edge: color-mix(in srgb, var(--focus-line) 80%, transparent);
+  --focus-shadow-blur: color-mix(in srgb, var(--focus-line) 32%, transparent);
+  --focus-shadow: 0 0 0 1px var(--focus-shadow-edge), 0 1px 4px var(--focus-shadow-blur);
+  --focus-inset-shadow:
+    inset 0 0 0 1px var(--focus-shadow-edge), inset 0 0 4px var(--focus-shadow-blur);
+}
+
+:root[data-focus-highlight="on"] {
+  --focus-outline: var(--focus-line);
+  --focus-shadow: 0 0 0 3px var(--focus-band);
+  --focus-inset-shadow: inset 0 0 0 5px var(--focus-band);
 }
 
 /* Signal colors are an opt-in setting; by default failure is neutral and carried by icon and rule. */

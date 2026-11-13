@@ -21,11 +21,6 @@
   width: min(100%, 300px);
 }
 
-:where(.splash-projects) .project-row > button {
-  border: 0;
-  box-shadow: none;
-}
-
 /* Banners: a written prefix and a 2px left rule. */
 .database-notice {
   position: relative;
@@ -471,8 +466,8 @@ label.check-label {
   background: var(--hover-bg);
 }
 
-:where(:root[data-focus-highlight="on"]) .actions-menu [role="menuitem"]:focus-visible {
-  outline: 2px solid var(--focus-line);
+.actions-menu [role="menuitem"]:focus-visible {
+  outline: 2px solid var(--focus-outline);
   outline-offset: -3px;
 }
 
@@ -598,6 +593,12 @@ label.check-label {
 .command-palette .palette-input input:focus-visible {
   outline: 0;
   box-shadow: none;
+}
+
+.command-palette .palette-input:has(input:focus-visible) {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -3px;
+  box-shadow: var(--focus-inset-shadow);
 }
 
 .command-palette [role="listbox"] {

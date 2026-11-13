@@ -174,7 +174,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     orchestratorConfigured,
     enterApp,
   });
-  const { setPicker, setProjectChoice, showPicker, projectActions } = connection;
+  const { setPicker, setProjectChoice, showPicker } = connection;
   const sessionCommands = (target: DesktopRun) =>
     createSessionCommands(target, {
       busy,
@@ -230,7 +230,6 @@ export function App({ api: transport }: { api: DesktopApi }) {
           error={error}
           theme={theme}
           onThemeChange={setTheme}
-          projectActions={projectActions}
           onConnectDatabase={() => showPicker("database")}
           onEnter={() => {
             if (!orchestratorConfigured) return;
@@ -268,8 +267,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
             onWorkerSelect={selectWorker}
             database={database}
             eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
-            directory={directory ?? undefined}
             onOpenProject={() => showPicker("project")}
+            onChatArchived={() => notify("Chat archived.")}
             onConnectDatabase={() => showPicker("database")}
             onSettingsSectionSelect={setSettingsSection}
             projectDisabled={
@@ -307,6 +306,14 @@ export function App({ api: transport }: { api: DesktopApi }) {
           notify={notify}
           openChat={openChat}
           openReview={openReview}
+          openRelay={async () => {
+            const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+            const id = relay && conversationId(relay);
+            if (!id) throw new Error("Relay is unavailable. Try again shortly.");
+            await api.orchestrationChatAction({ type: "select", id });
+            selectWorker(undefined, null);
+            setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+          }}
           act={act}
           fileAction={fileAction}
           accept={accept}

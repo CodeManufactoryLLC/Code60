@@ -1,7 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { parseLogClear, parseLogDetail, parseLogQuery } from "./index.js";
+import { logInputSchema, parseLogClear, parseLogDetail, parseLogQuery } from "./index.js";
 
 describe("diagnostic bridge validation", () => {
+  it("accepts only bounded persistence metadata without free-form exception details", () => {
+    const record = {
+      event: "persistence.failed",
+      operationId: crypto.randomUUID(),
+      outcome: "failed",
+      persistenceStage: "validate",
+      persistenceFailure: "identity",
+      queuedCharacters: 1024,
+      queuedRecords: 2,
+      changedIdentityFields: ["ctimeNs"],
+    };
+    expect(logInputSchema.parse(record)).toEqual(record);
+    for (const extra of [
+      { persistenceStage: "/private/path" },
+      { persistenceFailure: "secret message" },
+      { queuedCharacters: 1_048_577 },
+      { queuedRecords: 1025 },
+      { changedIdentityFields: ["path"] },
+      { exception: "private error" },
+    ])
+      expect(() => logInputSchema.parse({ ...record, ...extra })).toThrow();
+  });
   it("bounds pages, conditions, search and cursors without accepting paths", () => {
     expect(parseLogQuery({}).limit).toBe(100);
     for (const input of [

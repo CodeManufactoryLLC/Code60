@@ -14,7 +14,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import * as storage from "./relay-storage.js";
 import { type RelaySourceCursor, RelayStore } from "./relay-store.js";
 
 let directory: string;
@@ -24,8 +25,69 @@ beforeEach(async () => {
   stores = [];
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.allSettled(stores.map((store) => store.close()));
   await rm(directory, { recursive: true, force: true });
+});
+
+it.each(["open", "validate", "write", "sync", "close"] as const)(
+  "retains the %s failure stage and allowlisted code",
+  async (stage) => {
+    const store = await open();
+    const original = storage.relayFile;
+    vi.spyOn(storage, "relayFile").mockImplementation(async (...args) => {
+      const error = Object.assign(new Error("private source /private/path"), { code: "EIO" });
+      if (stage === "open") throw error;
+      const handle = await original(...args);
+      if (stage === "validate") vi.spyOn(handle, "stat").mockRejectedValueOnce(error);
+      if (stage === "write") vi.spyOn(handle, "write").mockRejectedValueOnce(error);
+      if (stage === "sync") vi.spyOn(handle, "sync").mockRejectedValueOnce(error);
+      const close = handle.close.bind(handle);
+      if (stage === "close" || stage === "write")
+        vi.spyOn(handle, "close").mockImplementationOnce(async () => {
+          await close();
+          throw Object.assign(new Error("later close failure"), { code: "EBUSY" });
+        });
+      return handle;
+    });
+    await expect(
+      store.append({
+        id: randomUUID(),
+        role: "human",
+        at: new Date().toISOString(),
+        text: "Source",
+      }),
+    ).rejects.toMatchObject({ stage, code: stage === "close" ? "EBUSY" : "EIO" });
+  },
+);
+
+it("preserves a partial write and never accepts a retry over its changed journal", async () => {
+  const store = await open();
+  const original = storage.relayFile;
+  const spy = vi.spyOn(storage, "relayFile").mockImplementationOnce(async (...args) => {
+    const handle = await original(...args);
+    const write = handle.write.bind(handle);
+    vi.spyOn(handle, "write").mockImplementationOnce(async () => {
+      await write(Buffer.from('{"id":"par'), 0, 10, 0);
+      throw Object.assign(new Error("write interrupted"), { code: "ENOSPC" });
+    });
+    return handle;
+  });
+  const message = {
+    id: randomUUID(),
+    role: "human" as const,
+    at: new Date().toISOString(),
+    text: "Source",
+  };
+  await expect(store.append(message)).rejects.toMatchObject({ stage: "write", code: "ENOSPC" });
+  spy.mockRestore();
+  const originalBytes = await readFile(join(store.root, "history.frames"));
+  expect(originalBytes.length).toBe(10);
+  await expect(store.append(message)).rejects.toMatchObject({
+    stage: "validate",
+    failure: "identity",
+  });
+  expect(await readFile(join(store.root, "history.frames"))).toEqual(originalBytes);
 });
 async function open() {
   const store = await RelayStore.open(join(directory, "code60", "relay"));

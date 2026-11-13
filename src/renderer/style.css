@@ -6,6 +6,7 @@
 @import "./styles/base.css" layer(base);
 @import "./styles/layout.css" layer(layout);
 @import "./styles/navigation.css" layer(components);
+@import "./styles/home.css" layer(components);
 @import "./styles/editors.css" layer(components);
 @import "./styles/settings.css" layer(components);
 @import "./styles/tables.css" layer(components);

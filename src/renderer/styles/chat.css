@@ -12,19 +12,6 @@
   display: none;
 }
 
-.relay-history {
-  flex: 0 1 auto;
-  max-height: 40vh;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  padding: 12px;
-}
-
-.relay-history pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .command-picker {
   border-bottom: 1px solid var(--control-border);
   padding: 8px;
@@ -73,15 +60,6 @@
   border: 1px solid currentColor;
   padding: 1px 4px;
   font-size: 0.9em;
-}
-
-.chat-page-heading {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.chat-page-heading .page-tab-label {
-  padding-right: 40px;
 }
 
 /* Code60 theme tokens and components. See ARCHITECTURE.md for the visual system. */
@@ -727,43 +705,6 @@
   font-size: var(--text-size, 12px);
 }
 
-.chat-loader {
-  --color-1: var(--hover-bg);
-  --color-2: var(--accent);
-  --size: 0.5px;
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  width: calc(100% + 2px);
-  height: 12px;
-  display: inline-block;
-  background-color: var(--color-1);
-  background-image: linear-gradient(
-    45deg,
-    var(--color-2) 25%,
-    transparent 25%,
-    transparent 50%,
-    var(--color-2) 50%,
-    var(--color-2) 75%,
-    transparent 75%,
-    transparent
-  );
-  font-size: calc(30 * var(--size));
-  background-size: 1em 1em;
-  box-sizing: border-box;
-  pointer-events: none;
-  animation: chat-bar-stripe 1s linear infinite;
-}
-
-@keyframes chat-bar-stripe {
-  from {
-    background-position: 1em 0;
-  }
-  to {
-    background-position: 0 0;
-  }
-}
-
 @media (max-width: 900px) {
   .orchestration-chat-body {
     padding: 0 12px;
@@ -1105,31 +1046,6 @@
 .chat-connecting .activity-name {
   flex: 0;
   text-align: center;
-}
-
-.activity-display[data-animate="true"] .activity-name,
-.chat-connecting[data-animate="true"] .activity-name {
-  background-image: linear-gradient(
-    100deg,
-    var(--muted) 35%,
-    var(--text) 45%,
-    var(--accent) 50%,
-    var(--text) 55%,
-    var(--muted) 65%
-  );
-  background-size: 250% 100%;
-  background-clip: text;
-  color: transparent;
-  animation: activity-spotlight 2.8s linear infinite;
-}
-
-@keyframes activity-spotlight {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
-  }
 }
 
 @media (max-height: 700px) {

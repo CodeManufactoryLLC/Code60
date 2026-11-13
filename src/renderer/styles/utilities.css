@@ -2,18 +2,11 @@
    component background shorthands so primary buttons and composer fields retain the hatching. */
 .app
   :is(button, input, select, textarea):is(:disabled, [aria-disabled="true"]):not(
-    .project-card,
     .icon-button,
     .gdg-search-bar-inner button,
     .plan-task input
   ),
-.app
-  [aria-disabled="true"]:not(
-    .project-card,
-    .icon-button,
-    .gdg-search-bar-inner button,
-    .plan-task input
-  ) {
+.app [aria-disabled="true"]:not(.icon-button, .gdg-search-bar-inner button, .plan-task input) {
   background-color: var(--disabled-fill);
   background-image: repeating-linear-gradient(
     135deg,
@@ -89,4 +82,32 @@
   border-style: solid;
   border-color: var(--border);
   border-width: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .activity-display[data-animate="true"] .activity-name,
+  .chat-connecting[data-animate="true"] .activity-name,
+  .search-loading-label {
+    background-image: linear-gradient(
+      100deg,
+      var(--muted) 35%,
+      var(--text) 45%,
+      var(--accent) 50%,
+      var(--text) 55%,
+      var(--muted) 65%
+    );
+    background-size: 250% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: activity-spotlight 2.8s linear infinite;
+  }
+}
+
+@keyframes activity-spotlight {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
 }
