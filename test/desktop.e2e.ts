@@ -179,8 +179,11 @@ async function selectProjectConversation(page: Page) {
       .click();
   }
   await expect
-    .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.projectId)
-    .toBe(owner.id);
+    .poll(async () => {
+      const { chat } = await page.evaluate(() => window.desktop.snapshot());
+      return chat.projectId === owner.id && !!chat.run?.id;
+    })
+    .toBe(true);
   const id = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
   await expect(page.locator(`.orchestration-chat-page[data-chat-id="${id}"]`)).toBeVisible();
 }
@@ -1882,8 +1885,11 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
           .getByRole("button", { name: `New chat in ${basename(folder)}`, exact: true })
           .click();
         await expect
-          .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
-          .not.toBe(previous);
+          .poll(async () => {
+            const id = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+            return id !== undefined && id !== previous;
+          })
+          .toBe(true);
         const selected = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
         await expect(
           page.locator(`.orchestration-chat-page[data-chat-id="${selected}"]`),
