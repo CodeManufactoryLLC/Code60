@@ -11,6 +11,7 @@ import { conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
+import { useHistoryNavigation } from "./history-navigation.js";
 import { pageAvailable } from "./navigation.js";
 import {
   CommandPalette,
@@ -106,6 +107,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
     notify,
     setBusy,
     onWorkerSelection: setDetailWorkerId,
+    // Defined below, once the workspace's worker selection exists; called only after render.
+    onChatNavigation: (request) => history.expectChat(request),
   });
   const {
     scope,
@@ -119,6 +122,25 @@ export function App({ api: transport }: { api: DesktopApi }) {
     setExplorerOpen,
     chatRequest,
   } = project;
+  const closeMenus = () => {
+    setMenu(undefined);
+    setConfigurationMenu(undefined);
+    setPollMenu(undefined);
+    setWorktreeMenu(undefined);
+  };
+  const history = useHistoryNavigation({
+    api,
+    snapshot,
+    tabs,
+    settingsSection,
+    workerId,
+    setTabs,
+    setSettingsSection,
+    closeMenus,
+    selectWorker,
+    openChat,
+    setError,
+  });
   const databaseLoaded = snapshot !== undefined;
   useEffect(() => {
     if (!databaseLoaded || database) return;
@@ -275,12 +297,14 @@ export function App({ api: transport }: { api: DesktopApi }) {
               busy || !snapshot || Boolean(snapshot.active && !snapshot.openProjects)
             }
             onSelect={(id) => {
-              setMenu(undefined);
-              setConfigurationMenu(undefined);
-              setPollMenu(undefined);
-              setWorktreeMenu(undefined);
+              closeMenus();
               setTabs((current) => updateTabs(current, { type: "select", id }));
             }}
+            onChatNavigation={history.expectChat}
+            canGoBack={history.canGoBack}
+            canGoForward={history.canGoForward}
+            onBack={history.back}
+            onForward={history.forward}
           />
         )}
         <AppPages
