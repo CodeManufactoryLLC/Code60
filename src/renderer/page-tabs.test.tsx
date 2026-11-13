@@ -65,7 +65,7 @@ describe("database connection navigation", () => {
     expect(card).toContain("Connect to database");
     expect(card).not.toContain("old-project");
     expect(card).not.toContain("disabled");
-    for (const id of ["prompts", "search", "sessions", "episodic-memory"]) {
+    for (const id of ["prompts", "search", "sessions", "episodic-memory", "rag"]) {
       expect(html.match(new RegExp(`<button[^>]*id="tab-${id}"[^>]*>`))?.[0]).toContain("disabled");
     }
     expect(html.match(/<button[^>]*id="tables-toggle"[^>]*>/)?.[0]).not.toContain("disabled");
@@ -75,6 +75,7 @@ describe("database connection navigation", () => {
     expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).not.toContain("disabled");
     for (const section of [
       "agents",
+      "memory",
       "appearance",
       "table-defaults",
       "text",
@@ -104,6 +105,7 @@ describe("database connection navigation", () => {
     const html = navigation("/database.sqlite", undefined, "appearance", "settings");
     const sections = [
       ["agents", "Agents"],
+      ["memory", "Memory"],
       ["appearance", "Appearance"],
       ["table-defaults", "Table defaults"],
       ["text", "Text"],
@@ -162,6 +164,7 @@ describe("sidebar labels and disclosure icons", () => {
       expect(html).toContain('id="tab-configurations"');
       expect(html).toContain('id="tab-settings-text"');
       expect(html).toContain('id="tab-episodic-memory"');
+      expect(html).toContain('id="tab-rag"');
     },
   );
 
@@ -177,7 +180,7 @@ describe("sidebar labels and disclosure icons", () => {
       expect(project).toContain("<svg");
       expect(html).not.toContain("<img");
       expect(html.match(/class="carbon-icon"/g)).toHaveLength(2);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(25);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(27);
       for (const [id, icon, label] of [
         ["tab-home", "house", "Home"],
         ["tab-chat", "clipboard", "Projects"],

@@ -102,6 +102,35 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
+      if (
+        text.startsWith("Produce a grounded continuity checkpoint and durable memory candidates.")
+      ) {
+        const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
+        const source = sources.find((s) => s.role === "human") ?? sources[0];
+        const quote = source.text.slice(0, 80);
+        const citations = [{ sourceId: source.id, start: 0, end: quote.length, quote }];
+        steps = [
+          {
+            message: JSON.stringify({
+              goal: "Continue the saved task",
+              constraints: [],
+              decisions: [],
+              attempts: [],
+              questions: [],
+              next: "Check results",
+              citations,
+              memories: ["episodic", "semantic", "lesson", "history"].map((type) => ({
+                type,
+                text: `${type}: ${quote}`,
+                subject: `fixture-${type}`,
+                condition: type === "lesson" ? "When repeating this task" : "",
+                correction: false,
+                citations,
+              })),
+            }),
+          },
+        ];
+      }
       if (options.relayWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
         if (request.startsWith("Relay plan: ")) {

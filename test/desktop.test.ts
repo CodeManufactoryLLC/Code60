@@ -32,6 +32,9 @@ import type {
 } from "../src/desktop/conversation-coordinator.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
+import type { RagExecutor } from "../src/desktop/rag-service.js";
+import { RagStore } from "../src/desktop/rag-store.js";
+import type { RagConversation } from "../src/desktop/rag-worker.js";
 import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
@@ -48,6 +51,25 @@ let stored: string | undefined;
 let preferencesFail = false;
 let orchestrationProvider: string | null = null;
 let listGate: (() => Promise<void>) | undefined;
+let ragSources: RagConversation[];
+let ragWaitForAbort = false;
+let ragStarted = false;
+const ragExecutor: RagExecutor = async (work, signal) => {
+  if (ragWaitForAbort) {
+    ragStarted = true;
+    await new Promise<void>((_, reject) =>
+      signal.addEventListener("abort", () => reject(new Error("RAG cancelled")), { once: true }),
+    );
+  }
+  if (work.action === "retrieve")
+    return { databaseKey: work.databaseKey, generation: randomUUID(), hits: [] };
+  ragSources = work.sources;
+  await new RagStore(work.root, work.databaseKey).stage(work.generation, {
+    chunks: [],
+    vectors: new Float32Array(),
+  });
+  return { builtAt: new Date().toISOString(), conversations: work.sources.length, chunks: 0 };
+};
 const databases = new Map<
   string,
   {
@@ -212,6 +234,9 @@ beforeEach(async () => {
   preferencesFail = false;
   orchestrationProvider = null;
   listGate = undefined;
+  ragSources = [];
+  ragWaitForAbort = false;
+  ragStarted = false;
   controller = new DesktopController(
     controllerDeps(),
     {
@@ -219,7 +244,11 @@ beforeEach(async () => {
       XDG_STATE_HOME: join(directory, "state"),
     },
     { confirm },
-    { openDatabase, preferences },
+    {
+      openDatabase,
+      preferences,
+      ragExecutor,
+    },
   );
   // These controller scenarios start after onboarding; wizard integration has separate tests.
   // biome-ignore lint/complexity/useLiteralKeys: Seed isolated post-setup lifecycle fixtures without exposing a production bypass.
@@ -229,6 +258,69 @@ beforeEach(async () => {
 afterEach(async () => {
   await controller.shutdown(true);
   await fs.rm(directory, { recursive: true, force: true });
+});
+
+describe("database-wide RAG discovery", () => {
+  const identity = () => ({
+    databaseKey: controller.rag.snapshot().databaseKey ?? "",
+    requestId: randomUUID(),
+  });
+  it("includes stopped workers and archived chats, without starting agents or changing records", async () => {
+    const worker = await start("Remember this worker request");
+    await controller.action({ type: "finish", id: worker });
+    await vi.waitFor(() => expect(controller.snapshot().active).toBe(false));
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const chat = controller.snapshot().chat.run?.id ?? "";
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: chat,
+      text: "Remember this chat request",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({ type: "archive", id: chat });
+    await controller.stopAll();
+    const starts = agents.sessions.length;
+    const workspace = await openWorkspace(
+      controllerDeps(),
+      directory,
+      { XDG_STATE_HOME: join(directory, "state") },
+      true,
+    );
+    const before = await workspace.store.read(worker);
+    await controller.rebuildRag(identity());
+    expect(agents.sessions.length).toBe(starts);
+    expect(await workspace.store.read(worker)).toEqual(before);
+    expect(ragSources.map((c) => c.source.runId)).toContain(worker);
+    expect(ragSources.map((c) => c.source.runId)).toContain(chat);
+    const events = ragSources.find((c) => c.source.runId === chat)?.events;
+    expect(
+      events?.filter((e) => e.type === "prompt" && e.text === "Remember this chat request"),
+    ).toHaveLength(1);
+    expect((await controller.retrieveRag({ ...identity(), text: "remember" })).hits).toEqual([]);
+    await controller.cancelRag(randomUUID());
+    confirm.mockResolvedValueOnce(false);
+    await controller.clearRag(identity());
+    expect((await controller.rag.status()).index).not.toBeNull();
+    await controller.clearRag(identity());
+    expect((await controller.rag.status()).index).toBeNull();
+  });
+  it("refuses corrupt saved metadata and missing registered projects without publishing", async () => {
+    await controller.rebuildRag(identity());
+    const previous = controller.rag.snapshot().index;
+    const root = join(directory, ".code60_workspace", "chats");
+    await fs.mkdir(root, { recursive: true });
+    const corrupt = join(root, `${randomUUID()}.json`);
+    await fs.writeFile(corrupt, "{}");
+    await expect(controller.rebuildRag(identity())).rejects.toThrow("unreadable");
+    expect(controller.rag.snapshot().index).toEqual(previous);
+    await fs.rm(corrupt);
+    databases
+      .get(join(directory, "first.sqlite"))
+      ?.entries.set(join(directory, "missing"), new Date().toISOString());
+    await expect(controller.rebuildRag(identity())).rejects.toThrow();
+    expect(controller.rag.snapshot().index).toEqual(previous);
+  });
 });
 
 // Simulate a successfully committed setup for tests of downstream chat lifecycles.
@@ -1531,13 +1623,83 @@ describe("retained project runtimes", () => {
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
-      { openDatabase, preferences, relay: true },
+      { openDatabase, preferences, relay: true, ragExecutor },
     );
     const adapter: CoreDeps["git"] = git;
     adapter.repoInfo = async (cwd) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
     await controller.restore();
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
   }
+
+  it("indexes archived and closed project chats across retained owners, without indexing Relay", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id;
+    const a = await project("rag-a");
+    const first = await newChat(a.id);
+    const firstId = first.run?.id ?? "";
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: firstId,
+      text: "First project evidence",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({ type: "archive", id: firstId });
+    const b = await project("rag-b");
+    const second = await newChat(b.id);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    const starts = agents.sessions.length;
+    await controller.rebuildRag({
+      databaseEpoch: controller.snapshot().databaseEpoch,
+      databaseKey: controller.rag.snapshot().databaseKey ?? "",
+      requestId: randomUUID(),
+    });
+    expect(agents.sessions.length).toBe(starts);
+    expect(ragSources.find((source) => source.source.runId === firstId)?.source.project).toBe(
+      a.path,
+    );
+    expect(
+      ragSources.find((source) => source.source.runId === second.run?.id)?.source.project,
+    ).toBe(b.path);
+    expect(ragSources.some((source) => source.source.runId === relayId)).toBe(false);
+  });
+
+  it.each(["database replacement", "Stop all", "shutdown"] as const)(
+    "cancels RAG during %s with retained project ownership",
+    async (action) => {
+      await prepareRelay();
+      ragWaitForAbort = true;
+      const pending = controller.rebuildRag({
+        databaseEpoch: controller.snapshot().databaseEpoch,
+        databaseKey: controller.rag.snapshot().databaseKey ?? "",
+        requestId: randomUUID(),
+      });
+      const rejected = expect(pending).rejects.toThrow("cancelled");
+      await vi.waitFor(() => expect(ragStarted).toBe(true));
+      if (action === "database replacement")
+        await controller.connect(join(directory, "next.sqlite"), true);
+      else if (action === "Stop all") await controller.stopAll();
+      else await controller.shutdown(true);
+      await rejected;
+      expect(controller.rag.snapshot().operation).toBeNull();
+    },
+  );
+
+  it("rejects stale RAG requests after reopening the same database", async () => {
+    await prepareRelay();
+    const old = {
+      databaseEpoch: controller.snapshot().databaseEpoch,
+      databaseKey: controller.rag.snapshot().databaseKey ?? "",
+      requestId: randomUUID(),
+    };
+    await controller.connect(join(directory, "other-rag.sqlite"), true);
+    await controller.connect(join(directory, "first.sqlite"), false);
+    expect(controller.rag.snapshot().databaseKey).toBe(old.databaseKey);
+    expect(() => controller.rebuildRag(old)).toThrow("database instance changed");
+    expect(() => controller.retrieveRag({ ...old, text: "query" })).toThrow(
+      "database instance changed",
+    );
+    expect(() => controller.clearRag(old)).toThrow("database instance changed");
+  });
 
   async function project(name: string) {
     const path = join(directory, name);
@@ -2367,6 +2529,30 @@ describe("desktop orchestration", () => {
     expect(agents.sessions).toHaveLength(1);
   });
 
+  it.each(["stop all", "shutdown", "force"])(
+    "starts worker cleanup without awaiting slow memory cleanup: %s",
+    async (action) => {
+      await start();
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const cleanup = vi
+        .spyOn(controller.memory, action === "stop all" ? "stop" : "close")
+        .mockReturnValue(gate);
+      const stopping =
+        action === "stop all" ? controller.stopAll() : controller.shutdown(action === "force");
+      try {
+        await vi.waitFor(() =>
+          expect(agents.sessions.every((session) => session.stops.length > 0)).toBe(true),
+        );
+      } finally {
+        release();
+        await stopping;
+        cleanup.mockRestore();
+      }
+    },
+  );
   it.each([false, true])("shuts down every batch (force=%s)", async (force) => {
     await start();
     await controller.start(request);

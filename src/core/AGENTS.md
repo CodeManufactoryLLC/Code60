@@ -4,6 +4,16 @@
 
 - Receive `agents`, `git`, the filesystem, the clock, and process checks as injected interfaces, so tests run without real agents or repositories.
 - Keep core usable without the desktop app.
+- Optional interactive-only memory hooks may build bounded evidence context and
+  replace an idle ACP session between turns. Never replay a dispatched prompt,
+  infer permissions from a checkpoint, or enable memory for headless runs.
+  Validate exact cited spans; isolated generators deny permissions and always
+  stop their processes. Desktop owns scope, storage, settings and extraction.
+  Context budgeting is the approved exception to the budget non-goal below.
+- RAG owns exact-span tokenizer-aware chunking, streamed-message reconstruction
+  and stable cosine ranking through injected query/document embedding operations.
+  Never import Transformers.js here. Read-only snapshots must not reconcile run
+  state; strict listings must surface corrupt history instead of skipping it.
 - Optional desktop diagnostic sinks must be inert when absent or throwing.
   Correlate turns with generated operation IDs and emit fixed metadata once per
   meaningful boundary, never prompts, event payloads, paths, commands or errors.

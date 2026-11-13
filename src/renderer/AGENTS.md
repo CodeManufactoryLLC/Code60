@@ -1,5 +1,15 @@
 # Renderer
 
+- Settings → Memory is application-wide and database-independent. Persist its
+  controls through main, not local storage. Keep separate capture, generation
+  and recall choices and explain provider usage, fallback estimates and the
+  limits of forgetting behind accessible information tips.
+- The Memories browser pages main-owned records, filters by project/type/state
+  and renders evidence/revisions as text. Use pushed notices and stale-response
+  guards, never polling. Human edits, pinning, conflict resolution, promotion and
+  forgetting must use revision-checked bridge actions; global sharing and
+  forgetting remain natively confirmed. Memory used notes belong to their turn.
+
 - Relay is application-owned, database-independent and singleton. Its history,
   draft and selected identity must not inherit a database/project view lifetime.
   Relay never offers New global chat, rename or archive. Connection Retry does
@@ -78,6 +88,11 @@
   Use the resolved attribute for the single dark palette and artwork. Import
   Glide CSS in the vendor layer. Scope runtime Monaco overrides to its internals.
   Never restore a universal important radius reset or global rounding patch.
+- RAG is a manual, database-wide snapshot experiment under Advanced → Experiments.
+  Preserve query/results across page switches, reset on database replacement,
+  reject stale replies and use pushed progress, never polling. Show retrieved
+  chunks as safe text with provenance and cosine scores, not confidence claims.
+  Use the shared Settings cards and information-tip pattern.
 
 - Tactics opens only from the orchestrator composer. Use the bundled browser-safe
   catalog as React/text, never prototype HTML/scripts. Preview does not apply;

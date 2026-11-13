@@ -51,6 +51,15 @@ export const pages = [
     icon: "brain",
   },
   {
+    id: "rag",
+    initialOrder: -1,
+    label: "RAG",
+    group: "experiments",
+    order: 1,
+    database: true,
+    icon: "flask",
+  },
+  {
     id: "contributor-tools",
     initialOrder: 1,
     label: "Contributor Tools",
@@ -180,6 +189,7 @@ export const renderedPages = pages.filter(
 ) as readonly (PageDefinition & { id: RenderedPageId })[];
 const settingsSections = [
   { id: "agents", label: "Agents", icon: "robot" },
+  { id: "memory", label: "Memory", icon: "brain" },
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "table-defaults", label: "Table defaults", icon: "table" },
   { id: "text", label: "Text", icon: "text-aa" },

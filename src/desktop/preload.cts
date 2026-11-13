@@ -2,6 +2,25 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  memorySnapshot: () => ipcRenderer.invoke("desktop:memory-snapshot"),
+  browseMemories: (request: unknown) => ipcRenderer.invoke("desktop:memory-browse", request),
+  memoryDetail: (request: unknown) => ipcRenderer.invoke("desktop:memory-detail", request),
+  memoryAction: (request: unknown) => ipcRenderer.invoke("desktop:memory-action", request),
+  onMemoryChanged: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("desktop:memory-changed", handler);
+    return () => ipcRenderer.removeListener("desktop:memory-changed", handler);
+  },
+  ragStatus: () => ipcRenderer.invoke("desktop:rag-status"),
+  rebuildRag: (request: unknown) => ipcRenderer.invoke("desktop:rag-rebuild", request),
+  retrieveRag: (request: unknown) => ipcRenderer.invoke("desktop:rag-retrieve", request),
+  cancelRag: (requestId: unknown) => ipcRenderer.invoke("desktop:rag-cancel", requestId),
+  clearRag: (request: unknown) => ipcRenderer.invoke("desktop:rag-clear", request),
+  onRagStatus: (listener: (value: unknown) => void) => {
+    const handler = (_event: unknown, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:rag-status", handler);
+    return () => ipcRenderer.removeListener("desktop:rag-status", handler);
+  },
   openWebLink: (request: unknown) => ipcRenderer.invoke("desktop:web-link", request),
   queryLogs: (request: unknown) => ipcRenderer.invoke("desktop:logs-query", request),
   logDetail: (request: unknown) => ipcRenderer.invoke("desktop:logs-detail", request),

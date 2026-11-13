@@ -17,6 +17,9 @@ RUN git config --global user.name 'Code60 Container' \
 # Cache Linux dependencies independently of source changes. Never copy host modules.
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund && node node_modules/electron/install.js
+# Download and verify the pinned offline embedding model in its own cached layer.
+COPY --chown=node:node scripts/prepare-models.mjs scripts/
+RUN node scripts/prepare-models.mjs
 COPY --chown=node:node . .
 
 ENTRYPOINT ["xvfb-run", "-a", "-s", "-screen 0 1280x1024x24", "npm", "run", "test:desktop", "--"]

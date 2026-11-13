@@ -46,6 +46,7 @@ import {
   workerTranscript,
 } from "./mcp-control.js";
 import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
+import type { MemoryService } from "./memory-service.js";
 import type { RelayFileRoot } from "./relay-files.js";
 import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
@@ -136,10 +137,11 @@ export class RelayService {
     private readonly dialogs: { confirm(title: string, detail: string): Promise<boolean> } = {
       confirm: async () => false,
     },
+    private readonly memory?: MemoryService,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
-    this.execution = new ExecutionHost(deps, env, {
+    this.execution = new ExecutionHost(memory?.attach(deps, "worker") ?? deps, env, {
       authorize: (owner) => this.authorize(owner),
       authorizeTarget: (owner, request, target) => {
         this.plans?.validate(owner, request, target);
@@ -596,7 +598,14 @@ export class RelayService {
       this.gateway = gateway;
       chat = await prepareOrchestrationChat(
         {
-          ...this.deps,
+          ...(this.memory?.attach(this.deps, "relay", null, store.id, () => {
+            const task = this.task;
+            if (!task || !current()) return [];
+            return this.execution
+              .list(task)
+              .filter((worker) => worker.owner.taskId === task.taskId)
+              .map((worker) => worker.target);
+          }) ?? this.deps),
           agents: {
             start: async (spec, signal) => {
               if (!current()) throw new Error("Relay connection was superseded");
@@ -1145,11 +1154,12 @@ export class RelayService {
               throw new Error("Relay changed before plan delivery");
             this.task = pending.owner;
             this.scope = randomUUID();
-            chat.reply(
+            const sent = await chat.reply(
               run.id,
               `Human accepted plan ${plan.id}, proposal revision ${plan.proposalRevision}. Execute only these target/mode assignments with their planTaskId values. Read the plan tool for row IDs.\n\n${planMarkdown(plan)}`,
               "automatic",
             );
+            if (!sent) throw new Error("Relay did not send the accepted plan");
           } catch (cause) {
             if (deliveryEpoch === this.connectionEpoch && this.chat === chat) {
               this.task = previous;
@@ -1178,11 +1188,12 @@ export class RelayService {
             this.authorize(task.owner);
             this.task = task.owner;
             this.scope = randomUUID();
-            chat.reply(
+            const sent = await chat.reply(
               run.id,
               `Human feedback for originating task ${feedback.taskId}.\n\n${feedback.text}`,
               "automatic",
             );
+            if (!sent) throw new Error("Relay did not send the feedback");
             accepted = true;
             this.feedback.splice(this.feedback.indexOf(feedback), 1);
             await reviews.finishFeedback(feedback.reviewId, feedback.batchId, {
@@ -1219,7 +1230,7 @@ export class RelayService {
         this.task = task.owner;
         this.scope = randomUUID();
         try {
-          this.chat.reply(
+          const sent = await this.chat.reply(
             run.id,
             [
               `Worker results for originating task ${taskId}. Target labels are authoritative provenance, not completion proof.`,
@@ -1227,6 +1238,8 @@ export class RelayService {
             ].join("\n"),
             "automatic",
           );
+          // Keep the results queued; the chain's failure handler pauses delivery.
+          if (!sent) throw new Error("Relay did not send worker results");
         } catch (cause) {
           this.task = previous;
           this.scope = previousScope;

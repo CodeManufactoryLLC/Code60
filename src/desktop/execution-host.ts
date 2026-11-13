@@ -249,8 +249,10 @@ export class ExecutionHost {
       });
       authorize();
     };
+    const memory = this.deps.memory;
     const deps: CoreDeps = {
       ...this.deps,
+      ...(memory ? { memory: (record: RunRecord) => memory(record, target.cwd) } : {}),
       agents: {
         start: async (spec, signal) => {
           await Promise.allSettled([...this.folderPauses]);
@@ -281,6 +283,7 @@ export class ExecutionHost {
         agents: [request.provider],
         prompt: request.prompt,
         allowAll: true,
+        owner: "relay",
         ...(base === undefined ? {} : { base }),
         ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
       },

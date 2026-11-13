@@ -18,6 +18,9 @@ environments.
 ## Development
 
 - Use npm. Install with `npm ci`, and commit `package-lock.json` changes.
+- Prepare pinned offline embedding assets explicitly with `npm run prepare:models`
+  before RAG development or packaging. Keep generated `models/` out of Git.
+  Model/runtime changes require the offline smoke and packaged target checks.
 - `npm run check` runs typecheck, Biome, Knip unused-code checks, and one
   coverage-enabled test suite with versioned four-metric gates. Run it before
   every commit. Never lower coverage floors or broaden Knip exclusions to hide

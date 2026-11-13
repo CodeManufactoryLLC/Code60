@@ -154,3 +154,14 @@ it("preserves valid records after rejected writes and serializes concurrent sele
   ]);
   expect((await store.load()).chats[0]?.tactic).toBeNull();
 });
+
+it("reserves read-only snapshots between pending and subsequent metadata writes", async () => {
+  const { record, store } = await setup();
+  const first = store.save({ ...record, title: "Before" });
+  const snapshot = store.snapshot();
+  const next = store.save({ ...record, title: "After" });
+  await first;
+  expect((await snapshot).chats[0]?.title).toBe("Before");
+  await next;
+  expect((await store.snapshot()).chats[0]?.title).toBe("After");
+});

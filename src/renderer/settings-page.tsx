@@ -14,6 +14,7 @@ export function SettingsPage({
   updates,
   versions,
   orchestration,
+  memory,
   pollingControls,
   transparent,
   savingAppearance,
@@ -39,6 +40,7 @@ export function SettingsPage({
   updates: ReactNode;
   versions: Versions | undefined;
   orchestration: ReactNode;
+  memory?: ReactNode;
   pollingControls: ReactNode;
   focusHighlight: boolean;
   onFocusHighlight(on: boolean): void;
@@ -77,6 +79,7 @@ export function SettingsPage({
         <h1 id={id}>Settings</h1>
       </div>
       {settingsPanel("agents", orchestration)}
+      {settingsPanel("memory", memory)}
       {settingsPanel(
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>

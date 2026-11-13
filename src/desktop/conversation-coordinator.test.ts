@@ -7,9 +7,11 @@ function harness() {
   let directory = "/project";
   const chat = { id: "chat", status: "idle", stopping: false } as RunView;
   const worker = { id: "worker", status: "idle", turns: 1, stopping: false } as RunView;
+  let dispatch = true;
   const deliver = vi.fn(() => {
     if (chat.status !== "idle") throw new Error("not ready");
     chat.status = "running";
+    return Promise.resolve(dispatch);
   });
   const coordinator = new ConversationCoordinator({
     directory: () => directory,
@@ -37,6 +39,9 @@ function harness() {
     worker,
     deliver,
     end,
+    refuse: () => {
+      dispatch = false;
+    },
     project: (value: string) => {
       directory = value;
     },
@@ -45,6 +50,17 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe("conversation coordination", () => {
+  it("keeps worker updates queued and pauses delivery when the chat refuses dispatch", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.refuse();
+    h.end();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.deliver).toHaveBeenCalledTimes(1);
+    expect(h.session.inbox).toHaveLength(1);
+    expect(h.session.updatesPaused).toBe(true);
+    expect(h.session.chatError).toContain("did not accept");
+  });
   it("retains task tactics across new human requests and groups interleaved updates by originating task", async () => {
     vi.useFakeTimers();
     const h = harness();

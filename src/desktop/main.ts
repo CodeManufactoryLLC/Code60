@@ -34,6 +34,9 @@ import {
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
+  parseMemoryAction,
+  parseMemoryBrowse,
+  parseMemoryDetail,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -46,6 +49,9 @@ import {
   parseProjectAction,
   parseProjectPath,
   parsePromptTemplateId,
+  parseRagCancel,
+  parseRagIdentity,
+  parseRagQuery,
   parseReviewAction,
   parseReviewFileRead,
   parseReviewRead,
@@ -130,12 +136,24 @@ const controller = new DesktopController(
   {
     openDatabase: openProjectDatabase,
     relay: true,
+    memory: true,
+    ragModelRoot: app.isPackaged
+      ? join(process.resourcesPath, "models")
+      : fileURLToPath(new URL("../../models/", import.meta.url)),
     preferences,
     refreshPath: async (signal) => {
       setEnvironmentPath(process.env, await desktopPath({ signal }));
     },
   },
 );
+controller.rag.subscribe((status) => {
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+    window.webContents.send("desktop:rag-status", status);
+});
+controller.memory.subscribe(() => {
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+    window.webContents.send("desktop:memory-changed");
+});
 let shutdownTask: Promise<void> | undefined;
 function shutdownDesktop(force = false): Promise<void> {
   if (shutdownTask) {
@@ -542,6 +560,34 @@ async function ready(): Promise<void> {
   handle("desktop:memory-extract", (value) =>
     controller.extractMemory(parseMemoryExtraction(value)),
   );
+  handle("desktop:rag-status", (value) => {
+    if (value !== undefined) throw new Error("Invalid request");
+    return controller.rag.status();
+  });
+  handle("desktop:memory-snapshot", (value) => {
+    if (value !== undefined) throw new Error("Invalid request");
+    return controller.memory.snapshot();
+  });
+  handle("desktop:memory-browse", (value) => controller.memory.browse(parseMemoryBrowse(value)));
+  handle("desktop:memory-detail", (value) => controller.memory.detail(parseMemoryDetail(value).id));
+  handle("desktop:memory-action", (value) =>
+    controller.memory.action(parseMemoryAction(value), async (title, detail) => {
+      const result = await dialog.showMessageBox({
+        type: "warning",
+        title,
+        message: title,
+        detail,
+        buttons: ["Cancel", "Confirm"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      return result.response === 1;
+    }),
+  );
+  handle("desktop:rag-rebuild", (value) => controller.rebuildRag(parseRagIdentity(value)));
+  handle("desktop:rag-retrieve", (value) => controller.retrieveRag(parseRagQuery(value)));
+  handle("desktop:rag-cancel", (value) => controller.cancelRag(parseRagCancel(value)));
+  handle("desktop:rag-clear", (value) => controller.clearRag(parseRagIdentity(value)));
   handle("desktop:search-summary", (value) =>
     controller.summarizeSearch(parseSearchSummary(value)),
   );
@@ -649,6 +695,7 @@ async function ready(): Promise<void> {
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
     controller.clearDetailSubscriptions();
+    void controller.cancelRag().catch(() => {});
     void controller.cancelDiffReads().catch(() => {});
     void controller.cancelGitSetup().catch(() => {});
     void controller.cancelAgentSetup().catch(() => {});

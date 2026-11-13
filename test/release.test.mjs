@@ -21,6 +21,28 @@ import { validPublisher } from "../scripts/verify-windows-signatures.mjs";
 
 const sha = "a".repeat(40);
 
+it("excludes Linux GPU providers while retaining CPU runtime files", () => {
+  const files = JSON.parse(
+    run(
+      process.execPath,
+      ["-p", "JSON.stringify(require('./scripts/packaging-config.cjs').files)"],
+      {
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
+        env: { ...process.env, CODE60_RELEASE: "0" },
+      },
+    ),
+  );
+  expect(files).toContain(
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/libonnxruntime_providers_cuda.so",
+  );
+  expect(files).toContain(
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/libonnxruntime_providers_tensorrt.so",
+  );
+  expect(
+    files.some((pattern) => /libonnxruntime\.so|onnxruntime_binding\.node/.test(pattern)),
+  ).toBe(false);
+});
+
 it.runIf(process.platform === "win32")(
   "routes the native helper through the Windows signing transformer",
   () => {

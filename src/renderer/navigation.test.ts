@@ -20,6 +20,8 @@ describe("navigation registry", () => {
     expect(resolvePage("files")).toBe("chat");
     for (const section of settingsSectionIds) expect(pageGroup(section)).toBe("settings");
     expect(pageGroup("episodic-memory")).toBe("advanced");
+    expect(pageGroup("rag")).toBe("advanced");
+    expect(pagesInGroup("experiments")).toEqual(["episodic-memory", "rag"]);
   });
   it("keeps tables alphabetical and primary navigation in its documented order", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);

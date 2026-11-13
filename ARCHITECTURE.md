@@ -15,7 +15,9 @@ That is the whole product. The tool talks to agents over the [Agent Client Proto
 The Relay architecture replaces database-wide orchestration.
 The rules in this section take precedence over the single-project descriptions
 below. Desktop conversations are Relay or project-bound chats. Database-wide
-legacy chat files are not loaded, migrated, assigned to projects or deleted.
+legacy chat files are not loaded into interactive conversations, migrated,
+assigned to projects or deleted. Explicit read-only RAG snapshots are the
+exception for searching existing database-associated history.
 See [Relay implementation status](docs/relay-implementation.md) for available
 features, resource bounds and remaining native-platform validation.
 
@@ -277,6 +279,66 @@ SQLite remains schema 5. No bulk transcript moves/deletions or implicit legacy
 imports are permitted.
 
 ## Non-goals
+
+### Approved agent memory
+
+Desktop memory is an explicit exception to automatic semantic retrieval and
+managed context handoff being deferred. Relay, project chats and workers may
+receive scoped historical evidence and between-turn checkpoints. A separate,
+private application `memory.sqlite` stores generated knowledge and continuity;
+it never changes project schemas or grants persisted execution authority.
+Automatic extraction uses the verified orchestration provider with tools denied.
+Global promotion is human-only. Memory settings, source provenance, corrections,
+suppression and bounded retrieval are owned by desktop; core receives optional
+injected lifecycle hooks. CLI defaults and the manual RAG experiment stay unchanged.
+Only completed, committed source ranges can advance extraction cursors. Provider
+session replacement never replays a dispatched request or restores task authority.
+
+Exception for the desktop RAG experiment: Settings → Advanced → Experiments → RAG
+manually snapshots all saved/live orchestration chats and workers across the
+connected database's registered projects, including archived/stopped conversations
+and legacy directory histories. It includes retained and closed project chats,
+with project provenance, and reads live worker events from each captured owner.
+The application-owned Relay conversation is not database-associated and is excluded.
+It indexes only human prompts and assistant text.
+Core reconstructs streamed messages, chunks exact source spans (512 total model
+tokens, up to 64-token overlap), validates normalized vectors and ranks cosine
+similarities with stable ties. The injected embedder separates document/query
+operations. Desktop alone owns discovery, storage and CPU inference.
+
+Jina Embeddings v2 Base Code INT8 (768 dimensions) and its tokenizer are bundled at
+a pinned revision and SHA-256 hashes, prepared explicitly with `npm run prepare:models`.
+Transformers.js is pinned. Model loading, embedding, index parsing and ranking run
+in a lazy, bounded Node sidecar using the Electron executable in Node mode, not in
+main or the renderer. Masked mean pooling and L2 normalization follow the model card.
+Remote model loading, filesystem caches and runtime downloads are disabled.
+Packages unpack the native ONNX/sharp runtime and include model provenance and
+Apache-2.0 notices. Only the target ONNX CPU binaries are shipped.
+
+Private, versioned JSON generations beneath
+`.code60_workspace/rag/<database-path-sha256>` store conversation provenance,
+message ordinal, original offsets/text and little-endian float32 vectors encoded
+as base64. Model, chunker, database, source and vector identities are checked.
+The database schema, CLI, Search and MCP tools are unchanged. Future repository
+sources must add a distinct versioned source kind, not misuse conversation fields.
+An atomic manifest replacement publishes a completed generation. Failed/cancelled
+builds keep the old manifest; native-confirmed Clear deletes only derived RAG files.
+There is no auto-indexing, generation, agent access or repository indexing.
+
+Rebuild/retrieve/clear are single-flight outside the controller action queue;
+strict bridge requests carry only opaque database/request identities and bounded
+query text. Status and progress are pushed. Queries are limited to 8,192 characters
+and 512 total tokens and return at most ten text-only chunks. Reads are bounded
+(1 MiB records, 32 MiB transcripts, 128 MiB snapshot, 1 MiB per message);
+an index supports 2,000 conversations, 10,000 chunks and 96 MiB persisted data.
+Limit or unreadable-source failures are explicit, never partial successes.
+Read-only orchestration history and strict project listing avoid reconciliation
+writes and silent corrupt-record skipping during indexing. Chat metadata snapshots
+reserve a read between the existing ChatStore's pending and subsequent atomic
+writes, without entering the controller action queue. Cancellation targets
+the current request UUID and runs on database replacement, renderer reload/loss,
+Stop all and shutdown. Sidecars are stopped before unfinished generations are
+removed. Page changes retain query/results; database changes reset them.
 
 Exception for Tactics and stopped orchestration chats: a browser-safe versioned
 catalog supplies eight bundled prompt workflows. Only the composer opens the

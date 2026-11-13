@@ -56,6 +56,8 @@ export const runRecordSchema = z
     lastStopReason: stopReasonSchema.optional(),
     reason: z.string().optional(),
     discardedAt: z.string().optional(),
+    /** Set for workers owned by the application-level Relay rather than a project chat. */
+    owner: z.literal("relay").optional(),
   })
   .refine(
     (record) => (record.base === null) === (record.branch === null),
