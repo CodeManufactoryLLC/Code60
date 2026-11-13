@@ -394,6 +394,8 @@ describe("retained project runtimes", () => {
         ]),
       );
     });
+    // The running summary can arrive before the fake agent starts its prompt.
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
     const worker = agents.sessions.at(-1);
     worker?.update({ type: "message", text: "Not a summary transcript" });
     worker?.endTurn("end_turn");
@@ -3947,6 +3949,8 @@ describe("orchestrated workers over ACP", () => {
     expect(chatPrompts().at(-1)).toContain("Verifier unavailable");
     expect(chatPrompts().at(-1)).toContain("not proof that the task succeeded");
     expect(controller.snapshot().chat.tactic).toBe("explore-the-codebase");
+    // Delivery precedes queued metadata writes; drain them before reading another store.
+    await controller.shutdown(true);
     const store = new ChatStore(join(directory, ".code60_workspace"));
     const saved = (await store.load()).chats.find((chat) => chat.runId === chatId);
     expect(
