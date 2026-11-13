@@ -10,6 +10,7 @@ import type {
 import type { RunEvent } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
+import type { ChatNavigation } from "./history-navigation.js";
 import { Icon } from "./icons.js";
 import {
   groups,
@@ -44,6 +45,11 @@ export function PageTabBar({
   eventsByRun,
   openProjects,
   selectedProjectId,
+  onChatNavigation,
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
 }: {
   tabs: PageTabs;
   settingsSection: SettingsSectionId;
@@ -63,6 +69,11 @@ export function PageTabBar({
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
+  onChatNavigation?: ChatNavigation;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onBack(): void;
+  onForward(): void;
 }) {
   const sidebar = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(() => {
@@ -109,6 +120,12 @@ export function PageTabBar({
         }}
       />
       <div className="sidebar-toolbar">
+        <HistoryControls
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onBack={onBack}
+          onForward={onForward}
+        />
         <button
           type="button"
           id="tab-search"
@@ -142,9 +159,73 @@ export function PageTabBar({
           eventsByRun={eventsByRun}
           openProjects={openProjects}
           selectedProjectId={selectedProjectId}
+          onChatNavigation={onChatNavigation}
         />
       </div>
     </nav>
+  );
+}
+
+type HistoryDirection = "back" | "forward";
+
+function HistoryControls({
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
+}: {
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onBack(): void;
+  onForward(): void;
+}) {
+  const back = useRef<HTMLButtonElement>(null);
+  const forward = useRef<HTMLButtonElement>(null);
+  // The browser drops focus as soon as a button becomes disabled, so remember which one the
+  // user pressed and hand focus to its sibling, or to Chat, when it runs out of destinations.
+  const pressed = useRef<HistoryDirection | undefined>(undefined);
+  useEffect(() => {
+    const direction = pressed.current;
+    pressed.current = undefined;
+    if (!direction) return;
+    const [button, enabled, sibling, siblingEnabled] =
+      direction === "back"
+        ? [back.current, canGoBack, forward.current, canGoForward]
+        : [forward.current, canGoForward, back.current, canGoBack];
+    const focused = document.activeElement;
+    if (enabled || (focused !== button && focused !== document.body && focused !== null)) return;
+    (siblingEnabled ? sibling : document.getElementById("tab-chat"))?.focus();
+  }, [canGoBack, canGoForward]);
+  const press = (direction: HistoryDirection, go: () => void) => () => {
+    pressed.current = direction;
+    go();
+  };
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a toolbar of two buttons, not a form fieldset.
+    <div className="sidebar-history" role="group" aria-label="Navigation history">
+      <button
+        ref={back}
+        type="button"
+        className="icon-button"
+        aria-label="Back"
+        title="Back"
+        disabled={!canGoBack}
+        onClick={press("back", onBack)}
+      >
+        <Icon name="arrow--left" />
+      </button>
+      <button
+        ref={forward}
+        type="button"
+        className="icon-button"
+        aria-label="Forward"
+        title="Forward"
+        disabled={!canGoForward}
+        onClick={press("forward", onForward)}
+      >
+        <Icon name="arrow--right" />
+      </button>
+    </div>
   );
 }
 
@@ -170,6 +251,7 @@ function PageTabList({
   eventsByRun,
   openProjects,
   selectedProjectId,
+  onChatNavigation,
 }: {
   onOpenProject(): void;
   projectDisabled: boolean;
@@ -188,6 +270,7 @@ function PageTabList({
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
+  onChatNavigation?: ChatNavigation | undefined;
 }) {
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState("");
@@ -234,6 +317,7 @@ function PageTabList({
     setChatPending(true);
     setChatError("");
     const navigate = request.type === "new" || request.type === "select";
+    const navigation = navigate ? onChatNavigation?.(request) : undefined;
     const archiveCurrent =
       request.type === "archive" && request.id === selectedId && tabs.active === "chat";
     if (navigate) onSelect("chat");
@@ -248,7 +332,8 @@ function PageTabList({
           onSelect("chat");
         }
       }
-      if (navigate)
+      // Keep a worker the user selected while the request was pending.
+      if (navigate && (navigation?.[1]() ?? true))
         onWorkerSelect(
           undefined,
           openProjects
@@ -259,8 +344,10 @@ function PageTabList({
                   )?.projectId) ?? null)
             : undefined,
         );
+      navigation?.[0](true);
       return true;
     } catch (cause) {
+      navigation?.[0](false);
       setChatError(cause instanceof Error ? cause.message : String(cause));
       return false;
     } finally {

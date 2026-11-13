@@ -51,6 +51,17 @@
   -webkit-app-region: no-drag;
 }
 
+/* Back and Forward, at the start of the toolbar; Search stays at the end. */
+.sidebar-history {
+  display: flex;
+  flex-shrink: 0;
+  padding-left: 4px;
+}
+.sidebar-history > .icon-button {
+  width: var(--nav-action-width);
+  height: var(--nav-row-height);
+}
+
 .sidebar-search {
   flex-shrink: 0;
   margin-left: auto;

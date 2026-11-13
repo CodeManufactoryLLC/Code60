@@ -12,6 +12,7 @@ function navigation(
   settingsSection: SettingsSectionId = "agents",
   active = initialTabs.active,
   expanded = true,
+  history = { canGoBack: false, canGoForward: false },
 ) {
   vi.stubGlobal("localStorage", { getItem: () => String(expanded), setItem: () => {} });
   return renderToStaticMarkup(
@@ -31,6 +32,9 @@ function navigation(
       selectedId={undefined}
       navigationSerial={undefined}
       eventsByRun={{}}
+      {...history}
+      onBack={() => {}}
+      onForward={() => {}}
     />,
   );
 }
@@ -179,7 +183,8 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain('data-icon="pencil-line"');
       expect(project).toContain("<svg");
       expect(html).not.toContain("<img");
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(2);
+      // Includes the Back and Forward arrows.
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(4);
       expect(html.match(/class="navigation-icon"/g)).toHaveLength(27);
       for (const [id, icon, label] of [
         ["tab-home", "house", "Home"],
@@ -222,5 +227,32 @@ describe("sidebar labels and disclosure icons", () => {
         expect(toggle).not.toContain('class="carbon-icon"');
       }
     }
+  });
+});
+
+describe("navigation history controls", () => {
+  const control = (html: string, label: string) =>
+    html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0];
+
+  it("puts labelled Back and Forward buttons at the start of the toolbar, before Search", () => {
+    const html = navigation("/database.sqlite");
+    expect(html).toContain('role="group" aria-label="Navigation history"');
+    expect(html.indexOf('class="sidebar-toolbar"')).toBeLessThan(html.indexOf('aria-label="Back"'));
+    expect(html.indexOf('aria-label="Back"')).toBeLessThan(html.indexOf('aria-label="Forward"'));
+    expect(html.indexOf('aria-label="Forward"')).toBeLessThan(html.indexOf('id="tab-search"'));
+    expect(html).toContain('d="M6.7 12.3 2.9 8.5 15 8.5 15 7.5 2.9 7.5 6.7 3.7 6 3 1 8 6 13z"');
+    expect(html).toContain('d="M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z"');
+  });
+
+  it("disables each direction without a destination", () => {
+    const none = navigation("/database.sqlite");
+    expect(control(none, "Back")).toContain("disabled");
+    expect(control(none, "Forward")).toContain("disabled");
+    const back = navigation("/database.sqlite", undefined, "agents", "chat", true, {
+      canGoBack: true,
+      canGoForward: false,
+    });
+    expect(control(back, "Back")).not.toContain("disabled");
+    expect(control(back, "Forward")).toContain("disabled");
   });
 });
