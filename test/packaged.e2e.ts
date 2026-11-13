@@ -63,51 +63,47 @@ test("installed app embeds and retrieves offline with bundled CPU runtime", asyn
   const directory = await mkdtemp(join(tmpdir(), "code60-packaged-rag-"));
   const app = await launchDesktop(directory, directory, join(directory, "code60.sqlite"), true);
   try {
-    const result = await app.evaluate(async ({ app }) => {
-      const { join } = await import("node:path");
-      const { pathToFileURL } = await import("node:url");
-      const { RagService } = await import(
-        pathToFileURL(join(app.getAppPath(), "dist", "desktop", "rag-service.js")).href
-      );
-      const service = new RagService(join(process.resourcesPath, "models"));
-      service.select(join(app.getPath("userData"), "offline-fixture.sqlite"));
-      const identity = () => ({
-        databaseKey: service.snapshot().databaseKey ?? "",
-        requestId: crypto.randomUUID(),
-      });
-      const at = new Date().toISOString();
-      try {
-        await service.rebuild(identity(), async () => [
-          {
-            source: {
-              version: 1,
-              kind: "conversation",
-              runId: "offline-fixture",
-              conversation: "chat",
-              title: "Offline fixture",
-              agent: "fixture",
-              project: null,
-            },
-            events: [
-              {
-                type: "message",
-                text: "The RAG snapshot stays on this device and is rebuilt manually.",
-                at,
-                runId: "offline-fixture",
-              },
-            ],
-          },
-        ]);
-        const found = await service.retrieve({
-          ...identity(),
-          text: "Where is the conversation index stored?",
-        });
-        return { count: found.hits.length, text: found.hits[0]?.text, score: found.hits[0]?.score };
-      } finally {
-        await service.cancel();
-        await service.clear(identity(), async () => true);
-      }
-    });
+    // Electron's main-process evaluate cannot use dynamic import; run RagService in Node mode,
+    // as packaged sidecars do, so it forks the bundled CPU worker from the installed app.
+    const paths = await app.evaluate(({ app }) => ({
+      service: `${app.getAppPath()}/dist/desktop/rag-service.js`,
+      models: `${process.resourcesPath}/models`,
+    }));
+    const script = join(directory, "rag-probe.mjs");
+    await writeFile(
+      script,
+      `import { pathToFileURL } from "node:url";
+const [service, models, database] = process.argv.slice(2);
+const { RagService } = await import(pathToFileURL(service).href);
+const rag = new RagService(models);
+rag.select(database);
+const identity = () => ({ databaseKey: rag.snapshot().databaseKey ?? "", requestId: crypto.randomUUID() });
+const at = new Date().toISOString();
+try {
+  await rag.rebuild(identity(), async () => [{
+    source: { version: 1, kind: "conversation", runId: "offline-fixture", conversation: "chat", title: "Offline fixture", agent: "fixture", project: null },
+    events: [{ type: "message", text: "The RAG snapshot stays on this device and is rebuilt manually.", at, runId: "offline-fixture" }],
+  }]);
+  const found = await rag.retrieve({ ...identity(), text: "Where is the conversation index stored?" });
+  process.stdout.write(JSON.stringify({ count: found.hits.length, text: found.hits[0]?.text, score: found.hits[0]?.score }));
+} finally {
+  await rag.cancel();
+  await rag.clear(identity(), async () => true);
+}
+process.exit(0);
+`,
+    );
+    const { stdout } = await promisify(execFile)(
+      process.env.CODE60_PACKAGED_EXECUTABLE as string,
+      [script, paths.service, paths.models, join(directory, "offline-fixture.sqlite")],
+      {
+        cwd: directory,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+        timeout: 75_000,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    const result = JSON.parse(stdout) as { count: number; text?: string; score?: number };
     expect(result.count).toBe(1);
     expect(result.text).toContain("rebuilt manually");
     expect(Number.isFinite(result.score)).toBe(true);
@@ -116,7 +112,6 @@ test("installed app embeds and retrieves offline with bundled CPU runtime", asyn
     await rm(directory, { recursive: true, force: true });
   }
 });
-
 test("installed app persists projects and runs agents, MCP and cancellation", async () => {
   const directory = await mkdtemp(
     join(process.env.CODE60_PACKAGED_DATA_ROOT ?? tmpdir(), "code60-package-"),
