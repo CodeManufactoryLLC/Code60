@@ -284,8 +284,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   .project-item,
   .modal-heading button,
   .page-tab [role="tab"],
-  .button-group > button,
-  .table-control-group > select
+  .button-group > button
 ):focus-visible {
   outline-offset: -3px;
   box-shadow: var(--focus-inset-shadow);

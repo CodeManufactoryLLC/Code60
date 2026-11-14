@@ -70,6 +70,7 @@ describe("database connection navigation", () => {
     }
     expect(html.match(/<button[^>]*id="tables-toggle"[^>]*>/)?.[0]).not.toContain("disabled");
     expect(html.match(/<button[^>]*id="tab-logs"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(html.match(/<button[^>]*id="tab-memories"[^>]*>/)?.[0]).not.toContain("disabled");
     expect(html.indexOf('id="tab-events"')).toBeLessThan(html.indexOf('id="tab-logs"'));
     expect(html.indexOf('id="tab-logs"')).toBeLessThan(html.indexOf('id="tab-messages"'));
     expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).not.toContain("disabled");
@@ -133,6 +134,56 @@ describe("database connection navigation", () => {
 });
 
 describe("sidebar labels and disclosure icons", () => {
+  it("nests Data Viewer alphabetically under Apps and gives every child the grid icon", () => {
+    const html = navigation("/database.sqlite");
+    const order = [
+      "app-pages",
+      "tab-commands",
+      "tables-toggle",
+      "table-pages",
+      "tab-configurations",
+      "tab-events",
+      "tab-logs",
+      "tab-memories",
+      "tab-messages",
+      "tab-polling",
+      "tab-sessions",
+      "tab-worktrees",
+      "tab-prompts",
+      "tab-settings",
+    ];
+    for (let index = 1; index < order.length; index++) {
+      expect(html.indexOf(`id="${order[index - 1]}"`)).toBeLessThan(
+        html.indexOf(`id="${order[index]}"`),
+      );
+    }
+    for (const id of [
+      "configurations",
+      "events",
+      "logs",
+      "memories",
+      "messages",
+      "polling",
+      "sessions",
+      "worktrees",
+    ]) {
+      const tab = html.match(new RegExp(`<button[^>]*id="tab-${id}"[\\s\\S]*?</button>`))?.[0];
+      expect(tab).toContain('data-icon="grid-nine"');
+    }
+    expect(html).toContain('aria-label="Data Viewer"');
+    expect(html).not.toContain('title="Tables"');
+  });
+
+  it.each([true, false])("selects Apps independently of its expansion (%s)", (expanded) => {
+    const html = navigation(null, undefined, "agents", "apps", expanded);
+    const tab = html.match(/<button[^>]*id="tab-apps"[\s\S]*?<\/button>/)?.[0];
+    expect(tab).toContain('role="tab"');
+    expect(tab).toContain('aria-selected="true"');
+    expect(tab).toContain('aria-controls="panel-apps app-pages"');
+    expect(tab).toContain(`aria-expanded="${expanded}"`);
+    expect(tab).not.toContain('disabled=""');
+  });
+
   it.each([true, false])(
     "keeps disclosure contents mounted and immediately inaccessible when closed (expanded: %s)",
     (expanded) => {
@@ -145,7 +196,7 @@ describe("sidebar labels and disclosure icons", () => {
       );
       for (const id of [
         "chat-pages",
-        "tool-pages",
+        "app-pages",
         "table-pages",
         "settings-pages",
         "advanced-pages",
@@ -180,17 +231,17 @@ describe("sidebar labels and disclosure icons", () => {
       expect(project).toContain("<svg");
       expect(html).not.toContain("<img");
       expect(html.match(/class="carbon-icon"/g)).toHaveLength(2);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(27);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(28);
       for (const [id, icon, label] of [
         ["tab-home", "house", "Home"],
         ["tab-chat", "clipboard", "Projects"],
         ["tab-prompts", "pencil-line", "Prompt Builder"],
-        ["tab-commands", "megaphone", "Commands"],
+        ["tab-commands", "megaphone", "Command Builder"],
         ["tab-settings", "gear", "Settings"],
-        ["tools-toggle", "wrench", "Tools"],
-        ["tables-toggle", "database", "Tables"],
-        ["tab-configurations", "sliders-horizontal", "Configurations"],
-        ["tab-logs", "list-bullets", "Logs"],
+        ["tab-apps", "app-window", "Apps"],
+        ["tables-toggle", "database", "Data Viewer"],
+        ["tab-configurations", "grid-nine", "Configurations"],
+        ["tab-logs", "grid-nine", "Logs"],
         ["tab-settings-agents", "robot", "Agents"],
         ["advanced-toggle", "wrench", "Advanced"],
         ["experiments-toggle", "flask", "Experiments"],
@@ -212,7 +263,7 @@ describe("sidebar labels and disclosure icons", () => {
       expect(settingsToggle).toContain(`aria-expanded="${expanded}"`);
       for (const id of [
         "tab-chat",
-        "tools-toggle",
+        "tab-apps",
         "tables-toggle",
         "advanced-toggle",
         "experiments-toggle",

@@ -1,5 +1,5 @@
 /* Shared disabled treatment, including controls disabled by a parent fieldset. Keep this after
-   component background shorthands so primary buttons and composer fields retain the hatching. */
+   component background shorthands so primary buttons and composer fields lose their fill. */
 .app
   :is(button, input, select, textarea):is(:disabled, [aria-disabled="true"]):not(
     .icon-button,
@@ -8,17 +8,20 @@
   ),
 .app [aria-disabled="true"]:not(.icon-button, .gdg-search-bar-inner button, .plan-task input) {
   background-color: var(--disabled-fill);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 4px,
-    var(--disabled-stripe) 4px 6px
-  );
+  background-image: none;
   color: var(--muted);
-  border-style: dashed;
-  border-color: var(--control-border);
+  border-style: solid;
+  border-color: var(--border);
   box-shadow: none;
   cursor: default;
-  opacity: 1;
+  opacity: 0.6;
+}
+
+/* Unavailable navigation destinations are dimmed labels, not outlined controls. */
+.app .sidebar :is(button, [role="tab"]):is(:disabled, [aria-disabled="true"]) {
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.45;
 }
 
 .app input[type="checkbox"]:disabled:checked:not(.plan-task input)::before {

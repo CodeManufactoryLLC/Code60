@@ -21,34 +21,38 @@
   width: min(100%, 300px);
 }
 
-/* Banners: a written prefix and a 2px left rule. */
+/* A single compact status row with a 3px warning rule. */
 .database-notice {
   position: relative;
   z-index: 12;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 4px 10px;
   flex-shrink: 0;
-  min-height: 88px;
-  margin: 0 var(--page-margin) 12px;
-  padding: 16px 20px;
+  min-height: 40px;
+  margin: 0 var(--page-margin) 8px;
+  padding: 4px 6px 4px 12px;
   color: var(--warning-text);
   background: var(--warning-bg);
-  border: 1px solid currentColor;
-  border-left-width: 4px;
+  border: 0;
+  border-left: 3px solid currentColor;
   -webkit-app-region: no-drag;
 }
 
 .database-notice > div {
-  flex: 1 1 240px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  flex: 1 1 200px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .database-notice h2 {
-  margin: 0 0 4px;
-  font-size: var(--title-size, 18px);
+  margin: 0;
+  font-size: var(--text-size, 13px);
 }
 
 .database-notice p {

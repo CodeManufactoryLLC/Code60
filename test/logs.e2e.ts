@@ -11,7 +11,9 @@ import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const root = resolve(import.meta.dirname, "..");
 async function openLogs(page: Page) {
-  const tables = page.getByRole("button", { name: "Tables", exact: true });
+  const apps = page.locator("#tab-apps");
+  if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+  const tables = page.getByRole("button", { name: "Data Viewer", exact: true });
   if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
   await page.getByRole("tab", { name: "Logs", exact: true }).click();
   await expect(page.locator("#panel-logs")).toBeVisible();
@@ -72,12 +74,12 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await search.press("Enter");
     await expect(logs.getByText("Page 1", { exact: true })).toBeVisible();
     await expect(logs.getByRole("button", { name: "Older page", exact: true })).toBeDisabled();
-    await logs.getByLabel("Current app launch only").check();
+    await logs.getByLabel("Current launch only").check();
     await expect(logs.getByText("No diagnostic logs match these filters.")).toBeVisible();
     await search.fill("retained-138");
     await search.press("Enter");
     await expect(logs.getByText("No diagnostic logs match these filters.")).toBeVisible();
-    await logs.getByLabel("Current app launch only").uncheck();
+    await logs.getByLabel("Current launch only").uncheck();
     await expect(logs.getByText("No diagnostic logs match these filters.")).toHaveCount(0);
     await search.fill("retained-139");
     await search.press("Enter");

@@ -37,19 +37,234 @@
 .memory-list li + li {
   margin-top: 8px;
 }
-.memory-edit {
+/* Memory details: one reading column with quiet metadata and a sticky action footer. */
+.setup-dialog.memory-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.memory-inspector {
   display: grid;
-  gap: 8px;
-  margin: 12px;
+  gap: 16px;
+  min-width: 0;
+  padding: 4px 0 0;
+  overflow-wrap: anywhere;
 }
-.memory-edit textarea {
-  min-height: 100px;
+
+.settings-card > .memory-inspector {
+  padding: 12px 16px 0;
+}
+
+.memory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+  line-height: 1.4;
+}
+
+.memory-tag[data-state="active"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.memory-tag:is([data-state="disputed"], [data-state="stale"], [data-state="forgotten"]) {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.memory-inspector .memory-edit {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.memory-inspector .memory-edit textarea {
+  min-height: 88px;
   resize: vertical;
+  font-size: calc(var(--text-size, 13px) + 1px);
+  line-height: 1.5;
 }
-.memory-page pre {
+
+.memory-condition {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.memory-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 12px 0;
+  border-block: 1px solid var(--border);
+}
+
+.memory-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.memory-facts dt {
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+}
+
+.memory-facts dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.memory-inspector h3 {
+  margin: 0;
+  font-size: var(--text-size, 13px);
+  font-weight: var(--title-weight, 400);
+  color: var(--muted);
+}
+
+.memory-inspector h4 {
+  margin: 0 0 6px;
+  font-size: var(--text-size, 12px);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.memory-muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.memory-citation {
+  margin: 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--accent);
+}
+
+.memory-citation blockquote {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.memory-citation figcaption {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+}
+
+.memory-disclosure {
+  min-width: 0;
+  margin: 0;
+}
+
+.memory-disclosure > summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.memory-disclosure[open] > summary {
+  margin-bottom: 10px;
+}
+
+.memory-source + .memory-source {
+  margin-top: 12px;
+}
+
+.memory-source-text {
+  max-height: 240px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.memory-page details {
-  margin: 12px;
+
+.memory-source-text mark {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: inherit;
+}
+
+.memory-revisions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-revisions p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.memory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.memory-dialog .memory-actions {
+  position: sticky;
+  bottom: 0;
+  margin-top: 4px;
+}
+
+.memory-actions-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.memory-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-end: 8px;
+}
+
+.memory-pin label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+@media (forced-colors: active) {
+  .memory-source-text mark {
+    background: Mark;
+    color: MarkText;
+  }
+  .memory-tag,
+  .memory-citation {
+    border-color: CanvasText;
+  }
 }

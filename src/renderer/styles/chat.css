@@ -373,13 +373,7 @@
   display: grid;
   min-height: 142px;
   place-items: center;
-  border-style: dashed;
   background-color: var(--disabled-fill);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 4px,
-    var(--disabled-stripe) 4px 6px
-  );
   color: var(--muted);
   font-size: var(--text-size, 12px);
   font-weight: 400;

@@ -96,14 +96,6 @@
   --letter-spacing: var(--title-spacing, normal);
 }
 
-.home-card-description {
-  font:
-    var(--text-weight, 400) max(15px, var(--text-size, 13px)) / 1.5 var(--text-font, var(--font));
-  text-transform: var(--text-case, none);
-  --letter-spacing: var(--text-spacing, normal);
-  color: var(--muted);
-}
-
 .home-card-arrow {
   position: absolute;
   right: 20px;

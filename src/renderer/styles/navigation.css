@@ -210,6 +210,7 @@
   --nav-indent: var(--nav-step);
 }
 
+#table-pages,
 #advanced-pages {
   --nav-indent: calc(var(--nav-step) * 2);
 }

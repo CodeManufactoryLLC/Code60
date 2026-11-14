@@ -89,48 +89,237 @@
   overflow-y: hidden;
 }
 
+/* Page toolbars are quiet icon actions; their names appear as tooltips. */
 .table-control-group {
+  --toolbar-target: max(30px, calc(var(--button-size, 13px) + 17px));
   position: relative;
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   width: max-content;
   max-width: none;
 }
 
-.button-group.table-control-group > button {
-  min-width: 0;
-  min-height: 28px;
+.table-control-group > button.icon-button,
+.icon-select {
+  display: inline-grid;
+  place-items: center;
   flex-shrink: 0;
+  width: var(--toolbar-target);
+  min-width: var(--toolbar-target);
+  height: var(--toolbar-target);
+  min-height: var(--toolbar-target);
+  padding: 0;
+  color: var(--muted);
 }
 
-.table-control-group > select {
-  width: 128px;
-  flex-shrink: 0;
-  min-width: 0;
-  min-height: 28px;
-  padding: 4px 10px;
+.table-control-group > button.icon-button[data-active="true"] {
+  color: var(--accent);
+}
+
+.table-control-group > button.icon-button.danger-text {
+  color: var(--danger);
+}
+
+.table-control-group > button.icon-button[data-attention="true"]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.table-control-group > button.icon-button[data-attention="true"] {
+  position: relative;
+}
+
+/* A native select stays the accessible control; the column glyph is its visible face. */
+.icon-select {
+  position: relative;
+}
+
+.icon-select > select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
   border: 0;
-  background-color: var(--group-fill);
+  background: transparent;
   box-shadow: none;
+  color: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.icon-select > select option {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.icon-select:hover,
+.icon-select:has(> select:focus-visible) {
+  color: var(--accent);
+}
+
+.icon-select:has(> select:focus-visible) {
+  box-shadow: var(--focus-inset-shadow);
+}
+
+.table-control-group > button.icon-button:disabled,
+.table-pager .icon-button:disabled {
+  opacity: 0.35;
+}
+
+.table-toolbar-divider:last-child {
+  display: none;
+}
+
+.table-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Data selectors keep the button role's typeface rather than the page text face. */
+.icon-select > select,
+.table-scope > select {
   font-family: var(--button-font, var(--font));
-  font-size: var(--button-size, 13px);
   font-weight: var(--button-weight, 400);
   text-transform: var(--button-case, none);
   --letter-spacing: var(--button-spacing, normal);
 }
 
-.table-control-group > select:hover {
-  background-color: var(--group-hover);
+.table-scope > select {
+  width: auto;
+  max-width: 220px;
+  min-height: 28px;
+  padding: 3px 28px 3px 8px;
+  font-size: var(--text-size, 12px);
 }
 
-.table-control-group > select:focus-visible {
-  box-shadow: var(--focus-inset-shadow);
+.table-scope-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+  white-space: nowrap;
+}
+
+.table-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 2px 6px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-size, 12px);
+}
+
+.filter-chip:hover {
+  background: var(--hover-bg);
+}
+
+.table-control-group > .filter-chip {
+  margin-inline: 4px;
+}
+
+.filter-chip .carbon-icon {
+  --icon-size: 12px;
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+}
+
+.link-button {
+  min-height: 24px;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: var(--text-size, 12px);
+}
+
+.link-button:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.table-filter-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+}
+
+.table-search-input {
+  flex: 0 1 320px;
+  min-width: 160px;
 }
 
 .filter-trigger-label {
   min-width: 0;
-  max-width: 260px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact pager shared by server-paged tables. */
+.table-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 4px var(--page-padding);
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
+}
+
+.table-pager-summary {
+  margin-right: auto;
+}
+
+.table-pager .icon-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.table-pager-page {
+  min-width: 4.5em;
+  text-align: center;
+  color: var(--text);
+}
+
+.table-empty,
+.table-notice {
+  margin: 0;
+  padding: 4px var(--page-padding);
+  color: var(--muted);
+  font-size: var(--text-size, 12px);
 }
 
 /* Table settings use a bounded modal; only the body scrolls. */
@@ -288,7 +477,6 @@
 
 .table-settings-dialog :disabled {
   color: var(--muted);
-  border-style: dashed;
   background: var(--disabled-fill);
   cursor: default;
 }
@@ -466,8 +654,4 @@
   .filter-rule {
     grid-template-columns: 1fr 1fr;
   }
-}
-
-.button-group.table-control-group > button {
-  white-space: nowrap;
 }
