@@ -36,7 +36,7 @@ it("renders labelled fields and actions without treating a saved command's metad
   expect(html).toContain("Review &lt;script&gt; as text.");
   expect(html).toContain('aria-invalid="false"');
   expect(html).not.toContain('aria-invalid="true"');
-  expect(html).toMatch(/<h1 class="table-title"[^>]*>Commands<\/h1>/);
+  expect(html).toMatch(/<h1 class="table-title"[^>]*>Command Builder<\/h1>/);
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
   expect(header).toContain("New command");
   expect(html.indexOf('class="commands-scroll"')).toBeGreaterThan(html.indexOf("</header>"));

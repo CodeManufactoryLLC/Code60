@@ -65,7 +65,9 @@
   background: transparent;
   box-shadow: none;
   color: var(--muted);
-  font-size: 11px;
+  font: var(--meta-font);
+  font-variant-numeric: tabular-nums;
+  --letter-spacing: var(--meta-spacing);
 }
 
 .poll-timestamp > [role="img"] {
@@ -104,7 +106,9 @@
   margin-left: auto;
   flex-shrink: 0;
   color: var(--muted);
-  font-size: 11px;
+  font: var(--meta-font);
+  font-variant-numeric: tabular-nums;
+  --letter-spacing: var(--meta-spacing);
   white-space: nowrap;
 }
 

@@ -142,7 +142,7 @@ before opening your browser; HTML and images are not loaded.
 
 ## Reusable commands
 
-Open **Commands** after connecting a database to save a reusable prompt. In a
+Open **Command Builder** (under Apps) after connecting a database to save a reusable prompt. In a
 project orchestrator chat, type `/` at the start of your message. Use Up/Down to choose
 and Enter or Tab to insert the command, then add optional instructions and send.
 Escape closes the list. Unknown commands and paths such as `/tmp` are sent as

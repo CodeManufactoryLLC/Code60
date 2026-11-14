@@ -19,7 +19,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FilterControls } from "./filter-controls.js";
-import { drawIcon } from "./icons.js";
+import { drawIcon, Icon } from "./icons.js";
 import {
   filterProblem,
   matchesSavedFilter,
@@ -45,6 +45,7 @@ export { useCssColors } from "./table-appearance.js";
 
 const markerWidth = 40;
 const tableTitles: Record<TableId, string> = {
+  memories: "Memories",
   logs: "Logs",
   sessions: "Sessions",
   messages: "Messages",
@@ -115,6 +116,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   addDisabled,
   viewState,
   actions: toolbarActions,
+  scope,
   onRetainedQuery,
 }: {
   rows: Row[];
@@ -137,6 +139,8 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   parent?(row: Row): string | undefined;
   /** Whether a row's Actions cell opens its menu; defaults to every row. */
   hasActions?(row: Row): boolean;
+  /** Store-wide selectors shown beside the title, separate from page-local table filters. */
+  scope?: ReactNode;
   /** Server-backed tables apply search and filters to retained history, not this page. */
   onRetainedQuery?(query: RetainedTableQuery): void;
 } & TableOptions) {
@@ -202,6 +206,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
     [display, now],
   );
   const [showSearch, setShowSearch] = useState(false);
+  const findShortcut = navigator.platform.startsWith("Mac") ? "⌘F" : "Ctrl+F";
   const [retainedSearch, setRetainedSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const retainedHandler = useRef(onRetainedQuery);
@@ -459,13 +464,17 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
     <div className="data-table" data-heading-lines={lines.heading}>
       <div className="table-controls">
         <h1 className="table-title">{tableTitles[tableId]}</h1>
+        {scope && <div className="table-scope">{scope}</div>}
         <TableControlGroup label="Table controls">
           <button
             type="button"
+            className="icon-button"
             onClick={() => setShowSearch(true)}
             aria-label={`Search ${tableId}`}
+            data-tooltip="Search"
+            data-tooltip-keys={findShortcut}
           >
-            Search
+            <Icon name="search" />
           </button>
           <FilterControls
             key={`${tableId}:${workspace}`}
@@ -480,53 +489,37 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
             }
             retained={!!onRetainedQuery}
           />
-          <select
-            aria-label="Column menu"
-            value=""
-            onChange={(event) => {
-              const bounds = event.currentTarget.getBoundingClientRect();
-              if (event.target.value) setHeaderMenu({ key: event.target.value as Key, bounds });
-            }}
-          >
-            <option value="">Columns…</option>
-            {allColumns.map((column) => (
-              <option key={column.key} value={column.key}>
-                {column.title}
-              </option>
-            ))}
-          </select>
+          <span className="icon-select">
+            <Icon name="column" />
+            <select
+              aria-label="Column menu"
+              data-tooltip="Column filter and sort"
+              value=""
+              onChange={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect();
+                if (event.target.value) setHeaderMenu({ key: event.target.value as Key, bounds });
+              }}
+            >
+              <option value="">Columns…</option>
+              {allColumns.map((column) => (
+                <option key={column.key} value={column.key}>
+                  {column.title}
+                </option>
+              ))}
+            </select>
+          </span>
           <button
             type="button"
+            className="icon-button"
             ref={settingsTrigger}
             aria-haspopup="dialog"
+            aria-label="Settings"
+            data-tooltip="Table settings"
             onClick={() => setSettings(settingsScope)}
           >
-            Settings
+            <Icon name="settings--adjust" />
           </button>
-          {Object.keys(filters).length > 0 && (
-            <>
-              {allColumns
-                .filter((column) => filters[column.key])
-                .map((column) => (
-                  <button
-                    type="button"
-                    key={column.key}
-                    onClick={() =>
-                      setFilters((value) => {
-                        const next = { ...value };
-                        delete next[column.key];
-                        return next;
-                      })
-                    }
-                  >
-                    Clear {column.title} filter
-                  </button>
-                ))}
-              <button type="button" onClick={() => setFilters({})}>
-                Clear all filters
-              </button>
-            </>
-          )}
+          {toolbarActions && <span className="table-toolbar-divider" aria-hidden="true" />}
           {toolbarActions}
           {onAdd && (
             <button
@@ -552,18 +545,22 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
             setSubmittedSearch(retainedSearch);
           }}
         >
-          <label>
-            Search retained logs
-            <input
-              ref={focusRetainedSearch}
-              maxLength={200}
-              value={retainedSearch}
-              onChange={(event) => setRetainedSearch(event.target.value)}
-            />
-          </label>
-          <button type="submit">Search history</button>
+          <input
+            ref={focusRetainedSearch}
+            className="table-search-input"
+            aria-label="Search retained logs"
+            placeholder="Search retained logs"
+            maxLength={200}
+            value={retainedSearch}
+            onChange={(event) => setRetainedSearch(event.target.value)}
+          />
+          <button type="submit" className="icon-button" aria-label="Search history">
+            <Icon name="search" />
+          </button>
           <button
             type="button"
+            className="icon-button"
+            aria-label="Close search"
             onClick={() => {
               setRetainedSearch("");
               setSubmittedSearch("");
@@ -571,7 +568,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
               grid.current?.focus();
             }}
           >
-            Close search
+            <Icon name="close" />
           </button>
         </form>
       )}
@@ -598,7 +595,30 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
         )}
       {Object.keys(filters).length > 0 && (
         <section className="table-filter-bar" aria-label="Applied column filters">
-          <span role="status">
+          {allColumns
+            .filter((column) => filters[column.key])
+            .map((column) => (
+              <button
+                type="button"
+                className="filter-chip"
+                key={column.key}
+                aria-label={`Clear ${column.title} filter`}
+                onClick={() =>
+                  setFilters((value) => {
+                    const next = { ...value };
+                    delete next[column.key];
+                    return next;
+                  })
+                }
+              >
+                {column.title}
+                <Icon name="close" />
+              </button>
+            ))}
+          <button type="button" className="link-button" onClick={() => setFilters({})}>
+            Clear all filters
+          </button>
+          <span className="table-filter-count" role="status">
             {sorted.filter((row) => !parent?.(row)).length} of{" "}
             {rows.filter((row) => !parent?.(row)).length} rows
           </span>

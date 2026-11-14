@@ -176,7 +176,7 @@ Names use 1–64 lowercase letters, digits or hyphens, starting with a letter or
 digit. Titles are single-line and at most 120 characters, descriptions at most
 500, and prompts nonempty and at most 100,000. A database holds at most 200 commands.
 The tool is create-only: duplicate names fail rather than overwrite. Edit or delete
-commands on the Commands page. Workers and CLI runs do not receive this capability.
+commands in Command Builder. Workers and CLI runs do not receive this capability.
 
 ## Orchestrator plans
 

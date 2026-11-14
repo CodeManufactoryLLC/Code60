@@ -61,7 +61,6 @@
   padding: 24px 20px;
   min-height: 100px;
   box-sizing: border-box;
-  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
   background: linear-gradient(
     125deg,
     color-mix(in srgb, var(--primary) 14%, var(--surface)),
@@ -96,14 +95,6 @@
   --letter-spacing: var(--title-spacing, normal);
 }
 
-.home-card-description {
-  font:
-    var(--text-weight, 400) max(15px, var(--text-size, 13px)) / 1.5 var(--text-font, var(--font));
-  text-transform: var(--text-case, none);
-  --letter-spacing: var(--text-spacing, normal);
-  color: var(--muted);
-}
-
 .home-card-arrow {
   position: absolute;
   right: 20px;
@@ -124,7 +115,7 @@
 }
 
 .home-card:focus-visible {
-  box-shadow: var(--focus-shadow), var(--group-shadow);
+  box-shadow: var(--focus-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,6 +4,8 @@ import { NavigationIcon } from "./navigation-icons.js";
 
 // SHA-256 of the original SVGs in the integrity-verified Phosphor 2.1.1 archive.
 it.each([
+  ["grid-nine", "a2ce684a854f339cada68550e5da7fa0e881d962a87f1e34d9a3e706d1647050"],
+  ["app-window", "b528ad83ebe8025555a98bcf176afed223c3e9ae7592214c5dffa61bcf2564b0"],
   ["chat-circle", "cee51ebf9726123b5fcb4139300dcf7f1bc5cb50373db7cb6f5e45a64a87fe3c"],
   ["arrow-elbow-down-right", "fdfedc5fd6fff889356e9a3a6ee31c3ec84eda4bc19905603ac254b8cd70590f"],
   ["house", "bd9f3502ab7d63c3cc8a3cf91657e5974188ede3bd1ac7249333d9ce5d0d932f"],

@@ -5,7 +5,7 @@ import type { Command } from "./overlays.js";
 type Group =
   | "chat"
   | "primary"
-  | "tools"
+  | "apps"
   | "tables"
   | "settings"
   | "advanced"
@@ -31,6 +31,15 @@ export const pages = [
     order: -1,
     database: false,
     icon: "house",
+  },
+  {
+    id: "apps",
+    initialOrder: 14,
+    label: "Apps",
+    group: "primary",
+    order: 1,
+    database: false,
+    icon: "app-window",
   },
   {
     id: "chat",
@@ -82,9 +91,9 @@ export const pages = [
     initialOrder: 4,
     label: "Sessions",
     group: "tables",
-    order: 5,
+    order: 6,
     database: true,
-    icon: "terminal-window",
+    icon: "grid-nine",
   },
   {
     id: "configurations",
@@ -93,16 +102,25 @@ export const pages = [
     group: "tables",
     order: 0,
     database: true,
-    icon: "sliders-horizontal",
+    icon: "grid-nine",
+  },
+  {
+    id: "memories",
+    initialOrder: 15,
+    label: "Memories",
+    group: "tables",
+    order: 3,
+    database: false,
+    icon: "grid-nine",
   },
   {
     id: "messages",
     initialOrder: 5,
     label: "Messages",
     group: "tables",
-    order: 3,
+    order: 4,
     database: true,
-    icon: "chat-text",
+    icon: "grid-nine",
   },
   {
     id: "events",
@@ -111,7 +129,7 @@ export const pages = [
     group: "tables",
     order: 1,
     database: true,
-    icon: "lightning",
+    icon: "grid-nine",
   },
   {
     id: "logs",
@@ -120,7 +138,7 @@ export const pages = [
     group: "tables",
     order: 2,
     database: false,
-    icon: "list-bullets",
+    icon: "grid-nine",
   },
   {
     id: "search",
@@ -136,34 +154,34 @@ export const pages = [
     initialOrder: 9,
     label: "Worktrees",
     group: "tables",
-    order: 6,
+    order: 7,
     database: true,
-    icon: "git-branch",
+    icon: "grid-nine",
   },
   {
     id: "polling",
     initialOrder: 10,
     label: "Polling",
     group: "tables",
-    order: 4,
+    order: 5,
     database: true,
-    icon: "arrows-clockwise",
+    icon: "grid-nine",
   },
   {
     id: "prompts",
     initialOrder: 11,
     label: "Prompt Builder",
-    group: "tools",
-    order: 0,
+    group: "apps",
+    order: 1,
     database: true,
     icon: "pencil-line",
   },
   {
     id: "commands",
     initialOrder: 12,
-    label: "Commands",
-    group: "tools",
-    order: 1,
+    label: "Command Builder",
+    group: "apps",
+    order: 0,
     database: true,
     icon: "megaphone",
   },
@@ -206,8 +224,7 @@ export const settingsIcons = Object.fromEntries(
   settingsSections.map((section) => [section.id, section.icon]),
 ) as Record<SettingsSectionId, NavigationIconName>;
 export const groups = {
-  tools: { label: "Tools", icon: "wrench" },
-  tables: { label: "Tables", icon: "database" },
+  tables: { label: "Data Viewer", icon: "database" },
   advanced: { label: "Advanced", icon: "wrench" },
   experiments: { label: "Experiments", icon: "flask" },
 } as const;

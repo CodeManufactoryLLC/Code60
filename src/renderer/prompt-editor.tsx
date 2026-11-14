@@ -87,41 +87,36 @@ export function PromptEditorPage({
         <TableControlGroup label="Template actions">
           <button
             type="button"
-            className="primary"
+            className="icon-button"
+            aria-label="Save"
+            data-active={dirty && preview.ok ? "true" : undefined}
             disabled={busy || !dirty || !preview.ok}
-            data-tooltip={
-              !dirty ? "No unsaved changes" : !preview.ok ? "Fix the template first" : undefined
-            }
             onClick={async () => {
               if (await onSave(selected.id, text)) setDraft(undefined);
             }}
           >
             <Icon name="checkmark" />
-            Save
           </button>
           <button
             type="button"
+            className="icon-button"
+            aria-label="Discard changes"
             disabled={busy || !dirty}
-            data-tooltip={dirty ? undefined : "No unsaved changes"}
             onClick={() => setDraft(undefined)}
           >
             <Icon name="close" />
-            Discard changes
           </button>
           <button
             type="button"
+            className="icon-button"
+            aria-label="Reset to default"
+            data-tooltip={`Reset to the ${restores} template`}
             disabled={busy || selected.source !== "database"}
-            data-tooltip={
-              selected.source === "database"
-                ? `Remove the saved edit and use the ${restores} template`
-                : "No saved edit to reset"
-            }
             onClick={async () => {
               if (await onReset(selected.id)) setDraft(undefined);
             }}
           >
             <Icon name="renew" />
-            Reset to default
           </button>
         </TableControlGroup>
       </div>
@@ -181,12 +176,7 @@ export function PromptEditorPage({
                   ? "Assembled Operating Contract"
                   : "Preview with sample values"}
               </h3>
-              {selected.fields.includes("summary") && (
-                <p className="muted">
-                  {"{{summary}}"} is the {promptLabels.handoffSummary} template merged with the same
-                  sample values, including its unsaved changes.
-                </p>
-              )}
+
               {!preview.ok && (
                 <p className="prompt-editor-problem" role="status">
                   {preview.error}

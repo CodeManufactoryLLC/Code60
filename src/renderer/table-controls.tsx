@@ -1,5 +1,6 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Icon } from "./icons.js";
 import { operators as filterOperators } from "./saved-filters.js";
 import { type ColumnFilter, type FilterKind, filterLabels } from "./table-view.js";
 
@@ -7,9 +8,56 @@ export function TableControlGroup({ label, children }: { label: string; children
   return (
     <div className="table-control-scroll">
       {/* biome-ignore lint/a11y/useSemanticElements: these controls are page actions. */}
-      <div className="button-group table-control-group" role="group" aria-label={label}>
+      <div className="table-control-group" role="group" aria-label={label}>
         {children}
       </div>
+    </div>
+  );
+}
+
+interface PagerStep {
+  label: string;
+  disabled: boolean;
+  onClick(): void;
+}
+
+/** Compact previous/next paging for server-backed tables. */
+export function TablePager({
+  label,
+  page,
+  summary,
+  previous,
+  next,
+}: {
+  label: string;
+  page: number;
+  summary?: ReactNode;
+  previous: PagerStep;
+  next: PagerStep;
+}) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: these controls are page actions.
+    <div className="table-pager" role="group" aria-label={label}>
+      <span className="table-pager-summary">{summary}</span>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label={previous.label}
+        disabled={previous.disabled}
+        onClick={previous.onClick}
+      >
+        <Icon name="chevron--left" />
+      </button>
+      <span className="table-pager-page">Page {page}</span>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label={next.label}
+        disabled={next.disabled}
+        onClick={next.onClick}
+      >
+        <Icon name="chevron--right" />
+      </button>
     </div>
   );
 }

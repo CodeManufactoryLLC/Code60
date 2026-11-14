@@ -44,8 +44,7 @@ it("offers private app-wide diagnostics without a database and wires explicit re
     />,
   );
   expect(markup).toContain('aria-label="Logs"');
-  expect(markup).toContain("7 days and 20 MiB");
-  expect(markup).toContain("Transcripts have no new retention limit");
+  expect(markup).not.toContain("7 days and 20 MiB");
   expect(markup).toContain("Pause viewing");
   expect(markup).toContain("Refresh logs");
   expect(markup).toContain("Clear logs");

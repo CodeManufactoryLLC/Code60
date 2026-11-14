@@ -9,6 +9,8 @@ body {
   line-height: 1.5;
   text-transform: var(--text-case, none);
   font-synthesis-weight: none;
+  /* Digits keep fixed widths so counts, timers and dates do not jitter. */
+  font-variant-numeric: tabular-nums;
 }
 
 button,
@@ -188,6 +190,11 @@ input[type="radio"] {
   cursor: pointer;
 }
 
+/* Radio buttons are the one true circle in the square interface. */
+input[type="radio"] {
+  border-radius: 50%;
+}
+
 input[type="checkbox"]:checked,
 input[type="radio"]:checked {
   background: var(--primary);
@@ -207,7 +214,7 @@ input[type="radio"]:checked::before {
   width: 8px;
   height: 8px;
   background: var(--primary-text);
-  border-radius: var(--ui-radius);
+  border-radius: 50%;
 }
 
 /* A switch prints its state inside the track, so on and off never rely on color or position. */
@@ -284,8 +291,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   .project-item,
   .modal-heading button,
   .page-tab [role="tab"],
-  .button-group > button,
-  .table-control-group > select
+  .button-group > button
 ):focus-visible {
   outline-offset: -3px;
   box-shadow: var(--focus-inset-shadow);
@@ -494,21 +500,6 @@ summary:hover {
   }
 }
 
-/* Round only group ends, including the keyboard-only add-row action. */
-:root .button-group > :is(button, select):first-child {
-  border-top-left-radius: var(--ui-radius);
-  border-bottom-left-radius: var(--ui-radius);
-}
-
-:root
-  .button-group
-  > :is(button, select):not(.table-add-accessible:not(:focus-visible)):not(
-    :has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible)))
-  ) {
-  border-top-right-radius: var(--ui-radius);
-  border-bottom-right-radius: var(--ui-radius);
-}
-
 :root
   .button-group
   > :is(button, select):has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible))) {
@@ -590,30 +581,12 @@ summary {
   border-radius: var(--ui-radius);
 }
 
-input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"]) {
+input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"]) {
   border-radius: var(--ui-radius);
 }
 
 [role="switch"] {
   border-radius: var(--ui-radius);
-}
-
-.button-group > :is(button, select) {
-  border-radius: 0;
-}
-
-.segmented > .segmented-option {
-  border-radius: 0;
-}
-
-.segmented > .segmented-option:first-child {
-  border-top-left-radius: var(--ui-radius);
-  border-bottom-left-radius: var(--ui-radius);
-}
-
-.segmented > .segmented-option:last-child {
-  border-top-right-radius: var(--ui-radius);
-  border-bottom-right-radius: var(--ui-radius);
 }
 
 .icon-button {

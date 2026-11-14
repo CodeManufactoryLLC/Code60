@@ -40,7 +40,7 @@
   margin-block: 16px;
   padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
 }
 .rag-results h3 {
   font-weight: 400;
