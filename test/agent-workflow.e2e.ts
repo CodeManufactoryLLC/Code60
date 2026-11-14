@@ -145,7 +145,6 @@ test("workflow: first use through plan, review, apply and undo", async () => {
           state.observed.push(actual);
           if (
             state.allowQuit &&
-            !state.expected.length &&
             actual.message === "Quit Code60?" &&
             JSON.stringify(actual.buttons) === JSON.stringify(["Keep working", "Quit"]) &&
             actual.defaultId === 0 &&
@@ -244,7 +243,9 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     if (!worker) throw new Error("Accepted plan did not create a worker");
     const worktree = await realpath(worker.record.worktree);
     expect(worktree).not.toBe(repo);
-    expect(git("worktree", "list", "--porcelain")).toContain(`worktree ${worktree}`);
+    expect(git("worktree", "list", "--porcelain").replaceAll("\\", "/")).toContain(
+      `worktree ${worktree.replaceAll("\\", "/")}`,
+    );
     expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
     const workerProcesses = (await processes()).filter((entry) => entry.cwd === worktree);
     expect(workerProcesses).toHaveLength(1);
@@ -305,7 +306,9 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     await expect(checkout.getByRole("status")).toHaveText("undone");
     await checkCheckout("original\n");
     expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
-    expect(git("worktree", "list", "--porcelain")).toContain(`worktree ${worktree}`);
+    expect(git("worktree", "list", "--porcelain").replaceAll("\\", "/")).toContain(
+      `worktree ${worktree.replaceAll("\\", "/")}`,
+    );
     expect((await processes()).filter((entry) => entry.cwd === worktree)).toEqual(workerProcesses);
     expect(
       (await page.evaluate(() => window.desktop.snapshot())).runs.map((run) => run.record.id),

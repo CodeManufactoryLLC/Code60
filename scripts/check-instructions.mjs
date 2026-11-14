@@ -1,6 +1,7 @@
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { constants, open, readdir, realpath } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import Markdown from "react-markdown";
 import { parse } from "yaml";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -8,11 +9,88 @@ const inside = (root, path) => {
   const name = relative(root, path);
   return name !== ".." && !name.startsWith(`..${sep}`) && !isAbsolute(name);
 };
-const withoutFences = (text) =>
-  text.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, (block) =>
-    block.replace(/[^\n]/g, " "),
-  );
 const referenceKey = (text) => text.trim().replace(/\s+/g, " ").toLowerCase();
+
+function markdownDocument(text) {
+  let document;
+  // Reuse the app's existing CommonMark parser, without rendering or fetching URLs.
+  Markdown({
+    children: text,
+    remarkPlugins: [
+      () => (tree) => {
+        document = tree;
+      },
+    ],
+    skipHtml: true,
+  });
+  const prose = text.split("");
+  const headings = [];
+  const explicit = new Set();
+  const inlineText = (node) => {
+    if (node.type === "text" || node.type === "inlineCode") return node.value;
+    if (node.type === "image" || node.type === "imageReference") return node.alt;
+    return (node.children ?? []).map(inlineText).join("");
+  };
+  const visit = (node) => {
+    if (node.type === "heading") headings.push(inlineText(node));
+    if (node.type === "code" || node.type === "inlineCode") {
+      for (let index = node.position.start.offset; index < node.position.end.offset; index++)
+        if (prose[index] !== "\n") prose[index] = " ";
+    }
+    if (node.type === "html") {
+      for (const match of node.value.matchAll(/<a\s+[^>]*(?:id|name)=["']([^"']+)["'][^>]*>/g))
+        explicit.add(match[1]);
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(document);
+  const generated = new Set();
+  for (const heading of headings) {
+    const base = heading
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, "")
+      .replace(/\s/g, "-");
+    let slug = base;
+    let suffix = 0;
+    while (generated.has(slug)) slug = `${base}-${++suffix}`;
+    generated.add(slug);
+  }
+  return { prose: prose.join(""), anchors: new Set([...generated, ...explicit]) };
+}
+
+function npmScripts(text) {
+  const valueOptions = new Set([
+    "-w",
+    "--workspace",
+    "--prefix",
+    "--script-shell",
+    "--loglevel",
+    "--userconfig",
+    "--globalconfig",
+    "--cache",
+    "--registry",
+  ]);
+  const scripts = [];
+  for (const match of text.matchAll(/\bnpm[ \t]+run(?:-script)?(?=[ \t])/g)) {
+    const rest = text.slice(match.index + match[0].length).split(/[\r\n`;&|]/, 1)[0];
+    const tokens = [...rest.matchAll(/"([^"]*)"|'([^']*)'|([^\s"']+)/g)].map(
+      (token) => token[1] ?? token[2] ?? token[3],
+    );
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index];
+      if (token === "--") {
+        if (tokens[index + 1]) scripts.push({ name: tokens[index + 1], index: match.index });
+        break;
+      }
+      if (valueOptions.has(token)) index++;
+      else if (!token.startsWith("-")) {
+        if (!/[$\\]/.test(token)) scripts.push({ name: token, index: match.index });
+        break;
+      } else if (/^(?:true|false)$/.test(tokens[index + 1] ?? "")) index++;
+    }
+  }
+  return scripts;
+}
 
 /** Extract destinations without treating a title or a balanced path as executable text. */
 function markdownLinks(markdown) {
@@ -55,35 +133,17 @@ function markdownLinks(markdown) {
   return links;
 }
 
-function anchors(text) {
-  const counts = new Map();
-  const result = new Set(
-    [
-      ...withoutFences(text).matchAll(
-        /^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$|^(.+)\n {0,3}(?:=+|-+)[ \t]*$/gm,
-      ),
-    ].map((match) => {
-      const slug = (match[1] ?? match[2])
-        .toLowerCase()
-        .replace(/<[^>]*>/g, "")
-        .replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, "")
-        .replace(/\s/g, "-");
-      const count = counts.get(slug) ?? 0;
-      counts.set(slug, count + 1);
-      return count ? `${slug}-${count}` : slug;
-    }),
-  );
-  for (const match of withoutFences(text).matchAll(/<a\s+[^>]*(?:id|name)=["']([^"']+)["'][^>]*>/g))
-    result.add(match[1]);
-  return result;
-}
-
 /** Checks references, not prose semantics. Never executes Markdown or follows remote links. */
 export async function checkInstructions(directory = repository) {
   const root = await realpath(directory);
   const failures = [];
   const documents = new Set(["AGENTS.md"]);
   const cache = new Map();
+  const parsed = new Map();
+  const markdown = (text) => {
+    if (!parsed.has(text)) parsed.set(text, markdownDocument(text));
+    return parsed.get(text);
+  };
   const fail = (file, line, message) => failures.push(`${file}:${line}: ${message}`);
   const checked = async (file) => {
     const path = resolve(root, file);
@@ -93,9 +153,17 @@ export async function checkInstructions(directory = repository) {
   };
   const local = async (file) => {
     const path = await checked(file);
-    if (!(await stat(path)).isFile()) throw new Error("Expected a regular file");
-    if (!cache.has(path)) cache.set(path, await readFile(path, "utf8"));
-    return cache.get(path);
+    const handle = await open(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+    );
+    try {
+      if (!(await handle.stat()).isFile()) throw new Error("Expected a regular file");
+      if (!cache.has(path)) cache.set(path, await handle.readFile("utf8"));
+      return cache.get(path);
+    } finally {
+      await handle.close();
+    }
   };
   const manifest = JSON.parse(await local("package.json"));
   for (const entry of await readdir(root, { withFileTypes: true }))
@@ -160,21 +228,19 @@ export async function checkInstructions(directory = repository) {
       }
     }
     const lineOf = (index) => text.slice(0, index).split("\n").length;
-    for (const match of text.matchAll(/\bnpm\s+run(?:-script)?\s+([\w:-]+)/g)) {
-      if (typeof manifest.scripts?.[match[1]] !== "string")
-        fail(file, lineOf(match.index), `Unknown npm script: ${match[1]}`);
+    for (const script of npmScripts(text)) {
+      if (typeof manifest.scripts?.[script.name] !== "string")
+        fail(file, lineOf(script.index), `Unknown npm script: ${script.name}`);
     }
-    const markdown = withoutFences(text).replace(/(`+)[\s\S]*?\1(?!`)/g, (code) =>
-      code.replace(/[^\n]/g, " "),
-    );
+    const prose = markdown(text).prose;
     const definitions = new Set(
-      [...markdown.matchAll(/^ {0,3}\[([^\]\n]+)\]:/gm)].map((match) => referenceKey(match[1])),
+      [...prose.matchAll(/^ {0,3}\[([^\]\n]+)\]:/gm)].map((match) => referenceKey(match[1])),
     );
-    for (const match of markdown.matchAll(/!?\[([^\]\n]+)\]\[([^\]\n]*)\]/g)) {
+    for (const match of prose.matchAll(/!?\[([^\]\n]+)\]\[([^\]\n]*)\]/g)) {
       if (!definitions.has(referenceKey(match[2] || match[1])))
         fail(file, lineOf(match.index), `Undefined Markdown reference: ${match[2] || match[1]}`);
     }
-    for (const match of markdownLinks(markdown)) {
+    for (const match of markdownLinks(prose)) {
       if (match.error) {
         fail(file, lineOf(match.index), match.error);
         continue;
@@ -189,7 +255,7 @@ export async function checkInstructions(directory = repository) {
           ? resolve(root, file, "..", decodeURIComponent(target))
           : resolve(root, file);
         await checked(path);
-        if (fragment && !anchors(await local(path)).has(decodeURIComponent(fragment)))
+        if (fragment && !markdown(await local(path)).anchors.has(decodeURIComponent(fragment)))
           throw new Error("Missing anchor");
       } catch {
         fail(file, lineOf(match.index), `Broken or unsafe local link: ${link}`);

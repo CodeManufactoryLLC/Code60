@@ -48,6 +48,100 @@ describe("agent instruction references", () => {
   it("accepts existing scripts, links, punctuation and duplicate heading anchors", async () => {
     expect(await checkInstructions(await fixture())).toEqual([]);
   });
+  it("checks complete script names after npm options and literal quoted arguments", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "package.json"),
+      JSON.stringify({
+        scripts: {
+          check: "never executed",
+          "check.docs": "never executed",
+          "lint:docs/build": "never executed",
+          "check docs": "never executed",
+        },
+      }),
+    );
+    const commands = [
+      "npm run --silent check",
+      'npm run-script --workspace "apps/documentation" --if-present check.docs',
+      'npm run --prefix . --loglevel=warn "lint:docs/build" -- --help',
+      "npm run --silent true check.docs",
+      "npm run -- check.docs",
+      "npm run 'check docs'",
+    ].join("\n");
+    await writeFile(join(root, "AGENTS.md"), `${guidance}\n${commands}\n`);
+    expect(await checkInstructions(root)).toEqual([]);
+    await writeFile(
+      join(root, "AGENTS.md"),
+      `${guidance}\nnpm run check.missing\nnpm run --silent --workspace=docs check.missing\n`,
+    );
+    expect(await checkInstructions(root)).toEqual([
+      "AGENTS.md:2: Unknown npm script: check.missing",
+      "AGENTS.md:3: Unknown npm script: check.missing",
+    ]);
+  });
+  it("uses rendered heading text and avoids collisions with explicit numeric suffixes", async () => {
+    const root = await fixture();
+    await writeFile(join(root, "logo.svg"), "<svg/>");
+    await writeFile(
+      join(root, "guide.md"),
+      "# Using [Git](https://git-scm.com)\n# Repeat\n# Repeat-1\n# Repeat\n# API `call()` &amp; ![Logo](logo.svg)\n",
+    );
+    await writeFile(
+      join(root, "AGENTS.md"),
+      `${guidance}\n[Git](guide.md#using-git)\n[Again](guide.md#repeat-2)\n[Inline](guide.md#api-call--logo)\n`,
+    );
+    expect(await checkInstructions(root)).toEqual([]);
+    await writeFile(
+      join(root, "AGENTS.md"),
+      `${guidance}\n[Invented](guide.md#using-githttpsgit-scmcom)\n`,
+    );
+    expect(await checkInstructions(root)).toEqual([
+      "AGENTS.md:2: Broken or unsafe local link: guide.md#using-githttpsgit-scmcom",
+    ]);
+  });
+  it("excludes indented fences and longer closing fences from Markdown link checks", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "AGENTS.md"),
+      `${guidance}\n\n  ~~~md\n  [Example](not-an-actual-link.md)\n  ~~~\n\n   \`\`\`md\n   [Another](also-not-a-link.md)\n   \`\`\`\`\n`,
+    );
+    expect(await checkInstructions(root)).toEqual([]);
+  });
+  it("derives plain heading identifiers without retaining HTML delimiters", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "guide.md"),
+      "# <span>Guide</span> <em>safe</em>\n## Literal < marker\n",
+    );
+    await writeFile(
+      join(root, "AGENTS.md"),
+      `${guidance}\n[Guide](guide.md#guide-safe)\n[Literal](guide.md#literal--marker)\n`,
+    );
+    expect(await checkInstructions(root)).toEqual([]);
+  });
+  it.skipIf(process.platform === "win32")(
+    "refuses special instruction files without blocking on open",
+    async () => {
+      const root = await fixture();
+      await rm(join(root, "AGENTS.md"));
+      await promisify(execFile)("mkfifo", [join(root, "AGENTS.md")], { timeout: 5000 });
+      const { stdout } = await promisify(execFile)(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          "const { checkInstructions } = await import(process.argv[1]); console.log(JSON.stringify(await checkInstructions(process.argv[2])));",
+          new URL("../scripts/check-instructions.mjs", import.meta.url).href,
+          root,
+        ],
+        { timeout: 5000 },
+      );
+      expect(JSON.parse(stdout)).toEqual([
+        "AGENTS.md:1: Missing, unreadable, or unsafe instruction/document file",
+      ]);
+    },
+  );
   it("validates titled, escaped, balanced and reference links without inspecting inline code", async () => {
     const root = await fixture();
     await writeFile(join(root, "guide(one).md"), "Guide\n===\n## Good\n");
