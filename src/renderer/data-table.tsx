@@ -489,10 +489,11 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
             }
             retained={!!onRetainedQuery}
           />
-          <span className="icon-select" data-tooltip="Column filter and sort">
+          <span className="icon-select">
             <Icon name="column" />
             <select
               aria-label="Column menu"
+              data-tooltip="Column filter and sort"
               value=""
               onChange={(event) => {
                 const bounds = event.currentTarget.getBoundingClientRect();

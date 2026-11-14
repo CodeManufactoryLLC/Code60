@@ -12,6 +12,7 @@ import { Icon } from "./icons.js";
 import { MemoriesModel } from "./memories-model.js";
 import { MemoryInspector } from "./memory.js";
 import { Modal } from "./modal.js";
+import { pathLabel } from "./path-label.js";
 import { TablePager } from "./table-controls.js";
 
 const columns = [
@@ -45,11 +46,6 @@ function display(record: MemoryRecord, key: (typeof columns)[number]["key"]): st
     return Number.isNaN(at.getTime()) ? "Unknown" : date.format(at);
   }
   return String(value);
-}
-
-/** Project labels are often absolute folders; the final segment is enough in a picker. */
-function shortLabel(label: string): string {
-  return label.split(/[\\/]/).filter(Boolean).pop() ?? label;
 }
 
 export function MemoriesPage({
@@ -138,7 +134,7 @@ export function MemoriesPage({
         <option value="">All projects</option>
         {state.metadata?.projects.map((project) => (
           <option key={project.id} value={project.id} title={project.label}>
-            {shortLabel(project.label)}
+            {pathLabel(project.label)}
           </option>
         ))}
       </select>

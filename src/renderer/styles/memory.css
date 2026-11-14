@@ -78,8 +78,8 @@
 }
 
 .memory-tag:is([data-state="disputed"], [data-state="stale"], [data-state="forgotten"]) {
-  border-color: var(--destructive);
-  color: var(--destructive);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .memory-inspector .memory-edit {

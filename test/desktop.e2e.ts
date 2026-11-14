@@ -7534,6 +7534,13 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await filtersTrigger.hover();
     await expect(page.getByRole("tooltip")).toHaveText("Filters");
     await slots.screenshot({ path: join(root, "test-results", "table-toolbar-icons.png") });
+    // The focused native select carries the tooltip, so keyboard users see it too.
+    const columnMenu = slots.getByLabel("Column menu");
+    await columnMenu.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(columnMenu).toBeFocused();
+    await expect(page.getByRole("tooltip")).toHaveText("Column filter and sort");
     await filtersTrigger.click();
     await expect(filters).toBeVisible();
     await filters.getByRole("button", { name: "Close", exact: true }).click();
