@@ -112,7 +112,7 @@ logs.subscribe(() => {
     window.webContents.send("desktop:logs-changed");
 });
 const windowControlColors = (dark: boolean) => ({
-  color: dark ? "#242b33" : "#ffffff",
+  color: dark ? "#0f172a" : "#ffffff",
   symbolColor: dark ? "#ffffff" : "#000000",
 });
 const controller = new DesktopController(
@@ -669,7 +669,7 @@ async function ready(): Promise<void> {
     minHeight: 600,
     title: `Code60 - ${app.getVersion()}`,
     transparent,
-    backgroundColor: transparent ? "#00000000" : "#111318",
+    backgroundColor: transparent ? "#00000000" : "#0f172a",
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",

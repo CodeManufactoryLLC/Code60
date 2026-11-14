@@ -300,7 +300,7 @@ async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light"
   await expect(page.locator("html")).toHaveCSS("color-scheme", scheme);
   await expect(page.locator(".splash-brand")).toHaveCSS(
     "background-color",
-    scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+    scheme === "dark" ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
   );
   await expect(page.locator(".splash-brand")).toHaveCSS("opacity", "1");
   if (scheme === "dark")
@@ -386,7 +386,7 @@ async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light"
 }
 
 async function expectMessageCopy(control: Locator) {
-  await expect(control).toHaveCSS("border-radius", "5px");
+  await expect(control).toHaveCSS("border-radius", "0px");
   await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(control).toHaveCSS("border-top-width", "0px");
   await expect(control).toHaveCSS("box-shadow", "none");
@@ -457,7 +457,7 @@ async function openPollingControls(page: Page) {
   await page.getByRole("button", { name: "Open polling controls", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Polling controls", exact: true });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveCSS("border-radius", "5px");
+  await expect(dialog).toHaveCSS("border-radius", "0px");
   const dimensions = await dialog.evaluate((element) => {
     const group = element.querySelector(".button-group");
     const buttons = [...element.querySelectorAll(".button-group > button")].map((button) =>
@@ -485,17 +485,9 @@ async function refreshProjectData(page: Page) {
   await dialog.getByRole("button", { name: "Close Polling controls", exact: true }).click();
 }
 
+/** Composers are defined by their hairline border alone, with no outer shadow. */
 async function expectComposerShadow(composer: Locator) {
-  const expected = await composer.evaluate(() => {
-    if (matchMedia("(forced-colors: active)").matches) return "none";
-    const probe = document.createElement("span");
-    probe.style.color = "var(--border)";
-    document.body.append(probe);
-    const color = getComputedStyle(probe).color;
-    probe.remove();
-    return `${color} 0px 0px 1px 0px`;
-  });
-  await expect(composer).toHaveCSS("box-shadow", expected);
+  await expect(composer).toHaveCSS("box-shadow", "none");
 }
 
 async function expectTurnSeparator(line: Locator) {
@@ -537,7 +529,7 @@ async function expectChatBorder(composer: Locator, color = "var(--focus-line)") 
   for (const side of ["top", "right", "bottom", "left"])
     await expect(composer).toHaveCSS(`border-${side}-color`, expected);
   await expect(composer).toHaveCSS("border-top-width", "1px");
-  await expect(composer).toHaveCSS("border-radius", "5px");
+  await expect(composer).toHaveCSS("border-radius", "0px");
   await expect(composer).toHaveCSS("outline-width", "0px");
   await expectComposerShadow(composer);
 }
@@ -584,25 +576,11 @@ async function expectIndustrialSurfaces(page: Page) {
           const grouped =
             element.matches("button, select, .segmented-option") &&
             element.parentElement?.matches(".button-group, .chat-sidebar-row, .segmented");
-          const controls = grouped
-            ? [...(element.parentElement?.children ?? [])].filter(
-                (child) =>
-                  child.matches("button, select, .segmented-option") &&
-                  !child.matches(".table-add-accessible:not(:focus-visible)"),
-              )
-            : [];
-          const leading = controls[0] === element ? 5 : 0;
-          const trailing = controls.at(-1) === element ? 5 : 0;
-          const rounded = element.matches(
-            "button, input[type=button], input[type=submit], input[type=reset], input[type=checkbox], input[type=radio], [role=switch], dialog:not(.splash), [role=dialog], [popover], .app-toast, .actions-menu, .button-group, .chat-sidebar-row, .segmented, .settings-card, .settings-group, .approval, .composer, .event.prompt:not(.automatic) > pre",
-          );
+          // Every surface is square; only radio inputs remain true circles.
+          const circle = element.matches("input[type=radio]");
           return {
             label: `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 40)}`,
-            expectedRadii: element.closest(".sidebar")
-              ? [0, 0, 0, 0]
-              : grouped
-                ? [leading, trailing, trailing, leading]
-                : Array(4).fill(rounded ? 5 : 0),
+            expectedRadii: Array(4).fill(circle ? 50 : 0),
             radii: [
               style.borderTopLeftRadius,
               style.borderTopRightRadius,
@@ -613,6 +591,10 @@ async function expectIndustrialSurfaces(page: Page) {
             indicatorRadius: element.matches("input[role=switch], input[type=radio]:checked")
               ? getComputedStyle(element, "::before").borderRadius
               : null,
+            expectedIndicatorRadius: element.matches("input[type=radio]") ? "50%" : "0px",
+            navSelected: element.matches(
+              '.sidebar [data-nav-active="true"], .page-tab [role="tab"][aria-selected="true"]:not(.page-group-toggle), .page-tab .page-group-toggle[data-active="true"], .sidebar-settings-heading[data-active="true"]',
+            ),
             checkboxMarkRadius: element.matches("input[type=checkbox]:checked:not([role=switch])")
               ? getComputedStyle(element, "::before").borderRadius
               : null,
@@ -653,11 +635,11 @@ async function expectIndustrialSurfaces(page: Page) {
   for (const surface of surfaces) {
     expect(surface.radii, surface.label).toEqual(surface.expectedRadii);
     if (surface.indicatorRadius !== null)
-      expect(surface.indicatorRadius, surface.label).toBe("5px");
+      expect(surface.indicatorRadius, surface.label).toBe(surface.expectedIndicatorRadius);
     if (surface.checkboxMarkRadius !== null)
       expect(surface.checkboxMarkRadius, surface.label).toBe("0px");
-    if (surface.promptBubble && !surface.forcedColors)
-      expect(surface.shadow, surface.label).toMatch(/^rgba?\([^)]+\) 1px 1px 1px 0px$/);
+    if (surface.navSelected && !surface.focused && !surface.forcedColors)
+      expect(surface.shadow, surface.label).toMatch(/^rgba?\([^)]+\) 2px 0px 0px 0px inset$/);
     else if (!surface.focused && !surface.overlay && !surface.baseline && !surface.segmentedChoice)
       expect(surface.shadow, surface.label).toBe("none");
     expect(surface.image, surface.label).toBe("none");
@@ -788,19 +770,25 @@ async function expectNeutralTheme(page: Page) {
     return { dark, fills, colors };
   });
   for (const [token, fill] of Object.entries(palette.fills))
-    expect(fill, token).toBe(palette.dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
+    expect(fill, token).toBe(
+      palette.dark
+        ? ["--surface-band", "--group-fill"].includes(token)
+          ? "rgb(22, 32, 54)"
+          : "rgb(15, 23, 42)"
+        : "rgb(255, 255, 255)",
+    );
   expect(palette.colors).toEqual(
     palette.dark
       ? {
           "--text": "rgb(255, 255, 255)",
-          "--muted": "rgb(170, 170, 170)",
-          "--border": "rgb(68, 68, 68)",
-          "--control-border": "rgb(136, 136, 136)",
-          "--accent-bg": "rgb(48, 48, 48)",
-          "--surface-edge": "rgb(68, 68, 68)",
+          "--muted": "rgb(154, 168, 191)",
+          "--border": "rgb(42, 58, 85)",
+          "--control-border": "rgb(100, 121, 157)",
+          "--accent-bg": "rgb(30, 43, 69)",
+          "--surface-edge": "rgb(42, 58, 85)",
           "--disabled-stripe": "rgba(0, 0, 0, 0)",
           "--primary": "rgb(119, 183, 245)",
-          "--hover-bg": "rgb(32, 52, 73)",
+          "--hover-bg": "rgb(27, 45, 74)",
           "--human-text": "rgb(155, 202, 255)",
         }
       : {
@@ -848,6 +836,14 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
   expect(highlight.grip).toMatch(/^rgba\(\d+, \d+, \d+, 0\)$/);
   await expect(page.locator(".sidebar [data-nav-active='true']:visible")).toHaveCount(1);
   await expect(row).toHaveCSS("border-radius", "0px");
+  // Forced colors drop box shadows; the system outline marks selection there.
+  if (
+    !(await row.evaluate(
+      (element) =>
+        element.matches(":focus-visible") || matchMedia("(forced-colors: active)").matches,
+    ))
+  )
+    await expect(row).toHaveCSS("box-shadow", /^rgba?\([^)]+\) 2px 0px 0px 0px inset$/);
   if (await row.evaluate((element) => element.classList.contains("chat-sidebar-row")))
     for (const control of await row.locator(":scope > button").all())
       await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -1323,7 +1319,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
       );
       await expect(relay).toHaveCSS(
         "background-color",
-        scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+        scheme === "dark" ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
       );
       await page.screenshot({ path: test.info().outputPath(`home-cards-${scheme}.png`) });
     }
@@ -4131,7 +4127,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       (window as unknown as { copyHarness: { resolve(): void } }).copyHarness.resolve(),
     );
     await expect(copyToast).toBeVisible();
-    await expect(copyToast).toHaveCSS("border-radius", "5px");
+    await expect(copyToast).toHaveCSS("border-radius", "0px");
     await expect(copyToast).toHaveAttribute("data-tone", "success");
     await expect(page.locator(".toast-stack").getByRole("status")).toHaveText("Done: Copied.");
     await expect(chat.getByText("Copied.", { exact: true })).toHaveCount(0);
@@ -4476,9 +4472,9 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Sessions");
     await expectNeutralTheme(page);
-    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgb(15, 23, 42)");
     for (const selector of ["#panel-sessions", ".app-footer"])
-      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(0, 0, 0)");
+      await expect(page.locator(selector)).toHaveCSS("background-color", "rgb(15, 23, 42)");
     for (const selector of ["html", "body", ".app", ".page-tabs"])
       await expect(page.locator(selector)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".app")).toHaveCSS("background-image", "none");
@@ -4631,7 +4627,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(splash.getByRole("button")).toHaveCount(4);
       await expect(splash.locator(".database-notice")).toHaveCSS(
         "background-color",
-        scheme === "dark" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+        scheme === "dark" ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
       );
       expect(
         await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
@@ -4756,7 +4752,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
     await expect(palette).toBeVisible();
-    await expect(palette).toHaveCSS("border-radius", "5px");
+    await expect(palette).toHaveCSS("border-radius", "0px");
     const searchCommands = palette.getByRole("combobox", { name: "Search commands" });
     await expect(searchCommands).toBeFocused();
     await searchCommands.fill("new agent");
@@ -4823,8 +4819,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const cornerRadius = await newSession.evaluate(
       (element) => getComputedStyle(element).borderTopRightRadius,
     );
-    // Toolbar actions are independent controls, so they keep the shared button radius.
-    expect(cornerRadius).toBe("5px");
+    // Toolbar actions share the square button geometry.
+    expect(cornerRadius).toBe("0px");
     await appendRow(page);
     await expect(page.getByRole("dialog", { name: "Select run configuration" })).toBeVisible();
     await page.getByRole("button", { name: "Do not use a run configuration" }).click();
@@ -4862,7 +4858,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       );
       await expect(chatPopup.locator(".composer")).toHaveCSS(
         "background-color",
-        dark ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
+        dark ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
       );
       await expectComposerShadow(chatPopup.locator(".composer"));
       await expect(chatPopup.locator(".composer")).toHaveCSS("border-top-width", "1px");
@@ -5367,7 +5363,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         await expect
           .poll(() => lastTitleBarOverlay())
           .toEqual({
-            color: darkTheme ? "#242b33" : "#ffffff",
+            color: darkTheme ? "#0f172a" : "#ffffff",
             symbolColor: darkTheme ? "#ffffff" : "#000000",
             height: 28,
           });
@@ -5396,7 +5392,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         await expect
           .poll(() => lastTitleBarOverlay())
           .toEqual({
-            color: darkTheme ? "#ffffff" : "#242b33",
+            color: darkTheme ? "#ffffff" : "#0f172a",
             symbolColor: darkTheme ? "#000000" : "#ffffff",
             height: 28,
           });
@@ -5407,7 +5403,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         await expect
           .poll(() => lastTitleBarOverlay())
           .toEqual({
-            color: darkTheme ? "#242b33" : "#ffffff",
+            color: darkTheme ? "#0f172a" : "#ffffff",
             symbolColor: darkTheme ? "#ffffff" : "#000000",
             height: 28,
           });
@@ -5437,10 +5433,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       if (theme === "dark") {
         await page.mouse.move(1, 1);
         // The open worker conversation uses the shared navigation highlight.
-        await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(48, 48, 48)");
+        await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(30, 43, 69)");
         await expect(chatHead).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
         await expect(chatHead).toHaveCSS("color", "rgb(255, 255, 255)");
-        await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+        await expect(page.locator("#panel-chat")).toHaveCSS("background-color", "rgb(15, 23, 42)");
         // Primary buttons stay filled in dark mode.
         const primary = await page.evaluate(() => {
           const probe = document.createElement("button");
@@ -5658,7 +5654,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectThemeContrast(page);
     await expectNeutralTheme(page);
     await page.mouse.move(1, 1);
-    await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(48, 48, 48)");
+    await expect(chatHead.locator("..")).toHaveCSS("background-color", "rgb(30, 43, 69)");
     await expect(chatHead).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expectChatFooterLayout();
     await page.emulateMedia({ colorScheme: "light" });
@@ -6313,7 +6309,7 @@ test("desktop: prompt template editing and persistence", async () => {
         await otherPrompt.hover();
         await expect(otherPrompt).toHaveCSS(
           "background-color",
-          theme === "light" ? "rgb(229, 240, 252)" : "rgb(32, 52, 73)",
+          theme === "light" ? "rgb(229, 240, 252)" : "rgb(27, 45, 74)",
           { timeout: 500 },
         );
       }).toPass({ timeout: 5_000 });
@@ -6321,7 +6317,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await expect(otherPrompt).toHaveCSS("outline-style", "none");
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(30, 43, 69)",
       );
       await panel.locator(".prompt-editor").evaluate((element) => {
         element.scrollTop = 0;
@@ -6330,7 +6326,7 @@ test("desktop: prompt template editing and persistence", async () => {
       await selectedPrompt.hover();
       await expect(selectedPrompt).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)",
+        theme === "light" ? "rgb(237, 237, 237)" : "rgb(30, 43, 69)",
       );
       await expect(selectedPrompt).toHaveCSS("border-top-width", "0px");
     }
@@ -7084,8 +7080,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     const pendingTip = page.getByRole("tooltip").filter({ hasText: pendingLabel });
     await expect(type).toBeVisible();
     await expect(sort).toBeVisible();
-    await expect(type).toHaveCSS("border-radius", "5px");
-    await expect(sort).toHaveCSS("border-radius", "5px");
+    await expect(type).toHaveCSS("border-radius", "0px");
+    await expect(sort).toHaveCSS("border-radius", "0px");
     const [buttonBox, typeBox, sortBox] = await Promise.all(
       [submitSearch, type, sort].map((control) => control.boundingBox()),
     );
@@ -7418,20 +7414,20 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     });
     const rowLines = tableSettings.getByRole("switch", { name: "Row lines", exact: true });
     await expect(rowLines).not.toBeChecked();
-    await expect(rowLines).toHaveCSS("border-radius", "5px");
+    await expect(rowLines).toHaveCSS("border-radius", "0px");
     expect(
       await rowLines.evaluate((element) => getComputedStyle(element, "::before").borderRadius),
-    ).toBe("5px");
+    ).toBe("0px");
     await tableSettings.getByLabel("Row density").focus();
     await page.keyboard.press("Tab");
     await expect(rowLines).toBeFocused();
     await expect(rowLines).toHaveCSS("outline-color", "rgba(0, 0, 0, 0)");
     await expect(rowLines).toHaveCSS("box-shadow", /1px/);
     await rowLines.check();
-    await expect(rowLines).toHaveCSS("border-radius", "5px");
+    await expect(rowLines).toHaveCSS("border-radius", "0px");
     expect(
       await rowLines.evaluate((element) => getComputedStyle(element, "::before").borderRadius),
-    ).toBe("5px");
+    ).toBe("0px");
     const switchState = await rowLines.evaluate(
       (element) => getComputedStyle(element, "::after").content,
     );
@@ -8179,7 +8175,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(chat.getByRole("status")).toHaveText("Responding...");
     const composer = chat.getByRole("region", { name: "Chat composer" });
-    await expect(composer).toHaveCSS("border-radius", "5px");
+    await expect(composer).toHaveCSS("border-radius", "0px");
     await idleCard.click();
     await expect(chatList().locator(".chat-loader")).toHaveCount(0);
     await activeCard.click();
@@ -8187,9 +8183,9 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
 
     for (const [theme, neutral, bubble, text] of [
       ["light", "rgb(255, 255, 255)", "rgb(91, 159, 230)", "rgb(0, 0, 0)"],
-      ["dark", "rgb(0, 0, 0)", "rgb(119, 183, 245)", "rgb(255, 255, 255)"],
+      ["dark", "rgb(15, 23, 42)", "rgb(119, 183, 245)", "rgb(255, 255, 255)"],
       ["system", "rgb(255, 255, 255)", "rgb(91, 159, 230)", "rgb(0, 0, 0)"],
-      ["system", "rgb(0, 0, 0)", "rgb(119, 183, 245)", "rgb(255, 255, 255)"],
+      ["system", "rgb(15, 23, 42)", "rgb(119, 183, 245)", "rgb(255, 255, 255)"],
     ] as const) {
       await page.emulateMedia({ colorScheme: neutral === "rgb(255, 255, 255)" ? "light" : "dark" });
       await selectSettingsPage(page, "Appearance");
@@ -9137,7 +9133,7 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await columnsButton.click();
     await page.emulateMedia({ colorScheme: "dark" });
     await expectNeutralTheme(page);
-    await expect(modal).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(modal).toHaveCSS("background-color", "rgb(15, 23, 42)");
     await page.screenshot({ path: "test-results/table-settings-dark.png" });
     await application.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];
@@ -10254,14 +10250,14 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect.poll(fileContext).toBeNull();
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Chat");
-    await expect(panel).toHaveCSS("background-color", "rgb(0, 0, 0)");
-    await expect(panel).toHaveCSS("border-color", "rgb(68, 68, 68)");
+    await expect(panel).toHaveCSS("background-color", "rgb(15, 23, 42)");
+    await expect(panel).toHaveCSS("border-color", "rgb(42, 58, 85)");
     await expectIconAction(toggle);
     await expectIconAction(add);
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(0, 0, 0)",
+      "rgb(15, 23, 42)",
     );
     await page.screenshot({ path: "test-results/file-panel-dark.png" });
     await selectSettingsPage(page, "Appearance");
@@ -10270,10 +10266,10 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
     await expect(panel).toHaveCSS("border-color", "rgb(208, 208, 208)");
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(panel).toHaveCSS("border-color", "rgb(68, 68, 68)");
+    await expect(panel).toHaveCSS("border-color", "rgb(42, 58, 85)");
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
-      "rgb(0, 0, 0)",
+      "rgb(15, 23, 42)",
     );
     await expectIconAction(toggle);
     await page.emulateMedia({ colorScheme: "light" });
@@ -10584,7 +10580,11 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
     const timestampOpacity = await page
       .locator(".poll-timestamp")
       .evaluate((element) => getComputedStyle(element).opacity);
-    await expect(databaseAction).toHaveCSS("opacity", timestampOpacity);
+    // The disabled Last Message indicator is dimmed; the available database action is not.
+    expect(timestampOpacity).toBe("0.6");
+    await expect(databaseAction).toHaveCSS("opacity", "1");
+    for (const selector of [".poll-timestamp", ".app-version"])
+      await expect(page.locator(selector)).toHaveCSS("font-variant-numeric", "tabular-nums");
     const bottomSpace = await page.evaluate(() =>
       [".poll-timestamp", ".footer-splash", ".footer-database", ".app-version"].map((selector) => {
         const element = document.querySelector(selector);
