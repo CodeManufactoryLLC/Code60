@@ -1,0 +1,3 @@
+#!/bin/sh
+# Git runs this at the checkout root. No fixes, staging, or desktop launches.
+exec npm run check:precommit

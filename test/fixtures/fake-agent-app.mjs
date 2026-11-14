@@ -133,8 +133,14 @@ export function createFakeAgent(options = {}) {
       }
       if (options.relayWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request.startsWith("Relay plan: ")) {
-          const target = JSON.parse(request.slice("Relay plan: ".length));
+        const readable =
+          /^Plan a change in (.+)\nCreate result\.txt containing "human accepted target" followed by a newline\. Use an isolated worktree and wait for my approval\.$/.exec(
+            request,
+          );
+        if (request.startsWith("Relay plan: ") || readable) {
+          const target = readable
+            ? { cwd: readable[1], workspaceMode: "worktree" }
+            : JSON.parse(request.slice("Relay plan: ".length));
           const plan = await tool("code60_create_plan", {
             requestId: "relay-fixture-plan",
             title: "Relay target plan",

@@ -21,7 +21,7 @@ environments.
 - Prepare pinned offline embedding assets explicitly with `npm run prepare:models`
   before RAG development or packaging. Keep generated `models/` out of Git.
   Model/runtime changes require the offline smoke and packaged target checks.
-- `npm run check` runs typecheck, Biome, Knip unused-code checks, and one
+- `npm run check` runs instruction validation, typecheck, Biome, Knip unused-code checks, and one
   coverage-enabled test suite with versioned four-metric gates. Run it before
   every commit. Never lower coverage floors or broaden Knip exclusions to hide
   findings; document explicitly reviewed exceptions. CI for PRs and pushes to main runs only on
@@ -116,6 +116,21 @@ environments.
   without clear confirmation or an existing explicit overwrite option.
 
 ## Tests and Validation
+
+- Use the [workflow QA skill](.factory/skills/qa/SKILL.md) for behavior/regression
+  validation, including configuration, bridge, fixture and packaging changes.
+  Select complete journeys from the reported starting state, assert intermediate
+  states and independent filesystem/Git/process outcomes, and report blocked
+  desktop execution honestly. Unit/static checks do not establish E2E success.
+- `npm run check:instructions` statically validates documented literal npm
+  scripts, local Markdown references/heading anchors, root/module instructions
+  and skill metadata. It does not execute documentation or verify its semantics.
+- Git hooks are opt-in: see [hook setup](CONTRIBUTING.md#optional-git-hooks).
+  Never activate them automatically. The hook is a non-mutating fast check,
+  not a replacement for full `npm run check` before every commit.
+- Use the [recovery runbooks](docs/runbooks/README.md) for scheduler, disk,
+  diagnostic-storage and Relay-history failures. Preserve evidence/ownership;
+  never repair by erasing history, deleting locks or replaying uncertain work.
 
 - Add or update tests for behavior changes, especially argument parsing, exit
   codes, output streams, cancellation, errors, and non-TTY operation.
