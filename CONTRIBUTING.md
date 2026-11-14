@@ -65,7 +65,8 @@ npm run check
 
 Useful scripts:
 
-- `npm run check`: typecheck, Biome checks, Knip, and one coverage-enabled unit/integration suite.
+- `npm run check`: instruction validation, typecheck, Biome checks, Knip, and one coverage-enabled unit/integration suite.
+- `npm run check:instructions`: validate literal documented npm scripts, local Markdown references/heading anchors, module instructions and skill metadata. This static check never executes Markdown commands, fetches remote links or proves prose semantics.
 - `npm run test:coverage`: prepare Windows helpers, run Vitest once, write JSON summary/HTML to `coverage/`, and enforce all four coverage metrics.
 - `npm run check:unused`: check unused files, exports, types and dependencies with Knip.
 - `npm run test:logs:performance`: build, then measure production logging in a fresh process against an exact 20 MiB fixture, including first query, 24 saved plus 24 column conditions, 200-row pages, event-loop delay, memory and dirty shutdown. Run `node scripts/benchmark-logs.mjs --fragmented` afterward for a seven-day, 10,066-segment worst case.
@@ -87,6 +88,51 @@ Run `npm run check` before each commit. Run `npm run test:desktop:container` for
 desktop changes; if Docker is unavailable, report that instead of running the
 desktop tests on the host. Tests must not require live agents, credentials, or
 network services. Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
+
+### Workflow QA
+
+Use the [QA skill](.factory/skills/qa/SKILL.md) to choose complete user journeys
+from the changed behavior and actual regression starting state, including for
+configuration/bridge/fixture/packaging changes. The golden path is onboarding →
+database/project → request → accepted plan → worker → review → apply → undo,
+with renderer reload and a declined apply confirmation. It uses the existing
+fake-provider/Linux-container harness, not a new plugin or live provider.
+
+Collect without launching Electron:
+`npx --no-install playwright test --list agent-workflow.e2e.ts`.
+Run via `npm run test:desktop:container -- --grep "workflow: first use through plan, review, apply and undo"`.
+Collection, unit/static checks and screenshots do not prove workflow success.
+Report PASS/FAIL/BLOCKED and exact gaps; disk pressure or unavailable Docker is
+BLOCKED, never permission for a host Electron fallback. Save sanitized evidence
+under ignored `test-results/`. Verify owned container **and** image cleanup;
+retain host artifacts and BuildKit caches.
+
+### Optional Git hooks
+
+Nothing installs hooks during `npm ci`. Opt in explicitly:
+
+```sh
+npm run hooks:status
+npm run hooks:install
+```
+
+The checked-in pre-commit hook runs `npm run check:precommit`: instructions,
+typecheck, Biome and Knip, in that order. It never formats, stages or rewrites
+files. Keep running full `npm run check` before **every** commit; this quicker
+hook does not run coverage or desktop tests.
+
+Installation refuses existing hook-path policy or active default hooks rather
+than hiding them. Review any conflict manually; there is no force option.
+`npm run hooks:uninstall` removes only this project's local `.githooks` setting,
+not hook files or another scope's configuration. Hook configuration may be shared
+by linked worktrees. Do not install on someone else's behalf.
+
+### Operational recovery
+
+Follow the [recovery runbooks](docs/runbooks/README.md) for scheduler registration,
+low disk, unavailable diagnostics and damaged Relay history. Read-only diagnosis
+comes first; preserve history/worktrees/locks and obtain permission for changes.
+Desktop Stop all and quit do not stop service-owned automations.
 
 ### Coverage and unused-code gates
 
