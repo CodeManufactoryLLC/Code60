@@ -148,7 +148,15 @@ export function AppPages(props: AppPagesProps) {
       <>
         <SettingsPage
           section={settingsSection}
-          memory={<MemoryPage api={api} />}
+          memory={
+            <MemoryPage
+              api={api}
+              active={!splash && tabs.active === "settings" && settingsSection === "memory"}
+              onManage={() =>
+                setTabs((current) => updateTabs(current, { type: "select", id: "memories" }))
+              }
+            />
+          }
           updates={<UpdatesSection updates={updates} />}
           versions={snapshot?.versions}
           orchestration={

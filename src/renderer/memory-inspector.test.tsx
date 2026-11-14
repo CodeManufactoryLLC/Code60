@@ -60,7 +60,7 @@ it("presents readable memory facts, highlighted evidence and history without raw
       busy={false}
       names={{
         projects: [{ id: ids.project, label: "/work/billing-service" }],
-        conversations: [{ id: ids.conversation, label: "Cache rollout", remember: true }],
+        conversations: [{ id: ids.conversation, label: "Cache rollout" }],
       }}
       onAction={() => {}}
     />,

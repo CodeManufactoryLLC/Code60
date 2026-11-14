@@ -10,7 +10,7 @@ import {
 } from "../bridge/index.js";
 import type { RagEmbedder } from "../core/index.js";
 import { MemoryStore } from "./memory-store.js";
-import { indexMemoryBatch, memorySearch } from "./memory-worker.js";
+import { indexMemoryBatch, memorySearch, openMemoryStore } from "./memory-worker.js";
 import { sqliteAvailable } from "./projects.js";
 
 let dir: string;
@@ -57,7 +57,39 @@ function seed(cid: string, count: number, label: string) {
 }
 const vector = () => Float32Array.from({ length: 768 }, (_, i) => (i === 0 ? 1 : 0));
 describe.skipIf(!sqliteAvailable())("memory index", () => {
-  it("filters disabled and expired lexical matches before the 100-result limit", async () => {
+  it("refuses a second writer before it can prune another owner's incomplete exchange", async () => {
+    const path = join(dir, "exclusive");
+    const first = await openMemoryStore(path);
+    try {
+      const cid = first.store.register("owner", "Owner", null).id;
+      const source: MemorySource = {
+        id: randomUUID(),
+        conversationId: cid,
+        role: "human",
+        at: new Date().toISOString(),
+        ordinal: 1,
+        start: 0,
+        text: "First chunk",
+      };
+      first.store.append(cid, "staged", [source], false);
+      await expect(openMemoryStore(path)).rejects.toThrow(/already running/);
+      first.store.append(
+        cid,
+        "staged",
+        [{ ...source, id: randomUUID(), text: "Second chunk" }],
+        true,
+      );
+      expect(first.store.range(cid).sources.map((s) => s.text)).toEqual([
+        "First chunk",
+        "Second chunk",
+      ]);
+    } finally {
+      await first.close();
+    }
+    const reopened = await openMemoryStore(path);
+    await reopened.close();
+  });
+  it("filters expired lexical matches before the 100-result limit and disables all recall when Off", async () => {
     const c = db.register("filters", "Filters", null);
     for (let i = 0; i < 4; i++) seed(c.id, 30, `cache${i}`);
     const source: MemorySource = {
@@ -99,23 +131,23 @@ describe.skipIf(!sqliteAvailable())("memory index", () => {
       },
       "fixture",
     );
-    db.configure({
-      ...DEFAULT_MEMORY_SETTINGS,
-      types: { ...DEFAULT_MEMORY_SETTINGS.types, episodic: false },
+    const saved = db.browse({ type: "semantic" }).records[0];
+    if (!saved) throw new Error("Missing semantic fixture");
+    db.action({
+      type: "edit",
+      id: saved.id,
+      revision: saved.revision,
+      text: saved.text,
+      pinned: true,
     });
     const offline = async (): Promise<RagEmbedder> => {
       throw new Error("offline");
     };
-    expect(
-      (await memorySearch(db, c.id, "cache0 cache1 cache2 cache3", offline)).records.map(
-        (r) => r.type,
-      ),
-    ).toEqual(["semantic"]);
     db.configure({
       ...DEFAULT_MEMORY_SETTINGS,
-      retentionDays: { ...DEFAULT_MEMORY_SETTINGS.retentionDays, episodic: 1 },
+      retentionDays: 30,
     });
-    const later = Date.now() + 2 * 86400000;
+    const later = Date.now() + 31 * 86400000;
     const now = vi.spyOn(Date, "now").mockReturnValue(later);
     try {
       expect(
@@ -123,6 +155,8 @@ describe.skipIf(!sqliteAvailable())("memory index", () => {
           (r) => r.type,
         ),
       ).toEqual(["semantic"]);
+      db.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
+      expect((await memorySearch(db, c.id, "cache0", offline)).records).toEqual([]);
     } finally {
       now.mockRestore();
     }

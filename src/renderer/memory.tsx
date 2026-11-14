@@ -1,35 +1,36 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import {
-  type DesktopApi,
-  MEMORY_TYPES,
-  type MemoryAction,
-  type MemoryBrowse,
-  type MemoryDetail,
-  type MemorySettings,
-  type MemorySnapshot,
-  type MemoryPage as RecordsPage,
+import type {
+  DesktopApi,
+  MemoryAction,
+  MemoryDetail,
+  MemorySettings,
+  MemorySnapshot,
 } from "../bridge/index.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
-type Api = Pick<
-  DesktopApi,
-  "memorySnapshot" | "browseMemories" | "memoryDetail" | "memoryAction" | "onMemoryChanged"
->;
-export function MemoryPage({ api }: { api: Api }) {
+type Api = Pick<DesktopApi, "memorySnapshot" | "memoryAction" | "onMemoryChanged">;
+
+export function MemoryPage({
+  api,
+  active = true,
+  onManage,
+}: {
+  api: Api;
+  active?: boolean;
+  onManage(): void;
+}) {
   const [snapshot, setSnapshot] = useState<MemorySnapshot>();
-  const [draft, setDraft] = useState<MemorySettings>();
-  const [query, setQuery] = useState<MemoryBrowse>({});
-  const [page, setPage] = useState<RecordsPage>({ records: [], next: null });
-  const [previousPages, setPreviousPages] = useState<(string | undefined)[]>([]);
-  const [detail, setDetail] = useState<MemoryDetail>();
+  const [optimistic, setOptimistic] = useState<MemorySettings>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [conversation, setConversation] = useState("");
-  const alive = useRef(true);
-  const request = useRef(0);
+  const inFlight = useRef(false);
+  const alive = useRef(false);
+  const generation = useRef(0);
   const refresh = useRef<() => void>(() => {});
   useEffect(() => {
+    if (!active) return;
+    generation.current++;
     alive.current = true;
     let disposed = false;
     let running = false;
@@ -43,16 +44,12 @@ export function MemoryPage({ api }: { api: Api }) {
       try {
         do {
           dirty = false;
-          const [next, records] = await Promise.all([
-            api.memorySnapshot(),
-            api.browseMemories(query),
-          ]);
+          const next = await api.memorySnapshot();
           if (disposed) return;
           setSnapshot(next);
-          setPage(records);
-        } while (dirty && !disposed);
+        } while (dirty);
       } catch {
-        if (!disposed) setError("Memory is unavailable. Check storage, then Refresh.");
+        if (!disposed) setError("Memory settings are unavailable. Refresh to try again.");
       } finally {
         running = false;
       }
@@ -64,61 +61,53 @@ export function MemoryPage({ api }: { api: Api }) {
     void read();
     return () => {
       disposed = true;
+      generation.current++;
       alive.current = false;
-      request.current++;
+      refresh.current = () => {};
       off();
     };
-  }, [api, query]);
+  }, [api, active]);
   async function action(value: MemoryAction) {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const current = generation.current;
     setBusy(true);
+    if (value.type === "configure") setOptimistic(value.settings);
     setError("");
     try {
       const accepted = await api.memoryAction(value);
-      if (!alive.current) return;
-      if (accepted) {
-        if (value.type === "configure") setDraft(undefined);
-        setDetail(undefined);
-      }
-      refresh.current();
-    } catch (cause) {
-      if (alive.current) setError(cause instanceof Error ? cause.message : "Memory action failed");
-    } finally {
-      if (alive.current) setBusy(false);
-    }
-  }
-  async function inspect(id: string) {
-    const token = ++request.current;
-    try {
-      const next = await api.memoryDetail({ id });
-      if (alive.current && token === request.current) setDetail(next);
+      if (accepted && value.type === "configure" && alive.current && current === generation.current)
+        setSnapshot((old) => (old ? { ...old, settings: value.settings } : old));
     } catch {
-      if (alive.current && token === request.current)
-        setError("Memory changed or is unavailable. Refresh and try again.");
+      if (alive.current && current === generation.current)
+        setError("The change could not be confirmed. Refresh to check the saved settings.");
+    } finally {
+      inFlight.current = false;
+      setOptimistic(undefined);
+      setBusy(false);
+      if (alive.current) {
+        refresh.current();
+      }
     }
   }
-  function changeQuery(next: MemoryBrowse) {
-    setPreviousPages([]);
-    setQuery({ ...next, cursor: undefined });
-    setDetail(undefined);
-  }
-  function more() {
-    if (!page.next || busy) return;
-    setPreviousPages((old) => [...old, query.cursor]);
-    setQuery({ ...query, cursor: page.next });
-    setDetail(undefined);
-  }
-  const settings = draft ?? snapshot?.settings;
-  const update = (change: Partial<MemorySettings>) => {
-    if (settings) setDraft({ ...settings, ...change });
+  const settings = optimistic ?? snapshot?.settings;
+  const configure = (change: Partial<MemorySettings>) => {
+    if (settings) void action({ type: "configure", settings: { ...settings, ...change } });
   };
   return (
     <section className="settings-section memory-page" aria-label="Memory">
       <SettingsHeader
         title="Memory"
-        tip="Automatic generation sends source text to your existing verified orchestration provider and may incur normal provider usage. Embeddings and search stay local. Memory is historical evidence, never permissions or task authority. Turning it off or forgetting cannot erase context already received by a running provider. A safe handoff refreshes that context. Original transcripts and manual RAG remain separate."
+        tip="When on, Code60 learns useful information from conversations and uses relevant saved memories across Relay, project chats and workers. Memories, embeddings and search stay local. Creating memories sends conversation excerpts to your verified provider and may incur usage. Secret filtering is best effort, not a privacy guarantee. Memory never grants permissions or task authority. Automatic conversation handoffs are separate and may summarize the current conversation even when Memory is off."
       >
-        <button type="button" onClick={() => refresh.current()}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setError("");
+            refresh.current();
+          }}
+        >
           Refresh
         </button>
       </SettingsHeader>
@@ -132,356 +121,86 @@ export function MemoryPage({ api }: { api: Api }) {
         <div role="status">Loading memory settings…</div>
       ) : (
         <>
-          <SettingsCard title="Enablement and privacy">
-            {(
-              [
-                ["enabled", "Memory on"],
-                ["relay", "Relay"],
-                ["project", "Project chats"],
-                ["worker", "Workers"],
-                ["capture", "Capture new evidence"],
-                ["generation", "Automatic generation"],
-                ["recall", "Recall saved memories"],
-                ["continuity", "Automatic checkpoints and handoff"],
-              ] as const
-            ).map(([key, label]) => (
-              <label className="settings-row" key={key}>
-                {label}
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={settings[key]}
-                  aria-checked={settings[key]}
-                  disabled={busy}
-                  onChange={(e) => update({ [key]: e.target.checked })}
-                />
-              </label>
-            ))}
-            <div className="settings-row">
-              <span>Generation provider</span>
-              <span>{snapshot?.provider ?? "No verified provider"}</span>
-            </div>
-            <div className="settings-row">
-              <span>Secret filtering</span>
-              <span>On, best effort, not a privacy guarantee</span>
-            </div>
-          </SettingsCard>
-          <SettingsCard title="Context and automation">
-            {(
-              [
-                ["rolloverPercent", "Rollover threshold (%)", 30, 85],
-                ["capacity", "Unknown model capacity (estimated tokens)", 1024, 2_000_000],
-                ["checkpointTokens", "Checkpoint token cap", 128, 8000],
-                ["recallTokens", "Recalled memory token cap", 0, 16000],
-                ["cadenceSeconds", "Generation delay (seconds)", 0, 3600],
-                ["dailyCalls", "Daily generation call limit", 1, 1000],
-              ] as const
-            ).map(([key, label, min, max]) => (
-              <label className="settings-row" key={key} htmlFor={`memory-${key}`}>
-                {label}
-                <MemoryNumber
-                  id={`memory-${key}`}
-                  min={min}
-                  max={max}
-                  value={settings[key]}
-                  disabled={busy}
-                  onChange={(value) => update({ [key]: value })}
-                />
-              </label>
-            ))}
-            <div className="settings-row">
-              <span>Generation calls today</span>
-              <span>
-                {snapshot?.dailyCalls ?? 0} / {settings.dailyCalls}
-              </span>
-            </div>
-            <div className="settings-row">
-              <span>Context estimate</span>
-              <InfoTip label="Context estimate">
-                Provider-reported usage takes priority. When unavailable, Code60 conservatively
-                counts UTF-8 bytes, not the Jina tokenizer. Capacity includes a 15% output reserve.
-                Oversized requests are not silently truncated.
-              </InfoTip>
-            </div>
-          </SettingsCard>
-          <SettingsCard title="Memory types and retention">
-            {MEMORY_TYPES.map((type) => (
-              <div className="settings-row" key={type}>
-                <span>{type}</span>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.generateTypes[type]}
-                    disabled={busy}
-                    onChange={(e) =>
-                      update({
-                        generateTypes: { ...settings.generateTypes, [type]: e.target.checked },
-                      })
-                    }
-                  />{" "}
-                  Generate {type}
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.types[type]}
-                    disabled={busy}
-                    onChange={(e) =>
-                      update({ types: { ...settings.types, [type]: e.target.checked } })
-                    }
-                  />{" "}
-                  Recall {type}
-                </label>
-                <label htmlFor={`memory-retention-${type}`}>
-                  Retention days (0 = no expiry){" "}
-                  <MemoryNumber
-                    id={`memory-retention-${type}`}
-                    min={0}
-                    max={3650}
-                    value={settings.retentionDays[type]}
-                    disabled={busy}
-                    onChange={(days) =>
-                      update({ retentionDays: { ...settings.retentionDays, [type]: days } })
-                    }
-                  />
-                </label>
-              </div>
-            ))}
-            <div className="settings-row">
-              <span>Sharing</span>
-              <span>Project-local; global promotion requires confirmation</span>
-            </div>
-            <div className="settings-row">
-              <span>Private store</span>
-              <span>
-                {snapshot?.count ?? 0} memories, {((snapshot?.bytes ?? 0) / 1_048_576).toFixed(1)} /
-                512 MiB
-              </span>
-            </div>
-            <div className="settings-row">
-              <span>Awaiting semantic indexing</span>
-              <span>{snapshot?.indexPending ?? 0}</span>
-            </div>
-            {(snapshot?.bytes ?? 0) > 450 * 1_048_576 && (
-              <div role="status">
-                Memory storage is nearly full. Forget unused derived memories.
+          <SettingsCard title="Memory">
+            <label className="settings-row">
+              Memory
+              <input
+                type="checkbox"
+                role="switch"
+                checked={settings.enabled}
+                aria-checked={settings.enabled}
+                disabled={busy}
+                onChange={(event) => configure({ enabled: event.target.checked })}
+              />
+            </label>
+            {!settings.enabled && (
+              <div className="settings-row" role="status">
+                Memory is off. Saved memories and ordinary transcripts are kept. Information already
+                supplied to an active conversation cannot be withdrawn.
               </div>
             )}
           </SettingsCard>
-          <div className="settings-actions">
-            <button
-              type="button"
-              disabled={!draft || busy}
-              onClick={() => void action({ type: "configure", settings })}
-            >
-              Save memory settings
-            </button>
-            <button type="button" disabled={!draft || busy} onClick={() => setDraft(undefined)}>
-              Discard changes
-            </button>
-          </div>
+          <SettingsCard title="Saved memories">
+            <div className="settings-row">
+              <span>
+                {snapshot?.count ?? 0} memories{" "}
+                <InfoTip label="Saved memory scope">
+                  Memories stay within their conversation or project unless you explicitly share
+                  them across projects. Manage memories to inspect evidence, edit, pin, resolve
+                  conflicts, share or delete records. Turning Memory off does not delete them.
+                </InfoTip>
+              </span>
+              <button type="button" onClick={onManage}>
+                Manage memories
+              </button>
+            </div>
+            {snapshot?.indexFailed && settings.enabled && (
+              <div className="settings-row">
+                <span>Semantic search needs repair. Keyword recall remains available.</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void action({ type: "reindex" })}
+                >
+                  Repair search
+                </button>
+              </div>
+            )}
+          </SettingsCard>
+          <SettingsCard title="Retention">
+            <div className="settings-row">
+              <span>
+                <label htmlFor="memory-retention">
+                  Automatically delete unpinned memories after
+                </label>{" "}
+                <InfoTip label="Memory retention" id="memory-retention-tip">
+                  Deletes unpinned memories based on their creation date, including derived search
+                  and revision data. Pinned memories and evidence needed by retained memories are
+                  kept. Original transcripts are never deleted. Shortening retention requires
+                  confirmation.
+                </InfoTip>
+              </span>
+              <select
+                id="memory-retention"
+                aria-describedby="memory-retention-tip"
+                value={settings.retentionDays}
+                disabled={busy}
+                onChange={(event) =>
+                  configure({
+                    retentionDays: Number(event.target.value) as MemorySettings["retentionDays"],
+                  })
+                }
+              >
+                <option value={0}>Never</option>
+                <option value={30}>30 days</option>
+                <option value={90}>90 days</option>
+                <option value={365}>1 year</option>
+              </select>
+            </div>
+          </SettingsCard>
         </>
       )}
-      <SettingsCard title="Conversation privacy and maintenance">
-        <label className="settings-row">
-          Conversation
-          <select
-            aria-label="Conversation"
-            value={conversation}
-            onChange={(e) => setConversation(e.target.value)}
-          >
-            <option value="">Select conversation</option>
-            {snapshot?.conversations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {conversation && (
-          <label className="settings-row">
-            Do not remember
-            <input
-              type="checkbox"
-              disabled={busy}
-              checked={
-                snapshot?.conversations.find((c) => c.id === conversation)?.remember === false
-              }
-              onChange={(e) =>
-                void action({
-                  type: "remember",
-                  conversationId: conversation,
-                  enabled: !e.target.checked,
-                })
-              }
-            />
-          </label>
-        )}
-        <div className="settings-row">
-          <button
-            type="button"
-            disabled={busy || !conversation || snapshot?.busy}
-            onClick={() => void action({ type: "generate", conversationId: conversation })}
-          >
-            Generate now
-          </button>
-          <button type="button" disabled={busy} onClick={() => void action({ type: "reindex" })}>
-            Rebuild search index
-          </button>
-        </div>
-      </SettingsCard>
-      <SettingsHeader
-        title="Memories"
-        tip="Filter records and inspect exact source evidence, attribution, revisions and last use. Disputed memories are not recalled. Promotion and forgetting require native confirmation."
-      />
-      <SettingsCard>
-        <div className="memory-filters">
-          <label>
-            Project{" "}
-            <select
-              value={query.projectId ?? ""}
-              onChange={(e) => {
-                setDetail(undefined);
-                changeQuery({ ...query, projectId: e.target.value || undefined });
-              }}
-            >
-              <option value="">All projects</option>
-              {snapshot?.projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Type{" "}
-            <select
-              value={query.type ?? ""}
-              onChange={(e) =>
-                changeQuery({
-                  ...query,
-                  type: (e.target.value as MemoryBrowse["type"]) || undefined,
-                })
-              }
-            >
-              <option value="">All types</option>
-              {MEMORY_TYPES.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Status{" "}
-            <select
-              value={query.state ?? ""}
-              onChange={(e) =>
-                changeQuery({
-                  ...query,
-                  state: (e.target.value as MemoryBrowse["state"]) || undefined,
-                })
-              }
-            >
-              <option value="">All statuses</option>
-              {["active", "disputed", "stale", "superseded"].map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={() => changeQuery({ ...query, state: "disputed" })}>
-            Review conflicts
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              void action({ type: "forget-scope", projectId: query.projectId ?? null })
-            }
-          >
-            {query.projectId ? "Forget project memories" : "Forget conversation-local memories"}
-          </button>
-        </div>
-        <ul className="memory-list">
-          {page.records.map((m) => (
-            <li key={m.id}>
-              <button type="button" onClick={() => void inspect(m.id)}>
-                {m.type} · {m.state} · {m.text}
-              </button>
-            </li>
-          ))}
-        </ul>
-        {!page.records.length && <div>No memories in this view.</div>}
-        {previousPages.length > 0 && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setQuery({ ...query, cursor: previousPages.at(-1) });
-              setPreviousPages((old) => old.slice(0, -1));
-              setDetail(undefined);
-            }}
-          >
-            Previous page
-          </button>
-        )}
-        {page.next && (
-          <button type="button" disabled={busy} onClick={more}>
-            Load more
-          </button>
-        )}
-      </SettingsCard>
-      {detail && (
-        <SettingsCard title="Memory details">
-          <MemoryInspector
-            key={`${detail.record.id}:${detail.record.revision}`}
-            detail={detail}
-            busy={busy}
-            names={snapshot}
-            onAction={(value) => void action(value)}
-          />
-        </SettingsCard>
-      )}
     </section>
-  );
-}
-
-function MemoryNumber({
-  id,
-  value,
-  min,
-  max,
-  disabled,
-  onChange,
-}: {
-  id: string;
-  value: number;
-  min: number;
-  max: number;
-  disabled: boolean;
-  onChange(value: number): void;
-}) {
-  const [text, setText] = useState(String(value));
-  useEffect(() => setText(String(value)), [value]);
-  const number = text.trim() ? Number(text) : NaN;
-  const valid = Number.isInteger(number) && number >= min && number <= max;
-  return (
-    <input
-      id={id}
-      type="number"
-      min={min}
-      max={max}
-      value={text}
-      disabled={disabled}
-      aria-invalid={!valid}
-      onChange={(event) => {
-        const next = event.target.value;
-        setText(next);
-        const parsed = next.trim() ? Number(next) : NaN;
-        if (Number.isInteger(parsed) && parsed >= min && parsed <= max) onChange(parsed);
-      }}
-      onBlur={() => {
-        if (!valid) setText(String(value));
-      }}
-    />
   );
 }
 

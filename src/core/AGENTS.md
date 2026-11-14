@@ -12,6 +12,8 @@
   Validate exact cited spans; isolated generators deny permissions and always
   stop their processes. Desktop owns scope, storage, settings and extraction.
   Context budgeting is the approved exception to the budget non-goal below.
+  Desktop continuity remains available with long-term Memory Off; summarizing
+  current context never implicitly authorizes durable learning or saved recall.
 - RAG owns exact-span tokenizer-aware chunking, streamed-message reconstruction
   and stable cosine ranking through injected query/document embedding operations.
   Never import Transformers.js here. Read-only snapshots must not reconcile run

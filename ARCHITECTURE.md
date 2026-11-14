@@ -328,12 +328,13 @@ newest-first revision history. Raw IDs and offsets stay out of the presentation.
 A sticky action row provides revision-checked edit, pin, resolve, promote and
 forget actions; Save changes is enabled only for changed text or pin state.
 Native confirmation still owns
-global promotion and forgetting. Settings → Memory and its browser remain intact.
+global promotion and forgetting. Settings → Memory links to this shared browser,
+without maintaining a second record list.
 
 Desktop memory is an explicit exception to automatic semantic retrieval and
 managed context handoff being deferred. Relay, project chats and workers may
 receive scoped historical evidence and between-turn checkpoints. A separate,
-private application `memory.sqlite` stores generated knowledge and continuity;
+private application `memory.sqlite` stores generated knowledge and learning checkpoints;
 it never changes project schemas or grants persisted execution authority.
 Automatic extraction uses the verified orchestration provider with tools denied.
 Global promotion is human-only. Memory settings, source provenance, corrections,
@@ -341,6 +342,28 @@ suppression and bounded retrieval are owned by desktop; core receives optional
 injected lifecycle hooks. CLI defaults and the manual RAG experiment stay unchanged.
 Only completed, committed source ranges can advance extraction cursors. Provider
 session replacement never replays a dispatched request or restores task authority.
+
+Settings exposes one immediately saved application-wide Memory On/Off switch and
+one retention policy: Never, 30 days, 90 days or one year for unpinned records.
+Off stops learning capture, generation and recall, cancels pending learning,
+discards unprocessed learning-only evidence and preserves saved records/citations.
+On starts prospectively, without importing Off-mode transcripts or live context.
+There is no daily generation limit or per-role/type/conversation override.
+Private settings/schema version 2 migrates any restricted legacy configuration to
+Off, preserves existing records and initializes deletion retention to Never.
+
+Automatic context handoff is independent of saved memory. A bounded, session-local
+continuity buffer and checkpoint remain available while Memory is Off; they are
+never persisted as a learning backlog or used to create long-term memories.
+Valid learning checkpoints may be reused only when their evidence matches the
+uninterrupted learning-enabled live buffer. Handoff still runs only between turns,
+with tools denied and no restored permissions or task authority.
+Retention deletes expired unpinned records and derived revisions/vectors in bounded
+sidecar batches, retaining shared evidence required by surviving records and
+suppressing recreation. Shortening retention requires a main-owned count preview,
+native confirmation and revalidation. Maintenance runs independently of Settings.
+Search indexing retries automatically with bounded backoff; manual repair is shown
+only after those retries fail. CLI, scheduled automations and manual RAG are unchanged.
 
 Exception for the desktop RAG experiment: Settings → Advanced → Experiments → RAG
 manually snapshots all saved/live orchestration chats and workers across the

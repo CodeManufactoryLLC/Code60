@@ -6,6 +6,14 @@
   extraction. SQLite, incremental vector indexing and search run in a bounded
   Node sidecar. Keep `memory.sqlite` private under application state, separate
   from project databases, transcripts and the manual RAG generations.
+- One versioned application-wide On/Off preference gates all long-term learning
+  and recall. Off cancels learning and discards unprocessed learning-only evidence;
+  On never backfills Off-mode text. Restricted v1 settings migrate to Off.
+  No daily generation allowance or hidden legacy role/type/conversation gates.
+  Automatic context handoff uses bounded, session-local continuity independently
+  of Memory; Off-mode continuity never becomes durable learning evidence.
+  Retention deletes unpinned records with confirmed, revalidated policy changes,
+  preserving evidence needed by retained records and original transcripts.
 - Resolve durable project identities from canonical paths and full native
   directory identities. Workers receive only their assignment's project,
   conversation and human-promoted global records. Relay's current host-owned

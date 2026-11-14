@@ -6,58 +6,15 @@ const memoryTypeSchema = z.enum(MEMORY_TYPES);
 const text = z.string().min(1).max(2000);
 const id = z.string().uuid();
 export const memorySettingsSchema = z.strictObject({
+  version: z.literal(2),
   enabled: z.boolean(),
-  relay: z.boolean(),
-  project: z.boolean(),
-  worker: z.boolean(),
-  continuity: z.boolean(),
-  capture: z.boolean(),
-  recall: z.boolean(),
-  generation: z.boolean(),
-  rolloverPercent: z.number().int().min(30).max(85),
-  capacity: z.number().int().min(1024).max(2_000_000),
-  checkpointTokens: z.number().int().min(128).max(8000),
-  recallTokens: z.number().int().min(0).max(16000),
-  cadenceSeconds: z.number().int().min(0).max(3600),
-  dailyCalls: z.number().int().min(1).max(1000),
-  types: z.strictObject({
-    episodic: z.boolean(),
-    semantic: z.boolean(),
-    lesson: z.boolean(),
-    history: z.boolean(),
-  }),
-  generateTypes: z.strictObject({
-    episodic: z.boolean(),
-    semantic: z.boolean(),
-    lesson: z.boolean(),
-    history: z.boolean(),
-  }),
-  retentionDays: z.strictObject({
-    episodic: z.number().int().min(0).max(3650),
-    semantic: z.number().int().min(0).max(3650),
-    lesson: z.number().int().min(0).max(3650),
-    history: z.number().int().min(0).max(3650),
-  }),
+  retentionDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(365)]),
 });
 export type MemorySettings = z.infer<typeof memorySettingsSchema>;
 export const DEFAULT_MEMORY_SETTINGS: MemorySettings = {
+  version: 2,
   enabled: true,
-  relay: true,
-  project: true,
-  worker: true,
-  continuity: true,
-  capture: true,
-  recall: true,
-  generation: true,
-  rolloverPercent: 70,
-  capacity: 128000,
-  checkpointTokens: 2000,
-  recallTokens: 4000,
-  cadenceSeconds: 30,
-  dailyCalls: 50,
-  types: { episodic: true, semantic: true, lesson: true, history: true },
-  generateTypes: { episodic: true, semantic: true, lesson: true, history: true },
-  retentionDays: { episodic: 0, semantic: 0, lesson: 0, history: 0 },
+  retentionDays: 0,
 };
 export const memorySourceSchema = z.strictObject({
   id,
@@ -133,8 +90,6 @@ export const memoryActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("promote"), id, revision: z.number().int().positive() }),
   z.strictObject({ type: z.literal("forget"), id, revision: z.number().int().positive() }),
   z.strictObject({ type: z.literal("resolve"), id, revision: z.number().int().positive() }),
-  z.strictObject({ type: z.literal("remember"), conversationId: id, enabled: z.boolean() }),
-  z.strictObject({ type: z.literal("generate"), conversationId: id }),
   z.strictObject({ type: z.literal("reindex") }),
   z.strictObject({ type: z.literal("forget-scope"), projectId: id.nullable() }),
 ]);
@@ -147,10 +102,10 @@ export interface MemorySnapshot {
   busy: boolean;
   count: number;
   bytes: number;
-  dailyCalls: number;
   indexPending: number;
+  indexFailed: boolean;
   projects: { id: string; label: string }[];
-  conversations: { id: string; label: string; remember: boolean }[];
+  conversations: { id: string; label: string }[];
 }
 export interface MemoryPage {
   records: MemoryRecord[];
