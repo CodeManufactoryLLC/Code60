@@ -102,9 +102,7 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
-      if (
-        text.startsWith("Produce a grounded continuity checkpoint and durable memory candidates.")
-      ) {
+      if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];
         const quote = source.text.slice(0, 80);
@@ -119,14 +117,16 @@ export function createFakeAgent(options = {}) {
               questions: [],
               next: "Check results",
               citations,
-              memories: ["episodic", "semantic", "lesson", "history"].map((type) => ({
-                type,
-                text: `${type}: ${quote}`,
-                subject: `fixture-${type}`,
-                condition: type === "lesson" ? "When repeating this task" : "",
-                correction: false,
-                citations,
-              })),
+              memories: text.includes("Memory is off:")
+                ? []
+                : ["episodic", "semantic", "lesson", "history"].map((type) => ({
+                    type,
+                    text: `${type}: ${quote}`,
+                    subject: `fixture-${type}`,
+                    condition: type === "lesson" ? "When repeating this task" : "",
+                    correction: false,
+                    citations,
+                  })),
             }),
           },
         ];

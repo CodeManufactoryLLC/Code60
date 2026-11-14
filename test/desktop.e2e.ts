@@ -8552,14 +8552,15 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
   }
 });
 
-test("desktop: scoped memory settings, automatic capture, inspection and confirmed forgetting", async () => {
-  test.setTimeout(90_000);
+test("desktop: simplified memory settings save immediately and manage automatic memories", async () => {
+  test.setTimeout(120_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-scoped-memory-e2e-"));
   const project = join(directory, "project");
+  const database = join(directory, "projects.sqlite");
   await mkdir(project);
   try {
-    application = await launch(directory, project, join(directory, "projects.sqlite"));
-    const page = await application.firstWindow();
+    application = await launch(directory, project, database);
+    let page = await application.firstWindow();
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -8569,81 +8570,116 @@ test("desktop: scoped memory settings, automatic capture, inspection and confirm
     await composer.fill("The cache service is Redis, running on this project only.");
     await composer.press("Enter");
     await expect(composer).toBeEnabled();
-    await expect
-      .poll(() =>
-        page.evaluate(async () => (await window.desktop.memorySnapshot()).conversations.length),
-      )
-      .toBeGreaterThan(0);
     await selectSidebarPage(page, "Settings");
     await page.getByRole("tab", { name: "Memory", exact: true }).click();
-    const memory = page.locator("#panel-settings-memory");
-    await expect(memory.getByRole("switch", { name: "Memory on", exact: true })).toBeChecked();
-    await expect(memory.getByText("Generation provider", { exact: true })).toBeVisible();
-    const conversation = await page.evaluate(
-      async () => (await window.desktop.memorySnapshot()).conversations[0]?.id,
-    );
-    await memory.getByLabel("Conversation", { exact: true }).selectOption(conversation ?? "");
-    const threshold = memory.getByRole("spinbutton", {
-      name: "Rollover threshold (%)",
-      exact: true,
-    });
-    await threshold.fill("");
-    await threshold.pressSequentially("50");
-    await expect(threshold).toHaveValue("50");
-    const capacity = memory.getByRole("spinbutton", {
-      name: "Unknown model capacity (estimated tokens)",
-      exact: true,
-    });
-    await capacity.fill("");
-    await capacity.pressSequentially("4096");
-    await expect(capacity).toHaveValue("4096");
-    await memory.getByRole("button", { name: "Generate now", exact: true }).click();
+    let memory = page.locator("#panel-settings-memory");
+    await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeChecked();
+    await expect(memory.getByRole("switch")).toHaveCount(1);
+    await expect(memory.getByRole("spinbutton")).toHaveCount(0);
+    for (const name of [
+      "Generate now",
+      "Rebuild search index",
+      "Save memory settings",
+      "Discard changes",
+    ])
+      await expect(memory.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expect(
+      memory.getByLabel("Automatically delete unpinned memories after", { exact: true }),
+    ).toHaveValue("0");
     await expect
-      .poll(() =>
-        page.evaluate(async () => (await window.desktop.browseMemories({})).records.length),
+      .poll(
+        () => page.evaluate(async () => (await window.desktop.browseMemories({})).records.length),
+        { timeout: 45_000 },
       )
       .toBe(4);
-    await expect(threshold).toHaveValue("50");
-    await expect(capacity).toHaveValue("4096");
-    await memory.getByRole("button", { name: "Rebuild search index", exact: true }).click();
-    await expect(threshold).toHaveValue("50");
-    await memory.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(memory.locator(".memory-list li")).toHaveCount(4);
-    await memory.locator(".memory-list button").first().click();
-    await expect(memory.getByText("Memory details", { exact: true })).toBeVisible();
-    await expect(memory.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
+    await expect(memory.getByText("4 memories", { exact: true })).toBeVisible();
+    await memory.getByRole("button", { name: "Manage memories", exact: true }).click();
+    const panel = page.locator("#panel-memories");
+    await expect(page.getByRole("tab", { name: "Memories", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    const rows = panel.locator(".sessions-grid tbody [role='row']");
+    await expect(rows).toHaveCount(4);
+    const canvas = panel.getByTestId("data-grid-canvas");
+    await canvas.focus();
+    await canvas.press("ArrowDown");
+    await canvas.press("Enter");
+    const detail = page.getByRole("dialog", { name: "Memory details", exact: true });
+    await expect(detail.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
       /cache service/,
     );
-    await memory
+    await detail
       .getByRole("textbox", { name: "Memory text", exact: true })
       .fill("Human corrected cache evidence.");
-    await memory.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(memory.locator(".memory-list")).toContainText("Human corrected cache evidence.");
-    await memory.locator(".memory-list button").filter({ hasText: "Human corrected" }).click();
+    await detail.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(detail).toHaveCount(0);
+    await expect(rows).toContainText(["Human corrected cache evidence."]);
+    await canvas.focus();
+    await canvas.press("Enter");
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
-    await memory.getByRole("button", { name: "Forget", exact: true }).click();
-    await expect(memory.locator(".memory-list li")).toHaveCount(4);
+    await detail.getByRole("button", { name: "Forget", exact: true }).click();
+    await expect(detail).toBeVisible();
+    await expect(rows).toHaveCount(4);
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await memory.getByRole("button", { name: "Forget", exact: true }).click();
-    await expect(memory.locator(".memory-list li")).toHaveCount(3);
-    await memory.getByRole("button", { name: "Generate now", exact: true }).click();
-    await expect(memory.locator(".memory-list")).not.toContainText(
-      "Human corrected cache evidence.",
-    );
-    await memory.getByRole("switch", { name: "Automatic generation", exact: true }).uncheck();
-    await memory.getByRole("button", { name: "Save memory settings", exact: true }).click();
+    await detail.getByRole("button", { name: "Forget", exact: true }).click();
+    await expect(rows).toHaveCount(3);
+
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("tab", { name: "Memory", exact: true }).click();
+    memory = page.locator("#panel-settings-memory");
+    const retention = memory.getByLabel("Automatically delete unpinned memories after", {
+      exact: true,
+    });
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await retention.selectOption("30");
+    await expect(retention).toBeEnabled();
+    await expect(retention).toHaveValue("0");
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await retention.selectOption("30");
+    await expect(retention).toHaveValue("30");
+    const toggle = memory.getByRole("switch", { name: "Memory", exact: true });
+    await toggle.focus();
+    await toggle.press("Space");
+    await expect(toggle).not.toBeChecked();
+    await expect(memory.getByRole("status")).toContainText("already supplied");
     expect(
-      await page.evaluate(async () => (await window.desktop.memorySnapshot()).settings.generation),
-    ).toBe(false);
-    expect(
-      await page.evaluate(
-        async () => (await window.desktop.memorySnapshot()).settings.rolloverPercent,
-      ),
-    ).toBe(50);
+      await page.evaluate(async () => (await window.desktop.memorySnapshot()).settings),
+    ).toEqual({ version: 2, enabled: false, retentionDays: 30 });
+    await application.close();
+    application = await launch(directory, project, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Settings");
+    await page.getByRole("tab", { name: "Memory", exact: true }).click();
+    memory = page.locator("#panel-settings-memory");
+    await expect(memory.getByRole("switch", { name: "Memory", exact: true })).not.toBeChecked();
+    await expect(
+      memory.getByLabel("Automatically delete unpinned memories after", { exact: true }),
+    ).toHaveValue("30");
+    await memory.getByRole("switch", { name: "Memory", exact: true }).check();
+    await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeEnabled();
+    await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeChecked();
+    await application.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("desktop:memory-action");
+      ipcMain.handle("desktop:memory-action", () => {
+        throw new Error("Fixture save failure");
+      });
+    });
+    await memory.getByRole("switch", { name: "Memory", exact: true }).uncheck();
+    await expect(memory.getByRole("alert")).toContainText("could not be confirmed");
+    await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeChecked();
+    await memory.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(memory.getByRole("alert")).toHaveCount(0);
+    await memory.screenshot({ path: test.info().outputPath("memory-settings.png") });
     expect(errors).toEqual([]);
   } finally {
     await application?.close().catch(() => {});
@@ -8702,28 +8738,32 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await selectSidebarPage(page, "Settings");
     await page.getByRole("tab", { name: "Memory", exact: true }).click();
-    const memory = page.locator("#panel-settings-memory");
-    for (let index = 0; index < 21; index++) {
-      await expect(memory.locator(".memory-list li")).toHaveCount(25);
-      await expect(memory.locator(".memory-list button").first()).toContainText(
-        `Fixture memory ${524 - index * 25}`,
-      );
-      if (index < 20) await memory.getByRole("button", { name: "Load more", exact: true }).click();
-    }
-    await memory
-      .locator(".memory-list button")
-      .filter({ hasText: /Fixture memory 0$/ })
+    await page
+      .locator("#panel-settings-memory")
+      .getByRole("button", { name: "Manage memories", exact: true })
       .click();
-    await expect(memory.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
+    const memory = page.locator("#panel-memories");
+    const rows = memory.locator(".sessions-grid tbody [role='row']");
+    for (let index = 0; index < 21; index++) {
+      await expect(rows).toHaveCount(25);
+      await expect(rows.first()).toContainText(`Fixture memory ${524 - index * 25}`);
+      if (index < 20) await memory.getByRole("button", { name: "Next page", exact: true }).click();
+    }
+    const canvas = memory.getByTestId("data-grid-canvas");
+    await canvas.focus();
+    for (let i = 0; i < 25; i++) await canvas.press("ArrowDown");
+    await canvas.press("Enter");
+    const detail = page.getByRole("dialog", { name: "Memory details", exact: true });
+    await expect(detail.getByRole("textbox", { name: "Memory text", exact: true })).toHaveValue(
       "Fixture memory 0",
     );
-    await memory
+    await detail
       .getByRole("textbox", { name: "Memory text", exact: true })
       .fill("Edited oldest memory.");
-    await memory.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(memory.locator(".memory-list")).toContainText("Edited oldest memory.");
+    await detail.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(rows).toContainText(["Edited oldest memory."]);
     await memory.getByRole("button", { name: "Previous page", exact: true }).click();
-    await expect(memory.locator(".memory-list button").first()).toContainText("Fixture memory 49");
+    await expect(rows.first()).toContainText("Fixture memory 49");
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

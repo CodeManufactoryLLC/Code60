@@ -24,6 +24,7 @@ import {
   privateDirectorySync,
   verifyPrivateSync,
 } from "../platform/index.js";
+import { migrateMemorySettings } from "./memory-migration.js";
 
 const normalize = (text: string) => text.toLocaleLowerCase("en").replace(/\s+/g, " ").trim();
 const json = (value: unknown) => JSON.stringify(value);
@@ -33,6 +34,7 @@ const now = () => new Date().toISOString();
 /** Runs only in a Node sidecar. SQLite has a separate schema from project databases. */
 export class MemoryStore {
   private readonly db: DatabaseSync;
+  private preview: { token: string; days: number; changes: number; settings: string } | undefined;
   constructor(root: string) {
     privateDirectorySync(root);
     const file = join(root, "memory.sqlite");
@@ -59,7 +61,7 @@ export class MemoryStore {
     }
     this.db.exec("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;");
     const version = Number(this.db.prepare("PRAGMA user_version").get()?.user_version);
-    if (version > 1) {
+    if (version > 2) {
       this.db.close();
       throw new Error("A newer Code60 created this memory database");
     }
@@ -91,10 +93,29 @@ export class MemoryStore {
       CREATE TABLE IF NOT EXISTS suppressed (source TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS suppressed_capture (source TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS vectors (id TEXT NOT NULL, part INTEGER NOT NULL, model TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY(id, part));
-      CREATE TABLE IF NOT EXISTS calls (day TEXT PRIMARY KEY, count INTEGER NOT NULL);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(id UNINDEXED, text);
-      PRAGMA user_version=1;
     `);
+    try {
+      if (version < 2) {
+        this.transaction(() => {
+          const row = this.db.prepare("SELECT value FROM meta WHERE key='settings'").get();
+          const excluded = Boolean(
+            this.db.prepare("SELECT 1 FROM conversations WHERE remember=0 LIMIT 1").get(),
+          );
+          const settings = migrateMemorySettings(row ? decode(row.value) : undefined, excluded);
+          this.db.prepare("INSERT OR REPLACE INTO meta VALUES ('settings',?)").run(json(settings));
+          if (!settings.enabled) this.discardLearning();
+          this.db.exec(
+            "UPDATE conversations SET remember=1; DROP TABLE IF EXISTS calls; PRAGMA user_version=2;",
+          );
+        });
+      }
+      // Sources never committed by a completed turn cannot be recovered after restart.
+      this.db.exec("DELETE FROM sources WHERE committed=0;");
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
   close() {
     this.db.close();
@@ -116,23 +137,62 @@ export class MemoryStore {
       ? parseValue(memorySettingsSchema, decode(row.value))
       : structuredClone(DEFAULT_MEMORY_SETTINGS);
   }
-  configure(settings: MemorySettings) {
-    this.db
-      .prepare("INSERT OR REPLACE INTO meta VALUES ('settings',?)")
-      .run(json(parseValue(memorySettingsSchema, settings)));
+  configure(settings: MemorySettings, token?: string) {
+    settings = parseValue(memorySettingsSchema, settings);
+    if (token !== undefined) {
+      const preview = this.preview;
+      this.preview = undefined;
+      if (
+        !preview ||
+        preview.token !== token ||
+        preview.days !== settings.retentionDays ||
+        preview.settings !== json(this.settings()) ||
+        preview.changes !== this.changes()
+      )
+        throw new Error("Memories changed. Review the retention change again.");
+    }
+    this.transaction(() => {
+      this.db.prepare("INSERT OR REPLACE INTO meta VALUES ('settings',?)").run(json(settings));
+      if (!settings.enabled) this.discardLearning();
+    });
+  }
+  private changes() {
+    return Number(this.db.prepare("SELECT total_changes() AS n").get()?.n);
+  }
+  previewRetention(days: number) {
+    const token = randomUUID();
+    const count = days
+      ? Number(
+          this.db
+            .prepare(
+              "SELECT count(*) AS n FROM memories WHERE created<=? AND json_extract(value,'$.pinned')=0",
+            )
+            .get(new Date(Date.now() - days * 86400000).toISOString())?.n,
+        )
+      : 0;
+    this.preview = { token, days, changes: this.changes(), settings: json(this.settings()) };
+    return { token, count };
+  }
+  private discardLearning() {
+    this.db.exec(`
+      INSERT OR IGNORE INTO suppressed_capture SELECT id FROM sources;
+      UPDATE conversations SET cursor=COALESCE((SELECT MAX(seq) FROM sources WHERE cid=conversations.id),cursor);
+      DELETE FROM checkpoints;
+      DELETE FROM sources WHERE id NOT IN (
+        SELECT json_extract(c.value,'$.sourceId') FROM memories m,json_each(m.value,'$.citations') c
+      );
+    `);
   }
   register(key: string, label: string, path: string | null) {
     const project = path ? this.project(path) : null;
     const fullKey = json([key, project]);
-    const previous = this.db
-      .prepare("SELECT id,remember FROM conversations WHERE key=?")
-      .get(fullKey);
+    const previous = this.db.prepare("SELECT id FROM conversations WHERE key=?").get(fullKey);
     const id = previous ? String(previous.id) : randomUUID();
     if (!previous)
       this.db
         .prepare("INSERT INTO conversations (id,key,project,label) VALUES (?,?,?,?)")
         .run(id, fullKey, project, label.slice(0, 256));
-    return { id, projectId: project, remember: previous ? Boolean(previous.remember) : true };
+    return { id, projectId: project };
   }
   project(path: string, expected?: { device: bigint; inode: bigint }) {
     const canonical = realpathSync(path);
@@ -160,7 +220,8 @@ export class MemoryStore {
     return row;
   }
   append(cid: string, turn: string | number, sources: MemorySource[], complete: boolean) {
-    if (!this.conversation(cid).remember) return;
+    this.conversation(cid);
+    if (!this.settings().enabled) return;
     if (this.bytes() > 512 * 1_048_576)
       throw new Error(
         "Memory storage reached 512 MiB. Forget derived history before capturing more.",
@@ -204,7 +265,6 @@ export class MemoryStore {
       cursor: Number(conversation.cursor),
       previous: checkpoint ? String(checkpoint.value) : "",
       projectId: conversation.project == null ? null : String(conversation.project),
-      remember: Boolean(conversation.remember),
     };
   }
   publish(
@@ -213,18 +273,22 @@ export class MemoryStore {
     boundary: number,
     value: MemoryGeneration,
     provider: string,
+    previous?: string,
   ) {
     const range = this.range(cid);
-    if (!range.remember || cursor !== range.cursor || boundary !== range.boundary)
+    if (
+      !this.settings().enabled ||
+      cursor !== range.cursor ||
+      boundary !== range.boundary ||
+      (previous !== undefined && previous !== range.previous)
+    )
       throw new Error("Memory sources changed while generating");
     const generation = validateMemoryGeneration(value, range.sources);
-    const settings = this.settings();
     this.transaction(() => {
       this.db
         .prepare("INSERT OR REPLACE INTO checkpoints VALUES (?,?,?)")
         .run(cid, boundary, checkpointText(generation));
       for (const candidate of generation.memories) {
-        if (!settings.generateTypes[candidate.type]) continue;
         this.saveCandidate(cid, range.projectId, candidate, range.sources, provider);
       }
       this.db.prepare("UPDATE conversations SET cursor=? WHERE id=?").run(boundary, cid);
@@ -371,13 +435,6 @@ export class MemoryStore {
   }
   action(action: MemoryAction) {
     if (action.type === "configure") return this.configure(action.settings);
-    if (action.type === "remember") {
-      this.conversation(action.conversationId);
-      this.db
-        .prepare("UPDATE conversations SET remember=? WHERE id=?")
-        .run(Number(action.enabled), action.conversationId);
-      return;
-    }
     if (action.type === "forget-scope") {
       return this.transaction(() => {
         // Shared evidence retained for explicit global memories must never regenerate local ones.
@@ -463,14 +520,17 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM memory_fts WHERE id=?").run(id);
   }
   eligible(cid: string, after = "", limit = 256, projects: readonly string[] = []): MemoryRecord[] {
+    if (!this.settings().enabled) return [];
     const conversation = this.conversation(cid);
     return this.db
       .prepare(`SELECT id,value FROM memories m WHERE id>? AND state='active' AND
+      (json_extract(value,'$.pinned')=1 OR created>?) AND
       NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) AND
       (scope='global' OR (scope='conversation' AND cid=?) OR (scope='project' AND (project=? OR project IN (SELECT value FROM json_each(?)))))
       ORDER BY id LIMIT ?`)
       .all(
         after,
+        this.retentionCutoff(),
         cid,
         conversation.project == null ? null : String(conversation.project),
         json(projects),
@@ -479,34 +539,30 @@ export class MemoryStore {
       .map((row) => parseValue(memoryRecordSchema, decode(row.value)));
   }
   lexical(cid: string, query: string, projects: readonly string[] = []): string[] {
+    if (!this.settings().enabled) return [];
     const terms = query.match(/[\p{L}\p{N}_]{2,}/gu)?.slice(0, 32);
     if (!terms?.length) return [];
     const match = terms.map((s) => `"${s.replaceAll('"', '""')}"`).join(" OR ");
     const conversation = this.conversation(cid);
-    const settings = this.settings();
-    const cutoffs = Object.fromEntries(
-      Object.entries(settings.retentionDays).map(([type, days]) => [
-        type,
-        days ? new Date(Date.now() - days * 86400000).toISOString() : "",
-      ]),
-    );
     return this.db
       .prepare(`SELECT m.id FROM memory_fts JOIN memories m ON m.id=memory_fts.id
       WHERE memory_fts MATCH ? AND m.state='active' AND
-      json_extract(?, '$.' || m.type)=1 AND
-      (json_extract(m.value,'$.pinned')=1 OR m.created>=json_extract(?, '$.' || m.type)) AND
+      (json_extract(m.value,'$.pinned')=1 OR m.created>?) AND
       NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) AND
       (m.scope='global' OR (m.scope='conversation' AND m.cid=?) OR (m.scope='project' AND (m.project=? OR m.project IN (SELECT value FROM json_each(?)))))
       ORDER BY rank,m.id LIMIT 100`)
       .all(
         match,
-        json(settings.types),
-        json(cutoffs),
+        this.retentionCutoff(),
         cid,
         conversation.project == null ? null : String(conversation.project),
         json(projects),
       )
       .map((row) => String(row.id));
+  }
+  private retentionCutoff() {
+    const days = this.settings().retentionDays;
+    return days ? new Date(Date.now() - days * 86400000).toISOString() : "";
   }
   vectors(id: string, model: string): Float32Array[] {
     return this.db
@@ -567,17 +623,6 @@ export class MemoryStore {
         .get(cid)?.value ?? "",
     );
   }
-  reserveCall(limit: number) {
-    const day = now().slice(0, 10);
-    this.transaction(() => {
-      const used = Number(
-        this.db.prepare("SELECT count FROM calls WHERE day=?").get(day)?.count ?? 0,
-      );
-      if (used >= limit) throw new Error("Memory generation reached its daily call limit");
-      this.db.prepare("INSERT OR REPLACE INTO calls VALUES (?,?)").run(day, used + 1);
-      this.db.prepare("DELETE FROM calls WHERE day<?").run(day);
-    });
-  }
   private bytes() {
     return (
       (Number(this.db.prepare("PRAGMA page_count").get()?.page_count ?? 0) -
@@ -585,28 +630,44 @@ export class MemoryStore {
       Number(this.db.prepare("PRAGMA page_size").get()?.page_size ?? 0)
     );
   }
+  expireBatch(): number {
+    const days = this.settings().retentionDays;
+    if (!days) return 0;
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    const rows = this.db
+      .prepare(
+        "SELECT value FROM memories WHERE created<=? AND json_extract(value,'$.pinned')=0 LIMIT 64",
+      )
+      .all(cutoff);
+    this.transaction(() => {
+      for (const row of rows) {
+        const record = parseValue(memoryRecordSchema, decode(row.value));
+        this.db.prepare("DELETE FROM memories WHERE id=?").run(record.id);
+        this.db.prepare("DELETE FROM revisions WHERE id=?").run(record.id);
+        this.db.prepare("DELETE FROM vectors WHERE id=?").run(record.id);
+        this.db.prepare("DELETE FROM memory_fts WHERE id=?").run(record.id);
+        this.db.prepare("DELETE FROM checkpoints WHERE cid=?").run(record.conversationId);
+        for (const citation of record.citations) {
+          this.db
+            .prepare("INSERT OR IGNORE INTO suppressed_capture VALUES (?)")
+            .run(citation.sourceId);
+        }
+      }
+      this.db.exec(`
+        DELETE FROM sources WHERE id IN (SELECT source FROM suppressed_capture)
+        AND id NOT IN (
+          SELECT json_extract(c.value,'$.sourceId') FROM memories m,json_each(m.value,'$.citations') c
+        );
+      `);
+    });
+    return rows.length;
+  }
   snapshot() {
     const settings = this.settings();
-    for (const [type, days] of Object.entries(settings.retentionDays)) {
-      if (!days) continue;
-      const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-      const records = this.db
-        .prepare(
-          "SELECT value FROM memories WHERE type=? AND state='active' AND created<? LIMIT 256",
-        )
-        .all(type, cutoff);
-      for (const row of records) {
-        const r = parseValue(memoryRecordSchema, decode(row.value));
-        if (!r.pinned) this.write({ ...r, state: "stale", revision: r.revision + 1 });
-      }
-    }
     return {
       settings,
       count: Number(this.db.prepare("SELECT count(*) AS n FROM memories").get()?.n),
       bytes: this.bytes(),
-      dailyCalls: Number(
-        this.db.prepare("SELECT count FROM calls WHERE day=?").get(now().slice(0, 10))?.count ?? 0,
-      ),
       indexPending: Number(
         this.db
           .prepare(
@@ -616,9 +677,9 @@ export class MemoryStore {
       ),
       projects: this.db.prepare("SELECT id,label FROM projects ORDER BY label LIMIT 500").all(),
       conversations: this.db
-        .prepare("SELECT id,label,remember FROM conversations ORDER BY rowid DESC LIMIT 500")
+        .prepare("SELECT id,label FROM conversations ORDER BY rowid DESC LIMIT 500")
         .all()
-        .map((r) => ({ id: String(r.id), label: String(r.label), remember: Boolean(r.remember) })),
+        .map((r) => ({ id: String(r.id), label: String(r.label) })),
     };
   }
 }

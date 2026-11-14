@@ -84,12 +84,11 @@ beforeEach(async () => {
     name: "fixture",
     command: ["fixture"],
   }));
-  service.settings = {
-    ...DEFAULT_MEMORY_SETTINGS,
+  Object.assign(service.limits, {
     capacity: 2048,
-    recallTokens: 0,
+    recallTokens: 4000,
     cadenceSeconds: 3600,
-  };
+  });
   store.configure(service.settings);
   vi.spyOn(service, "call").mockImplementation(async (op: string, ...args: unknown[]) => {
     switch (op) {
@@ -111,9 +110,8 @@ beforeEach(async () => {
           Number(args[2]),
           args[3] as MemoryGeneration,
           String(args[4]),
+          args[5] as string | undefined,
         );
-      case "reserve":
-        return store.reserveCall(Number(args[0]));
       case "checkpoint":
         return store.checkpoint(String(args[0]));
       case "tail":
@@ -121,7 +119,16 @@ beforeEach(async () => {
       case "used":
         return store.markUsed(args[0] as string[]);
       case "snapshot":
-        return store.snapshot();
+        return { ...store.snapshot(), indexFailed: false };
+      case "retention-preview":
+        return store.previewRetention(Number(args[0]));
+      case "configure":
+        return store.configure(
+          args[0] as typeof DEFAULT_MEMORY_SETTINGS,
+          args[1] as string | undefined,
+        );
+      case "maintain":
+        return store.expireBatch();
       case "browse":
         return store.browse(args[0] as MemoryBrowse);
       case "detail":
@@ -138,9 +145,11 @@ beforeEach(async () => {
         throw new Error(`Unexpected operation ${op}`);
     }
   });
+  await service.loadSettings();
 });
 afterEach(async () => {
   await service.close();
+  vi.useRealTimers();
   store.close();
   vi.restoreAllMocks();
   await fs.rm(dir, { recursive: true, force: true });
@@ -180,7 +189,7 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     m.dispose();
   });
   it("fits a full Relay history window and many contract-bearing turns at default capacity", async () => {
-    service.settings = { ...service.settings, capacity: DEFAULT_MEMORY_SETTINGS.capacity };
+    service.limits.capacity = 128000;
     const m = runtime();
     const contract = "Operating contract line.\n".repeat(240);
     const history = "😀文line\n".repeat(8000);
@@ -204,12 +213,12 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     const m = runtime();
     emit(m, { type: "prompt", turn: 1, origin: "automatic", text: "x".repeat(4500) });
     emit(m, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
-    await expect(m.prepare(turn(), new AbortController().signal)).rejects.toThrow("checkpoint");
+    expect((await m.prepare(turn(), new AbortController().signal)).rollover).toBe(true);
     expect(store.range(must(store.snapshot().conversations[0]).id).sources).toEqual([]);
     m.dispose();
   });
   it.each(["register", "range"])(
-    "uses reported capacity when %s fails and bypasses disabled memory",
+    "keeps reported-capacity handoff independent of %s storage failures and Memory Off",
     async (failed) => {
       const original = must(vi.mocked(service.call).getMockImplementation());
       vi.spyOn(service, "call").mockImplementation(async (op, ...args) => {
@@ -217,14 +226,15 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
         return original(op, ...args);
       });
       const m = runtime();
+      exchange(m);
       const request = { ...turn(), usage: { used: 8000, size: 8192, reportedAt: at } };
-      await expect(m.prepare(request, new AbortController().signal)).rejects.toThrow();
+      const prepared = await m.prepare(request, new AbortController().signal);
+      expect(prepared.rollover).toBe(true);
       service.settings.enabled = false;
-      expect(await m.prepare(request, new AbortController().signal)).toEqual({
-        context: "",
-        rollover: false,
-        used: [],
-      });
+      exchange(m);
+      const next = await m.prepare(request, new AbortController().signal);
+      expect(next.rollover).toBe(true);
+      expect(next.used).toEqual([]);
       m.dispose();
     },
   );
@@ -263,24 +273,36 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     expect(store.range(cid).sources[0]?.text).toBe("[REDACTED]");
     m.dispose();
   });
-  it("respects live per-conversation privacy and separate capture/recall switches", async () => {
+  it("keeps repeated handoffs working with Memory Off without persisted learning or recall", async () => {
     const m = runtime();
-    await m.prepare(turn(), new AbortController().signal);
-    const cid = must(store.snapshot().conversations[0]).id;
     await service.action(
-      { type: "remember", conversationId: cid, enabled: false },
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled: false } },
       async () => true,
     );
-    exchange(m);
-    await expect(m.prepare(turn(), new AbortController().signal)).rejects.toThrow("checkpoint");
-    expect(store.range(cid).sources).toEqual([]);
+    vi.mocked(service.call).mockClear();
+    for (let i = 0; i < 3; i++) {
+      exchange(m, `Off-mode request ${i}`);
+      const result = await m.prepare(turn(), new AbortController().signal);
+      expect(result.rollover).toBe(true);
+      expect(result.context).toContain("Historical continuity checkpoint");
+      expect(result.used).toEqual([]);
+    }
+    expect(service.call).not.toHaveBeenCalled();
+    expect(store.snapshot().count).toBe(0);
+    expect(store.snapshot().conversations).toEqual([]);
+    expect(helpers.sessions).toHaveLength(3);
+    expect(
+      helpers.sessions
+        .flatMap((s) => s.prompts)
+        .every((prompt) => prompt.includes("Memory is off: memories must be an empty array")),
+    ).toBe(true);
     m.dispose();
   });
   it("serializes generation, invalidates pending work on forgetting and requires confirmation for promotion", async () => {
     const m = runtime();
     exchange(m, "A short fact");
     // Drain capture without requiring handoff.
-    service.settings.capacity = 32000;
+    service.limits.capacity = 32000;
     await m.prepare(turn(), new AbortController().signal);
     const cid = must(store.snapshot().conversations[0]).id;
     helpers.startGate = new Promise<void>(() => {});
@@ -292,6 +314,184 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     expect(store.browse({}).records).toEqual([]);
     expect(store.range(cid).sources).toEqual([]);
     m.dispose();
+  });
+  it("does not backfill Off-mode text or a turn spanning Off and On", async () => {
+    service.limits.capacity = 32000;
+    const m = runtime();
+    await m.prepare(turn(), new AbortController().signal);
+    emit(m, { type: "prompt", turn: 1, text: "Do not learn this interrupted-on turn" });
+    emit(m, { type: "message", text: "First fragment" });
+    await service.action(
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled: false } },
+      async () => true,
+    );
+    emit(m, { type: "message", text: " Off-mode fragment" });
+    await service.action(
+      { type: "configure", settings: DEFAULT_MEMORY_SETTINGS },
+      async () => true,
+    );
+    emit(m, { type: "message", text: " Final fragment" });
+    emit(m, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
+    await m.prepare(turn(), new AbortController().signal);
+    const cid = must(store.snapshot().conversations[0]).id;
+    expect(store.range(cid).sources).toEqual([]);
+    emit(m, { type: "prompt", turn: 2, text: "A new eligible fact" });
+    emit(m, { type: "message", text: "A completed eligible reply" });
+    emit(m, { type: "turnEnd", turn: 2, stopReason: "end_turn", outcome: "finished" });
+    await m.prepare(turn(), new AbortController().signal);
+    expect(store.range(cid).sources.map((source) => source.text)).toEqual([
+      "A new eligible fact",
+      "A completed eligible reply",
+    ]);
+    m.dispose();
+  });
+  it("cancels in-flight learning on Off and never publishes its late result", async () => {
+    service.limits.capacity = 32000;
+    const m = runtime();
+    exchange(m);
+    await m.prepare(turn(), new AbortController().signal);
+    const cid = must(store.snapshot().conversations[0]).id;
+    helpers.startGate = new Promise<void>(() => {});
+    const learning = service.generate(cid);
+    const rejected = expect(learning).rejects.toThrow();
+    await vi.waitFor(() => expect(helpers.specs).toHaveLength(1));
+    await service.action(
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled: false } },
+      async () => true,
+    );
+    await rejected;
+    expect(store.snapshot().count).toBe(0);
+    expect(store.range(cid).sources).toEqual([]);
+    expect(store.checkpoint(cid)).toBe("");
+    await service.action(
+      { type: "configure", settings: DEFAULT_MEMORY_SETTINGS },
+      async () => true,
+    );
+    expect(await service.generate(cid)).toBeUndefined();
+    m.dispose();
+  });
+  it("rejects a stale recall preparation if Off is saved while search is in flight", async () => {
+    const m = runtime();
+    const original = must(vi.mocked(service.call).getMockImplementation());
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let searching = false;
+    vi.mocked(service.call).mockImplementation(async (op, ...args) => {
+      if (op === "search") {
+        searching = true;
+        await gate;
+      }
+      return original(op, ...args);
+    });
+    const preparing = m.prepare(turn(), new AbortController().signal);
+    const rejected = expect(preparing).rejects.toThrow("changed");
+    await vi.waitFor(() => expect(searching).toBe(true));
+    await service.action(
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled: false } },
+      async () => true,
+    );
+    release();
+    await rejected;
+    const next = await m.prepare(turn(), new AbortController().signal);
+    expect(next.used).toEqual([]);
+    expect(next.context).toBe("");
+    m.dispose();
+  });
+  it("invalidates prepared recall on Off and preserves continuity for an unsent handoff retry", async () => {
+    const m = runtime();
+    exchange(m);
+    const prepared = await m.prepare(turn("Redis"), new AbortController().signal);
+    expect(prepared.rollover).toBe(true);
+    expect(prepared.used.length).toBeGreaterThan(0);
+    await service.action(
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled: false } },
+      async () => true,
+    );
+    expect(() => prepared.validate?.()).toThrow("changed");
+    const retried = await m.prepare(turn("Redis"), new AbortController().signal);
+    expect(retried.rollover).toBe(true);
+    expect(retried.used).toEqual([]);
+    expect(retried.context).toContain("Historical continuity checkpoint");
+    expect(() => retried.validate?.()).not.toThrow();
+    m.dispose();
+  });
+  it("does not import a prior process's saved checkpoint into the live continuity buffer", async () => {
+    const cid = store.register("relay:restart", "Old session", null).id;
+    const source: MemorySource = {
+      id: randomUUID(),
+      conversationId: cid,
+      role: "human",
+      at,
+      text: "Old session evidence",
+      ordinal: 1,
+      start: 0,
+    };
+    store.append(cid, "old", [source], true);
+    const range = store.range(cid);
+    const previous = generated([source]);
+    previous.goal = "Old private checkpoint from another physical session";
+    store.publish(cid, range.cursor, range.boundary, previous, "fixture");
+    const m = must(service.attach(deps, "relay", null, "restart").memory)(
+      { id: randomUUID() } as RunRecord,
+      dir,
+    );
+    exchange(m, "Current live session evidence");
+    expect((await m.prepare(turn(), new AbortController().signal)).rollover).toBe(true);
+    expect(helpers.sessions).toHaveLength(2);
+    const last = must(helpers.sessions.at(-1)).prompts[0] ?? "";
+    expect(last).toContain("Memory is off:");
+    expect(last).not.toContain("Old private checkpoint");
+    m.dispose();
+  });
+  it("has no daily learning allowance and generates beyond the former 50-call limit", async () => {
+    const cid = store.register("uncapped", "Uncapped", null).id;
+    for (let i = 0; i < 55; i++) {
+      const source: MemorySource = {
+        id: randomUUID(),
+        conversationId: cid,
+        role: "human",
+        at,
+        text: `New fact ${i}`,
+        ordinal: i,
+        start: 0,
+      };
+      store.append(cid, String(i), [source], true);
+      expect(await service.generate(cid)).toBeDefined();
+    }
+    expect(helpers.sessions).toHaveLength(55);
+    expect(store.snapshot()).not.toHaveProperty("dailyCalls");
+    expect(store.settings()).toEqual(DEFAULT_MEMORY_SETTINGS);
+  });
+  it("confirms retention changes, keeps cancellation unchanged and expires without opening Settings", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+    const settings = { ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 as const };
+    const declined = vi.fn(async () => false);
+    expect(await service.action({ type: "configure", settings }, declined)).toBe(false);
+    expect(store.settings().retentionDays).toBe(0);
+    expect(declined).toHaveBeenCalledWith(
+      "Automatically delete old memories?",
+      expect.stringContaining("0 unpinned memories"),
+    );
+    const cid = store.register("expiry", "Expiry", null).id;
+    const source: MemorySource = {
+      id: randomUUID(),
+      conversationId: cid,
+      role: "human",
+      at,
+      text: "Expire me",
+      ordinal: 1,
+      start: 0,
+    };
+    store.append(cid, "1", [source], true);
+    const range = store.range(cid);
+    store.publish(cid, range.cursor, range.boundary, generated([source]), "fixture");
+    await service.action({ type: "configure", settings }, async () => true);
+    vi.setSystemTime(new Date(Date.parse(at) + 31 * 86400000));
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(store.snapshot().count).toBe(0);
   });
   it("recalls project/global evidence with per-turn IDs and keeps worker assignments isolated", async () => {
     const one = await fs.mkdtemp(join(dir, "one-"));
@@ -309,7 +509,7 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     store.append(saved.id, "1", [s], true);
     const range = store.range(saved.id);
     store.publish(saved.id, range.cursor, range.boundary, generated([s]), "fixture");
-    service.settings = { ...service.settings, capacity: 32000, recallTokens: 4000 };
+    Object.assign(service.limits, { capacity: 32000, recallTokens: 4000 });
     const m = runtime("worker", one),
       other = runtime("worker", two);
     const result = await m.prepare(turn("Redis"), new AbortController().signal);
@@ -351,7 +551,7 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     );
     orch.start();
     await vi.waitFor(() => expect(orch.runs()[0]?.status).toBe("idle"));
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       orch.reply("r1", `Request ${i}`);
       await vi.waitFor(() =>
         expect(records.events.filter((e) => e.type === "turnEnd")).toHaveLength(i + 1),
@@ -360,7 +560,7 @@ describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
     }
     expect(agents.sessions.length).toBeGreaterThan(3);
     const prompts = agents.sessions.flatMap((s) => s.prompts);
-    expect(prompts).toHaveLength(12);
+    expect(prompts).toHaveLength(20);
     prompts.forEach((p, i) => {
       expect(p).toContain(`Request ${i}`);
       expect(p).toContain("Trusted operating instructions.");

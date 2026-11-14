@@ -57,7 +57,7 @@ function seed(cid: string, count: number, label: string) {
 }
 const vector = () => Float32Array.from({ length: 768 }, (_, i) => (i === 0 ? 1 : 0));
 describe.skipIf(!sqliteAvailable())("memory index", () => {
-  it("filters disabled and expired lexical matches before the 100-result limit", async () => {
+  it("filters expired lexical matches before the 100-result limit and disables all recall when Off", async () => {
     const c = db.register("filters", "Filters", null);
     for (let i = 0; i < 4; i++) seed(c.id, 30, `cache${i}`);
     const source: MemorySource = {
@@ -99,23 +99,23 @@ describe.skipIf(!sqliteAvailable())("memory index", () => {
       },
       "fixture",
     );
-    db.configure({
-      ...DEFAULT_MEMORY_SETTINGS,
-      types: { ...DEFAULT_MEMORY_SETTINGS.types, episodic: false },
+    const saved = db.browse({ type: "semantic" }).records[0];
+    if (!saved) throw new Error("Missing semantic fixture");
+    db.action({
+      type: "edit",
+      id: saved.id,
+      revision: saved.revision,
+      text: saved.text,
+      pinned: true,
     });
     const offline = async (): Promise<RagEmbedder> => {
       throw new Error("offline");
     };
-    expect(
-      (await memorySearch(db, c.id, "cache0 cache1 cache2 cache3", offline)).records.map(
-        (r) => r.type,
-      ),
-    ).toEqual(["semantic"]);
     db.configure({
       ...DEFAULT_MEMORY_SETTINGS,
-      retentionDays: { ...DEFAULT_MEMORY_SETTINGS.retentionDays, episodic: 1 },
+      retentionDays: 30,
     });
-    const later = Date.now() + 2 * 86400000;
+    const later = Date.now() + 31 * 86400000;
     const now = vi.spyOn(Date, "now").mockReturnValue(later);
     try {
       expect(
@@ -123,6 +123,8 @@ describe.skipIf(!sqliteAvailable())("memory index", () => {
           (r) => r.type,
         ),
       ).toEqual(["semantic"]);
+      db.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
+      expect((await memorySearch(db, c.id, "cache0", offline)).records).toEqual([]);
     } finally {
       now.mockRestore();
     }

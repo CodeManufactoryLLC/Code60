@@ -9,8 +9,8 @@ const metadata: MemorySnapshot = {
   busy: false,
   count: 0,
   bytes: 0,
-  dailyCalls: 0,
   indexPending: 0,
+  indexFailed: false,
   projects: [],
   conversations: [],
 };

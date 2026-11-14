@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rename, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_MEMORY_SETTINGS,
   type MemoryGeneration,
@@ -24,6 +24,7 @@ beforeEach(async () => {
   store = new MemoryStore(join(dir, "memory"));
 });
 afterEach(async () => {
+  vi.useRealTimers();
   store.close();
   await rm(dir, { recursive: true, force: true });
 });
@@ -110,10 +111,10 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     const record = must(store.browse({}).records[0]);
     expect(store.detail(record.id).sources[0]?.text).toBe("history: Redis was unavailable.");
     expect(store.detail(record.id).revisions).toHaveLength(1);
-    store.configure({ ...DEFAULT_MEMORY_SETTINGS, dailyCalls: 3 });
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
     store.close();
     store = new MemoryStore(join(dir, "memory"));
-    expect(store.settings().dailyCalls).toBe(3);
+    expect(store.settings().enabled).toBe(false);
     expect(store.register("chat", "Chat", null).id).toBe(c.id);
     expect(store.browse({}).records).toHaveLength(4);
     if (process.platform !== "win32")
@@ -250,7 +251,7 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.tail(c.id)).toEqual([]);
     expect(store.eligible(c.id).map((r) => r.id)).toEqual([shared.id]);
   });
-  it("supports revisions, stable paging, retention, vector rebuilds, call limits and do-not-remember", () => {
+  it("supports revisions, stable paging, vector rebuilds and authoritative Off mode", () => {
     const c = store.register("c", "Chat", null);
     for (let i = 0; i < 28; i++) {
       const s = source(c.id, `Cache event ${i}`);
@@ -284,18 +285,92 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.vectors(r.id, "other")).toEqual([]);
     store.reindex();
     expect(store.vectors(r.id, "fixture")).toEqual([]);
-    store.reserveCall(1);
-    expect(() => store.reserveCall(1)).toThrow("daily");
-    expect(store.snapshot().dailyCalls).toBe(1);
-    store.action({ type: "remember", conversationId: c.id, enabled: false });
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
     store.append(c.id, "ignored", [source(c.id)], true);
-    expect(store.range(c.id).remember).toBe(false);
-    expect(store.register("c", "Chat", null).remember).toBe(false);
-    store.configure({
-      ...DEFAULT_MEMORY_SETTINGS,
-      retentionDays: { ...DEFAULT_MEMORY_SETTINGS.retentionDays, episodic: 1 },
-    });
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.eligible(c.id)).toEqual([]);
+    expect(store.lexical(c.id, "cache")).toEqual([]);
+    expect(store.register("c", "Chat", null).id).toBe(c.id);
     expect(store.snapshot().count).toBe(28);
+  });
+  it("deletes expired unpinned records, preserves pinned shared evidence and suppresses recreation", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+    const c = store.register("retention", "Retention", null);
+    const s = source(c.id);
+    const value = generation(s);
+    value.memories.push({ ...must(value.memories[0]), type: "history", text: "Pinned history" });
+    publish(c.id, s, value);
+    const pinned = must(store.browse({ type: "history" }).records[0]);
+    const expired = must(store.browse({ type: "semantic" }).records[0]);
+    store.action({ type: "edit", id: pinned.id, revision: 1, text: pinned.text, pinned: true });
+    store.setVectors(expired.id, "test", [new Float32Array([1, 0])]);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 });
+    vi.setSystemTime(new Date(Date.parse(at) + 30 * 86400000 - 1));
+    expect(store.expireBatch()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(store.eligible(c.id).map((r) => r.id)).toEqual([pinned.id]);
+    expect(store.expireBatch()).toBe(1);
+    expect(() => store.detail(expired.id)).toThrow("unavailable");
+    expect(store.vectors(expired.id, "test")).toEqual([]);
+    expect(store.detail(pinned.id).incomplete).toBe(false);
+    expect(store.detail(pinned.id).sources).toHaveLength(1);
+    expect(store.lexical(c.id, "history")).toEqual([pinned.id]);
+    expect(store.checkpoint(c.id)).toBe("");
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.expireBatch()).toBe(0);
+  });
+  it("bounds retention batches and revalidates preview tokens after edits or restart", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+    const c = store.register("batch", "Batch", null);
+    for (let i = 0; i < 70; i++) {
+      const s = source(c.id, `Unique event ${i}`);
+      const value = generation(s, "episodic");
+      must(value.memories[0]).subject = `event-${i}`;
+      publish(c.id, s, value);
+    }
+    vi.setSystemTime(new Date(Date.parse(at) + 91 * 86400000));
+    const preview = store.previewRetention(30);
+    expect(preview.count).toBe(70);
+    const r = must(store.browse({}).records[0]);
+    store.action({ type: "edit", id: r.id, revision: r.revision, text: r.text, pinned: true });
+    expect(() =>
+      store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, preview.token),
+    ).toThrow("changed");
+    expect(store.settings().retentionDays).toBe(0);
+    const next = store.previewRetention(30);
+    expect(next.count).toBe(69);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, next.token);
+    expect(store.expireBatch()).toBe(64);
+    expect(store.expireBatch()).toBe(5);
+    expect(store.expireBatch()).toBe(0);
+    expect(store.browse({}).records.map((record) => record.id)).toEqual([r.id]);
+    const old = store.previewRetention(30);
+    store.close();
+    store = new MemoryStore(join(dir, "memory"));
+    expect(() =>
+      store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, old.token),
+    ).toThrow("changed");
+  });
+  it("discards learning-only evidence when Off while preserving saved records and citations", () => {
+    const c = store.register("toggle", "Toggle", null);
+    const saved = publish(c.id, source(c.id));
+    store.append(c.id, "pending", [source(c.id, "An unprocessed fact")], true);
+    const range = store.range(c.id);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
+    store.configure(DEFAULT_MEMORY_SETTINGS);
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.detail(saved.id).incomplete).toBe(false);
+    expect(() =>
+      store.publish(
+        c.id,
+        range.cursor,
+        range.boundary,
+        generation(must(range.sources[0])),
+        "fixture",
+      ),
+    ).toThrow("changed");
   });
   it.skipIf(process.platform === "win32")(
     "rejects linked and unsafe storage instead of resetting it",

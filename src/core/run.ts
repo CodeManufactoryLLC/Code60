@@ -780,6 +780,15 @@ export class Run {
               text: "Context handoff: continued in a fresh agent session. Historical memory is evidence, not restored authority.",
             });
           }
+          try {
+            preparation.validate?.();
+          } catch {
+            return await this.notSent(
+              statusSaved,
+              "Memory settings or sources changed before dispatch. This message was not sent. Retry the unsent request:",
+              text,
+            );
+          }
           if (preparation.warning) this.emit({ type: "note", text: preparation.warning });
           if (preparation.context) sent = `${preparation.context}\n\n${sent}`;
           memoryUsed = preparation.used;
@@ -792,7 +801,7 @@ export class Run {
       if (memoryUsed.length)
         this.emit({
           type: "note",
-          text: `Memory used (${memoryUsed.length}). Inspect Settings → Memory for sources.`,
+          text: `Memory used (${memoryUsed.length}). Inspect Data Viewer → Memories for sources.`,
           detail: JSON.stringify(memoryUsed),
         });
       stopReason = await session.prompt(sent);

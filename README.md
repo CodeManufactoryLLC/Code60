@@ -42,6 +42,24 @@ existing files remain untouched.
 See [implementation and validation notes](docs/relay-implementation.md) for limits
 and platform-validation status.
 
+## Memory
+
+**Settings → Memory** has one application-wide On/Off switch. On learns useful
+information from Relay, project chats and workers, and recalls relevant saved
+memories. Off stops learning and recall without deleting saved memories or
+ordinary transcripts; turning it back on does not backfill the intervening chats.
+Previously supplied information can remain in an active provider session.
+
+**Manage memories** opens Apps → Data Viewer → Memories to inspect evidence, edit,
+pin, delete or explicitly share a memory across projects. Retention can delete
+unpinned memories after 30 days, 90 days or one year; the default is Never.
+Shortening retention requires confirmation.
+
+Storage, embeddings and search are local. Learning sends conversation excerpts
+to the configured provider and may incur usage; there is no daily learning limit.
+Automatic handoff can still summarize a long conversation while Memory is Off,
+without creating long-term memories. See [memory behavior and validation](docs/memory-validation.md).
+
 ## Scheduled automations
 
 Open **Automations** to save one agent, prompt, isolated Git repository and explicit
