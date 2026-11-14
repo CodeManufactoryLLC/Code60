@@ -173,7 +173,7 @@ export function MemoryPage({
                 <label htmlFor="memory-retention">
                   Automatically delete unpinned memories after
                 </label>{" "}
-                <InfoTip label="Memory retention">
+                <InfoTip label="Memory retention" id="memory-retention-tip">
                   Deletes unpinned memories based on their creation date, including derived search
                   and revision data. Pinned memories and evidence needed by retained memories are
                   kept. Original transcripts are never deleted. Shortening retention requires
@@ -182,6 +182,7 @@ export function MemoryPage({
               </span>
               <select
                 id="memory-retention"
+                aria-describedby="memory-retention-tip"
                 value={settings.retentionDays}
                 disabled={busy}
                 onChange={(event) =>

@@ -27,7 +27,7 @@ import type { MemoryFactory, MemoryPreparation, RunMemory } from "./agent-memory
 import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
-import { HANDOFF_PROMPT_LIMIT } from "./recovery.js";
+import { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "./recovery.js";
 import type {
   FinalRunStatus,
   Mode,
@@ -260,6 +260,14 @@ export class Run {
     }
     let session: AgentSession;
     try {
+      if (this.memory?.restore)
+        this.memory.restore(
+          buildHandoffPrompt(
+            this.record,
+            await this.deps.store.readEvents(this.id),
+            this.settings.prompts.handoffSummary,
+          ),
+        );
       session = await this.startRecoveryAgent((signal) =>
         (this.deps.agents.restore as NonNullable<Agents["restore"]>)(
           {
@@ -316,6 +324,7 @@ export class Run {
     if (summary.length > HANDOFF_PROMPT_LIMIT)
       throw new Error("the recovery handoff exceeds its size limit");
     if (text.trim() === "") throw new Error("the message is empty");
+    this.memory?.restore?.(summary);
     const context = this.settings.promptContext?.();
     const heading =
       origin === "automatic"

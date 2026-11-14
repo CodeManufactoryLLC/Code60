@@ -8,10 +8,9 @@ import {
   type RunEvent,
   type RunMemory,
 } from "../core/index.js";
-import type { GeneratedMemory, MemoryService } from "./memory-service.js";
+import type { GeneratedMemory, MemoryService, MemoryTarget } from "./memory-service.js";
 
 type Registered = { id: string; projectId: string | null };
-type Target = { cwd: string; device: bigint; inode: bigint };
 const secret =
   /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)|(?:sk-[A-Za-z0-9_-]{16,})|(?:\b(?:api[_-]?key|password|secret|access[_-]?token)\s*[:=]\s*["']?)[^\s"',;]+/gi;
 const scrub = (text: string) => text.replace(secret, "[REDACTED]");
@@ -37,7 +36,6 @@ export class MemoryRuntime implements RunMemory {
   private turnEpoch = -1;
   private queuedBytes = 0;
   private sources: MemorySource[] = [];
-  private sourceBytes = 0;
   private checkpoint = "";
   private learningComplete = true;
   private forceRollover = false;
@@ -47,9 +45,18 @@ export class MemoryRuntime implements RunMemory {
     private readonly role: "relay" | "project" | "worker",
     private readonly key: string,
     private readonly project: string | null,
-    private readonly targets?: () => readonly Target[],
+    private readonly targets?: () => readonly MemoryTarget[],
   ) {}
 
+  restore(context: string) {
+    this.learningComplete = false;
+    this.sources = this.split(context, "assistant", new Date().toISOString());
+    this.used = estimateMemoryTokens(context);
+  }
+  resumeLearning() {
+    if (!this.stopped && this.capturedId && this.service.learning)
+      this.scheduleGeneration(this.capturedId);
+  }
   private register() {
     this.registration ??= this.service
       .call<Registered>(
@@ -80,7 +87,6 @@ export class MemoryRuntime implements RunMemory {
   invalidateContext() {
     this.learningChanged();
     this.sources = [];
-    this.sourceBytes = 0;
     this.checkpoint = "";
     this.turnSources = [];
     this.assistantText = "";
@@ -111,8 +117,7 @@ export class MemoryRuntime implements RunMemory {
     if (generated.previous !== this.checkpoint) return;
     if (!generated.sources.every((source, index) => source.id === this.sources[index]?.id)) return;
     this.checkpoint = checkpointText(generated.result);
-    const removed = this.sources.splice(0, generated.sources.length);
-    this.sourceBytes -= removed.reduce((sum, source) => sum + Buffer.byteLength(source.text), 0);
+    this.sources.splice(0, generated.sources.length);
   }
   private scheduleGeneration(cid: string) {
     clearTimeout(this.timer);
@@ -142,7 +147,7 @@ export class MemoryRuntime implements RunMemory {
       return;
     }
     this.queuedBytes += bytes;
-    const eligible = () => !this.stopped && this.service.learning && epoch === this.learningEpoch;
+    const eligible = () => !this.stopped && this.service.capturing && epoch === this.learningEpoch;
     this.pending = this.pending
       .then(async () => {
         if (!eligible()) return;
@@ -178,7 +183,7 @@ export class MemoryRuntime implements RunMemory {
       this.used += estimateMemoryTokens(event.text);
       this.turn = event.turn;
       this.automatic = event.origin === "automatic";
-      this.turnEpoch = this.service.learning ? this.learningEpoch : -1;
+      this.turnEpoch = this.service.capturing ? this.learningEpoch : -1;
       this.assistantText = "";
       this.assistantAt = "";
       this.captureFailed = event.text.length > 256000;
@@ -220,7 +225,8 @@ export class MemoryRuntime implements RunMemory {
     this.turnSources = [];
     this.assistantText = "";
     const bytes = sources.reduce((sum, source) => sum + Buffer.byteLength(source.text), 0);
-    if (this.sourceBytes + bytes > 1_048_576 || this.sources.length + sources.length > 1024) {
+    const buffered = this.sources.reduce((sum, source) => sum + Buffer.byteLength(source.text), 0);
+    if (buffered + bytes > 1_048_576 || this.sources.length + sources.length > 1024) {
       this.incomplete = true;
       this.service.report(
         "Live continuity exceeds its buffer limit. Original transcripts are retained.",
@@ -228,8 +234,7 @@ export class MemoryRuntime implements RunMemory {
       return;
     }
     this.sources.push(...sources);
-    this.sourceBytes += bytes;
-    if (!finished || !this.service.learning || this.turnEpoch !== this.learningEpoch) {
+    if (!finished || !this.service.capturing || this.turnEpoch !== this.learningEpoch) {
       this.learningComplete = false;
       return;
     }
@@ -274,7 +279,6 @@ export class MemoryRuntime implements RunMemory {
       signal.throwIfAborted();
       this.checkpoint = checkpointText(result);
       this.sources.splice(0, page.length);
-      this.sourceBytes -= page.reduce((sum, source) => sum + Buffer.byteLength(source.text), 0);
       // This checkpoint can include Off-mode evidence. Never feed it into learning.
       this.learningComplete = false;
     }

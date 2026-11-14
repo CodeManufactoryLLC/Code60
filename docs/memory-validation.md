@@ -81,6 +81,11 @@ records or a durable learning backlog. Completed learning checkpoints are reused
 only when their evidence matches the uninterrupted On-mode live buffer.
 Off-mode evidence and continuity checkpoints are never imported into learning.
 
+Explicit restore and handoff seed this live buffer from the existing bounded
+recovery evidence, even when native ACP restoration does not replay history.
+This is not a startup archive import or learning backfill. Both immediate and
+later context rollover retain the recovered evidence without restoring authority.
+
 Required handoff failure pauses dispatch, with the unsent request retained in a
 transcript note. Unavailable recall alone is nonblocking while context fits.
 Oversized requests are rejected rather than truncated. Missing or overflowed
@@ -119,6 +124,14 @@ payloads and 30-second deadlines. Generation has at most 64 queued conversations
 Settings and browser lists are bounded; browsing uses 25-record pages.
 Semantic indexing retries after 1, 5 and 15 seconds before exposing Repair search.
 Keyword recall remains available during indexing failures.
+
+An exclusive private writer lock protects store opening, migration and incomplete
+exchange cleanup. A second live or unverifiable owner cannot open the store.
+Idle sidecar replacement waits for the previous process to exit before reopening.
+Queued helper cancellation settles immediately without starting another provider;
+active helper cleanup still completes before the serialized queue advances.
+Ordinary edit, retention and repair mutations pause generation, not capture of
+otherwise eligible completed On-mode exchanges.
 
 ## Privacy and forgetting
 

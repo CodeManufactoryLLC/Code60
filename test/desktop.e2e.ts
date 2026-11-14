@@ -8586,6 +8586,11 @@ test("desktop: simplified memory settings save immediately and manage automatic 
     await expect(
       memory.getByLabel("Automatically delete unpinned memories after", { exact: true }),
     ).toHaveValue("0");
+    await expect(
+      memory.getByLabel("Automatically delete unpinned memories after", { exact: true }),
+    ).toHaveAccessibleDescription(
+      /creation date.*Pinned memories.*Original transcripts are never deleted/s,
+    );
     await expect
       .poll(
         () => page.evaluate(async () => (await window.desktop.browseMemories({})).records.length),

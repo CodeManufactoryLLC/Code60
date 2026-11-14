@@ -137,15 +137,15 @@ targets. Only a confirmed **Promote to global** shares a memory across projects.
 The Memories browser shows attribution, exact evidence, conflicts, revisions and
 last use, and supports edits, pinning and forgetting.
 
-Before context reaches its configured threshold (initially 70%), Code60 prepares
+Before context reaches its automatic threshold (70%), Code60 prepares
 a checkpoint and continues between turns in a fresh agent session. The logical
 conversation and transcript stay intact. An oversized request or unavailable
 required checkpoint pauses the send, never silently truncates or replays it.
-Context capacity falls back to a configurable 128,000-token estimate when the
+Context capacity falls back to an internal 128,000-token estimate when the
 provider does not report one.
 
-Capture, automatic generation and recall have separate switches. Per-conversation
-**Do not remember** stops new capture and recall for that conversation. Forgetting
+One application-wide Memory switch controls capture, generation and recall.
+Automatic conversation continuity remains available with Memory Off. Forgetting
 suppresses future recall and recreation from the same source ranges, but does not
 erase original transcripts or context already sent to a provider. See
 [memory behavior and validation](docs/memory-validation.md).

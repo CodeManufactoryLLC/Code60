@@ -145,7 +145,7 @@ beforeEach(async () => {
         throw new Error(`Unexpected operation ${op}`);
     }
   });
-  await service.loadSettings();
+  await service.snapshot();
 });
 afterEach(async () => {
   await service.close();
@@ -175,6 +175,104 @@ function exchange(memory: RunMemory, text = "Redis cache uses local storage.") {
   emit(memory, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
 }
 describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
+  it.each([
+    { used: 95000, enabled: false },
+    { used: 1000, enabled: false },
+    { used: 95000, enabled: true },
+    { used: 1000, enabled: true },
+  ])(
+    "retains explicit restored continuity from $used tokens with Memory $enabled without learning old text",
+    async ({ used, enabled }) => {
+      await service.action(
+        { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, enabled } },
+        async () => true,
+      );
+      const m = runtime();
+      m.restore?.("Recovered constraint: preserve the old schema and unresolved failure.");
+      const first = await m.prepare(
+        { ...turn(), usage: { used, size: 128000, reportedAt: at } },
+        new AbortController().signal,
+      );
+      if (used === 1000) {
+        expect(first.rollover).toBe(false);
+        first.validate?.();
+        exchange(m, "A new live exchange");
+        expect(
+          (
+            await m.prepare(
+              { ...turn(), usage: { used: 95000, size: 128000, reportedAt: at } },
+              new AbortController().signal,
+            )
+          ).rollover,
+        ).toBe(true);
+      } else expect(first.rollover).toBe(true);
+      expect(helpers.sessions[0]?.prompts[0]).toContain(
+        "Recovered constraint: preserve the old schema",
+      );
+      expect(store.snapshot().count).toBe(0);
+      if (!enabled) expect(store.snapshot().conversations).toEqual([]);
+      for (const conversation of store.snapshot().conversations)
+        expect(
+          store
+            .range(conversation.id)
+            .sources.map((source) => source.text)
+            .join("\n"),
+        ).not.toContain("Recovered constraint");
+      m.dispose();
+    },
+  );
+  it("preserves completed On-mode exchanges while an unrelated reindex mutation is pending", async () => {
+    service.limits.capacity = 32000;
+    const a = runtime();
+    const b = runtime();
+    emit(a, { type: "prompt", turn: 1, text: "Started before reindex" });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stop = vi.spyOn(service, "stopJobs").mockImplementation(() => gate);
+    const pending = service.action({ type: "reindex" }, async () => true);
+    await vi.waitFor(() => expect(stop).toHaveBeenCalled());
+    emit(a, { type: "message", text: "Completed during reindex" });
+    emit(a, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
+    exchange(b, "Started during reindex");
+    await vi.waitFor(() => expect(store.snapshot().conversations).toHaveLength(2));
+    release();
+    await pending;
+    expect(
+      store
+        .snapshot()
+        .conversations.map((c) => store.range(c.id).sources.length)
+        .sort(),
+    ).toEqual([2, 3]);
+    a.dispose();
+    b.dispose();
+    stop.mockRestore();
+  });
+  it("settles a cancelled queued continuity request before an unrelated active helper finishes", async () => {
+    const source: MemorySource = {
+      id: randomUUID(),
+      conversationId: randomUUID(),
+      role: "human",
+      at,
+      ordinal: 1,
+      start: 0,
+      text: "Live context",
+    };
+    helpers.startGate = new Promise<void>(() => {});
+    const first = new AbortController();
+    const active = service.summarize([source], "", first.signal);
+    const activeRejected = expect(active).rejects.toThrow();
+    await vi.waitFor(() => expect(helpers.specs).toHaveLength(1));
+    const second = new AbortController();
+    const queued = service.summarize([source], "", second.signal);
+    const queuedRejected = expect(queued).rejects.toThrow(/cancelled/i);
+    second.abort();
+    await queuedRejected;
+    expect(helpers.specs).toHaveLength(1);
+    first.abort();
+    await activeRejected;
+  });
   it("continues after forgetting without requiring deleted checkpoints", async () => {
     const m = runtime();
     exchange(m);

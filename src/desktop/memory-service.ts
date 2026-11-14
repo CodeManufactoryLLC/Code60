@@ -41,12 +41,13 @@ export type GeneratedMemory = {
   previous: string;
 };
 type Provider = { name: string; command: readonly [string, ...string[]] };
-type MemoryTarget = { cwd: string; device: bigint; inode: bigint };
+export type MemoryTarget = { cwd: string; device: bigint; inode: bigint };
 
 /** Application-owned service; all SQLite/model/search work is outside Electron main. */
 export class MemoryService {
   private child: ChildProcess | undefined;
   private booting: Promise<void> | undefined;
+  private retiring: Promise<void> | undefined;
   private idle: ReturnType<typeof setTimeout> | undefined;
   private readonly requests = new Map<
     string,
@@ -68,21 +69,20 @@ export class MemoryService {
   private warning: string | null = null;
   private providerKey = "";
   private mutating = 0;
+  private toggling = false;
   private loaded = false;
   private maintenance: ReturnType<typeof setTimeout> | undefined;
   paused = false;
   settings: MemorySettings = structuredClone(DEFAULT_MEMORY_SETTINGS);
   readonly limits = { ...MEMORY_LIMITS };
+  get capturing() {
+    return this.loaded && !this.closed && !this.paused && !this.toggling && this.settings.enabled;
+  }
   get learning() {
-    return this.loaded && !this.closed && !this.paused && !this.mutating && this.settings.enabled;
+    return this.capturing && !this.mutating;
   }
   async loadSettings() {
-    if (!this.loaded) {
-      const snapshot = await this.call<MemorySnapshot>("snapshot");
-      this.settings = snapshot.settings;
-      this.loaded = true;
-      this.scheduleMaintenance();
-    }
+    if (!this.loaded) await this.ready();
   }
   private scheduleMaintenance() {
     if (this.closed || !this.settings.retentionDays) {
@@ -159,6 +159,7 @@ export class MemoryService {
     this.runtimes.delete(runtime);
   }
   private async ready() {
+    await this.retiring;
     if (this.closed) throw new Error("Memory service is stopping");
     if (this.booting) return this.booting;
     if (this.child) return;
@@ -215,8 +216,18 @@ export class MemoryService {
     if (this.requests.size) return;
     this.idle = setTimeout(() => {
       const child = this.child;
+      if (!child) return;
+      this.retiring = new Promise<void>((resolve) => {
+        const timer = setTimeout(() => child.kill("SIGKILL"), 1000);
+        child.once("exit", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        child.disconnect();
+      }).finally(() => {
+        this.retiring = undefined;
+      });
       this.child = undefined;
-      child?.disconnect();
     }, 60000);
     this.idle.unref();
   }
@@ -313,7 +324,9 @@ export class MemoryService {
     if (this.mutating) throw new Error("Memory settings are changing. Try again.");
     this.revision++;
     this.mutating++;
-    if (action.type === "configure") for (const runtime of this.runtimes) runtime.learningChanged();
+    this.toggling =
+      action.type === "configure" && action.settings.enabled !== this.settings.enabled;
+    if (this.toggling) for (const runtime of this.runtimes) runtime.learningChanged();
     try {
       await this.stopJobs();
       await Promise.all([...this.runtimes].map((runtime) => runtime.settle()));
@@ -329,6 +342,8 @@ export class MemoryService {
     } finally {
       this.revision++;
       this.mutating--;
+      this.toggling = false;
+      for (const runtime of this.runtimes) runtime.resumeLearning();
       this.scheduleMaintenance();
       this.changed();
     }
@@ -339,20 +354,31 @@ export class MemoryService {
     if (this.jobs.size >= 64) return Promise.reject(new Error("Memory generation queue is full"));
     const revision = this.revision;
     const abort = new AbortController();
+    let started = false;
+    let cancelQueued = () => {};
+    const cancelled = new Promise<T>((_resolve, reject) => {
+      cancelQueued = () => {
+        if (!started) reject(new Error("Memory generation cancelled"));
+      };
+      abort.signal.addEventListener("abort", cancelQueued, { once: true });
+    });
     const job = this.generationQueue.then(async () => {
       if (abort.signal.aborted || revision !== this.revision)
         throw new Error("Memory generation cancelled");
+      started = true;
       const value = await run(abort.signal);
       abort.signal.throwIfAborted();
       if (revision !== this.revision) throw new Error("Memory generation was superseded");
       return value;
     });
-    const done = job.finally(() => {
+    const settled = job.finally(() => {
+      abort.signal.removeEventListener("abort", cancelQueued);
       this.jobs.delete(id);
       this.changed();
     });
+    const done = Promise.race([settled, cancelled]);
     this.jobs.set(id, { abort, done });
-    this.generationQueue = done.then(
+    this.generationQueue = settled.then(
       () => {},
       () => {},
     );
@@ -441,6 +467,7 @@ export class MemoryService {
     this.revision++;
     await this.stopJobs();
     clearTimeout(this.idle);
+    await this.retiring;
     const child = this.child;
     if (child) {
       await new Promise<void>((resolve) => {

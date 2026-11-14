@@ -18,6 +18,8 @@ export interface MemoryPreparation {
   validate?(): void;
 }
 export interface RunMemory {
+  /** Explicit recovery evidence is live continuity only, never new learning. */
+  restore?(context: string): void;
   event(event: RunEvent): void;
   prepare(turn: MemoryTurn, signal: AbortSignal): Promise<MemoryPreparation>;
   dispose(): void;
