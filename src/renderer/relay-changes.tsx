@@ -159,10 +159,7 @@ export function RelayChanges({
       {[...direct].map(([id, cwd]) => (
         <section key={id} role="note">
           <h3>{cwd}</h3>
-          <p>
-            Direct edits, not isolated or reversible. Open the worker chat in Relay navigation for
-            its transcript.
-          </p>
+          <p>Direct edits, not isolated or reversible.</p>
         </section>
       ))}
       {!available.length && !direct.size && <p>No changes yet. Saved reviews remain on disk.</p>}

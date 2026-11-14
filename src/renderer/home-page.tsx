@@ -36,7 +36,6 @@ export function HomePage({
     {
       id: "relay",
       name: "Relay",
-      description: "Your Always-On Assistant",
       icon: <RelayNavigationIcon working={false} />,
       disabled: !relayAvailable || pending,
       action: () => void openRelay(),
@@ -46,8 +45,6 @@ export function HomePage({
       return {
         id,
         name: page.label,
-        description:
-          id === "commands" ? "Create Custom Commands" : "Adjust Code60's built-in Prompts",
         icon: page.icon && <NavigationIcon name={page.icon} />,
         disabled: !pageAvailable(id, database) || pending,
         action: () => onOpenTool(id),
@@ -70,7 +67,6 @@ export function HomePage({
               className="home-card"
               data-feature={card.id}
               aria-label={`Open ${card.name}`}
-              aria-describedby={`home-${card.id}-description`}
               disabled={card.disabled}
               title={!database && card.id !== "relay" ? "Connect to a database first" : undefined}
               onClick={card.action}
@@ -80,9 +76,6 @@ export function HomePage({
               </span>
               <span className="home-card-copy">
                 <span className="home-card-name">{card.name}</span>
-                <span className="home-card-description" id={`home-${card.id}-description`}>
-                  {card.description}
-                </span>
               </span>
               <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
             </button>

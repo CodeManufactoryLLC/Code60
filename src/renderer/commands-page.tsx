@@ -88,7 +88,7 @@ export function CommandsPage({
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
         <h1 className="table-title" id={`${id}-heading`}>
-          Commands
+          Command Builder
         </h1>
         <InfoTip label="About commands">
           Reusable prompts shared across projects in this database. Start an orchestrator message
@@ -97,13 +97,15 @@ export function CommandsPage({
         <TableControlGroup label="Command actions">
           <button
             type="button"
+            className="icon-button"
+            aria-label="New command"
             disabled={busy || commands.length >= COMMAND_LIMIT}
             onClick={() => {
               setSelected("new");
               setError("");
             }}
           >
-            <Icon name="add" /> New command
+            <Icon name="add" />
           </button>
         </TableControlGroup>
       </header>

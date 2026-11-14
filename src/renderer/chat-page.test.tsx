@@ -324,7 +324,8 @@ describe("orchestration activity presentation", () => {
     );
     expect(html).not.toContain('class="chat-loader"');
     expect(html).toContain("2 subagents: waiting for approval");
-    expect(html).toContain("Automatic worker updates are paused");
+    expect(html).not.toContain("Automatic worker updates are paused");
+    expect(html).not.toContain("Resume updates");
     expect(html).not.toContain(">Stop<");
     expect(html).toMatch(/<textarea(?![^>]*disabled)[^>]*>/);
   });

@@ -351,11 +351,6 @@ export function ChatPage({
           History isn’t being saved. Recent messages may be unavailable after restart.
         </div>
       )}
-      {relay && chat?.historySaving !== "unavailable" && chat?.history?.incomplete && (
-        <div className="warning-banner" role="status">
-          Some earlier Relay messages weren’t saved. Available history is incomplete.
-        </div>
-      )}
       {chat?.restored && (
         <div className="warning-banner" role="status">
           <span>
@@ -374,22 +369,6 @@ export function ChatPage({
               Continue task
             </button>
           )}
-        </div>
-      )}
-      {run && !ended && chat?.updates.paused && (
-        <div className="warning-banner" role="status">
-          <span>
-            Automatic worker updates are paused
-            {chat.updates.pending > 0 ? ` (${chat.updates.pending} waiting)` : ""}. Sending a
-            message also resumes them.
-          </span>
-          <button
-            type="button"
-            disabled={!available || busy}
-            onClick={() => void action({ type: "resume-updates", id: run.id })}
-          >
-            Resume updates
-          </button>
         </div>
       )}
       <div className="orchestration-chat-body">

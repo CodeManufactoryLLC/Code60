@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
+import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
 import { ChatWorkspace } from "./chat-workspace.js";
 import { CommandsPage } from "./commands-page.js";
@@ -8,7 +9,9 @@ import { ConfigurationsTable } from "./configurations.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
+import { Icon } from "./icons.js";
 import { LogsPage } from "./logs.js";
+import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
 import { type RenderedPageId, renderedPages } from "./navigation.js";
@@ -106,6 +109,22 @@ export function AppPages(props: AppPagesProps) {
         density={density}
         fit={fit}
         textStyles={textStyles}
+      />
+    ),
+    memories: (
+      <MemoriesPage
+        api={api}
+        active={!splash && tabs.active === "memories"}
+        lines={lines}
+        density={density}
+        fit={fit}
+        textStyles={textStyles}
+      />
+    ),
+    apps: (
+      <AppsPage
+        database={database}
+        onOpen={(id) => setTabs((current) => updateTabs(current, { type: "select", id }))}
       />
     ),
     home: (
@@ -438,20 +457,23 @@ export function AppPages(props: AppPagesProps) {
                   {run?.agentAlive && (
                     <button
                       type="button"
-                      className="danger-text"
+                      className="icon-button danger-text"
+                      aria-label="Stop leftover agent"
                       disabled={busy}
                       onClick={() => void act({ type: "stop", id: run.record.id })}
                     >
-                      Stop leftover agent
+                      <Icon name="stop" />
                     </button>
                   )}
                   {!!snapshot?.active && (
                     <button
                       type="button"
+                      className="icon-button"
+                      aria-label="Stop all runs"
                       disabled={busy}
                       onClick={() => void attempt(() => api.stopAll())}
                     >
-                      Stop all runs
+                      <Icon name="stop" />
                     </button>
                   )}
                 </>

@@ -148,7 +148,7 @@ export function PageTabBar({
   );
 }
 
-const toolPages = pagesInGroup("tools");
+const appPages = pagesInGroup("apps");
 const tablePages = pagesInGroup("tables");
 const experimentPages = pagesInGroup("experiments");
 
@@ -303,7 +303,7 @@ function PageTabList({
   const [experimentsExpanded, setExperimentsExpanded] = useState(
     () => localStorage.getItem("code60.experimentsExpanded") === "true",
   );
-  const [toolsExpanded, setToolsExpanded] = useState(
+  const [appsExpanded, setAppsExpanded] = useState(
     () => localStorage.getItem("code60.toolsExpanded") !== "false",
   );
   const [expanded, setExpanded] = useState(
@@ -313,17 +313,19 @@ function PageTabList({
   const previousActivePage = useRef<PageId | undefined>(undefined);
   const experimentActive = experimentPages.includes(tabs.active);
   const advancedActive = experimentActive || tabs.active === "contributor-tools";
-  const toolActive = toolPages.includes(tabs.active);
   const tableActive = tablePages.includes(tabs.active);
+  const appActive = appPages.includes(tabs.active) || tableActive;
   useLayoutEffect(() => {
     const activeChanged = previousActivePage.current !== tabs.active;
     previousActivePage.current = tabs.active;
     if (tabs.active === "settings" || (activeChanged && pageGroup(tabs.active) === "advanced")) {
       setSettingsExpanded(true);
     }
-    if (toolPages.includes(tabs.active)) setToolsExpanded(true);
-    else if (tablePages.includes(tabs.active)) setExpanded(true);
-    else if (pageGroup(tabs.active) === "advanced") {
+    if (appPages.includes(tabs.active)) setAppsExpanded(true);
+    else if (tablePages.includes(tabs.active)) {
+      setAppsExpanded(true);
+      setExpanded(true);
+    } else if (pageGroup(tabs.active) === "advanced") {
       setAdvancedExpanded(true);
       if (experimentPages.includes(tabs.active)) setExperimentsExpanded(true);
     } else return;
@@ -353,9 +355,9 @@ function PageTabList({
   const openPages = (group: Parameters<typeof pagesInGroup>[0]) =>
     pagesInGroup(group).filter((id) => tabs.open.includes(id));
   useEffect(() => {
-    localStorage.setItem("code60.toolsExpanded", String(toolsExpanded));
-  }, [toolsExpanded]);
-  const toolDestinations = openPages("tools");
+    localStorage.setItem("code60.toolsExpanded", String(appsExpanded));
+  }, [appsExpanded]);
+  const appDestinations = openPages("apps");
   const experiments = openPages("experiments");
   const tables = openPages("tables");
   const destinations: (
@@ -363,7 +365,6 @@ function PageTabList({
     | SettingsSectionId
     | "relay"
     | "tables"
-    | "tools"
     | "advanced"
     | "experiments"
   )[] = [
@@ -371,10 +372,15 @@ function PageTabList({
     ...(relay && !chatPending ? (["relay"] as const) : []),
     "chat",
     "automations",
-    "tools",
-    ...(toolsExpanded ? toolDestinations : []),
-    "tables",
-    ...(expanded ? tables : []),
+    "apps",
+    ...(appsExpanded
+      ? [
+          ...appDestinations.slice(0, 1),
+          "tables" as const,
+          ...(expanded ? tables : []),
+          ...appDestinations.slice(1),
+        ]
+      : []),
     "settings",
     ...(settingsExpanded
       ? ([
@@ -395,7 +401,6 @@ function PageTabList({
       database ||
       id === "relay" ||
       id === "tables" ||
-      id === "tools" ||
       id === "advanced" ||
       isSettingsSection(id) ||
       (id !== "experiments" && pageAvailable(id, database)),
@@ -419,12 +424,7 @@ function PageTabList({
   function moveTo(target: (typeof visible)[number] | undefined) {
     if (target === "relay") {
       relayButtons()[0]?.focus();
-    } else if (
-      target === "tools" ||
-      target === "tables" ||
-      target === "advanced" ||
-      target === "experiments"
-    ) {
+    } else if (target === "tables" || target === "advanced" || target === "experiments") {
       document.getElementById(`${target}-toggle`)?.focus();
     } else if (target && isSettingsSection(target)) {
       onSelect("settings");
@@ -527,19 +527,16 @@ function PageTabList({
       else setAdvancedExpanded(true);
       return;
     }
-    if (
-      event.key === "ArrowLeft" &&
-      (id === "tools" || toolPages.some((pageId) => pageId === id))
-    ) {
+    if (event.key === "ArrowLeft" && (id === "apps" || appPages.some((pageId) => pageId === id))) {
       event.preventDefault();
-      setToolsExpanded(false);
-      document.getElementById("tools-toggle")?.focus();
+      setAppsExpanded(false);
+      document.getElementById("tab-apps")?.focus();
       return;
     }
-    if (event.key === "ArrowRight" && id === "tools") {
+    if (event.key === "ArrowRight" && id === "apps") {
       event.preventDefault();
-      if (toolsExpanded && database && toolDestinations[0]) moveTo(toolDestinations[0]);
-      else setToolsExpanded(true);
+      if (appsExpanded) moveTo(database ? appDestinations[0] : "tables");
+      else setAppsExpanded(true);
       return;
     }
     if (
@@ -547,13 +544,16 @@ function PageTabList({
       (id === "tables" || tablePages.some((pageId) => pageId === id))
     ) {
       event.preventDefault();
-      setExpanded(false);
-      document.getElementById("tables-toggle")?.focus();
+      if (id === "tables" && !expanded) document.getElementById("tab-apps")?.focus();
+      else {
+        setExpanded(false);
+        document.getElementById("tables-toggle")?.focus();
+      }
       return;
     }
     if (event.key === "ArrowRight" && id === "tables") {
       event.preventDefault();
-      if (expanded && tables[0]) onSelect(tables[0]);
+      if (expanded) moveTo(tables.find((id) => pageAvailable(id, database)));
       else setExpanded(true);
       return;
     }
@@ -579,15 +579,29 @@ function PageTabList({
         className="page-tab"
         role="presentation"
         key={id}
-        data-nav-active={id !== "settings" && tabs.active === id}
+        data-nav-active={
+          (id !== "settings" && tabs.active === id) || (id === "apps" && appActive && !appsExpanded)
+        }
       >
         <button
           type="button"
           role="tab"
           id={`tab-${id}`}
-          aria-controls={id === "settings" ? "panel-settings settings-pages" : `panel-${id}`}
-          aria-expanded={id === "settings" ? settingsExpanded : undefined}
+          className={id === "apps" ? "page-group-toggle" : undefined}
+          aria-controls={
+            id === "settings"
+              ? "panel-settings settings-pages"
+              : id === "apps"
+                ? "panel-apps app-pages"
+                : `panel-${id}`
+          }
+          aria-expanded={
+            id === "settings" ? settingsExpanded : id === "apps" ? appsExpanded : undefined
+          }
           aria-selected={tabs.active === id && (id !== "settings" || !settingsExpanded)}
+          data-active={
+            id === "apps" ? tabs.active === id || (appActive && !appsExpanded) : undefined
+          }
           title={pageDefinitions[id].label}
           disabled={!pageAvailable(id, database)}
           tabIndex={
@@ -597,6 +611,11 @@ function PageTabList({
             if (id === "settings" && tabs.active === "settings") {
               setSettingsExpanded((value) => !value);
               return;
+            }
+            if (id === "apps") {
+              // Collapsing keeps the current page; only opening the group shows the Apps home page.
+              setAppsExpanded(!appsExpanded);
+              if (appsExpanded) return;
             }
             onSelect(id);
           }}
@@ -791,63 +810,52 @@ function PageTabList({
       <div role="tablist" aria-label="Automations page" aria-orientation="vertical">
         {page("automations", true)}
       </div>
-      <div className="page-tab" data-nav-active={toolActive && !toolsExpanded}>
-        <button
-          type="button"
-          id="tools-toggle"
-          title="Tools"
-          className="page-group-toggle"
-          aria-expanded={toolsExpanded}
-          aria-controls="tool-pages"
-          data-active={toolActive && !toolsExpanded}
-          onClick={() => setToolsExpanded((value) => !value)}
-          onKeyDown={(event) => navigate(event, "tools")}
-        >
-          <NavigationIcon name={groups.tools.icon} />
-          <span className="page-tab-label">{groups.tools.label}</span>
-        </button>
+      <div role="tablist" aria-label="Apps page" aria-orientation="vertical">
+        {page("apps", true)}
       </div>
       <div
-        id="tool-pages"
+        id="app-pages"
         className="page-tab-list page-group-pages"
-        role="tablist"
-        aria-label="Tools"
-        aria-orientation="vertical"
-        hidden={!toolsExpanded}
-        inert={!toolsExpanded}
-        aria-hidden={!toolsExpanded}
+        hidden={!appsExpanded}
+        inert={!appsExpanded}
+        aria-hidden={!appsExpanded}
       >
-        {toolDestinations.map((id, index) => page(id, index === 0))}
-      </div>
-      <div className="page-tab" data-nav-active={tableActive && !expanded}>
-        <button
-          type="button"
-          id="tables-toggle"
-          title="Tables"
-          className="page-group-toggle"
-          aria-expanded={expanded}
-          aria-controls="table-pages"
-          data-active={tableActive && !expanded}
-          onClick={() => {
-            setExpanded((value) => !value);
-          }}
-          onKeyDown={(event) => navigate(event, "tables")}
+        <div role="tablist" aria-label="Apps" aria-orientation="vertical">
+          {appDestinations.slice(0, 1).map((id) => page(id, true))}
+        </div>
+        <div className="page-tab" data-nav-active={tableActive && !expanded}>
+          <button
+            type="button"
+            id="tables-toggle"
+            title="Data Viewer"
+            className="page-group-toggle"
+            aria-expanded={expanded}
+            aria-controls="table-pages"
+            data-active={tableActive && !expanded}
+            onClick={() => {
+              setExpanded((value) => !value);
+            }}
+            onKeyDown={(event) => navigate(event, "tables")}
+          >
+            <NavigationIcon name={groups.tables.icon} />
+            <span className="page-tab-label">{groups.tables.label}</span>
+          </button>
+        </div>
+        <div
+          id="table-pages"
+          className="page-tab-list page-group-pages"
+          role="tablist"
+          aria-label="Data Viewer"
+          aria-orientation="vertical"
+          hidden={!expanded}
+          inert={!expanded}
+          aria-hidden={!expanded}
         >
-          <NavigationIcon name={groups.tables.icon} />
-          <span className="page-tab-label">{groups.tables.label}</span>
-        </button>
-      </div>
-      <div
-        id="table-pages"
-        className="page-tab-list page-group-pages"
-        role="tablist"
-        aria-label="Tables"
-        aria-orientation="vertical"
-        hidden={!expanded}
-        inert={!expanded}
-        aria-hidden={!expanded}
-      >
-        {tables.map((id, index) => page(id, index === 0))}
+          {tables.map((id, index) => page(id, index === 0))}
+        </div>
+        <div role="tablist" aria-label="Apps" aria-orientation="vertical">
+          {appDestinations.slice(1).map((id) => page(id, false))}
+        </div>
       </div>
       <div className="page-tab-list sidebar-settings">
         <div
