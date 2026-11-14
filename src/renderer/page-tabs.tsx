@@ -370,6 +370,7 @@ function PageTabList({
     "home",
     ...(relay && !chatPending ? (["relay"] as const) : []),
     "chat",
+    "automations",
     "tools",
     ...(toolsExpanded ? toolDestinations : []),
     "tables",
@@ -786,6 +787,9 @@ function PageTabList({
             onSelect={selectConversation}
           />
         )}
+      </div>
+      <div role="tablist" aria-label="Automations page" aria-orientation="vertical">
+        {page("automations", true)}
       </div>
       <div className="page-tab" data-nav-active={toolActive && !toolsExpanded}>
         <button

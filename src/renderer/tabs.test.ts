@@ -21,6 +21,7 @@ describe("page tabs", () => {
         "prompts",
         "commands",
         "settings",
+        "automations",
       ],
       active: "chat",
     });

@@ -33,6 +33,15 @@ export const pages = [
     icon: "house",
   },
   {
+    id: "automations",
+    initialOrder: 14,
+    label: "Automations",
+    group: "primary",
+    order: 1,
+    database: false,
+    icon: "arrows-clockwise",
+  },
+  {
     id: "chat",
     initialOrder: 2,
     label: "Projects",
