@@ -186,6 +186,7 @@ import { MemoryService } from "./memory-service.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
+import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
 import { desktopConfig, detectProvider } from "./provider-catalog.js";
@@ -350,6 +351,8 @@ export class DesktopController {
   }
   private readonly relay: RelayService | undefined;
   private relaySelected = true;
+  private projectSession: ProjectSessionStore | undefined;
+  private projectSessionWarnings: string[] = [];
   readonly rag: RagService;
   readonly memory: MemoryService;
   private readonly agentSetup: AgentSetup;
@@ -2626,10 +2629,15 @@ export class DesktopController {
     );
     const current = this.projectHost.current;
     for (const owner of this.relay ? this.projectHost.all() : [current])
-      await this.projectHost.run(owner, () => this.syncProjectChat(restart && owner === current));
+      await this.projectHost.run(owner, () =>
+        this.syncProjectChat(
+          restart && owner === current,
+          !this.relay || (!this.relaySelected && owner === this.projectHost.selected),
+        ),
+      );
   }
 
-  private async syncProjectChat(restart: boolean): Promise<void> {
+  private async syncProjectChat(restart: boolean, loadHistory = true): Promise<void> {
     if (this.relay && !this.workspace) return;
     const provider = this.orchestration.provider;
     const agent = provider ? this.config?.agents[provider] : undefined;
@@ -2718,10 +2726,11 @@ export class DesktopController {
         const selected = available[0];
         if (selected) {
           this.conversations.current = selected;
-          await this.loadChatHistory(selected).catch(() => {
-            selected.chatError =
-              "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
-          });
+          if (loadHistory)
+            await this.loadChatHistory(selected).catch(() => {
+              selected.chatError =
+                "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
+            });
           this.changed();
           return;
         }
@@ -3567,7 +3576,7 @@ export class DesktopController {
       runs: [...project.runs, ...(relayWorkers?.runs ?? [])],
       liveIds: [...project.liveIds, ...(relayWorkers?.liveIds ?? [])],
       active: this.active,
-      warnings: [...this.warnings],
+      warnings: [...this.warnings, ...this.projectSessionWarnings],
       events: [...project.events, ...(relayWorkers?.events ?? [])],
       polling: this.poller.snapshot(),
       prompts: promptStates(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts),
@@ -3679,6 +3688,7 @@ export class DesktopController {
         }
       }
       await this.syncOrchestrationChat();
+      await this.restoreOpenProjects();
       this.changed();
       this.poller.context(this.active);
     });
@@ -3792,6 +3802,7 @@ export class DesktopController {
       await this.projectHost.run(this.projectHost.fallback, async () => {
         await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
         await this.syncOrchestrationChat();
+        await this.restoreOpenProjects();
       });
       this.poller.invalidate(["history", "worktrees", "files", "configurations"]);
       this.changed();
@@ -3888,7 +3899,50 @@ export class DesktopController {
     this.changed();
   }
 
-  private async openRetainedProject(directory: string): Promise<void> {
+  private async restoreOpenProjects(): Promise<void> {
+    if (!this.projectSession) return;
+    let projects: string[];
+    try {
+      projects = await this.projectSession.load();
+    } catch {
+      this.projectSessionWarnings.push(
+        "Saved open projects could not be read safely. Their files were preserved; open projects manually or repair the saved session.",
+      );
+      return;
+    }
+    for (const path of projects) {
+      if (this.closing) break;
+      try {
+        await this.openRetainedProject(path, true);
+      } catch {
+        this.projectSessionWarnings.push(
+          `Could not reopen project: ${path}. Its saved chats were preserved. Open it manually when the folder is available.`,
+        );
+      }
+    }
+  }
+
+  private async saveOpenProjects(): Promise<void> {
+    if (!this.projectSession) return;
+    try {
+      await this.projectSession.save(
+        this.projectHost
+          .all()
+          .flatMap((owner) =>
+            owner.key && owner.state.workspace ? [owner.state.workspace.dir] : [],
+          ),
+      );
+    } catch {
+      const warning =
+        "Open projects could not be saved. Changes may not survive restarting Code60.";
+      if (!this.projectSessionWarnings.includes(warning)) {
+        this.projectSessionWarnings.push(warning);
+        this.changed();
+      }
+    }
+  }
+
+  private async openRetainedProject(directory: string, restoring = false): Promise<void> {
     const database = this.requireDatabase();
     let dir: string;
     try {
@@ -3899,7 +3953,7 @@ export class DesktopController {
     }
     const previous = this.projectHost.find(dir);
     if (previous) {
-      this.selectProject(previous.id);
+      if (!restoring) await this.selectProject(previous.id);
       return;
     }
     const workspace = await openWorkspace(this.deps, dir, this.env, true);
@@ -3922,21 +3976,30 @@ export class DesktopController {
       } catch (cause) {
         this.warnings.push(`Reviews unavailable: ${message(cause)}`);
       }
-      await this.syncProjectChat(false);
+      await this.syncProjectChat(false, !restoring);
     });
-    try {
-      database.record(dir, this.deps.clock.now().toISOString());
-      this.projects = database.list();
-    } catch (cause) {
-      owner.state.warnings.push(`Could not save this project to the database: ${message(cause)}`);
+    if (!restoring) {
+      try {
+        database.record(dir, this.deps.clock.now().toISOString());
+        this.projects = database.list();
+      } catch (cause) {
+        owner.state.warnings.push(`Could not save this project to the database: ${message(cause)}`);
+      }
+      await this.selectProject(owner.id);
+      await this.saveOpenProjects();
     }
-    this.selectProject(owner.id);
   }
 
-  private selectProject(id: string): void {
+  private async selectProject(id: string): Promise<void> {
     const owner = this.projectHost.byId(id);
     this.projectHost.select(owner);
     this.relaySelected = !owner.state.conversations.current.run;
+    await this.projectHost.run(owner, () =>
+      this.loadChatHistory(this.conversations.current).catch(() => {
+        this.conversations.current.chatError =
+          "Saved chat history or plans could not be read safely. Files were preserved; repair them or start a new chat.";
+      }),
+    );
     owner.state.pending = [...owner.state.events];
     for (const session of owner.state.conversations.sessions)
       session.chatPending = [...session.chatEvents];
@@ -3970,6 +4033,7 @@ export class DesktopController {
         if (request.type === "close") {
           if (this.projectHost.selected === owner) this.relaySelected = true;
           this.projectHost.remove(owner);
+          await this.saveOpenProjects();
         }
         this.poller.invalidate(["history", "files", "worktrees"]);
         this.changed();
@@ -4013,6 +4077,8 @@ export class DesktopController {
     this.savedPrompts = prompts;
     this.commands = commands;
     this.database = database;
+    this.projectSession = this.relay ? new ProjectSessionStore(database.path) : undefined;
+    this.projectSessionWarnings = [];
     this.rag.select(database.path);
     this.databaseError = null;
     this.poller.invalidate(["configurations"]);

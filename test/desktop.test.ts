@@ -31,6 +31,7 @@ import type {
   ConversationCoordinator,
 } from "../src/desktop/conversation-coordinator.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
+import { ProjectSessionStore } from "../src/desktop/project-session.js";
 import type { ProjectDatabase } from "../src/desktop/projects.js";
 import type { RagExecutor } from "../src/desktop/rag-service.js";
 import { RagStore } from "../src/desktop/rag-store.js";
@@ -381,6 +382,162 @@ async function configureMcp(version = "first") {
 }
 
 describe("retained project runtimes", () => {
+  it("restores open projects and stopped chats on Relay without starting project providers", async () => {
+    await prepareRelay();
+    const a = await project("restart-a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
+    const archived = await newChat(a.id);
+    await controller.orchestrationChatAction({
+      type: "archive",
+      id: archived.run?.id as string,
+    });
+    const b = await project("restart-b");
+    const closed = await project("restart-closed");
+    await newChat(closed.id);
+    await controller.projectAction({ type: "close", projectId: closed.id });
+    const database = controller.snapshot().database as string;
+    const before = controller.snapshot().projects;
+    const starts = agents.specs.length;
+    const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
+    try {
+      await prepareRelay(); // A new controller and Relay using the same private state.
+      const restored = controller.snapshot();
+      expect(restored.chat.kind).toBe("relay");
+      expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
+      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
+      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
+      expect(restored.projects).toEqual(before); // Startup is not a new human open.
+      expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
+        title: "Saved title",
+        restored: true,
+        workers: [],
+        events: [],
+        updates: { paused: true },
+      });
+      expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
+        true,
+      );
+      expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
+      expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([restored.chat.directory]);
+      expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
+        true,
+      );
+      expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+      await controller.orchestrationChatAction({ type: "select", id });
+      expect(controller.snapshot().chat.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
+          }),
+        ]),
+      );
+      expect(agents.specs).toHaveLength(starts + 1);
+    } finally {
+      readHistory.mockRestore();
+    }
+  });
+
+  it("persists confirmed closes, preserves cancelled closes, and isolates database replacement", async () => {
+    await prepareRelay();
+    const first = controller.snapshot().database as string;
+    const a = await project("session-a");
+    const b = await project("session-b");
+    confirm.mockResolvedValueOnce(false);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    expect(await new ProjectSessionStore(first).load()).toEqual([a.path, b.path]);
+    await controller.projectAction({ type: "close", projectId: b.id });
+    expect(await new ProjectSessionStore(first).load()).toEqual([a.path]);
+    const other = join(directory, "other-session.sqlite");
+    await controller.connect(other, true);
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const c = await project("session-c");
+    await controller.connect(first, false);
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([a.path]);
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(await new ProjectSessionStore(other).load()).toEqual([c.path]);
+    expect(() => controller.projectAction({ type: "select", projectId: a.id })).toThrow(
+      "no longer open",
+    );
+    const current = controller.snapshot().openProjects?.[0];
+    if (!current) throw new Error("Missing restored project");
+    await controller.projectAction({ type: "close", projectId: current.id });
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+  });
+
+  it("warns on missing projects without erasing the saved set or blocking other projects", async () => {
+    await prepareRelay();
+    const a = await project("missing-a");
+    const b = await project("available-b");
+    const database = controller.snapshot().database as string;
+    await controller.shutdown(true);
+    await fs.rename(a.path, `${a.path}-moved`);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([b.path]);
+    expect(controller.snapshot().warnings.join("\n")).toContain("Could not reopen project:");
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+    await expect(fs.stat(a.path)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("leaves invalid saved sessions untouched and warns when later changes cannot be saved", async () => {
+    await prepareRelay();
+    await project("invalid-session-a");
+    await controller.shutdown(true);
+    const root = join(directory, ".code60_workspace", "sessions");
+    const [name] = await fs.readdir(root);
+    if (!name) throw new Error("Missing session record");
+    const file = join(root, name);
+    await fs.writeFile(file, "{invalid");
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+    expect(controller.snapshot().warnings.join("\n")).toContain(
+      "Saved open projects could not be read safely",
+    );
+    await project("invalid-session-b");
+    expect(controller.snapshot().warnings.join("\n")).toContain("Open projects could not be saved");
+    expect(await fs.readFile(file, "utf8")).toBe("{invalid");
+  });
+
+  it("publishes a persistence warning even when saving fails after the open was already shown", async () => {
+    await prepareRelay();
+    const path = join(directory, "slow-save");
+    await fs.mkdir(path);
+    const canonical = await realOf(path);
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const save = vi
+      .spyOn(ProjectSessionStore.prototype, "save")
+      .mockImplementationOnce(async () => {
+        await gate;
+        throw new Error("disk is full");
+      });
+    const updates: ReturnType<DesktopController["snapshot"]>[] = [];
+    const unsubscribe = controller.subscribe((snapshot) => updates.push(snapshot));
+    const opening = controller.open(path);
+    try {
+      await vi.waitFor(() =>
+        expect(updates.some((snapshot) => snapshot.directory === canonical)).toBe(true),
+      );
+      release();
+      await opening;
+      await vi.waitFor(() =>
+        expect(updates.at(-1)?.warnings.join("\n")).toContain("Open projects could not be saved"),
+      );
+    } finally {
+      release();
+      await opening;
+      unsubscribe();
+      save.mockRestore();
+    }
+  });
+
   it.each(["search", "memory"] as const)(
     "cancels an originating %s helper after switching projects",
     async (kind) => {
