@@ -335,6 +335,27 @@ service notices and preserve native consent for service changes.
 
 ### Approved agent memory
 
+The shared right sidebar includes a human-opened, closable and reorderable Memory
+Recall tab in Relay, project chats and all worker chats. Relay workers can use it
+without a database. It follows the displayed chat's full runtime, conversation,
+generation, worker/run and target identity, independently of file roots and project
+selection. Existing turn-associated `Memory used` notes are the only recall index:
+validate their UUIDs and resolve only those IDs through memory detail. Never
+rerun retrieval, browse unrelated records, open the panel or steal focus on recall.
+Render recorded turn groups newest first in five-turn pages, including the latest
+dispatched zero-hit turn; a newer turn clears the earlier current-turn marker.
+Only the selected visible tab in a visible document reads records or subscribes
+to memory notices. Chat details remain pushed through their existing subscriptions.
+Owner replacement, navigation, closing or hiding discards late results. A shared
+four-read limit spans overlapping old/new requests; retain at most 160 record
+summaries with evidence quotes, not source-message bodies or revision collections.
+Saved IDs are not text snapshots. Label changed-since-recall saved records,
+forgotten/missing placeholders and malformed notes. Omit introductory and
+source-history gap copy from the tab;
+never invent earlier turns or change transcript retention. Evidence is read-only
+text; editing and forgetting stay in the Memories browser. Self-knowledge reports
+only the tab's metadata and explicitly denies its contents, without new MCP tools.
+
 Apps → Data Viewer → Memories is a database-independent, application-wide table
 of persistent memory records. It uses the shared Glide table, saved filters and
 presentation settings, with bounded cursor pages rather than loading the store.

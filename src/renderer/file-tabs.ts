@@ -1,7 +1,7 @@
 import type { ReviewAddress } from "./review-content.js";
 export type FileTab =
   | { id: number; kind: "plan"; planId: string; title: string }
-  | { id: number; kind: "blank" | "explorer" }
+  | { id: number; kind: "blank" | "explorer" | "recall" }
   | { id: number; kind: "file"; path: string; source?: ReviewAddress }
   | { id: number; kind: "changes" }
   | { id: number; kind: "revision"; reviewId: string; revisionId: string; title: string };
@@ -23,7 +23,7 @@ export const emptyFileTabs = (workspace: string): FileTabs => ({
 export type FileTabAction =
   | { type: "plan"; planId: string; title: string }
   | { type: "reset"; workspace: string }
-  | { type: "blank" | "explorer" | "browse" }
+  | { type: "blank" | "explorer" | "browse" | "recall" }
   | { type: "file"; path: string; source?: ReviewAddress }
   | { type: "changes" | "ensure-changes" }
   | { type: "revision"; reviewId: string; revisionId: string; title: string }
@@ -75,6 +75,7 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
     action.type === "plan" ||
     action.type === "file" ||
     action.type === "browse" ||
+    action.type === "recall" ||
     action.type === "changes" ||
     action.type === "revision"
   ) {
@@ -83,17 +84,19 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
         ? tab.kind === "plan" && tab.planId === action.planId
         : action.type === "changes"
           ? tab.kind === "changes"
-          : action.type === "revision"
-            ? tab.kind === "revision" &&
-              tab.reviewId === action.reviewId &&
-              tab.revisionId === action.revisionId
-            : action.type === "file"
-              ? tab.kind === "file" &&
-                tab.path === action.path &&
-                tab.source?.reviewId === action.source?.reviewId &&
-                tab.source?.revisionId === action.source?.revisionId &&
-                tab.source?.fileKey === action.source?.fileKey
-              : tab.kind === "explorer",
+          : action.type === "recall"
+            ? tab.kind === "recall"
+            : action.type === "revision"
+              ? tab.kind === "revision" &&
+                tab.reviewId === action.reviewId &&
+                tab.revisionId === action.revisionId
+              : action.type === "file"
+                ? tab.kind === "file" &&
+                  tab.path === action.path &&
+                  tab.source?.reviewId === action.source?.reviewId &&
+                  tab.source?.revisionId === action.source?.revisionId &&
+                  tab.source?.fileKey === action.source?.fileKey
+                : tab.kind === "explorer",
     );
     if (existing)
       return {
@@ -108,12 +111,10 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
   }
   const kind = action.type === "browse" ? "explorer" : action.type;
   const active = state.entries.find((tab) => tab.id === state.active);
-  if (kind === "explorer" && active?.kind === "blank") {
+  if ((kind === "explorer" || kind === "recall") && active?.kind === "blank") {
     return {
       ...state,
-      entries: state.entries.map((tab) =>
-        tab.id === active.id ? { id: tab.id, kind: "explorer" } : tab,
-      ),
+      entries: state.entries.map((tab) => (tab.id === active.id ? { id: tab.id, kind } : tab)),
     };
   }
   const tab: FileTab =
@@ -139,7 +140,10 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
                 path: action.path,
                 ...(action.source ? { source: action.source } : {}),
               }
-            : { id: state.nextId, kind: kind === "blank" ? "blank" : "explorer" };
+            : {
+                id: state.nextId,
+                kind: kind === "recall" ? "recall" : kind === "blank" ? "blank" : "explorer",
+              };
   return {
     ...state,
     entries: [...state.entries, tab],
@@ -151,6 +155,7 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
 export function fileTabLabel(tab: FileTab, entries: FileTab[]): string {
   if (tab.kind === "plan") return `Plan · ${tab.title}`;
   if (tab.kind === "changes") return "Changes";
+  if (tab.kind === "recall") return "Memory Recall";
   if (tab.kind === "revision") return tab.title;
   if (tab.kind !== "file") return tab.kind === "blank" ? "New tab" : "File Explorer";
   if (tab.source) return `${tab.path.split("/").at(-1)} · ${tab.source.label}`;

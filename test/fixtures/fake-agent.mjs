@@ -17,7 +17,17 @@ if (processLogIndex >= 0)
     { flag: "wx" },
   );
 if (process.env.FAKE_AGENT_STDERR) process.stderr.write(process.env.FAKE_AGENT_STDERR);
+const promptLogIndex = process.argv.indexOf("--prompt-log");
+let promptSequence = 0;
 createFakeAgent({
+  onPrompt: () => {
+    if (promptLogIndex >= 0)
+      writeFileSync(
+        join(process.argv[promptLogIndex + 1], `${process.pid}-${++promptSequence}.json`),
+        JSON.stringify({ pid: process.pid, cwd: process.cwd() }),
+        { flag: "wx" },
+      );
+  },
   sessionInfo: process.argv.includes("--session-info"),
   planWorkflow: process.argv.includes("--plan"),
   reviewWorkflow: process.argv.includes("--review"),

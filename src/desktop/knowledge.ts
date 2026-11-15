@@ -213,7 +213,10 @@ export class DesktopKnowledge {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.status === "placeholder") {
+    if (cap.id === "memory-recall") {
+      reason =
+        "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+    } else if (cap.status === "placeholder") {
       status = "unsupported";
       reason = "Placeholder, not implemented.";
     } else if (cap.prerequisite === "database" && !state.database) {
@@ -414,7 +417,8 @@ export class DesktopKnowledge {
         throw new Error("View is not owned by this caller");
       if (request.revision !== this.tabRevision(panel, tab))
         throw new Error("View changed; rediscover tabs");
-      const value = await this.sources.readView(caller, panel, tab);
+      const value =
+        tab.kind === "recall" ? undefined : await this.sources.readView(caller, panel, tab);
       this.sources.valid(caller);
       this.sources.validOwner(panel.owner);
       const current = this.panels.get(request.panelId);

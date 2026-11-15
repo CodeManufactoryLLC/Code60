@@ -35,7 +35,7 @@ const tab = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ id: sequence, kind: z.literal("plan"), planId: uuid }),
   z.strictObject({ id: sequence, kind: z.literal("revision"), reviewId: uuid, revisionId: uuid }),
-  z.strictObject({ id: sequence, kind: z.enum(["blank", "explorer", "changes"]) }),
+  z.strictObject({ id: sequence, kind: z.enum(["blank", "explorer", "changes", "recall"]) }),
 ]);
 const owner = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("project"), projectId: uuid, databaseEpoch: sequence }),
@@ -224,6 +224,16 @@ const feature = (
   status,
 });
 export const DESKTOP_CAPABILITIES: readonly Capability[] = [
+  feature(
+    "memory-recall",
+    "Memory Recall",
+    "Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.",
+    "Relay, project or worker chat → right sidebar → New tab → Open Memory Recall",
+    "none",
+    "human-only",
+    "Database-independent in Relay and its workers. Reads only recorded IDs while visible; current saved records, not historical snapshots. Unavailable records and malformed recall notes are labelled. Editing and forgetting remain in Memories. Awareness exposes tab metadata only, never memory contents.",
+    "Read-only; no retrieval or provider dispatch.",
+  ),
   feature(
     "relay",
     "Relay",

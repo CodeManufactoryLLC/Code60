@@ -4,6 +4,7 @@ import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from 
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
 import { useKnowledgePanel } from "./knowledge-report.js";
+import { MemoryRecall, type RecallSource } from "./memory-recall.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
@@ -94,6 +95,7 @@ export function FilePanel({
   emptyContent,
   changesContent,
   knowledgeOwner,
+  recallSource,
 }: {
   tabs: FileTabs;
   onAction(action: FileTabAction): void;
@@ -113,8 +115,17 @@ export function FilePanel({
   emptyContent?: ReactNode;
   changesContent?: ReactNode;
   knowledgeOwner?: KnowledgeOwner | undefined;
+  recallSource?: RecallSource | undefined;
 }) {
   useKnowledgePanel(api, knowledgeOwner, { tabs, open, active });
+  const [visible, setVisible] = useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
+  useEffect(() => {
+    const changed = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
   const selected = tabs.entries.find((tab) => tab.id === tabs.active);
@@ -180,7 +191,7 @@ export function FilePanel({
               {changesContent}
             </div>
           )}
-          {targetLabel && (
+          {targetLabel && (selected?.kind === "explorer" || selected?.kind === "file") && (
             <p className="file-target-label" role="note" aria-label="File target">
               Project files: {targetLabel}
             </p>
@@ -200,7 +211,25 @@ export function FilePanel({
               >
                 Open Files
               </button>
+              <button
+                type="button"
+                className="file-open-link"
+                onClick={() => {
+                  focusActiveTab();
+                  act({ type: "recall" });
+                }}
+              >
+                Open Memory Recall
+              </button>
             </div>
+          ) : selected.kind === "recall" ? (
+            active && open && visible && api ? (
+              recallSource ? (
+                <MemoryRecall key={recallSource.owner} api={api} source={recallSource} />
+              ) : (
+                <p role="status">Recall source history is unavailable.</p>
+              )
+            ) : null
           ) : selected.kind === "plan" ? (
             api && active && open && plans.some((plan) => plan.id === selected.planId) ? (
               <PlanPanelLoader

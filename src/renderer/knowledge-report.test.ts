@@ -9,8 +9,10 @@ describe("knowledge panel reports", () => {
     let tabs = updateFileTabs(emptyFileTabs("w"), { type: "plan", planId, title: "Plan" });
     tabs = updateFileTabs(tabs, { type: "file", path: "src/a.ts" });
     tabs = updateFileTabs(tabs, { type: "changes" });
+    tabs = updateFileTabs(tabs, { type: "recall" });
     const report = panelReport(tabs);
-    expect(report.tabs.map((tab) => tab.kind)).toEqual(["plan", "file", "changes"]);
+    expect(report.tabs.map((tab) => tab.kind)).toEqual(["plan", "file", "changes", "recall"]);
+    expect(report.tabs.at(-1)).toEqual({ id: tabs.active, kind: "recall" });
     expect(report.selected).toBe(tabs.active);
     expect(report.incomplete).toBe(false);
     expect(

@@ -113,6 +113,40 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("keeps Memory Recall available without a database or provider and denies its content through awareness", async () => {
+    const { knowledge, reads } = setup({ database: null, providers: [], projectOpen: false });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Memory Recall" }, relay),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "memory-recall",
+        agentAccess: "human-only",
+        availability: expect.objectContaining({ status: "available" }),
+      }),
+    ]);
+    const id = randomUUID();
+    knowledge.report(
+      panel(
+        knowledge.rendererIdentity(),
+        1,
+        id,
+        { kind: "relay", conversationId: relayId, generation: 2 },
+        [{ id: 1, kind: "recall" }],
+      ),
+    );
+    const tabs = result(await knowledge.call("code60_get_app_state", { section: "tabs" }, relay))
+      .entries as { revision: string }[];
+    const value = result(
+      await knowledge.call(
+        "code60_read_view",
+        { panelId: id, tabId: 1, revision: tabs[0]?.revision },
+        relay,
+      ),
+    );
+    expect(value.available).toBe(false);
+    expect(reads).toEqual([]);
+  });
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(

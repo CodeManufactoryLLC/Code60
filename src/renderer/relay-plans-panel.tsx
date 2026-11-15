@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DesktopApi, PlanSummary, Snapshot } from "../bridge/index.js";
 import { FilePanel } from "./file-panel.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
+import type { RecallSource } from "./memory-recall.js";
 import { RelayChanges } from "./relay-changes.js";
 import { useRelayFiles } from "./relay-files.js";
 
@@ -15,6 +16,7 @@ export function RelayPlansPanel({
   open,
   onOpen,
   snapshot,
+  recallSource,
 }: {
   api: DesktopApi;
   plans: PlanSummary[];
@@ -24,6 +26,7 @@ export function RelayPlansPanel({
   open: boolean;
   onOpen(value: boolean): void;
   snapshot: Snapshot | undefined;
+  recallSource?: RecallSource | undefined;
 }) {
   const [tabs, setTabs] = useState(() => emptyFileTabs("relay"));
   const proposals = useRef(new Map<string, number>());
@@ -61,7 +64,9 @@ export function RelayPlansPanel({
         updateFileTabs(
           {
             ...tabs,
-            entries: tabs.entries.filter((tab) => tab.kind === "plan" || tab.kind === "changes"),
+            entries: tabs.entries.filter(
+              (tab) => tab.kind === "plan" || tab.kind === "changes" || tab.kind === "recall",
+            ),
             active: null,
           },
           { type: "browse" },
@@ -81,6 +86,7 @@ export function RelayPlansPanel({
         onToggle={() => onOpen(!open)}
         onOpenProject={() => {}}
         api={api}
+        recallSource={recallSource}
         plans={plans}
         currentChat={conversationId}
         knowledgeOwner={

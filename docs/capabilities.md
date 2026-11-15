@@ -4,6 +4,20 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
+## Memory Recall
+
+- ID: `memory-recall`
+- Status: shipped
+- Purpose: Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.
+- Access: Relay, project or worker chat → right sidebar → New tab → Open Memory Recall
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Read-only; no retrieval or provider dispatch.
+- Limits: Database-independent in Relay and its workers. Reads only recorded IDs while visible; current saved records, not historical snapshots. Unavailable records and malformed recall notes are labelled. Editing and forgetting remain in Memories. Awareness exposes tab metadata only, never memory contents.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Relay
 
 - ID: `relay`

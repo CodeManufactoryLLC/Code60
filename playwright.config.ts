@@ -10,6 +10,7 @@ export default defineConfig({
     "renderer-replay.e2e.ts",
     "system-manager.e2e.ts",
     "navigation-icons.e2e.ts",
+    "memory-recall.e2e.ts",
   ],
   workers: 1,
   globalTimeout: 15 * 60_000,

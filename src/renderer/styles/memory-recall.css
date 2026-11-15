@@ -1,0 +1,60 @@
+.memory-recall {
+  padding: 12px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.memory-recall-meta {
+  color: var(--muted);
+}
+.memory-recall-turn {
+  margin-block: 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+}
+.memory-recall-turn[data-current="true"] {
+  background: color-mix(in srgb, var(--accent) 8%, var(--chat-neutral));
+}
+.memory-recall-turn h3 {
+  margin: 0 0 8px;
+  font-size: inherit;
+}
+.memory-recall-badge {
+  display: inline-block;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  font: var(--meta-font);
+}
+.memory-recall-record + .memory-recall-record {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.memory-recall-text,
+.memory-recall blockquote,
+.memory-recall dd {
+  white-space: pre-wrap;
+}
+.memory-recall dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+}
+.memory-recall dd {
+  margin: 0;
+}
+.memory-recall blockquote {
+  margin: 8px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+.memory-recall-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (forced-colors: active) {
+  .memory-recall-turn[data-current="true"] {
+    border-color: Highlight;
+  }
+}

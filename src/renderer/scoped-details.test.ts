@@ -211,6 +211,7 @@ it("hydrates target events independently of app revisions without regressing pus
       runs: [
         {
           ...worker(),
+          historyIncomplete: true,
           record: { ...worker().record, status: "idle", firstPrompt: "Original prompt" },
         },
       ],
@@ -231,6 +232,7 @@ it("hydrates target events independently of app revisions without regressing pus
     status: "running",
     firstPrompt: "Original prompt",
   });
+  expect(next?.snapshot.runs[0]?.historyIncomplete).toBe(true);
   const replaced = { ...relay, generation: 4 };
   expect(
     applyDetails(
