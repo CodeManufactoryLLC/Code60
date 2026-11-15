@@ -2,7 +2,6 @@ import { useId } from "react";
 import { SettingsHeader } from "./settings-layout.js";
 import {
   defaultTextStyles,
-  defaultTypeface,
   fontSizes,
   fontWeights,
   parseTypeface,
@@ -20,6 +19,7 @@ const textSamples: Record<TextRole, string> = {
   agentMessages: "I updated the parser and added two regression tests.",
   humanMessages: "Can you add tests for the parser?",
   pageTitles: "Sessions",
+  cardTitles: "Command Builder",
   normalText: "Code60 runs coding agents in parallel on one repository.",
 };
 
@@ -44,7 +44,7 @@ export function TextSettings({
   const id = useId();
   return (
     <section className="settings-section text-settings" aria-labelledby={`${id}-text`}>
-      <SettingsHeader id={`${id}-text`} title="Text">
+      <SettingsHeader page="text" id={`${id}-text`} title="Text">
         <button type="button" onClick={() => onTextStyles(structuredClone(defaultTextStyles))}>
           Reset text
         </button>
@@ -103,7 +103,9 @@ export function TextSettings({
                       })
                     }
                   >
-                    <option value="">Default ({defaultTypeface.label})</option>
+                    <option value="">
+                      Default ({typefaces.find((entry) => entry.id === role.typeface)?.label})
+                    </option>
                     {typefaces.map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.label}
@@ -147,7 +149,9 @@ export function TextSettings({
                       })
                     }
                   >
-                    <option value="">Default (Regular)</option>
+                    <option value="">
+                      Default ({fontWeights.find((entry) => entry.value === role.weight)?.label})
+                    </option>
                     {fontWeights.map((entry) => (
                       <option key={entry.value} value={entry.value}>
                         {entry.label}

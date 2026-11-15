@@ -12,6 +12,8 @@ import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { pageAvailable } from "./navigation.js";
+import { useNavigationActions } from "./navigation-actions.js";
+import { isNavigationHome, sidebarPageElementId } from "./navigation-tree.js";
 import {
   CommandPalette,
   maxToasts,
@@ -21,6 +23,7 @@ import {
   Tooltips,
 } from "./overlays.js";
 import { PageTabBar } from "./page-tabs.js";
+import { usePressFeedback } from "./press-feedback.js";
 import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
@@ -34,11 +37,20 @@ import { useUpdateNotice, useUpdates } from "./updates.js";
 import { useWindowAppearance } from "./window-appearance.js";
 
 export function App({ api: transport }: { api: DesktopApi }) {
+  usePressFeedback();
   const updates = useUpdates(transport);
   const [error, setError] = useState("");
   const { state: appState, accept } = useDesktopSnapshot(transport, setError);
   const [detailWorkerId, setDetailWorkerId] = useState<string>();
-  const state = useScopedDetails(transport, appState, setError, detailWorkerId);
+  const [tabs, setTabs] = useState(initialTabs);
+  const projectNavigationPending = useRef(false);
+  const state = useScopedDetails(
+    transport,
+    appState,
+    setError,
+    detailWorkerId,
+    !isNavigationHome(tabs.active) && !projectNavigationPending.current,
+  );
   const snapshot = state?.snapshot;
   const api = useMemo(
     () => bindDatabaseWrites(transport, snapshot?.databaseEpoch),
@@ -61,8 +73,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
   const { busy, attempt, setBusy } = useAppActions(setError);
   const preferences = useAppPreferences(transport, setError);
   const { theme, setTheme } = preferences;
-  const [tabs, setTabs] = useState(initialTabs);
-  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("agents");
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const { splash, splashReady, enterApp, returnSplash } = useSplashEntry(snapshot);
   const returnToSplash = () => {
     returnSplash();
@@ -106,6 +117,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     notify,
     setBusy,
     onWorkerSelection: setDetailWorkerId,
+    navigationPending: projectNavigationPending.current,
   });
   const {
     scope,
@@ -129,15 +141,64 @@ export function App({ api: transport }: { api: DesktopApi }) {
     );
   }, [database, databaseLoaded]);
   const run = snapshot?.runs.find((item) => item.record.id === selected);
+  const navigationRuns = useMemo(
+    () => [
+      ...new Map(
+        [
+          ...Object.values(state?.projectViews ?? {}).flatMap((view) => view.runs),
+          ...(snapshot?.runs ?? []),
+        ].map((run) => [run.record.id, run]),
+      ).values(),
+    ],
+    [state?.projectViews, snapshot?.runs],
+  );
+  const navigationSelectedId = workerId ?? (snapshot && conversationId(snapshot.chat));
+  const selectPage = (id: import("./navigation.js").PageId) => {
+    setMenu(undefined);
+    setConfigurationMenu(undefined);
+    setPollMenu(undefined);
+    setWorktreeMenu(undefined);
+    setTabs((current) => updateTabs(current, { type: "select", id }));
+  };
+  const navigation = useNavigationActions({
+    onProjectPending: (pending) => {
+      projectNavigationPending.current = pending;
+    },
+    api,
+    tabs,
+    database,
+    databaseEpoch: snapshot?.databaseEpoch,
+    projects: snapshot?.openProjects ?? [],
+    chats: snapshot?.chats ?? [],
+    runs: navigationRuns,
+    selectedId: navigationSelectedId,
+    onPage: selectPage,
+    onSection: setSettingsSection,
+    onProject: (projectId) =>
+      setTabs((current) => updateTabs(current, { type: "project", projectId })),
+    selectWorker,
+    onArchived: () => notify("Chat archived."),
+  });
+  useEffect(() => {
+    if (
+      snapshot &&
+      tabs.active === "project" &&
+      !snapshot.openProjects?.some((project) => project.id === tabs.projectId)
+    )
+      setTabs((current) => updateTabs(current, { type: "select", id: "projects" }));
+  }, [snapshot, tabs.active, tabs.projectId]);
 
   useLayoutEffect(() => {
     // Finish navigation focus before another interaction can focus a control or open a modal.
-    if (
-      !splash &&
-      !(tabs.active === "settings" && document.activeElement?.id.startsWith("tab-settings-"))
-    )
-      document.getElementById(`tab-${tabs.active}`)?.focus();
-  }, [tabs.active, splash]);
+    if (splash) return;
+    const id =
+      tabs.active === "settings" && settingsSection !== null
+        ? `tab-settings-${settingsSection}`
+        : tabs.active === "chat" && navigationSelectedId
+          ? `conversation-${navigationSelectedId}`
+          : sidebarPageElementId(tabs.active, tabs.projectId);
+    document.getElementById(id)?.focus();
+  }, [tabs.active, tabs.projectId, settingsSection, splash, navigationSelectedId]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -152,6 +213,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
         event.preventDefault();
         setMenu(undefined);
         setWorktreeMenu(undefined);
+        setSettingsSection(null);
         setTabs((current) => updateTabs(current, { type: "open", id: "settings" }));
       }
     };
@@ -191,6 +253,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     busy,
     tabs,
     setTabs,
+    setSettingsSection,
     preferences,
     fileAction,
     showPicker,
@@ -250,37 +313,22 @@ export function App({ api: transport }: { api: DesktopApi }) {
           <PageTabBar
             tabs={tabs}
             settingsSection={settingsSection}
-            api={api}
+            navigation={navigation}
             openProjects={snapshot?.openProjects}
             selectedProjectId={snapshot?.projectInstanceId}
             chats={snapshot?.chats ?? []}
-            selectedId={workerId ?? (snapshot && conversationId(snapshot.chat))}
+            selectedId={navigationSelectedId}
             navigationSerial={chatRequest?.serial}
-            runs={[
-              ...new Map(
-                [
-                  ...Object.values(state?.projectViews ?? {}).flatMap((view) => view.runs),
-                  ...(snapshot?.runs ?? []),
-                ].map((run) => [run.record.id, run]),
-              ).values(),
-            ]}
-            onWorkerSelect={selectWorker}
+            runs={navigationRuns}
             database={database}
             eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
             onOpenProject={() => showPicker("project")}
-            onChatArchived={() => notify("Chat archived.")}
             onConnectDatabase={() => showPicker("database")}
             onSettingsSectionSelect={setSettingsSection}
             projectDisabled={
               busy || !snapshot || Boolean(snapshot.active && !snapshot.openProjects)
             }
-            onSelect={(id) => {
-              setMenu(undefined);
-              setConfigurationMenu(undefined);
-              setPollMenu(undefined);
-              setWorktreeMenu(undefined);
-              setTabs((current) => updateTabs(current, { type: "select", id }));
-            }}
+            onSelect={selectPage}
           />
         )}
         <AppPages
@@ -292,6 +340,9 @@ export function App({ api: transport }: { api: DesktopApi }) {
           appearance={appearance}
           tabs={tabs}
           settingsSection={settingsSection}
+          navigation={navigation}
+          navigationRuns={navigationRuns}
+          setSettingsSection={setSettingsSection}
           splash={splash}
           busy={busy}
           error={error}
@@ -310,9 +361,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
             const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
             const id = relay && conversationId(relay);
             if (!id) throw new Error("Relay is unavailable. Try again shortly.");
-            await api.orchestrationChatAction({ type: "select", id });
-            selectWorker(undefined, null);
-            setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+            if (!(await navigation.open({ kind: "conversation", id })))
+              throw new Error("Unable to open Relay. Try again shortly.");
           }}
           act={act}
           fileAction={fileAction}

@@ -2,10 +2,10 @@ import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
 import { parseTheme, type Theme } from "./appearance.js";
+import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
-import type { SettingsSectionId } from "./tabs.js";
 import { TextSettings } from "./text-settings.js";
 import { TransitionSettings } from "./transition-settings.js";
 import type { TextStyles } from "./typography.js";
@@ -36,7 +36,7 @@ export function SettingsPage({
   charts,
   onCharts,
 }: {
-  section: SettingsSectionId;
+  section: SettingsSectionId | null;
   updates: ReactNode;
   versions: Versions | undefined;
   orchestration: ReactNode;
@@ -74,16 +74,17 @@ export function SettingsPage({
     </div>
   );
   return (
-    <main className="settings-page" aria-labelledby={id}>
-      <div className="settings-page-heading">
-        <h1 id={id}>Settings</h1>
-      </div>
+    <main
+      className="settings-page"
+      aria-label={section ? settingsLabels[section] : undefined}
+      hidden={section === null}
+    >
       {settingsPanel("agents", orchestration)}
       {settingsPanel("memory", memory)}
       {settingsPanel(
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
-          <SettingsHeader id={`${id}-appearance`} title="Appearance" />
+          <SettingsHeader page="appearance" id={`${id}-appearance`} title="Appearance" />
           <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">
@@ -155,6 +156,7 @@ export function SettingsPage({
         "table-defaults",
         <section className="settings-section" aria-labelledby={`${id}-table`}>
           <SettingsHeader
+            page="table-defaults"
             id={`${id}-table`}
             title="Table defaults"
             tip="Defaults for tables without local overrides. Use each table’s Settings to customize it."

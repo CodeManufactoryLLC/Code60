@@ -12,6 +12,7 @@
 @import "./styles/rag.css" layer(components);
 @import "./styles/memory.css" layer(components);
 @import "./styles/automations.css" layer(components);
+@import "./styles/system-manager.css" layer(components);
 @import "./styles/tables.css" layer(components);
 @import "./styles/footer.css" layer(components);
 @import "./styles/chat.css" layer(components);

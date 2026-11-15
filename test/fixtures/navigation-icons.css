@@ -1,0 +1,34 @@
+body {
+  margin: 24px;
+  color: #172030;
+  background: #fff;
+  font: 11px monospace;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.fixture-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fixture-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 48px;
+  height: 48px;
+  font-size: var(--fixture-size, 48px);
+}
+
+.navigation-icon {
+  position: static;
+  transform: none;
+  display: block;
+}

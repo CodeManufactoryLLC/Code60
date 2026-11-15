@@ -1,16 +1,26 @@
 /* Layout styles. Imported into its declared layer by style.css. */
 
 .app {
+  --sidebar-left-inset: calc(2 * var(--page-margin));
   /* Resolve beside the live width override, not once on :root before inheritance. */
-  --sidebar-track-width: clamp(
+  --sidebar-expanded-width: clamp(
     180px,
     var(--sidebar-width),
-    min(480px, calc(100vw - var(--page-margin) - 360px))
+    min(480px, calc(100vw - var(--sidebar-left-inset) - 2 * var(--page-margin) - 360px))
   );
+  /* Animate reveal only; saved-width and viewport resizing stay immediate. */
+  --sidebar-reveal: 1;
+  --sidebar-track-width: calc(var(--sidebar-expanded-width) * var(--sidebar-reveal));
+  --sidebar-toggle-width: 28px;
+  transition: --sidebar-reveal var(--motion) var(--ease);
   height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--surface);
+}
+
+.app:has(.sidebar[data-open="false"]) {
+  --sidebar-reveal: 0;
 }
 
 :root[data-transparent="true"],
@@ -31,14 +41,29 @@
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: var(--page-margin);
+  column-gap: var(--page-margin);
+  row-gap: 0;
   flex: 1;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--page-margin) 0 0;
+  margin: 0 var(--page-margin) 0 var(--sidebar-left-inset);
 }
 
-.app-workspace:has(> .sidebar)::before {
+.app-workspace:has(> .sidebar) {
+  grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr);
+}
+
+.workspace-header {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  min-height: 0;
+  padding-inline: var(--page-padding);
+}
+
+.app-workspace:has(> .sidebar[data-open="true"])::before {
   content: "";
   position: absolute;
   top: calc(-1 * var(--app-titlebar-height));
@@ -53,7 +78,7 @@
 /* Unframed main content alongside the navigation. */
 .page-panel {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -100,13 +125,13 @@
 /* Without a native title bar, the top of each screen moves the window. A scrolling element must
    never be a drag region: the window would take its wheel and scrollbar input. */
 .welcome,
-.settings-page-heading,
+:where(.settings-page) .settings-section-header:where(:first-child),
 .app > .error-banner {
   -webkit-app-region: drag;
 }
 
 .welcome button,
-.settings-page-heading button,
+:where(.settings-page) .settings-section-header:where(:first-child) button,
 .error-banner button,
 dialog,
 dialog::backdrop {

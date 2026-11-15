@@ -64,11 +64,45 @@ function render(
       onDatabase={() => {}}
       runs={runs}
       reviews={reviews}
+      notice={<p role="status">Project readiness</p>}
     />,
   );
 }
 
 describe("orchestration activity presentation", () => {
+  it("renders Relay as ordinary title text, not a doubly dimmed disabled rename control", () => {
+    const html = renderToStaticMarkup(
+      <ChatPage
+        api={{} as DesktopApi}
+        chat={{
+          kind: "relay",
+          conversationId: "relay",
+          title: "Relay",
+          directory: "/relay",
+          workers: [],
+          run: run("relay", "idle"),
+          events: [],
+          error: null,
+          updates: { paused: false, pending: 0 },
+        }}
+        events={[]}
+        database={null}
+        active
+        onDatabase={() => {}}
+        runs={[]}
+      />,
+    );
+    expect(html).toContain('<span class="page-title-text">Relay</span>');
+    expect(html).not.toContain("Rename chat: Relay");
+    expect(html).not.toContain('class="chat-title"');
+  });
+  it("keeps project notices below the page heading", () => {
+    const html = render("idle", [], []);
+    expect(html.indexOf("Project readiness")).toBeGreaterThan(html.indexOf("</header>"));
+    expect(html.indexOf("Project readiness")).toBeLessThan(
+      html.indexOf('class="orchestration-chat-body"'),
+    );
+  });
   it("does not duplicate plan tabs with chat-header plan buttons", () => {
     const html = renderToStaticMarkup(
       <ChatPage

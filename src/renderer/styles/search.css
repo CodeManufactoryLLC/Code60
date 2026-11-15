@@ -1,12 +1,16 @@
 /* Search styles. Imported into its declared layer by style.css. */
 
 .search-page {
-  padding: 20px;
+  padding: 0 var(--page-padding) 20px;
 
   flex-direction: column;
 
   min-height: 0;
   flex: 1;
+}
+
+.search-page > .page-breadcrumbs {
+  margin-bottom: var(--page-header-gap);
 }
 
 .filter-content label {
@@ -169,14 +173,14 @@
 
 @media (max-width: 700px) {
   .search-page {
-    padding: 12px;
+    padding-inline: 12px;
   }
 }
 
 /* Search opens around a single field, then makes room for the working results view. */
 .search-page {
   display: grid;
-  grid-template-rows: minmax(0, 1.45fr) auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1.45fr) auto minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
   scrollbar-gutter: auto;
@@ -184,7 +188,7 @@
 }
 
 .search-page[data-expanded="true"] {
-  grid-template-rows: minmax(clamp(24px, 8dvh, 64px), 0fr) auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(clamp(24px, 8dvh, 64px), 0fr) auto minmax(0, 1fr);
 }
 
 .search-lead-space {
@@ -413,10 +417,6 @@
   }
 }
 
-.app-workspace[data-chat="true"] > .page-panel {
-  grid-column: 2;
-}
-
 /* Episodic Memory experiment */
 .episodic-memory {
   flex: 1;
@@ -429,12 +429,12 @@
 
 .memory-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 0 var(--page-padding) 16px;
-  margin-bottom: var(--space-1);
+  padding: 0 var(--page-padding) var(--page-header-gap);
+  margin-bottom: 0;
 }
 
 .memory-heading h2 {

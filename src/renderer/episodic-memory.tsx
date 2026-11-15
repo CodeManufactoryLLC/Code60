@@ -5,6 +5,7 @@ import {
   type DesktopRun,
   type MemoryExtractionResult,
 } from "../bridge/index.js";
+import { PageTitle } from "./page-title.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
 const promptKey = "code60.episodicMemoryPrompt";
@@ -147,7 +148,7 @@ export function EpisodicMemoryPage({
   return (
     <main className="episodic-memory" aria-label="Episodic Memory">
       <header className="memory-heading">
-        <h2>Episodic Memory</h2>
+        <PageTitle page="episodic-memory" as="h2" />
         <div className="button-group">
           <button
             type="button"

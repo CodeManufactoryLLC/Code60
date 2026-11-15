@@ -25,6 +25,7 @@ type ChatWorkspaceProps = Pick<
   | "notify"
   | "fileAction"
   | "setError"
+  | "navigation"
 >;
 export function ChatWorkspace({
   api,
@@ -40,8 +41,10 @@ export function ChatWorkspace({
   notify,
   fileAction,
   setError,
+  navigation,
 }: ChatWorkspaceProps) {
   const snapshot = state?.snapshot;
+  const conversationActive = tabs.active === "chat" && !navigation.projectPending;
   const [relayPanelOpen, setRelayPanelOpen] = useState(false);
   const {
     scope,
@@ -82,34 +85,32 @@ export function ChatWorkspace({
   const reviewSummaries = snapshot?.reviews ?? [];
   const projectFiles =
     showsProjectFiles(snapshot, workerId) || project.explicitProjectFiles === true;
+  const projectNotice =
+    snapshot?.chat.kind !== "relay" && directory && snapshot?.gitReadiness ? (
+      <GitReadinessNotice
+        state={snapshot.gitReadiness}
+        onSetup={() => setGitSetupProject(directory)}
+        onCheck={() => {
+          const current = scope.capture();
+          void api
+            .checkGit({
+              project: directory,
+              ...(snapshot?.projectInstanceId
+                ? { projectId: snapshot.projectInstanceId, databaseEpoch: snapshot.databaseEpoch }
+                : {}),
+            })
+            .catch((cause) => {
+              if (current()) setError(message(cause));
+            });
+        }}
+      />
+    ) : null;
   return (
     <div
       className="chat-workspace-body"
       data-file-panel-open={projectFiles ? explorerOpen : relayActive ? relayPanelOpen : undefined}
     >
       <div className="chat-conversations">
-        {snapshot?.chat.kind !== "relay" && directory && snapshot?.gitReadiness && (
-          <GitReadinessNotice
-            state={snapshot.gitReadiness}
-            onSetup={() => setGitSetupProject(directory)}
-            onCheck={() => {
-              const current = scope.capture();
-              void api
-                .checkGit({
-                  project: directory,
-                  ...(snapshot?.projectInstanceId
-                    ? {
-                        projectId: snapshot.projectInstanceId,
-                        databaseEpoch: snapshot.databaseEpoch,
-                      }
-                    : {}),
-                })
-                .catch((cause) => {
-                  if (current()) setError(message(cause));
-                });
-            }}
-          />
-        )}
         {gitSetupProject === directory && gitSetupProject && (
           <GitSetupDialog
             key={`${snapshot?.projectInstanceId}:${snapshot?.databaseEpoch}`}
@@ -129,11 +130,12 @@ export function ChatWorkspace({
                 : `${database}:${chat?.run?.id ?? chat?.directory ?? "disconnected"}`
             }
             api={api}
+            notice={chat?.kind === "relay" ? null : projectNotice}
             chat={
               chat ? { ...chat, title: conversationTitle(snapshot?.chats ?? [], chat) } : undefined
             }
             hidden={
-              tabs.active !== "chat" || !!workerId || chat?.directory !== snapshot?.chat.directory
+              !conversationActive || !!workerId || chat?.directory !== snapshot?.chat.directory
             }
             events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
             database={chat?.kind === "relay" ? null : database}
@@ -151,7 +153,7 @@ export function ChatWorkspace({
             onReview={openReview}
             active={
               !splash &&
-              tabs.active === "chat" &&
+              conversationActive &&
               !workerId &&
               chat?.directory === snapshot?.chat.directory
             }
@@ -165,6 +167,7 @@ export function ChatWorkspace({
           return (
             <WorkerChat
               key={key}
+              notice={run.relay ? null : projectNotice}
               api={api}
               run={run}
               label={workerLabel(snapshot?.chats ?? [], run)}
@@ -174,7 +177,7 @@ export function ChatWorkspace({
                   ? (transcripts.events[id] ?? events ?? [])
                   : (events ?? transcripts.events[id] ?? [])
               }
-              active={!splash && tabs.active === "chat" && workerId === id}
+              active={!splash && conversationActive && workerId === id}
               request={chatRequest}
               loading={
                 !snapshot?.liveIds.includes(id) &&
@@ -211,7 +214,7 @@ export function ChatWorkspace({
             browser={fileBrowser}
             open={explorerOpen}
             onToggle={() => setExplorerOpen((value) => !value)}
-            active={!splash && tabs.active === "chat" && projectFiles}
+            active={!splash && conversationActive && projectFiles}
             onOpenProject={() => showPicker("project")}
           />
         </RetainedProjectPanels>
@@ -221,7 +224,7 @@ export function ChatWorkspace({
         api={api}
         plans={relay?.plans ?? []}
         conversationId={relay?.conversationId}
-        active={!splash && tabs.active === "chat" && relayActive && !projectFiles}
+        active={!splash && conversationActive && relayActive && !projectFiles}
         open={relayPanelOpen}
         onOpen={setRelayPanelOpen}
       />

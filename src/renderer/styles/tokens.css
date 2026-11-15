@@ -1,7 +1,13 @@
 /* Tokens styles. Imported into its declared layer by style.css. */
 
+@property --sidebar-reveal {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 :root {
-  --font: "D-DIN", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--text-font, var(--font));
   --letter-spacing: var(--text-spacing, normal);
@@ -16,6 +22,10 @@
   --rule-strong: 1px;
   --rule-select: 2px;
   --ui-radius: 0;
+  --button-radius: 5px;
+  --chat-radius: 5px;
+  --card-radius: 5px;
+  --input-radius: 5px;
   /* Metadata (timestamps, counts, versions) uses a compact monospace face. */
   --meta-font: 400 11px / 16px var(--mono);
   --meta-spacing: 0.02em;
@@ -42,6 +52,7 @@
   /* Workspace inset and content spacing. */
   --page-margin: 12px;
   --page-padding: 16px;
+  --page-header-gap: 24px;
 }
 
 /* Application appearance tokens, also inherited by the splash. */
@@ -107,19 +118,19 @@
   --disabled-fill: var(--surface);
   --footer-bg: var(--surface);
   --overlay-shadow: 0 2px 8px rgb(0 0 0 / 45%);
-  /* Midnight slate: raised bands sit one step lighter than the base surface. */
-  --surface-band: #162036;
-  --group-fill: #162036;
-  --bg: #0f172a;
-  --surface: #0f172a;
-  --surface-hover: #0f172a;
-  --row-alt: #0f172a;
+  /* Charcoal surfaces; blue is reserved for header bands and interaction accents. */
+  --surface-band: #253347;
+  --group-fill: #303030;
+  --bg: #252525;
+  --surface: #252525;
+  --surface-hover: #252525;
+  --row-alt: #252525;
   --text: #ffffff;
-  --muted: #9aa8bf;
-  --border: #2a3a55;
-  --control-border: #64799d;
+  --muted: #b1b1b1;
+  --border: #484848;
+  --control-border: #8c8c8c;
   --accent: #9bcaff;
-  --accent-bg: #1e2b45;
+  --accent-bg: #3c3c3c;
   --hover-bg: #1b2d4a;
   --primary: #77b7f5;
   --primary-hover: var(--accent);
@@ -127,12 +138,12 @@
   --danger: #ffffff;
   --change-additions: #afc59d;
   --change-deletions: #dfa69b;
-  --warning-bg: #0f172a;
+  --warning-bg: #252525;
   --warning-text: var(--accent);
   --success: #aaaaaa;
-  --code: #0f172a;
+  --code: #252525;
   --disabled-stripe: transparent;
-  --chat-bg: #0f172a;
+  --chat-bg: #252525;
   --chat-neutral: var(--surface);
   --user-bubble: var(--primary);
   --on-user-bubble: #ffffff;

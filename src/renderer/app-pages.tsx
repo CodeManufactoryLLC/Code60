@@ -4,6 +4,7 @@ import type { AppPagesProps } from "./app-page-props.js";
 import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
 import { ChatWorkspace } from "./chat-workspace.js";
+import { conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
@@ -14,15 +15,21 @@ import { LogsPage } from "./logs.js";
 import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
-import { type RenderedPageId, renderedPages } from "./navigation.js";
+import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
+import { NavigationHomePage } from "./navigation-home-page.js";
+import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
+import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { PollingControls, PollingPage } from "./polling.js";
+import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
 import { PromptEditorPage } from "./prompt-editor.js";
 import { RagPage } from "./rag.js";
 import { SearchPage } from "./search-page.js";
 import { sessionRows } from "./session-presentation.js";
 import { SessionsTable } from "./sessions.js";
+import { SettingsHomePage } from "./settings-home-page.js";
 import { SettingsPage } from "./settings-page.js";
+import { SystemManagerPage } from "./system-manager.js";
 import { updateTabs } from "./tabs.js";
 import { UpdatesSection } from "./updates.js";
 import { WorktreesPage } from "./worktrees.js";
@@ -38,6 +45,8 @@ export function AppPages(props: AppPagesProps) {
     appearance,
     tabs,
     settingsSection,
+    navigation,
+    navigationRuns,
     splash,
     busy,
     error,
@@ -55,6 +64,16 @@ export function AppPages(props: AppPagesProps) {
     accept,
   } = props;
   const snapshot = state?.snapshot;
+  const titleNavigation = useMemo(
+    () => ({
+      open: navigation.open,
+      pending: navigation.pending,
+      projects: snapshot?.openProjects ?? [],
+      chats: snapshot?.chats ?? [],
+      runs: navigationRuns,
+    }),
+    [navigation.open, navigation.pending, snapshot?.openProjects, snapshot?.chats, navigationRuns],
+  );
   const projectRuns = useMemo(
     () => snapshot?.runs.filter((run) => !run.relay) ?? [],
     [snapshot?.runs],
@@ -99,7 +118,38 @@ export function AppPages(props: AppPagesProps) {
   } = preferences;
   const run = snapshot?.runs.find((item) => item.record.id === selected);
   const rows = useMemo(() => sessionRows(snapshot?.runs ?? []), [snapshot?.runs]);
+  const parentHome = (page: "tables" | "advanced" | "experiments") => (
+    <NavigationHomePage
+      page={page}
+      cards={staticChildren(page, database)}
+      onOpen={({ target }) => void navigation.open(target)}
+    />
+  );
   const views = {
+    projects: (
+      <ProjectsHomePage
+        projects={snapshot?.openProjects ?? []}
+        navigation={navigation}
+        database={database}
+        onOpenProject={() => showPicker(database ? "project" : "database")}
+      />
+    ),
+    project: (
+      <ProjectHomePages
+        projects={snapshot?.openProjects ?? []}
+        chats={snapshot?.chats ?? []}
+        runs={navigationRuns}
+        selectedId={props.workerId ?? (snapshot && conversationId(snapshot.chat))}
+        activeId={tabs.projectId}
+        navigation={navigation}
+      />
+    ),
+    tables: parentHome("tables"),
+    advanced: parentHome("advanced"),
+    experiments: parentHome("experiments"),
+    "system-manager": (
+      <SystemManagerPage api={api} active={!splash && tabs.active === "system-manager"} />
+    ),
     automations: (
       <AutomationsPage
         api={api}
@@ -122,17 +172,14 @@ export function AppPages(props: AppPagesProps) {
       />
     ),
     apps: (
-      <AppsPage
-        database={database}
-        onOpen={(id) => setTabs((current) => updateTabs(current, { type: "select", id }))}
-      />
+      <AppsPage database={database} onOpen={(id) => void navigation.open({ kind: "page", id })} />
     ),
     home: (
       <HomePage
         database={database}
         relayAvailable={Boolean(snapshot?.chats.some((chat) => chat.kind === "relay"))}
         onOpenRelay={props.openRelay}
-        onOpenTool={(id) => setTabs((current) => updateTabs(current, { type: "select", id }))}
+        onOpenPage={(id) => void navigation.open({ kind: "page", id })}
       />
     ),
     chat: <ChatWorkspace {...props} />,
@@ -146,6 +193,16 @@ export function AppPages(props: AppPagesProps) {
     ),
     settings: (
       <>
+        {settingsSection === null && (
+          <SettingsHomePage
+            database={database}
+            onOpen={(id) => {
+              void navigation.open(
+                isSettingsSection(id) ? { kind: "settings", id } : { kind: "page", id },
+              );
+            }}
+          />
+        )}
         <SettingsPage
           section={settingsSection}
           memory={<MemoryPage api={api} />}
@@ -366,7 +423,7 @@ export function AppPages(props: AppPagesProps) {
     "contributor-tools": (
       <>
         <main className="contributor-tools">
-          <h1>Contributor Tools</h1>
+          <PageTitle page="contributor-tools" />
           <p>No contributor tools yet.</p>
         </main>
       </>
@@ -522,19 +579,23 @@ export function AppPages(props: AppPagesProps) {
     ),
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
-    <>
+    <PageTitleNavigationContext.Provider value={titleNavigation}>
       {renderedPages.map(({ id }) => (
         <div
           key={id}
           className="page-panel"
           role="tabpanel"
           id={`panel-${id}`}
-          aria-labelledby={`tab-${id}`}
+          aria-labelledby={
+            id === "chat" && snapshot
+              ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+              : sidebarPageElementId(id, tabs.projectId)
+          }
           hidden={tabs.active !== id}
         >
           {views[id]}
         </div>
       ))}
-    </>
+    </PageTitleNavigationContext.Provider>
   );
 }

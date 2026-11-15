@@ -10,6 +10,7 @@ import {
 } from "./commands-model.js";
 import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
+import { PageTitle } from "./page-title.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { TableControlGroup } from "./table-controls.js";
 
@@ -87,9 +88,7 @@ export function CommandsPage({
   return (
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
-        <h1 className="table-title" id={`${id}-heading`}>
-          Command Builder
-        </h1>
+        <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <InfoTip label="About commands">
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with /name to use one.

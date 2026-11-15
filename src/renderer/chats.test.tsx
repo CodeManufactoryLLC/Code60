@@ -59,9 +59,9 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('id="conversation-relay-id"');
-    expect(html).toContain("relay-navigation-icon");
-    expect(html).not.toContain('data-icon="chat-circle"');
-    expect(html).not.toContain('data-icon="arrow-elbow-down-right"');
+    expect(html).toContain('data-icon="app-steering-wheel"');
+    expect(html).not.toContain('data-icon="app-communication"');
+    expect(html).not.toContain('data-icon="app-down-right"');
     expect(html).not.toContain("disabled");
   });
   it("renders only project-bound conversations inside project groups", () => {
@@ -77,6 +77,8 @@ describe("conversation hierarchy", () => {
       <ProjectChatSidebar
         projects={projects}
         selectedProjectId="b"
+        homeProjectId={undefined}
+        onProjectOpen={() => {}}
         onProjectAction={async () => true}
         chats={[
           { ...chat("relay"), kind: "relay" },
@@ -110,6 +112,10 @@ describe("conversation hierarchy", () => {
       expect(section).not.toContain("Toggle chats");
       expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');
+      const folder = section.match(/<span class="project-chat-label">([\s\S]*?)<\/span>/)?.[0];
+      expect(folder).toContain('data-icon="app-folder"');
+      expect(folder).toContain("folder.svg");
+      expect(folder).toContain('alt="" aria-hidden="true" draggable="false"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
     expect(sections[1]).not.toContain('id="conversation-one"');
@@ -269,12 +275,12 @@ describe("conversation hierarchy", () => {
     for (const entry of entries) {
       expect(entry).toContain(
         entry.includes('data-role="orchestrator"')
-          ? 'data-icon="chat-circle"'
-          : 'data-icon="arrow-elbow-down-right"',
+          ? 'data-icon="app-communication"'
+          : 'data-icon="app-down-right"',
       );
-      expect(entry).toContain('aria-hidden="true" focusable="false"');
+      expect(entry).toContain('alt="" aria-hidden="true" draggable="false"');
     }
-    expect(html).not.toContain("<img");
+    expect(html.match(/<img/g)).toHaveLength(3);
     expect(html).not.toContain('role="dialog"');
   });
   it("keeps errors and approval counts visible as text", () => {
@@ -304,8 +310,9 @@ describe("conversation hierarchy", () => {
     expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
       "disabled",
     );
-    expect(html.match(/<svg/g)).toHaveLength(2);
-    expect(html).not.toContain("<img");
+    expect(html.match(/<svg/g)).toHaveLength(1);
+    expect(html.match(/<img/g)).toHaveLength(1);
+    expect(html).toContain('data-icon="app-communication"');
   });
   it("clears unread for the selected worker without clearing its siblings", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -352,9 +359,17 @@ describe("embedded worker chat", () => {
         loading={false}
         historyError={undefined}
         onRetry={() => {}}
+        notice={<p role="status">Worker project readiness</p>}
       />,
     );
   };
+  it("keeps project notices below worker headings", () => {
+    const html = render(run("one"));
+    expect(html.indexOf("Worker project readiness")).toBeGreaterThan(html.indexOf("</header>"));
+    expect(html.indexOf("Worker project readiness")).toBeLessThan(
+      html.indexOf('class="orchestration-chat-body"'),
+    );
+  });
   it.each([true, false])(
     "renders Markdown replies for live and historical workers (%s)",
     (historical) => {
@@ -401,10 +416,8 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain(
-      '<span class="chat-role-icon" aria-hidden="true"><svg class="carbon-icon"',
-    );
-    expect(html).toContain('d="M16,31c-1.6543');
+    expect(html).toContain('class="page-title worker-chat-title"');
+    expect(html).toContain('data-icon="app-down-right"');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain("Code60 auto-approval: On");
     expect(html).toContain('aria-label="Worker composer"');
@@ -432,8 +445,8 @@ describe("embedded worker chat", () => {
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
   it("titles the worker by its role name, falling back to provider and run ID", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/h2>/);
-    expect(render(run("one"))).toMatch(/fake \/ one<\/h2>/);
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/span><\/h2>/);
+    expect(render(run("one"))).toMatch(/fake \/ one<\/span><\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

@@ -1,5 +1,11 @@
 # Desktop
 
+- Settings About metadata reads the pinned embedding configuration from its
+  side-effect-free shared module and resolves the ONNX package version beside
+  Transformers. Read package JSON only, once; never import native inference into
+  Electron main, load/download assets or report a configured model as loaded.
+  Unavailable package metadata is nonfatal and exposes no raw error/path.
+
 ## Application agent memory
 
 - MemoryService owns optional desktop-only capture, scoped recall and coalesced

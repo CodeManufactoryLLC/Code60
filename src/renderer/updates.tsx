@@ -124,6 +124,7 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
       <SettingsHeader
+        page="updates"
         id={id}
         title="Updates"
         tip="Updates are downloaded only when you choose. Your settings, databases and worktrees are preserved."

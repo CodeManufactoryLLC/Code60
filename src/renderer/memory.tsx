@@ -115,6 +115,7 @@ export function MemoryPage({ api }: { api: Api }) {
   return (
     <section className="settings-section memory-page" aria-label="Memory">
       <SettingsHeader
+        page="memory"
         title="Memory"
         tip="Automatic generation sends source text to your existing verified orchestration provider and may incur normal provider usage. Embeddings and search stay local. Memory is historical evidence, never permissions or task authority. Turning it off or forgetting cannot erase context already received by a running provider. A safe handoff refreshes that context. Original transcripts and manual RAG remain separate."
       >
@@ -139,7 +140,6 @@ export function MemoryPage({ api }: { api: Api }) {
                 ["relay", "Relay"],
                 ["project", "Project chats"],
                 ["worker", "Workers"],
-                ["capture", "Capture new evidence"],
                 ["generation", "Automatic generation"],
                 ["recall", "Recall saved memories"],
                 ["continuity", "Automatic checkpoints and handoff"],
@@ -331,7 +331,9 @@ export function MemoryPage({ api }: { api: Api }) {
         </div>
       </SettingsCard>
       <SettingsHeader
+        page="memories"
         title="Memories"
+        breadcrumbs={false}
         tip="Filter records and inspect exact source evidence, attribution, revisions and last use. Disputed memories are not recalled. Promotion and forgetting require native confirmation."
       />
       <SettingsCard>
