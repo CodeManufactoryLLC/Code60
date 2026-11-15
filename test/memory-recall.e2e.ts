@@ -137,6 +137,7 @@ for (const kind of ["Relay", "project"] as const) {
     const processes = join(directory, "provider-processes");
     let application: ElectronApplication | undefined;
     let context: BrowserContext | undefined;
+    let completed = false;
     try {
       await mkdir(target);
       await mkdir(promptLog);
@@ -296,6 +297,12 @@ for (const kind of ["Relay", "project"] as const) {
         await expect(
           panel.getByRole("tab", { name: "Plan · Planned change", exact: true }),
         ).toHaveAttribute("aria-selected", "true");
+        const plan = panel.getByRole("region", { name: "Plan", exact: true });
+        await expect(plan.locator(".plan-state")).toHaveText("Awaiting acceptance");
+        expect((await page.evaluate(() => window.desktop.snapshot())).runs).toEqual([]);
+        // Inspecting a draft grants no execution authority. Dismiss it before separate work.
+        await plan.getByRole("button", { name: "Dismiss", exact: true }).click();
+        await expect(plan.locator(".plan-state")).toHaveText("Dismissed");
         await send(page, "Start a memory recall worker");
       }
       await expect
@@ -379,10 +386,11 @@ for (const kind of ["Relay", "project"] as const) {
         }),
         contentType: "application/json",
       });
+      completed = true;
     } finally {
       try {
         if (context) {
-          if (test.info().status !== test.info().expectedStatus) {
+          if (!completed) {
             const path = test.info().outputPath("electron-trace.zip");
             await context.tracing.stop({ path });
             await test.info().attach("electron-trace", { path, contentType: "application/zip" });
