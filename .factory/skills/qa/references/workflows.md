@@ -1,0 +1,100 @@
+# User workflow cards
+
+Use synthetic projects and isolated private state. Each card is a user journey,
+not a claim that all of its steps are already automated. Check current selectors
+and supported controls before extending tests. Retain evidence under ignored
+`test-results/`, and clean up only resources created by the run.
+
+## Request through undo (golden path)
+
+- **Prerequisites:** built app in the Linux container, Git, fake ACP executable,
+  native dialog stubs that record requests, committed synthetic repository.
+- **Starting state:** empty HOME/config/state, provider command configured but no
+  verified setup; repository has unrelated staged and unstaged edits.
+- **Actions:** choose/connect provider in setup, close setup, create database,
+  Start, open project, select Relay; send a readable target request, inspect plan,
+  Accept; wait for worker completion, reload renderer, open Changes and revision,
+  review exact diff, prepare application, decline once, confirm once, undo.
+- **Intermediate invariants:** no worker worktree/process before Accept; one
+  accepted plan owns worker dispatch; worker edits its own real worktree, not
+  checkout; reload retains result/review evidence without redispatch; cancellation
+  of confirmation leaves checkout untouched.
+- **Independent checks:** exact worker and checkout bytes, worktree inventory,
+  unchanged unrelated staged/unstaged bytes and Git index throughout apply/undo;
+  worker result still exists after undo; owned child PIDs exit after shutdown.
+- **Evidence:** selected plan/revision and dialog assertions, worker/result paths
+  in synthetic artifacts, Git/index comparisons, retained failure trace.
+- **Cleanup:** close app, verify owned processes gone, remove isolated fixture
+  only after checks; runner removes owned container/image, retains artifacts/cache.
+
+## First use and reopening
+
+- **Prerequisites/start:** fake provider only, empty private storage, committed
+  synthetic repository; no preseeded setup/database/project selection.
+- **Actions:** visible setup, database create/select, Start, Open Project; complete
+  a real request, close/reopen app using the same isolated state.
+- **Invariants:** setup verification comes from connection, database picker
+  cancellation does not fake a connection, reopening retains evidence but does
+  not grant saved workers or pending plans authority.
+- **Independent checks/evidence:** private settings and SQLite existence, no
+  duplicate worker worktrees/process launches; UI checkpoint/trace.
+- **Cleanup:** close both owned app instances and verify no children remain.
+
+## Navigation and concurrent ownership
+
+- **Prerequisites/start:** two synthetic committed projects, one active worker
+  in A; Relay work in a separate known target when relevant.
+- **Actions:** A → B → A during work, select worker and plan, switch database,
+  close/reopen A at the same path using visible controls.
+- **Invariants:** selection changes presentation only; late A replies cannot
+  overwrite B, replacement runtime, database epoch or file views; closing A
+  stops A-owned work, not Relay work merely using that directory.
+- **Independent checks/evidence:** distinct worktree outputs/PIDs and owner-local
+  revisions; compare both repositories, UI selection/stream checkpoint trace.
+- **Cleanup:** stop each owner explicitly, close app and verify child exit;
+  preserve evidence needed for failed ownership checks before fixture removal.
+
+## Cancellation, reload and restart
+
+- **Prerequisites/start:** fake slow worker at a condition-controlled checkpoint,
+  plus completed worker evidence and an accepted plan.
+- **Actions:** navigate/reload during progress, cancel via UI, quit/reopen after
+  completion; try historical review and supported explicit continuation only.
+- **Invariants:** cancellation settles owned cleanup; reload does not dispatch
+  another worker; app restart restores evidence, not live authority, pending
+  feedback, provider context or uncertain work.
+- **Independent checks/evidence:** PID exit, no late filesystem changes, exact
+  worktree/run counts and retained transcripts; checkpoint trace and cleanup.
+- **Cleanup:** release fixture gates, close app and check all owned process trees.
+
+## Scheduler ownership and recovery
+
+- **Prerequisites/start:** isolated injected service/native-service environment,
+  fake agents, saved schedule and pinned repository/provider; never a real
+  per-user installation without explicit permission.
+- **Actions:** use Automations to review disabled schedule, run once with consent,
+  pause/cancel; close desktop while service-owned work is active; reopen and
+  inspect history/block, following the [scheduler runbook](../../../../docs/runbooks/scheduler.md).
+- **Invariants:** desktop Stop all/quit do not stop service-owned automation;
+  no catch-up/retry, automatic apply or restored uncertain work; service remains
+  sole metadata writer. No unit-only injected-clock result counts as UI E2E.
+- **Independent checks/evidence:** service versus desktop PIDs, persisted occurrence
+  claims/history, worktree diff and absence of checkout/index mutation.
+- **Cleanup:** explicitly stop the isolated service and its children, uninstall
+  only a registration created for this run with authorization. Otherwise BLOCKED.
+
+## Memory and context handoff
+
+- **Prerequisites/start:** synthetic conversations/projects, fake verified provider,
+  isolated memory storage; include existing saved memory and pending generation.
+- **Actions:** Settings → Memory Off, complete a synthetic exchange, turn On,
+  complete a new exchange, navigate Data Viewer → Memories; inspect evidence,
+  correct/pin/forget with supported confirmations, cross a session handoff.
+- **Invariants:** Off cancels pending learning/recall but preserves saved records;
+  On is prospective, not an import of Off-mode content. Provenance remains
+  scoped; handoff neither replays dispatched work nor restores authority.
+- **Independent checks/evidence:** fake-provider input/output at its external
+  boundary, saved synthetic records/citations/revisions, no duplicate execution;
+  record scoped UI state and exact inclusion/exclusion evidence.
+- **Cleanup:** stop app/provider processes, remove only isolated synthetic state;
+  do not export actual memory, prompts or transcripts.

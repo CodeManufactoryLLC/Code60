@@ -1,10 +1,12 @@
 # Renderer
 
 - Settings → Memory is application-wide and database-independent. Persist its
-  controls through main, not local storage. Keep generation and recall choices
-  separate, but do not expose a Capture new evidence control. Preserve the saved
-  capture setting when editing other settings. Explain provider usage, fallback
-  estimates and the limits of forgetting behind accessible information tips.
+  controls through main, not local storage. Expose only the application-wide
+  Memory On/Off switch, immediate-save retention selector and Manage memories
+  navigation to the shared Data Viewer. No daily learning allowance, pipeline,
+  role/type/conversation switches or context tuning controls. Explain provider
+  usage, independent conversation continuity and privacy limits in accessible
+  information tips. Show search repair only on an actual indexing failure.
 - The Memories browser pages main-owned records, filters by project/type/state
   and is also available as a database-independent shared table under Apps →
   Data Viewer → Memories, with the grid-nine icon. Keep its cursor pages bounded;

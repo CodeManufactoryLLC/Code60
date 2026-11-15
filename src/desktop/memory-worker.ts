@@ -3,15 +3,38 @@ import type {
   MemoryBrowse,
   MemoryGeneration,
   MemoryRecord,
+  MemorySettings,
   MemorySource,
 } from "../bridge/index.js";
 import { checkedVector, chunkText, type RagEmbedder, topMatches } from "../core/index.js";
+import { lockPrivateState } from "../platform/index.js";
 import { MemoryStore } from "./memory-store.js";
 import { loadRagModel } from "./rag-model.js";
 
 export const MEMORY_MODEL =
   "jina-v2-base-code:516f4baf13dec4ddddda8631e019b5737c8bc250:q8:mean:normalized:768:512:64:chunks-v2";
 let store: MemoryStore | undefined;
+let closeStore: (() => Promise<void>) | undefined;
+/** Only the owning sidecar may open/migrate/prune the application store. */
+export async function openMemoryStore(path: string) {
+  const unlock = await lockPrivateState(path);
+  try {
+    const database = new MemoryStore(path);
+    return {
+      store: database,
+      async close() {
+        try {
+          database.close();
+        } finally {
+          await unlock();
+        }
+      },
+    };
+  } catch (error) {
+    await unlock();
+    throw error;
+  }
+}
 let model: Promise<RagEmbedder> | undefined;
 let root = "";
 const embedder = () => {
@@ -41,8 +64,37 @@ export async function indexMemoryBatch(db: MemoryStore, load: () => Promise<RagE
 }
 let pending = Promise.resolve();
 let indexing = false;
+let indexAttempts = 0;
+const INDEX_RETRY_DELAYS = [1000, 5000, 15000];
+const indexFailed = () => indexAttempts > INDEX_RETRY_DELAYS.length;
+let retry: ReturnType<typeof setTimeout> | undefined;
+let expiring = false;
+let retentionFailed = false;
+function scheduleExpiry() {
+  if (!process.send || expiring || !store) return;
+  expiring = true;
+  setImmediate(() => {
+    pending = pending
+      .then(() => {
+        let count = 0;
+        try {
+          count = store?.expireBatch() ?? 0;
+          retentionFailed = false;
+          if (count) process.send?.({ changed: true });
+        } finally {
+          expiring = false;
+        }
+        if (count === 64) scheduleExpiry();
+      })
+      .catch(() => {
+        expiring = false;
+        retentionFailed = true;
+        process.send?.({ changed: true });
+      });
+  });
+}
 function scheduleIndex() {
-  if (!process.send || indexing || !store) return;
+  if (!process.send || indexing || retry || indexFailed() || !store?.settings().enabled) return;
   indexing = true;
   setImmediate(() => {
     pending = pending
@@ -50,8 +102,16 @@ function scheduleIndex() {
         let more = false;
         try {
           if (store) more = await indexMemoryBatch(store, embedder);
+          indexAttempts = 0;
         } catch {
-          /* Missing/offline model leaves lexical recall available; explicit rebuild retries. */
+          const delay = INDEX_RETRY_DELAYS[indexAttempts++];
+          if (delay !== undefined) {
+            retry = setTimeout(() => {
+              retry = undefined;
+              scheduleIndex();
+            }, delay);
+            retry.unref();
+          }
         }
         process.send?.({ changed: true });
         indexing = false;
@@ -70,7 +130,6 @@ export async function memorySearch(
   load: () => Promise<RagEmbedder>,
   projects: readonly string[] = [],
 ) {
-  const settings = db.settings();
   if (!db.eligible(cid, "", 1, projects).length) return { records: [] };
   const lexical = db.lexical(cid, query, projects);
   const lexicalRank = new Map(lexical.map((id, index) => [id, index]));
@@ -98,10 +157,6 @@ export async function memorySearch(
     if (!page.length) break;
     for (const record of page) {
       cursor = record.id;
-      if (!settings.types[record.type]) continue;
-      const days = settings.retentionDays[record.type];
-      if (days && !record.pinned && Date.now() - Date.parse(record.createdAt) > days * 86400000)
-        continue;
       let similarity = -1;
       if (embed && queries.length) {
         const vectors = db.vectors(record.id, MEMORY_MODEL);
@@ -156,15 +211,33 @@ export async function memorySearch(
 }
 async function dispatch(op: string, args: unknown[]) {
   if (op === "init") {
-    store = new MemoryStore(String(args[0]));
+    const opened = await openMemoryStore(String(args[0]));
+    store = opened.store;
+    closeStore = opened.close;
     root = String(args[1]);
+    scheduleExpiry();
     scheduleIndex();
-    return store.snapshot();
+    return { ...store.snapshot(), indexFailed: indexFailed(), retentionFailed };
   }
   if (!store) throw new Error("Memory storage is unavailable");
   switch (op) {
     case "snapshot":
-      return store.snapshot();
+      return { ...store.snapshot(), indexFailed: indexFailed(), retentionFailed };
+    case "retention-preview":
+      return store.previewRetention(Number(args[0]));
+    case "configure": {
+      store.configure(args[0] as MemorySettings, args[1] as string | undefined);
+      if (!store.settings().enabled) {
+        clearTimeout(retry);
+        retry = undefined;
+      }
+      scheduleIndex();
+      scheduleExpiry();
+      return;
+    }
+    case "maintain":
+      scheduleExpiry();
+      return;
     case "register": {
       const registered = store.register(
         String(args[0]),
@@ -193,6 +266,7 @@ async function dispatch(op: string, args: unknown[]) {
         Number(args[2]),
         args[3] as MemoryGeneration,
         String(args[4]),
+        args[5] as string | undefined,
       );
       scheduleIndex();
       return result;
@@ -217,9 +291,10 @@ async function dispatch(op: string, args: unknown[]) {
       return store.tail(String(args[0]));
     case "checkpoint":
       return store.checkpoint(String(args[0]));
-    case "reserve":
-      return store.reserveCall(Number(args[0]));
     case "reindex":
+      clearTimeout(retry);
+      retry = undefined;
+      indexAttempts = 0;
       store.reindex();
       scheduleIndex();
       return;
@@ -246,7 +321,10 @@ if (process.send) {
       .catch(() => {});
   });
   process.once("disconnect", () => {
-    store?.close();
-    process.exit(0);
+    clearTimeout(retry);
+    void (closeStore?.() ?? Promise.resolve()).then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
   });
 }

@@ -42,6 +42,24 @@ existing files remain untouched.
 See [implementation and validation notes](docs/relay-implementation.md) for limits
 and platform-validation status.
 
+## Memory
+
+**Settings → Memory** has one application-wide On/Off switch. On learns useful
+information from Relay, project chats and workers, and recalls relevant saved
+memories. Off stops learning and recall without deleting saved memories or
+ordinary transcripts; turning it back on does not backfill the intervening chats.
+Previously supplied information can remain in an active provider session.
+
+**Manage memories** opens Apps → Data Viewer → Memories to inspect evidence, edit,
+pin, delete or explicitly share a memory across projects. Retention can delete
+unpinned memories after 30 days, 90 days or one year; the default is Never.
+Shortening retention requires confirmation.
+
+Storage, embeddings and search are local. Learning sends conversation excerpts
+to the configured provider and may incur usage; there is no daily learning limit.
+Automatic handoff can still summarize a long conversation while Memory is Off,
+without creating long-term memories. See [memory behavior and validation](docs/memory-validation.md).
+
 ## Scheduled automations
 
 Open **Apps → Automation Studio** to save one agent, prompt, isolated Git repository
@@ -120,15 +138,15 @@ targets. Only a confirmed **Promote to global** shares a memory across projects.
 The Memories browser shows attribution, exact evidence, conflicts, revisions and
 last use, and supports edits, pinning and forgetting.
 
-Before context reaches its configured threshold (initially 70%), Code60 prepares
+Before context reaches its automatic threshold (70%), Code60 prepares
 a checkpoint and continues between turns in a fresh agent session. The logical
 conversation and transcript stay intact. An oversized request or unavailable
 required checkpoint pauses the send, never silently truncates or replays it.
-Context capacity falls back to a configurable 128,000-token estimate when the
+Context capacity falls back to an internal 128,000-token estimate when the
 provider does not report one.
 
-Capture, automatic generation and recall have separate switches. Per-conversation
-**Do not remember** stops new capture and recall for that conversation. Forgetting
+One application-wide Memory switch controls capture, generation and recall.
+Automatic conversation continuity remains available with Memory Off. Forgetting
 suppresses future recall and recreation from the same source ranges, but does not
 erase original transcripts or context already sent to a provider. See
 [memory behavior and validation](docs/memory-validation.md).

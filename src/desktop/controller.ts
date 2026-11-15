@@ -1778,6 +1778,10 @@ export class DesktopController {
       },
       storage.memory === true,
     );
+    if (storage.memory === true)
+      void this.memory.loadSettings().catch(() => {
+        this.memory.report("Saved memory is unavailable. Check private storage.");
+      });
     this.relay = storage.relay
       ? new RelayService(deps, env, () => this.changed(null), dialogs, this.memory)
       : undefined;

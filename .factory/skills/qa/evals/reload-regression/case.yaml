@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: reload-regression
+expected_outcome: |
+  Select the complete first-use/request/accepted-plan/worker/reload/review/decline/apply/undo journey.
+  Preserve the reported dirty-checkout starting state and independent Git/index/process checks.
+  Do not dismiss fixture changes as no UI impact or claim E2E success from unit tests.
+  Clearly report missing desktop runtime evidence and the safe container-only next action.

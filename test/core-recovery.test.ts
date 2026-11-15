@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../src/core/config.js";
+import type { RunMemory } from "../src/core/index.js";
 import { createOrchestrator } from "../src/core/orchestrator.js";
 import { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "../src/core/recovery.js";
 import type { RunEvent, RunRecord } from "../src/core/types.js";
@@ -33,6 +34,7 @@ async function setup(
   record = makeRecord(),
   agents = new FakeAgents(),
   prompts?: Partial<typeof DEFAULT_CONFIG.prompts>,
+  memory?: RunMemory,
 ) {
   const store = new MemoryStore();
   await store.save(record);
@@ -47,6 +49,7 @@ async function setup(
       clock,
       processes,
       ownerPid: 500,
+      ...(memory ? { memory: () => memory } : {}),
     },
     {
       mode: "interactive",
@@ -65,6 +68,49 @@ async function setup(
 }
 
 describe("ended run recovery", () => {
+  it.each(["restore", "handoff"])(
+    "seeds only explicit live continuity during %s without replaying historical prompts",
+    async (mode) => {
+      const seed = vi.fn();
+      const memory: RunMemory = {
+        restore: seed,
+        prepare: async () => ({ context: "", rollover: false, used: [] }),
+        event() {},
+        dispose() {},
+      };
+      const { record, agents, store, orchestrator } = await setup(
+        undefined,
+        undefined,
+        undefined,
+        memory,
+      );
+      await store.appendEvent({
+        type: "prompt",
+        runId: record.id,
+        at: record.startedAt,
+        turn: 1,
+        text: "Historical constraint: retain the schema",
+      });
+      if (mode === "restore") {
+        await orchestrator.restore(record.id);
+        expect(seed).toHaveBeenCalledWith(
+          expect.stringContaining("Historical constraint: retain the schema"),
+        );
+        expect(agents.sessions[0]?.prompts).toEqual([]);
+      } else {
+        await orchestrator.handoff(
+          record.id,
+          "Recovered schema constraint",
+          "Continue",
+          "Not supported",
+        );
+        expect(seed).toHaveBeenCalledWith("Recovered schema constraint");
+        await vi.waitFor(() => expect(orchestrator.runs()[0]?.status).toBe("idle"));
+        expect(agents.sessions[0]?.prompts).toHaveLength(1);
+      }
+      await orchestrator.shutdown(true);
+    },
+  );
   it("restores the saved ACP session in the existing worktree without replaying the prompt", async () => {
     const { record, agents, git, store, orchestrator } = await setup();
     const promptEvent: RunEvent = {

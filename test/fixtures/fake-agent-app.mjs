@@ -102,9 +102,7 @@ export function createFakeAgent(options = {}) {
       const sessionId = params.sessionId;
       const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
       let steps;
-      if (
-        text.startsWith("Produce a grounded continuity checkpoint and durable memory candidates.")
-      ) {
+      if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];
         const quote = source.text.slice(0, 80);
@@ -119,22 +117,30 @@ export function createFakeAgent(options = {}) {
               questions: [],
               next: "Check results",
               citations,
-              memories: ["episodic", "semantic", "lesson", "history"].map((type) => ({
-                type,
-                text: `${type}: ${quote}`,
-                subject: `fixture-${type}`,
-                condition: type === "lesson" ? "When repeating this task" : "",
-                correction: false,
-                citations,
-              })),
+              memories: text.includes("Memory is off:")
+                ? []
+                : ["episodic", "semantic", "lesson", "history"].map((type) => ({
+                    type,
+                    text: `${type}: ${quote}`,
+                    subject: `fixture-${type}`,
+                    condition: type === "lesson" ? "When repeating this task" : "",
+                    correction: false,
+                    citations,
+                  })),
             }),
           },
         ];
       }
       if (options.relayWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request.startsWith("Relay plan: ")) {
-          const target = JSON.parse(request.slice("Relay plan: ".length));
+        const readable =
+          /^Plan a change in (.+)\nCreate result\.txt containing "human accepted target" followed by a newline\. Use an isolated worktree and wait for my approval\.$/.exec(
+            request,
+          );
+        if (request.startsWith("Relay plan: ") || readable) {
+          const target = readable
+            ? { cwd: readable[1], workspaceMode: "worktree" }
+            : JSON.parse(request.slice("Relay plan: ".length));
           const plan = await tool("code60_create_plan", {
             requestId: "relay-fixture-plan",
             title: "Relay target plan",
