@@ -10,9 +10,9 @@ import {
   renderedPages,
   resolvePage,
   settingsIcons,
-  settingsNavigationIds,
   settingsSectionIds,
 } from "./navigation.js";
+import { staticChildren } from "./navigation-tree.js";
 
 describe("navigation registry", () => {
   it("uses the supplied artwork for Memory, Agents and Experiments", () => {
@@ -29,7 +29,7 @@ describe("navigation registry", () => {
     expect(pageDefinitions["contributor-tools"].icon).toBe("app-under-construction");
   });
   it("alphabetizes Settings destinations, including the Advanced group", () => {
-    expect(settingsNavigationIds).toEqual([
+    expect(staticChildren("settings", "/db").map(({ target }) => target.id)).toEqual([
       "about",
       "advanced",
       "agents",

@@ -26,7 +26,7 @@ export function AnchoredMenu({
         left: Math.max(8, Math.min(x, innerWidth - rect.width - 8)),
         top: Math.max(8, Math.min(y, innerHeight - rect.height - 8)),
       });
-    menu.current?.querySelector("button")?.focus();
+    menu.current?.querySelector("button")?.focus({ preventScroll: true });
     let restore = true;
     const dismiss = () => {
       restore = false;

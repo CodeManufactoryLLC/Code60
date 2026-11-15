@@ -25,7 +25,7 @@ it("shares each page and Settings section's navigation icon with its heading", (
     );
   }
   for (const page of settingsSectionIds) {
-    const html = renderToStaticMarkup(<SettingsHeader page={page} title={settingsLabels[page]} />);
+    const html = renderToStaticMarkup(<SettingsHeader page={page} />);
     expect(html).toContain('<h1 class="page-title">');
     expect(html).toContain(`data-icon="${settingsIcons[page]}"`);
     expect(html).toContain(`<span class="page-title-text">${settingsLabels[page]}</span>`);
@@ -35,7 +35,7 @@ it("shares each page and Settings section's navigation icon with its heading", (
 it.each(["memories", "rag"] as const)(
   "keeps the non-Settings %s header at its existing level",
   (page) => {
-    const html = renderToStaticMarkup(<SettingsHeader page={page} title="Nested heading" />);
+    const html = renderToStaticMarkup(<SettingsHeader page={page} />);
     expect(html).toContain('<h2 class="page-title">');
     expect(html).not.toContain("<h1");
   },
@@ -126,9 +126,7 @@ it("keeps the current Home heading icon-only and accessible without a duplicate 
 });
 
 it("keeps standalone secondary headings and embedded rename buttons out of nested buttons", () => {
-  const secondary = renderToStaticMarkup(
-    <SettingsHeader page="memories" title="Memories" breadcrumbs={false} />,
-  );
+  const secondary = renderToStaticMarkup(<PageTitle page="memories" as="h2" breadcrumbs={false} />);
   expect(secondary).not.toContain("<nav");
   const html = renderToStaticMarkup(
     <PageTitle page="orchestrator">

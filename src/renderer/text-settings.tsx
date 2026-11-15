@@ -44,7 +44,7 @@ export function TextSettings({
   const id = useId();
   return (
     <section className="settings-section text-settings" aria-labelledby={`${id}-text`}>
-      <SettingsHeader page="text" id={`${id}-text`} title="Text">
+      <SettingsHeader page="text" id={`${id}-text`}>
         <button type="button" onClick={() => onTextStyles(structuredClone(defaultTextStyles))}>
           Reset text
         </button>

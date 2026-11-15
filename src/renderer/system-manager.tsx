@@ -51,6 +51,7 @@ export function SystemManagerPage({
         }
       } finally {
         running = false;
+        if (dirty && !disposed) void read();
       }
     };
     refresh.current = read;

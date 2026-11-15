@@ -84,7 +84,7 @@ export function SettingsPage({
       {settingsPanel(
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
-          <SettingsHeader page="appearance" id={`${id}-appearance`} title="Appearance" />
+          <SettingsHeader page="appearance" id={`${id}-appearance`} />
           <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">
@@ -158,7 +158,6 @@ export function SettingsPage({
           <SettingsHeader
             page="table-defaults"
             id={`${id}-table`}
-            title="Table defaults"
             tip="Defaults for tables without local overrides. Use each table’s Settings to customize it."
           />
           <SettingsCard title="Lines">

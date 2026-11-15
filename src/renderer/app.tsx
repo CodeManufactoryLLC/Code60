@@ -13,6 +13,7 @@ import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { pageAvailable } from "./navigation.js";
 import { useNavigationActions } from "./navigation-actions.js";
+import { focusNavigation } from "./navigation-focus.js";
 import { isNavigationHome, sidebarPageElementId } from "./navigation-tree.js";
 import {
   CommandPalette,
@@ -189,7 +190,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
   }, [snapshot, tabs.active, tabs.projectId]);
 
   useLayoutEffect(() => {
-    // Finish navigation focus before another interaction can focus a control or open a modal.
+    // Reveal nested sidebar ancestors before focus, without waiting for another frame.
     if (splash) return;
     const id =
       tabs.active === "settings" && settingsSection !== null
@@ -197,7 +198,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
         : tabs.active === "chat" && navigationSelectedId
           ? `conversation-${navigationSelectedId}`
           : sidebarPageElementId(tabs.active, tabs.projectId);
-    document.getElementById(id)?.focus();
+    return focusNavigation(id);
   }, [tabs.active, tabs.projectId, settingsSection, splash, navigationSelectedId]);
 
   useEffect(() => {

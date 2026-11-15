@@ -126,7 +126,6 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
       <SettingsHeader
         page="updates"
         id={id}
-        title="Updates"
         tip="Updates are downloaded only when you choose. Your settings, databases and worktrees are preserved."
       >
         <button

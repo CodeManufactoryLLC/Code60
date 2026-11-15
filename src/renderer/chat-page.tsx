@@ -20,7 +20,7 @@ import { useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
-import { delegatedActivity, turnTimings } from "./chat-presentation.js";
+import { delegatedActivity, isLiveMessage, turnTimings } from "./chat-presentation.js";
 import { useChatScroll } from "./chat-scroll.js";
 import { conversationId } from "./chats.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
@@ -120,6 +120,10 @@ export function ChatPage({
     resume,
     reveal: revealActivity,
   } = useChatScroll(active && !hidden, key);
+  const shown = active && !hidden;
+  const visibility = useRef({ key, shown, since: Date.now() });
+  if (visibility.current.key !== key || visibility.current.shown !== shown)
+    visibility.current = { key, shown, since: Date.now() };
   const receivedEvents = useRef({ key, count: events.length });
   if (receivedEvents.current.key !== key) receivedEvents.current = { key, count: events.length };
   useLayoutEffect(() => {
@@ -447,6 +451,7 @@ export function ChatPage({
                           : undefined;
                       const fresh =
                         Number(block.key) >= receivedEvents.current.count &&
+                        isLiveMessage(event?.at, visibility.current.since) &&
                         !chat?.restored &&
                         active &&
                         !hidden;

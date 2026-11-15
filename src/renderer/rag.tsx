@@ -86,7 +86,6 @@ export function RagPage({
     <main className="rag-page" aria-label="RAG">
       <SettingsHeader
         page="rag"
-        title="RAG"
         tip="This is a manual snapshot of project and legacy orchestration chats and worker conversations in the connected database, including archived chats and registered projects. The application-owned Relay is independent of this database and is not indexed. New messages are included only when you rebuild. Retrieval returns matching text, not generated answers. Scores are cosine similarities, not confidence percentages."
       >
         <div className="button-group">

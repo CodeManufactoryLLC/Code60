@@ -98,7 +98,6 @@ export function MemoryPage({
     <section className="settings-section memory-page" aria-label="Memory">
       <SettingsHeader
         page="memory"
-        title="Memory"
         tip="When on, Code60 learns useful information from conversations and uses relevant saved memories across Relay, project chats and workers. Memories, embeddings and search stay local. Creating memories sends conversation excerpts to your verified provider and may incur usage. Secret filtering is best effort, not a privacy guarantee. Memory never grants permissions or task authority. Automatic conversation handoffs are separate and may summarize the current conversation even when Memory is off."
       >
         <button

@@ -35,7 +35,7 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
   };
   return (
     <section className="settings-section" aria-labelledby={id}>
-      <SettingsHeader page="about" id={id} title="About">
+      <SettingsHeader page="about" id={id}>
         <span className="settings-status" role="status">
           {copyStatus}
         </span>

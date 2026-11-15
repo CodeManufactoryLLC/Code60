@@ -10,11 +10,11 @@ import { defaultTextStyles } from "./typography.js";
 const unchanged = () => {};
 const props: ComponentProps<typeof SettingsPage> = {
   section: "about",
-  updates: <SettingsHeader page="updates" title="Updates" />,
+  updates: <SettingsHeader page="updates" />,
   versions: undefined,
-  orchestration: <SettingsHeader page="agents" title="Agents" />,
-  memory: <SettingsHeader page="memory" title="Memory" />,
-  pollingControls: <SettingsHeader page="polling-settings" title="Polling" />,
+  orchestration: <SettingsHeader page="agents" />,
+  memory: <SettingsHeader page="memory" />,
+  pollingControls: <SettingsHeader page="polling-settings" />,
   transparent: false,
   savingAppearance: false,
   onTransparent: unchanged,

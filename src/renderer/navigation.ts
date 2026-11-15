@@ -308,12 +308,6 @@ export const groups = {
   advanced: { label: pageDefinitions.advanced.label, icon: "app-analyze" },
   experiments: { label: pageDefinitions.experiments.label, icon: "app-chemical" },
 } as const;
-export const settingsNavigationIds = [
-  ...settingsSections.map(({ id, label }) => ({ id, label })),
-  { id: "advanced" as const, label: groups.advanced.label },
-]
-  .sort((a, b) => a.label.localeCompare(b.label))
-  .map(({ id }) => id);
 export function isSettingsSection(id: string): id is SettingsSectionId {
   return settingsSectionIds.some((section) => section === id);
 }

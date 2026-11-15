@@ -215,7 +215,6 @@ export function PollingControls({
     <section className="settings-section polling-settings" aria-label="Polling settings">
       <SettingsHeader
         page="polling-settings"
-        title="Polling"
         tip="Desktop only. Empty intervals turn automatic polling off. Worktrees scan only while their tab is visible. Manual polls still work while paused."
       >
         <button
