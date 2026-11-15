@@ -102,7 +102,7 @@
   --letter-spacing: normal;
   margin: 0;
   color: var(--splash-logo-text);
-  font-family: var(--font);
+  font-family: "D-DIN", sans-serif;
   font-size: 18px;
   font-weight: 400;
   text-align: center;

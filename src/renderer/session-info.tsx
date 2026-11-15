@@ -50,6 +50,7 @@ export function SessionInfo({
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const modes = state?.modes;
+  const modeKey = modes && JSON.stringify([modes.source, modes.confirmed, modes.controls]);
   const enabled =
     active && editable && !ended && !changing && !!modes?.controls.some((c) => c.options.length);
   const selected =
@@ -75,7 +76,7 @@ export function SessionInfo({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Session and capability changes must dismiss an existing menu.
   useEffect(() => {
     setOpen(false);
-  }, [sessionId, active, editable, changing, ended, modes]);
+  }, [sessionId, active, editable, changing, ended, modeKey]);
   useLayoutEffect(() => {
     const popup = menu.current;
     const button = trigger.current;
@@ -92,7 +93,7 @@ export function SessionInfo({
     (
       popup.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
       popup.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
-    )?.focus();
+    )?.focus({ preventScroll: true });
     const dismiss = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&

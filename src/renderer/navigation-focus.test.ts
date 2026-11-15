@@ -31,3 +31,33 @@ it("cancels stale navigation and preserves an opened menu or dialog", async () =
   expect(closest).toHaveBeenCalledWith('dialog[open], [role="menu"]');
   expect(getElementById).not.toHaveBeenCalled();
 });
+
+it("preserves a search target already focused in the visible destination", async () => {
+  const getElementById = vi.fn();
+  const activeElement = {
+    closest: (selector: string) => (selector === ".page-panel" ? {} : null),
+  } as unknown as Element;
+  focusNavigation("conversation-worker", { activeElement, getElementById });
+  await Promise.resolve();
+  expect(getElementById).not.toHaveBeenCalled();
+});
+
+it("does not steal focus from a later interaction", async () => {
+  const root = { activeElement: null as Element | null, getElementById: vi.fn() };
+  focusNavigation("conversation-worker", root);
+  root.activeElement = {} as Element;
+  await Promise.resolve();
+  expect(root.getElementById).not.toHaveBeenCalled();
+});
+
+it("still focuses navigation after hiding the previous page drops focus to the body", async () => {
+  const focus = vi.fn();
+  const root = {
+    activeElement: {} as Element,
+    getElementById: vi.fn(() => ({ focus }) as unknown as HTMLElement),
+  };
+  focusNavigation("conversation-worker", root);
+  root.activeElement = { tagName: "BODY", closest: () => null } as unknown as Element;
+  await Promise.resolve();
+  expect(focus).toHaveBeenCalledOnce();
+});

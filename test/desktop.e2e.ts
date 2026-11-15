@@ -2278,6 +2278,7 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
         ).toBe(strip.height * 2);
       }
       await page.getByRole("button", { name: "Relay", exact: true }).click();
+      await expect(page.locator("#panel-chat .page-breadcrumbs:visible").first()).toBeVisible();
       expect(
         (await page.locator("#panel-chat .page-breadcrumbs:visible").first().boundingBox())?.y,
       ).toBe(strip.height * 2);
@@ -8663,19 +8664,6 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expect(worker(a)).not.toContainText("only chat B");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(owner);
-    // Opening a worker from Sessions must reveal its inert ancestor before focusing the row.
-    const workerDisclosure = row(owner).locator("..").locator(".chat-workers-toggle");
-    await workerDisclosure.click();
-    await expect(workerDisclosure).toHaveAttribute("aria-expanded", "false");
-    await selectSidebarPage(page, "Sessions");
-    const sessionGrid = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
-    await sessionGrid.focus();
-    await sessionGrid.press("ArrowDown");
-    await sessionGrid.press("Enter");
-    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(1);
-    await expect(workerDisclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toBeFocused();
-    await row(a).click();
     await selectSidebarPage(page, "Settings");
     await expect(worker(a)).toBeHidden();
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
@@ -8787,6 +8775,18 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(page.locator(`#workers-${owner}`)).toHaveAttribute("aria-hidden", "true");
     await expect(children).toBeHidden();
     await expect(worker(a)).toBeVisible();
+    // This part of the fixture supplies owned workers. Opening from Sessions reveals them.
+    await selectSidebarPage(page, "Sessions");
+    const sessionGrid = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+    await sessionGrid.focus();
+    await sessionGrid.press("ArrowDown");
+    await sessionGrid.press("Enter");
+    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(1);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toBeFocused();
+    await row(a).click();
+    await toggle.click();
+    await expect(children).toBeHidden();
     await page.evaluate(() =>
       window.desktop.snapshot().then((snapshot) =>
         window.desktop.poll(["history"], {
@@ -9865,6 +9865,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(tables).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("tab")).toHaveText([
       "Home",
+      "Search",
       "Projects",
       "Apps",
       "Automation Studio",
@@ -9877,6 +9878,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(tables).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab")).toHaveText([
       "Home",
+      "Search",
       "Projects",
       "Apps",
       "Automation Studio",
@@ -11644,7 +11646,7 @@ test("desktop: keyboard focus is visible and enhanced focus is persistent", asyn
     );
     await selectSidebarPage(page, "Home");
     await expectActionFocus(page, [
-      page.locator(".home-card").first(),
+      page.locator("#panel-home .home-card").first(),
       page.locator(".poll-timestamp"),
     ]);
     const expectWrappedFocus = async (enhanced: boolean) => {
