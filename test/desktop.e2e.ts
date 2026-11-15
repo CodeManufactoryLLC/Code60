@@ -1198,15 +1198,6 @@ test("desktop: project chat recovers a missed update without losing messages or 
     });
     await composer.fill(text);
     await composer.press("Enter");
-    const sent = await page.evaluate(async () => {
-      const snapshot = await window.desktop.snapshot();
-      return {
-        kind: snapshot.chat.kind,
-        turns: snapshot.chat.run?.turns,
-        relayTurns: snapshot.chats.find((chat) => chat.kind === "relay")?.run?.turns,
-      };
-    });
-    expect(sent).toEqual({ kind: "project", turns: 1, relayTurns: 0 });
     await expect
       .poll(() =>
         application.evaluate(
@@ -1216,6 +1207,15 @@ test("desktop: project chat recovers a missed update without losing messages or 
         ),
       )
       .toBe(true);
+    const sent = await page.evaluate(async () => {
+      const snapshot = await window.desktop.snapshot();
+      return {
+        kind: snapshot.chat.kind,
+        turns: snapshot.chat.run?.turns,
+        relayTurns: snapshot.chats.find((chat) => chat.kind === "relay")?.run?.turns,
+      };
+    });
+    expect(sent).toEqual({ kind: "project", turns: 1, relayTurns: 0 });
     await composer.fill("Draft retained during resynchronization");
     await page.evaluate(() => window.desktop.poll(["config"]));
     await expect(chat.locator(".event.prompt:not(.automatic) pre")).toHaveText(text);

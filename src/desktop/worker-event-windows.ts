@@ -1,35 +1,18 @@
 import type { SequencedEvent } from "../bridge/index.js";
+import { EventWindow } from "./event-window.js";
 
-class Window {
-  private readonly entries: { entry: SequencedEvent; characters: number }[] = [];
-  private characters = 0;
-  truncated = false;
-
-  append(entry: SequencedEvent, characters: number): void {
-    this.entries.push({ entry, characters });
-    this.characters += characters;
-    while (this.entries.length > 512 || this.characters > 256_000) {
-      const first = this.entries.shift();
-      if (!first) break;
-      this.characters -= first.characters;
-      this.truncated = true;
-    }
-  }
-  read(): SequencedEvent[] {
-    return this.entries.map(({ entry }) => entry);
-  }
-}
+const limits = { events: 512, characters: 256_000 };
 
 /** Shared event references, independent target eviction and one compatibility tail. */
 export class WorkerEventWindows {
-  private aggregate = new Window();
-  private readonly targets = new Map<string, Window>();
+  private readonly aggregate = new EventWindow(limits);
+  private readonly targets = new Map<string, EventWindow>();
 
   append(targetId: string, entry: SequencedEvent): void {
     let target = this.targets.get(targetId);
     if (!target) {
       if (this.targets.size >= 256) throw new Error("Relay event target capacity reached.");
-      target = new Window();
+      target = new EventWindow(limits);
       this.targets.set(targetId, target);
     }
     const characters = JSON.stringify(entry).length;
@@ -44,6 +27,6 @@ export class WorkerEventWindows {
   }
   clear(): void {
     this.targets.clear();
-    this.aggregate = new Window();
+    this.aggregate.clear();
   }
 }

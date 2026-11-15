@@ -38,6 +38,7 @@ import {
 } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import { ConversationReplies } from "./conversation-replies.js";
+import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
 import type { DesktopKnowledge, KnowledgeCaller } from "./knowledge.js";
 import {
@@ -117,8 +118,7 @@ export class RelayService {
   private initialHistory = "";
   private historyPending = false;
   private error: string | null = null;
-  private readonly events: { entry: SequencedEvent; characters: number }[] = [];
-  private eventCharacters = 0;
+  private readonly events = new EventWindow({ characters: LIVE_EVENT_CHARACTER_LIMIT });
   private readonly workerEvents = new WorkerEventWindows();
   private readonly workerReplies = new Map<string, ConversationReplies>();
   private revision = 0;
@@ -544,8 +544,7 @@ export class RelayService {
     await stopping;
     if (!current()) return;
     this.error = null;
-    this.events.length = 0;
-    this.eventCharacters = 0;
+    this.events.clear();
     this.replySummary.reset();
     this.workerEvents.clear();
     this.workerReplies.clear();
@@ -714,7 +713,7 @@ export class RelayService {
       directory: this.store?.workspace ?? null,
       error: this.error,
       historySaving: this.writer?.failed ? "unavailable" : "available",
-      events: summary ? [] : this.events.map(({ entry }) => entry),
+      events: summary ? [] : this.events.read(),
       workers: this.currentWorkers().map((worker) => worker.id),
       workerLabels: Object.fromEntries(
         this.currentWorkers().map((worker) => [
@@ -891,18 +890,7 @@ export class RelayService {
     if (event.type === "turnEnd") void this.writer?.flush();
 
     if (event.type !== "acp") {
-      const entry = { revision: ++this.revision, event };
-      const characters = JSON.stringify(entry).length;
-      this.events.push({ entry, characters });
-      this.eventCharacters += characters;
-      // Original core events and framed source stay on disk. Live buffers are bounded.
-      let from = 0;
-      for (const item of this.events) {
-        if (this.eventCharacters <= LIVE_EVENT_CHARACTER_LIMIT) break;
-        this.eventCharacters -= item.characters;
-        from++;
-      }
-      if (from) this.events.splice(0, from);
+      this.events.append({ revision: ++this.revision, event });
     }
     if (event.type === "status" && event.status === "idle") this.scheduleDelivery();
     this.changed();

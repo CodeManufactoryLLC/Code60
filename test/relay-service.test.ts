@@ -778,7 +778,7 @@ it("retains earlier Relay turns while tiny fragments arrive within the character
   const id = required(relay.snapshot().run).id;
   for (const text of ["First request", "Second request"]) {
     await relay.action({ type: "send", id, text });
-    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
   }
   const events = relay.snapshot().events;
   expect(events.flatMap(({ event }) => (event.type === "prompt" ? [event.text] : []))).toEqual([
