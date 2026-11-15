@@ -56,6 +56,8 @@ import { RelayWriter } from "./relay-writer.js";
 import { summarizeRun } from "./run-summary.js";
 import { WorkerEventWindows } from "./worker-event-windows.js";
 
+const LIVE_EVENT_CHARACTER_LIMIT = 1_000_000;
+
 const instructions = [
   assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
   "You are Relay, Code60's application-wide orchestrator. Your workspace is your persistent home, not a default worker target.",
@@ -113,7 +115,8 @@ export class RelayService {
   private initialHistory = "";
   private historyPending = false;
   private error: string | null = null;
-  private readonly events: SequencedEvent[] = [];
+  private readonly events: { entry: SequencedEvent; characters: number }[] = [];
+  private eventCharacters = 0;
   private readonly workerEvents = new WorkerEventWindows();
   private readonly workerReplies = new Map<string, ConversationReplies>();
   private revision = 0;
@@ -515,6 +518,7 @@ export class RelayService {
     if (!current()) return;
     this.error = null;
     this.events.length = 0;
+    this.eventCharacters = 0;
     this.replySummary.reset();
     this.workerEvents.clear();
     this.workerReplies.clear();
@@ -683,7 +687,7 @@ export class RelayService {
       directory: this.store?.workspace ?? null,
       error: this.error,
       historySaving: this.writer?.failed ? "unavailable" : "available",
-      events: summary ? [] : [...this.events],
+      events: summary ? [] : this.events.map(({ entry }) => entry),
       workers: this.currentWorkers().map((worker) => worker.id),
       workerLabels: Object.fromEntries(
         this.currentWorkers().map((worker) => [
@@ -861,16 +865,15 @@ export class RelayService {
 
     if (event.type !== "acp") {
       const entry = { revision: ++this.revision, event };
-      this.events.push(entry);
+      const characters = JSON.stringify(entry).length;
+      this.events.push({ entry, characters });
+      this.eventCharacters += characters;
       // Original core events and framed source stay on disk. Live buffers are bounded.
-      let size = 0;
-      let from = this.events.length;
-      while (from > 0 && this.events.length - from < 512) {
-        const item = this.events[from - 1];
-        if (!item) break;
-        size += JSON.stringify(item).length;
-        if (size > 256_000) break;
-        from--;
+      let from = 0;
+      for (const item of this.events) {
+        if (this.eventCharacters <= LIVE_EVENT_CHARACTER_LIMIT) break;
+        this.eventCharacters -= item.characters;
+        from++;
       }
       if (from) this.events.splice(0, from);
     }

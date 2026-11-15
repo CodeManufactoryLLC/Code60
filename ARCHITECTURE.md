@@ -105,6 +105,9 @@ features, resource bounds and remaining native-platform validation.
 - One history-window builder supplies retained historical evidence and first-Send context.
   The Relay screen shows the live conversation and composer. It has no separate
   historical transcript panel, history paging buttons or historical Copy controls.
+  The live Relay transcript retains up to 1,000,000 serialized UTF-16 code units,
+  evicting oldest events only when that character budget is exceeded. It has no
+  event-count limit, so tiny streamed fragments do not prematurely evict text.
   Historical labels, summaries and partial-excerpt markers count toward 64,000
   Unicode characters. Prefer complete recent messages, preserve structured records,
   omit duplicate raw ACP/tool payloads and never split a Unicode character.
