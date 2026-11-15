@@ -6,6 +6,7 @@ import {
   type SearchSummarySource,
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
+import { PageTitle } from "./page-title.js";
 import {
   highlights,
   type SearchKind,
@@ -78,6 +79,7 @@ export function SearchPage({
   const [overview, setOverview] = useState<Overview | null>(null);
   const active = useRef<string | undefined>(undefined);
   const list = useRef<HTMLUListElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const expanded = submitted !== null;
   const loading = submitted?.results === null || overview?.status === "generating";
   const unapplied =
@@ -146,6 +148,7 @@ export function SearchPage({
     active.current = id;
     setSubmitted({ ...criteria, results: null, evidence: [] });
     setOverview(null);
+    content.current?.scrollTo({ top: 0, behavior: "instant" });
     try {
       const events = await data.read();
       if (active.current !== id) return;
@@ -180,6 +183,7 @@ export function SearchPage({
 
   return (
     <main className="search-page" aria-label="Search" data-expanded={expanded}>
+      <PageTitle page="search" className="table-title" />
       <div className="search-lead-space" aria-hidden="true" />
       <search className="search-entry">
         <form
@@ -264,7 +268,7 @@ export function SearchPage({
           </div>
         </form>
       </search>
-      <div className="search-content" hidden={!expanded && !!directory}>
+      <div ref={content} className="search-content" hidden={!expanded && !!directory}>
         {!directory && <p>Open a project to search.</p>}
         {expanded && (
           <div className="search-pending" hidden={!loading} inert={!loading}>

@@ -7,7 +7,6 @@ import { sessionStatus } from "./chat-presentation.js";
 import { type Conversation, conversationId, conversations, reconcileDisclosure } from "./chats.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { RelayNavigationIcon } from "./relay-navigation-icon.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
@@ -24,6 +23,7 @@ export function ChatSidebar({
   onAction,
   relayNavigation = false,
   onKeyDown,
+  entries: suppliedEntries,
 }: {
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -37,12 +37,16 @@ export function ChatSidebar({
   onAction?(request: OrchestrationChatAction): Promise<boolean>;
   relayNavigation?: boolean;
   onKeyDown?(event: KeyboardEvent<HTMLElement>): void;
+  entries?: readonly Conversation[];
 }) {
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
   );
   const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null);
-  const entries = useMemo(() => conversations(chats, runs, selectedId), [chats, runs, selectedId]);
+  const entries = useMemo(
+    () => suppliedEntries ?? conversations(chats, runs, selectedId),
+    [suppliedEntries, chats, runs, selectedId],
+  );
   const archivedFocus = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!archivedFocus.current || entries.some((entry) => entry.id === archivedFocus.current))
@@ -143,8 +147,6 @@ export function ChatSidebar({
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
     const relayHeading = relayNavigation && chat?.kind === "relay";
-    const relayWorking =
-      relayHeading && view?.status === "running" && view.turns > 0 && !view.stopping;
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
@@ -216,11 +218,11 @@ export function ChatSidebar({
               }
             }}
           >
-            {relayHeading && <RelayNavigationIcon working={relayWorking} />}
+            {relayHeading && <NavigationIcon name="app-steering-wheel" />}
             {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-              <NavigationIcon name="chat-circle" />
+              <NavigationIcon name="app-communication" />
             )}
-            {entry.role === "worker" && <NavigationIcon name="arrow-elbow-down-right" />}
+            {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
             <span className="chat-sidebar-label">{entry.label}</span>
             <span className="chat-sidebar-indicators">
               {unread > 0 && (

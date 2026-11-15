@@ -2,6 +2,7 @@ import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useMemo } from "react";
 import type { PollState, WorktreeListing } from "../bridge/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
+import { PageTitle } from "./page-title.js";
 
 type GitWorktree = WorktreeListing["worktrees"][number];
 
@@ -84,6 +85,11 @@ export function WorktreesPage({
 
   return (
     <main className="sessions" aria-label="Worktrees" data-heading-lines={lines.heading}>
+      {(!directory || !currentListing?.repository) && (
+        <header className="table-controls">
+          <PageTitle page="worktrees" className="table-title" />
+        </header>
+      )}
       {loading && (
         <p className="configuration-empty muted" role="status">
           Reading worktrees and calculating file sizes…

@@ -6,12 +6,12 @@ import {
   type AutomationUiRequest,
   type DesktopApi,
   type RendererAutomationDraft,
-  type ServiceStatus,
   TOOL_KINDS,
 } from "../bridge/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
+import { PageTitle } from "./page-title.js";
 
 const automationColumns = [
   { key: "name", title: "Name", width: 180, filter: "text" },
@@ -65,7 +65,6 @@ export function AutomationsPage({
 } & Pick<TableOptions, "lines" | "density" | "fit" | "textStyles">) {
   const [automations, setAutomations] = useState<AutomationSummary[]>([]);
   const [history, setHistory] = useState<AutomationHistoryEntry[]>([]);
-  const [status, setStatus] = useState<ServiceStatus>();
   const [selected, setSelected] = useState<string>();
   const [selectedExecution, setSelectedExecution] = useState<string>();
   const [before, setBefore] = useState<number>();
@@ -85,8 +84,7 @@ export function AutomationsPage({
     try {
       do {
         dirty.current = false;
-        const [nextStatus, list, page] = await Promise.all([
-          api.automation({ action: "status" }),
+        const [list, page] = await Promise.all([
           api.automation({ action: "list" }),
           api.automation({
             action: "history",
@@ -95,16 +93,14 @@ export function AutomationsPage({
           }),
         ]);
         if (owner !== generation.current) return;
-        setStatus(nextStatus as ServiceStatus);
         setAutomations(list as AutomationSummary[]);
         setHistory(page as AutomationHistoryEntry[]);
         setError("");
       } while (dirty.current && owner === generation.current);
     } catch {
       if (owner === generation.current) {
-        setStatus(undefined);
         setError(
-          "Scheduler unavailable. Install or start the background service, then refresh. Existing schedules and evidence are kept.",
+          "Scheduler unavailable. Open Apps → System Manager to install or start the background service, then refresh. Existing schedules and evidence are kept.",
         );
       }
     } finally {
@@ -148,11 +144,7 @@ export function AutomationsPage({
     <section className="automations-page">
       <header className="automation-page-heading">
         <div>
-          <h1 className="table-title">Automations</h1>
-          <p>
-            Runs continue after you quit Code60. Keep this computer awake and logged in. Missed runs
-            are skipped.
-          </p>
+          <PageTitle page="automations" className="table-title" />
         </div>
         <div className="automation-page-actions">
           <button
@@ -184,92 +176,11 @@ export function AutomationsPage({
         </div>
       </header>
 
-      <section className="automation-service" aria-labelledby="automation-service-title">
-        <div className="automation-service-summary">
-          <div className="automation-service-copy">
-            <h2 id="automation-service-title">Background service</h2>
-            <p className="automation-service-state" role="status">
-              <span
-                className={`automation-health-dot${status ? " is-connected" : ""}`}
-                aria-hidden="true"
-              />
-              {status
-                ? status.pausedAll
-                  ? "Installed, all automations paused"
-                  : "Installed and running"
-                : "Service unavailable"}
-              {status?.activeExecutionId && !status.pausedAll ? " · A run is active" : ""}
-            </p>
-          </div>
-          <div className="automation-service-actions">
-            {status ? (
-              status.pausedAll ? (
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy}
-                  onClick={() => void act({ action: "resumeAll" })}
-                >
-                  Resume all
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void act({ action: "pauseAll", cancelActive: true })}
-                >
-                  Pause all and cancel active work
-                </button>
-              )
-            ) : (
-              <button
-                type="button"
-                className="primary"
-                disabled={busy}
-                onClick={() => void act({ action: "scheduler", control: "install" })}
-              >
-                Install service
-              </button>
-            )}
-          </div>
-        </div>
-        {status?.block && (
-          <div className="automation-block" role="alert">
-            <span>
-              {status.block.reason === "leftover_agent"
-                ? "An unfinished agent process needs recovery."
-                : "The service could not save its private state."}
-            </span>
-            <button
-              type="button"
-              className="small"
-              disabled={busy}
-              onClick={() => void act({ action: "resolveBlock" })}
-            >
-              Recheck
-            </button>
-          </div>
-        )}
-        <details className="automation-service-options">
-          <summary>Service options</summary>
-          <div className="automation-service-tools">
-            {(["install", "repair", "start", "stop", "uninstall"] as const).map((control) => (
-              <button
-                type="button"
-                className={`small${control === "uninstall" ? " danger-text" : ""}`}
-                key={control}
-                disabled={busy}
-                onClick={() => void act({ action: "scheduler", control })}
-              >
-                {control.charAt(0).toUpperCase() + control.slice(1)}
-              </button>
-            ))}
-          </div>
-        </details>
-      </section>
-
       {error && <p role="alert">{error}</p>}
-      <div className="automation-grid automation-schedules-grid">
+      <section
+        className="automation-grid automation-schedules-grid automation-table-card"
+        aria-label="Schedules"
+      >
         <DataTable
           {...table}
           tableId="automations"
@@ -284,7 +195,7 @@ export function AutomationsPage({
           initialSort="name"
           display={(row, key) => String(row[key] ?? "Paused")}
         />
-      </div>
+      </section>
       {chosen && (
         <section className="automation-selection-actions" aria-label="Selected automation actions">
           <div className="automation-selection-label">
@@ -350,7 +261,10 @@ export function AutomationsPage({
         </section>
       )}
 
-      <div className="automation-grid automation-history-grid">
+      <section
+        className="automation-grid automation-history-grid automation-table-card"
+        aria-label="Execution history"
+      >
         <DataTable
           {...table}
           tableId="automation-history"
@@ -363,11 +277,8 @@ export function AutomationsPage({
           initialDescending
           display={(row, key) => String(row[key] ?? "Not started")}
         />
-      </div>
+      </section>
       <div className="automation-history-footer">
-        <p>
-          A finished run means the agent turn ended, not that the task was independently verified.
-        </p>
         <div className="automation-action-group">
           {selected && (
             <button

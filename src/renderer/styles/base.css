@@ -65,7 +65,7 @@ button {
   justify-content: center;
   gap: 6px;
 
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
 button:hover:not(:disabled, [aria-pressed="true"], [aria-selected="true"], [aria-current="true"]) {
@@ -152,6 +152,25 @@ textarea {
   accent-color: var(--primary);
 }
 
+input:where(
+  :not([type]),
+  [type="text"],
+  [type="search"],
+  [type="email"],
+  [type="url"],
+  [type="tel"],
+  [type="password"],
+  [type="number"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="time"]
+),
+textarea {
+  border-radius: var(--input-radius);
+}
+
 /* Paint field baselines inside the fill. */
 :where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
   --focus-rest-shadow: inset 0 -1px var(--control-border);
@@ -190,7 +209,7 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-/* Radio buttons are the one true circle in the square interface. */
+/* Radio buttons retain their circular geometry. */
 input[type="radio"] {
   border-radius: 50%;
 }
@@ -427,7 +446,7 @@ summary:hover {
   box-shadow: var(--group-shadow);
   vertical-align: middle;
   max-width: 100%;
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
 .button-group > button {
@@ -436,7 +455,7 @@ summary:hover {
   padding: 4px 12px;
   margin: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--button-radius);
   background: var(--group-fill);
   color: var(--text);
 }
@@ -548,7 +567,7 @@ summary {
   font-weight: 400;
 }
 
-.settings-page-heading h1,
+:where(.settings-page) .settings-section-header:where(:first-child) h1,
 .orchestration-chat-heading h1,
 .worker-chat-title,
 .chat-empty h2,
@@ -560,7 +579,7 @@ summary {
   opacity: 0.65;
 }
 
-.settings-page-heading h1:where(:hover),
+:where(.settings-page) .settings-section-header:where(:first-child) h1:where(:hover),
 .orchestration-chat-heading h1:where(:hover),
 .worker-chat-title:where(:hover),
 .chat-empty h2:where(:hover),
@@ -578,15 +597,19 @@ summary {
 }
 
 [role="button"] {
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
-input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"]) {
+input:is([type="button"], [type="submit"], [type="reset"]) {
+  border-radius: var(--button-radius);
+}
+
+input[type="checkbox"] {
   border-radius: var(--ui-radius);
 }
 
 [role="switch"] {
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
 .icon-button {

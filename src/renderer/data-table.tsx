@@ -20,6 +20,7 @@ import {
 import { createPortal } from "react-dom";
 import { FilterControls } from "./filter-controls.js";
 import { drawIcon, Icon } from "./icons.js";
+import { PageTitle } from "./page-title.js";
 import {
   filterProblem,
   matchesSavedFilter,
@@ -59,6 +60,16 @@ const tableTitles: Record<TableId, string> = {
 
 function dataColumnIndex(index: number, actionsColumn: number): number {
   return actionsColumn >= 0 && index >= actionsColumn ? index - 1 : index;
+}
+
+export function TableHeading({ tableId }: { tableId: TableId }) {
+  return tableId === "automations" || tableId === "automation-history" ? (
+    <h2 className="table-card-title">{tableTitles[tableId]}</h2>
+  ) : (
+    <PageTitle page={tableId} className="table-title">
+      {tableTitles[tableId]}
+    </PageTitle>
+  );
 }
 
 function compare<Row, Key extends keyof Row>(a: Row, b: Row, key: Key): number {
@@ -465,7 +476,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   return (
     <div className="data-table" data-heading-lines={lines.heading}>
       <div className="table-controls">
-        <h1 className="table-title">{tableTitles[tableId]}</h1>
+        <TableHeading tableId={tableId} />
         {scope && <div className="table-scope">{scope}</div>}
         <TableControlGroup label="Table controls">
           <button

@@ -9,6 +9,8 @@
 
 .sessions {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -62,6 +64,7 @@
 }
 
 .table-controls {
+  align-items: flex-start;
   padding-top: 0;
   gap: 8px 16px;
   flex-shrink: 0;
@@ -71,9 +74,21 @@
 .table-title {
   margin: 0;
   flex-shrink: 0;
-  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 400) var(--title-size, 18px) / 1.25 var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
+}
+
+.table-controls:has(> .page-breadcrumbs):not(.home-page > .table-controls) {
+  padding-bottom: var(--page-header-gap);
+  margin-bottom: 0;
+}
+
+.table-card-title {
+  min-width: 0;
+  font: var(--card-weight, 400) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
 }
 
 .table-control-scroll {
