@@ -9,6 +9,8 @@ import { type OperatingContractClauses, type PromptId, validatePromptTemplate } 
 // triggers a CSP violation in the sandboxed renderer. Apply the same mode in Node.
 z.config({ jitless: true });
 
+export * from "./knowledge.js";
+export * from "./navigation.js";
 export * from "./values.js";
 
 /** Return one concise message, never a serialized Zod issue containing input data. */

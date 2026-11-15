@@ -11,6 +11,7 @@ import { conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
+import { useKnowledgeNavigation } from "./knowledge-report.js";
 import { pageAvailable } from "./navigation.js";
 import { useNavigationActions } from "./navigation-actions.js";
 import { focusNavigation } from "./navigation-focus.js";
@@ -142,6 +143,13 @@ export function App({ api: transport }: { api: DesktopApi }) {
     );
   }, [database, databaseLoaded]);
   const run = snapshot?.runs.find((item) => item.record.id === selected);
+  useKnowledgeNavigation(transport, {
+    page: tabs.active,
+    settingsSection,
+    splash,
+    workerId,
+    theme,
+  });
   const navigationRuns = useMemo(
     () => [
       ...new Map(

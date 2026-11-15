@@ -22,6 +22,7 @@ import {
   assembleOperatingContract,
   DEFAULT_PROMPT_TEMPLATES,
   isActivityTool,
+  isKnowledgeTool,
   isMcpControlTool,
   parseActivityContextArgs,
   planMarkdown,
@@ -39,6 +40,7 @@ import { ActivityDisplay } from "./activity-display.js";
 import { ConversationReplies } from "./conversation-replies.js";
 import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
+import type { DesktopKnowledge, KnowledgeCaller } from "./knowledge.js";
 import {
   formatWorkerUpdate,
   parseControlArgs,
@@ -132,6 +134,7 @@ export class RelayService {
   private turns: Promise<unknown> = Promise.resolve();
   private closing = false;
   private storageFailed = false;
+  private knowledge: Pick<DesktopKnowledge, "call" | "context" | "hint"> | undefined;
 
   constructor(
     private readonly deps: CoreDeps,
@@ -159,6 +162,30 @@ export class RelayService {
         changed();
       },
     });
+  }
+  attachKnowledge(knowledge: Pick<DesktopKnowledge, "call" | "context" | "hint">): void {
+    this.knowledge = knowledge;
+  }
+  private knowledgeCaller(): KnowledgeCaller {
+    if (!this.store) throw new Error("Relay is unavailable");
+    return { kind: "relay", conversationId: this.store.id, generation: this.generation };
+  }
+  private knowledgeContext(): string {
+    if (!this.knowledge) return instructions;
+    let context: string;
+    try {
+      context = this.knowledge.context(this.knowledgeCaller());
+    } catch {
+      context = "--- Code60 awareness unavailable. Do not infer current UI state or authority. ---";
+    }
+    return `${instructions}\n\n${context}`;
+  }
+  knowledgePlan(planId: string): unknown {
+    const plan = this.plans?.get(planId);
+    return plan && { ...plan, markdown: planMarkdown(plan) };
+  }
+  knowledgeLiveWorkers(): number {
+    return this.task ? this.execution.liveCount(this.task) : 0;
   }
   detailVersion(targetId?: string): number {
     return targetId === undefined
@@ -638,7 +665,7 @@ export class RelayService {
               ],
             },
           ],
-          promptContext: () => instructions,
+          promptContext: () => this.knowledgeContext(),
         },
       );
       if (!current()) return await retire();
@@ -885,6 +912,13 @@ export class RelayService {
       directEditing: worker.workspaceMode === "direct",
     };
   }
+  private knowledgeHint(): unknown {
+    try {
+      return this.knowledge?.hint(this.knowledgeCaller());
+    } catch {
+      return { available: false };
+    }
+  }
   private currentWorkers(): ExecutionWorker[] {
     return this.store
       ? this.execution.list({ id: this.store.id, generation: this.generation })
@@ -892,6 +926,10 @@ export class RelayService {
   }
   private async tool(name: string, args: unknown): Promise<unknown> {
     if (this.closing || !this.gateway) throw new Error("Relay gateway is closed");
+    if (isKnowledgeTool(name)) {
+      if (!this.knowledge) throw new Error("Code60 awareness is unavailable");
+      return this.knowledge.call(name, args, this.knowledgeCaller());
+    }
     if (isActivityTool(name)) {
       if (name === "code60_get_activity_context") {
         parseActivityContextArgs(args);
@@ -918,6 +956,7 @@ export class RelayService {
         project: null,
         explicitTargetRequired: true,
         plans: this.plans?.list() ?? [],
+        ...(this.knowledge ? { knowledge: this.knowledgeHint() } : {}),
       };
     }
     if (name === "code60_list_agents") {
