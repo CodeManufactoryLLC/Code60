@@ -25,6 +25,18 @@
   scrollbar-gutter: stable both-edges;
 }
 
+.home-welcome {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 736px;
+  margin: auto auto 24px;
+  font: var(--card-weight, 300) var(--card-size, 22px) var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .home-cards {
   --navigation-card-width: 224px;
   display: grid;
@@ -35,6 +47,10 @@
   max-width: 736px;
   margin: auto;
   flex-shrink: 0;
+}
+
+.home-welcome + .home-cards {
+  margin-top: 0;
 }
 
 .home-card {
@@ -89,10 +105,35 @@
 }
 
 .home-card-name {
-  font: var(--card-weight, 400) max(8px, calc(var(--card-size, 22px) * 9 / 11))
+  font: var(--card-weight, 300) max(8px, calc(var(--card-size, 22px) * 9 / 11))
     var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   --letter-spacing: var(--card-spacing, normal);
+}
+
+.home-card-create {
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 16px;
+  border: 3px dashed var(--control-border);
+  background: transparent;
+}
+
+.home-card-create .home-card-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.home-card-create .carbon-icon {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
 }
 
 .home-card-arrow {

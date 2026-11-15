@@ -20,7 +20,12 @@ import { useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
-import { delegatedActivity, isLiveMessage, turnTimings } from "./chat-presentation.js";
+import {
+  chatFailureReason,
+  delegatedActivity,
+  isLiveMessage,
+  turnTimings,
+} from "./chat-presentation.js";
 import { useChatScroll } from "./chat-scroll.js";
 import { conversationId } from "./chats.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
@@ -273,7 +278,8 @@ export function ChatPage({
               ? "Sending"
               : "";
   const failed = run && ["failed", "timed_out", "interrupted"].includes(run.status);
-  const failure = error || chat?.error || (failed ? run.reason : "");
+  const failure =
+    error || chatFailureReason(run?.status, chat?.error || (failed ? run.reason : undefined));
   const opening = progress === "Connecting" && !failure;
   useEffect(() => {
     setError("");
@@ -352,6 +358,7 @@ export function ChatPage({
               Cancel
             </button>
           ) : (
+            relay &&
             (!run || ended) && (
               <button
                 type="button"
@@ -360,7 +367,7 @@ export function ChatPage({
                   void action({ type: "restart", id: run?.id ?? chat?.conversationId ?? null })
                 }
               >
-                {relay ? "Retry connection" : "New session"}
+                Retry connection
               </button>
             )
           )}
@@ -375,26 +382,6 @@ export function ChatPage({
       {relay && chat?.historySaving === "unavailable" && (
         <div className="warning-banner" role="status">
           History isn’t being saved. Recent messages may be unavailable after restart.
-        </div>
-      )}
-      {chat?.restored && (
-        <div className="warning-banner" role="status">
-          <span>
-            Saved chat is stopped. Send starts a new request with the selected tactic. Continue task
-            uses its original instructions. Previous workers are history only.
-          </span>
-          {run && chat.taskId && (
-            <button
-              type="button"
-              disabled={busy || !database}
-              onClick={() => {
-                if (chat.taskId)
-                  void action({ type: "continue-task", id: run.id, taskId: chat.taskId });
-              }}
-            >
-              Continue task
-            </button>
-          )}
         </div>
       )}
       <div className="orchestration-chat-body">

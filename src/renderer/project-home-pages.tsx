@@ -1,5 +1,4 @@
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
-import { Icon } from "./icons.js";
 import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { conversationNodes, projectConversations, projectNodes } from "./navigation-tree.js";
@@ -24,16 +23,11 @@ export function ProjectsHomePage({
       empty="No open projects"
       error={navigation.error}
       pending={navigation.pending}
-      actions={
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={database ? "Open Project" : "Connect to database"}
-          onClick={onOpenProject}
-        >
-          <Icon name="add" />
-        </button>
-      }
+      create={{
+        label: "New Project",
+        title: database ? "Open Project" : "Connect to database",
+        onClick: onOpenProject,
+      }}
     />
   );
 }
@@ -65,17 +59,11 @@ export function ProjectHomePages({
       empty="No conversations"
       error={navigation.error}
       pending={navigation.pending}
-      actions={
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={`New chat in ${pathLabel(project.path)}`}
-          disabled={navigation.pending}
-          onClick={() => void navigation.chatAction({ type: "new", projectId: project.id })}
-        >
-          <Icon name="add" />
-        </button>
-      }
+      create={{
+        label: "New Chat",
+        ariaLabel: `New chat in ${pathLabel(project.path)}`,
+        onClick: () => void navigation.chatAction({ type: "new", projectId: project.id }),
+      }}
     />
   ));
 }

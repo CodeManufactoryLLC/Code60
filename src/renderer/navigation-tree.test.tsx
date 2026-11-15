@@ -5,6 +5,7 @@ import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import {
   conversationNodes,
+  conversationProject,
   inNavigationBranch,
   isNavigationHome,
   navigationParent,
@@ -49,6 +50,21 @@ const navigation: NavigationActions = {
 };
 
 describe("navigation tree", () => {
+  it("reveals only the owning project's ancestors, never Relay or an absent selection", () => {
+    const projects = [{ ...project, workerIds: [...project.workerIds, "relay"] }];
+    expect(conversationProject("one", projects, chats, runs)).toBe("a");
+    expect(conversationProject("owned", projects, chats, runs)).toBe("a");
+    expect(conversationProject("relay", projects, chats, runs)).toBeUndefined();
+    expect(conversationProject("foreign", projects, chats, runs)).toBeUndefined();
+    expect(
+      conversationProject(
+        undefined,
+        projects,
+        [{ ...chats[0], run: null } as OrchestrationChat],
+        runs,
+      ),
+    ).toBeUndefined();
+  });
   it("resolves only immediate children in sidebar order with real destinations", () => {
     expect(staticChildren("apps", null).map(({ id }) => id)).toEqual([
       "automations",
@@ -157,7 +173,8 @@ describe("navigation tree", () => {
       />,
     );
     expect(empty).toContain("No open projects");
-    expect(empty).toContain('aria-label="Connect to database"');
+    expect(empty).toContain('aria-label="New Project"');
+    expect(empty).toContain('title="Connect to database"');
     const home = renderToStaticMarkup(
       <NavigationHomePage page="tables" cards={[]} onOpen={() => {}} error="Read failed" hidden />,
     );
@@ -177,7 +194,58 @@ describe("navigation tree", () => {
     expect(html).toContain('aria-label="New chat in A"');
     expect(html).toContain('id="project-a-title"');
     expect(dynamic[0]?.props.hidden).toBe(false);
-    dynamic[0]?.props.actions.props.onClick();
+    dynamic[0]?.props.create?.onClick();
     expect(navigation.chatAction).toHaveBeenCalledWith({ type: "new", projectId: "a" });
+  });
+
+  it.each([null, "/db"])(
+    "uses a first-position New Project card without a header plus for %s",
+    (database) => {
+      const onOpenProject = vi.fn();
+      const page = ProjectsHomePage({ projects: [project], database, navigation, onOpenProject });
+      const html = renderToStaticMarkup(page);
+      const header = html.slice(0, html.indexOf('class="home-content"'));
+      expect(header).not.toContain('class="icon-button"');
+      expect(html.indexOf('aria-label="New Project"')).toBeLessThan(
+        html.indexOf('aria-label="Open A"'),
+      );
+      page.props.create?.onClick();
+      expect(onOpenProject).toHaveBeenCalledExactlyOnceWith();
+      const pending = renderToStaticMarkup(
+        <ProjectsHomePage
+          projects={[]}
+          database={database}
+          navigation={{ ...navigation, pending: true }}
+          onOpenProject={onOpenProject}
+        />,
+      );
+      expect(pending).toContain('aria-label="New Project" disabled=""');
+    },
+  );
+
+  it("keeps New Chat first and bound to each retained project, without a header plus", () => {
+    const chatAction = vi.fn(async () => true);
+    const pages = ProjectHomePages({
+      projects: [project, { ...project, id: "b", path: "/projects/B", chatIds: [] }],
+      chats,
+      runs,
+      selectedId: "one",
+      activeId: "b",
+      navigation: { ...navigation, chatAction },
+    });
+    for (const [index, id] of ["a", "b"].entries()) {
+      const page = pages[index];
+      if (!page) throw new Error("Missing retained project home");
+      const html = renderToStaticMarkup(page);
+      const header = html.slice(0, html.indexOf('class="home-content"'));
+      expect(header).not.toContain('class="icon-button"');
+      expect(html).toContain("New Chat");
+      if (id === "a")
+        expect(html.indexOf("home-card-create")).toBeLessThan(html.indexOf('data-feature="one"'));
+      expect(page.props.hidden).toBe(id !== "b");
+      page.props.create?.onClick();
+      expect(chatAction).toHaveBeenLastCalledWith({ type: "new", projectId: id });
+    }
+    expect(chatAction).toHaveBeenCalledTimes(2);
   });
 });

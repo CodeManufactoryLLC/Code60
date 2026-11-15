@@ -33,7 +33,7 @@ it("provides create-command without a saved row and preserves user overrides", (
     override,
     ...BUILTIN_COMMANDS.filter((entry) => entry.name !== override.name),
   ]);
-  const expanded = expandCommand(builtin, "/create-command Review SQL migrations for safety.");
+  const expanded = expandCommand(builtin, "$create-command Review SQL migrations for safety.");
   expect(expanded).toContain("Use code60_create_command");
   expect(expanded).toContain("without carrying out its prompt");
   expect(expanded).toContain("instructions are missing");
@@ -53,12 +53,12 @@ it("ships unique valid built-ins and preserves saved overrides for each name", (
     const available = availableCommands([override]);
     expect(available.filter((entry) => entry.name === builtin.name)).toEqual([override]);
     expect(available).toHaveLength(BUILTIN_COMMANDS.length);
-    const request = `/${builtin.name} Help with my idea.\nKeep this context.`;
+    const request = `$${builtin.name} Help with my idea.\nKeep this context.`;
     expect(expandCommand(builtin, request)).toBe(
-      `Command /${builtin.name}: ${builtin.title}\n${builtin.prompt}\n\nAdditional instructions:\nHelp with my idea.\nKeep this context.`,
+      `Command $${builtin.name}: ${builtin.title}\n${builtin.prompt}\n\nAdditional instructions:\nHelp with my idea.\nKeep this context.`,
     );
-    expect(expandCommand(builtin, `/${builtin.name}`)).toBe(
-      `Command /${builtin.name}: ${builtin.title}\n${builtin.prompt}`,
+    expect(expandCommand(builtin, `$${builtin.name}`)).toBe(
+      `Command $${builtin.name}: ${builtin.title}\n${builtin.prompt}`,
     );
   }
 });
@@ -66,7 +66,7 @@ it("ships unique valid built-ins and preserves saved overrides for each name", (
 it("requires Code60 plan creation and human acceptance in both planning commands", () => {
   for (const name of ["plan", "business-evaluation"]) {
     const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
-    if (!builtin) throw new Error(`Missing /${name}`);
+    if (!builtin) throw new Error(`Missing $${name}`);
     for (const instruction of [
       "code60_create_plan",
       "code60_update_plan",
@@ -141,7 +141,17 @@ it("bounds every command field and supplies an empty optional description", () =
       prompt: "p".repeat(100_000),
     }).success,
   ).toBe(true);
-  for (const name of ["", "-x", "Upper", "two words", "/review", "a/b", "x\n", "a".repeat(65)])
+  for (const name of [
+    "",
+    "-x",
+    "Upper",
+    "two words",
+    "$review",
+    "/review",
+    "a/b",
+    "x\n",
+    "a".repeat(65),
+  ])
     expect(commandNameSchema.safeParse(name).success).toBe(false);
   for (const invalid of [
     { title: "" },
@@ -160,28 +170,33 @@ it("bounds every command field and supplies an empty optional description", () =
 });
 
 it("recognizes only a complete leading token, case-insensitively", () => {
-  expect(leadingCommand("/REVIEW-2 extra")).toBe("review-2");
-  expect(leadingCommand("/review-2\nnext")).toBe("review-2");
+  expect(leadingCommand("$REVIEW-2 extra")).toBe("review-2");
+  expect(leadingCommand("$review-2\nnext")).toBe("review-2");
+  expect(leadingCommand(`$${"a".repeat(64)}`)).toBe("a".repeat(64));
   for (const text of [
-    " /review-2",
-    "Use /review-2",
-    "/review-2/path",
-    "/",
-    "/bad_name",
-    `/${"a".repeat(65)}`,
+    "/review-2",
+    "/plan",
+    "/tmp",
+    " $review-2",
+    "Use $review-2",
+    "$review-2/path",
+    "$",
+    "$bad_name",
+    `$${"a".repeat(65)}`,
   ])
     expect(leadingCommand(text)).toBeUndefined();
 });
 
-it("expands one command only and treats later slash tokens as additional instructions", () => {
-  expect(expandCommand(command, "/review-2")).toBe(
-    "Command /review-2: Review code\nInspect the diff.",
+it("expands one command only and treats later dollar tokens as additional instructions", () => {
+  expect(expandCommand(command, "$review-2")).toBe(
+    "Command $review-2: Review code\nInspect the diff.",
   );
-  expect(expandCommand(command, "/REVIEW-2 \n")).toBe(
-    "Command /review-2: Review code\nInspect the diff.",
+  expect(expandCommand(command, "$REVIEW-2 \n")).toBe(
+    "Command $review-2: Review code\nInspect the diff.",
   );
-  expect(expandCommand(command, "/review-2  Focus here.\n/another")).toBe(
-    "Command /review-2: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus here.\n/another",
+  expect(expandCommand(command, "$review-2  Focus here.\n$another")).toBe(
+    "Command $review-2: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus here.\n$another",
   );
-  expect(() => expandCommand(command, "/other")).toThrow(/beginning/);
+  expect(() => expandCommand(command, "$other")).toThrow(/beginning/);
+  expect(() => expandCommand(command, "/review-2")).toThrow(/beginning/);
 });

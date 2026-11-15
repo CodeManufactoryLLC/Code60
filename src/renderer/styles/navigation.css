@@ -25,17 +25,16 @@
   --nav-row-height: max(40px, calc(1.25 * var(--button-size) + 8px));
   --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
-  --control-fill: var(--chat-neutral);
-  --disabled-fill: var(--chat-neutral);
+  --control-fill: var(--surface);
+  --disabled-fill: var(--surface);
   grid-column: 1;
   grid-row: 2;
   align-self: stretch;
   max-height: 100%;
   margin-bottom: var(--page-margin);
-  border: 1px solid var(--border);
-  border-width: 0 1px 0 0;
+  border: 0;
   border-radius: 0;
-  background: var(--chat-neutral);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -70,10 +69,16 @@
 }
 
 .sidebar-toggle {
+  position: fixed;
+  top: calc((var(--app-titlebar-height) - var(--sidebar-toggle-width)) / 2);
+  /* Clear macOS traffic lights and any wider native-control inset. */
+  left: max(80px, calc(var(--titlebar-left) + 8px));
+  z-index: 12;
   flex-shrink: 0;
   width: var(--sidebar-toggle-width);
   height: var(--sidebar-toggle-width);
   min-height: var(--sidebar-toggle-width);
+  color: var(--muted);
   -webkit-app-region: no-drag;
 }
 
@@ -114,7 +119,7 @@
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -185,9 +190,15 @@
   max-width: 100%;
 }
 
+.page-title-placeholder {
+  --title-size: var(--page-title-space-size, 64px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .page-breadcrumbs ol {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin: 0;
@@ -205,6 +216,24 @@
 
 .page-breadcrumbs .page-title {
   flex-shrink: 1;
+}
+
+.page-breadcrumbs [aria-current="page"] :is(.page-title-text, .chat-title) {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only) {
+  position: relative;
+}
+
+.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only)::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -0.15em;
+  border-bottom: 1px solid currentColor;
+  pointer-events: none;
 }
 
 .page-breadcrumbs :is(.breadcrumb-link, .breadcrumb-label) {
@@ -259,7 +288,7 @@
   --control-fill: var(--accent-bg);
   background: var(--accent-bg);
   color: var(--text);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
 }
 
 .sidebar-settings {
@@ -400,17 +429,20 @@
   justify-content: flex-end;
   align-items: center;
   min-width: 0;
+  color: var(--text);
 }
 
 .sidebar .chat-sidebar-row:has(> .chat-sidebar-entry:enabled):hover {
   background: var(--hover-bg);
 }
 
-.sidebar .chat-sidebar-row > button.chat-sidebar-entry {
+.sidebar .chat-sidebar-row > button.chat-sidebar-entry,
+.sidebar .project-chat-heading > button.project-chat-name {
   background-color: transparent;
 }
 
-.sidebar .chat-sidebar-row > .chat-sidebar-entry:not(:disabled) {
+.sidebar .chat-sidebar-row > .chat-sidebar-entry:not(:disabled),
+.sidebar .project-chat-heading > .project-chat-name:not(:disabled) {
   color: inherit;
 }
 
@@ -419,13 +451,6 @@
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-}
-
-.chat-sidebar-status {
-  max-width: 7ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11px;
 }
 
 .chat-unread {
@@ -469,6 +494,11 @@
   align-items: stretch;
   min-width: 0;
   min-height: var(--nav-row-height);
+  color: var(--text);
+}
+
+.chat-page-heading .page-group-toggle:not(:disabled) {
+  color: inherit;
 }
 
 .project-chat-heading:hover {
@@ -554,7 +584,7 @@
 .chat-page-heading {
   position: relative;
   flex-shrink: 0;
-  color: var(--muted);
+  color: var(--text);
 }
 
 .chat-page-heading:has(.project-sidebar-open) .page-group-toggle {
@@ -606,7 +636,7 @@
 .chat-sidebar-entry[aria-current="true"] {
   background: var(--control-fill);
   color: var(--text);
-  font-weight: 400;
+  font-weight: var(--button-weight, 300);
 }
 
 .chat-unread {
@@ -661,6 +691,6 @@
   box-shadow: var(--focus-inset-shadow);
 }
 
-.sidebar button:hover:not(:disabled, .chat-sidebar-entry) {
+.sidebar button:hover:not(:disabled, .chat-sidebar-entry, .project-chat-name) {
   background: var(--hover-bg);
 }

@@ -43,7 +43,7 @@
   border-radius: var(--card-radius);
 }
 .rag-results h3 {
-  font-weight: 400;
+  font-weight: inherit;
   margin: 0 0 8px;
 }
 .rag-metadata {

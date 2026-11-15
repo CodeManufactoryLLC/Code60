@@ -127,9 +127,12 @@
   input,
   select,
   textarea,
-  .button-group,
-  .composer {
+  .button-group {
     border: 1px solid ButtonText;
+  }
+  .composer {
+    background: Canvas;
+    outline: 1px solid ButtonText;
   }
   .page-tab [aria-selected="true"],
   .search-results [aria-selected="true"],
@@ -202,9 +205,12 @@
 @media (forced-colors: active) {
   .event.prompt:not(.automatic) pre {
     border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
   }
-  .orchestration-chat-body .composer:focus-within {
-    border-color: Highlight;
+  .composer:focus-within {
+    background: Canvas;
+    outline: 2px solid Highlight;
   }
 }
 

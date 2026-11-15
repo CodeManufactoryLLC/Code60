@@ -4,7 +4,12 @@ import { AnchoredMenu } from "./anchored-menu.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { parentActivation, projectConversations } from "./navigation-tree.js";
+import {
+  conversationProject,
+  type NavigationTarget,
+  parentActivation,
+  projectConversations,
+} from "./navigation-tree.js";
 import { pathLabel } from "./path-label.js";
 
 type Props = ComponentProps<typeof ChatSidebar> & {
@@ -13,6 +18,7 @@ type Props = ComponentProps<typeof ChatSidebar> & {
   onProjectAction(request: ProjectAction): Promise<boolean>;
   homeProjectId: string | undefined;
   onProjectOpen(id: string): void;
+  destination?: NavigationTarget | undefined;
 };
 
 export function ProjectChatSidebar({
@@ -21,6 +27,8 @@ export function ProjectChatSidebar({
   onProjectAction,
   homeProjectId,
   onProjectOpen,
+  ancestorsExpanded = true,
+  destination,
   ...props
 }: Props) {
   const [menu, setMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
@@ -33,22 +41,39 @@ export function ProjectChatSidebar({
     const added = [...live].filter((id) => !known.current.has(id));
     known.current = live;
     setExpanded((current) => {
+      if (!ancestorsExpanded) return current.size ? new Set() : current;
       const next = new Set([...current].filter((id) => live.has(id)));
       for (const id of added) next.add(id);
       return next.size === current.size && [...next].every((id) => current.has(id))
         ? current
         : next;
     });
-  }, [projects]);
-  const selectedProject =
-    props.chats.find((chat) => chat.run?.id === props.selectedId)?.projectId ??
-    projects.find((project) => project.workerIds.includes(props.selectedId ?? ""))?.id;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: New or explicit same-project destinations must reveal their manually collapsed ancestor.
+  }, [projects, ancestorsExpanded]);
+  const selectedProject = conversationProject(props.selectedId, projects, props.chats, props.runs);
+  const previousSelection = useRef({ id: props.selectedId, serial: props.navigationSerial });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Page activation alone must not reveal a stale project selection while navigating to Relay.
   useLayoutEffect(() => {
-    const reveal = homeProjectId ?? (props.open ? selectedProject : undefined);
+    const previous = previousSelection.current;
+    previousSelection.current = { id: props.selectedId, serial: props.navigationSerial };
+    const changed = previous.id !== props.selectedId || previous.serial !== props.navigationSerial;
+    const matches = destination?.kind !== "conversation" || destination.id === props.selectedId;
+    const reveal =
+      homeProjectId ?? (props.open && changed && matches ? selectedProject : undefined);
     if (reveal)
       setExpanded((current) => (current.has(reveal) ? current : new Set([...current, reveal])));
-  }, [selectedProject, props.selectedId, props.navigationSerial, props.open, homeProjectId]);
+  }, [selectedProject, props.selectedId, props.navigationSerial, homeProjectId]);
+  const destinationProject =
+    destination?.kind === "project"
+      ? destination.id
+      : destination?.kind === "conversation"
+        ? conversationProject(destination.id, projects, props.chats, props.runs)
+        : undefined;
+  useLayoutEffect(() => {
+    if (destination && destinationProject)
+      setExpanded((current) =>
+        current.has(destinationProject) ? current : new Set([...current, destinationProject]),
+      );
+  }, [destination, destinationProject]);
   return (
     <>
       {projects.map((project) => {
@@ -146,6 +171,7 @@ export function ProjectChatSidebar({
             >
               <ChatSidebar
                 {...props}
+                ancestorsExpanded={ancestorsExpanded && open}
                 entries={projectConversations(project, props.chats, props.runs, props.selectedId)}
               />
             </div>

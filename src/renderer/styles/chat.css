@@ -97,7 +97,7 @@
   font-family: var(--agent-font, var(--font));
   --letter-spacing: var(--agent-spacing, normal);
   font-size: var(--agent-size, 14px);
-  font-weight: var(--agent-weight, 400);
+  font-weight: var(--agent-weight, 300);
   text-transform: var(--agent-case, none);
   line-height: 1.65;
 }
@@ -124,7 +124,7 @@
 .chat-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin-block: 1em 0.4em;
   font-family: inherit;
-  font-weight: 400;
+  font-weight: inherit;
   line-height: 1.3;
 }
 
@@ -170,7 +170,7 @@
 .event.message .chat-markdown :is(pre, code) {
   font-family: var(--mono);
   font-size: 0.95em;
-  font-weight: 400;
+  font-weight: inherit;
   text-transform: none;
   --letter-spacing: normal;
 }
@@ -217,7 +217,7 @@
 }
 
 .chat-markdown th {
-  font-weight: 400;
+  font-weight: inherit;
   background: var(--field-fill);
 }
 
@@ -256,7 +256,7 @@
   font-family: var(--human-font, var(--font));
   --letter-spacing: var(--human-spacing, normal);
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-prompt-weight, 400);
+  font-weight: var(--human-weight, 300);
   text-transform: var(--human-case, none);
   line-height: 1.65;
   color: var(--human-text);
@@ -273,10 +273,10 @@
 .event.prompt:where(:not(.automatic)) pre {
   padding: 12px 18px;
   border: 1px solid var(--user-bubble);
-  background: transparent;
+  background: var(--user-bubble);
   color: var(--on-user-bubble);
 
-  border-radius: var(--ui-radius);
+  border-radius: var(--chat-radius);
 }
 
 .event.toolCall {
@@ -322,9 +322,10 @@
 /* Composer */
 .composer {
   margin: 12px;
-  border: 1px solid var(--surface-edge);
+  border: 0;
+  padding: 1px;
   box-shadow: var(--composer-shadow);
-  background: var(--field-fill);
+  background: var(--composer-bg);
   flex-shrink: 0;
   overflow: hidden;
 
@@ -347,8 +348,8 @@
   box-shadow: none;
 }
 
-:where(:root[data-focus-highlight="on"]) .composer:focus-within {
-  border-color: var(--focus-line);
+.composer:focus-within {
+  background: var(--composer-focus-bg);
   outline: 0;
   box-shadow: var(--composer-shadow);
 }
@@ -360,7 +361,7 @@
   justify-content: space-between;
   padding: 8px 10px;
   border-top: 1px solid transparent;
-  background: var(--surface);
+  background: transparent;
 }
 
 .composer-footer span {
@@ -375,7 +376,7 @@
   background-color: var(--disabled-fill);
   color: var(--muted);
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 /* Approval card */
@@ -407,7 +408,7 @@
 
 .approval strong {
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--warning-text);
 }
 
@@ -477,6 +478,10 @@
   font-size: var(--text-size, 13px);
 }
 
+.orchestration-chat-status:empty {
+  display: none;
+}
+
 .orchestration-chat-body {
   display: flex;
   flex-direction: column;
@@ -540,6 +545,7 @@
 }
 
 .orchestration-chat-body .event.message {
+  margin-bottom: 8px;
   padding: 16px 18px;
   border: 0;
 }
@@ -578,12 +584,12 @@
 }
 
 .orchestration-chat-body .event.prompt pre {
-  font-weight: var(--human-weight, 400);
+  font-weight: var(--human-weight, 300);
 }
 
 .chat-message-speaker {
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
   margin-bottom: 8px;
   color: var(--muted);
 }
@@ -651,14 +657,6 @@
   position: relative;
   flex-shrink: 0;
   margin: 1px;
-  border: 1px solid var(--control-border);
-  box-shadow: var(--composer-shadow);
-  background: var(--chat-neutral);
-}
-
-.orchestration-chat-body .composer:focus-within {
-  border-color: var(--focus-line);
-  outline: 0;
   box-shadow: var(--composer-shadow);
 }
 
@@ -1009,7 +1007,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--text-size, 13px);
-  font-weight: 400;
+  font-weight: var(--text-weight, 300);
   font-variant-numeric: tabular-nums;
   text-align: left;
   overflow-wrap: anywhere;
@@ -1123,7 +1121,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   border: 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  margin: 4px 0 0 calc(var(--title-size, 18px) + 8px);
+  margin: 4px 0 0 calc(var(--page-title-space-size, 64px) + 8px);
   font-size: var(--text-size, 13px);
 }
 
@@ -1195,7 +1193,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 
 .turn-timer {
-  margin: 8px 0;
+  margin: 4px 0;
   color: var(--muted);
   font-size: var(--text-size, 13px);
   text-transform: none;
@@ -1203,7 +1201,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 
 .turn-separator {
-  margin: 12px 0;
+  margin: 4px 0 12px;
   border: 0;
   border-top: 1px solid var(--border);
 }

@@ -91,7 +91,7 @@ export function CommandsPage({
         <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <InfoTip label="About commands">
           Reusable prompts shared across projects in this database. Start an orchestrator message
-          with /name to use one.
+          with $name to use one.
         </InfoTip>
         <TableControlGroup label="Command actions">
           <button
@@ -122,7 +122,7 @@ export function CommandsPage({
                   setError("");
                 }}
               >
-                <span className="prompt-editor-name">/{entry.name}</span>
+                <span className="prompt-editor-name">${entry.name}</span>
                 <span className="prompt-editor-source">{entry.title}</span>
                 {drafts[entry.id] && <span className="prompt-editor-source">Unsaved changes</span>}
               </button>
@@ -180,7 +180,7 @@ export function CommandsPage({
                     </div>
                   ) : (
                     <div className={field === "name" ? "command-name-input" : undefined}>
-                      {field === "name" && <span aria-hidden="true">/</span>}
+                      {field === "name" && <span aria-hidden="true">$</span>}
                       <input
                         {...control}
                         maxLength={field === "title" ? 120 : field === "name" ? 64 : 500}

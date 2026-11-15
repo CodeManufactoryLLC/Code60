@@ -39,7 +39,7 @@ function setup(overrides: Partial<KnowledgeRuntime> = {}) {
       {
         id: "command:1",
         kind: "command",
-        title: "/fix",
+        title: "$fix",
         source: "database",
         value: "x".repeat(20_000),
       },
@@ -116,17 +116,19 @@ describe("DesktopKnowledge", () => {
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(
-      await knowledge.call("code60_get_capabilities", { query: "slash" }, project),
+      await knowledge.call("code60_get_capabilities", { query: "reusable prompts" }, project),
     );
     expect(first.entries).toEqual([
       expect.objectContaining({
         id: "commands",
+        label: "Commands",
+        access: expect.stringContaining("$ command picker"),
         availability: expect.objectContaining({ status: "available" }),
       }),
     ]);
     runtime.database = null;
     const blocked = result(
-      await knowledge.call("code60_get_capabilities", { query: "slash" }, project),
+      await knowledge.call("code60_get_capabilities", { query: "reusable prompts" }, project),
     );
     expect(blocked.entries).toEqual([
       expect.objectContaining({

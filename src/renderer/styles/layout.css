@@ -54,25 +54,36 @@
 }
 
 .workspace-header {
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 1;
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
+  column-gap: var(--page-margin);
+  align-items: flex-start;
   min-width: 0;
   min-height: 0;
-  padding-inline: var(--page-padding);
+  padding: 0;
 }
 
-.app-workspace:has(> .sidebar[data-open="true"])::before {
-  content: "";
-  position: absolute;
-  top: calc(-1 * var(--app-titlebar-height));
-  bottom: calc(-1 * var(--app-footer-height));
-  left: calc(var(--sidebar-track-width) - 1px);
-  width: 1px;
-  border-left: 1px solid var(--border);
-  z-index: 11;
-  pointer-events: none;
+.workspace-breadcrumbs {
+  grid-column: 2;
+  min-width: 0;
+  padding-inline: var(--page-padding);
+  position: relative;
+  z-index: 3;
+  -webkit-app-region: no-drag;
+}
+
+.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: safe center;
+  /* Balance the workspace's wider left inset around the window center. */
+  margin-left: calc(var(--page-margin) - var(--sidebar-left-inset));
+}
+
+.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs ol {
+  justify-content: safe center;
 }
 
 /* Unframed main content alongside the navigation. */

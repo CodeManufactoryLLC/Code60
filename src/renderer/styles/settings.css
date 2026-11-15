@@ -45,8 +45,8 @@
   font-family: var(--title-font, var(--font));
   --letter-spacing: var(--title-spacing, normal);
   letter-spacing: var(--title-tracking, normal);
-  font-size: var(--title-size, 18px);
-  font-weight: var(--title-weight, 400);
+  font-size: var(--title-size, 16px);
+  font-weight: var(--title-weight, 300);
   text-transform: var(--title-case, none);
   line-height: 1.25;
   font-synthesis: none;
@@ -110,7 +110,7 @@
   margin: 0;
   padding: 12px 16px 4px;
   color: var(--muted);
-  font: var(--card-weight, 400) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   font-variant-numeric: tabular-nums;
   --letter-spacing: var(--card-spacing, normal);
@@ -141,7 +141,7 @@
 .eyebrow {
   font-family: var(--font);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--muted);
   text-transform: none;
   --letter-spacing: normal;
@@ -150,7 +150,7 @@
 .settings-section h2:not(.page-title) {
   margin: 24px 0 4px;
   font-size: 12px;
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--text);
 }
 
@@ -258,7 +258,7 @@ button.info-tip {
   margin: 0 0 12px;
   padding: 0 88px 0 0;
   color: var(--text);
-  font: var(--card-weight, 400) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   --letter-spacing: var(--card-spacing, normal);
 }
@@ -502,7 +502,7 @@ button.settings-group-reset {
   margin: 0;
   text-align: left;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: inherit;
   border: 1px solid var(--border);
   border-radius: var(--card-radius);
   background: var(--surface);
@@ -597,8 +597,8 @@ button.settings-group-reset {
 .agent-setup-dialog .modal-heading h2 {
   margin: 0;
   font-family: var(--title-font, var(--font));
-  font-size: var(--title-size, 18px);
-  font-weight: var(--title-weight, 400);
+  font-size: var(--title-size, 16px);
+  font-weight: var(--title-weight, 300);
   letter-spacing: var(--title-tracking, normal);
   text-transform: var(--title-case, none);
   white-space: normal;

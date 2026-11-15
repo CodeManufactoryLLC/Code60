@@ -24,10 +24,11 @@
   --ui-radius: 0;
   --button-radius: 5px;
   --chat-radius: 5px;
+  --dialog-radius: 5px;
   --card-radius: 5px;
   --input-radius: 5px;
   /* Metadata (timestamps, counts, versions) uses a compact monospace face. */
-  --meta-font: 400 11px / 16px var(--mono);
+  --meta-font: var(--text-weight, 300) 11px / 16px var(--mono);
   --meta-spacing: 0.02em;
   --motion: 175ms;
   --navigation-hover-delay: 20ms;
@@ -98,7 +99,9 @@
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
   --chat-neutral: var(--surface);
-  --user-bubble: #5b9fe6;
+  --composer-bg: #f3f3f3;
+  --composer-focus-bg: #e9e9e9;
+  --user-bubble: #d8e8fa;
   --on-user-bubble: #000000;
   --human-text: #245f9e;
   --destructive: #a03d31;
@@ -145,7 +148,9 @@
   --disabled-stripe: transparent;
   --chat-bg: #252525;
   --chat-neutral: var(--surface);
-  --user-bubble: var(--primary);
+  --composer-bg: #303030;
+  --composer-focus-bg: #383838;
+  --user-bubble: #1b3a5c;
   --on-user-bubble: #ffffff;
   --human-text: var(--accent);
   --destructive: #df9d8f;

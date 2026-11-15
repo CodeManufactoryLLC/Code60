@@ -109,6 +109,13 @@ describe("application palette", () => {
     expect(css).not.toContain('[data-theme="dark"]');
   });
 
+  it("uses solid light-blue and dark-blue chat bubbles with contrasting text", () => {
+    expect(palette("light")("--user-bubble")).toBe("#d8e8fa");
+    expect(palette("dark")("--user-bubble")).toBe("#1b3a5c");
+    expect(luminance(palette("light")("--user-bubble"))).toBeGreaterThan(0.7);
+    expect(luminance(palette("dark")("--user-bubble"))).toBeLessThan(0.08);
+  });
+
   for (const scheme of ["light", "dark"]) {
     it(`keeps text at 4.5:1 and control edges at 3:1 across every ${scheme} surface`, () => {
       const color = palette(scheme);
@@ -126,6 +133,7 @@ describe("application palette", () => {
       for (const [foreground, background] of [
         ["--primary-text", "--primary"],
         ["--human-text", "--chat-bg"],
+        ["--on-user-bubble", "--user-bubble"],
       ]) {
         const ratio = contrast(color(foreground), color(background));
         expect(ratio, `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);

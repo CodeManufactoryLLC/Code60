@@ -189,17 +189,19 @@ export function FilePanel({
             <p className="file-panel-empty">Connect a database to use files.</p>
           ) : !selected || selected.kind === "blank" ? (
             <div className="file-panel-empty">
-              {emptyContent}
-              <button
-                type="button"
-                className="file-open-link"
-                onClick={() => {
-                  focusActiveTab();
-                  act({ type: "explorer" });
-                }}
-              >
-                Open Files
-              </button>
+              <div className="file-panel-empty-actions">
+                {emptyContent}
+                <button
+                  type="button"
+                  className="file-open-link"
+                  onClick={() => {
+                    focusActiveTab();
+                    act({ type: "explorer" });
+                  }}
+                >
+                  Open Files
+                </button>
+              </div>
             </div>
           ) : selected.kind === "plan" ? (
             api && active && open && plans.some((plan) => plan.id === selected.planId) ? (

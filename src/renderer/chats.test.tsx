@@ -33,6 +33,27 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
+    const worker = run("old-worker", "interrupted");
+    worker.record.reason = "the owning process (PID 12345) is gone";
+    const html = renderToStaticMarkup(
+      <WorkerChat
+        api={{} as DesktopApi}
+        run={worker}
+        orchestrated
+        events={[]}
+        active
+        request={undefined}
+        loading={false}
+        historyError={undefined}
+        onRetry={() => {}}
+      />,
+    );
+    expect(html).not.toContain("PID 12345");
+    expect(html).toContain("Interrupted");
+    expect(worker.record.reason).toBe("the owning process (PID 12345) is gone");
+  });
+
   it("keeps a failed Relay connection navigable by its stable identity", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const failed = {
@@ -236,7 +257,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("marks conversation roles with icons while retaining text status and separate actions", () => {
+  it("marks conversation roles with icons, accessible status, unread counts and separate actions", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -262,7 +283,8 @@ describe("conversation hierarchy", () => {
     expect(html).toContain('aria-label="Chat 1 workers"');
     expect(html).toContain('aria-label="1 unread reply"');
     expect(html).toContain("Worker. Failed");
-    expect(html).toContain('<span class="chat-sidebar-status">Failed</span>');
+    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
     for (const action of ["Actions", "Workers"]) {
       const button = html.match(
         new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
@@ -283,7 +305,7 @@ describe("conversation hierarchy", () => {
     expect(html.match(/<img/g)).toHaveLength(3);
     expect(html).not.toContain('role="dialog"');
   });
-  it("keeps errors and approval counts visible as text", () => {
+  it("keeps errors accessible and approval counts visible without a status label", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const owner = chat("a");
     owner.error = "Connection failed";
@@ -304,7 +326,10 @@ describe("conversation hierarchy", () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).toContain('<span class="chat-sidebar-status">Error</span>');
+    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).toContain(
+      'aria-description="Orchestrator. Connection failed. 1 approvals waiting"',
+    );
     expect(html).toContain('<span class="chat-approval-count">(1)</span>');
     expect(html).toContain("Connection failed. 1 approvals waiting");
     expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(

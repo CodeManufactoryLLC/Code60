@@ -235,7 +235,7 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults page titles to 48pt IBM Plex Serif Light and other roles to IBM Plex Sans", () => {
+  it("defaults all roles to Light, 16px serif page titles and sans card/table headings", () => {
     for (const role of [
       "tableHeadings",
       "buttons",
@@ -246,27 +246,29 @@ describe("desktop stream state", () => {
     ] as const)
       expect(resolveText(defaultTextStyles, role)).toMatchObject({
         family: fontFamily("ibm-plex-sans"),
-        weight: 400,
+        weight: 300,
       });
     expect(resolveText(defaultTextStyles, "tableHeadings")).toMatchObject({
       size: 12,
-      weight: 400,
+      weight: 300,
       case: undefined,
     });
     expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({
       family: fontFamily("ibm-plex-serif"),
-      size: 64,
+      size: 16,
       weight: 300,
       case: undefined,
     });
     expect(resolveText(defaultTextStyles, "cardTitles").size).toBe(22);
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
       "--title-font": fontFamily("ibm-plex-serif"),
-      "--title-size": "64px",
+      "--title-size": "16px",
       "--title-weight": "300",
       "--card-font": fontFamily("ibm-plex-sans"),
       "--card-size": "22px",
-      "--card-weight": "400",
+      "--card-weight": "300",
+      "--human-weight": "300",
+      "--page-title-space-size": "64px",
     });
     expect(parseTextStyles(JSON.stringify(defaultTextStyles))).toEqual(defaultTextStyles);
     expect(defaultTextStyles.normalText).toEqual({});
@@ -294,7 +296,7 @@ describe("desktop stream state", () => {
     for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
       expect(resolveText(styles, role)).toMatchObject({
         family: fontFamily(role === "pageTitles" ? "ibm-plex-serif" : "ibm-plex-sans"),
-        weight: role === "pageTitles" ? 300 : 400,
+        weight: 300,
       });
     expect(styles.normalText).toEqual({ size: 22, case: "lower" });
     expect(storage.getItem("code60.theme")).toBe("dark");
@@ -411,7 +413,7 @@ describe("desktop stream state", () => {
     });
     expect(resolveText(styles, "buttons")).toMatchObject({
       size: 13,
-      weight: 400,
+      weight: 300,
       case: undefined,
     });
     expect(resolveText(styles, "normalText")).toMatchObject({ weight: 700, case: "lower" });
@@ -424,7 +426,7 @@ describe("desktop stream state", () => {
     });
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
       "--heading-size": "12px",
-      "--heading-weight": "400",
+      "--heading-weight": "300",
       "--heading-case": undefined,
       "--text-size": "13px",
     });

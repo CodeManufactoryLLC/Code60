@@ -23,11 +23,11 @@ Schema version: 1
 - ID: `projects`
 - Status: shipped
 - Purpose: Retain independent project workspaces and conversations.
-- Access: Sidebar → Projects → Open Project; each open project has its own page
+- Access: Projects → New Project; project home → New Chat; sidebar add controls remain available
 - Prerequisite: database
 - Agent access: read
-- Confirmation: Existing permissions apply.
-- Limits: Opening or selecting a project is a human action.
+- Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none
@@ -102,16 +102,16 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Slash commands
+## Commands
 
 - ID: `commands`
 - Status: shipped
-- Purpose: Use bundled or saved reusable prompts.
-- Access: Apps → Command Builder; project composer slash picker
+- Purpose: Use bundled or saved reusable prompts with a leading $name.
+- Access: Apps → Command Builder; project composer $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Saved names override bundled names. Relay has no command creation tool; reading never executes.
+- Limits: Saved names override bundled names; /name is plain text, not a command. Relay has no command creation tool; reading never executes.
 - Pages: `commands`
 - Settings sections: none
 - Tools: `code60_create_command`
