@@ -418,7 +418,7 @@ export function createFakeAgent(options = {}) {
         if (!steps) {
           // The orchestration role prepends its Operating Contract; scripts remain user input.
           const request = text.split("--- User request ---\n").at(-1);
-          steps = request.startsWith("Command /fixture-")
+          steps = request.startsWith("Command $fixture-")
             ? [{ message: `Received command:\n${request}` }]
             : JSON.parse(request);
           if (!Array.isArray(steps)) throw new Error("not steps");

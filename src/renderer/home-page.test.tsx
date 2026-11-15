@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { HomePage } from "./home-page.js";
+import { NavigationHomePage } from "./navigation-home-page.js";
 
 type Card = { id: string; label: string; available: boolean; action(): void };
 type HomeView = {
@@ -22,6 +23,17 @@ vi.mock("./navigation-home-page.js", async (importOriginal) => {
 });
 
 describe("Home destinations", () => {
+  it.each(["apps", "settings", "projects"] as const)(
+    "does not add Home's welcome to the %s navigation home",
+    (page) => {
+      const html = renderToStaticMarkup(
+        <NavigationHomePage page={page} cards={[]} onOpen={() => {}} />,
+      );
+      expect(html).not.toContain("Welcome to Code60");
+      expect(html).not.toContain("home-welcome");
+    },
+  );
+
   it.each([
     [null, false],
     [null, true],
@@ -46,6 +58,9 @@ describe("Home destinations", () => {
         "Sessions",
       ]);
       expect(html.match(/class="home-card"/g)).toHaveLength(5);
+      expect(html.match(/Welcome to Code60/g)).toHaveLength(1);
+      expect(html).toContain('<p class="home-welcome">Welcome to Code60</p>');
+      expect(html.indexOf("Welcome to Code60")).toBeLessThan(html.indexOf('class="home-cards"'));
       expect(html).toContain('id="home-title" class="page-title table-title"');
       expect(html).not.toContain("home-card-description");
       for (const [id, icon, available] of [

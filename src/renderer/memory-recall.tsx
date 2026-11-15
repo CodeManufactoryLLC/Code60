@@ -8,7 +8,6 @@ export interface RecallSource {
   owner: string;
   runId: string;
   events: readonly RunEvent[];
-  incomplete: boolean;
   loading?: boolean;
   error?: boolean;
   retry?(): void;
@@ -137,7 +136,11 @@ export function MemoryRecall({ api, source }: { api: DesktopApi; source: RecallS
           <button
             type="button"
             onClick={() =>
-              setBefore(history.turns[Math.max(0, start - RECALL_PAGE_SIZE)]?.key ?? null)
+              setBefore(
+                start <= RECALL_PAGE_SIZE
+                  ? null
+                  : (history.turns[start - RECALL_PAGE_SIZE]?.key ?? null),
+              )
             }
           >
             Newer turns

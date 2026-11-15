@@ -37,7 +37,6 @@ export function selectedRecallSource(
       ]),
       runId: workerId,
       events: transcripts.events[workerId] ?? [],
-      incomplete: run.historyIncomplete === true,
       loading:
         !snapshot.liveIds.includes(workerId) &&
         !transcripts.events[workerId] &&
@@ -64,12 +63,5 @@ export function selectedRecallSource(
     ),
     runId,
     events: state.chatEventsByRun[runId] ?? [],
-    incomplete: !!(
-      chat.history?.older ||
-      chat.history?.incomplete ||
-      chat.historySaving === "unavailable" ||
-      (chat.kind === "relay" && (chat.history?.characters ?? 0) > 0) ||
-      (chat.restored && !state.chatEventsByRun[runId]?.length && (chat.run?.turns ?? 0) > 0)
-    ),
   };
 }

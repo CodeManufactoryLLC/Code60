@@ -54,6 +54,12 @@ export function HomePage({
     }),
   ];
   return (
-    <NavigationHomePage page="home" cards={cards} error={error} onOpen={(card) => card.action()} />
+    <NavigationHomePage
+      page="home"
+      intro={<p className="home-welcome">Welcome to Code60</p>}
+      cards={cards}
+      error={error}
+      onOpen={(card) => card.action()}
+    />
   );
 }

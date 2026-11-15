@@ -77,7 +77,7 @@
 
 .search-overview h2,
 .search-results h2 {
-  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 300) var(--title-size, 16px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
 }
 
@@ -280,7 +280,7 @@
 
 .search-skeleton-title {
   width: min(236px, 64%);
-  height: var(--title-size, 18px);
+  height: var(--title-size, 16px);
 }
 
 .search-summary-skeleton > .search-skeleton-title {

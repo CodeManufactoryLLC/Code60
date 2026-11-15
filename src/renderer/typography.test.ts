@@ -36,6 +36,23 @@ describe("independent card titles", () => {
 });
 
 describe("IBM Plex Light", () => {
+  it("reserves the previous title space without resetting explicitly saved sizes or weights", () => {
+    expect(textStyleProperties(defaultTextStyles)).toMatchObject({
+      "--title-size": "16px",
+      "--page-title-space-size": "64px",
+      "--human-weight": "300",
+    });
+    for (const size of [8, 16, 32, 64]) {
+      const styles = parseTextStyles(
+        JSON.stringify({ pageTitles: { size }, humanMessages: { weight: 600 } }),
+      );
+      expect(textStyleProperties(styles)).toMatchObject({
+        "--title-size": `${size}px`,
+        "--page-title-space-size": `${size}px`,
+        "--human-weight": "600",
+      });
+    }
+  });
   it.each(["ibm-plex-sans", "ibm-plex-serif"] as const)(
     "restores Light for %s, including the 48pt page-title size",
     (typeface) => {

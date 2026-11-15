@@ -10,20 +10,47 @@ interface NavigationCard {
   title?: string;
 }
 
+export interface NavigationCardAction {
+  label: string;
+  ariaLabel?: string;
+  title?: string;
+  onClick(): void;
+}
+
 export function NavigationCards<Card extends NavigationCard>({
   cards,
+  create,
   onOpen,
+  intro,
   children,
   pending = false,
 }: {
   cards: readonly Card[];
+  create?: NavigationCardAction | undefined;
   onOpen(card: Card): void;
+  intro?: import("react").ReactNode;
   children?: import("react").ReactNode;
   pending?: boolean;
 }) {
   return (
     <div className="home-content">
+      {intro}
       <div className="home-cards">
+        {create && (
+          <button
+            type="button"
+            className="home-card home-card-create"
+            aria-label={create.ariaLabel ?? create.label}
+            disabled={pending}
+            title={pending ? "Wait for the current action to finish" : create.title}
+            onClick={create.onClick}
+          >
+            <span className="home-card-name">
+              <Icon name="add" />
+              {create.label}
+            </span>
+          </button>
+        )}
         {cards.map((card) => (
           <button
             key={card.id}

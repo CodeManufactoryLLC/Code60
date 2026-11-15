@@ -58,6 +58,24 @@ describe("desktop capability catalog", () => {
     );
   });
 
+  it("describes the current creation cards, folder confirmation and dollar commands", () => {
+    const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
+    expect(projects).toMatchObject({
+      prerequisite: "database",
+      access: expect.stringContaining("Projects → New Project; project home → New Chat"),
+      confirmation: expect.stringContaining("Confirm the full selected path"),
+      limitations: expect.stringContaining("never initializes Git"),
+    });
+    const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
+    expect(commands).toMatchObject({
+      label: "Commands",
+      prerequisite: "database",
+      purpose: expect.stringContaining("$name"),
+      access: expect.stringContaining("$ command picker"),
+      limitations: expect.stringContaining("/name is plain text"),
+    });
+  });
+
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
   });

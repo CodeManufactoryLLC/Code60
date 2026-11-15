@@ -269,7 +269,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
   control(
     "code60_create_command",
     "Create a command",
-    "Save a reusable slash command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Command Builder and the orchestrator slash picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
+    "Save a reusable $ command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Command Builder and the orchestrator $ command picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
     object(
       {
         name: {
@@ -277,7 +277,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
           minLength: 1,
           maxLength: 64,
           pattern: "^[a-z0-9][a-z0-9-]{0,63}$",
-          description: "Lowercase slash name without the leading slash.",
+          description: "Lowercase command name without the leading $.",
         },
         title: { type: "string", minLength: 1, maxLength: 120, description: "Single-line title." },
         description: { type: "string", maxLength: 500 },

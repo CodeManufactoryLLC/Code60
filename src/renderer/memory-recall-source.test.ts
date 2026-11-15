@@ -38,7 +38,7 @@ const transcripts = { events: { worker: [] }, errors: {}, retry: vi.fn() };
 
 it("binds project recall to conversation, run, project runtime and database lifecycle", () => {
   const original = selectedRecallSource(state(), undefined, transcripts, "a");
-  expect(original).toMatchObject({ runId: "run-a", incomplete: false });
+  expect(original).toMatchObject({ runId: "run-a" });
   for (const change of [
     { generation: 2 },
     { conversationId: "conversation-b" },
@@ -82,7 +82,6 @@ it("uses the displayed worker's events rather than the selected orchestrator's e
   const value = selectedRecallSource(state(relay), "worker", transcripts, "project");
   expect(value).toMatchObject({
     runId: "worker",
-    incomplete: false,
     loading: false,
   });
   expect(value?.events).toBe(transcripts.events.worker);
@@ -115,13 +114,13 @@ it("keeps Relay-worker identity independent of database changes and includes tar
   }
 });
 
-it("labels missing/truncated history and exposes the existing transcript Retry", () => {
+it("exposes transcript loading, failures and the existing Retry", () => {
   const current = state();
   current.snapshot.runs = [{ ...worker, historyIncomplete: true }];
   current.snapshot.liveIds = [];
   expect(
     selectedRecallSource(current, "worker", { ...transcripts, events: {} }, "a"),
-  ).toMatchObject({ loading: true, incomplete: true });
+  ).toMatchObject({ loading: true });
   const failed = selectedRecallSource(
     current,
     "worker",
@@ -132,12 +131,12 @@ it("labels missing/truncated history and exposes the existing transcript Retry",
   failed?.retry?.();
   expect(transcripts.retry).toHaveBeenCalledOnce();
   current.snapshot.chat = { ...project, restored: true };
-  expect(selectedRecallSource(current, undefined, transcripts, "a")?.incomplete).toBe(true);
+  expect(selectedRecallSource(current, undefined, transcripts, "a")?.events).toEqual([]);
   current.snapshot.chat = { ...project, run: null };
   expect(selectedRecallSource(current, undefined, transcripts, "a")).toBeUndefined();
 });
 
-it("labels prior Relay history without inventing recalled records from text-only restored messages", () => {
+it("does not invent recalled records from text-only restored Relay messages", () => {
   const current = state(relay);
   current.snapshot.chat = {
     ...relay,
@@ -150,6 +149,5 @@ it("labels prior Relay history without inventing recalled records from text-only
     },
   };
   const source = selectedRecallSource(current, undefined, transcripts, "a");
-  expect(source?.incomplete).toBe(true);
   expect(source?.events).toEqual([]);
 });

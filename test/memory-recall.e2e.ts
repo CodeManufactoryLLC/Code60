@@ -90,6 +90,7 @@ async function openRecall(page: Page, panel: Locator) {
     "true",
   );
   await expect(page.locator(".memory-recall:visible")).toHaveCount(1);
+  await expect(page.locator(".memory-recall:visible")).toHaveCSS("scrollbar-gutter", "stable");
 }
 async function displayedIds(panel: Locator) {
   return panel
@@ -102,6 +103,11 @@ async function send(page: Page, text: string) {
     .getByRole("combobox", { name: "Message to orchestrator", exact: true });
   await expect(composer).toBeEditable();
   await composer.fill(text);
+  await expect(
+    page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("button", { name: "Send", exact: true }),
+  ).toBeEnabled();
   await composer.press("Enter");
   await expect(page.locator(".orchestration-chat-page:visible .event.prompt").last()).toContainText(
     text,
@@ -311,11 +317,21 @@ for (const kind of ["Relay", "project"] as const) {
       await expect(panel.locator(".memory-recall-record")).toHaveCount(workerRecalls.length);
       expect(await displayedIds(panel)).toEqual(workerRecalls);
       await expect(panel.locator(".memory-recall")).toContainText(memoryText);
+      if (kind === "Relay")
+        await page.locator(".sidebar").getByRole("button", { name: "Relay", exact: true }).click();
+      else await page.locator(`[id="conversation-${chatId}"]`).click();
+      await openRecall(page, panel);
+      for (let index = 0; index < 6; index++)
+        await send(page, `The cache service is Redis. Recall check ${index + 1}.`);
       await memoryOff(page);
       // Return through visible navigation, then dispatch a zero-hit turn with Memory Off.
       if (kind === "Relay") await page.getByRole("button", { name: "Relay", exact: true }).click();
       else await page.locator(`[id="conversation-${chatId}"]`).click();
       await openRecall(page, panel);
+      await panel.getByRole("button", { name: "Older turns", exact: true }).click();
+      await expect(panel.locator(".memory-recall-badge")).toHaveCount(0);
+      await panel.getByRole("button", { name: "Newer turns", exact: true }).click();
+      await expect(panel.locator(".memory-recall-badge")).toHaveCount(1);
       await send(page, "No memory recall for this turn.");
       await expect(panel.locator('.memory-recall-turn[data-current="true"]')).toContainText(
         "No memories recalled for this turn.",
@@ -327,6 +343,7 @@ for (const kind of ["Relay", "project"] as const) {
         chatId,
       )
         .reverse()
+        .slice(0, 4) // The newest five-turn page includes the current zero-hit turn.
         .flat();
       await expect(panel.locator(".memory-recall-record")).toHaveCount(finalIds.length);
       expect(await displayedIds(panel)).toEqual(finalIds);

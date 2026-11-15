@@ -21,7 +21,7 @@ export function useWindowAppearance(api: DesktopApi, setError: (message: string)
           const nativeControls = event.clientY < 28 && event.clientX < 80;
           const element = document.elementFromPoint(event.clientX, event.clientY);
           const content = element?.closest(
-            ".app-footer, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .database-notice, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
+            ".app-footer, .sidebar-toggle, .workspace-breadcrumbs, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .database-notice, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
           const next = !nativeControls && !content && !document.querySelector("dialog[open]");
           if (ignored === next) return;

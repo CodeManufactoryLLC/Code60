@@ -1983,6 +1983,18 @@ describe("retained project runtimes", () => {
       (prompts.entries as { source: string }[]).every((entry) => entry.source === "built-in"),
     ).toBe(true);
 
+    for (const id of [relayId, chatId]) {
+      const commands = result(await call(id, "code60_list_customizations", { kind: "command" }));
+      expect(commands.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ title: expect.stringMatching(/^\$plan · /) }),
+        ]),
+      );
+      expect(
+        (commands.entries as { title: string }[]).every((entry) => entry.title.startsWith("$")),
+      ).toBe(true);
+    }
+
     const renderer = controller.knowledge.rendererIdentity();
     const panelId = randomUUID();
     const planId = randomUUID();
@@ -3255,17 +3267,17 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id: first,
-      text: "/plan Review the changes",
+      text: "$plan Review the changes",
       command: "plan",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts[0]).toContain("Tactic: Independent review");
-    expect(agents.sessions[0]?.prompts[0]).toContain("Command /plan: Make a plan");
+    expect(agents.sessions[0]?.prompts[0]).toContain("Command $plan: Make a plan");
     expect(
       controller
         .snapshot()
         .chat.events.some(
-          ({ event }) => event.type === "prompt" && event.text === "/plan Review the changes",
+          ({ event }) => event.type === "prompt" && event.text === "$plan Review the changes",
         ),
     ).toBe(true);
     await apply(null);
@@ -3725,7 +3737,7 @@ describe("app-wide orchestration chat", () => {
   it("expands the built-in create-command from a fresh database and keeps the typed transcript", async () => {
     const id = await ready();
     expect(controller.snapshot().commands).toEqual([]);
-    for (const text of ["/create-command Review SQL migrations for safety.", "/create-command"]) {
+    for (const text of ["$create-command Review SQL migrations for safety.", "$create-command"]) {
       await controller.orchestrationChatAction({
         type: "send",
         id,
@@ -3754,31 +3766,31 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id,
-      text: "/create-command",
+      text: "$create-command",
       command: "create-command",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts.at(-1)).toContain("User-defined creator.");
     expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /create-command: My creator\nUser-defined creator.`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $create-command: My creator\nUser-defined creator.`,
     );
   });
 
   it.each(["plan", "business-evaluation"])(
-    "delivers the complete /%s built-in without saving it",
+    "delivers the complete $%s built-in without saving it",
     async (name) => {
       const id = await ready();
       const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
-      if (!builtin) throw new Error(`Missing /${name}`);
+      if (!builtin) throw new Error(`Missing $${name}`);
       for (const suffix of [
         "",
         " A tool for independent bookshops.\nCompare possible business models.",
       ]) {
-        const text = `/${name}${suffix}`;
+        const text = `$${name}${suffix}`;
         await controller.orchestrationChatAction({ type: "send", id, text, command: name });
         await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
         expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
+          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
         );
         expect(controller.snapshot().commands).toEqual([]);
         expect(
@@ -3802,11 +3814,21 @@ describe("app-wide orchestration chat", () => {
     await controller.saveCommand(fields);
     const command = controller.snapshot().commands[0];
     expect(command?.name).toBe("review");
+    await expect(
+      controller.orchestrationChatAction({ type: "send", id, text: "/review", command: "review" }),
+    ).rejects.toThrow(/beginning/);
+    for (const text of ["/review", "/plan", "/tmp is full"]) {
+      await controller.orchestrationChatAction({ type: "send", id, text });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
+        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${text}`,
+      );
+    }
     for (const [text, expected] of [
-      ["/review", "Command /review: Review code\nInspect the diff."],
+      ["$review", "Command $review: Review code\nInspect the diff."],
       [
-        "/REVIEW  Focus on errors.\n",
-        "Command /review: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus on errors.",
+        "$REVIEW  Focus on errors.\n",
+        "Command $review: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus on errors.",
       ],
     ]) {
       await controller.orchestrationChatAction({
@@ -3833,7 +3855,7 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id,
-      text: "/review",
+      text: "$review",
       command: "review",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -3852,8 +3874,8 @@ describe("app-wide orchestration chat", () => {
     expect(await controller.deleteCommand({ id: command?.id as string })).toBe(true);
     const turns = controller.snapshot().chat.run?.turns;
     await expect(
-      controller.orchestrationChatAction({ type: "send", id, text: "/review", command: "review" }),
-    ).rejects.toThrow("Command /review no longer exists");
+      controller.orchestrationChatAction({ type: "send", id, text: "$review", command: "review" }),
+    ).rejects.toThrow("Command $review no longer exists");
     expect(controller.snapshot().chat.run?.turns).toBe(turns);
     await controller.orchestrationChatAction({ type: "send", id, text: "/tmp is full" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));

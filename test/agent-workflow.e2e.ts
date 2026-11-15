@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type ElectronApplication, expect, test } from "@playwright/test";
+import { type ElectronApplication, expect, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
@@ -34,6 +34,214 @@ function alive(pid: number) {
     if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
     throw error;
   }
+}
+
+async function checkHeaderBreadcrumbs(page: Page) {
+  const header = page.locator(".workspace-breadcrumbs");
+  await expect(header.getByRole("navigation", { name: "Breadcrumb", exact: true })).toHaveCount(1);
+  await expect(header.getByRole("heading")).toHaveCount(1);
+  await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
+  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "300");
+  const slot = page.locator(".page-title-placeholder");
+  await expect(slot).toHaveCount(1);
+  await expect(slot).toHaveAttribute("aria-hidden", "true");
+  await expect(slot).toHaveAttribute("inert", "");
+  await expect(slot).toHaveCSS("visibility", "hidden");
+  await expect(slot).toHaveCSS("font-size", "64px");
+  await expect(slot.locator("button, h1, h2, [id]")).toHaveCount(0);
+  const geometry = await slot.evaluate((element) => {
+    const header = document.querySelector(".workspace-header");
+    const heading = header?.querySelector("h1, h2");
+    if (!header || !heading) throw new Error("Missing header heading");
+    return {
+      slot: element.getBoundingClientRect().top,
+      header: header.getBoundingClientRect().bottom,
+      ids: heading.id ? document.querySelectorAll(`#${CSS.escape(heading.id)}`).length : null,
+    };
+  });
+  expect(geometry.slot).toBeGreaterThanOrEqual(geometry.header);
+  if (geometry.ids !== null) expect(geometry.ids).toBe(1);
+}
+
+async function checkSidebarNavigation(page: Page, repo: string) {
+  const project = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+  const newChat = project.getByRole("button", { name: /^New chat in / });
+  const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+  const entries = project.locator(".chat-sidebar-entry");
+  let count = await entries.count();
+  for (const name of ["First sidebar draft", "Second sidebar draft"]) {
+    await newChat.click();
+    await expect(entries).toHaveCount(++count);
+    await expect(entries.last()).toHaveAttribute("aria-current", "true");
+    await expect(composer).toBeEditable();
+    await composer.fill(name);
+  }
+
+  for (const theme of ["light", "dark"]) {
+    await page.locator("#tab-settings").click();
+    await page.locator("#tab-settings-appearance").click();
+    await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+    await checkHeaderBreadcrumbs(page);
+    const gray = theme === "light" ? "rgb(243, 243, 243)" : "rgb(48, 48, 48)";
+    await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px");
+    await expect(page.locator(".sidebar")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(37, 37, 37)",
+    );
+    await expect(page.locator("body")).toHaveCSS("font-weight", "300");
+    await page.locator("#tab-home").scrollIntoViewIfNeeded();
+    await page.mouse.move(1000, 500);
+    const geometry = await page.evaluate(() => {
+      const toggle = document.querySelector(".sidebar-toggle");
+      const home = document.querySelector("#tab-home .navigation-icon");
+      const strip = document.querySelector(".app > .window-drag-strip");
+      const footer = document.querySelectorAll(".footer-sidebar > .icon-button");
+      if (!toggle || !home || !strip || footer.length !== 2)
+        throw new Error("Missing sidebar controls");
+      const style = (element: Element) => ({
+        color: getComputedStyle(element).color,
+        opacity: getComputedStyle(element).opacity,
+        glyphOpacity: getComputedStyle(element.querySelector("svg") ?? element).opacity,
+      });
+      const a = toggle.getBoundingClientRect();
+      const b = home.getBoundingClientRect();
+      const nativeRow = strip.getBoundingClientRect();
+      return {
+        above: a.bottom <= b.top,
+        nativeClearance: a.left >= 80,
+        centered: Math.abs((a.top + a.bottom - nativeRow.top - nativeRow.bottom) / 2) < 1,
+        styles: [toggle, ...footer].map(style),
+      };
+    });
+    expect(geometry.above).toBe(true);
+    expect(geometry.nativeClearance).toBe(true);
+    expect(geometry.centered).toBe(true);
+    expect(geometry.styles[0]).toEqual(geometry.styles[1]);
+    expect(geometry.styles[0]).toEqual(geometry.styles[2]);
+
+    // Observe the whole selection window, not just its settled appearance.
+    await page.evaluate(() => {
+      const sidebar = document.querySelector(".sidebar");
+      if (!sidebar) throw new Error("Missing sidebar");
+      const entries = [...sidebar.querySelectorAll(".chat-sidebar-entry")];
+      const disabled: string[] = [];
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations)
+          if (
+            mutation.attributeName === "disabled" &&
+            mutation.oldValue === null &&
+            mutation.target instanceof Element &&
+            mutation.target.matches(".chat-sidebar-entry, .project-chat-name")
+          )
+            disabled.push(mutation.target.id);
+      });
+      observer.observe(sidebar, {
+        subtree: true,
+        attributes: true,
+        attributeOldValue: true,
+        attributeFilter: ["disabled"],
+      });
+      (
+        window as typeof window & {
+          sidebarObservation?: {
+            observer: MutationObserver;
+            entries: Element[];
+            disabled: string[];
+          };
+        }
+      ).sidebarObservation = { observer, entries, disabled };
+    });
+    try {
+      for (const control of [
+        project.locator(".project-chat-name"),
+        project.locator(".chat-sidebar-entry").first(),
+        project.locator(".chat-sidebar-entry").last(),
+      ]) {
+        await control.hover();
+        const color = await control.evaluate((element) => getComputedStyle(element).color);
+        await page.mouse.down();
+        try {
+          await expect(control).toHaveCSS("color", color);
+        } finally {
+          await page.mouse.up();
+        }
+        await expect(control).toHaveCSS("color", color);
+        // Selection finishes through the real main-process path.
+        await expect(control).toHaveAttribute("aria-current", /^(page|true)$/);
+      }
+      await expect(composer).toHaveValue("Second sidebar draft");
+      await checkHeaderBreadcrumbs(page);
+      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toBeVisible();
+      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveCSS(
+        "text-decoration-line",
+        "underline",
+      );
+      await expect(page.locator(".sidebar .chat-sidebar-status")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
+      const box = composer.locator("..");
+      await page.locator(".sidebar-toggle").focus();
+      await expect(box).toHaveCSS("border-width", "0px");
+      await expect(box).toHaveCSS("background-color", gray);
+      const bounds = await box.boundingBox();
+      await composer.focus();
+      await expect(box).toHaveCSS(
+        "background-color",
+        theme === "light" ? "rgb(233, 233, 233)" : "rgb(56, 56, 56)",
+      );
+      expect(await box.boundingBox()).toEqual(bounds);
+      await project.locator(".project-chat-name").press("ArrowLeft");
+      await expect(project.locator(".project-chat-name")).toHaveAttribute("aria-expanded", "false");
+      await page.locator("#tab-chat").press("ArrowLeft");
+      await page.getByRole("button", { name: "Relay", exact: true }).click();
+      await expect(page.locator(".relay-sidebar .chat-sidebar-entry")).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+      await expect(page.locator("#tab-chat")).toHaveAttribute("aria-expanded", "false");
+      await page.locator("#tab-chat").press("ArrowRight");
+      await expect(project.locator(".project-chat-name")).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      const observed = await page.evaluate(() => {
+        const scope = window as typeof window & {
+          sidebarObservation?: {
+            observer: MutationObserver;
+            entries: Element[];
+            disabled: string[];
+          };
+        };
+        const observation = scope.sidebarObservation;
+        if (!observation) throw new Error("Missing selection observation");
+        observation.observer.disconnect();
+        delete scope.sidebarObservation;
+        return {
+          disabled: observation.disabled,
+          retained: observation.entries.every((entry) => entry.isConnected),
+        };
+      });
+      expect(observed).toEqual({ disabled: [], retained: true });
+    }
+    await page.locator("#tab-settings").press("ArrowRight");
+    await page.locator("#advanced-toggle").press("ArrowRight");
+    await page.locator("#experiments-toggle").press("ArrowRight");
+    await page.locator("#tab-settings").press("ArrowLeft");
+    for (const id of ["settings-pages", "advanced-pages", "experiment-pages"])
+      await expect(page.locator(`#${id}`)).toHaveAttribute("inert", "");
+    await page.locator("#tab-settings").press("ArrowRight");
+    for (const id of ["advanced-toggle", "experiments-toggle"])
+      await expect(page.locator(`#${id}`)).toHaveAttribute("aria-expanded", "false");
+    await page.locator("#tab-apps").press("ArrowRight");
+    await page.locator("#tables-toggle").press("ArrowRight");
+    await page.locator("#tab-apps").press("ArrowLeft");
+    await expect(page.locator("#tables-toggle")).toHaveAttribute("aria-expanded", "false");
+    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
+    await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
+    await project.locator(".project-chat-name").press("ArrowRight");
+  }
+  await page.locator(".sidebar-toggle").click();
+  await expect(page.locator("#navigation-sidebar")).toHaveAttribute("inert", "");
+  await page.locator(".sidebar-toggle").press("Enter");
+  await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
 }
 
 test("workflow: first use through plan, review, apply and undo", async () => {
@@ -116,7 +324,7 @@ test("workflow: first use through plan, review, apply and undo", async () => {
       title: "Create database",
       properties: ["createDirectory", "showOverwriteConfirmation"],
     },
-    { kind: "open", title: "Open project", properties: ["openDirectory"] },
+    { kind: "open", title: "Open project", properties: ["openDirectory", "createDirectory"] },
     {
       kind: "message",
       title: "Open project?",
@@ -199,13 +407,23 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     await expect(selectDatabase).toHaveCount(0);
     expect((await readFile(database)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.locator(".sidebar .project-sidebar-open").click();
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    const projectsHome = page.locator("#panel-projects");
+    await expect(projectsHome.locator(".table-controls > button")).toHaveCount(0);
+    await expect(projectsHome.locator(".home-cards > button").first()).toHaveAccessibleName(
+      "New Project",
+    );
+    await projectsHome.getByRole("button", { name: "New Project", exact: true }).click();
     const openProject = page.getByRole("dialog", { name: "Open Project", exact: true });
     await openProject.getByRole("button", { name: "Open Folder", exact: true }).click();
     await expect(openProject).toHaveCount(0);
     await expect(page.getByRole("region", { name: `Project ${repo}`, exact: true })).toBeVisible();
     checks.push(
       "Fresh setup, database creation and project opening completed through visible controls.",
+    );
+    await checkSidebarNavigation(page, repo);
+    checks.push(
+      "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
     );
 
     // Relay owns checkout-local apply/undo; project revision tabs are read-only.
@@ -222,6 +440,12 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     await expect(
       plan.getByRole("heading", { name: "Relay target plan", exact: true }),
     ).toBeVisible();
+    const bubble = page
+      .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic) pre")
+      .last();
+    await expect(bubble).toHaveCSS("border-radius", "5px");
+    await expect(bubble).toHaveCSS("background-color", "rgb(27, 58, 92)");
+    await expect(bubble).toHaveCSS("color", "rgb(255, 255, 255)");
     await expect(plan).toContainText(repo);
     await expect(composer).toBeEditable();
     expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
@@ -263,6 +487,31 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     const panel = page.locator("#relay-plan-panel");
     if ((await panel.getAttribute("aria-hidden")) === "true")
       await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
+    const blank = panel.locator(".file-panel-empty");
+    const actions = blank.locator(".file-panel-empty-actions");
+    await expect(actions).toBeVisible();
+    const blankBox = await blank.boundingBox();
+    const actionsBox = await actions.boundingBox();
+    if (!blankBox || !actionsBox) throw new Error("Missing blank-tab action bounds");
+    expect(
+      Math.abs(blankBox.x + blankBox.width / 2 - actionsBox.x - actionsBox.width / 2),
+    ).toBeLessThan(2);
+    expect(
+      Math.abs(blankBox.y + blankBox.height / 2 - actionsBox.y - actionsBox.height / 2),
+    ).toBeLessThan(2);
+    const choices = await actions.getByRole("button").all();
+    expect(choices.length).toBeGreaterThanOrEqual(2);
+    let previousBottom: number | undefined;
+    for (const choice of choices) {
+      const box = await choice.boundingBox();
+      if (!box) throw new Error("Missing blank-tab choice bounds");
+      expect(Math.abs(box.x - actionsBox.x - 16)).toBeLessThan(2);
+      if (previousBottom !== undefined) {
+        expect(box.y - previousBottom).toBeGreaterThanOrEqual(0);
+        expect(box.y - previousBottom).toBeLessThanOrEqual(12);
+      }
+      previousBottom = box.y + box.height;
+    }
     await panel.getByRole("button", { name: "Open Changes", exact: true }).click();
     const changes = panel.getByRole("region", { name: "Relay changes by target" });
     await expect(changes.getByRole("heading", { name: repo, exact: true })).toBeVisible();
@@ -484,7 +733,8 @@ test("workflow: reopening restores projects and saved chats on Relay without res
           const options = args.at(-1) as Record<string, unknown>;
           if (
             options.title !== "Open project" ||
-            JSON.stringify(options.properties) !== JSON.stringify(["openDirectory"])
+            JSON.stringify(options.properties) !==
+              JSON.stringify(["openDirectory", "createDirectory"])
           )
             throw new Error("Unexpected project picker");
           return { canceled: false, filePaths: [repo] };
@@ -497,16 +747,29 @@ test("workflow: reopening restores projects and saved chats on Relay without res
         .click();
       const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
       await expect(group).toBeVisible();
-      await group
-        .getByRole("button", { name: `New chat in ${repo.split(/[\\/]/).at(-1)}`, exact: true })
-        .click();
+      const owner = (await page.evaluate(() => window.desktop.snapshot())).openProjects?.find(
+        (project) => project.path === repo,
+      );
+      if (!owner) throw new Error("Missing opened project");
+      await group.locator(".project-chat-name").click();
+      const projectHome = page.locator(
+        `#panel-project main[aria-labelledby="project-${owner.id}-title"]`,
+      );
+      await expect(projectHome).toBeVisible();
+      await expect(projectHome.locator(".table-controls > button")).toHaveCount(0);
+      const newChat = projectHome.locator(".home-cards > button").first();
+      await expect(newChat).toContainText("New Chat");
+      await newChat.focus();
+      await newChat.press("Enter");
       await expect(group.getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
         "aria-current",
         "true",
       );
       const chat = page.locator(".orchestration-chat-page:visible");
       await expect(
-        chat.getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
+        page
+          .locator(".workspace-breadcrumbs")
+          .getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
       ).toBeVisible();
       const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
       const text = `Saved exchange ${i + 1}`;
@@ -516,7 +779,10 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await composer.press("Enter");
       await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
       const title = `Saved project ${i + 1}`;
-      await chat.getByRole("button", { name: /^Rename chat:/ }).click();
+      await page
+        .locator(".workspace-breadcrumbs")
+        .getByRole("button", { name: /^Rename chat:/ })
+        .click();
       const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
       await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill(title);
       await rename.getByRole("button", { name: "Save", exact: true }).click();
@@ -538,10 +804,15 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     );
     const archivedChat = page.locator(".orchestration-chat-page:visible");
     await expect(
-      archivedChat.getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
+      page
+        .locator(".workspace-breadcrumbs")
+        .getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
     ).toBeVisible();
     await expect(archivedChat.getByRole("combobox")).toBeEditable();
-    await archivedChat.getByRole("button", { name: /^Rename chat:/ }).click();
+    await page
+      .locator(".workspace-breadcrumbs")
+      .getByRole("button", { name: /^Rename chat:/ })
+      .click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
     await rename.getByRole("button", { name: "Save", exact: true }).click();

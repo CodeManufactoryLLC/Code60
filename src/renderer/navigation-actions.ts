@@ -35,7 +35,8 @@ interface Context {
 
 export function createNavigationActions(
   read: () => Context,
-  status: (pending: boolean, error: string, projectPending: boolean) => void,
+  status: (pending: boolean, error: string, projectPending: boolean, blocking?: boolean) => void,
+  reveal: (target: NavigationTarget) => void = () => {},
 ) {
   let pending = false;
   let serial = 0;
@@ -45,6 +46,7 @@ export function createNavigationActions(
     success?: () => void,
     projectPending = false,
     valid: () => boolean = () => true,
+    blocking = true,
   ) {
     if (pending) return false;
     pending = true;
@@ -53,7 +55,7 @@ export function createNavigationActions(
     const destination = read().tabs;
     const current = () =>
       ticket === serial && owner === scope() && read().tabs === destination && valid();
-    status(true, "", projectPending);
+    status(true, "", projectPending, blocking);
     try {
       await operation(current);
       if (!current()) return false;
@@ -61,7 +63,12 @@ export function createNavigationActions(
       return true;
     } catch (cause) {
       if (current())
-        status(true, cause instanceof Error ? cause.message : String(cause), projectPending);
+        status(
+          true,
+          cause instanceof Error ? cause.message : String(cause),
+          projectPending,
+          blocking,
+        );
       return false;
     } finally {
       pending = false;
@@ -87,6 +94,7 @@ export function createNavigationActions(
         if (archiveCurrent) {
           read().onArchived();
           read().selectWorker(undefined, null);
+          if (relayId) reveal({ kind: "conversation", id: relayId });
           read().onPage("chat");
         } else if (request.type === "select" || request.type === "new") {
           const projectId =
@@ -94,6 +102,8 @@ export function createNavigationActions(
               ? request.projectId
               : before.chats.find((chat) => conversationId(chat) === request.id)?.projectId;
           read().selectWorker(undefined, projectId ?? null);
+          if (request.type === "select") reveal({ kind: "conversation", id: request.id });
+          else if (projectId) reveal({ kind: "project", id: projectId });
           read().onPage("chat");
         }
       },
@@ -105,6 +115,7 @@ export function createNavigationActions(
           return read().projects.some((project) => project.id === request.projectId);
         return true;
       },
+      request.type !== "select",
     );
   };
   const open = async (target: NavigationTarget) => {
@@ -125,11 +136,14 @@ export function createNavigationActions(
         return run(
           async () => context.api.projectAction({ type: "select", projectId: target.id }),
           () => {
-            if (read().projects.some((project) => project.id === target.id))
+            if (read().projects.some((project) => project.id === target.id)) {
+              reveal(target);
               read().onProject(target.id);
+            }
           },
           true,
           () => read().projects.some((project) => project.id === target.id),
+          false,
         );
       case "conversation":
         if (context.chats.some((chat) => !chat.archived && conversationId(chat) === target.id))
@@ -142,9 +156,13 @@ export function createNavigationActions(
               if ((await context.selectWorker(target.id, undefined, current)) === false)
                 throw new Error("Unable to open conversation");
             },
-            () => read().onPage("chat"),
+            () => {
+              reveal(target);
+              read().onPage("chat");
+            },
             false,
             () => read().runs.some((run) => run.record.id === target.id),
+            false,
           );
         }
         return false;
@@ -164,19 +182,28 @@ export function useNavigationActions(context: Context) {
   const mounted = useRef(true);
   const latest = useRef(context);
   latest.current = context;
-  const [state, setState] = useState({ pending: false, error: "", projectPending: false });
+  const [state, setState] = useState<{
+    pending: boolean;
+    error: string;
+    projectPending: boolean;
+    destination?: NavigationTarget;
+  }>({ pending: false, error: "", projectPending: false });
   const [actions] = useState(() =>
     createNavigationActions(
       () => latest.current,
-      (pending, error, projectPending) => {
+      (pending, error, projectPending, blocking = true) => {
         // Suspend selected details before project selection can publish a different owner.
         latest.current.onProjectPending?.(projectPending);
         if (mounted.current)
           setState((previous) => ({
-            pending,
+            ...previous,
+            pending: pending && blocking,
             projectPending,
             error: pending ? error : previous.error,
           }));
+      },
+      (destination) => {
+        if (mounted.current) setState((previous) => ({ ...previous, destination }));
       },
     ),
   );

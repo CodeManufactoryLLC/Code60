@@ -1,6 +1,7 @@
 .memory-recall {
   padding: 12px;
   overflow: auto;
+  scrollbar-gutter: stable;
   overflow-wrap: anywhere;
 }
 .memory-recall-meta {

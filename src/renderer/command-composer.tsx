@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { availableCommands, type Command, leadingCommand } from "../bridge/index.js";
 
 export function matchingCommands(commands: readonly Command[], text: string, cursor: number) {
-  const token = /^\/([^\s]*)/.exec(text);
+  const token = /^\$([^\s]*)/.exec(text);
   if (!token || cursor < 1 || cursor > token[0].length) return [];
   const query = (token[1] ?? "").toLowerCase();
   return availableCommands(commands).filter(
@@ -41,10 +41,10 @@ export function CommandComposer({
   const open = focused && !disabled && !dismissed && matches.length > 0;
   const index = Math.min(selected, matches.length - 1);
   const listId = `${id}-commands`;
-  const unknown = commandsEnabled && /^\/\S+/.test(value) && !invokedCommand(commands, value);
+  const unknown = commandsEnabled && /^\$\S+/.test(value) && !invokedCommand(commands, value);
   function insert(command: Command) {
-    const rest = value.replace(/^\/\S*\s?/, "");
-    const prefix = `/${command.name} `;
+    const rest = value.replace(/^\$\S*\s?/, "");
+    const prefix = `$${command.name} `;
     onChange(prefix + rest);
     setDismissed(true);
     setCursor(prefix.length);
@@ -57,7 +57,7 @@ export function CommandComposer({
     const text = inserted.current;
     if (!element || text === null || value !== text) return;
     inserted.current = null;
-    const end = text.length - text.replace(/^\/\S*\s?/, "").length;
+    const end = text.length - text.replace(/^\$\S*\s?/, "").length;
     element.focus();
     element.setSelectionRange(end, end);
   }, [value]);
@@ -77,7 +77,7 @@ export function CommandComposer({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => insert(command)}
               >
-                <span>/{command.name}</span>
+                <span>${command.name}</span>
                 <span>{command.title}</span>
                 {command.description && <small>{command.description}</small>}
               </button>
@@ -97,7 +97,7 @@ export function CommandComposer({
           open && matches[index] ? `${listId}-${matches[index].id}` : undefined
         }
         aria-describedby={unknown ? `${id}-plain-text` : undefined}
-        placeholder={commandsEnabled ? "Message… (type / for commands)" : "Message…"}
+        placeholder={commandsEnabled ? "Message… (type $ for commands)" : "Message…"}
         rows={2}
         value={value}
         disabled={disabled}
@@ -161,7 +161,7 @@ export function CommandComposer({
 
 export function CommandMessage({ text, commands }: { text: string; commands: readonly Command[] }) {
   if (!invokedCommand(commands, text)) return text;
-  const token = /^\/\S+/.exec(text)?.[0] ?? "";
+  const token = /^\$\S+/.exec(text)?.[0] ?? "";
   return (
     <>
       <mark className="command-label">{token}</mark>

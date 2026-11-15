@@ -62,7 +62,7 @@
 }
 
 .prompt-editor-name {
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .prompt-editor-source,

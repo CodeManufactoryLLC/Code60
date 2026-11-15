@@ -74,7 +74,7 @@
 .table-title {
   margin: 0;
   flex-shrink: 0;
-  font: var(--title-weight, 400) var(--title-size, 18px) / 1.25 var(--title-font, var(--font));
+  font: var(--title-weight, 300) var(--title-size, 16px) / 1.25 var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
 }
@@ -86,7 +86,7 @@
 
 .table-card-title {
   min-width: 0;
-  font: var(--card-weight, 400) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   --letter-spacing: var(--card-spacing, normal);
 }
@@ -207,7 +207,7 @@
 .icon-select > select,
 .table-scope > select {
   font-family: var(--button-font, var(--font));
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
   text-transform: var(--button-case, none);
   --letter-spacing: var(--button-spacing, normal);
 }
@@ -375,7 +375,7 @@
   padding: 0;
   margin: 0 0 12px;
   font-size: var(--text-size, 13px);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .table-preview-grid {

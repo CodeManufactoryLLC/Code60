@@ -14,15 +14,14 @@ const record = {
   citations: [{ sourceId: "source", quote: "<img src=x onerror=bad>", start: 0, end: 1 }],
 } as MemoryDetail["record"];
 it("omits introductory and source-history messages while retaining recorded turns", () => {
-  for (const incomplete of [false, true]) {
+  for (const turn of [1, 3]) {
     const html = renderToStaticMarkup(
       <MemoryRecall
         api={{} as DesktopApi}
         source={{
           owner: "owner",
           runId: "run",
-          events: [{ type: "prompt", runId: "run", at, turn: 3, text: "task" }],
-          incomplete,
+          events: [{ type: "prompt", runId: "run", at, turn, text: "task" }],
         }}
       />,
     );
@@ -30,7 +29,7 @@ it("omits introductory and source-history messages while retaining recorded turn
     expect(html).not.toContain("Edit or forget in Data Viewer");
     expect(html).not.toContain("Source history may be missing or truncated.");
     expect(html).not.toContain("Only recorded recall turns are shown.");
-    expect(html).toContain("Turn 3");
+    expect(html).toContain(`Turn ${turn}`);
     expect(html).toContain("Current turn");
     expect(html).toContain("No memories recalled for this turn.");
   }
@@ -71,7 +70,7 @@ it("retains unavailable records and distinguishes loading and unknown recall tim
   expect(html).toContain("No conditions recorded");
 });
 it("labels a zero-hit current turn and removes the previous indicator", () => {
-  const turn = { key: "1", turn: 2, at, ids: [], current: true, malformed: false };
+  const turn = { key: "1", turn: 2, ids: [], current: true, malformed: false };
   const html = renderToStaticMarkup(<RecallGroup turn={turn} records={new Map()} />);
   expect(html).toContain("Current turn");
   expect(html).toContain('data-current="true"');

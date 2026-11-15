@@ -25,7 +25,6 @@ it("groups every recorded recall newest first and preserves repeated IDs in dist
     [prompt(1), note([a, a]), note([a, b]), prompt(2), note([a])],
     "run",
   );
-  expect(history.incomplete).toBe(false);
   expect(
     history.turns.map((turn) => [turn.turn, turn.current, turn.ids.map((item) => item.id)]),
   ).toEqual([
@@ -44,15 +43,16 @@ it("moves the current indicator on a zero-hit dispatched turn, including automat
     [1, false, 1],
   ]);
   expect(recallHistory([prompt(1)], "run").turns[0]?.ids).toEqual([]);
-  expect(recallHistory([], "run")).toEqual({ turns: [], incomplete: false });
+  expect(recallHistory([], "run")).toEqual({ turns: [] });
 });
 
 it("does not invent earlier turns or attribute orphan notes to a later prompt", () => {
   const result = recallHistory([note([a]), prompt(7), note([b])], "run");
-  expect(result.incomplete).toBe(true);
   expect(result.turns).toHaveLength(1);
   expect(result.turns[0]).toMatchObject({ turn: 7, ids: [{ id: b, at }] });
-  expect(recallHistory([prompt(1), note([a]), prompt(3)], "run").incomplete).toBe(true);
+  expect(
+    recallHistory([prompt(1), note([a]), prompt(3)], "run").turns.map((turn) => turn.turn),
+  ).toEqual([3, 1]);
 });
 
 it("does not advance the current dispatched turn for unsent or cancelled preparation", () => {

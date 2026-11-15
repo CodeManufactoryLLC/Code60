@@ -35,7 +35,7 @@ it("offers recall beside Files without opening it automatically and never mounts
         onOpenProject={() => {}}
         onToggle={() => {}}
         api={api}
-        recallSource={{ owner: "owner", runId: "run", events: [], incomplete: false }}
+        recallSource={{ owner: "owner", runId: "run", events: [] }}
       />,
     );
   const blank = render("blank", true, true);
@@ -50,6 +50,28 @@ it("offers recall beside Files without opening it automatically and never mounts
     expect(render("recall", active, open)).not.toContain('class="memory-recall"');
   expect(render("recall", true, true)).toContain('class="memory-recall"');
   expect(memoryDetail).not.toHaveBeenCalled();
+});
+
+it.each(["empty", "blank"])("groups %s tab choices in one centered action list", (state) => {
+  const empty = emptyFileTabs("/project");
+  const html = renderToStaticMarkup(
+    <FilePanel
+      tabs={state === "blank" ? updateFileTabs(empty, { type: "blank" }) : empty}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+      emptyContent={<button type="button">Open Changes</button>}
+    />,
+  );
+  const actions = html.match(/class="file-panel-empty-actions">(.*?)<\/div>/)?.[1] ?? "";
+  expect(actions).toContain(">Open Changes</button>");
+  expect(actions).toContain(">Open Files</button>");
+  expect(actions).toContain(">Open Memory Recall</button>");
+  expect(actions.match(/<button/g)).toHaveLength(3);
+  expect(html.match(/class="file-panel-empty"/g)).toHaveLength(1);
 });
 
 it("nests all revisions under their task without a review dropdown or diff", () => {

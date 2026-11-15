@@ -200,27 +200,29 @@ export function FilePanel({
             <p className="file-panel-empty">Connect a database to use files.</p>
           ) : !selected || selected.kind === "blank" ? (
             <div className="file-panel-empty">
-              {emptyContent}
-              <button
-                type="button"
-                className="file-open-link"
-                onClick={() => {
-                  focusActiveTab();
-                  act({ type: "explorer" });
-                }}
-              >
-                Open Files
-              </button>
-              <button
-                type="button"
-                className="file-open-link"
-                onClick={() => {
-                  focusActiveTab();
-                  act({ type: "recall" });
-                }}
-              >
-                Open Memory Recall
-              </button>
+              <div className="file-panel-empty-actions">
+                {emptyContent}
+                <button
+                  type="button"
+                  className="file-open-link"
+                  onClick={() => {
+                    focusActiveTab();
+                    act({ type: "explorer" });
+                  }}
+                >
+                  Open Files
+                </button>
+                <button
+                  type="button"
+                  className="file-open-link"
+                  onClick={() => {
+                    focusActiveTab();
+                    act({ type: "recall" });
+                  }}
+                >
+                  Open Memory Recall
+                </button>
+              </div>
             </div>
           ) : selected.kind === "recall" ? (
             active && open && visible && api ? (

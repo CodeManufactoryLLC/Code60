@@ -170,6 +170,25 @@
   flex: 1;
 }
 
+.file-panel-empty-actions,
+.file-panel-saved-plans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  text-align: left;
+}
+
+.file-panel-empty-actions {
+  padding: 16px;
+}
+
+.file-panel-empty-actions button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 button.file-open-link {
   padding: 8px;
   border: 0;
@@ -299,7 +318,7 @@ button.file-open-link {
 .files-header h2,
 .file-inspector-header h2 {
   margin: 0;
-  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 300) var(--title-size, 16px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
   overflow-wrap: anywhere;
@@ -368,7 +387,7 @@ button.file-open-link {
 
 .file-tree-item[aria-selected="true"] {
   background: var(--accent-bg);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .file-tree-item[aria-disabled="true"] {
@@ -494,7 +513,7 @@ button.file-open-link {
 .revision-task {
   margin: 0;
   font-size: inherit;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .revision-task > span:first-of-type,
@@ -615,7 +634,7 @@ button.file-open-link {
 .review-feedback :where(h3) {
   margin: 0;
   font-size: 15px;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .review-heading :where(h2) {
@@ -929,8 +948,8 @@ button.file-open-link {
 .plan-title {
   font-family: var(--title-font, var(--font));
   --letter-spacing: var(--title-spacing, normal);
-  font-size: max(var(--title-size, 18px), 1.2em);
-  font-weight: var(--title-weight, 400);
+  font-size: max(var(--title-size, 16px), 1.2em);
+  font-weight: var(--title-weight, 300);
   text-transform: var(--title-case, none);
   line-height: 1.3;
 }

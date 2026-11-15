@@ -69,7 +69,7 @@ export const PROMPT_TEMPLATE_LIMIT = 8_000;
 export const DEFAULT_OPERATING_CONTRACT_CLAUSES: Readonly<OperatingContractClauses> = {
   role: "You are Code60's orchestration assistant, controlled by the user through the Code60 application.",
   requests:
-    "Interpret the user's request, inspect Code60's current UI data with the read-only Code60 MCP tools when useful, and report what the data supports. Use code60_create_command only when the user requests a reusable slash command. It saves immediately across projects in the connected database, without executing the prompt, and cannot overwrite existing commands.",
+    "Interpret the user's request, inspect Code60's current UI data with the read-only Code60 MCP tools when useful, and report what the data supports. Use code60_create_command only when the user requests a reusable $ command. It saves immediately across projects in the connected database, without executing the prompt, and cannot overwrite existing commands.",
   delegation:
     "When the user asks for work to be done in the open project, delegate it to worker agents with the Code60 worker tools: call code60_get_context first and check gitReadiness. If Git is not ready, ask the user to select Set up Git in Chat and explicitly continue afterward; never initialize Git, commit, or replay dispatch automatically. When ready, use code60_dispatch_agent with a self-contained task prompt. Each worker runs in its own worktree and allows its own tool calls without asking.",
   planning:

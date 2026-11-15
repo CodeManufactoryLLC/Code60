@@ -20,6 +20,7 @@ import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
+import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
 import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
 import { PromptEditorPage } from "./prompt-editor.js";
@@ -64,15 +65,34 @@ export function AppPages(props: AppPagesProps) {
     accept,
   } = props;
   const snapshot = state?.snapshot;
+  usePageTransition(
+    tabs.active,
+    tabs.active === "settings"
+      ? settingsSection
+      : tabs.active === "project"
+        ? tabs.projectId
+        : tabs.active === "chat"
+          ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
+          : undefined,
+    !splash,
+  );
   const titleNavigation = useMemo(
     () => ({
       open: navigation.open,
       pending: navigation.pending,
+      header: !splash,
       projects: snapshot?.openProjects ?? [],
       chats: snapshot?.chats ?? [],
       runs: navigationRuns,
     }),
-    [navigation.open, navigation.pending, snapshot?.openProjects, snapshot?.chats, navigationRuns],
+    [
+      navigation.open,
+      navigation.pending,
+      splash,
+      snapshot?.openProjects,
+      snapshot?.chats,
+      navigationRuns,
+    ],
   );
   const projectRuns = useMemo(
     () => snapshot?.runs.filter((run) => !run.relay) ?? [],
