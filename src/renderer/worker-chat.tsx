@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { useChatDraft } from "./chat-draft.js";
@@ -7,6 +7,7 @@ import { sessionStatus, turnTimings } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
+import { PageTitle } from "./page-title.js";
 import { continueBlocker } from "./recovery.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
@@ -27,6 +28,7 @@ export function WorkerChat({
   historyError,
   onRetry,
   onCopied,
+  notice,
 }: {
   api: DesktopApi;
   run: DesktopRun;
@@ -40,6 +42,7 @@ export function WorkerChat({
   historyError: string | undefined;
   onRetry(): void;
   onCopied?: (() => void) | undefined;
+  notice?: ReactNode;
 }) {
   const id = run.record.id;
   const titleId = useId();
@@ -151,12 +154,15 @@ export function WorkerChat({
     >
       <header className="orchestration-chat-heading worker-chat-heading">
         <div className="worker-chat-identity">
-          <h2 className="worker-chat-title" id={titleId}>
-            <span className="chat-role-icon" aria-hidden="true">
-              <Icon name="ai-agent" />
-            </span>
+          <PageTitle
+            page="worker"
+            as="h2"
+            className="worker-chat-title"
+            id={titleId}
+            target={{ kind: "conversation", id }}
+          >
             {label ?? `${run.record.agent} / ${id.slice(-6)}`}
-          </h2>
+          </PageTitle>
           <span className="status-label worker-chat-subtitle" data-status={status}>
             {run.view?.stopping
               ? "Stopping agent…"
@@ -174,6 +180,7 @@ export function WorkerChat({
           </span>
         )}
       </header>
+      {notice}
       {run.relay && (
         <p role="status">
           {run.relay.cwd} ({run.relay.workspaceMode}).

@@ -328,7 +328,7 @@
   flex-shrink: 0;
   overflow: hidden;
 
-  border-radius: var(--ui-radius);
+  border-radius: var(--chat-radius);
 }
 
 .composer textarea {
@@ -397,7 +397,7 @@
   padding: 12px;
   margin: 7px 0;
 
-  border-radius: var(--ui-radius);
+  border-radius: var(--card-radius);
 }
 
 .approval > div {
@@ -460,7 +460,7 @@
 
 .orchestration-chat-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 12px;
@@ -740,29 +740,8 @@
   overflow-wrap: anywhere;
 }
 
-.chat-role-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 1em;
-  width: 1em;
-  height: 1em;
-  line-height: 0;
-}
-
-.chat-role-icon > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .chat-orchestrator-icon > .chat-orchestrator-icon-dark {
   display: none;
-}
-
-.chat-role-icon > .carbon-icon {
-  width: 100%;
-  height: 100%;
 }
 
 :root[data-color-scheme="dark"] .chat-orchestrator-icon > .chat-orchestrator-icon-light {
@@ -943,7 +922,7 @@
 .activity-display {
   padding: 0;
   border: 0;
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
   min-height: 0;
   background: transparent;
   box-shadow: none;
@@ -1150,6 +1129,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 
 .chat-conversations {
   flex: 1;
+  border-radius: var(--chat-radius);
   min-width: 300px;
   min-height: 0;
   overflow: hidden;
@@ -1203,10 +1183,11 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   place-items: center;
   width: 16px;
   height: 16px;
+  transition: transform 60ms ease-out;
 }
 
 .message-copy-glyph[data-clicked] {
-  animation: message-copy-depress var(--motion) ease;
+  animation: message-copy-depress 150ms ease;
 }
 
 .message-copy button:active .message-copy-glyph {

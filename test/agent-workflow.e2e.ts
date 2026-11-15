@@ -254,6 +254,7 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     checks.push("A real fake-provider subprocess changed only its accepted isolated worktree.");
 
     await page.reload();
+    await page.setViewportSize({ width: 1600, height: 1000 });
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     await expect(composer).toBeEditable();
     const restored = await page.evaluate(() => window.desktop.snapshot());
@@ -269,6 +270,9 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     const review = changes.getByRole("region", { name: "Selected Relay review" });
     await review.getByRole("button", { name: "Refresh changes", exact: true }).click();
     await expect(review.getByLabel("Revision", { exact: true })).not.toHaveValue("");
+    // Monaco renders only the visible columns. Widen the real panel to read the whole line.
+    const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
+    for (let step = 0; step < 20; step++) await resize.press("ArrowLeft");
     await expect(review.locator(".review-panel .review-diff-editor")).toContainText(
       "human accepted target",
     );

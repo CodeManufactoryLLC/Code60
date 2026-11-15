@@ -17,7 +17,7 @@ export function OrchestrationSettings({
   const setup = snapshot.agentSetup;
   return (
     <section className="settings-section" aria-labelledby={id}>
-      <SettingsHeader id={id} title="Agents">
+      <SettingsHeader page="agents" id={id}>
         <button type="button" onClick={() => setMode("primary")}>
           {setup?.complete ? "Change primary" : "Set up agents"}
         </button>

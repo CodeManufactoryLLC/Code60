@@ -24,12 +24,26 @@ describe("page tabs", () => {
         "apps",
         "memories",
         "automations",
+        "system-manager",
+        "projects",
+        "project",
+        "tables",
+        "advanced",
+        "experiments",
       ],
       active: "chat",
     });
     for (const id of initialTabs.open) {
       expect(updateTabs(initialTabs, { type: "close", id })).toBe(initialTabs);
     }
+  });
+  it("routes project homes separately from conversations and clears their identity on exit", () => {
+    const project = updateTabs(initialTabs, { type: "project", projectId: "one" });
+    expect(project).toEqual({ ...initialTabs, active: "project", projectId: "one" });
+    expect(updateTabs(project, { type: "select", id: "projects" })).toEqual({
+      ...initialTabs,
+      active: "projects",
+    });
   });
   it("selects the existing Settings tab without duplicating it", () => {
     const settings = updateTabs(initialTabs, { type: "open", id: "settings" });

@@ -3,18 +3,24 @@ import type { OpenProject, ProjectAction } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
+import { NavigationIcon } from "./navigation-icons.js";
+import { parentActivation, projectConversations } from "./navigation-tree.js";
 import { pathLabel } from "./path-label.js";
 
 type Props = ComponentProps<typeof ChatSidebar> & {
   projects: readonly OpenProject[];
   selectedProjectId: string | null | undefined;
   onProjectAction(request: ProjectAction): Promise<boolean>;
+  homeProjectId: string | undefined;
+  onProjectOpen(id: string): void;
 };
 
 export function ProjectChatSidebar({
   projects,
   selectedProjectId,
   onProjectAction,
+  homeProjectId,
+  onProjectOpen,
   ...props
 }: Props) {
   const [menu, setMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
@@ -39,29 +45,26 @@ export function ProjectChatSidebar({
     projects.find((project) => project.workerIds.includes(props.selectedId ?? ""))?.id;
   // biome-ignore lint/correctness/useExhaustiveDependencies: New or explicit same-project destinations must reveal their manually collapsed ancestor.
   useLayoutEffect(() => {
-    if (selectedProject)
-      setExpanded((current) =>
-        current.has(selectedProject) ? current : new Set([...current, selectedProject]),
-      );
-  }, [selectedProject, props.selectedId, props.navigationSerial]);
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const reveal = homeProjectId ?? (props.open ? selectedProject : undefined);
+    if (reveal)
+      setExpanded((current) => (current.has(reveal) ? current : new Set([...current, reveal])));
+  }, [selectedProject, props.selectedId, props.navigationSerial, props.open, homeProjectId]);
   return (
     <>
       {projects.map((project) => {
         const open = expanded.has(project.id);
         const panelId = `project-chats-${project.id}`;
         const name = pathLabel(project.path);
-        const workerIds = new Set(project.workerIds);
         const toggleProject = () => {
           if (props.pending) return;
-          toggle(project.id);
-          if (!open) void onProjectAction({ type: "select", projectId: project.id });
+          const next = parentActivation(homeProjectId === project.id, open);
+          setExpanded((current) => {
+            const result = new Set(current);
+            if (next.expanded) result.add(project.id);
+            else result.delete(project.id);
+            return result;
+          });
+          if (next.navigate) onProjectOpen(project.id);
         };
         return (
           <section
@@ -75,6 +78,7 @@ export function ProjectChatSidebar({
               aria-label={`Project controls for ${project.path}`}
               className="project-chat-heading"
               data-project-selected={selectedProjectId === project.id}
+              data-nav-active={homeProjectId === project.id}
               onClick={(event) => {
                 if (event.target === event.currentTarget) toggleProject();
               }}
@@ -93,15 +97,16 @@ export function ProjectChatSidebar({
               <button
                 type="button"
                 className="project-chat-name"
+                id={`project-${project.id}`}
                 title={project.path}
-                aria-current={selectedProjectId === project.id || undefined}
+                aria-current={homeProjectId === project.id ? "page" : undefined}
                 aria-expanded={open}
-                aria-controls={panelId}
+                aria-controls={`panel-project ${panelId}`}
                 disabled={props.pending}
                 onClick={toggleProject}
               >
                 <span className="project-chat-label">
-                  <Icon name="folder" />
+                  <NavigationIcon name="app-folder" />
                   <span className="project-chat-title">{name}</span>
                 </span>
                 {project.active && <span className="project-chat-activity">Active</span>}
@@ -141,8 +146,7 @@ export function ProjectChatSidebar({
             >
               <ChatSidebar
                 {...props}
-                chats={props.chats.filter((chat) => chat.projectId === project.id)}
-                runs={props.runs.filter((run) => !run.relay && workerIds.has(run.record.id))}
+                entries={projectConversations(project, props.chats, props.runs, props.selectedId)}
               />
             </div>
             {menu?.projectId === project.id && (

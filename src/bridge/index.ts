@@ -251,6 +251,9 @@ export interface Versions {
   electron: string | null;
   chromium: string | null;
   node: string;
+  /** Configured offline model, not a claim that its assets have been loaded. */
+  embeddingModel?: { id: string; revision: string; dimensions: number; dtype: string };
+  onnxRuntime?: { name: string; version: string | null; execution: string };
 }
 
 export interface Snapshot {

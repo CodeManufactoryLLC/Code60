@@ -76,9 +76,10 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
 export function requestedDetails(
   state: DesktopState | undefined,
   workerId?: string,
+  active = true,
 ): DetailScope[] {
   const snapshot = state?.snapshot;
-  if (!snapshot) return [];
+  if (!snapshot || !active) return [];
   const scopes: DetailScope[] = [];
   if (snapshot.projectInstanceId && snapshot.databaseEpoch !== undefined)
     scopes.push({
@@ -234,9 +235,10 @@ export function useScopedDetails(
   state: DesktopState | undefined,
   fail: (message: string) => void,
   workerId?: string,
+  active = true,
 ) {
   const [frames, setFrames] = useState<Record<string, DetailFrame>>({});
-  const scopes = JSON.stringify(requestedDetails(state, workerId));
+  const scopes = JSON.stringify(requestedDetails(state, workerId, active));
   const live = JSON.stringify(liveDetails(state).map(detailScopeKey));
   // biome-ignore lint/correctness/useExhaustiveDependencies: Replacing the transport/error sink must dispose its registrations.
   const subscriptions = useMemo(() => new Map<string, () => void>(), [api, fail]);

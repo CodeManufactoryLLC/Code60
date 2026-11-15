@@ -21,9 +21,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 0 0 calc(var(--sidebar-track-width) - var(--page-margin));
+  flex: 0 0 calc(var(--sidebar-left-inset) + var(--sidebar-track-width) - var(--page-margin));
   min-width: 0;
   padding-right: 8px;
+}
+
+.app:has(.sidebar[data-open="false"]) .footer-sidebar {
+  flex-basis: auto;
+  flex-shrink: 1;
+  max-width: min(420px, calc(100vw - 140px));
 }
 
 .update-indicator {

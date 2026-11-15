@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } f
 import type { ModeChange, SessionState } from "../core/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
+import { menuAnchorMoved } from "./menu-anchor.js";
 
 export function contextUsage(usage: SessionState["usage"]): string {
   if (!usage) return "N/A";
@@ -50,6 +51,7 @@ export function SessionInfo({
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const modes = state?.modes;
+  const modeKey = modes && JSON.stringify([modes.source, modes.confirmed, modes.controls]);
   const enabled =
     active && editable && !ended && !changing && !!modes?.controls.some((c) => c.options.length);
   const selected =
@@ -75,7 +77,7 @@ export function SessionInfo({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Session and capability changes must dismiss an existing menu.
   useEffect(() => {
     setOpen(false);
-  }, [sessionId, active, editable, changing, ended, modes]);
+  }, [sessionId, active, editable, changing, ended, modeKey]);
   useLayoutEffect(() => {
     const popup = menu.current;
     const button = trigger.current;
@@ -89,10 +91,13 @@ export function SessionInfo({
       popup.style.top = `${Math.max(8, rect.top - box.height - 6)}px`;
     };
     place();
+    // Press feedback scales the trigger; its layout container is the stationary anchor.
+    const anchorElement = button.parentElement ?? button;
+    const anchor = anchorElement.getBoundingClientRect();
     (
       popup.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
       popup.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
-    )?.focus();
+    )?.focus({ preventScroll: true });
     const dismiss = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&
@@ -112,7 +117,8 @@ export function SessionInfo({
         setOpen(false);
     };
     const scroll = (event: Event) => {
-      if (!(event.target instanceof Node) || !popup.contains(event.target)) setOpen(false);
+      if (event.target instanceof Node && popup.contains(event.target)) return;
+      if (menuAnchorMoved(anchorElement, anchor)) setOpen(false);
     };
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("focusin", leave);

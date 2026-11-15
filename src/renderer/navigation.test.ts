@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  groups,
   pageAvailable,
   pageCommands,
   pageDefinitions,
@@ -8,10 +9,38 @@ import {
   pagesInGroup,
   renderedPages,
   resolvePage,
+  settingsIcons,
   settingsSectionIds,
 } from "./navigation.js";
+import { staticChildren } from "./navigation-tree.js";
 
 describe("navigation registry", () => {
+  it("uses the supplied artwork for Memory, Agents and Experiments", () => {
+    expect(settingsIcons.memory).toBe("app-bookshelf");
+    expect(settingsIcons.agents).toBe("app-helmet");
+    expect(groups.experiments.icon).toBe("app-chemical");
+    expect(pageDefinitions["episodic-memory"].icon).toBe("brain");
+    expect(pageDefinitions.rag.icon).toBe("flask");
+  });
+  it("uses the supplied artwork for Search, tables, Table defaults and Contributor Tools", () => {
+    expect(pageDefinitions.search.icon).toBe("app-search");
+    for (const id of pagesInGroup("tables")) expect(pageDefinitions[id].icon).toBe("app-table");
+    expect(settingsIcons["table-defaults"]).toBe("app-table");
+    expect(pageDefinitions["contributor-tools"].icon).toBe("app-under-construction");
+  });
+  it("alphabetizes Settings destinations, including the Advanced group", () => {
+    expect(staticChildren("settings", "/db").map(({ target }) => target.id)).toEqual([
+      "about",
+      "advanced",
+      "agents",
+      "appearance",
+      "memory",
+      "polling-settings",
+      "table-defaults",
+      "text",
+      "updates",
+    ]);
+  });
   it("defines every static destination once and routes aliases to rendered pages", () => {
     expect(new Set(pages.map((page) => page.id)).size).toBe(pages.length);
     expect(renderedPages.map((page) => page.id)).toEqual(
@@ -26,13 +55,20 @@ describe("navigation registry", () => {
   it("keeps tables alphabetical and primary navigation in its documented order", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
-    expect(pagesInGroup("apps")).toEqual(["commands", "prompts"]);
-    expect(pagesInGroup("primary")).toEqual(["home", "automations", "apps", "search"]);
+    expect(pagesInGroup("apps")).toEqual(["automations", "commands", "prompts", "system-manager"]);
+    expect(pagesInGroup("primary")).toEqual(["home", "apps", "search"]);
+    expect(pageGroup("automations")).toBe("apps");
+    expect(pageDefinitions.automations.label).toBe("Automation Studio");
+    expect(pageGroup("system-manager")).toBe("apps");
+    expect(pageDefinitions["system-manager"].label).toBe("System Manager");
   });
   it("uses the same availability for palette and sidebar, including database-free Logs", () => {
     for (const database of [null, "/db"]) {
       const navigate = vi.fn();
       const commands = pageCommands("chat", database, navigate, "Ctrl+,");
+      expect(commands.find((command) => command.id === "automations")?.label).toBe(
+        "Automation Studio",
+      );
       for (const command of commands) {
         const id = command.id as keyof typeof pageDefinitions;
         expect(command.disabled).toBe(!pageAvailable(id, database));
@@ -43,6 +79,7 @@ describe("navigation registry", () => {
     }
     expect(pageAvailable("logs", null)).toBe(true);
     expect(pageAvailable("automations", null)).toBe(true);
+    expect(pageAvailable("system-manager", null)).toBe(true);
     expect(pageAvailable("memories", null)).toBe(true);
     expect(pageAvailable("settings", null)).toBe(true);
     expect(pageAvailable("apps", null)).toBe(true);

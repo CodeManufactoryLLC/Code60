@@ -10,7 +10,7 @@ vi.mock("./data-table.js", () => ({
     createElement("div", { "data-test-table": tableId }),
 }));
 
-it("keeps service maintenance and schedule actions out of the default uncluttered view", () => {
+it("keeps service controls and explanatory notes out of Automation Studio", () => {
   const markup = renderToStaticMarkup(
     <AutomationsPage
       api={{} as DesktopApi}
@@ -23,11 +23,19 @@ it("keeps service maintenance and schedule actions out of the default uncluttere
     />,
   );
 
-  expect(markup).toContain('<h1 class="table-title">Automations</h1>');
-  expect(markup).toContain("Runs continue after you quit Code60.");
-  expect(markup).toContain("<summary>Service options</summary>");
+  expect(markup).toContain('<h1 class="page-title table-title">');
+  expect(markup).toContain('data-icon="app-robotic-arm"');
+  expect(markup).toContain('<span class="page-title-text">Automation Studio</span></h1>');
+  expect(markup).not.toContain("Runs continue after you quit Code60.");
+  expect(markup).not.toContain("A finished run means the agent turn ended");
+  expect(markup).not.toContain("Background service");
+  expect(markup).not.toContain("Service options");
+  expect(markup).not.toContain("Install service");
   expect(markup).toContain('data-test-table="automations"');
   expect(markup).toContain('data-test-table="automation-history"');
+  expect(markup.match(/automation-table-card/g)).toHaveLength(2);
+  expect(markup).toContain('aria-label="Schedules"');
+  expect(markup).toContain('aria-label="Execution history"');
   expect(markup).not.toContain("Cancel active run");
   expect(markup).not.toContain("Delete automation");
   expect(markup).not.toContain("Read transcript");

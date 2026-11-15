@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { RunEvent } from "../core/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
+import { PageTitle } from "./page-title.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
 export interface EventRow {
@@ -103,6 +104,11 @@ export function EventsPage({
   const [selected, setSelected] = useState<string>();
   return (
     <main className="sessions" aria-label="Events" data-heading-lines={lines.heading}>
+      {!directory && (
+        <header className="table-controls">
+          <PageTitle page="events" className="table-title" />
+        </header>
+      )}
       <TranscriptNotice data={data} />
       {directory && (
         <DataTable

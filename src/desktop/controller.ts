@@ -173,6 +173,7 @@ import { DiffReads, prepareUnlessAborted } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import { GitSetup } from "./git-setup.js";
+import { INFERENCE_VERSIONS } from "./inference-versions.js";
 import { logProjectId } from "./log-store.js";
 import {
   type ControlArgs,
@@ -3508,6 +3509,7 @@ export class DesktopController {
         ? { summaryOnly: true as const, detailRevisions: this.details.revisions() }
         : {}),
       versions: {
+        ...INFERENCE_VERSIONS,
         code60: CODE60_VERSION,
         databaseSchema: SCHEMA,
         runRecordFormat: RUN_RECORD_FORMAT,
