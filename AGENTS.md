@@ -49,6 +49,11 @@ environments.
   `ARCHITECTURE.md`; update it only together with that document.
 - Import another module only through its `index.ts` (written as
   `../<module>/index.js`).
+- Every capability-affecting change (pages, settings sections, MCP tools,
+  prerequisites, confirmations or limits) must update the self-knowledge catalog
+  in `src/contracts/knowledge.ts`, its availability rules and tests, then run
+  `npm run generate:capabilities`. Otherwise state in the PR why no knowledge
+  change is needed.
 
 ## Before Making Changes
 

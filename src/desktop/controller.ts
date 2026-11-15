@@ -49,6 +49,7 @@ import type {
 } from "../bridge/index.js";
 import {
   assembleOperatingContract,
+  availableCommands,
   BUILTIN_COMMANDS,
   DEFAULT_PROMPT_TEMPLATES,
   emitLog,
@@ -60,7 +61,9 @@ import {
   type GitSetupFileRequest,
   type GitSetupIdentity,
   isActivityTool,
+  isKnowledgeTool,
   isMcpControlTool,
+  type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
   type Plan,
@@ -116,6 +119,8 @@ import {
   type ReviewRead,
   renderPrompt,
   type SavedChat,
+  TACTICS,
+  tacticPrompt,
 } from "../bridge/index.js";
 import type { ModeChange } from "../core/index.js";
 import {
@@ -173,6 +178,12 @@ import { DiffReads, prepareUnlessAborted } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import { GitSetup } from "./git-setup.js";
+import {
+  type Customization,
+  DesktopKnowledge,
+  type KnowledgeCaller,
+  type KnowledgeRuntime,
+} from "./knowledge.js";
 import { logProjectId } from "./log-store.js";
 import {
   type ControlArgs,
@@ -1788,6 +1799,7 @@ export class DesktopController {
     this.relay = storage.relay
       ? new RelayService(deps, env, () => this.changed(null), dialogs, this.memory)
       : undefined;
+    this.relay?.attachKnowledge(this.knowledge);
     this.rag = new RagService(
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
       storage.ragExecutor,
@@ -2382,6 +2394,8 @@ export class DesktopController {
 
   private async callChatTool(name: string, args: unknown, session: ChatSession): Promise<unknown> {
     this.conversations.assertCurrent(session);
+    if (isKnowledgeTool(name))
+      return this.knowledge.call(name, args, this.knowledgeCaller(session));
     if (isActivityTool(name)) {
       const run = session.chat?.runs()[0];
       if (!run || run.stopping || !["running", "waiting"].includes(run.status))
@@ -2793,10 +2807,10 @@ export class DesktopController {
         {
           mcpServers,
           promptContext: () =>
-            assembleOperatingContract(
+            `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
                 .operatingContract,
-            ),
+            )}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -2935,10 +2949,10 @@ export class DesktopController {
           recovery: record,
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
-            assembleOperatingContract(
+            `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
                 .operatingContract,
-            ),
+            )}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -3256,6 +3270,7 @@ export class DesktopController {
   }
 
   clearDetailSubscriptions(): void {
+    this.knowledge.resetRenderer();
     this.details.clear();
   }
 
@@ -3360,6 +3375,278 @@ export class DesktopController {
             ...this.projectSnapshot(allEvents),
           };
         }),
+    };
+  }
+
+  readonly knowledge = new DesktopKnowledge({
+    runtime: (caller) => this.knowledgeRuntime(caller),
+    valid: (caller) => this.validKnowledgeCaller(caller),
+    validOwner: (owner) => this.validKnowledgeOwner(owner),
+    readView: async (caller, _panel, tab) => {
+      if (caller.kind === "relay") {
+        if (tab.kind === "plan") return this.relay?.knowledgePlan(tab.planId);
+        if (tab.kind === "file" && !tab.savedRevision)
+          return this.relayFiles.knowledgePreview(tab.path);
+        return undefined;
+      }
+      const owner = this.projectHost.byId(caller.projectId);
+      return this.projectHost.run(owner, () => {
+        const session = this.conversations.sessions.find((s) => s.run?.id === caller.chatId);
+        if (!session) throw new Error("Conversation unavailable");
+        if (tab.kind === "plan") {
+          const plan = session.plans?.get(tab.planId);
+          return plan && { ...plan, markdown: planMarkdown(plan) };
+        }
+        if (tab.kind === "revision") {
+          const review = this.reviews?.get(tab.reviewId);
+          if (review?.chatId !== caller.chatId)
+            throw new Error("Review belongs to another conversation");
+          return review.revisions.find((r) => r.id === tab.revisionId);
+        }
+        if (
+          tab.kind === "file" &&
+          !tab.savedRevision &&
+          this.files?.preview?.path === tab.path &&
+          this.files.context.projectId === owner.id &&
+          this.files.context.databaseEpoch === owner.epoch
+        )
+          return this.files.preview;
+        return undefined;
+      });
+    },
+  });
+
+  private validKnowledgeOwner(owner: KnowledgeOwner): void {
+    if (this.closing) throw new Error("Desktop is closing");
+    if (owner.kind === "project") {
+      const runtime = this.projectHost.byId(owner.projectId);
+      if (runtime.epoch !== owner.databaseEpoch || !runtime.state.workspace)
+        throw new Error("Stale project owner");
+    } else {
+      const relay = this.relay?.snapshot(true);
+      if (relay?.conversationId !== owner.conversationId || relay.generation !== owner.generation)
+        throw new Error("Stale Relay owner");
+    }
+  }
+  private validKnowledgeCaller(caller: KnowledgeCaller): void {
+    if (caller.kind === "relay") {
+      this.validKnowledgeOwner(caller);
+      return;
+    }
+    if (this.closing) throw new Error("Desktop is closing");
+    // Chats remain usable before a project is opened, so the caller needs no workspace.
+    const runtime = this.projectHost.byId(caller.projectId);
+    if (runtime.epoch !== caller.databaseEpoch) throw new Error("Stale project owner");
+    const session = runtime.state.conversations.sessions.find((s) => s.run?.id === caller.chatId);
+    if (
+      !session ||
+      session.revoked ||
+      session.chatGeneration !== caller.generation ||
+      !session.mcpGateway
+    )
+      throw new Error("Stale conversation");
+  }
+  private knowledgeContext(session: ChatSession): string {
+    try {
+      return this.knowledge.context(this.knowledgeCaller(session));
+    } catch {
+      return "--- Code60 awareness unavailable. Do not infer current UI state or authority. ---";
+    }
+  }
+  private knowledgeHint(session: ChatSession): unknown {
+    try {
+      return this.knowledge.hint(this.knowledgeCaller(session));
+    } catch {
+      return { available: false };
+    }
+  }
+  private knowledgeCaller(session: ChatSession): KnowledgeCaller {
+    const owner = this.chatOwner(session.run?.id ?? "");
+    if (!owner || !session.run) throw new Error("Conversation unavailable");
+    return {
+      kind: "project",
+      projectId: owner.id,
+      databaseEpoch: owner.epoch,
+      chatId: session.run.id,
+      generation: session.chatGeneration,
+    };
+  }
+  private knowledgeRuntime(caller: KnowledgeCaller): KnowledgeRuntime {
+    const projects: Record<string, unknown>[] = [];
+    const conversations: Record<string, unknown>[] = [];
+    const sessions: Record<string, unknown>[] = [];
+    const relay = this.relay?.snapshot(true);
+    if (relay)
+      conversations.push({
+        id: relay.conversationId,
+        kind: "relay",
+        generation: relay.generation,
+        title: "Relay",
+        status: relay.run?.status ?? "disconnected",
+        historical: false,
+        selected: this.relaySelected,
+      });
+    for (const owner of this.projectHost.all()) {
+      const state = owner.state;
+      const workspace = state.workspace;
+      if (workspace)
+        projects.push({
+          id: owner.id,
+          databaseEpoch: owner.epoch,
+          name: basename(workspace.dir),
+          path: workspace.dir,
+          selected: owner === this.projectHost.selected,
+        });
+      for (const session of state.conversations.sessions) {
+        if (!session.run) continue;
+        conversations.push({
+          id: session.run.id,
+          kind: "project",
+          projectId: owner.id,
+          generation: session.chatGeneration,
+          title: session.title ?? "Chat",
+          archived: session.archived,
+          tactic: session.tactic ?? null,
+          status: session.run.status,
+          historical: session.restored || !session.chat,
+          selected:
+            !this.relaySelected &&
+            owner === this.projectHost.selected &&
+            session === state.conversations.current,
+        });
+      }
+      if (!workspace) continue;
+      const liveRuns = new Map(
+        [...state.batches.keys()].flatMap((batch) => batch.runs()).map((run) => [run.id, run]),
+      );
+      for (const listed of state.history) {
+        const live = liveRuns.get(listed.record.id);
+        const worker = state.conversations.workers.get(listed.record.id);
+        const owned =
+          worker && worker.directory === workspace.dir
+            ? state.conversations.sessions.find(
+                (session) => worker.generation === session.chatGeneration,
+              )
+            : undefined;
+        sessions.push({
+          id: listed.record.id,
+          projectId: owner.id,
+          conversationId: owned?.run?.id ?? null,
+          status: live?.status ?? listed.record.status,
+          provider: listed.record.agent,
+          historical: !live,
+          target: workspace.dir,
+        });
+      }
+    }
+    for (const run of this.relay?.workerSnapshot(true).runs ?? [])
+      sessions.push({
+        id: run.record.id,
+        conversationId: run.relay?.conversationId,
+        targetId: run.relay?.targetId,
+        target: run.relay?.cwd,
+        workspaceMode: run.relay?.workspaceMode,
+        status: run.record.status,
+        provider: run.record.agent,
+        historical: false,
+      });
+    const state =
+      caller.kind === "project" ? this.projectHost.byId(caller.projectId).state : undefined;
+    const session = state?.conversations.sessions.find(
+      (s) => s.run?.id === (caller.kind === "project" ? caller.chatId : ""),
+    );
+    const customizations: Customization[] = [];
+    if (this.database) {
+      for (const command of availableCommands(this.commands))
+        customizations.push({
+          id: `command:${command.id}`,
+          kind: "command",
+          title: `/${command.name} · ${command.title}`,
+          source: this.commands.some((c) => c.id === command.id) ? "database" : "built-in",
+          value: {
+            name: command.name,
+            title: command.title,
+            description: command.description,
+            prompt: command.prompt,
+            usableInCallerComposer: caller.kind === "project",
+          },
+        });
+      for (const configuration of this.configurations)
+        customizations.push({
+          id: `configuration:${configuration.id}`,
+          kind: "configuration",
+          title: configuration.name,
+          source: "database",
+          value: { name: configuration.name, settings: configuration.settings },
+        });
+    }
+    for (const tactic of TACTICS)
+      customizations.push({
+        id: `tactic:${tactic.id}`,
+        kind: "tactic",
+        title: tactic.title,
+        source: "built-in",
+        value: tacticPrompt(tactic),
+      });
+    for (const prompt of promptStates(
+      caller.kind === "relay"
+        ? DEFAULT_PROMPT_TEMPLATES
+        : (this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES),
+      caller.kind === "relay" ? {} : this.savedPrompts,
+    ))
+      customizations.push({
+        id: `prompt:${prompt.id}`,
+        kind: "prompt",
+        title: prompt.id,
+        source: prompt.source,
+        value: prompt.template,
+      });
+    customizations.push({
+      id: "setting:runtime",
+      kind: "setting",
+      title: "Safe runtime settings",
+      source: "application",
+      value: {
+        memory: {
+          enabled: this.memory.settings.enabled,
+          retentionDays: this.memory.settings.retentionDays,
+        },
+        maxParallel: this.config?.maxParallel ?? 4,
+        turnTimeout: this.config?.turnTimeout ?? "30m",
+        selectedTactic: session?.tactic ?? null,
+        relayOperatingInstructions:
+          caller.kind === "relay"
+            ? "fixed application instructions; database/config overrides ignored"
+            : null,
+      },
+    });
+    return {
+      revision: this.revision,
+      version: CODE60_VERSION,
+      database: this.database
+        ? {
+            id: createHash("sha256").update(this.database.path).digest("hex"),
+            epoch: this.projectHost.databaseEpoch,
+          }
+        : null,
+      selectedProjectId: this.projectHost.selected.state.workspace
+        ? this.projectHost.selected.id
+        : null,
+      selectedConversationId: this.relaySelected
+        ? (relay?.conversationId ?? null)
+        : (this.projectHost.selected.state.conversations.current.run?.id ?? null),
+      projects,
+      conversations,
+      sessions,
+      providers: this.agentSetup.complete ? this.agentSetup.enabled : [],
+      maxParallel: this.config?.maxParallel ?? 4,
+      liveWorkers:
+        session && state
+          ? state.conversations.liveWorkerCount(session)
+          : (this.relay?.knowledgeLiveWorkers() ?? 0),
+      gitReady: state?.gitState ? state.gitState.status === "ready" : null,
+      projectOpen: !!state?.workspace,
+      customizations,
     };
   }
 
@@ -5022,6 +5309,7 @@ export class DesktopController {
             updatesPaused: session.updatesPaused,
             activeReviewId: session.reviewTask?.reviewId ?? null,
             plans: session.plans?.list() ?? [],
+            knowledge: this.knowledgeHint(session),
           };
         });
       case "code60_dispatch_agent":

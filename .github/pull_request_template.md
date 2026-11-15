@@ -42,5 +42,6 @@ Testing done or Relevant context section rather than implying it was tested. -->
 - [ ] Tests cover changed behavior, including a regression test for bug fixes.
 - [ ] Desktop changes have been verified with `npm run test:desktop:container`.
 - [ ] CLI help and relevant documentation reflect user-visible changes.
+- [ ] Capability-affecting changes update `src/contracts/knowledge.ts` and `docs/capabilities.md` (`npm run generate:capabilities`), or the description explains why no knowledge change is needed.
 - [ ] Changes follow `ARCHITECTURE.md` and the applicable `AGENTS.md` instructions.
 - [ ] Each commit includes the Developer Certificate of Origin sign-off required by `CONTRIBUTING.md`.

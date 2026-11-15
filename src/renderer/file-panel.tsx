@@ -1,8 +1,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
+import type { DesktopApi, KnowledgeOwner, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
+import { useKnowledgePanel } from "./knowledge-report.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
@@ -92,6 +93,7 @@ export function FilePanel({
   targetLabel,
   emptyContent,
   changesContent,
+  knowledgeOwner,
 }: {
   tabs: FileTabs;
   onAction(action: FileTabAction): void;
@@ -110,7 +112,9 @@ export function FilePanel({
   targetLabel?: string | undefined;
   emptyContent?: ReactNode;
   changesContent?: ReactNode;
+  knowledgeOwner?: KnowledgeOwner | undefined;
 }) {
+  useKnowledgePanel(api, knowledgeOwner, { tabs, open, active });
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
   const selected = tabs.entries.find((tab) => tab.id === tabs.active);

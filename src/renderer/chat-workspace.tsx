@@ -205,6 +205,15 @@ export function ChatWorkspace({
                 : undefined
             }
             currentChat={snapshot?.chat.run?.id}
+            knowledgeOwner={
+              snapshot?.projectInstanceId && snapshot.databaseEpoch !== undefined
+                ? {
+                    kind: "project",
+                    projectId: snapshot.projectInstanceId,
+                    databaseEpoch: snapshot.databaseEpoch,
+                  }
+                : undefined
+            }
             key={scope.viewKey}
             tabs={currentFileTabs}
             onAction={fileAction}
@@ -221,6 +230,7 @@ export function ChatWorkspace({
         api={api}
         plans={relay?.plans ?? []}
         conversationId={relay?.conversationId}
+        generation={relay?.generation}
         active={!splash && tabs.active === "chat" && relayActive && !projectFiles}
         open={relayPanelOpen}
         onOpen={setRelayPanelOpen}

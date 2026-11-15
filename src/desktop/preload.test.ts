@@ -56,6 +56,8 @@ describe("sandboxed diagnostic preload", () => {
     expect(api).not.toHaveProperty("readFile");
     expect(await api.appSummary?.()).toBe("result");
     expect(invoke).toHaveBeenLastCalledWith("desktop:snapshot-summary");
+    expect(await api.knowledgeRenderer?.()).toBe("result");
+    expect(invoke).toHaveBeenLastCalledWith("desktop:knowledge-renderer");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
       automation: "automation",
@@ -77,6 +79,7 @@ describe("sandboxed diagnostic preload", () => {
       subscribeDetails: "detail-subscribe",
       readDetails: "detail-read",
       setRelayFileContext: "relay-files",
+      reportKnowledge: "knowledge-report",
       unsubscribeDetails: "detail-unsubscribe",
       readRelayMessage: "relay-message",
       relayReview: "relay-review",
