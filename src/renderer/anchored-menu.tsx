@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { menuAnchorMoved } from "./menu-anchor.js";
 
 export function AnchoredMenu({
   x,
@@ -35,16 +36,13 @@ export function AnchoredMenu({
     };
     const outside = (event: Event) => {
       // A scroll queued before opening is not movement of this menu's anchor.
-      if (event.type === "scroll" && anchor && previous instanceof HTMLElement) {
-        const next = previous.getBoundingClientRect();
-        if (
-          next.x === anchor.x &&
-          next.y === anchor.y &&
-          next.width === anchor.width &&
-          next.height === anchor.height
-        )
-          return;
-      }
+      if (
+        event.type === "scroll" &&
+        anchor &&
+        previous instanceof HTMLElement &&
+        !menuAnchorMoved(previous, anchor)
+      )
+        return;
       if (!(event.target instanceof Node) || !menu.current?.contains(event.target)) dismiss();
     };
     window.addEventListener("pointerdown", outside, true);

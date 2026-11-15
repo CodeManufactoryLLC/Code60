@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } f
 import type { ModeChange, SessionState } from "../core/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
+import { menuAnchorMoved } from "./menu-anchor.js";
 
 export function contextUsage(usage: SessionState["usage"]): string {
   if (!usage) return "N/A";
@@ -90,6 +91,7 @@ export function SessionInfo({
       popup.style.top = `${Math.max(8, rect.top - box.height - 6)}px`;
     };
     place();
+    const anchor = button.getBoundingClientRect();
     (
       popup.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
       popup.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
@@ -113,7 +115,8 @@ export function SessionInfo({
         setOpen(false);
     };
     const scroll = (event: Event) => {
-      if (!(event.target instanceof Node) || !popup.contains(event.target)) setOpen(false);
+      if (event.target instanceof Node && popup.contains(event.target)) return;
+      if (menuAnchorMoved(button, anchor)) setOpen(false);
     };
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("focusin", leave);

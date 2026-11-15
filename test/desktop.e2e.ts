@@ -6458,10 +6458,10 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("Escape");
     await expect(palette).toHaveCount(0);
     await expect(connect).toBeFocused();
-    // Default interface text uses D-DIN Regular.
+    // Interface text uses IBM Plex Sans; D-DIN is reserved for branding.
     await expect
       .poll(() => page.evaluate(() => getComputedStyle(document.body).fontFamily))
-      .toMatch(/^"?D-DIN"?/);
+      .toMatch(/^"?IBM Plex Sans"?/);
     expect(await page.evaluate(() => localStorage.getItem("code60.appearanceVersion"))).toBe(
       "theme-4",
     );
@@ -6487,7 +6487,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(24);
+    await expect(page.getByRole("tab")).toHaveCount(25);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -6515,8 +6515,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const cornerRadius = await newSession.evaluate(
       (element) => getComputedStyle(element).borderTopRightRadius,
     );
-    // Toolbar actions share the square button geometry.
-    expect(cornerRadius).toBe("0px");
+    // Toolbar actions share the rounded button geometry.
+    expect(cornerRadius).toBe("5px");
     await appendRow(page);
     await expect(page.getByRole("dialog", { name: "Select run configuration" })).toBeVisible();
     await page.getByRole("button", { name: "Do not use a run configuration" }).click();
@@ -6918,7 +6918,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(appearance).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(24);
+    await expect(page.getByRole("tab")).toHaveCount(25);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await selectSettingsPage(page, "Text");
@@ -7145,11 +7145,11 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       }
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
-        /^"?D-DIN"?/,
+        /^"?IBM Plex Sans"?/,
       );
       await expect(page.locator(".event.message .chat-markdown").first()).toHaveCSS(
         "font-family",
-        /^"?D-DIN"?/,
+        /^"?IBM Plex Sans"?/,
       );
       // Outlined human messages keep contrasting text and no side rule.
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
@@ -8777,13 +8777,21 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(worker(a)).toBeVisible();
     // This part of the fixture supplies owned workers. Opening from Sessions reveals them.
     await selectSidebarPage(page, "Sessions");
-    const sessionGrid = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+    const sessions = page.locator("#panel-sessions");
+    await sessions.getByLabel("Column menu").selectOption("shortId");
+    const idFilter = page.getByRole("dialog", { name: "ID", exact: true });
+    await idFilter.getByLabel("Value", { exact: true }).fill(a.slice(-6));
+    await idFilter.getByRole("button", { name: "Apply filter", exact: true }).click();
+    const sessionRows = sessions.locator(".sessions-grid tbody [role='row']");
+    await expect(sessionRows).toHaveCount(1);
+    await expect(sessionRows).toContainText(a.slice(-6));
+    const sessionGrid = sessions.getByTestId("data-grid-canvas");
     await sessionGrid.focus();
-    await sessionGrid.press("ArrowDown");
+    await sessionGrid.press("ControlOrMeta+Home");
     await sessionGrid.press("Enter");
-    await expect(page.locator(".worker-chat-page:visible")).toHaveCount(1);
+    await expect(worker(a)).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toBeFocused();
+    await expect(row(a)).toBeFocused();
     await row(a).click();
     await toggle.click();
     await expect(children).toBeHidden();

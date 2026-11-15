@@ -1,19 +1,87 @@
 import type { DependencyList, EffectCallback } from "react";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { SessionState } from "../core/index.js";
 import { SessionInfo } from "./session-info.js";
 
-const hooks = vi.hoisted(() => ({ dependencies: undefined as DependencyList | undefined }));
+const hooks = vi.hoisted(() => ({
+  dependencies: undefined as DependencyList | undefined,
+  layout: undefined as EffectCallback | undefined,
+  refs: [] as unknown[],
+  open: false,
+  setOpen: vi.fn(),
+}));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   useId: () => "mode-menu",
   useEffect: (_effect: EffectCallback, dependencies: DependencyList) => {
     hooks.dependencies = dependencies;
   },
-  useLayoutEffect: () => {},
-  useRef: () => ({ current: null }),
-  useState: () => [false, vi.fn()],
+  useLayoutEffect: (effect: EffectCallback) => {
+    hooks.layout = effect;
+  },
+  useRef: () => ({ current: hooks.refs.shift() ?? null }),
+  useState: () => [hooks.open, hooks.setOpen],
 }));
+afterEach(() => {
+  hooks.open = false;
+  hooks.refs = [];
+  hooks.setOpen.mockClear();
+  vi.unstubAllGlobals();
+});
+
+it("keeps harness choices through unrelated scrolls, but dismisses a moved anchor", () => {
+  let y = 470;
+  class Node {}
+  const child = new Node();
+  const focus = vi.fn();
+  const popup = {
+    showPopover: vi.fn(),
+    hidePopover: vi.fn(),
+    style: {},
+    getBoundingClientRect: () => ({ width: 180, height: 160 }),
+    querySelector: () => ({ focus }),
+    contains: (target: unknown) => target === child,
+  };
+  const button = {
+    getBoundingClientRect: () => ({ x: 200, y, left: 200, top: y, width: 180, height: 36 }),
+  };
+  const listeners = new Map<string, (event: Event) => void>();
+  const events = {
+    addEventListener: (type: string, listener: (event: Event) => void) =>
+      listeners.set(type, listener),
+    removeEventListener: (type: string) => listeners.delete(type),
+  };
+  vi.stubGlobal("Node", Node);
+  vi.stubGlobal("document", events);
+  vi.stubGlobal("window", events);
+  vi.stubGlobal("innerWidth", 1100);
+  hooks.open = true;
+  hooks.refs = [button, popup];
+  SessionInfo({
+    state: undefined,
+    ended: false,
+    editable: true,
+    changing: false,
+    autoApproval: false,
+    harness: "droid",
+    sessionId: "same-session",
+    onMode: vi.fn(),
+  });
+  const cleanup = hooks.layout?.();
+  expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  const scroll = listeners.get("scroll");
+  if (!scroll) throw new Error("Missing scroll listener");
+  scroll({ target: new Node() } as unknown as Event);
+  expect(hooks.setOpen).not.toHaveBeenCalled();
+  y -= 20;
+  scroll({ target: child } as unknown as Event);
+  expect(hooks.setOpen).not.toHaveBeenCalled();
+  scroll({ target: new Node() } as unknown as Event);
+  expect(hooks.setOpen).toHaveBeenCalledExactlyOnceWith(false);
+  if (typeof cleanup === "function") cleanup();
+  expect(popup.hidePopover).toHaveBeenCalledOnce();
+  expect(listeners.size).toBe(0);
+});
 
 it("keeps an open mode menu across equivalent pushed snapshots, but not capability changes", () => {
   const state: SessionState = {
