@@ -652,7 +652,8 @@ async function expectIndustrialSurfaces(page: Page) {
             // Icon actions stay glyph-only; disabled ones dim the glyph instead of hatching.
             iconOnly: element.matches("button.icon-button"),
             animation: style.animationName,
-            height: element.tagName === "BUTTON" ? element.getBoundingClientRect().height : 36,
+            // Press feedback scales the painted button, not its layout height.
+            height: element instanceof HTMLButtonElement ? element.offsetHeight : 36,
             minHeight: element.matches(
               ".app-footer > button, .footer-polling > .poll-timestamp, .footer-database, .footer-splash",
             )
@@ -4145,7 +4146,13 @@ test("desktop: Relay Changes captures two unopened targets, applies locally, und
           ]),
         })}`,
       );
+      await expect(
+        page
+          .locator(".orchestration-chat-page:visible")
+          .getByRole("button", { name: "Send", exact: true }),
+      ).toBeEnabled();
       await composer.press("Enter");
+      await expect(composer).toHaveValue("");
       await expect
         .poll(async () => {
           const snapshot = await page.evaluate(() => window.desktop.snapshot());
@@ -8786,9 +8793,16 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(sessionRows).toHaveCount(1);
     await expect(sessionRows).toContainText(a.slice(-6));
     const sessionGrid = sessions.getByTestId("data-grid-canvas");
-    await sessionGrid.focus();
-    await sessionGrid.press("ControlOrMeta+Home");
-    await sessionGrid.press("Enter");
+    const firstCell = await sessions.locator(".sessions-grid").evaluate((element) => ({
+      x: 60,
+      y:
+        Math.max(
+          32,
+          Number.parseFloat(getComputedStyle(element).getPropertyValue("--heading-size")) + 12,
+        ) +
+        Number(element.getAttribute("data-row-height")) / 2,
+    }));
+    await sessionGrid.click({ position: firstCell });
     await expect(worker(a)).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(row(a)).toBeFocused();

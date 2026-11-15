@@ -91,7 +91,9 @@ export function SessionInfo({
       popup.style.top = `${Math.max(8, rect.top - box.height - 6)}px`;
     };
     place();
-    const anchor = button.getBoundingClientRect();
+    // Press feedback scales the trigger; its layout container is the stationary anchor.
+    const anchorElement = button.parentElement ?? button;
+    const anchor = anchorElement.getBoundingClientRect();
     (
       popup.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
       popup.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
@@ -116,7 +118,7 @@ export function SessionInfo({
     };
     const scroll = (event: Event) => {
       if (event.target instanceof Node && popup.contains(event.target)) return;
-      if (menuAnchorMoved(button, anchor)) setOpen(false);
+      if (menuAnchorMoved(anchorElement, anchor)) setOpen(false);
     };
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("focusin", leave);

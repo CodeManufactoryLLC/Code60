@@ -31,6 +31,7 @@ afterEach(() => {
 
 it("keeps harness choices through unrelated scrolls, but dismisses a moved anchor", () => {
   let y = 470;
+  let width = 180;
   class Node {}
   const child = new Node();
   const focus = vi.fn();
@@ -43,7 +44,10 @@ it("keeps harness choices through unrelated scrolls, but dismisses a moved ancho
     contains: (target: unknown) => target === child,
   };
   const button = {
-    getBoundingClientRect: () => ({ x: 200, y, left: 200, top: y, width: 180, height: 36 }),
+    parentElement: {
+      getBoundingClientRect: () => ({ x: 200, y, width: 180, height: 36 }),
+    },
+    getBoundingClientRect: () => ({ x: 200, y, left: 200, top: y, width, height: 36 }),
   };
   const listeners = new Map<string, (event: Event) => void>();
   const events = {
@@ -71,6 +75,8 @@ it("keeps harness choices through unrelated scrolls, but dismisses a moved ancho
   expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
   const scroll = listeners.get("scroll");
   if (!scroll) throw new Error("Missing scroll listener");
+  // Delegated press feedback scales the button, not its stationary layout container.
+  width = 178;
   scroll({ target: new Node() } as unknown as Event);
   expect(hooks.setOpen).not.toHaveBeenCalled();
   y -= 20;
