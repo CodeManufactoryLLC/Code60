@@ -1,6 +1,8 @@
 import {
   type Group,
+  type ParentPageId,
   pages,
+  parentPageIds,
   type PageDefinition as SharedPageDefinition,
   settingsSections,
 } from "../bridge/index.js";
@@ -8,7 +10,7 @@ import type { IconName } from "./icons.js";
 import type { NavigationIconName } from "./navigation-icons.js";
 import type { Command } from "./overlays.js";
 
-export { pages };
+export { type ParentPageId, pages, parentPageIds };
 
 // Shared descriptors store icon names as strings; keep renderer icon names compile-time checked.
 type PageDefinition = Omit<SharedPageDefinition, "icon" | "commandIcon"> & {
@@ -35,9 +37,9 @@ export const settingsIcons = Object.fromEntries(
   settingsSections.map((section) => [section.id, section.icon]),
 ) as Record<SettingsSectionId, NavigationIconName>;
 export const groups = {
-  tables: { label: "Data Viewer", icon: "database" },
-  advanced: { label: "Advanced", icon: "wrench" },
-  experiments: { label: "Experiments", icon: "flask" },
+  tables: { label: pageDefinitions.tables.label, icon: "app-database" },
+  advanced: { label: pageDefinitions.advanced.label, icon: "app-analyze" },
+  experiments: { label: pageDefinitions.experiments.label, icon: "app-chemical" },
 } as const;
 export function isSettingsSection(id: string): id is SettingsSectionId {
   return settingsSectionIds.some((section) => section === id);
@@ -50,6 +52,8 @@ export function pagesInGroup(group: Group): PageId[] {
 }
 export function pageGroup(id: PageId | SettingsSectionId) {
   if (isSettingsSection(id)) return "settings";
+  if (id === "tables") return "apps";
+  if (id === "advanced" || id === "experiments") return "advanced";
   const group = pageDefinitions[id].group;
   return group === "experiments" ? "advanced" : group;
 }
@@ -65,21 +69,23 @@ export function pageCommands(
   navigate: (id: PageId) => void,
   settingsShortcut: string,
 ): Command[] {
-  return pages.map(({ id }): Command => {
-    const page = pageDefinitions[id];
-    const disabled = !pageAvailable(id, database);
-    return {
-      id,
-      label: page.paletteLabel ?? page.label,
-      group: "Pages",
-      icon: page.commandIcon ?? "document",
-      checked: active === id,
-      disabled,
-      ...(disabled ? { reason: "Connect to a database first" } : {}),
-      ...(id === "settings" ? { keys: settingsShortcut } : {}),
-      run: () => {
-        if (!disabled) navigate(id);
-      },
-    };
-  });
+  return pages
+    .filter(({ id }) => !pageDefinitions[id].internal)
+    .map(({ id }): Command => {
+      const page = pageDefinitions[id];
+      const disabled = !pageAvailable(id, database);
+      return {
+        id,
+        label: page.paletteLabel ?? page.label,
+        group: "Pages",
+        icon: page.commandIcon ?? "document",
+        checked: active === id,
+        disabled,
+        ...(disabled ? { reason: "Connect to a database first" } : {}),
+        ...(id === "settings" ? { keys: settingsShortcut } : {}),
+        run: () => {
+          if (!disabled) navigate(id);
+        },
+      };
+    });
 }

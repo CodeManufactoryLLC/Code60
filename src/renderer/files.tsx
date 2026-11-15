@@ -23,6 +23,7 @@ import { FileBrowserState } from "./file-browser-state.js";
 import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
 import type { PreviewViewState } from "./monaco-preview.js";
+import { PageTitle } from "./page-title.js";
 import { pathLabel } from "./path-label.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
@@ -169,7 +170,9 @@ export function FilesPage({
     <section className="files-page" aria-label="File Explorer">
       <header className="files-header">
         <div className="files-title">
-          <h2>File Explorer</h2>
+          <PageTitle page="files" as="h2" breadcrumbs={false}>
+            File Explorer
+          </PageTitle>
           <button
             type="button"
             className="icon-button"

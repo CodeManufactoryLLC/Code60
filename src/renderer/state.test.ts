@@ -225,7 +225,7 @@ describe("desktop stream state", () => {
     ]);
     expect(
       resolveText(parseTextStyles(storage.getItem("code60.textStyles")), "normalText").family,
-    ).toMatch(/^"D-DIN"/);
+    ).toMatch(/^"IBM Plex Sans"/);
     values.set("code60.theme", "light");
     values.set("code60.textStyles", '{"normalText":{"typeface":"georgia"}}');
     values.set("code60.tableLines", '{"horizontal":false,"vertical":false,"heading":false}');
@@ -235,17 +235,17 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults every category to D-DIN Regular and sentence case", () => {
+  it("defaults page titles to 48pt IBM Plex Serif Light and other roles to IBM Plex Sans", () => {
     for (const role of [
       "tableHeadings",
       "buttons",
       "agentMessages",
       "humanMessages",
-      "pageTitles",
+      "cardTitles",
       "normalText",
     ] as const)
       expect(resolveText(defaultTextStyles, role)).toMatchObject({
-        family: fontFamily("d-din"),
+        family: fontFamily("ibm-plex-sans"),
         weight: 400,
       });
     expect(resolveText(defaultTextStyles, "tableHeadings")).toMatchObject({
@@ -253,7 +253,21 @@ describe("desktop stream state", () => {
       weight: 400,
       case: undefined,
     });
-    expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({ size: 18, weight: 400 });
+    expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({
+      family: fontFamily("ibm-plex-serif"),
+      size: 64,
+      weight: 300,
+      case: undefined,
+    });
+    expect(resolveText(defaultTextStyles, "cardTitles").size).toBe(22);
+    expect(textStyleProperties(defaultTextStyles)).toMatchObject({
+      "--title-font": fontFamily("ibm-plex-serif"),
+      "--title-size": "64px",
+      "--title-weight": "300",
+      "--card-font": fontFamily("ibm-plex-sans"),
+      "--card-size": "22px",
+      "--card-weight": "400",
+    });
     expect(parseTextStyles(JSON.stringify(defaultTextStyles))).toEqual(defaultTextStyles);
     expect(defaultTextStyles.normalText).toEqual({});
   });
@@ -279,8 +293,8 @@ describe("desktop stream state", () => {
     const styles = parseTextStyles(storage.getItem("code60.textStyles"));
     for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
       expect(resolveText(styles, role)).toMatchObject({
-        family: fontFamily("d-din"),
-        weight: 400,
+        family: fontFamily(role === "pageTitles" ? "ibm-plex-serif" : "ibm-plex-sans"),
+        weight: role === "pageTitles" ? 300 : 400,
       });
     expect(styles.normalText).toEqual({ size: 22, case: "lower" });
     expect(storage.getItem("code60.theme")).toBe("dark");
@@ -301,6 +315,7 @@ describe("desktop stream state", () => {
         JSON.stringify({
           buttons: { typeface: "ibm-plex-sans", size: 13, weight: 500, case: "upper" },
           normalText: { typeface: "georgia", size: 22 },
+          pageTitles: { typeface: "d-din", size: 18, weight: 400 },
         }),
       ],
     ]);
@@ -324,7 +339,14 @@ describe("desktop stream state", () => {
       family: fontFamily("georgia"),
       size: 22,
     });
-    expect(resolveText(styles, "agentMessages").family).toBe(fontFamily("d-din"));
+    expect(resolveText(styles, "agentMessages").family).toBe(fontFamily("ibm-plex-sans"));
+    expect(resolveText(styles, "pageTitles")).toMatchObject({
+      family: fontFamily("d-din"),
+      size: 18,
+      weight: 400,
+    });
+    expect(styles.cardTitles).toEqual({});
+    expect(resolveText(styles, "cardTitles").family).toBe(fontFamily("ibm-plex-sans"));
     expect(textStyleProperties(styles)["--nav-font-size"]).toBe("13px");
   });
 
@@ -353,7 +375,7 @@ describe("desktop stream state", () => {
     const styles = parseTextStyles(
       JSON.stringify({
         tableHeadings: { typeface: "georgia", size: 18, weight: 700, case: "upper" },
-        buttons: { typeface: "url(remote)", size: 49, weight: 800, case: "capitalize" },
+        buttons: { typeface: "url(remote)", size: 65, weight: 800, case: "capitalize" },
         agentMessages: { size: 7 },
         humanMessages: { size: 12.5 },
         normalText: { size: "14" },
@@ -634,7 +656,7 @@ describe("typeface setting", () => {
         expect(textStyleProperties(styles)[`--${css}-font`]).toBe(fontFamily(typeface));
       }
     }
-    expect(resolveText(defaultTextStyles, "normalText").family).toBe(fontFamily("d-din"));
+    expect(resolveText(defaultTextStyles, "normalText").family).toBe(fontFamily("ibm-plex-sans"));
   });
 
   it("defaults to the system font and keeps known typefaces", () => {

@@ -51,6 +51,11 @@ export function messageAgeText(at: number, now: number): string {
   return `${seconds}s ago`;
 }
 
+/** A resumed detail read can contain replies that arrived while the view was hidden. */
+export function isLiveMessage(at: string | undefined, visibleSince: number) {
+  return at !== undefined && Date.parse(at) >= visibleSince;
+}
+
 export function newestMessage(events: readonly RunEvent[]): number | null | undefined {
   let newest: number | undefined;
   let invalid = false;

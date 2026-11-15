@@ -23,12 +23,12 @@ Schema version: 1
 - ID: `projects`
 - Status: shipped
 - Purpose: Retain independent project workspaces and conversations.
-- Access: Sidebar → Projects → Open Project
+- Access: Sidebar → Projects → Open Project; each open project has its own page
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
 - Limits: Opening or selecting a project is a human action.
-- Pages: `chat`
+- Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none
 
@@ -205,12 +205,26 @@ Schema version: 1
 - ID: `automations`
 - Status: shipped
 - Purpose: Run consented local schedules in an independent service.
-- Access: Sidebar → Automations
+- Access: Apps → Automation Studio
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
 - Limits: Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.
 - Pages: `automations`
+- Settings sections: none
+- Tools: none
+
+## System Manager
+
+- ID: `system-manager`
+- Status: shipped
+- Purpose: Install, repair, start, stop or uninstall the background automation service.
+- Access: Apps → System Manager
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Human service consent; native confirmation for service controls.
+- Limits: Awareness never installs, probes or controls the service.
+- Pages: `system-manager`
 - Settings sections: none
 - Tools: none
 
@@ -224,7 +238,7 @@ Schema version: 1
 - Agent access: read
 - Confirmation: Existing permissions apply.
 - Limits: Existing table tools retain their scopes. Diagnostic logs and memory records are not agent-readable.
-- Pages: `sessions`, `messages`, `events`, `worktrees`, `polling`
+- Pages: `tables`, `sessions`, `messages`, `events`, `worktrees`, `polling`
 - Settings sections: none
 - Tools: `code60_read_sessions`, `code60_search_sessions`, `code60_read_messages`, `code60_search_messages`, `code60_read_events`, `code60_search_events`, `code60_read_worktrees`, `code60_search_worktrees`, `code60_read_polling`, `code60_search_polling`
 
@@ -238,7 +252,7 @@ Schema version: 1
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
 - Limits: Only explicitly allowlisted values are included in awareness.
-- Pages: `apps`, `settings`
+- Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
 

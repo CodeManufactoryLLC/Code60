@@ -1,3 +1,56 @@
+import aiIcon from "./icons/apps/ai.svg?no-inline";
+import analyzeIcon from "./icons/apps/analyze.svg?no-inline";
+import appsIcon from "./icons/apps/apps.svg?no-inline";
+import backlogIcon from "./icons/apps/backlog.svg?no-inline";
+import bookshelfIcon from "./icons/apps/bookshelf.svg?no-inline";
+import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
+import cloudIcon from "./icons/apps/cloud-computing.svg?no-inline";
+import cogwheelIcon from "./icons/apps/cogwheel.svg?no-inline";
+import paletteIcon from "./icons/apps/color-palette.svg?no-inline";
+import communicationIcon from "./icons/apps/communication.svg?no-inline";
+import databaseIcon from "./icons/apps/database.svg?no-inline";
+import downRightIcon from "./icons/apps/down-right.svg?no-inline";
+import folderIcon from "./icons/apps/folder.svg?no-inline";
+import heartRateIcon from "./icons/apps/heart-rate.svg?no-inline";
+import helmetIcon from "./icons/apps/helmet.svg?no-inline";
+import homeIcon from "./icons/apps/home2.svg?no-inline";
+import infoIcon from "./icons/apps/info.svg?no-inline";
+import megaphoneIcon from "./icons/apps/megaphone.svg?no-inline";
+import roboticArmIcon from "./icons/apps/robotic-arm.svg?no-inline";
+import searchIcon from "./icons/apps/search.svg?no-inline";
+import steeringWheelIcon from "./icons/apps/steering-wheel.svg?no-inline";
+import tableIcon from "./icons/apps/table.svg?no-inline";
+import textSizeIcon from "./icons/apps/text-size.svg?no-inline";
+import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
+import viewBoxes from "./navigation-icon-viewboxes.json" with { type: "json" };
+
+const artwork = {
+  "app-ai": aiIcon,
+  "app-analyze": analyzeIcon,
+  "app-apps": appsIcon,
+  "app-backlog": backlogIcon,
+  "app-bookshelf": bookshelfIcon,
+  "app-chemical": chemicalIcon,
+  "app-cloud-computing": cloudIcon,
+  "app-cogwheel": cogwheelIcon,
+  "app-color-palette": paletteIcon,
+  "app-communication": communicationIcon,
+  "app-database": databaseIcon,
+  "app-down-right": downRightIcon,
+  "app-folder": folderIcon,
+  "app-heart-rate": heartRateIcon,
+  "app-helmet": helmetIcon,
+  "app-home2": homeIcon,
+  "app-info": infoIcon,
+  "app-megaphone": megaphoneIcon,
+  "app-robotic-arm": roboticArmIcon,
+  "app-search": searchIcon,
+  "app-steering-wheel": steeringWheelIcon,
+  "app-table": tableIcon,
+  "app-text-size": textSizeIcon,
+  "app-under-construction": underConstructionIcon,
+} as const;
+
 /** Phosphor duotone, @phosphor-icons/core 2.1.1 (MIT; see icons/phosphor/). */
 const shapes = {
   "grid-nine": [
@@ -114,14 +167,36 @@ const shapes = {
   ],
 } as const;
 
-export type NavigationIconName = keyof typeof shapes;
+export type NavigationIconName = keyof typeof shapes | keyof typeof artwork;
 
 export function NavigationIcon({ name }: { name: NavigationIconName }) {
-  const [tone, outline] = shapes[name];
+  if (name === "app-text-size") {
+    return (
+      <span
+        className="navigation-icon"
+        data-icon={name}
+        aria-hidden="true"
+        style={{ maskImage: `url("${artwork[name]}")` }}
+      />
+    );
+  }
+  if (name in artwork) {
+    return (
+      <img
+        src={artwork[name as keyof typeof artwork]}
+        className="navigation-icon"
+        data-icon={name}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+      />
+    );
+  }
+  const [tone, outline] = shapes[name as keyof typeof shapes];
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 256 256"
+      viewBox={viewBoxes[name]}
       width="1em"
       height="1em"
       fill="currentColor"

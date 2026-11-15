@@ -1,4 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   Command,
   DesktopApi,
@@ -12,12 +20,14 @@ import { useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
-import { delegatedActivity, turnTimings } from "./chat-presentation.js";
+import { delegatedActivity, isLiveMessage, turnTimings } from "./chat-presentation.js";
 import { useChatScroll } from "./chat-scroll.js";
+import { conversationId } from "./chats.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
+import { PageTitle } from "./page-title.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
@@ -60,6 +70,7 @@ export function ChatPage({
   commands = [],
   onReview,
   onCopied,
+  notice,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
@@ -74,10 +85,12 @@ export function ChatPage({
   commands?: readonly Command[];
   onReview?(id: string): void;
   onCopied?: (() => void) | undefined;
+  notice?: ReactNode;
 }) {
   const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
+  const titleTarget = chat && conversationId(chat);
   const relay = chat?.kind === "relay";
   const available = !!database || relay;
   const key = chat?.conversationId
@@ -107,6 +120,10 @@ export function ChatPage({
     resume,
     reveal: revealActivity,
   } = useChatScroll(active && !hidden, key);
+  const shown = active && !hidden;
+  const visibility = useRef({ key, shown, since: Date.now() });
+  if (visibility.current.key !== key || visibility.current.shown !== shown)
+    visibility.current = { key, shown, since: Date.now() };
   const receivedEvents = useRef({ key, count: events.length });
   if (receivedEvents.current.key !== key) receivedEvents.current = { key, count: events.length };
   useLayoutEffect(() => {
@@ -295,17 +312,25 @@ export function ChatPage({
       data-chat-id={run?.id}
     >
       <header className="orchestration-chat-heading">
-        <h1 id={id}>
-          <button
-            type="button"
-            className="chat-title"
-            aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
-            disabled={relay || !available || !run}
-            onClick={() => setRenaming(true)}
-          >
-            {chat?.title ?? "Chat"}
-          </button>
-        </h1>
+        <PageTitle
+          page={relay ? "relay" : chat ? "orchestrator" : "chat"}
+          id={id}
+          target={titleTarget ? { kind: "conversation", id: titleTarget } : undefined}
+        >
+          {relay ? (
+            (chat?.title ?? "Relay")
+          ) : (
+            <button
+              type="button"
+              className="chat-title"
+              aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
+              disabled={!available || !run}
+              onClick={() => setRenaming(true)}
+            >
+              {chat?.title ?? "Chat"}
+            </button>
+          )}
+        </PageTitle>
         {renaming && run && (
           <RenameChat
             title={chat?.title ?? "Chat"}
@@ -341,6 +366,7 @@ export function ChatPage({
           )}
         </div>
       </header>
+      {notice}
       {failure && (
         <div className="error-banner" role="alert">
           {failure}
@@ -425,6 +451,7 @@ export function ChatPage({
                           : undefined;
                       const fresh =
                         Number(block.key) >= receivedEvents.current.count &&
+                        isLiveMessage(event?.at, visibility.current.since) &&
                         !chat?.restored &&
                         active &&
                         !hidden;

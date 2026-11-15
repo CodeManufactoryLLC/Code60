@@ -13,7 +13,9 @@
     "test/fixtures/fake-agent.mjs",
     "test/fixtures/packaged-agent.mjs",
     "test/fixtures/fake-docker.mjs",
-    "test/fixtures/renderer-replay.tsx"
+    "test/fixtures/renderer-replay.tsx",
+    "test/fixtures/system-manager.tsx",
+    "test/fixtures/navigation-icons.tsx"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",

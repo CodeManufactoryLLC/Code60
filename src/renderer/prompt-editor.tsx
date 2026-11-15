@@ -7,6 +7,7 @@ import {
   type PromptTemplateState,
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
+import { PageTitle } from "./page-title.js";
 import {
   draftText,
   insertField,
@@ -81,9 +82,7 @@ export function PromptEditorPage({
   return (
     <main className="prompt-editor" aria-labelledby={`${id}-title`}>
       <div className="table-controls">
-        <h1 className="table-title" id={`${id}-title`}>
-          Prompt Builder
-        </h1>
+        <PageTitle page="prompts" className="table-title" id={`${id}-title`} />
         <TableControlGroup label="Template actions">
           <button
             type="button"

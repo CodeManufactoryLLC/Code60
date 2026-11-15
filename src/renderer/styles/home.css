@@ -11,6 +11,10 @@
   min-height: 38px;
 }
 
+.home-page[hidden] {
+  display: none;
+}
+
 .home-content {
   display: flex;
   flex-direction: column;
@@ -22,14 +26,13 @@
 }
 
 .home-cards {
+  --navigation-card-width: 224px;
   display: grid;
-  grid-template-columns: repeat(
-      auto-fit,
-      minmax(min(100%, max(240px, calc(var(--text-size, 13px) * 16))), 1fr)
-    );
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, var(--navigation-card-width));
+  gap: 32px;
+  justify-content: safe center;
   width: 100%;
-  max-width: 840px;
+  max-width: 736px;
   margin: auto;
   flex-shrink: 0;
 }
@@ -44,7 +47,7 @@
   min-width: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--ui-radius);
+  border-radius: var(--card-radius);
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--group-shadow);
@@ -58,9 +61,10 @@
 .home-card-art {
   display: flex;
   align-items: center;
-  padding: 24px 20px;
-  min-height: 100px;
+  padding: 16px;
+  min-height: 72px;
   box-sizing: border-box;
+  border-radius: calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px) 0 0;
   background: linear-gradient(
     125deg,
     color-mix(in srgb, var(--primary) 14%, var(--surface)),
@@ -71,34 +75,30 @@
 
 .home-card-art .navigation-icon {
   position: static;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   transform: none;
-}
-
-.home-card-art .relay-navigation-icon {
-  width: 57px;
-  height: 51px;
 }
 
 .home-card-copy {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 20px 20px 48px;
+  padding: 16px 16px 40px;
   overflow-wrap: anywhere;
 }
 
 .home-card-name {
-  font: var(--title-weight, 400) max(22px, var(--title-size, 18px)) var(--title-font, var(--font));
-  text-transform: var(--title-case, none);
-  --letter-spacing: var(--title-spacing, normal);
+  font: var(--card-weight, 400) max(8px, calc(var(--card-size, 22px) * 9 / 11))
+    var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
 }
 
 .home-card-arrow {
   position: absolute;
-  right: 20px;
-  bottom: 16px;
+  right: 16px;
+  bottom: 12px;
   color: var(--accent);
   transform: rotate(180deg);
 }

@@ -72,6 +72,21 @@ const worker = (id = "worker-a", targetId = "target-a"): DesktopRun =>
       workspaceMode: "direct",
     },
   }) as DesktopRun;
+it("does not request conversation, worker or project payloads for navigation homes", () => {
+  const state = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    runs: [worker()],
+    chat: relay,
+    chats: [relay],
+  });
+  expect(requestedDetails(state, "worker-a", false)).toEqual([]);
+  expect(requestedDetails(state, undefined, false)).toEqual([]);
+  expect(requestedDetails(state, "worker-a", true).map((scope) => scope.kind)).toEqual([
+    "project",
+    "target",
+  ]);
+});
 it("hydrates Relay history when provider startup failed without a run", () => {
   const failed = { ...relay, run: null, error: "Provider failed" };
   const state = applyUpdate(undefined, {

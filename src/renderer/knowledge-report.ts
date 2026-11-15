@@ -49,7 +49,7 @@ export function useKnowledgeNavigation(
   api: DesktopApi,
   view: {
     page: PageId;
-    settingsSection: SettingsSectionId;
+    settingsSection: SettingsSectionId | null;
     splash: boolean;
     workerId: string | undefined;
     theme: "light" | "dark" | "system";

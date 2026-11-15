@@ -118,7 +118,7 @@ logs.subscribe(() => {
     window.webContents.send("desktop:logs-changed");
 });
 const windowControlColors = (dark: boolean) => ({
-  color: dark ? "#0f172a" : "#ffffff",
+  color: dark ? "#252525" : "#ffffff",
   symbolColor: dark ? "#ffffff" : "#000000",
 });
 const controller = new DesktopController(
@@ -227,7 +227,7 @@ async function quit(confirm: boolean): Promise<void> {
         type: "warning",
         message: "Quit Code60?",
         detail:
-          "Desktop-owned turns will be cancelled and idle sessions finished. Background automations keep running while Code60 is quit. Worktrees are kept. Use Automations to pause or cancel background work.",
+          "Desktop-owned turns will be cancelled and idle sessions finished. Background automations keep running while Code60 is quit. Worktrees are kept. Use Apps → System Manager to pause or cancel background work.",
         buttons: ["Keep working", "Quit"],
         defaultId: 0,
         cancelId: 0,
@@ -362,7 +362,7 @@ async function ready(): Promise<void> {
       type: "error",
       message: "Background automations could not restart after the update.",
       detail:
-        "Open Automations to repair the background service. Your schedules and run evidence are kept.",
+        "Open Apps → System Manager to repair the background service. Your schedules and run evidence are kept.",
       buttons: ["Continue"],
     });
   });
@@ -721,7 +721,7 @@ async function ready(): Promise<void> {
     minHeight: 600,
     title: `Code60 - ${app.getVersion()}`,
     transparent,
-    backgroundColor: transparent ? "#00000000" : "#0f172a",
+    backgroundColor: transparent ? "#00000000" : "#252525",
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",

@@ -7,13 +7,7 @@ import {
   type PreTrainedTokenizer,
 } from "@huggingface/transformers";
 import type { RagEmbedder } from "../core/index.js";
-
-const RAG_MODEL = {
-  id: "jinaai/jina-embeddings-v2-base-code",
-  revision: "516f4baf13dec4ddddda8631e019b5737c8bc250",
-  dimensions: 768,
-  dtype: "q8",
-} as const;
+import { BUNDLED_EMBEDDING_MODEL as RAG_MODEL } from "./embedding-model-info.js";
 
 /** Only imported by the sidecar, never by Electron main or the renderer. */
 export async function loadRagModel(root: string): Promise<RagEmbedder> {
@@ -23,7 +17,7 @@ export async function loadRagModel(root: string): Promise<RagEmbedder> {
   env.localModelPath = join(root, "/");
   const tokenizer: PreTrainedTokenizer = await AutoTokenizer.from_pretrained(RAG_MODEL.id);
   const model: PreTrainedModel = await AutoModel.from_pretrained(RAG_MODEL.id, {
-    dtype: "q8",
+    dtype: RAG_MODEL.dtype,
     device: "cpu",
     session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
   });

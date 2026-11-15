@@ -17,8 +17,68 @@ export interface PageDefinition {
   icon?: string;
   paletteLabel?: string;
   commandIcon?: string;
+  parent?: ParentPageId;
+  internal?: boolean;
 }
+export const parentPageIds = [
+  "projects",
+  "apps",
+  "tables",
+  "settings",
+  "advanced",
+  "experiments",
+] as const;
+export type ParentPageId = (typeof parentPageIds)[number];
 export const pages = [
+  {
+    id: "projects",
+    label: "Projects",
+    group: "chat",
+    order: 0,
+    initialOrder: 18,
+    database: false,
+    icon: "app-backlog",
+  },
+  {
+    id: "project",
+    label: "Project",
+    group: "legacy",
+    order: 0,
+    initialOrder: 19,
+    database: true,
+    icon: "app-folder",
+    internal: true,
+  },
+  {
+    id: "tables",
+    label: "Data Viewer",
+    group: "legacy",
+    parent: "apps",
+    order: 0,
+    initialOrder: 20,
+    database: false,
+    icon: "app-database",
+  },
+  {
+    id: "advanced",
+    label: "Advanced",
+    group: "legacy",
+    parent: "settings",
+    order: 0,
+    initialOrder: 21,
+    database: false,
+    icon: "app-analyze",
+  },
+  {
+    id: "experiments",
+    label: "Experiments",
+    group: "legacy",
+    parent: "advanced",
+    order: 0,
+    initialOrder: 22,
+    database: false,
+    icon: "app-chemical",
+  },
   {
     id: "home",
     initialOrder: -2,
@@ -26,16 +86,25 @@ export const pages = [
     group: "primary",
     order: -1,
     database: false,
-    icon: "house",
+    icon: "app-home2",
   },
   {
     id: "automations",
     initialOrder: 16,
-    label: "Automations",
-    group: "primary",
-    order: 1,
+    label: "Automation Studio",
+    group: "apps",
+    order: -1,
     database: false,
-    icon: "arrows-clockwise",
+    icon: "app-robotic-arm",
+  },
+  {
+    id: "system-manager",
+    initialOrder: 17,
+    label: "System Manager",
+    group: "apps",
+    order: 2,
+    database: false,
+    icon: "wrench",
   },
   {
     id: "apps",
@@ -44,16 +113,17 @@ export const pages = [
     group: "primary",
     order: 1,
     database: false,
-    icon: "app-window",
+    icon: "app-apps",
   },
   {
     id: "chat",
     initialOrder: 2,
-    label: "Projects",
-    group: "chat",
+    label: "Chat",
+    group: "legacy",
+    internal: true,
     order: 0,
     database: false,
-    icon: "clipboard",
+    icon: "app-backlog",
   },
   {
     id: "episodic-memory",
@@ -80,7 +150,7 @@ export const pages = [
     group: "advanced",
     order: 1,
     database: false,
-    icon: "code",
+    icon: "app-under-construction",
   },
   {
     id: "files",
@@ -90,6 +160,7 @@ export const pages = [
     group: "legacy",
     order: 0,
     database: true,
+    icon: "app-folder",
   },
   {
     id: "sessions",
@@ -98,7 +169,7 @@ export const pages = [
     group: "tables",
     order: 6,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "configurations",
@@ -107,7 +178,7 @@ export const pages = [
     group: "tables",
     order: 0,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "memories",
@@ -116,7 +187,7 @@ export const pages = [
     group: "tables",
     order: 3,
     database: false,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "messages",
@@ -125,7 +196,7 @@ export const pages = [
     group: "tables",
     order: 4,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "events",
@@ -134,7 +205,7 @@ export const pages = [
     group: "tables",
     order: 1,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "logs",
@@ -143,7 +214,7 @@ export const pages = [
     group: "tables",
     order: 2,
     database: false,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "search",
@@ -152,7 +223,7 @@ export const pages = [
     group: "primary",
     order: 2,
     database: true,
-    icon: "magnifying-glass",
+    icon: "app-search",
   },
   {
     id: "worktrees",
@@ -161,7 +232,7 @@ export const pages = [
     group: "tables",
     order: 7,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "polling",
@@ -170,7 +241,7 @@ export const pages = [
     group: "tables",
     order: 5,
     database: true,
-    icon: "grid-nine",
+    icon: "app-table",
   },
   {
     id: "prompts",
@@ -179,7 +250,7 @@ export const pages = [
     group: "apps",
     order: 1,
     database: true,
-    icon: "pencil-line",
+    icon: "app-ai",
   },
   {
     id: "commands",
@@ -188,7 +259,7 @@ export const pages = [
     group: "apps",
     order: 0,
     database: true,
-    icon: "megaphone",
+    icon: "app-megaphone",
   },
   {
     id: "settings",
@@ -197,18 +268,18 @@ export const pages = [
     group: "settings",
     order: 0,
     database: false,
-    icon: "gear",
+    icon: "app-cogwheel",
     commandIcon: "settings",
   },
 ] as const satisfies readonly PageDefinition[];
 
 export const settingsSections = [
-  { id: "agents", label: "Agents", icon: "robot" },
-  { id: "memory", label: "Memory", icon: "brain" },
-  { id: "appearance", label: "Appearance", icon: "palette" },
-  { id: "table-defaults", label: "Table defaults", icon: "table" },
-  { id: "text", label: "Text", icon: "text-aa" },
-  { id: "polling-settings", label: "Polling", icon: "arrows-clockwise" },
-  { id: "updates", label: "Updates", icon: "download-simple" },
-  { id: "about", label: "About", icon: "info" },
+  { id: "about", label: "About", icon: "app-info" },
+  { id: "agents", label: "Agents", icon: "app-helmet" },
+  { id: "appearance", label: "Appearance", icon: "app-color-palette" },
+  { id: "memory", label: "Memory", icon: "app-bookshelf" },
+  { id: "polling-settings", label: "Polling", icon: "app-heart-rate" },
+  { id: "table-defaults", label: "Table defaults", icon: "app-table" },
+  { id: "text", label: "Text", icon: "app-text-size" },
+  { id: "updates", label: "Updates", icon: "app-cloud-computing" },
 ] as const satisfies readonly { id: string; label: string; icon: string }[];

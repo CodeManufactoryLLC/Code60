@@ -204,9 +204,16 @@ describe("desktop container runner", () => {
     const { options, calls } = await setup({ DOCKER_TEST_HANG: "build" });
     const running = runDesktopContainer([], options);
     try {
-      await vi.waitFor(async () => expect((await calls()).at(-1)?.[0]).toBe("build"), {
-        timeout: 4_000,
-      });
+      await vi.waitFor(
+        async () => {
+          const build = (await calls()).at(-1);
+          expect(build?.[0]).toBe("build");
+          expect(await readFile(`${options.env.DOCKER_TEST_LOG}.image`, "utf8")).toBe(
+            build[build.indexOf("--tag") + 1],
+          );
+        },
+        { timeout: 4_000 },
+      );
     } finally {
       options.signals.emit("SIGINT");
     }

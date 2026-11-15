@@ -1,5 +1,9 @@
 # Bridge
 
+- `snapshot.versions` may include read-only configured embedding metadata and
+  installed ONNX Runtime identity/version/execution details. These are main-owned
+  display values, not accepted model/path/command inputs or inference authority.
+
 - Application memory accepts only opaque record/conversation/project IDs, strict
   bounded settings and revision-checked actions. Expose snapshot, paged browsing,
   cited detail, fixed actions and payload-free change notices. Never accept paths,

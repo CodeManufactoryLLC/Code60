@@ -14,6 +14,13 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
         ["Electron", versions.electron ?? "Unavailable"],
         ["Chromium", versions.chromium ?? "Unavailable"],
         ["Node.js", versions.node],
+        ["Embedding model", versions.embeddingModel?.id ?? "Unavailable"],
+        ["Embedding revision", versions.embeddingModel?.revision ?? "Unavailable"],
+        ["Embedding dimensions", versions.embeddingModel?.dimensions ?? "Unavailable"],
+        ["Embedding precision", versions.embeddingModel?.dtype ?? "Unavailable"],
+        ["ONNX Runtime", versions.onnxRuntime?.name ?? "Unavailable"],
+        ["ONNX Runtime version", versions.onnxRuntime?.version ?? "Unavailable"],
+        ["Embedding execution", versions.onnxRuntime?.execution ?? "Unavailable"],
       ] as const)
     : [];
   const copy = async () => {
@@ -28,7 +35,7 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
   };
   return (
     <section className="settings-section" aria-labelledby={id}>
-      <SettingsHeader id={id} title="About">
+      <SettingsHeader page="about" id={id}>
         <span className="settings-status" role="status">
           {copyStatus}
         </span>

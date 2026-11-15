@@ -10,6 +10,7 @@ type CommandContext = Pick<
   | "busy"
   | "tabs"
   | "setTabs"
+  | "setSettingsSection"
   | "preferences"
   | "fileAction"
   | "showPicker"
@@ -29,6 +30,7 @@ export function appCommands({
   busy,
   tabs,
   setTabs,
+  setSettingsSection,
   preferences,
   fileAction,
   showPicker,
@@ -58,6 +60,7 @@ export function appCommands({
       tabs.active,
       database,
       (id) => {
+        if (id === "settings") setSettingsSection(null);
         if (id === "files") {
           fileAction({ type: "browse" });
           setExplorerOpen(true);

@@ -29,6 +29,7 @@
 /* Chat's single file workspace shares the navigation fill. */
 #panel-chat {
   flex-direction: column;
+  border-radius: var(--chat-radius);
 }
 
 .chat-workspace-body {
@@ -108,6 +109,7 @@
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
+  border-radius: var(--button-radius);
 }
 
 .file-tab > :where([role="tab"]) {
@@ -428,7 +430,7 @@ button.file-open-link {
   padding: 0;
   border: 0;
   box-shadow: none;
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
   background: var(--chat-neutral);
   z-index: 2;
   cursor: col-resize;
