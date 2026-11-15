@@ -3906,6 +3906,16 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
     await expect(group.locator(".project-chat-pages")).toHaveAttribute("inert", "");
     await toggle.press("ArrowRight");
     await expect(aChat).toBeVisible();
+    const workersToggle = group.locator(".chat-workers-toggle");
+    const workerRows = group.locator("[data-role='worker']");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(workerRows).toHaveCount(2);
+    for (const worker of await workerRows.all()) await expect(worker).toBeHidden();
+    // Reopening a project intentionally keeps its descendants closed. Reveal workers
+    // explicitly before measuring their indentation at each width and text size.
+    await workersToggle.press("ArrowRight");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+    for (const worker of await workerRows.all()) await expect(worker).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(selected);
     await aChat.click();
     await expect(composer()).toHaveValue("project-a draft 1");
