@@ -6919,10 +6919,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         (Menu.getApplicationMenu()?.items ?? []).map((item) => item.label),
       ),
     ).not.toContain("Settings");
-    const appearance = page.getByRole("heading", { name: "Settings", exact: true });
+    const settingsPanel = page.locator("#panel-settings");
     await page.getByLabel("Message", { exact: true }).fill("draft retained across tabs");
     await settingsTab.click();
-    await expect(appearance).toBeVisible();
+    await expect(settingsPanel).toBeVisible();
+    await expect(
+      settingsPanel.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
     await expect(page.getByRole("tab")).toHaveCount(25);
@@ -6935,7 +6938,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const settingsScroll = await settingsPage.evaluate((element) => element.scrollTop);
     expect(settingsScroll).toBeGreaterThan(0);
     await sessionsTab.click();
-    await expect(appearance).toBeHidden();
+    await expect(settingsPanel).toBeHidden();
     await expect(settingsTab).toHaveCount(1);
     await expect(chatPopup).toBeHidden();
     await chatHead.click();
@@ -7383,15 +7386,19 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(page.getByLabel("Theme")).toHaveValue("system");
     await expect(page.locator(".settings-page pre, .settings-page code")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await expect(appearance).toBeVisible();
+    await expect(settingsPanel).toBeVisible();
+    await expect(page.locator("#panel-settings-appearance")).toBeVisible();
     await sessionsTab.click();
-    await expect(appearance).toBeHidden();
+    await expect(settingsPanel).toBeHidden();
     await expect(settingsTab).toHaveCount(1);
     await expect(sessionsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(appearance).toBeVisible();
+    await expect(settingsPanel).toBeVisible();
+    await expect(
+      settingsPanel.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible();
     await sessionsTab.click();
-    await expect(appearance).toBeHidden();
+    await expect(settingsPanel).toBeHidden();
     if (!(await chatPopup.isVisible())) await chatHead.click();
     await expect(chatPopup).toBeVisible();
     await page.emulateMedia({ colorScheme: "dark" });
