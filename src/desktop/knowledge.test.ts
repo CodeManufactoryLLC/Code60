@@ -329,4 +329,48 @@ describe("DesktopKnowledge", () => {
       knowledge.call("code60_get_app_state", { section: "secrets" }, project),
     ).rejects.toThrow("Invalid self-knowledge request");
   });
+  it("reports project workers by Git readiness and lists only tools the caller can call", async () => {
+    const { knowledge, runtime } = setup({ gitReady: false });
+    const workers = async (caller: KnowledgeCaller) =>
+      (
+        result(await knowledge.call("code60_get_capabilities", { query: "delegate" }, caller))
+          .entries as { id: string; tools: string[]; availability: { status: string } }[]
+      )[0];
+    const blocked = await workers(project);
+    expect(blocked).toMatchObject({ id: "workers", availability: { status: "blocked" } });
+    expect(blocked?.tools).toContain("code60_resume_agent");
+    const relayWorkers = await workers(relay);
+    expect(relayWorkers?.availability.status).toBe("available");
+    expect(relayWorkers?.tools).toContain("code60_dispatch_agent");
+    expect(relayWorkers?.tools).not.toContain("code60_resume_agent");
+    runtime.gitReady = null;
+    expect((await workers(project))?.availability.status).toBe("unknown");
+    runtime.gitReady = true;
+    expect((await workers(project))?.availability.status).toBe("available");
+    const reviews = result(
+      await knowledge.call("code60_get_capabilities", { query: "pinned revisions" }, relay),
+    ).entries as { tools: string[] }[];
+    expect(reviews[0]?.tools).toEqual([]);
+  });
+
+  it("keeps customization cursors valid across unrelated runtime and UI changes", async () => {
+    const { knowledge, runtime } = setup();
+    const first = result(await knowledge.call("code60_list_customizations", { limit: 1 }, project));
+    expect(first.nextCursor).toEqual(expect.any(String));
+    knowledge.report(navigation(knowledge.rendererIdentity(), 1));
+    runtime.sessions.push({ id: "worker", status: "running" });
+    runtime.revision++;
+    const second = result(
+      await knowledge.call(
+        "code60_list_customizations",
+        { limit: 1, cursor: first.nextCursor },
+        project,
+      ),
+    );
+    expect(second).toMatchObject({ complete: true, entries: [{ id: "tactic:a" }] });
+    runtime.customizations = [...runtime.customizations.slice(0, 1)];
+    await expect(
+      knowledge.call("code60_list_customizations", { limit: 1, cursor: first.nextCursor }, project),
+    ).rejects.toThrow("Stale");
+  });
 });

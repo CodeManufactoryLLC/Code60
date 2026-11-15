@@ -11,6 +11,7 @@ import {
   type KnowledgePanel,
   type KnowledgeTool,
   knowledgeReportSchema,
+  mcpToolsForRole,
   parseKnowledge,
   parseValue,
 } from "../bridge/index.js";
@@ -208,7 +209,7 @@ export class DesktopKnowledge {
   private tabRevision(panel: KnowledgePanel, tab: KnowledgePanel["tabs"][number]): string {
     return knowledgeHash([this.renderer, panel.id, panel.owner, tab]);
   }
-  private availability(cap: Capability, state: KnowledgeRuntime) {
+  private availability(cap: Capability, state: KnowledgeRuntime, caller: KnowledgeCaller) {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
@@ -238,12 +239,28 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No verified provider or no available worker slot.";
       action = "Verify a provider or finish an owned worker.";
+    } else if (cap.prerequisite === "capacity" && caller.kind === "project" && !state.projectOpen) {
+      status = "blocked";
+      reason = "Project workers require the caller's project to be open.";
+      action = "Open the chat's project.";
+    } else if (cap.prerequisite === "capacity" && caller.kind === "project" && !state.gitReady) {
+      // Dispatch always runs requireGitRun for project chats; Relay targets choose their own mode.
+      status = state.gitReady === false ? "blocked" : "unknown";
+      reason = "Project workers require Git readiness with an initial commit.";
+      action = "Set up Git from Chat, then continue explicitly.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =
         "Availability depends on the specific target, saved evidence or platform runtime; inspect that feature.";
     }
-    return { ...cap, ...capabilityReferences(cap.id), availability: { status, reason, action } };
+    const references = capabilityReferences(cap.id);
+    const callable = new Set(mcpToolsForRole(caller.kind).map((tool) => tool.name));
+    return {
+      ...cap,
+      ...references,
+      tools: references.tools.filter((tool) => callable.has(tool)),
+      availability: { status, reason, action },
+    };
   }
   private page(
     items: unknown[],
@@ -319,7 +336,7 @@ export class DesktopKnowledge {
       result = this.page(
         DESKTOP_CAPABILITIES.filter((cap) =>
           `${cap.label} ${cap.purpose} ${cap.limitations}`.toLowerCase().includes(q),
-        ).map((cap) => this.availability(cap, runtime)),
+        ).map((cap) => this.availability(cap, runtime, caller)),
         request,
         meta.revision,
         [name, q],
@@ -379,7 +396,7 @@ export class DesktopKnowledge {
             revision: meta.customizations.revision,
           })),
         request,
-        meta.revision,
+        meta.customizations.revision,
         [name, request.kind],
       );
     } else if (name === "code60_read_customization") {

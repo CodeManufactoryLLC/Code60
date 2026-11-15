@@ -4,6 +4,7 @@ export {
   capabilityReferences,
   DESKTOP_CAPABILITIES,
   type Group,
+  isKnowledgeRelativePath,
   isKnowledgeTool,
   KNOWLEDGE_LIMITS,
   KNOWLEDGE_SCHEMA_VERSION,

@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import type { DesktopApi, KnowledgeOwner, KnowledgeReport } from "../bridge/index.js";
+import {
+  type DesktopApi,
+  isKnowledgeRelativePath,
+  KNOWLEDGE_LIMITS,
+  type KnowledgeOwner,
+  type KnowledgeReport,
+} from "../bridge/index.js";
 import type { FileTab, FileTabs } from "./file-tabs.js";
 import type { PageId, SettingsSectionId } from "./navigation.js";
 
 type View = KnowledgeReport["view"];
 type ReportedTab = Extract<View, { kind: "panel" }>["tabs"][number];
-const TAB_LIMIT = 128;
 
 // One renderer generation per document; reloading the document resets both sides.
 let renderer: Promise<string | null> | undefined;
@@ -26,17 +31,9 @@ function report(api: DesktopApi | undefined, view: View): void {
     });
 }
 
-const safeRelative = (path: string) =>
-  path.length > 0 &&
-  path.length <= 4096 &&
-  !path.startsWith("/") &&
-  !path.includes("\\") &&
-  !path.split("/").includes("..") &&
-  !/[:\0]/.test(path);
-
 function reportedTab(tab: FileTab): ReportedTab | null {
   if (tab.kind === "file")
-    return safeRelative(tab.path)
+    return isKnowledgeRelativePath(tab.path)
       ? { id: tab.id, kind: "file", path: tab.path, savedRevision: tab.source !== undefined }
       : null;
   if (tab.kind === "plan") return { id: tab.id, kind: "plan", planId: tab.planId };
@@ -77,7 +74,9 @@ export function useKnowledgeNavigation(
 
 /** Bounded presentation summary; unsupported file paths are omitted and marked incomplete. */
 export function panelReport(tabs: FileTabs) {
-  const reported = tabs.entries.slice(0, TAB_LIMIT).flatMap((tab) => reportedTab(tab) ?? []);
+  const reported = tabs.entries
+    .slice(0, KNOWLEDGE_LIMITS.tabs)
+    .flatMap((tab) => reportedTab(tab) ?? []);
   return {
     tabs: reported,
     selected: reported.some((tab) => tab.id === tabs.active) ? tabs.active : null,

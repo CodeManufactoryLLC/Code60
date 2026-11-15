@@ -14,14 +14,18 @@ export const KNOWLEDGE_LIMITS = {
 const uuid = z.string().uuid();
 const sequence = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const reference = z.string().min(1).max(256);
-const relative = z
-  .string()
-  .min(1)
-  .max(4096)
-  .refine(
-    (s) =>
-      !s.startsWith("/") && !s.includes("\\") && !s.split("/").includes("..") && !/[:\0]/.test(s),
+/** Bounded project-relative path accepted in awareness tab reports. */
+export function isKnowledgeRelativePath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    path.length <= 4096 &&
+    !path.startsWith("/") &&
+    !path.includes("\\") &&
+    !path.split("/").includes("..") &&
+    !/[:\0]/.test(path)
   );
+}
+const relative = z.string().refine(isKnowledgeRelativePath);
 const tab = z.discriminatedUnion("kind", [
   z.strictObject({
     id: sequence,
