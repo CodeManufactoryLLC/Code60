@@ -7031,6 +7031,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
             },
           ),
       ).toBeFocused();
+      if (name === "Projects") {
+        // Projects now follows Search; collapse it here, before stepping to Apps.
+        const projects = page.getByRole("tab", { name: "Projects", exact: true });
+        await projects.press("ArrowLeft");
+        await expect(projects).toHaveAttribute("aria-expanded", "false");
+      }
     }
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Home", exact: true })).toBeFocused();
@@ -8792,7 +8798,8 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     const sessionRows = sessions.locator(".sessions-grid tbody [role='row']");
     await expect(sessionRows).toHaveCount(1);
     await expect(sessionRows).toContainText(a.slice(-6));
-    const sessionGrid = sessions.getByTestId("data-grid-canvas");
+    // Glide receives pointer input on its scroller above the painting canvas.
+    const sessionGrid = sessions.locator(".sessions-grid .dvn-scroller");
     const firstCell = await sessions.locator(".sessions-grid").evaluate((element) => ({
       x: 60,
       y:
@@ -10650,6 +10657,11 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
       .click();
     const memory = page.locator("#panel-memories");
     const rows = memory.locator(".sessions-grid tbody [role='row']");
+    // Cold sidecar startup can queue behind the first inference batch. Match its
+    // bounded request deadline here, without relaxing subsequent paging checks.
+    await expect(memory.getByText("25 memories", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     for (let index = 0; index < 21; index++) {
       await expect(memory.getByText("25 memories", { exact: true })).toBeVisible();
       expect(await rows.count()).toBeLessThanOrEqual(25);
