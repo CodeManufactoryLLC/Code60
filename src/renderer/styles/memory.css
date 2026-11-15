@@ -111,7 +111,7 @@
 .memory-inspector h3 {
   margin: 0;
   font-size: var(--text-size, 13px);
-  font-weight: var(--title-weight, 400);
+  font-weight: var(--title-weight, 300);
   color: var(--muted);
 }
 

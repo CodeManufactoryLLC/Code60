@@ -5,7 +5,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: var(--text-size, 13px);
-  font-weight: var(--text-weight, 400);
+  font-weight: var(--text-weight, 300);
   line-height: 1.5;
   text-transform: var(--text-case, none);
   font-synthesis-weight: none;
@@ -50,7 +50,7 @@ button {
   font-family: var(--button-font, var(--font));
   --letter-spacing: var(--button-spacing, normal);
   font-size: var(--button-size, 13px);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
   text-transform: var(--button-case, none);
   font-synthesis: none;
   color: var(--text);
@@ -86,7 +86,7 @@ button.primary {
   background: var(--primary);
   color: var(--primary-text);
   border-color: transparent;
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
 }
 
 button.primary:hover:not(:disabled) {
@@ -102,7 +102,7 @@ button.destructive {
   background: var(--destructive);
   color: var(--on-destructive);
   border-color: var(--destructive);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 300);
 }
 
 button.destructive:hover:not(:disabled) {
@@ -412,19 +412,19 @@ kbd {
 
 .status-label:is([data-status="running"], [data-status="idle"]) {
   color: var(--text);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .status-label[data-status="waiting"] {
   color: var(--bg);
   background: var(--text);
   border-color: var(--text);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .status-label:is([data-status="failed"], [data-status="timed_out"], [data-status="interrupted"]) {
   color: var(--danger);
-  font-weight: 400;
+  font-weight: inherit;
   border-left: 3px solid currentColor;
   padding-left: 4px;
 }
@@ -537,7 +537,7 @@ summary:hover {
 .setup-dialog textarea {
   font-family: var(--human-font, var(--font));
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-weight, 400);
+  font-weight: var(--human-weight, 300);
   line-height: 1.65;
   --letter-spacing: var(--human-spacing, normal);
   text-transform: none;
@@ -564,7 +564,7 @@ summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 :where(.settings-page) .settings-section-header:where(:first-child) h1,

@@ -45,14 +45,14 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
     id: "00000000-0000-4000-8000-000000000001",
     name: "create-command",
     title: "Create a command",
-    description: "Create a reusable slash command from your instructions.",
+    description: "Create a reusable $ command from your instructions.",
     prompt: [
-      "Create a reusable Code60 slash command from the user's additional instructions below.",
+      "Create a reusable Code60 $ command from the user's additional instructions below.",
       "Use code60_create_command to save it in the connected database. Do not delegate this to a worker or write a skill file.",
       "Infer a concise lowercase, hyphenated name, a clear single-line title, a short description, and a self-contained reusable prompt that preserves the user's intent.",
       "Honor any name, title, description, or prompt the user explicitly provides. Ask a focused question if the instructions are missing or essential details are unclear; do not save a placeholder command.",
       "Create the command only, without carrying out its prompt. Do not overwrite an existing command. If saving fails, explain the error instead of claiming success.",
-      "After the tool confirms creation, tell the user the saved /name and show a short invocation example.",
+      "After the tool confirms creation, tell the user the saved $name and show a short invocation example.",
     ].join("\n"),
     createdAt: "2026-11-10T00:00:00.000Z",
     updatedAt: "2026-11-10T00:00:00.000Z",
@@ -99,14 +99,14 @@ export function availableCommands(commands: readonly Command[]): Command[] {
 
 /** Only a complete token at the very beginning can invoke a command. */
 export function leadingCommand(text: string): string | undefined {
-  return /^\/([a-z0-9][a-z0-9-]{0,63})(?=\s|$)/i.exec(text)?.[1]?.toLowerCase();
+  return /^\$([a-z0-9][a-z0-9-]{0,63})(?=\s|$)/i.exec(text)?.[1]?.toLowerCase();
 }
 
 export function expandCommand(command: Command, text: string): string {
   if (leadingCommand(text) !== command.name.toLowerCase())
     throw new Error("The command must match the beginning of the message");
-  const rest = text.slice((/^\/\S+/.exec(text)?.[0] ?? "").length).trim();
-  return `Command /${command.name}: ${command.title}\n${command.prompt}${
+  const rest = text.slice((/^\$\S+/.exec(text)?.[0] ?? "").length).trim();
+  return `Command $${command.name}: ${command.title}\n${command.prompt}${
     rest ? `\n\nAdditional instructions:\n${rest}` : ""
   }`;
 }

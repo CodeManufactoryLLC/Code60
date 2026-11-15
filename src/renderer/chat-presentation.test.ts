@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DesktopRun } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import {
+  chatFailureReason,
   delegatedActivity,
   durationText,
   isLiveMessage,
@@ -15,6 +16,20 @@ import { copyMessage } from "./message-controls.js";
 import { transcript } from "./transcript.js";
 
 const at = (seconds: number) => new Date(seconds * 1000).toISOString();
+
+it("omits only the known exited-owner diagnostic from interrupted chat presentation", () => {
+  const reason = "the owning process (PID 12345) is gone";
+  expect(chatFailureReason("interrupted", reason)).toBeUndefined();
+  for (const status of ["running", "failed", "timed_out"] as const)
+    expect(chatFailureReason(status, reason)).toBe(reason);
+  for (const reason of [
+    "Provider connection failed",
+    "Permission denied while checking PID 12345",
+    "the owning process (PID 12345) is gone; history could not be read",
+    undefined,
+  ])
+    expect(chatFailureReason("interrupted", reason)).toBe(reason);
+});
 
 it("does not replay background replies delivered by a resumed detail read", () => {
   expect(isLiveMessage(at(1), 2000)).toBe(false);

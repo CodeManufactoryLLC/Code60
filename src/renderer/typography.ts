@@ -41,7 +41,7 @@ export const textRoles = [
     css: "heading",
     typeface: defaultTypeface.id,
     size: 12,
-    weight: 400,
+    weight: 300,
   },
   {
     id: "buttons",
@@ -49,7 +49,7 @@ export const textRoles = [
     css: "button",
     typeface: defaultTypeface.id,
     size: 13,
-    weight: 400,
+    weight: 300,
   },
   {
     id: "agentMessages",
@@ -57,7 +57,7 @@ export const textRoles = [
     css: "agent",
     typeface: defaultTypeface.id,
     size: 14,
-    weight: 400,
+    weight: 300,
   },
   {
     id: "humanMessages",
@@ -65,15 +65,14 @@ export const textRoles = [
     css: "human",
     typeface: defaultTypeface.id,
     size: 14,
-    weight: 400,
+    weight: 300,
   },
-  // CSS pixels are 3/4 of a point: 64px is the requested 48pt.
   {
     id: "pageTitles",
     label: "Page Titles",
     css: "title",
     typeface: "ibm-plex-serif",
-    size: 64,
+    size: 16,
     weight: 300,
   },
   {
@@ -82,7 +81,7 @@ export const textRoles = [
     css: "card",
     typeface: defaultTypeface.id,
     size: 22,
-    weight: 400,
+    weight: 300,
   },
   {
     id: "normalText",
@@ -90,7 +89,7 @@ export const textRoles = [
     css: "text",
     typeface: defaultTypeface.id,
     size: 13,
-    weight: 400,
+    weight: 300,
   },
 ] as const;
 export type TextRole = (typeof textRoles)[number]["id"];
@@ -186,7 +185,7 @@ export function applyCase(text: string, textCase: ResolvedText["case"]): string 
 }
 /**
  * CSS custom properties for the text styles. Family, spacing, size, and weight are always set;
- * case only when chosen. Sent prompts use regular weight unless a weight is chosen.
+ * case only when chosen. The former title size remains reserved in the page layout.
  */
 export function textStyleProperties(styles: TextStyles): Record<string, string | undefined> {
   const properties: Record<string, string | undefined> = {};
@@ -207,8 +206,8 @@ export function textStyleProperties(styles: TextStyles): Record<string, string |
             ? "none"
             : undefined;
   }
-  const human = styles.humanMessages.weight;
-  properties["--human-prompt-weight"] = human ? String(human) : undefined;
+  properties["--human-prompt-weight"] = String(resolveText(styles, "humanMessages").weight);
+  properties["--page-title-space-size"] = `${styles.pageTitles.size ?? 64}px`;
   // Navigation has its own default size, but still honors an explicit Button Text size.
   properties["--nav-font-size"] = `${styles.buttons.size ?? 15}px`;
   return properties;

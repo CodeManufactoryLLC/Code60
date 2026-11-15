@@ -63,7 +63,9 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await page.locator(".splash").getByRole("button", { name: "Start", exact: true }).click();
     await openLogs(page);
     const logs = page.locator("#panel-logs");
-    await expect(logs.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
+    await expect(
+      page.locator(".workspace-breadcrumbs").getByRole("heading", { name: "Logs", exact: true }),
+    ).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
     await expect(logs.getByRole("button", { name: "Older page", exact: true })).toBeEnabled();
     await logs.getByRole("button", { name: "Older page", exact: true }).click();

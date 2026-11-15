@@ -24,6 +24,7 @@ export function ChatSidebar({
   relayNavigation = false,
   onKeyDown,
   entries: suppliedEntries,
+  ancestorsExpanded = true,
 }: {
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -38,6 +39,7 @@ export function ChatSidebar({
   relayNavigation?: boolean;
   onKeyDown?(event: KeyboardEvent<HTMLElement>): void;
   entries?: readonly Conversation[];
+  ancestorsExpanded?: boolean;
 }) {
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
@@ -88,6 +90,8 @@ export function ChatSidebar({
     const prior = previous.current;
     setCollapsed((current) => {
       const next = reconcileDisclosure(prior, entries, current);
+      if (!ancestorsExpanded)
+        for (const entry of entries) if (entry.parentId) next.add(entry.parentId);
       return next.size === current.size && [...next].every((id) => current.has(id))
         ? current
         : next;
@@ -100,7 +104,7 @@ export function ChatSidebar({
       }
     }
     previous.current = children;
-  }, [entries]);
+  }, [entries, ancestorsExpanded]);
   const parentId = entries.find(({ id }) => id === selectedId)?.parentId;
   // biome-ignore lint/correctness/useExhaustiveDependencies: explicit navigation to the same worker must reveal its parent.
   useLayoutEffect(() => {
@@ -224,17 +228,16 @@ export function ChatSidebar({
             )}
             {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
             <span className="chat-sidebar-label">{entry.label}</span>
-            <span className="chat-sidebar-indicators">
-              {unread > 0 && (
-                <span className="chat-unread" role="img" aria-label={unreadLabel}>
-                  <span>{unread}</span>
-                </span>
-              )}
-              {(error || presentation.icon !== "chat") && (
-                <span className="chat-sidebar-status">{error ? "Error" : presentation.label}</span>
-              )}
-              {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
-            </span>
+            {(unread > 0 || approvals > 0) && (
+              <span className="chat-sidebar-indicators">
+                {unread > 0 && (
+                  <span className="chat-unread" role="img" aria-label={unreadLabel}>
+                    <span>{unread}</span>
+                  </span>
+                )}
+                {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
+              </span>
+            )}
             <span className="sr-only">{description}</span>
           </button>
           {entry.role === "orchestrator" && chat?.kind !== "relay" && (

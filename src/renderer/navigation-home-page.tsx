@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NavigationCards } from "./navigation-cards.js";
+import { type NavigationCardAction, NavigationCards } from "./navigation-cards.js";
 import type { NavigationIconName } from "./navigation-icons.js";
 import { PageTitle, type PageTitleId } from "./page-title.js";
 
@@ -15,7 +15,9 @@ export function NavigationHomePage<
   id = page,
   label,
   cards,
+  create,
   onOpen,
+  intro,
   actions,
   empty = "No items",
   error,
@@ -26,7 +28,9 @@ export function NavigationHomePage<
   id?: string;
   label?: string;
   cards: readonly Card[];
+  create?: NavigationCardAction | undefined;
   onOpen(card: Card): void;
+  intro?: ReactNode;
   actions?: ReactNode;
   empty?: string;
   error?: string | undefined;
@@ -41,7 +45,13 @@ export function NavigationHomePage<
         </PageTitle>
         {actions}
       </div>
-      <NavigationCards cards={cards} onOpen={onOpen} pending={pending}>
+      <NavigationCards
+        cards={cards}
+        create={create}
+        onOpen={onOpen}
+        intro={intro}
+        pending={pending}
+      >
         {!cards.length && <p className="empty">{empty}</p>}
         {error && (
           <p className="error-banner" role="alert">

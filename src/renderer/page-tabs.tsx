@@ -15,6 +15,7 @@ import {
 import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import {
+  conversationProject,
   inNavigationBranch,
   navigationParent,
   parentActivation,
@@ -161,6 +162,7 @@ export function PageTabBar({
         >
           <Icon name={open ? "side-panel--close" : "side-panel--open"} />
         </button>
+        <div className="workspace-breadcrumbs" />
       </header>
     </>
   );
@@ -215,17 +217,25 @@ function PageTabList({
         block: "nearest",
       });
   }, [chatExpanded, selectedId, relaySelected]);
-  const previousNavigation = useRef({ tabs, selectedId });
+  const projectForConversation = (id: string | undefined) =>
+    conversationProject(id, openProjects ?? [], chats, runs);
+  const selectedConversationProject = projectForConversation(selectedId);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reveal explicit destinations, not unrelated tab-object replacements or Relay navigation.
   useLayoutEffect(() => {
-    const previous = previousNavigation.current;
-    if (
-      (tabs.active === "project" || (tabs.active === "chat" && !relaySelected)) &&
-      (previous.tabs !== tabs ||
-        (previous.selectedId !== undefined && previous.selectedId !== selectedId))
-    )
-      setChatExpanded(true);
-    previousNavigation.current = { tabs, selectedId };
-  }, [tabs, selectedId, relaySelected]);
+    if (tabs.active === "chat" && selectedConversationProject) setChatExpanded(true);
+  }, [selectedId, navigationSerial, selectedConversationProject]);
+  useLayoutEffect(() => {
+    if (tabs.active === "project") setChatExpanded(true);
+  }, [tabs.active]);
+  const destinationProject =
+    navigation.destination?.kind === "project"
+      ? navigation.destination.id
+      : navigation.destination?.kind === "conversation"
+        ? projectForConversation(navigation.destination.id)
+        : undefined;
+  useLayoutEffect(() => {
+    if (navigation.destination && destinationProject) setChatExpanded(true);
+  }, [navigation.destination, destinationProject]);
   const [settingsExpanded, setSettingsExpanded] = useState(
     () => localStorage.getItem("code60.settingsExpanded") === "true",
   );
@@ -303,6 +313,10 @@ function PageTabList({
     staticChildren(parent, database).flatMap(({ target }) =>
       target.kind === "page" || target.kind === "settings" ? [target.id] : [],
     );
+  const setDisclosure = (id: StaticParent, open: boolean) => {
+    disclosures[id].set(open);
+    if (!open) for (const child of childIds(id)) if (isParent(child)) setDisclosure(child, false);
+  };
   const descendants = (parent: StaticParent): (PageId | SettingsSectionId)[] =>
     childIds(parent).flatMap((id) => [
       id,
@@ -322,7 +336,7 @@ function PageTabList({
     const disclosure = disclosures[id];
     const active = tabs.active === id && (id !== "settings" || settingsSection === null);
     const next = parentActivation(active, disclosure.open);
-    disclosure.set(next.expanded);
+    setDisclosure(id, next.expanded);
     if (next.navigate) {
       if (id === "settings") onSettingsSectionSelect(null);
       onSelect(id);
@@ -420,7 +434,7 @@ function PageTabList({
       if (isParent(id)) {
         event.preventDefault();
         const disclosure = disclosures[id];
-        if (disclosure.open) disclosure.set(false);
+        if (disclosure.open) setDisclosure(id, false);
         else {
           const owner = navigationParent(id);
           if (owner) document.getElementById(sidebarPageElementId(owner))?.focus();
@@ -434,7 +448,7 @@ function PageTabList({
           : navigationParent(id);
       if (owner && isParent(owner)) {
         event.preventDefault();
-        disclosures[owner].set(false);
+        setDisclosure(owner, false);
         document.getElementById(sidebarPageElementId(owner))?.focus();
         return;
       }
@@ -601,7 +615,7 @@ function PageTabList({
           navigationSerial={navigationSerial}
           database={database}
           eventsByRun={eventsByRun}
-          open={tabs.active === "chat" && !navigation.projectPending}
+          open={tabs.active === "chat"}
           pending={chatPending}
           onSelect={selectConversation}
           onKeyDown={(event) => {
@@ -723,6 +737,8 @@ function PageTabList({
       >
         {openProjects ? (
           <ProjectChatSidebar
+            ancestorsExpanded={chatExpanded}
+            destination={navigation.destination}
             projects={openProjects}
             selectedProjectId={selectedProjectId}
             onProjectAction={projectAction}
@@ -735,12 +751,13 @@ function PageTabList({
             navigationSerial={navigationSerial}
             database={database}
             eventsByRun={eventsByRun}
-            open={tabs.active === "chat" && !navigation.projectPending}
+            open={tabs.active === "chat"}
             pending={chatPending}
             onSelect={selectConversation}
           />
         ) : (
           <ChatSidebar
+            ancestorsExpanded={chatExpanded}
             onAction={chatAction}
             chats={chats.filter((chat) => chat.kind !== "relay")}
             runs={runs.filter((run) => !run.relay)}
@@ -748,7 +765,7 @@ function PageTabList({
             navigationSerial={navigationSerial}
             database={database}
             eventsByRun={eventsByRun}
-            open={tabs.active === "chat" && !navigation.projectPending}
+            open={tabs.active === "chat"}
             pending={chatPending}
             onSelect={selectConversation}
           />

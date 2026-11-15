@@ -26,6 +26,7 @@ function render(
   database: string | null = "/db",
   turns = 1,
   runChanges: Partial<RunView> = {},
+  chatChanges: Partial<OrchestrationChat> = {},
 ) {
   return renderToStaticMarkup(
     <ChatPage
@@ -56,6 +57,7 @@ function render(
           },
           workers,
           updates: { paused: true, pending: 1 },
+          ...chatChanges,
         } as OrchestrationChat
       }
       events={events}
@@ -70,6 +72,96 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("omits the stale PID warning in restored chats but preserves actual failures", () => {
+    const reason = "the owning process (PID 12345) is gone";
+    for (const error of [null, reason]) {
+      const html = render(
+        "interrupted",
+        [],
+        [],
+        [],
+        [],
+        "/db",
+        1,
+        { reason },
+        {
+          restored: true,
+          error,
+        },
+      );
+      expect(html).not.toContain(reason);
+      expect(html).not.toContain('class="error-banner"');
+      expect(html).toContain('class="composer"');
+    }
+    expect(
+      render(
+        "interrupted",
+        [],
+        [],
+        [],
+        [],
+        "/db",
+        1,
+        {
+          reason: "Provider connection failed",
+        },
+        { restored: true },
+      ),
+    ).toContain("Provider connection failed");
+  });
+
+  it.each(["finished", "failed", "cancelled", "timed_out", "interrupted"] as const)(
+    "omits stopped-chat controls and warnings for %s chats, including restored tasks",
+    (status) => {
+      for (const restored of [false, true]) {
+        const html = render(
+          status,
+          [],
+          [],
+          [],
+          [],
+          "/db",
+          1,
+          {},
+          {
+            restored,
+            taskId: "saved-task",
+          },
+        );
+        expect(html).not.toContain("New session");
+        expect(html).not.toContain("Continue task");
+        expect(html).not.toContain("Saved chat is stopped");
+        expect(html).not.toContain("Previous workers are history only");
+        expect(html.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
+        expect(html).toContain('class="primary composer-send"');
+        expect(html).toContain(">Send ");
+      }
+    },
+  );
+
+  it("keeps Relay connection retry and current history-saving warnings", () => {
+    const html = render(
+      "failed",
+      [],
+      [],
+      [],
+      [],
+      null,
+      1,
+      {},
+      {
+        kind: "relay",
+        conversationId: "relay",
+        historySaving: "unavailable",
+        error: "Connection failed",
+      },
+    );
+    expect(html).toContain("Retry connection");
+    expect(html).toContain("Connection failed");
+    expect(html).toContain("History isn’t being saved");
+    expect(html).not.toContain("New session");
+  });
+
   it("renders Relay as ordinary title text, not a doubly dimmed disabled rename control", () => {
     const html = renderToStaticMarkup(
       <ChatPage
@@ -148,6 +240,7 @@ describe("orchestration activity presentation", () => {
       expect(html).toContain('class="chat-connecting" role="status"');
       expect(html).toContain("communicating.gif");
       expect(html).toContain(">Connecting...</span>");
+      expect(html).toContain(">Cancel</button>");
       expect(html).not.toContain("Give Code60 a task.");
       expect(html).not.toContain('class="chat-progress activity-display"');
       expect(html).not.toContain('class="activity-timer"');
@@ -173,6 +266,7 @@ describe("orchestration activity presentation", () => {
       />,
     );
     expect(html).not.toContain("Give Code60 a task.");
+    expect(html).not.toContain("New session");
   });
 
   it("renders only agent replies as Markdown, including adjacent streamed chunks", () => {

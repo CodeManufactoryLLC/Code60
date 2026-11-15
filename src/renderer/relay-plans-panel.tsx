@@ -98,7 +98,7 @@ export function RelayPlansPanel({
               Open Changes
             </button>
             {plans.length > 0 && (
-              <nav className="file-panel-empty" aria-label="Saved Relay plans">
+              <nav className="file-panel-saved-plans" aria-label="Saved Relay plans">
                 {plans.map((plan) => (
                   <button
                     key={plan.id}

@@ -11,17 +11,18 @@ it("offers seven independent text roles with role-specific defaults and Light we
   expect(groups).toHaveLength(7);
   for (const group of groups) {
     expect(group).toContain('<option value="300">Light</option>');
+    expect(group).toContain("Default (Light)");
     expect(group).toContain('type="number" min="8" max="64"');
   }
   const page = groups.find((group) => group.includes(">Page Titles</legend>"));
   expect(page).toContain("Default (IBM Plex Serif)");
   expect(page).toContain("Default (Light)");
-  expect(page).toContain('placeholder="64"');
+  expect(page).toContain('placeholder="16"');
   expect(page).toContain("font-family:&quot;IBM Plex Serif&quot;");
-  expect(page).toContain("font-size:64px;font-weight:300");
+  expect(page).toContain("font-size:16px;font-weight:300");
   const card = groups.find((group) => group.includes(">Card Titles</legend>"));
   expect(card).toContain("Default (IBM Plex Sans)");
-  expect(card).toContain("Default (Regular)");
+  expect(card).toContain("Default (Light)");
   expect(card).toContain('placeholder="22"');
   expect(card).not.toContain("Reset Card Titles");
 });

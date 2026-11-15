@@ -3,7 +3,7 @@ import type { DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
-import { sessionStatus, turnTimings } from "./chat-presentation.js";
+import { chatFailureReason, sessionStatus, turnTimings } from "./chat-presentation.js";
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
@@ -83,7 +83,9 @@ export function WorkerChat({
     error ||
     draftState.storageError ||
     historyError ||
-    (["failed", "timed_out", "interrupted"].includes(status) ? run.record.reason : "");
+    (["failed", "timed_out", "interrupted"].includes(status)
+      ? chatFailureReason(status, run.record.reason)
+      : "");
   const target = request?.id === id ? request : undefined;
 
   useEffect(() => {

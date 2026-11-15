@@ -137,7 +137,7 @@
 - Check the sender of every IPC request and parse its arguments with `bridge` before acting. Act only on runs recorded in the open workspace.
 - Serialize user actions and completion history refreshes in the controller. Allow overlapping batches, each with its own selected parallel limit, orchestrator, and subscriptions. Route actions and approvals to the owning batch, and retain earlier transcripts when adding sessions.
 - Refuse folder and database switches until every batch has ended. Stop all and every shutdown path, including forced shutdown, must stop every batch.
-- After a native folder pick, confirm the full project path before opening or adding it to history. Default to Cancel; declining must leave the current project and history unchanged.
+- The native Open Project folder picker enables explicit directory creation (`createDirectory`); opening never initializes Git. After a native folder pick, confirm the full project path before opening or adding it to history. Default to Cancel; declining must leave the current project and history unchanged.
 - Return only newly created session IDs from start. Require Git readiness on every project launch and continuation, with required isolation during core preparation. Never continue legacy non-isolated workers. Keep Chat and read-only history usable before Git setup.
 - Ask with a native dialog before destructive actions and before quitting with active runs. Reject unisolated project workers; guided Git setup uses its own explicit initial-commit confirmation.
 - On quit, signals, and renderer crashes, shut down every run through `core` and wait for it before exiting. Never remove worktrees automatically.

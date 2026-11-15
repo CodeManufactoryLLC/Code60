@@ -28,6 +28,15 @@ describe("shared project selector", () => {
     }
     for (const { path } of props.projects) expect(html).toContain(path);
     expect(html).not.toContain("Clear history");
+    expect(html.match(/class="icon-button project-remove"/g)).toHaveLength(2);
+    for (const removal of html.matchAll(
+      /<button[^>]*class="icon-button project-remove"[^>]*>(.*?)<\/button>/g,
+    )) {
+      expect(removal[1]).toContain("<svg");
+      expect(removal[1]).not.toContain("Remove");
+    }
+    expect(html).not.toContain(">Remove</button>");
+    expect(html).toMatch(/<\/button><button[^>]*class="icon-button project-remove"/);
     expect(html).toContain("<span>Open Folder</span>");
     expect(html).toContain('class="project-open-folder"');
     expect(html.indexOf("</ul>")).toBeLessThan(html.indexOf('class="project-open-folder"'));

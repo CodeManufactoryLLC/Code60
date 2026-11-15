@@ -541,7 +541,7 @@ async function ready(): Promise<void> {
     const epoch = controller.assertDatabaseRequest(databaseEpoch);
     if (!controller.connected) throw new Error("Connect to a database first");
     const result = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
+      properties: ["openDirectory", "createDirectory"],
       title: "Open project",
     });
     controller.assertDatabaseRequest(epoch);

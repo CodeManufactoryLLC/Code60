@@ -1,5 +1,5 @@
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
-import { conversations } from "./chats.js";
+import { conversationId, conversations } from "./chats.js";
 import {
   type PageId,
   type ParentPageId,
@@ -97,6 +97,18 @@ export function projectConversations(
     runs.filter((run) => !run.relay && workers.has(run.record.id)),
     selectedId,
   );
+}
+
+export function conversationProject(
+  id: string | undefined,
+  projects: readonly OpenProject[],
+  chats: readonly OrchestrationChat[],
+  runs: readonly DesktopRun[],
+): string | undefined {
+  if (!id) return;
+  const chat = chats.find((chat) => conversationId(chat) === id);
+  if (chat?.kind === "relay" || runs.some((run) => run.record.id === id && run.relay)) return;
+  return chat?.projectId ?? projects.find((project) => project.workerIds.includes(id))?.id;
 }
 
 export function conversationNodes(entries: ReturnType<typeof conversations>): NavigationNode[] {

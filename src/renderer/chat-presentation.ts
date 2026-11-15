@@ -2,6 +2,13 @@ import type { DesktopRun } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { statusSpec } from "./session-presentation.js";
 
+/** An exited owner is normal for saved history, not an actionable chat failure. */
+export function chatFailureReason(status: RunStatus | undefined, reason: string | undefined) {
+  return status === "interrupted" && /^the owning process \(PID \d+\) is gone$/.test(reason ?? "")
+    ? undefined
+    : reason;
+}
+
 export function sessionStatus(run: Pick<RunView, "status" | "turns" | "stopping" | "pending">) {
   if (run.stopping) return { ...statusSpec.cancelled, label: "Stopping" };
   if (run.pending.length > 0 || run.status === "waiting")

@@ -116,7 +116,7 @@
 
 .automation-selection-label > strong {
   overflow: hidden;
-  font-weight: 400;
+  font-weight: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

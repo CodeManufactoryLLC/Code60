@@ -26,7 +26,13 @@ function fixture() {
     onArchived: vi.fn(),
   };
   const status = vi.fn();
-  return { context, status, actions: createNavigationActions(() => context, status) };
+  const reveal = vi.fn();
+  return {
+    context,
+    status,
+    reveal,
+    actions: createNavigationActions(() => context, status, reveal),
+  };
 }
 function deferred() {
   let resolve = () => {};
@@ -48,7 +54,7 @@ describe("shared navigation actions", () => {
     expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
     expect(context.selectWorker).not.toHaveBeenCalled();
     expect(status.mock.calls).toEqual([
-      [true, "", true],
+      [true, "", true, false],
       [false, "", false],
     ]);
     expect(await actions.open({ kind: "project", id: "closed" })).toBe(false);
@@ -76,7 +82,7 @@ describe("shared navigation actions", () => {
     const { actions, context, status } = fixture();
     vi.mocked(context.api.projectAction).mockRejectedValueOnce(new Error("Selection failed"));
     expect(await actions.open({ kind: "project", id: "a" })).toBe(false);
-    expect(status).toHaveBeenCalledWith(true, "Selection failed", true);
+    expect(status).toHaveBeenCalledWith(true, "Selection failed", true, false);
     expect(await actions.open({ kind: "project", id: "a" })).toBe(true);
     await actions.open({ kind: "page", id: "settings" });
     expect(context.onSection).toHaveBeenLastCalledWith(null);
@@ -97,6 +103,39 @@ describe("shared navigation actions", () => {
     expect(await actions.open({ kind: "conversation", id: "relay" })).toBe(true);
     expect(context.selectWorker).toHaveBeenLastCalledWith(undefined, null);
     expect(await actions.open({ kind: "conversation", id: "unknown" })).toBe(false);
+  });
+  it.each(["project", "chat", "relay", "worker"] as const)(
+    "keeps %s selection single-flight without dimming unrelated navigation",
+    async (target) => {
+      const { actions, context, status, reveal } = fixture();
+      const gate = deferred();
+      vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
+      vi.mocked(context.api.orchestrationChatAction).mockImplementation(() => gate.promise);
+      context.selectWorker = vi.fn(() => gate.promise.then(() => true));
+      const destination =
+        target === "project"
+          ? ({ kind: "project", id: "a" } as const)
+          : ({ kind: "conversation", id: target } as const);
+      const selection = actions.open(destination);
+      expect(status).toHaveBeenCalledWith(true, "", target === "project", false);
+      expect(await actions.open(destination)).toBe(false);
+      expect(reveal).not.toHaveBeenCalled();
+      gate.resolve();
+      expect(await selection).toBe(true);
+      expect(reveal).toHaveBeenCalledExactlyOnceWith(destination);
+      expect(status).toHaveBeenLastCalledWith(false, "", false);
+    },
+  );
+  it("keeps destructive chat actions blocking and reveals only their successful destination", async () => {
+    const { actions, context, status, reveal } = fixture();
+    expect(await actions.chatAction({ type: "new", projectId: "a" })).toBe(true);
+    expect(status).toHaveBeenCalledWith(true, "", false, true);
+    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "project", id: "a" });
+    reveal.mockClear();
+    vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(new Error("Unavailable"));
+    expect(await actions.chatAction({ type: "select", id: "relay" })).toBe(false);
+    expect(status).toHaveBeenCalledWith(true, "Unavailable", false, false);
+    expect(reveal).not.toHaveBeenCalled();
   });
   it("guards asynchronous worker navigation against later destinations", async () => {
     const { actions, context } = fixture(),

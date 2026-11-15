@@ -3110,7 +3110,7 @@ export class DesktopController {
           const command =
             this.requireDatabase().command(request.command) ??
             BUILTIN_COMMANDS.find((entry) => entry.name === request.command);
-          if (!command) throw new Error(`Command /${request.command} no longer exists`);
+          if (!command) throw new Error(`Command $${request.command} no longer exists`);
           deliveredText = expandCommand(command, request.text);
         }
         if (!run) throw new Error("No orchestration session is available");
