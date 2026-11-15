@@ -31,6 +31,7 @@
     "test:tactics:live": "npm run build && node scripts/evaluate-tactics.mjs",
     "check:unused": "knip",
     "check:instructions": "node scripts/check-instructions.mjs",
+    "generate:capabilities": "vitest run test/capabilities.test.ts --update",
     "check:precommit": "npm run check:instructions && npm run typecheck && npm run lint && npm run check:unused",
     "hooks:install": "node scripts/git-hooks.mjs install",
     "hooks:status": "node scripts/git-hooks.mjs status",

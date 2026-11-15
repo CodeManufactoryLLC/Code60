@@ -19,6 +19,8 @@ describe("MCP initialization", () => {
       inputSchema: { properties: Record<string, unknown> };
     }>;
     expect(relay.some((tool) => tool.name === "code60_create_command")).toBe(false);
+    for (const name of ["code60_get_capabilities", "code60_get_app_state", "code60_read_view"])
+      expect(relay.some((tool) => tool.name === name)).toBe(true);
     const plan = relay.find((tool) => tool.name === "code60_create_plan");
     expect(plan?.inputSchema.properties.tasks).toMatchObject({
       items: {
@@ -33,6 +35,7 @@ describe("MCP initialization", () => {
     vi.stubEnv("CODE60_MCP_ROLE", "");
     await handleMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const project = JSON.parse(String(write.mock.calls[0]?.[0])).result.tools as typeof relay;
+    expect(project.some((tool) => tool.name === "code60_list_customizations")).toBe(true);
     expect(
       project.find((tool) => tool.name === "code60_create_plan")?.inputSchema.properties.tasks,
     ).toMatchObject({ items: { required: ["text"] } });

@@ -148,7 +148,9 @@ This branch implements Relay and retained project runtimes as described in
   root changes and ignored responses for released subscriptions.
 - The Relay screen shows the live transcript and composer without a historical
   transcript panel or its paging and Copy controls. Live-message Copy remains
-  available. Stored history continues to supply bounded first-Send context.
+  available. The live transcript uses a 1,000,000-serialized-UTF-16-code-unit
+  character budget with no event-count cap; oldest events are evicted only when
+  that budget is exceeded. Stored history continues to supply bounded first-Send context.
   The backend retains bounded original-source reads for compatibility.
   Original-source reads use pinned, expiring opaque cursors outside lifecycle
   queues, with at most two concurrent bounded reads. Source requests never send

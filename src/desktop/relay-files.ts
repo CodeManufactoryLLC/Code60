@@ -103,6 +103,14 @@ export class RelayFiles {
           .sources.find((s) => s.key === "files") ?? null,
     };
   }
+  /** Only an already loaded preview from exactly one live view; never reads the filesystem. */
+  knowledgePreview(path: string): RelayFileSnapshot["preview"] | undefined {
+    const matches = [...this.views.values()].filter((view) => view.files?.preview?.path === path);
+    const view = matches.length === 1 ? matches[0] : undefined;
+    if (!view) return undefined;
+    view.valid();
+    return view.files?.preview ?? undefined;
+  }
   version(id: string): number {
     return this.views.get(id)?.revision ?? 0;
   }

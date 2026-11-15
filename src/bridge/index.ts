@@ -1,3 +1,27 @@
+export {
+  type Capability,
+  capabilityReference,
+  capabilityReferences,
+  DESKTOP_CAPABILITIES,
+  type Group,
+  isKnowledgeRelativePath,
+  isKnowledgeTool,
+  KNOWLEDGE_LIMITS,
+  KNOWLEDGE_SCHEMA_VERSION,
+  type KnowledgeNavigation,
+  type KnowledgeOwner,
+  type KnowledgePanel,
+  type KnowledgeReport,
+  type KnowledgeTool,
+  knowledgeReportSchema,
+  mcpToolsForRole,
+  type PageDefinition,
+  type ParentPageId,
+  pages,
+  parentPageIds,
+  parseKnowledge,
+  settingsSections,
+} from "../contracts/index.js";
 export * from "./automation.js";
 export * from "./database.js";
 export * from "./details.js";
@@ -339,6 +363,10 @@ export interface DesktopApi {
   ): Promise<import("./details.js").DetailFrame>;
   unsubscribeDetails(request: import("./details.js").DetailIdentity): Promise<void>;
   setRelayFileContext(context: import("./relay-files.js").RelayFileContext): Promise<void>;
+  /** Current renderer generation for presentation-only awareness reports. */
+  knowledgeRenderer?(): Promise<string>;
+  /** Presentation metadata only; main validates owners and grants no authority. */
+  reportKnowledge?(report: import("../contracts/index.js").KnowledgeReport): Promise<void>;
   onDetails(listener: (frame: import("./details.js").DetailFrame) => void): () => void;
   readRelayMessage(
     request: import("./relay.js").RelayMessageRead,
