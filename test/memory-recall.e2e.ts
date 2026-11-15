@@ -3,7 +3,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
+import {
+  type BrowserContext,
+  type ElectronApplication,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from "@playwright/test";
 import type { MemorySource } from "../src/bridge/index.js";
 import type { RunEvent } from "../src/core/index.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
@@ -99,19 +106,15 @@ async function displayedIds(panel: Locator) {
 }
 async function send(page: Page, text: string) {
   const composer = page
-    .locator(".orchestration-chat-page:visible")
-    .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    .getByRole("combobox", { name: "Message to orchestrator", exact: true })
+    .filter({ visible: true });
+  const chat = page.locator(".orchestration-chat-page").filter({ has: composer });
+  await expect(composer).toBeVisible();
   await expect(composer).toBeEditable();
   await composer.fill(text);
-  await expect(
-    page
-      .locator(".orchestration-chat-page:visible")
-      .getByRole("button", { name: "Send", exact: true }),
-  ).toBeEnabled();
+  await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await composer.press("Enter");
-  await expect(page.locator(".orchestration-chat-page:visible .event.prompt").last()).toContainText(
-    text,
-  );
+  await expect(chat.locator(".event.prompt").last()).toContainText(text);
   await expect(composer).toBeEditable();
 }
 async function memoryOff(page: Page) {
@@ -133,6 +136,7 @@ for (const kind of ["Relay", "project"] as const) {
     const promptLog = join(directory, "provider-prompts");
     const processes = join(directory, "provider-processes");
     let application: ElectronApplication | undefined;
+    let context: BrowserContext | undefined;
     try {
       await mkdir(target);
       await mkdir(promptLog);
@@ -164,6 +168,8 @@ for (const kind of ["Relay", "project"] as const) {
       );
       application = await launchDesktop(directory, target, database);
       const page = await application.firstWindow();
+      context = page.context();
+      await context.tracing.start({ screenshots: true, snapshots: true });
       await page.setViewportSize({ width: 1600, height: 1000 });
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
@@ -193,6 +199,13 @@ for (const kind of ["Relay", "project"] as const) {
         await group
           .getByRole("button", { name: `New chat in ${basename(target)}`, exact: true })
           .click();
+        await expect(group.locator(".chat-sidebar-entry").last()).toHaveAttribute(
+          "aria-current",
+          "true",
+        );
+        await expect
+          .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
+          .toBe("project");
       }
       await send(page, "The cache service is Redis.");
       snapshot = await page.evaluate(() => window.desktop.snapshot());
@@ -367,27 +380,37 @@ for (const kind of ["Relay", "project"] as const) {
         contentType: "application/json",
       });
     } finally {
-      const pids = await Promise.all(
-        (await readdir(processes).catch(() => [])).map(
-          async (file) =>
-            (JSON.parse(await readFile(join(processes, file), "utf8")) as { pid: number }).pid,
-        ),
-      );
-      await application?.close();
-      await expect
-        .poll(() =>
-          pids.filter((pid) => {
-            try {
-              process.kill(pid, 0);
-              return true;
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
-              throw error;
-            }
-          }),
-        )
-        .toEqual([]);
-      await removeDesktopFixture(directory, { recursive: true, force: true });
+      try {
+        if (context) {
+          if (test.info().status !== test.info().expectedStatus) {
+            const path = test.info().outputPath("electron-trace.zip");
+            await context.tracing.stop({ path });
+            await test.info().attach("electron-trace", { path, contentType: "application/zip" });
+          } else await context.tracing.stop();
+        }
+      } finally {
+        const pids = await Promise.all(
+          (await readdir(processes).catch(() => [])).map(
+            async (file) =>
+              (JSON.parse(await readFile(join(processes, file), "utf8")) as { pid: number }).pid,
+          ),
+        );
+        await application?.close();
+        await expect
+          .poll(() =>
+            pids.filter((pid) => {
+              try {
+                process.kill(pid, 0);
+                return true;
+              } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+                throw error;
+              }
+            }),
+          )
+          .toEqual([]);
+        await removeDesktopFixture(directory, { recursive: true, force: true });
+      }
     }
   });
 }

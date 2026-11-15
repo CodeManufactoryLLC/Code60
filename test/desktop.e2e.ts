@@ -12383,10 +12383,21 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(tabs.getByRole("tab")).toHaveCount(0);
     expect(await fileContext()).toBeNull();
     const empty = await panel.locator(".file-panel-empty").boundingBox();
-    const link = await open.boundingBox();
+    const actions = panel.locator(".file-panel-empty-actions");
+    const choices = await actions.boundingBox();
     expect(
-      Math.abs((empty?.x ?? 0) + (empty?.width ?? 0) / 2 - (link?.x ?? 0) - (link?.width ?? 0) / 2),
+      Math.abs(
+        (empty?.x ?? 0) + (empty?.width ?? 0) / 2 - (choices?.x ?? 0) - (choices?.width ?? 0) / 2,
+      ),
     ).toBeLessThan(2);
+    const links = await actions.getByRole("button").all();
+    const firstChoice = await links[0]?.boundingBox();
+    for (const choice of links) {
+      await expect(choice).toBeVisible();
+      expect(Math.abs(((await choice.boundingBox())?.x ?? 0) - (firstChoice?.x ?? 0))).toBeLessThan(
+        2,
+      );
+    }
     await add.click();
     await expect(tabs.getByRole("tab", { name: "New tab", exact: true })).toBeFocused();
     await page.keyboard.press("Delete");
