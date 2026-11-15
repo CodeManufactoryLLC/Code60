@@ -10652,9 +10652,10 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
   } finally {
     store.close();
   }
+  let page: Page | undefined;
   try {
     application = await launch(directory, project, join(directory, "projects.sqlite"));
-    const page = await application.firstWindow();
+    page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await selectSidebarPage(page, "Settings");
     await page.getByRole("tab", { name: "Memory", exact: true }).click();
@@ -10663,6 +10664,7 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
       .getByRole("button", { name: "Manage memories", exact: true })
       .click();
     const memory = page.locator("#panel-memories");
+    await expect(memory).toBeVisible();
     const rows = memory.locator(".sessions-grid tbody [role='row']");
     // Cold sidecar startup can queue behind the first inference batch. Match its
     // bounded request deadline here, without relaxing subsequent paging checks.
@@ -10690,6 +10692,19 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
     await expect(rows).toContainText(["Edited oldest memory."]);
     await memory.getByRole("button", { name: "Previous page", exact: true }).click();
     await expect(rows.first()).toContainText("Fixture memory 49");
+  } catch (cause) {
+    // Electron is closed below, before Playwright can capture the failing page.
+    if (page && !page.isClosed()) {
+      await test.info().attach("memory-browser-accessibility", {
+        body: await page.locator("body").ariaSnapshot(),
+        contentType: "text/plain",
+      });
+      await test.info().attach("memory-browser-screen", {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    }
+    throw cause;
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

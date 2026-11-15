@@ -364,3 +364,296 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });
+
+test("workflow: reopening restores projects and saved chats on Relay without resuming work", async () => {
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-reopen-workflow-")));
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "provider-processes");
+  const database = join(directory, "projects.sqlite");
+  const projects = ["project-a", "project-b", "project-closed"].map((name) =>
+    join(directory, name),
+  );
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  const git = (repo: string, ...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  for (const repo of projects) {
+    await mkdir(repo);
+    git(repo, "init", "-q", "-b", "main");
+    await writeFile(join(repo, "evidence.txt"), "unchanged project\n");
+    git(repo, "add", "evidence.txt");
+    commitFixture(repo);
+  }
+  const baseline = await Promise.all(
+    projects.map(async (repo) => ({
+      repo,
+      head: git(repo, "rev-parse", "HEAD"),
+      index: await readFile(join(repo, ".git/index")),
+      worktrees: git(repo, "worktree", "list", "--porcelain"),
+    })),
+  );
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  const processes = async (): Promise<ProcessEvidence[]> =>
+    Promise.all(
+      (await readdir(processLog)).map(async (file) =>
+        JSON.parse(await readFile(join(processLog, file), "utf8")),
+      ),
+    );
+  let application: ElectronApplication | undefined;
+  const owned = new Set<number>();
+  const native: Record<string, unknown>[] = [];
+  const launch = async () => {
+    application = await launchDesktop(directory, projects[0] as string, database);
+    const pid = application.process().pid;
+    if (pid) owned.add(pid);
+    await application.evaluate(({ dialog }) => {
+      const messages: Record<string, unknown>[] = [];
+      (globalThis as typeof globalThis & { reopenDialogs: typeof messages }).reopenDialogs =
+        messages;
+      dialog.showMessageBox = async (...args: unknown[]) => {
+        const options = args.at(-1) as Record<string, unknown>;
+        messages.push(options);
+        const message = options.message;
+        const quit = message === "Quit Code60?";
+        const open = message === "Open this project?";
+        if (
+          (!quit && !open && message !== "Close project?") ||
+          options.type !== (open ? "question" : "warning") ||
+          options.defaultId !== 0 ||
+          options.cancelId !== 0 ||
+          JSON.stringify(options.buttons) !==
+            JSON.stringify(
+              quit
+                ? ["Keep working", "Quit"]
+                : open
+                  ? ["Cancel", "Open project"]
+                  : ["Cancel", "Confirm"],
+            )
+        )
+          throw new Error("Unexpected restart-workflow confirmation");
+        return { response: 1, checkboxChecked: false };
+      };
+    });
+    return application.firstWindow();
+  };
+  const nativeMessages = () =>
+    application?.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { reopenDialogs: Record<string, unknown>[] })
+          .reopenDialogs,
+    );
+  try {
+    let page = await launch();
+    const wizard = page.locator(".agent-setup-dialog");
+    // Fresh private state: verify setup through the visible provider connection.
+    await page
+      .locator(".agent-setup-dialog")
+      .getByRole("button", { name: "Claude", exact: true })
+      .click();
+    await expect(page.locator(".agent-setup-dialog").getByRole("status")).toHaveText(
+      "Claude connected",
+    );
+    await page.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const chats: { id: string; directory: string; title: string; text: string }[] = [];
+    for (const [i, repo] of projects.entries()) {
+      // Stub native boundaries only; opening and chat creation use visible controls.
+      await application?.evaluate(({ dialog }, repo) => {
+        dialog.showOpenDialog = async (...args: unknown[]) => {
+          const options = args.at(-1) as Record<string, unknown>;
+          if (
+            options.title !== "Open project" ||
+            JSON.stringify(options.properties) !== JSON.stringify(["openDirectory"])
+          )
+            throw new Error("Unexpected project picker");
+          return { canceled: false, filePaths: [repo] };
+        };
+      }, repo);
+      await page.locator(".sidebar .project-sidebar-open").click();
+      await page
+        .getByRole("dialog", { name: "Open Project", exact: true })
+        .getByRole("button", { name: "Open Folder", exact: true })
+        .click();
+      const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+      await expect(group).toBeVisible();
+      await group
+        .getByRole("button", { name: `New chat in ${repo.split(/[\\/]/).at(-1)}`, exact: true })
+        .click();
+      await expect(group.getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+      const chat = page.locator(".orchestration-chat-page:visible");
+      await expect(
+        chat.getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
+      ).toBeVisible();
+      const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+      const text = `Saved exchange ${i + 1}`;
+      await expect(composer).toBeEditable();
+      await composer.fill(text);
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+      await composer.press("Enter");
+      await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
+      const title = `Saved project ${i + 1}`;
+      await chat.getByRole("button", { name: /^Rename chat:/ }).click();
+      const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+      await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill(title);
+      await rename.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(group.getByRole("button", { name: title, exact: true })).toBeVisible();
+      const snapshot = await page.evaluate(() => window.desktop.snapshot());
+      chats.push({
+        id: snapshot.chat.run?.id as string,
+        directory: snapshot.chat.directory as string,
+        title,
+        text,
+      });
+      await composer.fill("Unsent draft must not survive quitting");
+    }
+    const firstGroup = page.getByRole("region", { name: `Project ${projects[0]}`, exact: true });
+    await firstGroup.getByRole("button", { name: "New chat in project-a", exact: true }).click();
+    await expect(firstGroup.getByRole("button", { name: "Chat 2", exact: true })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    const archivedChat = page.locator(".orchestration-chat-page:visible");
+    await expect(
+      archivedChat.getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
+    ).toBeVisible();
+    await expect(archivedChat.getByRole("combobox")).toBeEditable();
+    await archivedChat.getByRole("button", { name: /^Rename chat:/ }).click();
+    const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+    await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
+    await rename.getByRole("button", { name: "Save", exact: true }).click();
+    await firstGroup
+      .getByRole("button", { name: "Actions for Hidden saved chat", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+    await expect(
+      firstGroup.getByRole("button", { name: "Hidden saved chat", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: `More for ${projects[2]}`, exact: true }).click();
+    await page.getByRole("menuitem", { name: "Close project", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
+    ).toHaveCount(0);
+    const before = await page.evaluate(() => window.desktop.snapshot());
+    native.push(...((await nativeMessages()) ?? []));
+    expect(native.map((entry) => entry.message)).toEqual([
+      "Open this project?",
+      "Open this project?",
+      "Open this project?",
+      "Close project?",
+    ]);
+    expect(native.slice(0, 3).map((entry) => entry.detail)).toEqual(projects);
+    expect(native[3]?.detail).toContain(projects[2]);
+    const previousPids = new Set((await processes()).map((entry) => entry.pid));
+    for (const pid of previousPids) owned.add(pid);
+    await application?.close();
+    application = undefined;
+    for (const entry of await processes()) {
+      previousPids.add(entry.pid);
+      owned.add(entry.pid);
+    }
+    await expect.poll(() => [...owned].filter(alive)).toEqual([]);
+
+    page = await launch();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await expect(
+      page.getByRole("region", { name: `Project ${projects[0]}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: `Project ${projects[1]}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
+    ).toHaveCount(0);
+    const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects.slice(0, 2));
+    expect(
+      restored.openProjects?.some((entry) =>
+        before.openProjects?.some((old) => old.id === entry.id),
+      ),
+    ).toBe(false);
+    expect(restored.chat.kind).toBe("relay");
+    expect(restored.chat.run?.turns).toBe(0);
+    expect(restored.chats.find((entry) => entry.title === "Hidden saved chat")?.archived).toBe(
+      true,
+    );
+    expect(
+      restored.chats
+        .filter((entry) => entry.kind === "project")
+        .every((entry) => entry.restored && entry.workers?.length === 0 && entry.updates.paused),
+    ).toBe(true);
+    for (const saved of chats.slice(0, 2)) {
+      await page.locator(`[id="conversation-${saved.id}"]`).click();
+      const chat = page.locator(".orchestration-chat-page:visible");
+      await expect(chat.locator(".event.prompt:not(.automatic) pre")).toHaveText(saved.text);
+      await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
+      await expect(
+        chat.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+      ).toHaveValue("");
+      expect((await page.evaluate(() => window.desktop.snapshot())).chat.restored).toBe(true);
+    }
+    const newProcesses = (await processes()).filter((entry) => !previousPids.has(entry.pid));
+    expect(newProcesses.some((entry) => chats.some((saved) => saved.directory === entry.cwd))).toBe(
+      false,
+    );
+    for (const saved of chats) {
+      const transcript = await readFile(
+        join(saved.directory, ".code60/runs", saved.id, "events.jsonl"),
+        "utf8",
+      );
+      expect(transcript).toContain(saved.text);
+    }
+    for (const before of baseline) {
+      expect(git(before.repo, "rev-parse", "HEAD")).toBe(before.head);
+      expect(await readFile(join(before.repo, ".git/index"))).toEqual(before.index);
+      expect(git(before.repo, "worktree", "list", "--porcelain")).toBe(before.worktrees);
+      expect(await readFile(join(before.repo, "evidence.txt"), "utf8")).toBe("unchanged project\n");
+    }
+    expect(await nativeMessages()).toEqual([]); // Restore never asks to open or execute again.
+    await test.info().attach("reopen-checkpoints", {
+      body: JSON.stringify({
+        projects: restored.openProjects,
+        chats: chats.map(({ id, title }) => ({ id, title })),
+        newProcesses,
+        native,
+      }),
+      contentType: "application/json",
+    });
+  } finally {
+    try {
+      for (const entry of await processes()) owned.add(entry.pid);
+    } finally {
+      if (application) await application.close();
+    }
+    for (const entry of await processes()) owned.add(entry.pid);
+    await expect.poll(() => [...owned].filter(alive), { timeout: 10_000 }).toEqual([]);
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});

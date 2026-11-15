@@ -33,8 +33,14 @@ workers or replaying feedback. Human **Accept** authorizes the displayed plan
 revision and target assignments, not later target changes.
 
 Project accordions retain independent chats, drafts and file views. Project chats
-remain database-backed and bound to their project. Navigation and database changes
-do not retarget Relay. Closing a project stops its own work, not Relay workers in
+remain database-backed and bound to their project. Reopening Code60 restores the
+open projects and saved chats for the connected database, starting on Relay.
+Chat titles, archive state and history survive; unsent drafts do not. Restored
+project chats stay stopped until you explicitly send or continue. **Close project**
+removes a project from the next restore; quitting the app preserves the open set.
+Unavailable folders produce a warning without deleting their saved chats.
+Navigation and database changes do not retarget Relay. Closing a project stops
+its own work, not Relay workers in
 that folder. **Stop workers in folder** includes those Relay workers; **Stop all**
 stops every owner. Database-wide legacy chat files are not loaded or migrated;
 existing files remain untouched.

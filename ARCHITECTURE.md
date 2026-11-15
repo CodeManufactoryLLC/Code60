@@ -157,6 +157,19 @@ features, resource bounds and remaining native-platform validation.
   that folder. Folder stop explicitly includes them and pauses replacement for
   that task/target; other targets continue. Stop all pauses automation and stops
   orchestrator turns and all workers.
+- Desktop also persists the ordered open-project set per database in private,
+  versioned `.code60_workspace/sessions/<database-path-sha256>.json` metadata.
+  Validated bounded reads and serialized atomic writes retain at most 64 canonical
+  paths, never runtime IDs or execution authority. Successful database connection
+  reopens those projects with fresh runtime identities and stopped saved chats,
+  leaving Relay selected. Transcript events load only on explicit chat/project
+  selection. Successful opens and confirmed closes save the set; navigation and
+  shutdown teardown do not. Missing folders warn without blocking other restores
+  or recreating folders. Unavailable entries retain their order and capacity
+  across unrelated opens/closes until that saved project is explicitly closed.
+  Invalid session files remain untouched. Chat titles,
+  archive state and provenance retain their existing storage; unsent drafts are
+  not restored. No workers, gateways, pending plans or uncertain work resume.
 - Database replacement disposes database-owned work only. Database tool requests
   carry an instance epoch and reject stale requests. Shutdown, renderer crash,
   signals and updates attempt cleanup for every owner, collect failures and retain
