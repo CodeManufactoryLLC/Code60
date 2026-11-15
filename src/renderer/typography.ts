@@ -206,7 +206,6 @@ export function textStyleProperties(styles: TextStyles): Record<string, string |
             ? "none"
             : undefined;
   }
-  properties["--human-prompt-weight"] = String(resolveText(styles, "humanMessages").weight);
   properties["--page-title-space-size"] = `${styles.pageTitles.size ?? 64}px`;
   // Navigation has its own default size, but still honors an explicit Button Text size.
   properties["--nav-font-size"] = `${styles.buttons.size ?? 15}px`;

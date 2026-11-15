@@ -220,9 +220,16 @@ function PageTabList({
   const projectForConversation = (id: string | undefined) =>
     conversationProject(id, openProjects ?? [], chats, runs);
   const selectedConversationProject = projectForConversation(selectedId);
+  const previousSelection = useRef({ id: selectedId, serial: navigationSerial });
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reveal explicit destinations, not unrelated tab-object replacements or Relay navigation.
   useLayoutEffect(() => {
-    if (tabs.active === "chat" && selectedConversationProject) setChatExpanded(true);
+    const previous = previousSelection.current;
+    previousSelection.current = { id: selectedId, serial: navigationSerial };
+    const changed = previous.id !== selectedId || previous.serial !== navigationSerial;
+    const matches =
+      navigation.destination?.kind !== "conversation" || navigation.destination.id === selectedId;
+    if (changed && matches && tabs.active === "chat" && selectedConversationProject)
+      setChatExpanded(true);
   }, [selectedId, navigationSerial, selectedConversationProject]);
   useLayoutEffect(() => {
     if (tabs.active === "project") setChatExpanded(true);
@@ -616,6 +623,7 @@ function PageTabList({
           database={database}
           eventsByRun={eventsByRun}
           open={tabs.active === "chat"}
+          conversationVisible={tabs.active === "chat" && !navigation.projectPending}
           pending={chatPending}
           onSelect={selectConversation}
           onKeyDown={(event) => {
@@ -752,6 +760,7 @@ function PageTabList({
             database={database}
             eventsByRun={eventsByRun}
             open={tabs.active === "chat"}
+            conversationVisible={tabs.active === "chat" && !navigation.projectPending}
             pending={chatPending}
             onSelect={selectConversation}
           />
@@ -766,6 +775,7 @@ function PageTabList({
             database={database}
             eventsByRun={eventsByRun}
             open={tabs.active === "chat"}
+            conversationVisible={tabs.active === "chat" && !navigation.projectPending}
             pending={chatPending}
             onSelect={selectConversation}
           />

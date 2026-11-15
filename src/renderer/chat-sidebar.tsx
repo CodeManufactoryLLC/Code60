@@ -18,6 +18,7 @@ export function ChatSidebar({
   database,
   eventsByRun,
   open,
+  conversationVisible = open,
   pending,
   onSelect,
   onAction,
@@ -33,6 +34,7 @@ export function ChatSidebar({
   database: string | null;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
   open: boolean;
+  conversationVisible?: boolean;
   pending: boolean;
   onSelect(id: string): void;
   onAction?(request: OrchestrationChatAction): Promise<boolean>;
@@ -117,7 +119,7 @@ export function ChatSidebar({
     });
   }, [selectedId, parentId, open, navigationSerial]);
   useLayoutEffect(() => {
-    if (!selectedMarkerKey || !open || !selectedId) return;
+    if (!selectedMarkerKey || !conversationVisible || !selectedId) return;
     const key = selectedMarkerKey;
     const read =
       selectedReplies ??
@@ -131,7 +133,7 @@ export function ChatSidebar({
     } catch {
       // Keep in-memory read state when browser storage is unavailable.
     }
-  }, [selectedMarkerKey, open, selectedId, replies, selectedReplies]);
+  }, [selectedMarkerKey, conversationVisible, selectedId, replies, selectedReplies]);
 
   const chatById = new Map(chats.map((chat) => [conversationId(chat), chat]));
   const runById = new Map(runs.map((run) => [run.record.id, run]));

@@ -99,7 +99,6 @@
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
   --chat-neutral: var(--surface);
-  --sidebar-bg: var(--surface);
   --composer-bg: #f3f3f3;
   --composer-focus-bg: #e9e9e9;
   --user-bubble: #d8e8fa;
@@ -149,7 +148,6 @@
   --disabled-stripe: transparent;
   --chat-bg: #252525;
   --chat-neutral: var(--surface);
-  --sidebar-bg: var(--surface);
   --composer-bg: #303030;
   --composer-focus-bg: #383838;
   --user-bubble: #1b3a5c;

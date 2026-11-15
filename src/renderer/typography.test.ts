@@ -41,7 +41,6 @@ describe("IBM Plex Light", () => {
       "--title-size": "16px",
       "--page-title-space-size": "64px",
       "--human-weight": "300",
-      "--human-prompt-weight": "300",
     });
     for (const size of [8, 16, 32, 64]) {
       const styles = parseTextStyles(
@@ -51,7 +50,6 @@ describe("IBM Plex Light", () => {
         "--title-size": `${size}px`,
         "--page-title-space-size": `${size}px`,
         "--human-weight": "600",
-        "--human-prompt-weight": "600",
       });
     }
   });

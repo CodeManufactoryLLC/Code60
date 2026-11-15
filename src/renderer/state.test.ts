@@ -267,7 +267,7 @@ describe("desktop stream state", () => {
       "--card-font": fontFamily("ibm-plex-sans"),
       "--card-size": "22px",
       "--card-weight": "300",
-      "--human-prompt-weight": "300",
+      "--human-weight": "300",
       "--page-title-space-size": "64px",
     });
     expect(parseTextStyles(JSON.stringify(defaultTextStyles))).toEqual(defaultTextStyles);

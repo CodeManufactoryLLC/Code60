@@ -35,6 +35,7 @@ it("keeps project controls centered with one shared row fill and a corner remova
   expect(rule("overlays", ".modal-heading")).toContain("border-bottom: 1px solid");
   expect(rule("overlays", ".project-open-folder")).toContain("align-self: center");
   expect(rule("overlays", ".project-open-folder")).toContain("margin-inline: auto");
+  expect(rule("overlays", ".project-dialog")).toContain("scrollbar-gutter: stable both-edges");
   expect(rule("overlays", ".project-row")).toContain("position: relative");
   const remove = rule("overlays", ".project-remove");
   for (const value of ["position: absolute", "top: 4px", "right: 4px"])
@@ -46,6 +47,10 @@ it("keeps project controls centered with one shared row fill and a corner remova
   expect(rule("overlays", ".project-row > .project-item:not(:disabled)")).toContain(
     "background: transparent",
   );
+  expect(rule("overlays", ".project-row > .project-item:not(:disabled)")).toContain(
+    "color: var(--text)",
+  );
+  expect(rule("chat", ".activity-name")).toContain("font-weight: var(--text-weight, 300)");
 });
 
 it("keeps Relay and every outer page in the content track without feature-sheet overrides", () => {
@@ -243,16 +248,15 @@ it("shares normal card geometry with thick dashed creation cards and a centered 
 });
 
 it("keeps the sidebar on the app surface and gray composers independent in both palettes", () => {
-  expect(rule("navigation", ".sidebar")).toContain("background: var(--sidebar-bg)");
-  expect(sheet("tokens").match(/--sidebar-bg: var\(--surface\);/g)).toHaveLength(2);
-  expect(rule("navigation", ".sidebar")).toContain("--control-fill: var(--sidebar-bg)");
+  expect(rule("navigation", ".sidebar")).toContain("background: var(--surface)");
+  expect(rule("navigation", ".sidebar")).toContain("--control-fill: var(--surface)");
   expect(rule("chat", ".composer")).toContain("background: var(--composer-bg)");
   expect(rule("chat", ".composer")).toContain("border: 0");
   expect(rule("chat", ".composer")).toContain("padding: 1px");
   expect(rule("chat", ".composer:focus-within")).toContain("background: var(--composer-focus-bg)");
   expect(rule("chat", ".composer:focus-within")).not.toContain("border-color:");
   expect(rule("chat", ".orchestration-chat-body .composer")).not.toContain("border:");
-  for (const token of ["--sidebar-bg", "--composer-bg", "--composer-focus-bg"])
+  for (const token of ["--composer-bg", "--composer-focus-bg"])
     expect(sheet("tokens").match(new RegExp(`${token}:`, "g"))).toHaveLength(2);
   expect(sheet("accessibility")).toContain("outline: 2px solid Highlight");
 });

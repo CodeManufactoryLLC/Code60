@@ -89,6 +89,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(37, 37, 37)",
     );
     await expect(page.locator("body")).toHaveCSS("font-weight", "300");
+    await page.locator("#tab-home").scrollIntoViewIfNeeded();
     await page.mouse.move(1000, 500);
     const geometry = await page.evaluate(() => {
       const toggle = document.querySelector(".sidebar-toggle");

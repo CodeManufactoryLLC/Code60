@@ -1349,7 +1349,7 @@ test("desktop: Automation Studio excludes service controls and adapts its editor
       await expect(heading).toHaveJSProperty("tagName", "H2");
       await expect(heading.locator("svg, img")).toHaveCount(0);
       const geometry = await heading.evaluate((element) => {
-        const pageTitle = element.closest(".automations-page")?.querySelector("h1");
+        const pageTitle = document.querySelector(".workspace-breadcrumbs h1");
         if (!pageTitle) throw new Error("Missing Automation Studio page heading");
         return {
           card: Number.parseFloat(getComputedStyle(element).fontSize),
@@ -1357,7 +1357,7 @@ test("desktop: Automation Studio excludes service controls and adapts its editor
         };
       });
       expect(geometry.card).toBe(22);
-      expect(geometry.card).toBeLessThan(geometry.page);
+      expect(geometry.page).toBe(16);
     }
     await expect(panel).not.toContainText("Runs continue after you quit Code60.");
     await expect(panel).not.toContainText("A finished run means the agent turn ended");
@@ -1510,9 +1510,12 @@ test("desktop: breadcrumb titles navigate parents and preserve settings with key
       );
       await page.getByRole("button", { name: "Relay", exact: true }).click();
       const relay = page.locator("#panel-chat .orchestration-chat-page:visible");
-      expect(
-        await titleAppearance(page.locator(".workspace-breadcrumbs h1 .page-title-text")),
-      ).toEqual(expected);
+      await expect(
+        page.locator(".workspace-breadcrumbs").getByRole("heading", { name: "Relay", exact: true }),
+      ).toBeVisible();
+      await expect
+        .poll(() => titleAppearance(page.locator(".workspace-breadcrumbs h1 .page-title-text")))
+        .toEqual(expected);
       await expect(relay.getByRole("button", { name: "Rename chat: Relay" })).toHaveCount(0);
       const breadcrumbs = page
         .locator(".workspace-breadcrumbs")
@@ -1620,6 +1623,14 @@ test("desktop: page fades preserve drafts and respect reduced motion", async () 
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
     await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+    await page
+      .locator(".splash")
+      .getByRole("button", { name: "Connect to database", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await composer.fill("Retain this draft through page fades");
@@ -2387,17 +2398,20 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
       ]) {
         await selectSettingsPage(page, label);
         const title = page.locator(".workspace-breadcrumbs .page-breadcrumbs:visible").first();
-        expect((await title.boundingBox())?.y).toBe(strip.height);
+        await expect.poll(async () => (await title.boundingBox())?.y).toBe(strip.height);
       }
       await page.locator("#tab-settings").click();
-      expect(
-        (
-          await page
-            .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
-            .first()
-            .boundingBox()
-        )?.y,
-      ).toBe(strip.height);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page
+                .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
+                .first()
+                .boundingBox()
+            )?.y,
+        )
+        .toBe(strip.height);
       for (const [id, control] of [
         ["advanced", "#advanced-toggle"],
         ["experiments", "#experiments-toggle"],
@@ -2407,27 +2421,33 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
       ] as const) {
         await page.locator(control).click();
         await expect(page.locator(`#panel-${id}`)).toBeVisible();
-        expect(
-          (
-            await page
-              .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
-              .first()
-              .boundingBox()
-          )?.y,
-        ).toBe(strip.height);
+        await expect
+          .poll(
+            async () =>
+              (
+                await page
+                  .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
+                  .first()
+                  .boundingBox()
+              )?.y,
+          )
+          .toBe(strip.height);
       }
       await page.getByRole("button", { name: "Relay", exact: true }).click();
       await expect(
         page.locator(".workspace-breadcrumbs .page-breadcrumbs:visible").first(),
       ).toBeVisible();
-      expect(
-        (
-          await page
-            .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
-            .first()
-            .boundingBox()
-        )?.y,
-      ).toBe(strip.height);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page
+                .locator(".workspace-breadcrumbs .page-breadcrumbs:visible")
+                .first()
+                .boundingBox()
+            )?.y,
+        )
+        .toBe(strip.height);
     }
     await selectSidebarPage(page, "Home");
     await application.evaluate(({ BrowserWindow }) =>
@@ -2822,7 +2842,7 @@ test("desktop: charcoal Dark and System retain blue accents and preserve Light t
     await home.getByRole("button", { name: "Open Relay", exact: true }).click();
     await expect(page.locator(".composer:visible")).toHaveCSS(
       "background-color",
-      "rgb(37, 37, 37)",
+      "rgb(48, 48, 48)",
     );
     await selectSettingsPage(page, "Appearance");
     await theme.selectOption("light");
@@ -3870,7 +3890,9 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
     await projectName.locator(".project-chat-title").click();
     const projectHome = page.locator("#panel-project .home-page:visible");
     await expect(projectHome).toBeVisible();
-    await expect(projectHome.locator(".home-card")).toHaveCount(2);
+    await expect(projectHome.locator(".home-card")).toHaveCount(3);
+    await expect(projectHome.locator(".home-card").first()).toHaveClass(/home-card-create/);
+    await expect(projectHome.locator(".home-card:not(.home-card-create)")).toHaveCount(2);
     for (const worker of beforeClose.runs)
       await expect(projectHome.locator(`[data-feature="${worker.record.id}"]`)).toHaveCount(0);
     await projectName.press("ArrowLeft");
@@ -6847,7 +6869,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       );
       await expect(chatPopup.locator(".composer")).toHaveCSS(
         "background-color",
-        dark ? "rgb(37, 37, 37)" : "rgb(255, 255, 255)",
+        dark ? "rgb(48, 48, 48)" : "rgb(243, 243, 243)",
       );
       await expectComposerShadow(chatPopup.locator(".composer"));
       await expect(chatPopup.locator(".composer")).toHaveCSS("border-top-width", "0px");
@@ -10322,7 +10344,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       };
       return [rect(".sidebar"), rect(".chat-sidebar"), rect("#panel-chat")];
     });
-    expect(columns[0]?.right).toBeGreaterThan(columns[1]?.right ?? 0);
+    expect(columns[0]?.right).toBe(columns[1]?.right);
     expect(columns[1]?.right).toBeLessThan(columns[2]?.left ?? 0);
     await expect(chatList().getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
       "aria-current",
@@ -13179,6 +13201,28 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
     await expectIconAction(remove);
     await expect(remove).toHaveText("");
     await expect(remove.locator("svg")).toHaveCount(1);
+    const originalScheme = await page.locator("html").getAttribute("data-color-scheme");
+    for (const scheme of ["light", "dark"]) {
+      await page.evaluate(
+        (scheme) => document.documentElement.setAttribute("data-color-scheme", scheme),
+        scheme,
+      );
+      const item = projectRow.locator(".project-item");
+      await item.focus();
+      const expectedColor = scheme === "light" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)";
+      await page.keyboard.down("Space");
+      try {
+        await expect(item).toHaveCSS("color", expectedColor);
+      } finally {
+        await page.keyboard.up("Space");
+      }
+      await expect(projectConfirmation).toBeVisible();
+      await projectConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    }
+    await page.evaluate(
+      (scheme) => document.documentElement.setAttribute("data-color-scheme", scheme ?? "light"),
+      originalScheme,
+    );
     const rowBox = await projectRow.boundingBox();
     const removeBox = await remove.boundingBox();
     if (!rowBox || !removeBox) throw new Error("Missing project removal bounds");
@@ -14174,7 +14218,10 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(activityTimer).not.toHaveText("0s");
     await expect(activityTimer).toHaveAttribute("aria-live", "off");
     await expect(status.getByRole("status")).toHaveText("Verifying...");
+    await page.evaluate(() => document.documentElement.style.setProperty("--button-weight", "700"));
+    await expect(status).toHaveCSS("font-weight", "700");
     await expect(status.locator(".activity-name")).toHaveCSS("font-weight", "300");
+    await page.evaluate(() => document.documentElement.style.removeProperty("--button-weight"));
     await expect(status.locator(".activity-name")).toHaveCSS("font-size", "13px");
     await expect(chat.locator(".chat-loader")).toHaveCount(0);
     await expect(page.locator(".chat-sidebar-entry .chat-loader")).toHaveCount(0);

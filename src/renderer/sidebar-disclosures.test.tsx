@@ -146,7 +146,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function tabList() {
+function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   const props: ComponentProps<typeof PageTabBar> = {
     ...chatProps,
     tabs: { ...initialTabs, active: "settings" },
@@ -165,6 +165,7 @@ function tabList() {
       projectPending: false,
       error: "",
     },
+    ...overrides,
   };
   const shell = mount(PageTabBar, props);
   const list = find(
@@ -270,7 +271,7 @@ it("closes Data Viewer when Apps closes, including when invoked from a child", (
 });
 
 it("does not reveal Projects for Relay while its selection snapshot is delayed", () => {
-  const view = tabList();
+  const view = tabList({ selectedId: "worker" });
   press(view.tree(), "tab-chat", "ArrowLeft");
   view.render();
   const navigation = {
@@ -283,7 +284,8 @@ it("does not reveal Projects for Relay while its selection snapshot is delayed",
     error: "",
     destination: { kind: "conversation", id: "relay" } as const,
   };
-  view.render({ tabs: { ...initialTabs, active: "chat" }, navigation });
+  view.render({ tabs: { ...initialTabs, active: "home" } });
+  view.render({ tabs: { ...initialTabs, active: "chat" }, selectedId: "chat", navigation });
   expect(byId(view.tree(), "chat-pages").props.hidden).toBe(true);
   view.render({ selectedId: "relay" });
   expect(byId(view.tree(), "chat-pages").props.hidden).toBe(true);
@@ -294,9 +296,57 @@ it("does not reveal Projects for Relay while its selection snapshot is delayed",
   expect(byId(view.tree(), "chat-pages").props.hidden).toBe(false);
 });
 
+it("preserves a saved Projects collapse when a project chat mounts after reload", () => {
+  vi.stubGlobal("localStorage", { getItem: () => "false", setItem: vi.fn() });
+  const view = tabList({ tabs: { ...initialTabs, active: "chat" } });
+  expect(byId(view.tree(), "chat-pages").props.hidden).toBe(true);
+});
+
+it("keeps the row selected without marking hidden streaming replies read during project selection", () => {
+  const view = tabList({ tabs: { ...initialTabs, active: "chat" } });
+  view.render({
+    navigation: {
+      open: vi.fn(async () => true),
+      chatAction: vi.fn(async () => true),
+      projectAction: vi.fn(async () => true),
+      invalidate: vi.fn(),
+      pending: false,
+      projectPending: true,
+      error: "",
+    },
+  });
+  const hidden = find(view.tree(), (element) => element.type === ProjectChatSidebar)
+    .props as ComponentProps<typeof ProjectChatSidebar>;
+  expect(hidden.open).toBe(true);
+  expect(hidden.conversationVisible).toBe(false);
+  expect(
+    find(
+      view.tree(),
+      (element) => element.type === ChatSidebar && element.props.relayNavigation === true,
+    ).props.conversationVisible,
+  ).toBe(false);
+  const child = mount(ChatSidebar, {
+    ...hidden,
+    chats: chats.map((chat) =>
+      chat.run ? ({ ...chat, replies: { count: 1 } } as OrchestrationChat) : chat,
+    ),
+  });
+  expect(byId(child.tree(), "conversation-chat").props["aria-current"]).toBe("true");
+  expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  child.render({
+    chats: chats.map((chat) =>
+      chat.run ? ({ ...chat, replies: { count: 2 } } as OrchestrationChat) : chat,
+    ),
+  });
+  expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  child.render({ conversationVisible: true });
+  expect(sessionStorage.setItem).toHaveBeenLastCalledWith(expect.any(String), "2");
+});
+
 it("closes all project accordions on ancestor collapse and does not reopen them for Relay", () => {
   const view = mount(ProjectChatSidebar, {
     ...chatProps,
+    selectedId: "worker",
     projects: [project],
     selectedProjectId: "a",
     homeProjectId: "a" as string | undefined,
@@ -307,7 +357,14 @@ it("closes all project accordions on ancestor collapse and does not reopen them 
   });
   view.render({ ancestorsExpanded: false });
   expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ homeProjectId: undefined, destination: { kind: "conversation", id: "relay" } });
+  view.render({ homeProjectId: undefined, open: false });
+  view.render({
+    selectedId: "chat",
+    open: true,
+    destination: { kind: "conversation", id: "relay" },
+    ancestorsExpanded: true,
+  });
+  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
   view.render({ selectedId: "relay", ancestorsExpanded: true });
   expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
   view.render({ destination: { kind: "conversation", id: "chat" } });

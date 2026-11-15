@@ -56,7 +56,9 @@ export function ProjectChatSidebar({
     const previous = previousSelection.current;
     previousSelection.current = { id: props.selectedId, serial: props.navigationSerial };
     const changed = previous.id !== props.selectedId || previous.serial !== props.navigationSerial;
-    const reveal = homeProjectId ?? (props.open && changed ? selectedProject : undefined);
+    const matches = destination?.kind !== "conversation" || destination.id === props.selectedId;
+    const reveal =
+      homeProjectId ?? (props.open && changed && matches ? selectedProject : undefined);
     if (reveal)
       setExpanded((current) => (current.has(reveal) ? current : new Set([...current, reveal])));
   }, [selectedProject, props.selectedId, props.navigationSerial, homeProjectId]);

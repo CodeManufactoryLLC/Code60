@@ -256,7 +256,7 @@
   font-family: var(--human-font, var(--font));
   --letter-spacing: var(--human-spacing, normal);
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-prompt-weight, 300);
+  font-weight: var(--human-weight, 300);
   text-transform: var(--human-case, none);
   line-height: 1.65;
   color: var(--human-text);
@@ -1007,7 +1007,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--text-size, 13px);
-  font-weight: inherit;
+  font-weight: var(--text-weight, 300);
   font-variant-numeric: tabular-nums;
   text-align: left;
   overflow-wrap: anywhere;

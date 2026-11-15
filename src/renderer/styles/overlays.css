@@ -135,6 +135,7 @@
 
 .project-dialog {
   height: min(600px, calc(100dvh - 32px));
+  scrollbar-gutter: stable both-edges;
 }
 
 .project-dialog[open] {
@@ -371,6 +372,7 @@ label.check-label {
 
 .project-row > .project-item:not(:disabled) {
   background: transparent;
+  color: var(--text);
 }
 
 .project-item {

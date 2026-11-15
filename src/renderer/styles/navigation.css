@@ -25,8 +25,8 @@
   --nav-row-height: max(40px, calc(1.25 * var(--button-size) + 8px));
   --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
-  --control-fill: var(--sidebar-bg);
-  --disabled-fill: var(--sidebar-bg);
+  --control-fill: var(--surface);
+  --disabled-fill: var(--surface);
   grid-column: 1;
   grid-row: 2;
   align-self: stretch;
@@ -34,7 +34,7 @@
   margin-bottom: var(--page-margin);
   border: 0;
   border-radius: 0;
-  background: var(--sidebar-bg);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
