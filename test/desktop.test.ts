@@ -482,6 +482,21 @@ describe("retained project runtimes", () => {
     expect(controller.snapshot().chat.kind).toBe("relay");
     expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
     await expect(fs.stat(a.path)).rejects.toMatchObject({ code: "ENOENT" });
+    const c = await project("available-c");
+    const restoredB = controller.snapshot().openProjects?.find((entry) => entry.path === b.path);
+    if (!restoredB) throw new Error("Missing available project");
+    await controller.projectAction({ type: "close", projectId: restoredB.id });
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, c.path]);
+    await controller.shutdown(true);
+    await fs.rename(`${a.path}-moved`, a.path);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([
+      a.path,
+      c.path,
+    ]);
+    // Reopening an unavailable saved path must not duplicate or reorder its entry.
+    await controller.open(a.path);
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, c.path]);
   });
 
   it("leaves invalid saved sessions untouched and warns when later changes cannot be saved", async () => {
@@ -501,6 +516,36 @@ describe("retained project runtimes", () => {
     await project("invalid-session-b");
     expect(controller.snapshot().warnings.join("\n")).toContain("Open projects could not be saved");
     expect(await fs.readFile(file, "utf8")).toBe("{invalid");
+  });
+
+  it("counts unavailable saved projects toward capacity and frees a slot only on confirmed close", async () => {
+    await prepareRelay();
+    const database = controller.snapshot().database as string;
+    const parent = await realOf(directory);
+    const paths = Array.from({ length: 64 }, (_, i) => join(parent, `offline-${i}`));
+    await new ProjectSessionStore(database).save(paths);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const extra = join(directory, "extra-project");
+    await fs.mkdir(extra);
+    await expect(controller.open(extra)).rejects.toThrow("64-project limit");
+    expect(await new ProjectSessionStore(database).load()).toEqual(paths);
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const recovered = paths[0] as string;
+    await fs.mkdir(recovered);
+    await controller.open(recovered);
+    expect(await new ProjectSessionStore(database).load()).toEqual(paths);
+    const owner = controller.snapshot().openProjects?.[0];
+    if (!owner) throw new Error("Missing recovered project");
+    confirm.mockResolvedValueOnce(false);
+    await controller.projectAction({ type: "close", projectId: owner.id });
+    await expect(controller.open(extra)).rejects.toThrow("64-project limit");
+    await controller.projectAction({ type: "close", projectId: owner.id });
+    await controller.open(extra);
+    expect(await new ProjectSessionStore(database).load()).toEqual([
+      ...paths.slice(1),
+      await realOf(extra),
+    ]);
   });
 
   it("publishes a persistence warning even when saving fails after the open was already shown", async () => {

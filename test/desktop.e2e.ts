@@ -11866,6 +11866,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
         { hang: "cancellable" },
       ]),
     );
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await input.press("Enter");
     await expect(input).toHaveValue("");
     await expect(status).toHaveAttribute("data-source", "declared");

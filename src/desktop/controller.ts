@@ -352,6 +352,7 @@ export class DesktopController {
   private readonly relay: RelayService | undefined;
   private relaySelected = true;
   private projectSession: ProjectSessionStore | undefined;
+  private projectSessionPaths: string[] = [];
   private projectSessionWarnings: string[] = [];
   readonly rag: RagService;
   readonly memory: MemoryService;
@@ -3904,6 +3905,7 @@ export class DesktopController {
     let projects: string[];
     try {
       projects = await this.projectSession.load();
+      this.projectSessionPaths = projects;
     } catch {
       this.projectSessionWarnings.push(
         "Saved open projects could not be read safely. Their files were preserved; open projects manually or repair the saved session.",
@@ -3925,13 +3927,7 @@ export class DesktopController {
   private async saveOpenProjects(): Promise<void> {
     if (!this.projectSession) return;
     try {
-      await this.projectSession.save(
-        this.projectHost
-          .all()
-          .flatMap((owner) =>
-            owner.key && owner.state.workspace ? [owner.state.workspace.dir] : [],
-          ),
-      );
+      await this.projectSession.save(this.projectSessionPaths);
     } catch {
       const warning =
         "Open projects could not be saved. Changes may not survive restarting Code60.";
@@ -3951,9 +3947,18 @@ export class DesktopController {
     } catch {
       throw new Error(`This folder is not available: ${directory}`);
     }
+    // Keep unavailable saved entries, including their order and capacity reservation.
+    const paths = [
+      ...new Set(this.projectSessionPaths.map((path) => (path === directory ? dir : path))),
+    ];
+    if (!paths.includes(dir)) paths.push(dir);
+    if (paths.length > 64)
+      throw new Error("Close a saved project before opening another (64-project limit)");
     const previous = this.projectHost.find(dir);
     if (previous) {
       if (!restoring) await this.selectProject(previous.id);
+      this.projectSessionPaths = paths;
+      if (!restoring) await this.saveOpenProjects();
       return;
     }
     const workspace = await openWorkspace(this.deps, dir, this.env, true);
@@ -3978,6 +3983,7 @@ export class DesktopController {
       }
       await this.syncProjectChat(false, !restoring);
     });
+    this.projectSessionPaths = paths;
     if (!restoring) {
       try {
         database.record(dir, this.deps.clock.now().toISOString());
@@ -4033,6 +4039,7 @@ export class DesktopController {
         if (request.type === "close") {
           if (this.projectHost.selected === owner) this.relaySelected = true;
           this.projectHost.remove(owner);
+          this.projectSessionPaths = this.projectSessionPaths.filter((path) => path !== folder);
           await this.saveOpenProjects();
         }
         this.poller.invalidate(["history", "files", "worktrees"]);
@@ -4078,6 +4085,7 @@ export class DesktopController {
     this.commands = commands;
     this.database = database;
     this.projectSession = this.relay ? new ProjectSessionStore(database.path) : undefined;
+    this.projectSessionPaths = [];
     this.projectSessionWarnings = [];
     this.rag.select(database.path);
     this.databaseError = null;

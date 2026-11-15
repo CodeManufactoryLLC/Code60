@@ -166,7 +166,9 @@ features, resource bounds and remaining native-platform validation.
   leaving Relay selected. Transcript events load only on explicit chat/project
   selection. Successful opens and confirmed closes save the set; navigation and
   shutdown teardown do not. Missing folders warn without blocking other restores
-  or recreating folders. Invalid session files remain untouched. Chat titles,
+  or recreating folders. Unavailable entries retain their order and capacity
+  across unrelated opens/closes until that saved project is explicitly closed.
+  Invalid session files remain untouched. Chat titles,
   archive state and provenance retain their existing storage; unsent drafts are
   not restored. No workers, gateways, pending plans or uncertain work resume.
 - Database replacement disposes database-owned work only. Database tool requests

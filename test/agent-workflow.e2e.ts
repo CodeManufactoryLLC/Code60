@@ -496,11 +496,19 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await group
         .getByRole("button", { name: `New chat in ${repo.split(/[\\/]/).at(-1)}`, exact: true })
         .click();
+      await expect(group.getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
       const chat = page.locator(".orchestration-chat-page:visible");
+      await expect(
+        chat.getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
+      ).toBeVisible();
       const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
       const text = `Saved exchange ${i + 1}`;
       await expect(composer).toBeEditable();
       await composer.fill(text);
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
       await composer.press("Enter");
       await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
       const title = `Saved project ${i + 1}`;
@@ -520,7 +528,14 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     }
     const firstGroup = page.getByRole("region", { name: `Project ${projects[0]}`, exact: true });
     await firstGroup.getByRole("button", { name: "New chat in project-a", exact: true }).click();
+    await expect(firstGroup.getByRole("button", { name: "Chat 2", exact: true })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
     const archivedChat = page.locator(".orchestration-chat-page:visible");
+    await expect(
+      archivedChat.getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
+    ).toBeVisible();
     await expect(archivedChat.getByRole("combobox")).toBeEditable();
     await archivedChat.getByRole("button", { name: /^Rename chat:/ }).click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
