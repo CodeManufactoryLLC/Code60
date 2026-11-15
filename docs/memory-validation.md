@@ -36,6 +36,48 @@ capacity for output. Numeric defaults are tuning values, not performance promise
 
 ## Scope and provenance
 
+### Inspecting recorded recalls
+
+Every chat's right sidebar offers **Open Memory Recall** beside **Open Files**
+in the empty/New tab view. Reopening selects the existing recall tab; shared
+close, drag, arrow/Home/End, Delete and Alt+Left/Right behavior applies.
+Relay and Relay workers require no database. The tab follows the displayed chat,
+not the selected file root or project.
+
+The renderer groups existing turn-associated `Memory used` notes, validates their
+IDs and requests only those saved records through memory detail. It never calls
+retrieval, a provider or memory browsing. Every available recorded recall turn
+remains reachable through newest-first five-turn pages. The latest dispatched
+turn is marked Current turn, with an explicit zero-hit state that removes the
+previous marker. Preparing or failing to send a request does not advance that
+marker. Malformed notes retain per-turn warnings. Missing prompt boundaries,
+unavailable restored recall annotations and truncated history never reconstruct
+earlier turns. The tab omits introductory and source-history gap copy.
+
+Text, type, scope, conditions and expandable evidence quotes are read-only
+literal text. Saved notes contain IDs, not historical text snapshots: the tab
+shows current saved records, marks records updated after recall and preserves
+unavailable placeholders for forgotten/missing records. Record errors offer
+Retry. Editing and forgetting remain in Data Viewer → Memories.
+
+Reads occur only for the selected, open, active tab in a visible document.
+Existing chat detail updates and payload-free memory notices refresh the view,
+without polling or automatic focus/opening. Four concurrent detail reads are
+shared across owner replacements; a page retains at most 160 record summaries
+and citation quotes, excluding full source bodies and revisions. Full owner keys
+include project/database epochs or Relay generation, conversation, worker/run
+and target/task identity. Navigation/replacement rejects late replies.
+Self-knowledge reports only the recall tab kind/selection, never its contents.
+
+Focused tests cover turn order, repeated recalls, zero hits, malformed/orphan
+notes, current saved records, unavailable/changed records, read bounds, hidden
+cleanup, late results, owner changes and tab state. `test/memory-recall.e2e.ts`
+adds real fake-provider Relay/project/worker journeys, including no-database
+Relay, sidebar interactions, navigation and IDs checked against recorded notes.
+Its provider-boundary dispatch logs and unchanged last-used timestamps check
+that opening recall does not dispatch or retrieve again. Desktop collection is
+not execution; see the local QA report for the disk-pressure execution blocker.
+
 Project IDs pin canonical paths, device, inode and creation identity. Replacing
 a directory does not reuse its knowledge identity. Conversation keys preserve
 logical identity across physical sessions. Worker scope comes from its assignment,

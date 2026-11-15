@@ -61,6 +61,16 @@ pin, delete or explicitly share a memory across projects. Retention can delete
 unpinned memories after 30 days, 90 days or one year; the default is Never.
 Shortening retention requires confirmation.
 
+In Relay, project chats and worker chats, open the right sidebar and choose
+**New tab → Open Memory Recall** (also available in an empty sidebar). The
+closable, reorderable tab shows recorded recalls by turn, newest first, and
+marks the latest dispatched turn, including when it recalled nothing.
+Older recorded turns are paged without rerunning retrieval. Relay and its workers
+need no database. Retrieval never opens or focuses the tab automatically.
+Records show their current saved text, conditions and expandable evidence quotes,
+not historical snapshots. Changed records and unavailable memories are labelled.
+Editing and forgetting stay in Memories.
+
 Storage, embeddings and search are local. Learning sends conversation excerpts
 to the configured provider and may incur usage; there is no daily learning limit.
 Automatic handoff can still summarize a long conversation while Memory is Off,

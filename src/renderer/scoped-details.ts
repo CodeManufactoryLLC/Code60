@@ -106,7 +106,11 @@ function withRunDetails(summaries: DesktopRun[], details: DesktopRun[]): Desktop
   return summaries.map((run) => {
     const detail = byId.get(run.record.id);
     return detail
-      ? { ...run, record: { ...run.record, firstPrompt: detail.record.firstPrompt } }
+      ? {
+          ...run,
+          historyIncomplete: detail.historyIncomplete === true,
+          record: { ...run.record, firstPrompt: detail.record.firstPrompt },
+        }
       : run;
   });
 }

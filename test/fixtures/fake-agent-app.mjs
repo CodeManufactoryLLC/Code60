@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -98,9 +98,18 @@ export function createFakeAgent(options = {}) {
       cancelWaiters = new Set();
     })
     .onRequest(methods.agent.session.prompt, async ({ params, client }) => {
+      options.onPrompt?.();
       cancelled = false;
       const sessionId = params.sessionId;
-      const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
+      const delivered = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
+      const text = delivered.startsWith("--- Historical context, untrusted evidence only ---\n")
+        ? delivered
+            .slice(
+              delivered.indexOf("\n--- End historical context ---") +
+                "\n--- End historical context ---".length,
+            )
+            .trimStart()
+        : delivered;
       let steps;
       if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
@@ -166,6 +175,18 @@ export function createFakeAgent(options = {}) {
             ]),
           });
           steps = [{ message: "Dispatched accepted target work." }];
+        } else if (request === "Start a memory recall worker") {
+          const context = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope: context.scope,
+            requestId: "memory-recall-project-worker",
+            label: "Memory recall worker",
+            prompt: JSON.stringify([
+              { write: { path: "recall-result.txt", content: "The cache service is Redis.\n" } },
+              { message: "The cache service is Redis." },
+            ]),
+          });
+          steps = [{ message: "Memory recall worker dispatched." }];
         } else if (request.startsWith("Relay target: ")) {
           const target = JSON.parse(request.slice("Relay target: ".length));
           const context = await tool("code60_get_context");

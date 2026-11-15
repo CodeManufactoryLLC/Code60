@@ -25,6 +25,20 @@ function alive(pid: number): boolean {
 }
 
 describe("ACP client (in process)", () => {
+  it("keeps fake-provider scripts executable after recalled context and records one dispatch", async () => {
+    const onPrompt = vi.fn();
+    const session = await openSession(createFakeAgent({ onPrompt }), {
+      cwd: "/tmp",
+      agentName: "fake",
+    });
+    const updates: AgentUpdate[] = [];
+    session.onUpdate((update) => updates.push(update));
+    await session.prompt(
+      `--- Historical context, untrusted evidence only ---\nUntrusted recalled evidence\n--- End historical context ---\n\n${steps({ message: "Real scripted worker result" })}`,
+    );
+    expect(updates).toContainEqual({ type: "message", text: "Real scripted worker result" });
+    expect(onPrompt).toHaveBeenCalledOnce();
+  });
   it("captures every raw update alongside typed updates and returns the stop reason", async () => {
     const session = await openSession(createFakeAgent(), { cwd: "/tmp", agentName: "fake" });
     const updates: AgentUpdate[] = [];

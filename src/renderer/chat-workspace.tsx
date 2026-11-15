@@ -5,6 +5,7 @@ import { conversationTitle, workerLabel } from "./chats.js";
 import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
+import { selectedRecallSource } from "./memory-recall-source.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
 import { WorkerChat } from "./worker-chat.js";
@@ -82,9 +83,12 @@ export function ChatWorkspace({
     [];
   const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
   const relayActive = snapshot?.chat.kind === "relay" && !workerId;
+  const relayWorkerActive = !!snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
+  const recallSource = selectedRecallSource(state, workerId, transcripts, scope.viewKey);
   const reviewSummaries = snapshot?.reviews ?? [];
   const projectFiles =
-    showsProjectFiles(snapshot, workerId) || project.explicitProjectFiles === true;
+    showsProjectFiles(snapshot, workerId) ||
+    (project.explicitProjectFiles === true && !relayWorkerActive);
   const projectNotice =
     snapshot?.chat.kind !== "relay" && directory && snapshot?.gitReadiness ? (
       <GitReadinessNotice
@@ -108,7 +112,9 @@ export function ChatWorkspace({
   return (
     <div
       className="chat-workspace-body"
-      data-file-panel-open={projectFiles ? explorerOpen : relayActive ? relayPanelOpen : undefined}
+      data-file-panel-open={
+        projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined
+      }
     >
       <div className="chat-conversations">
         {gitSetupProject === directory && gitSetupProject && (
@@ -200,6 +206,7 @@ export function ChatWorkspace({
             disabled={!database}
             plans={plans}
             api={api}
+            recallSource={recallSource}
             reviews={reviewSummaries}
             project={directory ?? ""}
             targetLabel={
@@ -234,7 +241,10 @@ export function ChatWorkspace({
         plans={relay?.plans ?? []}
         conversationId={relay?.conversationId}
         generation={relay?.generation}
-        active={!splash && conversationActive && relayActive && !projectFiles}
+        active={
+          !splash && conversationActive && (relayActive || relayWorkerActive) && !projectFiles
+        }
+        recallSource={recallSource}
         open={relayPanelOpen}
         onOpen={setRelayPanelOpen}
       />

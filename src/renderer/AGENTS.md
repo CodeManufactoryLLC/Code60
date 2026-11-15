@@ -23,6 +23,15 @@
   guards, never polling. Human edits, pinning, conflict resolution, promotion and
   forgetting must use revision-checked bridge actions; global sharing and
   forgetting remain natively confirmed. Memory used notes belong to their turn.
+- Memory Recall is a read-only shared sidebar tab for the displayed Relay,
+  project or worker chat, including Relay workers without a database. Validate
+  IDs from turn-associated Memory used notes only; never retrieve or browse.
+  Page all available recall turns, retain current/zero-hit turn indicators, and
+  label edited/unavailable records and malformed notes. Omit introductory and
+  source-history gap copy from the tab. Read only while
+  selected and visible, with bounded caches/concurrency, pushed notices and full
+  owner/generation stale-result rejection. No automatic opening or focus changes.
+  Awareness receives only tab metadata, never recalled memory or evidence text.
 
 - Relay is application-owned, database-independent and singleton. Its history,
   draft and selected identity must not inherit a database/project view lifetime.

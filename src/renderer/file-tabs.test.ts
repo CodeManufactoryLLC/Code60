@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest";
 import { emptyFileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 
 describe("Chat file tabs", () => {
+  it("opens, reorders, closes and reopens a single Memory Recall tab without affecting other tabs", () => {
+    let state = updateFileTabs(emptyFileTabs("project"), { type: "browse" });
+    state = updateFileTabs(state, { type: "blank" });
+    const blank = state.active;
+    state = updateFileTabs(state, { type: "recall" });
+    expect(state.active).toBe(blank);
+    expect(state.entries.map((tab) => tab.kind)).toEqual(["explorer", "recall"]);
+    const recall = state.entries[1];
+    if (!recall) throw new Error("Missing recall tab");
+    expect(fileTabLabel(recall, state.entries)).toBe("Memory Recall");
+    state = updateFileTabs(state, { type: "blank" });
+    state = updateFileTabs(state, { type: "recall" });
+    expect(state.entries).toHaveLength(3);
+    expect(state.active).toBe(recall.id);
+    state = updateFileTabs(state, { type: "move", id: recall.id, to: 0 });
+    expect(state.entries[0]).toBe(recall);
+    state = updateFileTabs(state, { type: "close", id: recall.id });
+    expect(state.entries.some((tab) => tab.kind === "recall")).toBe(false);
+    state = updateFileTabs(state, { type: "recall" });
+    expect(state.entries.filter((tab) => tab.kind === "recall")).toHaveLength(1);
+    expect(state.active).not.toBe(recall.id);
+  });
   it("starts empty, converts blanks in place, and allows multiple Explorers", () => {
     const empty = emptyFileTabs("db:project");
     expect(empty.entries).toEqual([]);
