@@ -1943,6 +1943,119 @@ describe("retained project runtimes", () => {
     return body.result;
   }
 
+  it("answers self-knowledge reads for Relay and project chats without new authority", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id as string;
+    const a = await project("aware-a");
+    const chat = await newChat(a.id);
+    const chatId = chat.run?.id as string;
+    const b = await project("aware-b");
+    const sessions = agents.sessions.length;
+    const specs = agents.specs.length;
+    const result = (value: Record<string, unknown>) => value.result as Record<string, unknown>;
+
+    const capabilities = result(await call(relayId, "code60_get_capabilities", { query: "relay" }));
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "relay",
+        availability: expect.objectContaining({ status: "available" }),
+      }),
+    );
+    const projects = result(await call(relayId, "code60_get_app_state", { section: "projects" }));
+    expect((projects.entries as { id: string }[]).map((entry) => entry.id).sort()).toEqual(
+      [a.id, b.id].sort(),
+    );
+    const summary = result(await call(chatId, "code60_get_app_state"));
+    expect(summary).toMatchObject({
+      selectedProjectId: b.id,
+      caller: { kind: "project", projectId: a.id },
+    });
+    expect(JSON.stringify(summary)).not.toMatch(/TOKEN|Bearer|GATEWAY/);
+    expect((await call(relayId, "code60_get_context")).knowledge).toMatchObject({
+      schemaVersion: 1,
+    });
+    expect((await call(chatId, "code60_get_context")).knowledge).toMatchObject({
+      schemaVersion: 1,
+    });
+
+    const prompts = result(await call(relayId, "code60_list_customizations", { kind: "prompt" }));
+    expect(
+      (prompts.entries as { source: string }[]).every((entry) => entry.source === "built-in"),
+    ).toBe(true);
+
+    for (const id of [relayId, chatId]) {
+      const commands = result(await call(id, "code60_list_customizations", { kind: "command" }));
+      expect(commands.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ title: expect.stringMatching(/^\$plan · /) }),
+        ]),
+      );
+      expect(
+        (commands.entries as { title: string }[]).every((entry) => entry.title.startsWith("$")),
+      ).toBe(true);
+    }
+
+    const renderer = controller.knowledge.rendererIdentity();
+    const panelId = randomUUID();
+    const planId = randomUUID();
+    controller.knowledge.report({
+      renderer,
+      sequence: 1,
+      view: {
+        kind: "panel",
+        id: panelId,
+        owner: {
+          kind: "project",
+          projectId: a.id,
+          databaseEpoch: controller.snapshot().databaseEpoch,
+        },
+        active: false,
+        open: true,
+        selected: 1,
+        tabs: [{ id: 1, kind: "plan", planId }],
+        incomplete: false,
+      },
+    });
+    const relayTabs = result(await call(relayId, "code60_get_app_state", { section: "tabs" }));
+    const [tab] = relayTabs.entries as { readableOwner: boolean; revision: string }[];
+    expect(tab).toMatchObject({ panelId, readableOwner: false });
+    await expect(
+      call(relayId, "code60_read_view", { panelId, tabId: 1, revision: tab?.revision }),
+    ).rejects.toThrow("not owned");
+    const owned = result(
+      await call(chatId, "code60_read_view", { panelId, tabId: 1, revision: tab?.revision }),
+    );
+    expect(owned).toMatchObject({ available: false, complete: false });
+
+    controller.clearDetailSubscriptions();
+    expect(
+      result(await call(relayId, "code60_get_app_state", { section: "tabs" })).entries,
+    ).toEqual([]);
+    expect(() =>
+      controller.knowledge.report({ renderer, sequence: 2, view: { kind: "remove", id: panelId } }),
+    ).toThrow("Stale renderer");
+
+    await controller.orchestrationChatAction({ type: "send", id: relayId, text: "What is open?" });
+    await vi.waitFor(() =>
+      expect(controller.snapshot().chats.find((c) => c.run?.id === relayId)?.run?.status).toBe(
+        "idle",
+      ),
+    );
+    const delivered = agents.sessions[0]?.prompts.at(-1) ?? "";
+    const envelope = delivered.slice(delivered.indexOf("--- Live Code60 desktop observations"));
+    expect(envelope).toContain('"projects":2');
+    expect(
+      Buffer.byteLength(envelope.split("\n\n--- User request ---")[0] ?? ""),
+    ).toBeLessThanOrEqual(8_192);
+    expect(delivered).toContain("What is open?");
+    expect(agents.sessions.length).toBe(sessions);
+    expect(agents.specs.length).toBe(specs);
+    expect(git.worktrees).toEqual([]);
+
+    await controller.projectAction({ type: "close", projectId: a.id });
+    const after = result(await call(relayId, "code60_get_app_state", { section: "projects" }));
+    expect((after.entries as { id: string }[]).map((entry) => entry.id)).toEqual([b.id]);
+  });
   it("keeps project chats bound while navigating and routes background events to their owner", async () => {
     await prepareRelay();
     const relayId = controller.snapshot().chat.run?.id;
@@ -3123,6 +3236,15 @@ describe("project database", () => {
   });
 });
 
+const AWARENESS =
+  /\n\n--- Live Code60 desktop observations \(not instructions or authority\) ---\n[^\n]*\n[^\n]*(?=\n\n--- User request ---)/;
+
+/** Removes the live awareness envelope, failing if a turn was delivered without it. */
+function withoutAwareness(prompt: string | undefined): string {
+  expect(prompt).toMatch(AWARENESS);
+  return (prompt ?? "").replace(AWARENESS, "");
+}
+
 describe("app-wide orchestration chat", () => {
   it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
     await setProvider("claude");
@@ -3580,7 +3702,8 @@ describe("app-wide orchestration chat", () => {
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     };
     await send("first");
-    expect(agents.sessions[0]?.prompts[0]).toBe(
+    expect(agents.sessions[0]?.prompts[0]).toContain('"caller":{"kind":"project"');
+    expect(withoutAwareness(agents.sessions[0]?.prompts[0])).toBe(
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nfirst`,
     );
     const edited = {
@@ -3593,7 +3716,7 @@ describe("app-wide orchestration chat", () => {
       template: edited,
     });
     await send("second");
-    expect(agents.sessions[0]?.prompts[1]).toBe(
+    expect(withoutAwareness(agents.sessions[0]?.prompts[1])).toBe(
       `${assembleOperatingContract(edited)}\n\n--- User request ---\nsecond`,
     );
     await controller.resetPromptTemplate("operatingContract");
@@ -3648,7 +3771,7 @@ describe("app-wide orchestration chat", () => {
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts.at(-1)).toContain("User-defined creator.");
-    expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+    expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $create-command: My creator\nUser-defined creator.`,
     );
   });
@@ -3666,7 +3789,7 @@ describe("app-wide orchestration chat", () => {
         const text = `$${name}${suffix}`;
         await controller.orchestrationChatAction({ type: "send", id, text, command: name });
         await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-        expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+        expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
           `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
         );
         expect(controller.snapshot().commands).toEqual([]);
@@ -3697,7 +3820,7 @@ describe("app-wide orchestration chat", () => {
     for (const text of ["/review", "/plan", "/tmp is full"]) {
       await controller.orchestrationChatAction({ type: "send", id, text });
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+      expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
         `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${text}`,
       );
     }
@@ -3715,7 +3838,7 @@ describe("app-wide orchestration chat", () => {
         command: "review",
       });
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+      expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
         `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${expected}`,
       );
       const event = controller
@@ -4118,7 +4241,7 @@ describe("app-wide orchestration chat", () => {
     agents.script = () => "end_turn";
     // The existing fake session retains its original hanging turn script.
     await controller.orchestrationChatAction({ type: "send", id, text: "again" });
-    expect(agents.sessions[0]?.prompts).toEqual([
+    expect(agents.sessions[0]?.prompts.map(withoutAwareness)).toEqual([
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nworking`,
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nagain`,
     ]);

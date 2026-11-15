@@ -742,6 +742,7 @@ it("pages through bounded opaque cursors without replacing first-Send history or
 });
 
 it("saves thousands of streaming chunks without failing or cancelling the conversation", async () => {
+  const expected = Array.from({ length: 3000 }, (_, index) => `chunk ${index} 😀\n`).join("");
   agents.script = (_text, session) => {
     for (let index = 0; index < 3000; index++)
       session.update({ type: "message", text: `chunk ${index} 😀\n` });
@@ -750,19 +751,78 @@ it("saves thousands of streaming chunks without failing or cancelling the conver
   await connect();
   await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Stream" });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const live = relay.snapshot().events;
+  expect(live.some(({ event }) => event.type === "prompt" && event.text === "Stream")).toBe(true);
+  expect(live.flatMap(({ event }) => (event.type === "message" ? [event.text] : [])).join("")).toBe(
+    expected,
+  );
   await relay.shutdown();
   const store = await RelayStore.open(join(root, "state", "code60", "relay"));
   try {
     const history = await store.history();
     expect(history.incomplete).toBe(false);
-    expect(history.messages.at(-1)?.text).toBe(
-      Array.from({ length: 3000 }, (_, index) => `chunk ${index} 😀\n`).join(""),
-    );
+    expect(history.messages.at(-1)?.text).toBe(expected);
   } finally {
     await store.close();
   }
   expect(relay.snapshot().error).toBeNull();
   expect(agents.sessions[0]?.cancels).toBe(0);
+});
+
+it("retains earlier Relay turns while tiny fragments arrive within the character budget", async () => {
+  agents.script = (_text, session) => {
+    for (let index = 0; index < 700; index++) session.update({ type: "message", text: "😀" });
+    return "end_turn";
+  };
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  for (const text of ["First request", "Second request"]) {
+    await relay.action({ type: "send", id, text });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
+  }
+  const events = relay.snapshot().events;
+  expect(events.flatMap(({ event }) => (event.type === "prompt" ? [event.text] : []))).toEqual([
+    "First request",
+    "Second request",
+  ]);
+  expect(
+    events.flatMap(({ event }) => (event.type === "message" ? [event.text] : [])).join(""),
+  ).toBe("😀".repeat(1400));
+});
+
+it("evicts only above one million serialized characters and resets the budget on reconnect", async () => {
+  await connect();
+  const session = required(agents.sessions[0]);
+  session.update({ type: "thought", text: "" });
+  const sample = required(relay.snapshot().events.at(-1));
+  const next = { ...sample, revision: sample.revision + 1 };
+  const text = "x".repeat(1_000_000 - JSON.stringify(next).length);
+  session.update({ type: "thought", text });
+  const full = relay.snapshot().events;
+  expect(full).toHaveLength(1);
+  expect(JSON.stringify(full[0]).length).toBe(1_000_000);
+  expect(full[0]?.event).toMatchObject({ type: "thought", text });
+  session.update({ type: "thought", text: "New tail" });
+  expect(relay.snapshot().events.map(({ event }) => event)).toEqual([
+    expect.objectContaining({ type: "thought", text: "New tail" }),
+  ]);
+  session.update({ type: "thought", text: "😀".repeat(500_001) });
+  expect(relay.snapshot().events).toEqual([]);
+  session.update({ type: "thought", text: '"\\\n😀' });
+  expect(relay.snapshot().events.map(({ event }) => event)).toEqual([
+    expect.objectContaining({ type: "thought", text: '"\\\n😀' }),
+  ]);
+  const reconnectedText = "r".repeat(950_000);
+  session.update({ type: "thought", text: reconnectedText });
+  await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
+  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  required(agents.sessions.at(-1)).update({ type: "thought", text: reconnectedText });
+  expect(
+    relay
+      .snapshot()
+      .events.some(({ event }) => event.type === "thought" && event.text === reconnectedText),
+  ).toBe(true);
 });
 
 it.each(["write", "sync"] as const)(

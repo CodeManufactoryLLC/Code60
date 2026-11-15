@@ -10,6 +10,7 @@ export function RelayPlansPanel({
   api,
   plans,
   conversationId,
+  generation,
   active,
   open,
   onOpen,
@@ -18,6 +19,7 @@ export function RelayPlansPanel({
   api: DesktopApi;
   plans: PlanSummary[];
   conversationId: string | undefined;
+  generation?: number | undefined;
   active: boolean;
   open: boolean;
   onOpen(value: boolean): void;
@@ -81,6 +83,11 @@ export function RelayPlansPanel({
         api={api}
         plans={plans}
         currentChat={conversationId}
+        knowledgeOwner={
+          conversationId && generation !== undefined
+            ? { kind: "relay", conversationId, generation }
+            : undefined
+        }
         changesContent={
           <RelayChanges
             api={api}

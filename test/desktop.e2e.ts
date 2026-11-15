@@ -1207,15 +1207,6 @@ test("desktop: project chat recovers a missed update without losing messages or 
     });
     await composer.fill(text);
     await composer.press("Enter");
-    const sent = await page.evaluate(async () => {
-      const snapshot = await window.desktop.snapshot();
-      return {
-        kind: snapshot.chat.kind,
-        turns: snapshot.chat.run?.turns,
-        relayTurns: snapshot.chats.find((chat) => chat.kind === "relay")?.run?.turns,
-      };
-    });
-    expect(sent).toEqual({ kind: "project", turns: 1, relayTurns: 0 });
     await expect
       .poll(() =>
         application.evaluate(
@@ -1225,6 +1216,15 @@ test("desktop: project chat recovers a missed update without losing messages or 
         ),
       )
       .toBe(true);
+    const sent = await page.evaluate(async () => {
+      const snapshot = await window.desktop.snapshot();
+      return {
+        kind: snapshot.chat.kind,
+        turns: snapshot.chat.run?.turns,
+        relayTurns: snapshot.chats.find((chat) => chat.kind === "relay")?.run?.turns,
+      };
+    });
+    expect(sent).toEqual({ kind: "project", turns: 1, relayTurns: 0 });
     await composer.fill("Draft retained during resynchronization");
     await page.evaluate(() => window.desktop.poll(["config"]));
     await expect(chat.locator(".event.prompt:not(.automatic) pre")).toHaveText(text);
@@ -3352,6 +3352,65 @@ test("desktop: incomplete Relay history remains usable and navigable from a proj
       .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns)
       .toBe(1);
     await expect(chat.locator(".error-banner")).toHaveCount(0);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Relay retains earlier text across tiny streamed replies and renderer reload", async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-stream-")));
+  const project = join(directory, "project");
+  await mkdir(project);
+  try {
+    application = await launch(directory, project, join(directory, "unused.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    const replies = chat.getByRole("log").locator(".event.message .chat-markdown");
+    const first = "a".repeat(900);
+    const second = "b".repeat(900);
+    await expect(composer).toBeEnabled();
+    await composer.fill(
+      JSON.stringify([...Array.from(first, (message) => ({ message })), { hang: "cancellable" }]),
+    );
+    await composer.press("Enter");
+    await expect(replies).toHaveText([first]);
+    await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+    await chat.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    await composer.fill(JSON.stringify(Array.from(second, (message) => ({ message }))));
+    await composer.press("Enter");
+    await expect(replies).toHaveText([first, second]);
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    await page.reload();
+    await expect(composer).toBeEnabled();
+    await expect(replies).toHaveText([first, second]);
+    const reply = chat.getByRole("log").locator(".event.message").first();
+    await reply.hover();
+    await reply.getByRole("button", { name: "Copy message", exact: true }).click();
+    await expect
+      .poll(() => application.evaluate(({ clipboard }) => clipboard.readText()))
+      .toBe(first);
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    const run = snapshot.chat.run;
+    expect(run?.turns).toBe(2);
+    if (!run || !snapshot.chat.directory) throw new Error("Missing live Relay source");
+    const source = await readFile(
+      join(snapshot.chat.directory, ".code60", "runs", run.id, "events.jsonl"),
+      "utf8",
+    );
+    expect(
+      source
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .filter((event) => event.type === "message")
+        .map((event) => event.text)
+        .join(""),
+    ).toBe(first + second);
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

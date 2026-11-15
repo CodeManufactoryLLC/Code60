@@ -22,6 +22,7 @@ import {
   assembleOperatingContract,
   DEFAULT_PROMPT_TEMPLATES,
   isActivityTool,
+  isKnowledgeTool,
   isMcpControlTool,
   parseActivityContextArgs,
   planMarkdown,
@@ -37,7 +38,9 @@ import {
 } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import { ConversationReplies } from "./conversation-replies.js";
+import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
+import type { DesktopKnowledge, KnowledgeCaller } from "./knowledge.js";
 import {
   formatWorkerUpdate,
   parseControlArgs,
@@ -55,6 +58,8 @@ import { type RelaySourceCursor, RelayStore } from "./relay-store.js";
 import { RelayWriter } from "./relay-writer.js";
 import { summarizeRun } from "./run-summary.js";
 import { WorkerEventWindows } from "./worker-event-windows.js";
+
+const LIVE_EVENT_CHARACTER_LIMIT = 1_000_000;
 
 const instructions = [
   assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
@@ -113,7 +118,7 @@ export class RelayService {
   private initialHistory = "";
   private historyPending = false;
   private error: string | null = null;
-  private readonly events: SequencedEvent[] = [];
+  private readonly events = new EventWindow({ characters: LIVE_EVENT_CHARACTER_LIMIT });
   private readonly workerEvents = new WorkerEventWindows();
   private readonly workerReplies = new Map<string, ConversationReplies>();
   private revision = 0;
@@ -129,6 +134,7 @@ export class RelayService {
   private turns: Promise<unknown> = Promise.resolve();
   private closing = false;
   private storageFailed = false;
+  private knowledge: Pick<DesktopKnowledge, "call" | "context" | "hint"> | undefined;
 
   constructor(
     private readonly deps: CoreDeps,
@@ -156,6 +162,30 @@ export class RelayService {
         changed();
       },
     });
+  }
+  attachKnowledge(knowledge: Pick<DesktopKnowledge, "call" | "context" | "hint">): void {
+    this.knowledge = knowledge;
+  }
+  private knowledgeCaller(): KnowledgeCaller {
+    if (!this.store) throw new Error("Relay is unavailable");
+    return { kind: "relay", conversationId: this.store.id, generation: this.generation };
+  }
+  private knowledgeContext(): string {
+    if (!this.knowledge) return instructions;
+    let context: string;
+    try {
+      context = this.knowledge.context(this.knowledgeCaller());
+    } catch {
+      context = "--- Code60 awareness unavailable. Do not infer current UI state or authority. ---";
+    }
+    return `${instructions}\n\n${context}`;
+  }
+  knowledgePlan(planId: string): unknown {
+    const plan = this.plans?.get(planId);
+    return plan && { ...plan, markdown: planMarkdown(plan) };
+  }
+  knowledgeLiveWorkers(): number {
+    return this.task ? this.execution.liveCount(this.task) : 0;
   }
   detailVersion(targetId?: string): number {
     return targetId === undefined
@@ -514,7 +544,7 @@ export class RelayService {
     await stopping;
     if (!current()) return;
     this.error = null;
-    this.events.length = 0;
+    this.events.clear();
     this.replySummary.reset();
     this.workerEvents.clear();
     this.workerReplies.clear();
@@ -635,7 +665,7 @@ export class RelayService {
               ],
             },
           ],
-          promptContext: () => instructions,
+          promptContext: () => this.knowledgeContext(),
         },
       );
       if (!current()) return await retire();
@@ -683,7 +713,7 @@ export class RelayService {
       directory: this.store?.workspace ?? null,
       error: this.error,
       historySaving: this.writer?.failed ? "unavailable" : "available",
-      events: summary ? [] : [...this.events],
+      events: summary ? [] : this.events.read(),
       workers: this.currentWorkers().map((worker) => worker.id),
       workerLabels: Object.fromEntries(
         this.currentWorkers().map((worker) => [
@@ -860,19 +890,7 @@ export class RelayService {
     if (event.type === "turnEnd") void this.writer?.flush();
 
     if (event.type !== "acp") {
-      const entry = { revision: ++this.revision, event };
-      this.events.push(entry);
-      // Original core events and framed source stay on disk. Live buffers are bounded.
-      let size = 0;
-      let from = this.events.length;
-      while (from > 0 && this.events.length - from < 512) {
-        const item = this.events[from - 1];
-        if (!item) break;
-        size += JSON.stringify(item).length;
-        if (size > 256_000) break;
-        from--;
-      }
-      if (from) this.events.splice(0, from);
+      this.events.append({ revision: ++this.revision, event });
     }
     if (event.type === "status" && event.status === "idle") this.scheduleDelivery();
     this.changed();
@@ -894,6 +912,13 @@ export class RelayService {
       directEditing: worker.workspaceMode === "direct",
     };
   }
+  private knowledgeHint(): unknown {
+    try {
+      return this.knowledge?.hint(this.knowledgeCaller());
+    } catch {
+      return { available: false };
+    }
+  }
   private currentWorkers(): ExecutionWorker[] {
     return this.store
       ? this.execution.list({ id: this.store.id, generation: this.generation })
@@ -901,6 +926,10 @@ export class RelayService {
   }
   private async tool(name: string, args: unknown): Promise<unknown> {
     if (this.closing || !this.gateway) throw new Error("Relay gateway is closed");
+    if (isKnowledgeTool(name)) {
+      if (!this.knowledge) throw new Error("Code60 awareness is unavailable");
+      return this.knowledge.call(name, args, this.knowledgeCaller());
+    }
     if (isActivityTool(name)) {
       if (name === "code60_get_activity_context") {
         parseActivityContextArgs(args);
@@ -927,6 +956,7 @@ export class RelayService {
         project: null,
         explicitTargetRequired: true,
         plans: this.plans?.list() ?? [],
+        ...(this.knowledge ? { knowledge: this.knowledgeHint() } : {}),
       };
     }
     if (name === "code60_list_agents") {

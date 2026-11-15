@@ -82,6 +82,8 @@ contextBridge.exposeInMainWorld("desktop", {
   subscribeDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-subscribe", request),
   readDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-read", request),
   setRelayFileContext: (request: unknown) => ipcRenderer.invoke("desktop:relay-files", request),
+  knowledgeRenderer: () => ipcRenderer.invoke("desktop:knowledge-renderer"),
+  reportKnowledge: (request: unknown) => ipcRenderer.invoke("desktop:knowledge-report", request),
   unsubscribeDetails: (request: unknown) =>
     ipcRenderer.invoke("desktop:detail-unsubscribe", request),
   onDetails: (listener: (frame: unknown) => void) => {

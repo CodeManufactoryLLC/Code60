@@ -180,4 +180,9 @@
 - ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
 - Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Persist title/archive state with private chat metadata; archive only hides navigation and never deletes records or stops work.
 
+- DesktopKnowledge is a read model, not authority or storage. Derive facts on demand
+  from existing owners; validate renderer reports by generation, sequence and owner,
+  and clear them on reload. Recheck owners after async reads, bound every response,
+  and keep credentials, environments, drafts, logs and memory records out of it.
+
 - GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.
