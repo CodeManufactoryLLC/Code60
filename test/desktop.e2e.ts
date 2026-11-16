@@ -13787,6 +13787,9 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await setup.getByRole("button", { name: "Return to Chat" }).click();
     await expect(composer).toHaveValue("Draft preserved through setup");
     expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    const git = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
+    const initialHead = git(["rev-parse", "HEAD"]);
+    const initialIndex = await readFile(join(repo, ".git", "index"));
     await composer.fill("Implement validation");
     await composer.press("Enter");
     await expect(page.locator(".conversation-changes-link").last()).toBeVisible();
@@ -13900,11 +13903,19 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await expect(review.getByRole("checkbox", { name: "Side by side" })).toHaveCount(0);
     await expect(review.getByRole("checkbox", { name: "Hide Reviewed" })).toHaveCount(0);
     if (!saved.worktree) throw new Error("Missing worker worktree");
+    expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
     await writeFile(join(saved.worktree, "same.ts"), "export const readonlyMarker = true;\n");
-    await page.evaluate(
-      (identity) => window.desktop.captureReview({ ...identity, requestId: crypto.randomUUID() }),
-      saved.identity,
-    );
+    // Both workers change the same file differently. Preserve their captured evidence,
+    // but reject automatic integration rather than overwrite the checkout.
+    await expect(
+      page.evaluate(
+        (identity) => window.desktop.captureReview({ ...identity, requestId: crypto.randomUUID() }),
+        saved.identity,
+      ),
+    ).rejects.toThrow("Worker changes conflict with current files");
+    expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(initialIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     const captured = await page.evaluate(
       (identity) => window.desktop.readReview({ ...identity, requestId: crypto.randomUUID() }),
       saved.identity,
@@ -14028,6 +14039,8 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     expect(unchanged.comments).toEqual([]);
     expect(unchanged.submissions).toEqual([]);
     expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(initialIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     await page.screenshot({ path: "test-results/chat-review-readonly.png" });
   } finally {
     await application?.close().catch(() => {});
