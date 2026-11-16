@@ -407,7 +407,10 @@ async function configureMcp(version = "first") {
   ];
 }
 
-describe("retained project runtimes", () => {
+// Windows CI completed sibling native-backed save/reopen journeys in up to 8.7 s.
+describe("retained project runtimes", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   it(
     "restores open projects and stopped chats on Relay without starting project providers",
     async () => {
@@ -5131,8 +5134,11 @@ describe("orchestrated workers over ACP", () => {
       await controller.captureReview({ ...identity, requestId: randomUUID() });
       expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
       session(worker)?.endTurn("end_turn");
-      await vi.waitFor(async () =>
-        expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+      // Integration writes several private journals; each is a native helper launch on Windows.
+      await vi.waitFor(
+        async () =>
+          expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+        { timeout: 10_000 },
       );
     });
 

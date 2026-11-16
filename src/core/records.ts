@@ -54,6 +54,14 @@ interface StoreCoordination {
 
 const coordinators = new WeakMap<object, StoreCoordination>();
 
+/** Bounds one coalesced events.jsonl append, including its native helper input. */
+const APPEND_BATCH_CHARACTERS = 1_048_576;
+interface AppendBatch {
+  lines: string[];
+  size: number;
+  next: Promise<void>;
+}
+
 async function canonicalDirectory(fs: RecordFs, dir: string): Promise<string> {
   let parent = resolve(dir);
   if (!fs.realpath) return parent;
@@ -121,12 +129,17 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       directory = undefined;
       throw cause;
     }));
+  const appends = new Map<string, AppendBatch>();
   const temporaryId = randomUUID();
   let tmpCounter = 0;
 
-  const enqueue = async (id: string, op: () => Promise<void>): Promise<void> => {
+  const queueKey = async (id: string): Promise<string> => {
     assertRunId(id);
-    const key = JSON.stringify([await canonical(), id]);
+    return JSON.stringify([await canonical(), id]);
+  };
+  const enqueue = async (id: string, op: () => Promise<void>): Promise<void> =>
+    enqueueKey(await queueKey(id), op);
+  const enqueueKey = (key: string, op: () => Promise<void>): Promise<void> => {
     const next = (queues.get(key) ?? Promise.resolve()).then(op, op);
     queues.set(key, next);
     const release = () => {
@@ -160,13 +173,31 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
         }
       });
     },
-    appendEvent(event) {
+    async appendEvent(event) {
       const line = `${JSON.stringify(event)}\n`;
-      return enqueue(event.runId, async () => {
+      const key = await queueKey(event.runId);
+      const pending = appends.get(key);
+      // Join only a batch that is still the run's last queued write, so events never
+      // overtake an intervening run.json save. Windows private appends launch a native
+      // helper per call; streamed fragments otherwise queue thousands of launches.
+      if (
+        pending &&
+        queues.get(key) === pending.next &&
+        pending.size + line.length <= APPEND_BATCH_CHARACTERS
+      ) {
+        pending.lines.push(line);
+        pending.size += line.length;
+        return pending.next;
+      }
+      const batch: AppendBatch = { lines: [line], size: line.length, next: Promise.resolve() };
+      batch.next = enqueueKey(key, async () => {
+        if (appends.get(key) === batch) appends.delete(key);
         const target = runDir(event.runId);
         await fs.mkdir(target, { recursive: true, mode: 0o700 });
-        await fs.appendFile(join(target, "events.jsonl"), line, { mode: 0o600 });
+        await fs.appendFile(join(target, "events.jsonl"), batch.lines.join(""), { mode: 0o600 });
       });
+      appends.set(key, batch);
+      return batch.next;
     },
     async read(id) {
       let text: string;

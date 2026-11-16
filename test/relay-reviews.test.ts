@@ -265,7 +265,8 @@ it.each(["failed", "cancelled"] as const)(
           ],
         });
       },
-      { timeout: 10_000 },
+      // Windows CI needed up to 16 s for sibling automatic captures.
+      { timeout: 20_000 },
     );
     expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
     expect(await readFile(join(worktree, "file.txt"), "utf8")).toBe("Partial retained result\n");
@@ -810,7 +811,7 @@ it("splits bounded worker groups without moving earlier workers or losing new as
   expect((await reviews.read(first)).get(first).workers).toHaveLength(100);
   expect((await reviews.read(second)).get(second).workers).toHaveLength(2);
   expect((await reviews.index.read()).entries).toHaveLength(2);
-});
+}, 120_000); // 102 private review writes took 32 s on Windows, one helper launch each.
 it("does not restore an assignment when a queued association outlives reset", async () => {
   const first = await worker();
   await reviews.associate(first, 1);

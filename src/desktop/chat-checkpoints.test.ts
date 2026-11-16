@@ -632,4 +632,4 @@ it("recovers a partially written inverse journal without overwriting newer files
   await checkpoints.restore(id, 12);
   expect(await readFile(join(a, "file.txt"), "utf8")).toBe("before\n");
   expect(await readFile(join(b, "file.txt"), "utf8")).toBe("before\n");
-}, 10_000);
+}); // File default: sibling two-target restores took 15-19 s on Windows CI.

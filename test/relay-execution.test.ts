@@ -209,7 +209,7 @@ it("starts real worktrees from saved files without changing HEAD or staging", as
   expect(command("rev-parse", "HEAD")).toBe(head);
   expect(command("diff", "--cached", "--binary")).toBe(staged);
   expect(await readFile(join(target, "tracked.txt"), "utf8")).toBe("later human edits\n");
-});
+}, 30_000); // Three real Windows worktrees took 5.2 s in CI; one sibling snapshot took 4.8 s.
 it.each(["folder", "all"] as const)(
   "aborts pending baseline capture on %s stop before an agent starts",
   async (kind) => {
