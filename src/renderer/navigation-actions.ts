@@ -202,6 +202,7 @@ export function useNavigationActions(context: Context) {
     error: string;
     projectPending: boolean;
     destination?: NavigationTarget;
+    expectedConversation?: NavigationTarget | undefined;
   }>({ pending: false, error: "", projectPending: false });
   const [actions] = useState(() =>
     createNavigationActions(
@@ -218,10 +219,37 @@ export function useNavigationActions(context: Context) {
           }));
       },
       (destination) => {
-        if (mounted.current) setState((previous) => ({ ...previous, destination }));
+        if (mounted.current)
+          setState((previous) => ({
+            ...previous,
+            destination,
+            expectedConversation:
+              destination.kind === "custom-agent" || destination.kind === "conversation"
+                ? destination
+                : undefined,
+          }));
       },
     ),
   );
+  const expected = state.expectedConversation;
+  // IPC completion can precede the app-stream selection update. Never expose the old composer.
+  const conversationPending =
+    expected?.kind === "custom-agent"
+      ? !context.chats.some(
+          (chat) =>
+            chat.customAgentId === expected.id &&
+            conversationId(chat) !== undefined &&
+            conversationId(chat) === context.selectedId,
+        )
+      : expected?.kind === "conversation" && context.selectedId !== expected.id;
+  useEffect(() => {
+    if (expected && !conversationPending)
+      setState((previous) =>
+        previous.expectedConversation === expected
+          ? { ...previous, expectedConversation: undefined }
+          : previous,
+      );
+  }, [expected, conversationPending]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -229,7 +257,7 @@ export function useNavigationActions(context: Context) {
       actions.invalidate();
     };
   }, [actions]);
-  return { ...actions, ...state };
+  return { ...actions, ...state, conversationPending };
 }
 
 export type NavigationActions = ReturnType<typeof useNavigationActions>;

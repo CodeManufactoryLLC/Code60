@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -261,3 +261,65 @@ it("settles an in-flight catalog open on shutdown and releases its exclusive wri
   await vi.waitFor(() => expect(agents.sessions).toHaveLength(count + 1));
   expect(host.error).toBeUndefined();
 });
+
+it("does not connect after Stop all interrupts initial catalog loading", async () => {
+  await host.shutdown();
+  const count = agents.sessions.length;
+  host = create();
+  const syncing = host.sync("claude", config);
+  await host.stopAll();
+  await syncing;
+  expect(agents.sessions).toHaveLength(count);
+  // A subsequent explicit human Open can still use the verified provider.
+  await open(await define("After Stop all"));
+  expect(agents.sessions).toHaveLength(count + 1);
+  expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+});
+
+it("allows graceful shutdown and force escalation to release the catalog together", async () => {
+  await open(await define("A"));
+  await Promise.all([host.shutdown(), host.shutdown(true)]);
+  host = create();
+  await host.sync("claude", config);
+  expect(host.error).toBeUndefined();
+  expect(host.summaries()).toHaveLength(1);
+});
+
+it.each(["corrupt-state", "missing-workspace"])(
+  "rejects an unidentified Open after %s, preserves selection and evidence, and permits explicit retry",
+  async (failure) => {
+    const agent = await define("Recovery Agent");
+    await open(agent);
+    const directory = join(root, "code60/custom-agents", agent.id);
+    const state = join(directory, "state.json");
+    const workspace = join(directory, "workspace");
+    const saved = await readFile(state);
+    await host.shutdown();
+    if (failure === "corrupt-state") await writeFile(state, "{bad");
+    else await rename(workspace, `${workspace}.preserved`);
+    host = create();
+    await host.sync("claude", config);
+    await vi.waitFor(() => expect(host.snapshot().run?.status).toBe("idle"));
+    const selected = host.snapshot().conversationId;
+    const count = agents.sessions.length;
+    await expect(host.manage({ type: "open", id: agent.id })).rejects.toThrow();
+    expect(host.snapshot().conversationId).toBe(selected);
+    expect(host.snapshot().customAgentId).toBeUndefined();
+    expect(host.summaries()).toContainEqual({
+      id: agent.id,
+      name: agent.name,
+      archived: false,
+      revision: 1,
+    });
+    expect(agents.sessions).toHaveLength(count);
+    expect(await readFile(state)).toEqual(
+      failure === "corrupt-state" ? Buffer.from("{bad") : saved,
+    );
+    // Fixture-only explicit storage recovery, never an application repair operation.
+    if (failure === "corrupt-state") await writeFile(state, saved);
+    else await rename(`${workspace}.preserved`, workspace);
+    await open(agent);
+    expect(host.snapshot().customAgentId).toBe(agent.id);
+    expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+  },
+);

@@ -22,7 +22,8 @@ it("bounds custom agent definitions and rejects authority-bearing fields", () =>
     { type: "open", id: "../relay" },
     { type: "archive", id: crypto.randomUUID() },
     { type: "restore", id: crypto.randomUUID(), revision: 0 },
-    { type: "list", command: ["sh"] },
+    { type: "list" },
+    { type: "read", id: crypto.randomUUID(), command: ["sh"] },
   ])
     expect(() => parseCustomAgentRequest(value)).toThrow();
 });

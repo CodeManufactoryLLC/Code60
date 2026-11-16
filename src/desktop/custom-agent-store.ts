@@ -24,6 +24,7 @@ const DEFINITION_LIMIT = 256 * 1024;
 
 /** A compact locked catalog references immutable definitions, read only on demand. */
 export class CustomAgentStore {
+  private closing: Promise<void> | undefined;
   private constructor(
     readonly root: string,
     private state: z.infer<typeof schema>,
@@ -111,6 +112,7 @@ export class CustomAgentStore {
     this.state = next;
   }
   close() {
-    return this.release();
+    this.closing ??= this.release();
+    return this.closing;
   }
 }

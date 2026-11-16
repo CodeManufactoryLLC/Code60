@@ -466,6 +466,9 @@ for (const custom of [false, true]) {
           await editor.getByRole("button", { name: "Save", exact: true }).click();
           await page.getByRole("button", { name: "Open Workflow Agent", exact: true }).click();
         } else await page.getByRole("button", { name: "Relay", exact: true }).click();
+        await expect(
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
+        ).toBeVisible();
         const composer = page
           .locator(".orchestration-chat-page:visible")
           .getByRole("combobox", { name: "Message to orchestrator", exact: true });
@@ -1065,6 +1068,7 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     expect(beforeOpen.database).toBeNull();
     expect(beforeOpen.chats.filter((chat) => chat.customAgentId)).toHaveLength(0);
     await page.getByRole("button", { name: "Open Reviewer", exact: true }).click();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
@@ -1075,11 +1079,22 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     await composer.fill("Reviewer unsent draft");
     await page.getByRole("tab", { name: "Custom Agents", exact: true }).click();
     await page.getByRole("button", { name: "Open Writer", exact: true }).click();
+    await expect(page.getByRole("main", { name: "Writer", exact: true })).toBeVisible();
     await expect(composer).toHaveValue("");
     await checkSidebarIconSpacing(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Writer", exact: true }),
     );
     await composer.fill("Writer unsent draft");
+    await page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Reviewer", exact: true })
+      .click();
+    await expect(composer).toHaveValue("Reviewer unsent draft");
+    await page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Writer", exact: true })
+      .click();
+    await expect(composer).toHaveValue("Writer unsent draft");
     await page
       .locator("#custom-agent-pages")
       .getByRole("button", { name: "Reviewer", exact: true })
@@ -1139,6 +1154,27 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     expect(restarted.runs).toHaveLength(0);
     expect(restarted.database).toBeNull();
     expect(await readFile(statePath)).toEqual(saved);
+    // Fault injection into an unopened fixture owner, not an application repair.
+    await writeFile(statePath, "{bad");
+    await page.getByRole("button", { name: "Open Reviewer", exact: true }).click();
+    await expect(page.locator(".sidebar").getByRole("alert")).not.toHaveText("");
+    await expect(page.locator("#panel-custom-agents")).toBeVisible();
+    const recoveryEntry = page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Reviewer", exact: true });
+    await expect(recoveryEntry).toBeEnabled();
+    expect(
+      (await page.evaluate(() => window.desktop.snapshot())).chat.customAgentId,
+    ).toBeUndefined();
+    expect(await readFile(statePath, "utf8")).toBe("{bad");
+    // Restore only synthetic evidence, then retry using the same visible entry.
+    await writeFile(statePath, saved);
+    await recoveryEntry.click();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+    ).toBeEditable();
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.turns).toBe(0);
   } finally {
     if (application) await application.close();
     await removeDesktopFixture(directory, { recursive: true, force: true });

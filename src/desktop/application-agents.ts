@@ -85,14 +85,15 @@ export class ApplicationAgents {
   }
   async sync(provider: typeof this.provider, config: typeof this.config) {
     if (this.closing) return;
+    const epoch = this.epoch;
+    this.provider = provider;
+    this.config = config;
     try {
       await this.load();
     } catch {
       this.error = "Custom agent storage is unavailable. Existing data was preserved.";
     }
-    if (this.closing) return;
-    this.provider = provider;
-    this.config = config;
+    if (this.closing || epoch !== this.epoch) return;
     await this.each((agent) => agent.sync(provider, config));
   }
   private async each(work: (agent: RelayService) => Promise<unknown>) {
@@ -120,8 +121,6 @@ export class ApplicationAgents {
     let agent: CustomAgent | undefined;
     let conversationId: string | undefined;
     switch (request.type) {
-      case "list":
-        break;
       case "read":
         agent = await store.get(request.id);
         break;
@@ -175,14 +174,22 @@ export class ApplicationAgents {
           await runtime.stopAll();
           throw new Error("Application is stopping");
         }
+        const snapshot = runtime.snapshot(true);
+        conversationId = snapshot.run?.id ?? snapshot.conversationId;
+        if (!conversationId) {
+          await runtime.shutdown();
+          this.agents.delete(request.id);
+          this.notify();
+          throw new Error(
+            snapshot.error ?? "This agent could not connect. Its data was preserved.",
+          );
+        }
         this.selected = runtime;
-        conversationId = runtime.snapshot(true).run?.id ?? runtime.snapshot(true).conversationId;
         break;
       }
     }
     this.notify();
     return {
-      agents: store.list(),
       ...(agent ? { agent } : {}),
       ...(conversationId ? { conversationId } : {}),
     };
@@ -224,8 +231,8 @@ export class ApplicationAgents {
       throw new Error("Worker is unavailable");
     return owner.workerAction(r);
   }
-  workerSnapshot(summary = false, targetId?: string) {
-    const snapshots = this.all().map((agent) => agent.workerSnapshot(summary, targetId));
+  workerSnapshot(summary = false) {
+    const snapshots = this.all().map((agent) => agent.workerSnapshot(summary));
     return {
       runs: snapshots.flatMap((s) => s.runs),
       events: snapshots.flatMap((s) => s.events),
@@ -238,9 +245,9 @@ export class ApplicationAgents {
   stopFolder(cwd: string) {
     return this.each((a) => a.stopFolder(cwd));
   }
-  stopAll(force = false) {
+  stopAll() {
     this.epoch++;
-    return this.each((a) => a.stopAll(force));
+    return this.each((a) => a.stopAll());
   }
   async shutdown(force = false) {
     this.closing = true;

@@ -5204,12 +5204,16 @@ test("desktop: database connection gates splash and workspace controls", async (
     await customAgents.press("ArrowUp");
     await expect(relay).toBeFocused();
     await page.keyboard.press("Tab");
+    await expect(customAgents).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(chatTab).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(card).toBeFocused();
     await card.press("Shift+Tab");
     await expect(chatTab).toBeFocused();
     await chatTab.press("Shift+Tab");
+    await expect(customAgents).toBeFocused();
+    await customAgents.press("Shift+Tab");
     await expect(relay).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(customAgents).toBeFocused();
@@ -6413,15 +6417,27 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(page.locator(".sidebar-toolbar")).toHaveCount(0);
     const homeBounds = await page.locator("#tab-home").boundingBox();
     const relayBounds = await page.locator(".relay-sidebar").boundingBox();
+    const customBounds = await page.locator("#tab-custom-agents").boundingBox();
     const searchBounds = await searchAction.boundingBox();
     const projectsBounds = await page.locator("#tab-chat").boundingBox();
     const navBounds = await page.locator(".sidebar").boundingBox();
-    if (!homeBounds || !relayBounds || !searchBounds || !projectsBounds || !navBounds)
+    if (
+      !homeBounds ||
+      !relayBounds ||
+      !customBounds ||
+      !searchBounds ||
+      !projectsBounds ||
+      !navBounds
+    )
       throw new Error("Sidebar navigation row is missing");
     expect(searchBounds.height).toBe(40);
+    expect(customBounds.height).toBe(40);
     expect(relayBounds.y).toBe(homeBounds.y + homeBounds.height);
-    expect(searchBounds.y).toBe(relayBounds.y + relayBounds.height);
+    expect(customBounds.y).toBe(relayBounds.y + relayBounds.height);
+    expect(searchBounds.y).toBe(customBounds.y + customBounds.height);
     expect(projectsBounds.y).toBe(searchBounds.y + searchBounds.height);
+    expect(customBounds.x).toBe(homeBounds.x);
+    expect(customBounds.width).toBe(homeBounds.width);
     expect(searchBounds.x).toBe(homeBounds.x);
     expect(searchBounds.width).toBe(homeBounds.width);
     const originalScheme = await page.evaluate(() =>
