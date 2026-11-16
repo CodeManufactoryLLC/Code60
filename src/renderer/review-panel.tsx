@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { DesktopApi, Review, ReviewSummary } from "../bridge/index.js";
-import { attachToChat } from "./chat-draft.js";
+import { attachToChat, relayDraftKey } from "./chat-draft.js";
 import { useReviewFile } from "./review-content.js";
 
 const MonacoDiff = lazy(() => import("./monaco-diff.js"));
@@ -102,8 +102,10 @@ export function ReviewPanel({
                   original={content.content.original}
                   modified={content.content.modified}
                   onAddToChat={(selection) => {
-                    const chat = review.relay?.conversationId ?? review.chatId;
-                    const added = attachToChat(`code60.orchestrationDraft:${chat}`, {
+                    const chatKey = review.relay
+                      ? relayDraftKey
+                      : `code60.orchestrationDraft:${review.chatId}`;
+                    const added = attachToChat(chatKey, {
                       reference: {
                         reviewId: review.id,
                         revisionId,

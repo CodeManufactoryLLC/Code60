@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChatDraft } from "./chat-draft.js";
+import type { OrchestrationChat } from "../bridge/index.js";
+import { ChatDraft, chatDraftKey } from "./chat-draft.js";
 
 const attachment = {
   reference: {
@@ -26,6 +27,20 @@ function storage() {
   };
 }
 describe("conversation drafts", () => {
+  it("keeps the Relay draft owner stable as its conversation identity appears", () => {
+    const beforeConnection = {
+      kind: "relay",
+      run: { id: "relay-run" } as NonNullable<OrchestrationChat["run"]>,
+    } as OrchestrationChat;
+    const afterConnection = {
+      ...beforeConnection,
+      conversationId: "relay-conversation",
+    };
+
+    expect(chatDraftKey(beforeConnection)).toBe("code60.orchestrationDraft:relay");
+    expect(chatDraftKey(afterConnection)).toBe(chatDraftKey(beforeConnection));
+  });
+
   it("keeps pinned code references across reload and removes them only after a matching Send", () => {
     const saved = storage();
     const draft = new ChatDraft("key", saved);

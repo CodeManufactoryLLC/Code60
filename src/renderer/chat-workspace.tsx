@@ -134,7 +134,7 @@ export function ChatWorkspace({
           <ChatPage
             key={
               chat?.kind === "relay"
-                ? (chat.conversationId ?? "relay")
+                ? "relay"
                 : `${database}:${chat?.run?.id ?? chat?.directory ?? "disconnected"}`
             }
             api={api}

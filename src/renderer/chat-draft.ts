@@ -8,7 +8,9 @@ export interface ChatAttachment {
   label: string;
 }
 const drafts = new Map<string, ChatDraft>();
+export const relayDraftKey = "code60.orchestrationDraft:relay";
 export function chatDraftKey(chat: OrchestrationChat | undefined): string {
+  if (chat?.kind === "relay") return relayDraftKey;
   const id = chat?.conversationId ?? chat?.run?.id;
   return id ? `code60.orchestrationDraft:${id}` : "";
 }
@@ -156,7 +158,7 @@ export class ChatDraft extends ScopeLifetime {
     return true;
   };
 }
-export function useChatDraft(key: string, runId?: string) {
+export function useChatDraft(key: string, runId?: string, conversationId?: string) {
   const store = useMemo(() => {
     let storage: Storage | undefined;
     try {
@@ -175,11 +177,21 @@ export function useChatDraft(key: string, runId?: string) {
   useEffect(() => {
     if (!runId) return;
     const alias = `code60.orchestrationDraft:${runId}`;
+    if (alias === key) return;
     drafts.set(alias, store);
     return () => {
       if (drafts.get(alias) === store) drafts.delete(alias);
     };
-  }, [runId, store]);
+  }, [key, runId, store]);
+  useEffect(() => {
+    if (!conversationId) return;
+    const alias = `code60.orchestrationDraft:${conversationId}`;
+    if (alias === key) return;
+    drafts.set(alias, store);
+    return () => {
+      if (drafts.get(alias) === store) drafts.delete(alias);
+    };
+  }, [conversationId, key, store]);
   const state = useSyncExternalStore(store.subscribe, store.snapshot, store.snapshot);
   return {
     draft: state.text,

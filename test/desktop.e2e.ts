@@ -14336,7 +14336,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     });
     const sentRun = await page.evaluate(async () => {
       document
-        .querySelector("#panel-chat .orchestration-chat-page textarea")
+        .querySelector("#panel-chat .orchestration-chat-page:not([hidden]) textarea")
         ?.setAttribute("data-qa-mark", "sent");
       return (await window.desktop.snapshot()).chat.run?.id;
     });
@@ -14398,6 +14398,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
         });
         throw error;
       });
+    await expect(input).toHaveAttribute("data-qa-mark", "sent");
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     const activityTimer = status.getByRole("timer");
     await expect(activityTimer).not.toHaveText("0s");
