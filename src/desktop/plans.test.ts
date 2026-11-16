@@ -22,6 +22,34 @@ const draft = {
   description: "A small change",
   tasks: [{ text: "Implement" }, { text: "Verify" }],
 };
+it("rewinds plan context without decreasing revisions or reviving discarded authority", async () => {
+  const { root, store } = await setup();
+  const original = await store.create(draft, "/project");
+  await store.mutate(original.id, (plan) => {
+    plan.title = "Later plan change";
+  });
+  await store.mutate(original.id, (plan) => {
+    plan.tasks[0]?.workerIds.push("worker");
+  });
+  const currentRevision = store.get(original.id).revision;
+  await store.rewind([original]);
+  expect(store.get(original.id)).toMatchObject({
+    title: "Build",
+    revision: currentRevision + 1,
+  });
+  expect(store.get(original.id).tasks.every((task) => task.workerIds.length === 0)).toBe(true);
+  await store.rewind([]);
+  expect(store.list()).toEqual([]);
+  expect(store.get(original.id).rewound).toBe(true);
+  await expect(
+    store.mutate(original.id, (plan) => {
+      plan.title = "Late update";
+    }),
+  ).rejects.toThrow("discarded by Undo");
+  const reopened = await PlanStore.open(root, "chat");
+  expect(reopened.list()).toEqual([]);
+  expect(reopened.get(original.id).title).toBe("Build");
+});
 it("keeps Relay target assignments and rejects private-record changes instead of overwriting them", async () => {
   const parent = await mkdtemp(join(tmpdir(), "code60-private-plan-"));
   roots.push(parent);

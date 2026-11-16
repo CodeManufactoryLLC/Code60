@@ -4,7 +4,6 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, it, vi } from "vitest";
-import type { RelayReviewRequest } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import { commitFixture } from "./fixtures/git-repository.js";
@@ -17,7 +16,7 @@ const required = <T>(value: T | undefined | null): T => {
 // Supporting integration, not UI E2E: validates the real provider subprocess and
 // production plan/Git/review path without claiming onboarding or renderer coverage.
 it.each(["readable", "legacy"] as const)(
-  "supports the %s fake-provider request through accepted worktree changes, decline, apply and undo",
+  "supports the %s fake-provider request through plan acceptance, automatic edits and message Undo",
   async (format) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "code60-workflow-integration-")));
     const repo = join(root, "target with spaces");
@@ -98,7 +97,12 @@ it.each(["readable", "legacy"] as const)(
       const worker = required(service.workerSnapshot().runs[0]);
       const worktree = worker.record.worktree;
       expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
-      expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+      await vi.waitFor(
+        async () =>
+          expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n"),
+        { timeout: 10_000 },
+      );
+      expect(confirm).not.toHaveBeenCalled();
       const provenance = required(worker.relay);
       const address = {
         conversationId: provenance.conversationId,
@@ -107,29 +111,28 @@ it.each(["readable", "legacy"] as const)(
         reviewId: required(provenance.reviewId),
       };
       const captured = await service.reviewRequest({
-        type: "capture",
+        type: "read",
         ...address,
         requestId: randomUUID(),
       });
       if (captured.type !== "review") throw new Error("No captured review");
       const revision = required(captured.review.revisions.at(-1));
       expect(revision.files.map((file) => file.path)).toEqual(["result.txt"]);
-      const task = async (action: Extract<RelayReviewRequest, { type: "task" }>["action"]) => {
-        const result = await service.reviewRequest({ type: "task", ...address, action });
-        if (result.type !== "task") throw new Error("No application state");
-        return result.task;
+      const request = {
+        type: "undo-request" as const,
+        id: required(service.snapshot().run?.id),
+        checkpointId: required(service.snapshot().checkpoint?.id),
+        replacesDraft: false,
       };
-      const prepared = await task({ type: "prepare", revisionId: revision.id });
-      expect(prepared.operation?.conflicts).toEqual([]);
-      const operationId = required(prepared.operation?.id);
-      expect((await task({ type: "apply", operationId })).operation?.status).toBe("prepared");
-      expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
-      confirm.mockResolvedValue(true);
-      expect((await task({ type: "apply", operationId })).operation?.status).toBe("applied");
+      expect(await service.action(request)).toBeUndefined();
       expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
       expect(git("diff", "--cached", "--binary")).toBe(staged);
       expect(git("ls-files", "--stage", "-z")).toBe(entries);
-      expect((await task({ type: "undo", operationId })).operation?.status).toBe("undone");
+      confirm.mockResolvedValue(true);
+      expect(await service.action(request)).toMatchObject({
+        type: "rewound",
+        checkpointId: request.checkpointId,
+      });
       expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
       expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("unstaged notes\n");
       expect(git("show", ":notes.txt")).toBe("staged notes\n");
@@ -139,10 +142,11 @@ it.each(["readable", "legacy"] as const)(
       expect(git("rev-parse", "HEAD")).toBe(head);
       expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
       expect(confirm.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
-        "Apply reviewed changes?",
-        "Apply reviewed changes?",
-        "Undo reviewed changes?",
+        "Undo this request?",
+        "Undo this request?",
       ]);
+      expect(service.workerSnapshot().runs).toHaveLength(0);
+      expect(service.snapshot().plans).toHaveLength(0);
     } finally {
       await service.shutdown(true);
       const evidence = await Promise.all(

@@ -113,6 +113,67 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("keeps Relay application target-scoped instead of borrowing selected-project Git readiness", async () => {
+    const { knowledge } = setup({ gitReady: false });
+    const capabilities = result(
+      await knowledge.call(
+        "code60_get_capabilities",
+        { query: "Checkpoints and message Undo" },
+        relay,
+      ),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "apply-undo",
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("latest request checkpoint"),
+        }),
+      }),
+    ]);
+  });
+  it("discovers conversation review entry points without treating evidence as execution authority", async () => {
+    const { knowledge } = setup({ database: null });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Reviews" }, relay),
+    );
+    expect(capabilities.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "reviews",
+          access: expect.stringContaining("files changed"),
+          availability: expect.objectContaining({
+            status: "unknown",
+            reason: expect.stringContaining("live originating workers"),
+          }),
+        }),
+      ]),
+    );
+  });
+  it("reports application preview metadata without exposing its content to agents", async () => {
+    const { knowledge, reads } = setup();
+    const id = randomUUID();
+    knowledge.report(
+      panel(
+        knowledge.rendererIdentity(),
+        1,
+        id,
+        { kind: "relay", conversationId: relayId, generation: 2 },
+        [{ id: 1, kind: "application" }],
+      ),
+    );
+    const tabs = result(await knowledge.call("code60_get_app_state", { section: "tabs" }, relay))
+      .entries as { revision: string }[];
+    const value = result(
+      await knowledge.call(
+        "code60_read_view",
+        { panelId: id, tabId: 1, revision: tabs[0]?.revision },
+        relay,
+      ),
+    );
+    expect(value.available).toBe(false);
+    expect(reads).toEqual([]);
+  });
   it("keeps Memory Recall available without a database or provider and denies its content through awareness", async () => {
     const { knowledge, reads } = setup({ database: null, providers: [], projectOpen: false });
     const capabilities = result(

@@ -53,6 +53,19 @@ const detail = (): DetailFrame => ({
     },
   },
 });
+it("does not overlay a pre-Undo detail cache after the same project conversation rewinds", () => {
+  const rewound = { ...chat, rewindRevision: 1 };
+  const state = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    chat: rewound,
+    chats: [rewound],
+  });
+  const old = detail();
+  const result = applyDetails(state, { [detailScopeKey(old.scope)]: old });
+  expect(result?.chatEvents).toEqual([]);
+  expect(result?.chatEventsByRun.chat).toEqual([]);
+});
 const relay = {
   ...chat,
   kind: "relay",

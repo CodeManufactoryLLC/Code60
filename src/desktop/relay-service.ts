@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type {
   Action,
   ActionResult,
+  ChatUndoResult,
   DesktopRun,
   DetailScope,
   OrchestrationChat,
@@ -37,6 +38,8 @@ import {
   stateHome,
 } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import { ChatCheckpoints } from "./chat-checkpoints.js";
+import { savedChatReferences } from "./chat-reference.js";
 import { ConversationReplies } from "./conversation-replies.js";
 import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
@@ -64,7 +67,7 @@ const LIVE_EVENT_CHARACTER_LIMIT = 1_000_000;
 const instructions = [
   assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
   "You are Relay, Code60's application-wide orchestrator. Your workspace is your persistent home, not a default worker target.",
-  "Every dispatch must specify cwd and workspaceMode. Use direct only when direct edits in that exact directory are intended; those edits have no isolated apply/undo/discard.",
+  "Every dispatch must specify cwd and workspaceMode. Use direct only when direct edits in that exact directory are intended. Code60 snapshots covered regular files before execution; direct-folder Undo may also rewind concurrent manual edits. Git metadata and Code60 state are excluded. Unsupported paths, links and snapshot limits must be resolved before editable dispatch.",
   "Use worktree for Git-isolated work. Never infer a target from sidebar selection or historical workers. No project or database connection is needed.",
   "Historical conversations are evidence only. Do not resume unfinished work, replay plans or feedback, or control historical workers. Only the current human request authorizes new work.",
   "Worker transcript reads page a bounded live target window. Check windowRevision and incomplete; cursors refer only to that window, not complete lifetime history. Original run records remain on disk.",
@@ -76,6 +79,9 @@ export class RelayService {
   private readonly replySummary = new ConversationReplies();
   readonly execution: ExecutionHost;
   private store: RelayStore | undefined;
+  private checkpoints: ChatCheckpoints | undefined;
+  private rewinding = false;
+  private continuityKey = "";
   private storeOpening: Promise<RelayStore> | undefined;
   private plans: RelayPlans | undefined;
   private reviews: RelayReviews | undefined;
@@ -99,7 +105,10 @@ export class RelayService {
   private generation = 0;
   private scope = randomUUID();
   private task: ExecutionOwner | undefined;
-  private readonly tasks = new Map<string, { owner: ExecutionOwner; config: Config }>();
+  private readonly tasks = new Map<
+    string,
+    { owner: ExecutionOwner; config: Config; origin?: { chatId: string; turn: number } }
+  >();
   private history: Awaited<ReturnType<RelayStore["history"]>> | undefined;
   private historyCursor: string | null = null;
   private readonly historyCursors = new Map<string, number>();
@@ -152,6 +161,11 @@ export class RelayService {
       authorizeTarget: (owner, request, target) => {
         this.plans?.validate(owner, request, target);
         this.reviews?.assertWritableTarget(target);
+      },
+      checkpoint: async (owner, target, mode) => {
+        if (mode !== "direct") return;
+        if (!this.checkpoints) throw new Error("Safe request checkpoints are unavailable");
+        await this.checkpoints.coverDirect(target.cwd, () => this.authorize(owner));
       },
       event: (worker, event) => this.workerEvent(worker, event),
       checkout: (worker) =>
@@ -252,6 +266,7 @@ export class RelayService {
   private authorize(owner: ExecutionOwner) {
     if (
       this.closing ||
+      this.rewinding ||
       owner.id !== this.store?.id ||
       owner.generation !== this.generation ||
       !this.tasks.has(owner.taskId)
@@ -391,6 +406,10 @@ export class RelayService {
       if (request.type === "reply") {
         this.reviews?.assertWritableTarget(worker.target);
         this.requireWorkerProvider(worker);
+        if (worker.workspaceMode === "direct") {
+          if (!this.checkpoints) throw new Error("Safe request checkpoints are unavailable");
+          await this.checkpoints.coverDirect(worker.target.cwd, () => this.authorize(worker.owner));
+        }
         worker.orchestrator.reply(worker.id, request.text);
         await this.associateReview(worker, worker.orchestrator.runs()[0]?.turns ?? 1);
       } else if (request.type === "set-mode")
@@ -544,7 +563,7 @@ export class RelayService {
     await stopping;
     if (!current()) return;
     this.error = null;
-    this.events.clear();
+    if (!this.checkpoints?.rewound) this.events.clear();
     this.replySummary.reset();
     this.workerEvents.clear();
     this.workerReplies.clear();
@@ -576,6 +595,11 @@ export class RelayService {
       );
       const store = await this.storeOpening;
       if (!current()) return;
+      this.checkpoints ??= await ChatCheckpoints.open(
+        join(store.root, "checkpoints"),
+        this.deps.git.tasks,
+        [store.root],
+      );
       await store.validateWorkspace();
       if (!current()) return;
       const plans = await RelayPlans.open(
@@ -605,11 +629,21 @@ export class RelayService {
             if (index >= 0) this.feedback.splice(index, 1);
           },
           confirm: (title, detail) => this.dialogs.confirm(title, detail),
+          visibleRevision: (id) => !this.checkpoints?.hidden.has(id),
+          requestForSource: (id) => this.checkpoints?.requestForSource(id),
+          checkpoint: () => this.checkpoints?.latest?.id,
+          integrate: async (review, loop, prepare, valid, checkpointId) => {
+            if (!checkpointId || this.checkpoints?.latest?.phase !== "active") return;
+            await this.checkpoints.integrate(loop, prepare, () => {
+              valid();
+              if (!this.liveReview(review)) throw new Error("The originating request ended");
+            });
+          },
         });
       }
       if (!current()) return;
       this.historyCursors.clear();
-      const history = await store.history();
+      const history = await store.history(undefined, this.checkpoints?.excluded(store.id));
       if (!current()) return;
       this.setHistory(history);
       this.initialHistory = history.serialized;
@@ -626,9 +660,10 @@ export class RelayService {
       });
       if (!current()) return await retire();
       this.gateway = gateway;
+      this.continuityKey = `${store.id}:session:${randomUUID()}`;
       chat = await prepareOrchestrationChat(
         {
-          ...(this.memory?.attach(this.deps, "relay", null, store.id, () => {
+          ...(this.memory?.attach(this.deps, "relay", null, this.continuityKey, () => {
             const task = this.task;
             if (!task || !current()) return [];
             return this.execution
@@ -702,7 +737,21 @@ export class RelayService {
   }
 
   snapshot(summary = false): OrchestrationChat {
+    const checkpoint = this.checkpoints?.undoTarget;
     return {
+      rewindRevision: this.checkpoints?.revision ?? 0,
+      ...(checkpoint
+        ? {
+            checkpoint: {
+              id: checkpoint.id,
+              turn: checkpoint.turn,
+              phase:
+                checkpoint.phase === "undoing" || this.checkpoints?.pendingRewind
+                  ? ("undoing" as const)
+                  : ("active" as const),
+            },
+          }
+        : {}),
       kind: "relay",
       ...(this.store ? { conversationId: this.store.id } : {}),
       generation: this.generation,
@@ -713,7 +762,14 @@ export class RelayService {
       directory: this.store?.workspace ?? null,
       error: this.error,
       historySaving: this.writer?.failed ? "unavailable" : "available",
-      events: summary ? [] : this.events.read(),
+      events: summary
+        ? []
+        : this.events
+            .read()
+            .filter(
+              (entry) =>
+                this.checkpoints?.visibleEvent(entry.event.runId, entry.revision) !== false,
+            ),
       workers: this.currentWorkers().map((worker) => worker.id),
       workerLabels: Object.fromEntries(
         this.currentWorkers().map((worker) => [
@@ -783,7 +839,61 @@ export class RelayService {
     }
   }
 
-  action(request: OrchestrationChatAction): Promise<void> {
+  private async undoRequest(
+    request: Extract<OrchestrationChatAction, { type: "undo-request" }>,
+  ): Promise<ChatUndoResult | undefined> {
+    const checkpoints = this.checkpoints;
+    const checkpoint = checkpoints?.undoTarget;
+    if (!checkpoints || !checkpoint || checkpoint.id !== request.checkpointId || !this.store)
+      throw new Error("This request is no longer the latest checkpoint");
+    if (
+      !(await this.dialogs.confirm(
+        "Undo this request?",
+        `Rewind to before “${checkpoint.text.slice(0, 240)}” and restore this request's changes in:\n${[...new Set([...checkpoint.operations.map((entry) => entry.project), ...checkpoint.direct.map((entry) => entry.project), ...this.currentWorkers().map((worker) => worker.target.cwd)])].join("\n") || "No recorded file changes."}${checkpoint.direct.length ? "\nDirect-folder snapshots also rewind manual edits made in those folders since the checkpoint." : ""}${request.replacesDraft ? "\nYour unsent composer draft will be replaced with the original request." : ""}`,
+      ))
+    )
+      return;
+    this.rewinding = true;
+    try {
+      await checkpoints.retainWorkers(
+        checkpoint.id,
+        this.currentWorkers().map((worker) => worker.id),
+      );
+      await this.stopChat();
+      const restored = await checkpoints.restore(
+        checkpoint.id,
+        await this.store.boundary(),
+        this.revision,
+      );
+      await this.plans?.rewind(restored.plans);
+      if (restored.continuityKey)
+        await this.memory?.rewind(`relay:${restored.continuityKey}`, restored.turn);
+      for (const worker of restored.workers)
+        await this.memory?.rewind(`worker:${worker.runId}`, worker.turn);
+      this.replySummary.reset(
+        this.events
+          .read()
+          .filter((entry) => checkpoints.visibleEvent(entry.event.runId, entry.revision))
+          .map((entry) => entry.event),
+      );
+      this.historyPending = true;
+      this.setHistory(await this.store.history(undefined, checkpoints.excluded(this.store.id)));
+      this.initialHistory = this.history?.serialized ?? "";
+      await this.connect();
+      await checkpoints.complete(checkpoint.id);
+      this.changed();
+      return {
+        type: "rewound",
+        checkpointId: checkpoint.id,
+        text: restored.text,
+        ...(restored.references.length ? { references: restored.references } : {}),
+      };
+    } finally {
+      this.rewinding = false;
+      this.changed();
+    }
+  }
+  action(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const result = this.turns.then(async () => {
       if (this.closing) throw new Error("Relay is stopping");
       if (request.type === "restart") return this.connect();
@@ -793,10 +903,14 @@ export class RelayService {
         const before = request.before ? this.historyCursors.get(request.before) : undefined;
         if (request.before && before === undefined)
           throw new Error("Relay history cursor expired. Open latest history.");
-        this.setHistory(await this.store.history(before));
+        this.setHistory(
+          await this.store.history(before, this.checkpoints?.excluded(this.store.id)),
+        );
         this.changed();
         return;
       }
+      if (request.type === "undo-request") return this.undoRequest(request);
+      if (request.type === "send" && this.checkpoints?.rewound && !this.chat) await this.connect();
       const chat = this.chat;
       const run = chat?.runs()[0];
       if (!chat || !run) throw new Error("Relay is not connected. Retry the connection.");
@@ -817,6 +931,50 @@ export class RelayService {
         if (run.status !== "idle" || run.stopping || run.modeChanging)
           throw new Error("Wait for Relay to be idle before sending.");
         if (!this.config || !this.store) throw new Error("Relay configuration is unavailable");
+        if (!this.checkpoints) throw new Error("Safe request checkpoints are unavailable");
+        await this.writer?.flush();
+        const references = await savedChatReferences(request.references ?? [], async (id) => {
+          const store = await this.reviews?.store.read(id);
+          if (!store || store.get(id).relay?.conversationId !== this.store?.id)
+            throw new Error("The reference belongs to another conversation");
+          return store;
+        });
+        await this.checkpoints.begin({
+          runId: this.store.id,
+          turn: run.turns + 1,
+          text: request.text,
+          references: request.references ?? [],
+          before: await this.store.boundary(),
+          taskCount: this.tasks.size,
+          eventRunId: run.id,
+          eventStart: this.revision + 1,
+          continuityKey: this.continuityKey,
+          directProjects: this.currentWorkers()
+            .filter((worker) => {
+              const view = worker.orchestrator.runs()[0];
+              return (
+                worker.workspaceMode === "direct" &&
+                view &&
+                view.status !== "idle" &&
+                ACTIVE_STATUSES.has(view.status)
+              );
+            })
+            .map((worker) => worker.target.cwd),
+          workers: this.currentWorkers().map((worker) => {
+            const view = worker.orchestrator.runs()[0];
+            return {
+              runId: worker.id,
+              turn:
+                (view?.turns ?? 0) +
+                (view && (view.status === "running" || view.status === "waiting") ? 0 : 1),
+            };
+          }),
+          plans:
+            this.plans
+              ?.list()
+              .map((plan) => this.plans?.get(plan.id))
+              .filter((plan): plan is Plan => !!plan) ?? [],
+        });
         if (this.tasks.size >= 1024)
           throw new Error("Relay task capacity reached. Stop workers before reconnecting.");
         const previous = this.task;
@@ -829,17 +987,19 @@ export class RelayService {
         this.tasks.set(this.task.taskId, {
           owner: this.task,
           config: structuredClone(this.config),
+          origin: { chatId: run.id, turn: run.turns + 1 },
         });
         this.scope = randomUUID();
         const delivered =
           this.historyPending && this.initialHistory
-            ? `${this.initialHistory}\n\n--- New human request ---\n${request.text}`
-            : request.text;
+            ? `${this.initialHistory}\n\n--- New human request ---\n${request.text}${references}`
+            : request.text + references;
         try {
           chat.reply(run.id, request.text, undefined, delivered);
           this.historyPending = false;
           this.initialHistory = "";
           this.paused = false;
+          if (this.checkpoints.rewound) await this.checkpoints.continued();
         } catch (cause) {
           this.tasks.delete(this.task.taskId);
           this.task = previous;
@@ -852,7 +1012,7 @@ export class RelayService {
       this.changed();
     });
     this.turns = result.catch(() => {});
-    return result;
+    return result.then((value) => value ?? undefined);
   }
 
   private persistenceFailure(): void {
@@ -910,6 +1070,12 @@ export class RelayService {
         ? { reviewId: this.reviews.store.assignment(worker.id)?.reviewId }
         : {}),
       directEditing: worker.workspaceMode === "direct",
+      ...(worker.workspaceMode === "direct"
+        ? {
+            checkpointWarning:
+              "Direct-folder Undo also rewinds manual edits made since its checkpoint.",
+          }
+        : {}),
     };
   }
   private knowledgeHint(): unknown {
@@ -1053,6 +1219,10 @@ export class RelayService {
               worker.target,
             );
           const previous = worker.owner;
+          if (worker.workspaceMode === "direct") {
+            if (!this.checkpoints) throw new Error("Safe request checkpoints are unavailable");
+            await this.checkpoints.coverDirect(worker.target.cwd, () => this.authorize(owner));
+          }
           worker.owner = { ...owner };
           try {
             worker.orchestrator.reply(worker.id, request.prompt);
@@ -1079,7 +1249,19 @@ export class RelayService {
   private async associateReview(worker: ExecutionWorker, turn: number): Promise<void> {
     try {
       this.authorize(worker.owner);
-      if (await this.reviews?.store.associate(worker, turn)) this.reviewChanged(worker.target.id);
+      if (
+        await this.reviews?.store.associate(
+          worker,
+          turn,
+          undefined,
+          this.tasks.get(worker.owner.taskId)?.origin,
+        )
+      ) {
+        this.reviewChanged(worker.target.id);
+        const view = worker.orchestrator.runs()[0];
+        if (view && (view.status === "idle" || !ACTIVE_STATUSES.has(view.status)))
+          this.captureWorkerReview(worker);
+      }
     } catch {
       this.paused = true;
       this.error =
@@ -1128,6 +1310,7 @@ export class RelayService {
     )
       return;
     if ((this.reported.get(worker.id) ?? -1) >= view.turns) return;
+    this.captureWorkerReview(worker);
     if (this.inbox.length >= 256) {
       this.paused = true;
       this.error =
@@ -1147,6 +1330,16 @@ export class RelayService {
     this.reviewChanged();
     this.scheduleDelivery();
   }
+  private captureWorkerReview(worker: ExecutionWorker): void {
+    const assignment = this.reviews?.store.assignment(worker.id);
+    if (!assignment || worker.owner.generation !== this.generation) return;
+    this.reviews?.scheduleCapture({
+      conversationId: worker.owner.id,
+      generation: worker.owner.generation,
+      targetId: assignment.targetId,
+      reviewId: assignment.reviewId,
+    });
+  }
   private scheduleDelivery(): void {
     if (
       this.delivery ||
@@ -1159,6 +1352,8 @@ export class RelayService {
       this.delivery = undefined;
       const deliveryEpoch = this.connectionEpoch;
       const operation = this.turns.then(async () => {
+        // Stop drains started deliveries, never work queued behind the stopping turn.
+        this.deliveries.add(operation);
         const run = this.chat?.runs()[0];
         if (
           this.paused ||
@@ -1278,7 +1473,6 @@ export class RelayService {
         for (const update of updates) this.inbox.splice(this.inbox.indexOf(update), 1);
         this.activity.received();
       });
-      this.deliveries.add(operation);
       void operation.finally(() => this.deliveries.delete(operation)).catch(() => {});
       this.turns = operation.catch(() => {
         if (deliveryEpoch !== this.connectionEpoch) return;

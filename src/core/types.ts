@@ -62,6 +62,8 @@ export interface RunView {
   branch: string | null;
   worktree: string;
   lastStopReason?: StopReason;
+  /** Actual last completed interactive turn outcome, independent of the idle session status. */
+  lastOutcome?: FinalRunStatus;
   pending: readonly PendingPermission[];
   /** The run is ending and its agent is being stopped. */
   stopping: boolean;

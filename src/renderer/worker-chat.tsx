@@ -187,7 +187,7 @@ export function WorkerChat({
         <p role="status">
           {run.relay.cwd} ({run.relay.workspaceMode}).
           {run.relay.workspaceMode === "direct"
-            ? " Direct edits have no isolated apply, undo or discard."
+            ? " Undo in Relay also rewinds manual edits since the checkpoint."
             : ""}{" "}
           Showing a bounded live transcript; original source remains on disk.
           {run.historyIncomplete ? " Earlier activity is omitted from this view." : ""}

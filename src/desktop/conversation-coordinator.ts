@@ -8,6 +8,7 @@ import {
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import type { ChatCheckpoints } from "./chat-checkpoints.js";
 import { ConversationReplies } from "./conversation-replies.js";
 import type { WorkerUpdate } from "./mcp-control.js";
 import type { McpGateway } from "./mcp-gateway.js";
@@ -38,6 +39,9 @@ const UPDATE_BATCH = 20;
 
 /** All mutable state and capabilities belong to one orchestration conversation. */
 export class ChatSession {
+  checkpoints: ChatCheckpoints | undefined;
+  rewinding = false;
+  readonly writableReviews = new Set<string>();
   readonly replies = new ConversationReplies();
   reservations = 0;
   tactic: string | null | undefined;
@@ -136,7 +140,7 @@ export class ConversationCoordinator {
   }
 
   assertCurrent(session: ChatSession): void {
-    if (session.revoked || !this.sessions.includes(session))
+    if (session.revoked || session.rewinding || !this.sessions.includes(session))
       throw new Error("This orchestration chat is no longer current");
   }
 
@@ -284,6 +288,13 @@ export class ConversationCoordinator {
     session.workerScope = randomUUID();
     session.inbox = [];
     session.dispatches.clear();
+  }
+  forgetWorkers(session: ChatSession): void {
+    for (const [id, worker] of this.registry)
+      if (worker.generation === session.chatGeneration) this.registry.delete(id);
+    session.inbox = [];
+    session.dispatches.clear();
+    session.workerScope = randomUUID();
   }
 
   stop(): void {

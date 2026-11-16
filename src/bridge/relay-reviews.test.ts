@@ -9,6 +9,17 @@ const address = {
   reviewId: crypto.randomUUID(),
 };
 const requestId = crypto.randomUUID();
+it("accepts bounded opaque conversation timeline pages without adding worker or path authority", () => {
+  const request = {
+    type: "timeline",
+    conversationId: address.conversationId,
+    generation: address.generation,
+    cursor: crypto.randomUUID(),
+  };
+  expect(parseRelayReview(request)).toEqual(request);
+  expect(() => parseRelayReview({ ...request, cwd: "/target" })).toThrow();
+  expect(() => parseRelayReview({ ...request, cursor: "../history" })).toThrow();
+});
 it("accepts only addressed Relay review operations, never cwd or project fallbacks", () => {
   const request = { ...address, type: "read", requestId };
   expect(parseRelayReview(request)).toEqual(request);

@@ -167,6 +167,10 @@ export class RelayPlans {
   assignment(id: string) {
     return this.assignments.get(id);
   }
+  rewind(prefix: readonly Plan[]): Promise<void> {
+    this.assignments.clear();
+    return this.store.rewind(prefix);
+  }
   async associate(worker: ExecutionWorker, taskId?: string) {
     if (!taskId || this.assignments.get(worker.id)?.planTaskId === taskId) return;
     const plan = this.list()

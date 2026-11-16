@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   appendFile,
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -16,6 +17,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Plan } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
+import { MemoryService } from "../src/desktop/memory-service.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import * as storage from "../src/desktop/relay-storage.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
@@ -36,7 +38,12 @@ beforeEach(async () => {
   relay = create();
   await mkdir(join(root, "target"));
 });
-function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn()) {
+function create(
+  beforeMkdir?: () => Promise<void>,
+  notify: () => void = vi.fn(),
+  confirm: (title: string, detail: string) => Promise<boolean> = async () => false,
+  memory?: MemoryService,
+) {
   const deps = defaultDeps();
   const git = new FakeGit();
   git.repoInfo = async () => {
@@ -58,6 +65,8 @@ function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn())
     },
     { XDG_STATE_HOME: join(root, "state") },
     notify,
+    { confirm },
+    memory,
   );
   services.push(service);
   return service;
@@ -74,6 +83,159 @@ async function connect() {
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
 }
+it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
+  const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+  relay = create(undefined, vi.fn(), confirm);
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Surviving prefix" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({ type: "send", id, text: "Discarded request marker" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const checkpointId = required(relay.snapshot().checkpoint).id;
+  const request = { type: "undo-request" as const, id, checkpointId, replacesDraft: true };
+  expect(await relay.action(request)).toBeUndefined();
+  expect(agents.sessions[0]?.stops).toHaveLength(0);
+  expect(await relay.action(request)).toEqual({
+    type: "rewound",
+    checkpointId,
+    text: "Discarded request marker",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect(confirm).toHaveBeenLastCalledWith("Undo this request?", expect.stringContaining("unsent"));
+  expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+  expect(agents.sessions[1]?.prompts).toHaveLength(0);
+  expect(JSON.stringify(relay.snapshot().events)).not.toContain("Discarded request marker");
+  const nextId = required(relay.snapshot().run).id;
+  expect(nextId).not.toBe(id);
+  await relay.action({ type: "send", id: nextId, text: "A fresh follow-up" });
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1));
+  expect(agents.sessions[1]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[1]?.prompts[0]).not.toContain("Discarded request marker");
+  await relay.shutdown();
+  relay = create();
+  await connect();
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "After restart",
+  });
+  await vi.waitFor(() => expect(agents.sessions[2]?.prompts).toHaveLength(1));
+  expect(agents.sessions[2]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[2]?.prompts[0]).not.toContain("Discarded request marker");
+});
+it("does not await a worker update queued behind the native Undo confirmation", async () => {
+  let accept!: (value: boolean) => void;
+  const confirm = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        accept = resolve;
+      }),
+  );
+  relay = create(undefined, vi.fn(), confirm);
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Undo this worker request" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const { scope } = await tool("code60_get_context");
+  await tool("code60_dispatch_agent", {
+    scope,
+    requestId: "queued-update",
+    cwd: join(root, "target"),
+    workspaceMode: "direct",
+    prompt: "Complete before confirmation",
+  });
+  let result: unknown;
+  const undo = relay
+    .action({
+      type: "undo-request",
+      id,
+      checkpointId: required(relay.snapshot().checkpoint).id,
+      replacesDraft: false,
+    })
+    .then((value) => {
+      result = value;
+    });
+  await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+  // biome-ignore lint/complexity/useLiteralKeys: Observe the real conversation queue, without dispatching a private action.
+  const blocked = relay["turns"];
+  let releaseCleanup = () => {};
+  const cleanupGate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
+  // biome-ignore lint/complexity/useLiteralKeys: A regressed queued-delivery drain must not deadlock suite cleanup.
+  const running = relay["deliveries"];
+  const wrapped: Promise<unknown>[] = [];
+  try {
+    await vi.waitFor(() => {
+      // biome-ignore lint/complexity/useLiteralKeys: The worker timer must queue its actual automatic delivery behind Undo.
+      expect(relay["turns"]).not.toBe(blocked);
+    });
+    for (const operation of running) {
+      running.delete(operation);
+      const entry = Promise.race([operation, cleanupGate]);
+      wrapped.push(entry);
+    }
+    for (const entry of wrapped) running.add(entry);
+    accept(true);
+    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }));
+  } finally {
+    accept(true);
+    releaseCleanup();
+    await undo;
+    for (const entry of wrapped) running.delete(entry);
+  }
+});
+it("rewinds worker memory only for the request's Relay generation", async () => {
+  const memory = new MemoryService(
+    join(root, "memory"),
+    join(root, "models"),
+    defaultDeps(),
+    () => null,
+    false,
+  );
+  const rewind = vi.spyOn(memory, "rewind");
+  relay = create(undefined, vi.fn(), async () => true, memory);
+  try {
+    await connect();
+    let id = required(relay.snapshot().run).id;
+    await relay.action({ type: "send", id, text: "Earlier generation" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    let context = await tool("code60_get_context");
+    const old = await tool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "old-worker",
+      cwd: join(root, "target"),
+      workspaceMode: "direct",
+      prompt: "Earlier evidence",
+    });
+    await relay.action({ type: "stop", id });
+    await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    id = required(relay.snapshot().run).id;
+    await relay.action({ type: "send", id, text: "Current generation" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    context = await tool("code60_get_context");
+    const current = await tool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "new-worker",
+      cwd: join(root, "target"),
+      workspaceMode: "direct",
+      prompt: "Current evidence",
+    });
+    expect(relay.execution.list().map((worker) => worker.id)).toContain(old.runId);
+    await relay.action({
+      type: "undo-request",
+      id,
+      checkpointId: required(relay.snapshot().checkpoint).id,
+      replacesDraft: false,
+    });
+    expect(rewind).toHaveBeenCalledWith(`worker:${current.runId}`, 0);
+    expect(rewind).not.toHaveBeenCalledWith(`worker:${old.runId}`, expect.anything());
+  } finally {
+    await memory.close();
+  }
+});
 it.each(["removed", "replaced", "symlink"])(
   "refuses a %s workspace on in-process Retry",
   async (kind) => {
@@ -824,6 +986,27 @@ it("evicts only above one million serialized characters and resets the budget on
       .events.some(({ event }) => event.type === "thought" && event.text === reconnectedText),
   ).toBe(true);
 });
+
+it.skipIf(process.platform === "win32")(
+  "checkpoints live requests when history permissions change without weakening journal reads",
+  async () => {
+    await connect();
+    const id = required(relay.snapshot().run).id;
+    const journal = join(root, "state", "code60", "relay", "history.frames");
+    await chmod(journal, 0o400);
+    try {
+      await relay.action({ type: "send", id, text: "Continue with unavailable history" });
+      await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+      await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+      await relay.action({ type: "send", id, text: "Another checkpointed request" });
+      await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
+      expect(relay.snapshot().checkpoint).toBeDefined();
+      expect(relay.snapshot().error).toBeNull();
+    } finally {
+      await chmod(journal, 0o600);
+    }
+  },
+);
 
 it.each(["write", "sync"] as const)(
   "keeps Send and worker delivery operational after a %s failure and saves again after Retry",

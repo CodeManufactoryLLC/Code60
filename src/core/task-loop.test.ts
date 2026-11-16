@@ -47,6 +47,91 @@ beforeEach(async () => {
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
+it("serializes complete checkout transactions while independent checkouts proceed", async () => {
+  const events: string[] = [];
+  let entered!: () => void;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const first = TaskLoop.coordinate([project], async () => {
+    events.push("first started");
+    entered();
+    await gate;
+    events.push("first finished");
+  });
+  await ready;
+  const second = TaskLoop.coordinate([project], async () => {
+    events.push("second");
+  });
+  await TaskLoop.coordinate([join(root, "other")], async () => {
+    events.push("independent");
+  });
+  expect(events).toEqual(["first started", "independent"]);
+  release();
+  await Promise.all([first, second]);
+  expect(events).toEqual(["first started", "independent", "first finished", "second"]);
+});
+it("orders and deduplicates multi-target leases and releases them after failure", async () => {
+  const other = join(root, "other");
+  let entered!: () => void;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const first = TaskLoop.coordinate([project, other, project], async () => {
+    entered();
+    await gate;
+    throw new Error("transaction failed");
+  });
+  const failure = expect(first).rejects.toThrow("transaction failed");
+  await ready;
+  let secondEntered = false;
+  const second = TaskLoop.coordinate([other, project], async () => {
+    secondEntered = true;
+    return "second";
+  });
+  await TaskLoop.coordinate([join(root, "independent")], async () => {});
+  expect(secondEntered).toBe(false);
+  release();
+  await failure;
+  await expect(second).resolves.toBe("second");
+  await expect(TaskLoop.coordinate([project, other], async () => "next")).resolves.toBe("next");
+});
+it.each([false, true])(
+  "serializes nested roots in either acquisition order (%s)",
+  async (childFirst) => {
+    const child = join(project, "nested");
+    let release!: () => void;
+    let entered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = TaskLoop.coordinate([childFirst ? child : project], async () => {
+      entered();
+      await gate;
+    });
+    await ready;
+    let secondEntered = false;
+    const second = TaskLoop.coordinate([childFirst ? project : child], async () => {
+      secondEntered = true;
+    });
+    await TaskLoop.coordinate([`${project}-independent`], async () => {});
+    expect(secondEntered).toBe(false);
+    release();
+    await Promise.all([first, second]);
+    expect(secondEntered).toBe(true);
+  },
+);
 it("binds a previously captured Relay baseline without recapturing later project edits", async () => {
   const captured = await tasks.snapshot(project);
   await fs.writeFile(join(project, "file.txt"), "Edited after dispatch\n");
@@ -126,6 +211,76 @@ it("applies, survives restart, undoes, and includes accepted files in the next t
   expect(await tasks.identity(project)).toBe(identity);
   await fs.access(w.path);
 });
+it("rewinds several worker updates without losing edits made between or after updates", async () => {
+  const lines = Array.from({ length: 30 }, (_, index) => `line ${index}`);
+  const text = (edits: Record<number, string>) =>
+    `${lines.map((line, index) => edits[index] ?? line).join("\n")}\n`;
+  await fs.writeFile(join(project, "file.txt"), text({}));
+  const w = await worker("rewind");
+  await fs.writeFile(join(w.path, "file.txt"), text({ 0: "worker first" }));
+  const first = await capture([w]);
+  await loop.execute(task, first.id, "apply");
+  await fs.writeFile(join(project, "file.txt"), text({ 0: "worker first", 15: "user between" }));
+  await fs.writeFile(join(w.path, "file.txt"), text({ 0: "worker first", 29: "worker last" }));
+  const second = await capture([w]);
+  await loop.execute(task, second.id, "apply");
+  await fs.writeFile(
+    join(project, "file.txt"),
+    text({ 0: "worker first", 8: "user after", 15: "user between", 29: "worker last" }),
+  );
+  const identity = await tasks.identity(project);
+  const checkpoint = randomUUID();
+  const restore = await loop.prepareRewind(checkpoint, [first, second]);
+  expect(restore.conflicts).toEqual([]);
+  await loop.verifyPrepared(restore);
+  await loop.execute(checkpoint, restore.id, "apply");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(
+    text({ 8: "user after", 15: "user between" }),
+  );
+  expect(await tasks.identity(project)).toBe(identity);
+});
+it("preflights an inverse transaction and refuses conflicting newer edits without writes", async () => {
+  const w = await worker("rewind-conflict");
+  await fs.writeFile(join(w.path, "file.txt"), "worker\n");
+  const applied = await capture([w]);
+  await loop.execute(task, applied.id, "apply");
+  await fs.writeFile(join(project, "file.txt"), "user\n");
+  const checkpoint = randomUUID();
+  const restore = await loop.prepareRewind(checkpoint, [applied]);
+  expect(restore.conflicts).toEqual([
+    { path: "file.txt", reason: "Newer edits conflict with Undo" },
+  ]);
+  await expect(loop.execute(checkpoint, restore.id, "apply")).rejects.toThrow("cannot be applied");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe("user\n");
+});
+it("restores deleted files and removes created files through a restart-safe inverse journal", async () => {
+  const w = await worker("rewind-created");
+  const original = await fs.readFile(join(project, "file.txt"));
+  await fs.rename(join(w.path, "file.txt"), join(w.path, "renamed.txt"));
+  await fs.writeFile(join(w.path, "image.bin"), Buffer.from([255, 0, 123]));
+  const applied = await capture([w]);
+  await loop.execute(task, applied.id, "apply");
+  const checkpoint = randomUUID();
+  const restore = await loop.prepareRewind(checkpoint, [applied]);
+  expect(restore.conflicts).toEqual([]);
+  loop = new TaskLoop(project, join(root, "tasks"), tasks);
+  await loop.execute(checkpoint, restore.id, "apply");
+  expect(await fs.readFile(join(project, "file.txt"))).toEqual(original);
+  await expect(fs.access(join(project, "renamed.txt"))).rejects.toThrow();
+  await expect(fs.access(join(project, "image.bin"))).rejects.toThrow();
+});
+it("detects an intervening edit after the multi-target preflight was prepared", async () => {
+  const w = await worker("rewind-preflight");
+  await fs.writeFile(join(w.path, "file.txt"), "worker\n");
+  const applied = await capture([w]);
+  await loop.execute(task, applied.id, "apply");
+  const checkpoint = randomUUID();
+  const restore = await loop.prepareRewind(checkpoint, [applied]);
+  await fs.writeFile(join(project, "file.txt"), "newer\n");
+  await expect(loop.verifyPrepared(restore)).rejects.toThrow("Newer edits prevent Undo");
+  await expect(loop.execute(checkpoint, restore.id, "apply")).rejects.toThrow("changed");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe("newer\n");
+});
 it("combines disjoint edits and rejects conflicting edits without writes", async () => {
   const a = await worker("a");
   const b = await worker("b");
@@ -172,6 +327,40 @@ it("rolls back an interrupted multi-file write and allows a fresh proposal", asy
   expect(await fs.readFile(join(project, "file.txt"), "utf8")).toContain("first\n");
   await expect(fs.access(join(project, "other.txt"))).rejects.toThrow();
   expect((await capture([w])).conflicts).toEqual([]);
+});
+
+it("revalidates turn authority after awaited file preparation before any checkout replacement", async () => {
+  const w = await worker("stale-turn");
+  await fs.writeFile(join(w.path, "file.txt"), "result\n");
+  const proposal = await capture([w]);
+  const target = join(project, "file.txt");
+  const before = await fs.readFile(target);
+  const index = await fs.readFile(join(project, ".git", "index"));
+  const head = command(project, "rev-parse", "HEAD");
+  let current = true;
+  let replacements = 0;
+  const guarded = new TaskLoop(project, join(root, "tasks"), tasks, {
+    ...fs,
+    open: async (...args) => {
+      const handle = await fs.open(...args);
+      if (String(args[0]).startsWith(join(project, ".code60-"))) current = false;
+      return handle;
+    },
+    rename: async (from, to) => {
+      if (to === target) replacements++;
+      await fs.rename(from, to);
+    },
+  });
+  await expect(
+    guarded.execute(task, proposal.id, "apply", undefined, () => {
+      if (!current) throw new Error("Worker turn changed");
+    }),
+  ).rejects.toThrow("Worker turn changed");
+  expect(replacements).toBe(0);
+  expect(await fs.readFile(target)).toEqual(before);
+  expect(await fs.readFile(join(project, ".git", "index"))).toEqual(index);
+  expect(command(project, "rev-parse", "HEAD")).toBe(head);
+  expect(await guarded.pendingOperation(task)).toBeNull();
 });
 
 it("preserves private file modes, renames, deletions and binary contents through Undo", async () => {

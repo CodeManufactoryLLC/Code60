@@ -132,6 +132,21 @@ export class MemoryService {
   cancelConversation(cid: string) {
     this.jobs.get(cid)?.abort.abort();
   }
+  async rewind(key: string, turn: number): Promise<void> {
+    if (!this.active) return;
+    await this.loadSettings();
+    const runtimes = [...this.runtimes].filter((runtime) => runtime.matches(key));
+    for (const runtime of runtimes) runtime.invalidateContext();
+    await Promise.all(runtimes.map((runtime) => runtime.settle()));
+    const ids = await this.call<string[]>("rewind", key, turn);
+    const jobs = ids.flatMap((id) => {
+      const job = this.jobs.get(id);
+      return job ? [job] : [];
+    });
+    for (const job of jobs) job.abort.abort();
+    await Promise.allSettled(jobs.map((job) => job.done));
+    this.changed();
+  }
   attach(
     deps: CoreDeps,
     role: "relay" | "project" | "worker",

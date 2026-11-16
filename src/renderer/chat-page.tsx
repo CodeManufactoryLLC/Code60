@@ -16,7 +16,7 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
-import { useChatDraft } from "./chat-draft.js";
+import { chatDraftKey, useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
@@ -29,10 +29,12 @@ import {
 import { useChatScroll } from "./chat-scroll.js";
 import { conversationId } from "./chats.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
+import { revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
+import type { ReviewPreview } from "./review-actions.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
@@ -54,12 +56,6 @@ function feedbackAt(review: ReviewSummary, chatId: string | undefined, turn: num
     )
   );
 }
-function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: number) {
-  return (
-    review.chatId === chatId &&
-    ((review.originChatId === chatId && review.turn === turn) || feedbackAt(review, chatId, turn))
-  );
-}
 
 export function ChatPage({
   api,
@@ -74,6 +70,7 @@ export function ChatPage({
   reviews = [],
   commands = [],
   onReview,
+  onRevisionPreview,
   onCopied,
   notice,
 }: {
@@ -89,6 +86,7 @@ export function ChatPage({
   reviews?: ReviewSummary[];
   commands?: readonly Command[];
   onReview?(id: string): void;
+  onRevisionPreview?(preview: ReviewPreview): void;
   onCopied?: (() => void) | undefined;
   notice?: ReactNode;
 }) {
@@ -98,14 +96,10 @@ export function ChatPage({
   const titleTarget = chat && conversationId(chat);
   const relay = chat?.kind === "relay";
   const available = !!database || relay;
-  const key = chat?.conversationId
-    ? `code60.orchestrationDraft:${chat.conversationId}`
-    : run
-      ? `code60.orchestrationDraft:${run.id}`
-      : "";
+  const key = chatDraftKey(chat);
   const currentKey = useRef(key);
   currentKey.current = key;
-  const draftState = useChatDraft(key);
+  const draftState = useChatDraft(key, run?.id);
   const { draft, edit } = draftState;
   const {
     pending,
@@ -126,6 +120,14 @@ export function ChatPage({
     reveal: revealActivity,
   } = useChatScroll(active && !hidden, key);
   const shown = active && !hidden;
+  const revisionFlow = useConversationRevisions({
+    api,
+    chat,
+    reviews,
+    runs,
+    active: shown,
+    onPreview: onRevisionPreview,
+  });
   const visibility = useRef({ key, shown, since: Date.now() });
   if (visibility.current.key !== key || visibility.current.shown !== shown)
     visibility.current = { key, shown, since: Date.now() };
@@ -138,6 +140,7 @@ export function ChatPage({
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
   const ready =
     available &&
+    chat?.checkpoint?.phase !== "undoing" &&
     !!run &&
     (run.status === "idle" ||
       !!chat?.restored ||
@@ -149,6 +152,7 @@ export function ChatPage({
     available && run && (run.turns > 0 || run.status === "idle" || chat?.restored || ended),
   );
   const blocks = useMemo(() => transcript(events), [events]);
+  const latestRequest = blocks.findLast((block) => block.type === "prompt" && !block.automatic);
   const timings = useMemo(
     () => turnTimings(events, run?.status ?? "interrupted"),
     [events, run?.status],
@@ -170,6 +174,16 @@ export function ChatPage({
     }
     return result;
   }, [blocks, visible]);
+  const revisionSlots = new Map<number, ReactNode[]>();
+  for (const card of revisionFlow.cards) {
+    const slot = revisionSlot(
+      card.at,
+      card.summary.originChatId,
+      run?.id,
+      items.map((item) => events[Number(item.blocks[0]?.key)]?.at),
+    );
+    revisionSlots.set(slot, [...(revisionSlots.get(slot) ?? []), card.content]);
+  }
   const activityTurns = useMemo(() => {
     const groups = new Map<string, Block[]>();
     const included = new Set(blocks.slice(-visible).map((block) => block.key));
@@ -296,12 +310,32 @@ export function ChatPage({
         type: "send",
         id: run.id,
         text,
+        ...(sent.attachments.length
+          ? { references: sent.attachments.map((item) => item.reference) }
+          : {}),
         ...(command ? { command: command.name } : {}),
       })
     ) {
       draftState.clear(sent);
       resume();
     }
+  }
+  async function undoRequest() {
+    const undoId = run?.id ?? (relay ? chat?.conversationId : undefined);
+    if (!undoId || !chat?.checkpoint || busy) return;
+    const sent = draftState.sent();
+    await action(
+      {
+        type: "undo-request",
+        id: undoId,
+        checkpointId: chat.checkpoint.id,
+        replacesDraft: !!sent.text || sent.attachments.length > 0,
+      },
+      (result) => {
+        if (!draftState.restore(sent, result.text, result.references))
+          setError("Undo finished, but a newer draft was preserved.");
+      },
+    );
   }
   const label = connecting
     ? "Connecting"
@@ -426,15 +460,18 @@ export function ChatPage({
                   Show earlier activity
                 </button>
               )}
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <div className="chat-turn-content" key={item.key}>
+                  {revisionSlots.get(index)}
                   {!item.activity &&
                     (() => {
                       const block = item.blocks[0] as Block;
                       const event = events[Number(block.key)];
                       const feedback =
                         event?.type === "prompt"
-                          ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
+                          ? revisionFlow.summaries.find((review) =>
+                              feedbackAt(review, run?.id, event.turn),
+                            )
                           : undefined;
                       const fresh =
                         Number(block.key) >= receivedEvents.current.count &&
@@ -446,7 +483,20 @@ export function ChatPage({
                         <article className="event prompt" aria-label="Your review feedback">
                           <div className="chat-message-speaker">You</div>
                           <p>Feedback on {feedback.title}</p>
-                          <button type="button" onClick={() => onReview?.(feedback.id)}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const batch = feedback.submissions.find(
+                                (batch) =>
+                                  (batch.deliveredChatId ?? feedback.originChatId) === run?.id &&
+                                  batch.deliveredTurn ===
+                                    (event?.type === "prompt" ? event.turn : undefined),
+                              );
+                              if (batch && revisionFlow.showFeedback(feedback.id, batch.revisionId))
+                                return;
+                              if (!relay) onReview?.(feedback.id);
+                            }}
+                          >
                             View submitted feedback
                           </button>
                         </article>
@@ -466,6 +516,19 @@ export function ChatPage({
                           incoming={block.type === "message" && fresh}
                           visible={active && !hidden}
                           onCopied={onCopied}
+                          actions={
+                            block === latestRequest &&
+                            chat?.checkpoint && (
+                              <button
+                                className="message-undo"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void undoRequest()}
+                              >
+                                Undo
+                              </button>
+                            )
+                          }
                         />
                       );
                       return block.type === "message" || block.type === "prompt" ? (
@@ -476,30 +539,6 @@ export function ChatPage({
                         message
                       );
                     })()}
-                  {item.blocks.flatMap((block) => {
-                    const event = events[Number(block.key)];
-                    if (event?.type !== "prompt") return [];
-                    return reviews
-                      .filter((review) => reviewAt(review, run?.id, event.turn))
-                      .map((review) => (
-                        <div className="chat-review-activity" key={review.id}>
-                          <span>{review.title}</span>
-                          <span>
-                            {review.workers
-                              .map(
-                                (worker) =>
-                                  `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                              )
-                              .join(" · ")}
-                          </span>
-                          <button type="button" onClick={() => onReview?.(review.id)}>
-                            {review.submissions.some((batch) => batch.state === "delivered")
-                              ? "Review updates"
-                              : "Review changes"}
-                          </button>
-                        </div>
-                      ));
-                  })}
                   {item.blocks.map((block) => {
                     const timing = timings.get(block.key);
                     return timing && !timing.active ? (
@@ -526,33 +565,8 @@ export function ChatPage({
                   })}
                 </div>
               ))}
-              {reviews
-                .filter(
-                  (review) =>
-                    review.chatId === run?.id &&
-                    review.workers.length > 0 &&
-                    !events.some(
-                      (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
-                    ),
-                )
-                .map((review) => (
-                  <div className="chat-review-activity" key={review.id}>
-                    <span>{review.title}</span>
-                    <span>
-                      {review.workers
-                        .map(
-                          (worker) =>
-                            `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                        )
-                        .join(" · ")}
-                    </span>
-                    <button type="button" onClick={() => onReview?.(review.id)}>
-                      {review.submissions.some((batch) => batch.state === "delivered")
-                        ? "Review updates"
-                        : "Review changes"}
-                    </button>
-                  </div>
-                ))}
+              {revisionSlots.get(items.length)}
+              {revisionFlow.footer}
               {!opening && (
                 <ActivityDisplay
                   key={run?.id ?? "empty"}
@@ -595,6 +609,31 @@ export function ChatPage({
           </div>
         </div>
         <section className="composer" aria-label="Chat composer">
+          {chat?.checkpoint?.phase === "undoing" && (
+            <p role="alert">
+              Undo needs recovery before another request can start.
+              <button type="button" disabled={busy} onClick={() => void undoRequest()}>
+                Resume Undo
+              </button>
+            </p>
+          )}
+          {!!draftState.attachments.length && (
+            <ul className="chat-attachments" aria-label="Attached code references">
+              {draftState.attachments.map((attachment, index) => (
+                <li key={JSON.stringify(attachment.reference)}>
+                  {attachment.label}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Remove ${attachment.label}`}
+                    onClick={() => draftState.remove(index)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <label className="sr-only" htmlFor={`${id}-message`}>
             Message to orchestrator
           </label>
@@ -604,7 +643,9 @@ export function ChatPage({
             value={draft}
             commands={commands}
             commandsEnabled={!relay}
-            disabled={!available || !run || (connecting && !chat?.restored)}
+            disabled={
+              !available || !run || pending === "undo-request" || (connecting && !chat?.restored)
+            }
             onChange={edit}
             onSend={() => void send()}
           />

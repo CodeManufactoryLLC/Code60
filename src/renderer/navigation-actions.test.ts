@@ -110,7 +110,9 @@ describe("shared navigation actions", () => {
       const { actions, context, status, reveal } = fixture();
       const gate = deferred();
       vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
-      vi.mocked(context.api.orchestrationChatAction).mockImplementation(() => gate.promise);
+      vi.mocked(context.api.orchestrationChatAction).mockImplementation(() =>
+        gate.promise.then(() => undefined),
+      );
       context.selectWorker = vi.fn(() => gate.promise.then(() => true));
       const destination =
         target === "project"
@@ -160,7 +162,9 @@ describe("shared navigation actions", () => {
   it("does not open a conversation whose owner closed while selection was pending", async () => {
     const { actions, context } = fixture(),
       gate = deferred();
-    vi.mocked(context.api.orchestrationChatAction).mockImplementation(() => gate.promise);
+    vi.mocked(context.api.orchestrationChatAction).mockImplementation(() =>
+      gate.promise.then(() => undefined),
+    );
     const pending = actions.open({ kind: "conversation", id: "chat" });
     context.chats = [];
     gate.resolve();

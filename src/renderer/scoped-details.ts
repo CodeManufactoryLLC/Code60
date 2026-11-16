@@ -133,6 +133,8 @@ export function applyDetails(
         (relay
           ? chat.kind === "relay" && chat.conversationId === scope.conversationId
           : chat.run?.id === scope.conversationId);
+      const owner = [state.snapshot.chat, ...state.snapshot.chats].find(matches);
+      if ((payload.chat.rewindRevision ?? 0) < (owner?.rewindRevision ?? 0)) continue;
       const overlay = (chat: OrchestrationChat) =>
         matches(chat) &&
         payload.chat.history &&

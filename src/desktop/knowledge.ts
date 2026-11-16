@@ -216,6 +216,18 @@ export class DesktopKnowledge {
     if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+    } else if (cap.id === "reviews") {
+      status = "unknown";
+      reason =
+        "Quiet change links open captured evidence in project chats and Relay. Corrections require live originating workers; saved evidence grants no authority.";
+      action =
+        "Use the conversation's files changed link or Changes. Select saved code and Add to chat without sending.";
+    } else if (cap.id === "apply-undo") {
+      status = "unknown";
+      reason =
+        "Undo depends on the latest request checkpoint and its addressed targets, not the selected project's Git readiness. Zero-edit requests can rewind; direct-folder snapshots may also rewind manual edits.";
+      action =
+        "Use Undo beside the latest user message; confirm the request, targets and any draft replacement.";
     } else if (cap.status === "placeholder") {
       status = "unsupported";
       reason = "Placeholder, not implemented.";
@@ -418,7 +430,9 @@ export class DesktopKnowledge {
       if (request.revision !== this.tabRevision(panel, tab))
         throw new Error("View changed; rediscover tabs");
       const value =
-        tab.kind === "recall" ? undefined : await this.sources.readView(caller, panel, tab);
+        tab.kind === "recall" || tab.kind === "application"
+          ? undefined
+          : await this.sources.readView(caller, panel, tab);
       this.sources.valid(caller);
       this.sources.validOwner(panel.owner);
       const current = this.panels.get(request.panelId);

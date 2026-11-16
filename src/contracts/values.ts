@@ -27,6 +27,17 @@ export const stopReasonSchema = z.enum([
 ]);
 export type StopReason = z.infer<typeof stopReasonSchema>;
 export const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
+export const runStatusSchema = z.enum([
+  "queued",
+  "running",
+  "waiting",
+  "idle",
+  "finished",
+  "failed",
+  "cancelled",
+  "timed_out",
+  "interrupted",
+]);
 export const permissionRuleSchema = z.enum(["allow", "deny", "ask"]);
 export type PermissionRule = z.infer<typeof permissionRuleSchema>;
 

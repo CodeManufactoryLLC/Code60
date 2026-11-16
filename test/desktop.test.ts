@@ -322,6 +322,29 @@ describe("database-wide RAG discovery", () => {
     await expect(controller.rebuildRag(identity())).rejects.toThrow();
     expect(controller.rag.snapshot().index).toEqual(previous);
   });
+  it("excludes discarded chat events from live and saved-only RAG rebuilds", async () => {
+    agents.script = (_text, session) => {
+      session.update({ type: "message", text: "DISCARDED_RAG_REPLY" });
+      return "end_turn";
+    };
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "DISCARDED_RAG_REQUEST" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({
+      type: "undo-request",
+      id,
+      checkpointId: controller.snapshot().chat.checkpoint?.id as string,
+      replacesDraft: false,
+    });
+    await controller.rebuildRag(identity());
+    expect(JSON.stringify(ragSources)).not.toContain("DISCARDED_RAG_");
+    await setProvider(null);
+    await controller.rebuildRag(identity());
+    expect(JSON.stringify(ragSources)).not.toContain("DISCARDED_RAG_");
+    expect(ragSources.some((source) => source.source.runId === id)).toBe(true);
+  });
 });
 
 // Simulate a successfully committed setup for tests of downstream chat lifecycles.
@@ -3979,6 +4002,40 @@ describe("app-wide orchestration chat", () => {
     await expect(call("code60_read_sessions")).rejects.toThrow();
   });
 
+  it("generates a title only from the surviving exchange after Undoing the first request", async () => {
+    const titles: string[] = [];
+    agents.script = (text, session) => {
+      if (text.startsWith("Write a descriptive chat title")) {
+        titles.push(text);
+        if (titles.length === 1) return "hang";
+        session.update({ type: "message", text: "Public work" });
+      } else {
+        session.update({
+          type: "message",
+          text: text.includes("DISCARDED_TITLE_REQUEST")
+            ? "DISCARDED_TITLE_REPLY"
+            : "PUBLIC_TITLE_REPLY",
+        });
+      }
+      return "end_turn";
+    };
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "DISCARDED_TITLE_REQUEST" });
+    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await controller.orchestrationChatAction({
+      type: "undo-request",
+      id,
+      checkpointId: controller.snapshot().chat.checkpoint?.id as string,
+      replacesDraft: false,
+    });
+    await controller.orchestrationChatAction({ type: "send", id, text: "PUBLIC_TITLE_REQUEST" });
+    await vi.waitFor(() => expect(titles).toHaveLength(2));
+    expect(titles[1]).toContain("PUBLIC_TITLE_REQUEST");
+    expect(titles[1]).toContain("PUBLIC_TITLE_REPLY");
+    expect(titles[1]).not.toContain("DISCARDED_TITLE_");
+    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Public work"));
+  });
+
   it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
     agents.script = (_text, session) => {
       session.update({ type: "message", text: "Parser validation" });
@@ -4538,6 +4595,151 @@ describe("orchestrated workers over ACP", () => {
     return { call, scope: context.body.result.scope as string };
   }
 
+  it("does not wait for a dispatch queued behind the native Undo confirmation", async () => {
+    const { call, scope } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "HANG undo target" });
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    const current = (controller as unknown as { conversations: ConversationCoordinator })
+      .conversations.current;
+    let confirmUndo!: (value: boolean) => void;
+    confirm.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          confirmUndo = resolve;
+        }),
+    );
+    let result: unknown;
+    const undo = controller
+      .orchestrationChatAction({ type: "undo-request", id, checkpointId, replacesDraft: false })
+      .then((value) => {
+        result = value;
+      });
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+    const starts = agents.specs.length;
+    const queued = call("code60_dispatch_agent", {
+      scope,
+      requestId: "during-undo",
+      prompt: "Never launch this stale request",
+    }).catch(() => undefined);
+    let releaseCleanup: (() => void) | undefined;
+    try {
+      await vi.waitFor(() => expect(current.dispatches.has("during-undo")).toBe(true));
+      const entry = current.dispatches.get("during-undo");
+      if (!entry) throw new Error("Missing queued dispatch");
+      // Let cleanup release a regressed queue cycle rather than hang the whole suite.
+      const cleanupGate = new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      });
+      entry.result = Promise.race([entry.result, cleanupGate]);
+      void entry.result.catch(() => {});
+      confirmUndo(true);
+      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }));
+      expect(agents.specs).toHaveLength(starts);
+    } finally {
+      confirmUndo(true);
+      releaseCleanup?.();
+      await undo;
+      await queued;
+    }
+  });
+
+  it("retains worker memory rewind boundaries after a fallible rewind loses execution ownership", async () => {
+    const { call, scope } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "HANG discarded" });
+    const worker = await dispatch(call, scope, "HANG worker");
+    await vi.waitFor(() => expect(session(worker)?.turnActive).toBe(true));
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    // biome-ignore lint/complexity/useLiteralKeys: Fail the real host's memory recovery boundary once.
+    const rewind = vi.spyOn(controller["memory"], "rewind");
+    rewind.mockRejectedValueOnce(new Error("Memory temporarily unavailable"));
+    const action = { type: "undo-request" as const, id, checkpointId, replacesDraft: false };
+    try {
+      await expect(controller.orchestrationChatAction(action)).rejects.toThrow(
+        "Memory temporarily",
+      );
+      expect(controller.snapshot().chat.workers).toEqual([]);
+      await expect(controller.orchestrationChatAction(action)).resolves.toMatchObject({
+        type: "rewound",
+      });
+      expect(rewind).toHaveBeenCalledWith(`worker:${worker}`, 0);
+    } finally {
+      rewind.mockRestore();
+    }
+  });
+
+  it("rewinds an active project request, stops only owned work and uses a fresh surviving-history provider on Send", async () => {
+    const { call } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "SURVIVING_PROJECT_PREFIX",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const discarded = "DISCARDED_PROJECT_Z9 HANG";
+    await controller.orchestrationChatAction({ type: "send", id, text: discarded });
+    const { scope } = (await call("code60_get_context")).body.result;
+    const owned = await dispatch(call, scope, "HANG owned worker");
+    const [unrelated] = await controller.start({ ...request, prompt: "HANG unrelated worker" });
+    await vi.waitFor(() =>
+      expect(agents.sessions.filter((session) => session.turnActive)).toHaveLength(3),
+    );
+    await vi.waitFor(() =>
+      expect(
+        controller.snapshot().runs.filter((run) => run.view?.status === "running"),
+      ).toHaveLength(2),
+    );
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    const starts = agents.sessions.length;
+    confirm.mockResolvedValueOnce(false);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toBeUndefined();
+    expect(chatStatus()).toBe("running");
+    expect(confirm.mock.calls.at(-1)?.[1]).toContain(discarded);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toEqual({ type: "rewound", checkpointId, text: discarded });
+    expect(agents.sessions).toHaveLength(starts);
+    expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+    expect(session(owned)?.stops.length).toBeGreaterThan(0);
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    expect((await workspace.store.read(owned)).status).toBe("cancelled");
+    expect(
+      controller.snapshot().runs.find((run) => run.record.id === unrelated)?.view?.status,
+    ).toBe("running");
+    expect(JSON.stringify(controller.snapshot().chat.events)).not.toContain("DISCARDED_PROJECT_Z9");
+    expect(controller.snapshot().chat.workers).toEqual([]);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "Continue from the surviving prefix.",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const freshIndex = agents.specs.findLastIndex((spec) =>
+      spec.mcpServers?.some((server) => server.name === "code60"),
+    );
+    expect(freshIndex).toBeGreaterThan(0);
+    const fresh = agents.sessions[freshIndex];
+    expect(fresh?.prompts).toHaveLength(1);
+    expect(fresh?.prompts[0]).toContain("SURVIVING_PROJECT_PREFIX");
+    expect(fresh?.prompts[0]).not.toContain("DISCARDED_PROJECT_Z9");
+  });
+
   it("creates reusable commands through the chat gateway without executing or overwriting them", async () => {
     const { call } = await setup();
     const prompts = [...chatPrompts()];
@@ -4850,7 +5052,7 @@ describe("orchestrated workers over ACP", () => {
   describe("desktop task application boundaries", () => {
     afterEach(() => vi.restoreAllMocks());
 
-    async function taskFixture(content = Buffer.from("after\n")) {
+    async function taskFixture(content = Buffer.from("after\n"), automatic = false) {
       const project = await realOf(directory);
       const base = "a".repeat(40);
       const commit = "b".repeat(40);
@@ -4888,11 +5090,19 @@ describe("orchestrated workers over ACP", () => {
         }),
       });
       const { call, scope } = await setup();
-      const worker = await dispatch(call, scope, "task worker");
+      if (automatic) {
+        await controller.orchestrationChatAction({
+          type: "send",
+          id: controller.snapshot().chat.run?.id as string,
+          text: "Change task",
+        });
+        await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+      }
+      const worker = await dispatch(call, scope, automatic ? "HANG task worker" : "task worker");
       await vi.waitFor(() =>
         expect(
           controller.snapshot().runs.find((run) => run.record.id === worker)?.view?.status,
-        ).toBe("idle"),
+        ).toBe(automatic ? "running" : "idle"),
       );
       const reviewId = controller.snapshot().reviews?.[0]?.id;
       if (!reviewId) throw new Error("Missing task review");
@@ -4903,6 +5113,19 @@ describe("orchestrated workers over ACP", () => {
       if (!revisionId) throw new Error("Missing task revision");
       return { identity, revisionId, tasks, call, scope, worker };
     }
+
+    it("keeps a busy worker and its settled sibling read-only until every captured turn settles", async () => {
+      const { identity, call, scope, worker } = await taskFixture(Buffer.from("after\n"), true);
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      const sibling = await dispatch(call, scope, "settled sibling", "sibling");
+      await vi.waitFor(() => expect(session(sibling)?.turnActive).toBe(false));
+      await controller.captureReview({ ...identity, requestId: randomUUID() });
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      session(worker)?.endTurn("end_turn");
+      await vi.waitFor(async () =>
+        expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+      );
+    });
 
     it("prepares, previews, applies and undoes through the real controller and task store", async () => {
       const { identity, revisionId, tasks } = await taskFixture();
@@ -5647,6 +5870,53 @@ describe("orchestrated workers over ACP", () => {
     await controller.orchestrationChatAction({ type: "resume-updates", id: chatId });
     await vi.waitFor(() => expect(chatPrompts()).toHaveLength(4));
     expect(chatPrompts()[3]).toContain(`Worker ${one} (claude): idle after turn 2`);
+  });
+
+  it("retains a worker's terminal view when an older history read finishes after Stop", async () => {
+    const { call, scope } = await setup();
+    const runId = await dispatch(call, scope, "HANG work");
+    await vi.waitFor(() => expect(session(runId)?.turnActive).toBe(true));
+    await controller.poll(["history"]);
+    // biome-ignore lint/complexity/useLiteralKeys: Hold the host history boundary across real worker cleanup.
+    const store = controller["workspace"]?.store;
+    if (!store) throw new Error("Missing fixture workspace");
+    const list = store.list.bind(store);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let captured = false;
+    const listing = vi.spyOn(store, "list").mockImplementationOnce(async (...args) => {
+      const records = await list(...args);
+      expect(records.find((record) => record.id === runId)?.status).toBe("running");
+      captured = true;
+      await gate;
+      return records;
+    });
+    const pending = controller.poll(["history"]);
+    try {
+      await vi.waitFor(() => expect(captured).toBe(true));
+      expect((await call("code60_stop_agent", { scope, runId })).status).toBe(200);
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      release();
+      await pending;
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.view?.status).toBe(
+        "cancelled",
+      );
+      expect((await call("code60_list_agents")).body.result.workers[0]).toMatchObject({
+        status: "cancelled",
+        actions: ["resume"],
+      });
+      await controller.poll(["history"]);
+      expect((await store.read(runId)).status).toBe("cancelled");
+      expect(
+        controller.snapshot().runs.find((run) => run.record.id === runId)?.view,
+      ).toBeUndefined();
+    } finally {
+      release();
+      await pending;
+      listing.mockRestore();
+    }
   });
 
   it("stops and resumes owned workers with allow-all, and revokes tools when the chat is replaced", async () => {

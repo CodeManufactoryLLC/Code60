@@ -4352,7 +4352,9 @@ test("desktop: Relay direct workers remain visible and controllable without a pr
     await expect(row).toBeEnabled();
     await row.click();
     const worker = page.locator(".worker-chat-page:visible");
-    await expect(worker).toContainText("Direct edits have no isolated apply, undo or discard");
+    await expect(worker).toContainText(
+      "Undo in Relay also rewinds manual edits since the checkpoint",
+    );
     const reply = worker.getByRole("textbox", { name: "Message", exact: true });
     await expect(reply).toBeEnabled();
     await reply.fill("A human follow-up without a project");
@@ -4376,7 +4378,7 @@ test("desktop: Relay direct workers remain visible and controllable without a pr
   }
 });
 
-test("desktop: Relay Changes captures two unopened targets, applies locally, undoes and delivers feedback", async () => {
+test("desktop: Relay automatic edits preserve two target owners through latest-message Undo and restart", async () => {
   test.setTimeout(120_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-relay-changes-ui-"));
   const targets = [join(directory, "target-a"), join(directory, "target-b")] as const;
@@ -4405,20 +4407,27 @@ test("desktop: Relay Changes captures two unopened targets, applies locally, und
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator" });
+    const indexes = await Promise.all(
+      targets.map((target) => readFile(join(target, ".git/index"))),
+    );
+    const heads = targets.map((target) =>
+      execFileSync("git", ["rev-parse", "HEAD"], { cwd: target, encoding: "utf8" }),
+    );
+    const requests: string[] = [];
     for (const [index, cwd] of targets.entries()) {
       await expect(composer).toBeEnabled();
-      await composer.fill(
-        `Relay target: ${JSON.stringify({
-          cwd,
-          workspaceMode: "worktree",
-          requestId: `review-target-${index}`,
-          label: `Target ${index + 1} changes`,
-          prompt: JSON.stringify([
-            { write: { path: "result.txt", content: `target ${index + 1} changed\n` } },
-            { message: "Isolated target change ready." },
-          ]),
-        })}`,
-      );
+      const request = `Relay target: ${JSON.stringify({
+        cwd,
+        workspaceMode: "worktree",
+        requestId: `review-target-${index}`,
+        label: `Target ${index + 1} changes`,
+        prompt: JSON.stringify([
+          { write: { path: "result.txt", content: `target ${index + 1} changed\n` } },
+          { message: "Isolated target change ready." },
+        ]),
+      })}`;
+      requests.push(request);
+      await composer.fill(request);
       await expect(
         page
           .locator(".orchestration-chat-page:visible")
@@ -4432,80 +4441,89 @@ test("desktop: Relay Changes captures two unopened targets, applies locally, und
           return snapshot.runs.filter((run) => run.relay && run.view?.status === "idle").length;
         })
         .toBe(index + 1);
+      await expect
+        .poll(() => readFile(join(cwd, "result.txt"), "utf8"))
+        .toBe(`target ${index + 1} changed\n`);
     }
     await expect(composer).toBeEnabled();
-    await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
+    await composer.fill("Unsent target draft");
     const panel = page.locator("#relay-plan-panel");
-    await panel.getByRole("button", { name: "Open Changes", exact: true }).click();
-    const changes = panel.getByRole("region", { name: "Relay changes by target" });
-    await expect(changes.getByRole("heading", { name: targets[0], exact: true })).toBeVisible();
-    await expect(changes.getByRole("heading", { name: targets[1], exact: true })).toBeVisible();
-    await changes
-      .getByRole("button", { name: "Target 1 changes · Current generation", exact: true })
-      .click();
-    const review = changes.getByRole("region", { name: "Selected Relay review" });
-    await review.getByRole("button", { name: "Refresh changes", exact: true }).click();
-    await expect(review.getByLabel("Revision", { exact: true })).not.toHaveValue("");
-    await expect(review.locator(".review-panel .review-diff-editor")).toContainText(
-      "target 1 changed",
-    );
-    await review.getByRole("checkbox", { name: "Mark file reviewed", exact: true }).check();
+    await expect(panel).toHaveAttribute("aria-hidden", "true");
+    const links = page.locator(".orchestration-chat-page:visible .conversation-changes-link");
+    await expect(links).toHaveCount(2);
+    await expect(links.nth(0)).toHaveText("1 file changed");
+    await expect(links.nth(1)).toHaveText("1 file changed");
+    const before = await page.evaluate(() => window.desktop.snapshot());
+    await links.nth(1).click();
+    await expect(panel.locator(".review-diff-editor")).toContainText("target 2 changed");
+    await links.nth(0).click();
+    await expect(panel.locator(".review-diff-editor")).toContainText("target 1 changed");
+    await expect(panel.locator("form, .task-actions")).toHaveCount(0);
     await expect(
-      review.getByRole("checkbox", { name: "Mark file reviewed", exact: true }),
-    ).toBeChecked();
-    await review.getByRole("button", { name: "Use these changes…", exact: true }).click();
-    await expect(review.getByRole("status")).toHaveText("prepared");
-    await review
-      .getByRole("list", { name: "Application files" })
-      .getByRole("button", { name: "result.txt", exact: true })
-      .click();
-    await expect(review.locator(".review-diff-editor").last()).toContainText("target 1 changed");
+      page.getByRole("button", { name: /Preview application|Apply changes|Send feedback/ }),
+    ).toHaveCount(0);
+    for (const worker of before.runs) {
+      expect(await readFile(join(worker.record.worktree, "result.txt"), "utf8")).toBe(
+        worker.relay?.cwd === targets[0] ? "target 1 changed\n" : "target 2 changed\n",
+      );
+    }
+    const latest = page
+      .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic)")
+      .last();
+    await latest.hover();
+    const undo = latest.getByRole("button", { name: "Undo", exact: true });
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await undo.click();
+    await expect(undo).toBeEnabled();
+    await expect(composer).toHaveValue("Unsent target draft");
+    for (const [index, target] of targets.entries())
+      expect(await readFile(join(target, "result.txt"), "utf8")).toBe(
+        `target ${index + 1} changed\n`,
+      );
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await review.getByRole("button", { name: "Apply changes…", exact: true }).click();
-    await expect
-      .poll(() => readFile(join(targets[0] as string, "result.txt"), "utf8"))
-      .toBe("target 1 changed\n");
-    expect(await readFile(join(targets[1] as string, "result.txt"), "utf8")).toBe("original\n");
-    await review.getByRole("button", { name: "Undo application…", exact: true }).click();
-    await expect
-      .poll(() => readFile(join(targets[0] as string, "result.txt"), "utf8"))
-      .toBe("original\n");
-    await review
-      .getByRole("textbox", { name: "Feedback", exact: true })
-      .fill("Keep the target-specific change.");
-    await review.getByRole("button", { name: "Send feedback", exact: true }).click();
-    await expect(review.getByRole("list", { name: "Feedback delivery" })).toContainText(
-      "delivered",
-    );
+    await undo.click();
+    await expect(composer).toHaveValue(requests[1] as string);
+    await expect(links).toHaveCount(1);
+    for (const [index, target] of targets.entries()) {
+      expect(await readFile(join(target, "result.txt"), "utf8")).toBe(
+        index === 0 ? "target 1 changed\n" : "original\n",
+      );
+      expect(await readFile(join(target, ".git/index"))).toEqual(indexes[index]);
+      expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: target, encoding: "utf8" })).toBe(
+        heads[index],
+      );
+    }
     const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    expect(snapshot.runs).toHaveLength(0);
+    expect(snapshot.chat.workers).toEqual([]);
+    expect(snapshot.chat.run?.turns).toBe(0);
     expect(snapshot.database).toBeNull();
     expect(snapshot.directory).toBeNull();
     await page.reload();
-    await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
-    await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: "Open Changes", exact: true }).click();
-    await changes
-      .getByRole("button", { name: "Target 1 changes · Current generation", exact: true })
-      .click();
-    await expect(review.getByRole("list", { name: "Feedback delivery" })).toContainText(
-      "delivered",
-    );
+    await expect(composer).toHaveValue(requests[1] as string);
+    await expect(links).toHaveCount(1);
     await application.close();
     application = await launch(directory, targets[0], join(directory, "unused.sqlite"));
     const restarted = await application.firstWindow();
     await restarted.getByRole("button", { name: "Start", exact: true }).click();
-    await restarted.getByRole("button", { name: "Toggle files panel", exact: true }).click();
-    const saved = restarted.locator("#relay-plan-panel");
-    await saved.getByRole("button", { name: "Open Changes", exact: true }).click();
-    await saved
-      .getByRole("button", { name: "Target 1 changes · Historical evidence", exact: true })
-      .click();
-    await expect(saved).toContainText("Historical evidence only");
-    await expect(saved.getByRole("textbox", { name: "Feedback", exact: true })).toBeDisabled();
-    await expect(saved.getByRole("list", { name: "Feedback delivery" })).toContainText("delivered");
+    const savedLink = restarted.locator(
+      ".orchestration-chat-page:visible .conversation-changes-link",
+    );
+    await expect(savedLink).toHaveCount(1);
+    await savedLink.click();
+    await expect(restarted.locator("#relay-plan-panel .review-diff-editor")).toContainText(
+      "target 1 changed",
+    );
+    await expect(
+      restarted.getByRole("button", { name: /Apply changes|Send feedback/ }),
+    ).toHaveCount(0);
     expect((await restarted.evaluate(() => window.desktop.snapshot())).chat.workers).toEqual([]);
+    expect(await readFile(join(targets[0], "result.txt"), "utf8")).toBe("target 1 changed\n");
+    expect(await readFile(join(targets[1], "result.txt"), "utf8")).toBe("original\n");
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -4540,7 +4558,7 @@ test("desktop: Relay plans bind human acceptance to explicit targets without a d
     let panel = page.locator("#relay-plan-panel");
     await expect(panel.getByRole("heading", { name: "Relay target plan" })).toBeVisible();
     await expect(panel).toContainText(target);
-    await expect(panel).toContainText("direct edits, no isolated apply or undo");
+    await expect(panel).toContainText("Undo also rewinds manual edits since the checkpoint");
     let snapshot = await page.evaluate(() => window.desktop.snapshot());
     const identity = snapshot.chat.conversationId;
     expect(snapshot.database).toBeNull();
@@ -4907,7 +4925,7 @@ test("desktop: Tactics preview, keyboard selection, draft preservation and stopp
   }
 });
 
-test("desktop: read-only task revisions preserve project files and switch reviews", async () => {
+test("desktop: automatic project edits support ordinary corrections, pinned revisions and message Undo", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-task-loop-ui-")));
   const repo = join(directory, "repo");
@@ -4983,7 +5001,12 @@ test("desktop: read-only task revisions preserve project files and switch review
     await composer.fill("Implement task loop");
     await composer.press("Enter");
     await waitForCapture("Implement task loop", "task.txt");
-    await page.getByRole("button", { name: "Review changes", exact: true }).click();
+    const links = page.locator(".orchestration-chat-page:visible .conversation-changes-link");
+    await expect(links).toHaveCount(1);
+    await links.last().click();
+    const firstTab = page.getByRole("tab", { name: "Implement task loop", exact: true });
+    await expect(firstTab).toHaveAttribute("aria-selected", "true");
+    const firstTabId = await firstTab.getAttribute("id");
     const review = page.getByRole("region", { name: "Revision diff", exact: true });
     await expect(review.locator(".monaco-diff-editor")).toBeVisible();
     await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
@@ -5001,20 +5024,67 @@ test("desktop: read-only task revisions preserve project files and switch review
         name: /Use these changes|Undo application|Refresh changes|Mark file/,
       }),
     ).toHaveCount(0);
-    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
+    await expect
+      .poll(() => readFile(join(repo, "task.txt"), "utf8"))
+      .toBe("accepted task result\n");
     expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
     expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     await expect(composer).toBeEditable();
     await composer.fill("Implement second task loop");
     await composer.press("Enter");
     await waitForCapture("Implement second task loop", "second.txt");
-    await page.getByRole("button", { name: "Review changes", exact: true }).last().click();
+    await expect
+      .poll(() => readFile(join(repo, "second.txt"), "utf8"))
+      .toBe("accepted task result\n");
+    await expect(links).toHaveCount(2);
+    await links.last().click();
     await expect(page.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(1);
     await expect(review.locator(".review-files")).toContainText("second.txt");
     const secondTab = await page
-      .getByRole("tab", { name: /Revision \d+ · Implement second task loop/ })
+      .getByRole("tab", { name: "Implement second task loop", exact: true })
       .getAttribute("aria-selected");
     expect(secondTab).toBe("true");
+    // The next request starts from the user's actual working edit, not a clean checkout.
+    await writeFile(join(repo, "second.txt"), "user edit\n");
+    const correction = "Keep the user edit and add worker correction";
+    await expect(composer).toBeEditable();
+    await composer.fill(correction);
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("");
+    await composer.fill("Keep this unsent draft");
+    await waitForCapture(correction, "second.txt");
+    await expect
+      .poll(() => readFile(join(repo, "second.txt"), "utf8"))
+      .toBe("user edit\nworker correction\n");
+    // New captures must not replace an already selected immutable revision.
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "accepted task result",
+    );
+    await expect(links).toHaveCount(3);
+    await links.last().click();
+    await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
+      "worker correction",
+    );
+    await expect(composer).toHaveValue("Keep this unsent draft");
+    expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\nworker correction\n");
+    expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    const next = snapshot.runs.find((run) => run.record.firstPrompt.includes("worker correction"));
+    if (!next) throw new Error("Missing correction worker");
+    expect(await readFile(join(next.record.worktree, "second.txt"), "utf8")).toBe(
+      "user edit\nworker correction\n",
+    );
+    const latest = page
+      .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic)")
+      .last();
+    await latest.hover();
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await latest.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(composer).toHaveValue(correction);
+    expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("user edit\n");
+    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("accepted task result\n");
     await page.getByRole("tab", { name: "Changes", exact: true }).click();
     const revisionList = page.getByRole("navigation", { name: "Task revisions" });
     await expect(
@@ -5033,16 +5103,17 @@ test("desktop: read-only task revisions preserve project files and switch review
     await firstTask.getByRole("button").last().focus();
     await page.keyboard.press("Enter");
     await expect(review.locator(".review-files")).toContainText("task.txt");
-    await expect(
-      page.getByRole("tab", { name: /Revision \d+ · Implement task loop$/ }),
-    ).toHaveCount(1);
-    const snapshot = await page.evaluate(() => window.desktop.snapshot());
-    const next = snapshot.runs.find((run) => run.record.firstPrompt.includes("second.txt"));
-    if (!next) throw new Error("Missing second task");
-    expect(await readFile(join(next.record.worktree, "task.txt"), "utf8")).toBe(
-      "initial project\n",
+    // Opening the same immutable revision reuses the tab first opened by its quiet link.
+    await expect(firstTab).toHaveCount(1);
+    await expect(firstTab).toHaveAttribute("id", firstTabId ?? "");
+    await expect(firstTab).toHaveAttribute("aria-selected", "true");
+    expect(await readFile(join(next.record.worktree, "second.txt"), "utf8")).toBe(
+      "user edit\nworker correction\n",
     );
-    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("initial project\n");
+    expect(await readFile(join(next.record.worktree, "task.txt"), "utf8")).toBe(
+      "accepted task result\n",
+    );
+    expect(await readFile(join(repo, "task.txt"), "utf8")).toBe("accepted task result\n");
     expect(git(["diff", "--cached", "--binary"])).toBe(originalIndex);
     expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
   } finally {
@@ -13716,9 +13787,12 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await setup.getByRole("button", { name: "Return to Chat" }).click();
     await expect(composer).toHaveValue("Draft preserved through setup");
     expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    const git = (args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
+    const initialHead = git(["rev-parse", "HEAD"]);
+    const initialIndex = await readFile(join(repo, ".git", "index"));
     await composer.fill("Implement validation");
     await composer.press("Enter");
-    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeVisible();
+    await expect(page.locator(".conversation-changes-link").last()).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(
@@ -13745,7 +13819,15 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         }),
       )
       .toBe(2);
-    await page.getByRole("button", { name: "Review changes", exact: true }).click();
+    const filesToggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    await expect(filesToggle).toHaveAttribute("aria-expanded", "false");
+    await filesToggle.click();
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .last()
+      .click();
     let review = page.getByRole("region", { name: "Revision diff", exact: true });
     await expect(review).toBeVisible();
     const files = review.getByRole("navigation", { name: "Changed files" }).getByRole("button");
@@ -13821,11 +13903,19 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await expect(review.getByRole("checkbox", { name: "Side by side" })).toHaveCount(0);
     await expect(review.getByRole("checkbox", { name: "Hide Reviewed" })).toHaveCount(0);
     if (!saved.worktree) throw new Error("Missing worker worktree");
+    expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
     await writeFile(join(saved.worktree, "same.ts"), "export const readonlyMarker = true;\n");
-    await page.evaluate(
-      (identity) => window.desktop.captureReview({ ...identity, requestId: crypto.randomUUID() }),
-      saved.identity,
-    );
+    // Both workers change the same file differently. Preserve their captured evidence,
+    // but reject automatic integration rather than overwrite the checkout.
+    await expect(
+      page.evaluate(
+        (identity) => window.desktop.captureReview({ ...identity, requestId: crypto.randomUUID() }),
+        saved.identity,
+      ),
+    ).rejects.toThrow("Worker changes conflict with current files");
+    expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(initialIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     const captured = await page.evaluate(
       (identity) => window.desktop.readReview({ ...identity, requestId: crypto.randomUUID() }),
       saved.identity,
@@ -13949,6 +14039,8 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     expect(unchanged.comments).toEqual([]);
     expect(unchanged.submissions).toEqual([]);
     expect(await readFile(join(repo, "same.ts"), "utf8")).toBe("export const optional = false;\n");
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(initialIndex);
+    expect(git(["rev-parse", "HEAD"])).toBe(initialHead);
     await page.screenshot({ path: "test-results/chat-review-readonly.png" });
   } finally {
     await application?.close().catch(() => {});

@@ -36,7 +36,7 @@ function render(
 it("shows escaped target assignments and warns before accepting direct edits", () => {
   const direct = render(["pending"], "draft", "direct");
   expect(direct).toContain("/explicit/&lt;source&gt;");
-  expect(direct).toContain("direct edits, no isolated apply or undo");
+  expect(direct).toContain("Undo also rewinds manual edits since the checkpoint");
   expect(direct).toContain(">Accept</button>");
   expect(render(["pending"], "draft", "worktree")).toContain("isolated worktree");
 });

@@ -68,6 +68,98 @@ function publish(cid: string, s: MemorySource, value = generation(s)) {
   return must(store.browse({ conversationId: cid }).records[0]);
 }
 describe.skipIf(!sqliteAvailable())("private application memory", () => {
+  it.each([false, true])(
+    "restores a surviving fact after rewinding a correction=%s",
+    (correction) => {
+      const c = store.register("project:rewind", "Chat", dir);
+      const original = publish(c.id, source(c.id));
+      const changed = { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 };
+      const value = generation(changed);
+      must(value.memories[0]).correction = correction;
+      publish(c.id, changed, value);
+      expect(store.detail(original.id).record.state).toBe(correction ? "superseded" : "disputed");
+      store.close();
+      store = new MemoryStore(join(dir, "memory"));
+      store.rewind("project:rewind", 2);
+      expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+      store.rewind("project:rewind", 2);
+      expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+    },
+  );
+  it("preserves a human edit made after a discarded correction", () => {
+    const c = store.register("project:rewind", "Chat", dir);
+    const original = publish(c.id, source(c.id));
+    const changed = { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 };
+    const value = generation(changed);
+    must(value.memories[0]).correction = true;
+    publish(c.id, changed, value);
+    const current = store.detail(original.id).record;
+    store.action({
+      type: "edit",
+      id: original.id,
+      revision: current.revision,
+      text: "Human cache choice",
+      pinned: true,
+    });
+    const edited = store.detail(original.id).record;
+    store.rewind("project:rewind", 2);
+    expect(store.detail(original.id).record).toEqual(edited);
+  });
+  it("restores derived state across consecutive request Undos", () => {
+    const c = store.register("project:rewind", "Chat", dir);
+    const original = publish(c.id, source(c.id));
+    publish(c.id, { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 });
+    publish(c.id, { ...source(c.id, "Use Memcached for the cache."), ordinal: 3 });
+    store.rewind("project:rewind", 3);
+    expect(store.detail(original.id).record.state).toBe("disputed");
+    store.rewind("project:rewind", 2);
+    expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+  });
+  it.each([true, false])(
+    "ignores discarded project candidates when relearning identical=%s evidence",
+    (identical) => {
+      const c = store.register("project:rewind", "Chat", dir);
+      const discarded = publish(c.id, source(c.id));
+      store.rewind("project:rewind", 1);
+      const fresh = {
+        ...source(c.id, identical ? discarded.text : "Use SQLite for the cache."),
+        ordinal: 2,
+      };
+      const learned = publish(c.id, fresh);
+      expect(learned.id).not.toBe(discarded.id);
+      expect(learned.state).toBe("active");
+      expect(store.eligible(c.id).map((record) => record.id)).toEqual([learned.id]);
+    },
+  );
+
+  it("suppresses discarded turns and stale extraction while retaining surviving and unrelated evidence", () => {
+    const c = store.register("project:chat", "Chat", null);
+    const other = store.register("project:other", "Other", null);
+    const surviving = source(c.id, "Use Redis for the cache.");
+    publish(c.id, surviving);
+    const discarded = { ...source(c.id, "Retry failed requests seven times."), ordinal: 2 };
+    const value = generation(discarded);
+    must(value.memories[0]).subject = "retries";
+    publish(c.id, discarded, value);
+    publish(other.id, source(other.id, "Other chat remains available."));
+    const pending = { ...source(c.id, "Pending discarded extraction."), ordinal: 3 };
+    store.append(c.id, "pending", [pending], true);
+    const range = store.range(c.id);
+    expect(store.checkpoint(c.id)).not.toBe("");
+    expect(store.rewind("project:chat", 2)).toEqual([c.id]);
+    expect(store.eligible(c.id).map((record) => record.text)).toEqual([surviving.text]);
+    expect(store.lexical(c.id, "seven")).toEqual([]);
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.checkpoint(c.id)).toBe("");
+    expect(store.eligible(other.id).map((record) => record.text)).toEqual([
+      "Other chat remains available.",
+    ]);
+    expect(() =>
+      store.publish(c.id, range.cursor, range.boundary, generation(pending), "late"),
+    ).toThrow("changed");
+    expect(store.browse({ conversationId: c.id }).records).toHaveLength(2);
+    expect(() => store.rewind("project:chat", -1)).toThrow("boundary");
+  });
   it("distinguishes type, conditions, subject and dated events when deduplicating", () => {
     const c = store.register("c", "Chat", null);
     publish(c.id, source(c.id));

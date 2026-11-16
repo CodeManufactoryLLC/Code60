@@ -56,22 +56,26 @@ export function applyUpdate(state: DesktopState | undefined, update: Snapshot): 
   for (const chat of update.chats.length ? update.chats : [update.chat]) {
     const id = chat.run?.id;
     if (!id) continue;
+    const previousChat =
+      state?.snapshot.chats.find((item) => item.run?.id === id) ??
+      (state?.snapshot.chat.run?.id === id ? state.snapshot.chat : undefined);
+    const rewound = (previousChat?.rewindRevision ?? 0) !== (chat.rewindRevision ?? 0);
     chatEventRevisions[id] = chat.events.reduce(
       (revision, entry) => Math.max(revision, entry.revision),
-      (sameDatabase ? state?.chatEventRevisions?.[id] : undefined) ?? -1,
+      (sameDatabase && !rewound ? state?.chatEventRevisions?.[id] : undefined) ?? -1,
     );
     if (chat.kind === "relay") {
       // Relay snapshots carry one bounded replacement window, never an append-only UI lifetime.
       const previous = state?.snapshot.chats.find((item) => item.run?.id === id);
       chatEventsByRun[id] =
-        update.summaryOnly && previous?.generation === chat.generation
+        update.summaryOnly && !rewound && previous?.generation === chat.generation
           ? (state?.chatEventsByRun[id] ?? [])
           : chat.events.map((entry) => entry.event);
       continue;
     }
-    const previous = previousChats?.[id];
+    const previous = rewound ? undefined : previousChats?.[id];
     const merged = [...(previous ?? [])];
-    const after = previous ? (state?.snapshot.revision ?? -1) : -1;
+    const after = previous ? (state?.chatEventRevisions?.[id] ?? -1) : -1;
     for (const entry of chat.events) {
       if (entry.revision > after && entry.event.runId === id) merged.push(entry.event);
     }

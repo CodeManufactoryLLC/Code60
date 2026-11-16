@@ -94,13 +94,14 @@ network services. Place unit tests beside the code as `*.test.ts`; cross-cutting
 Use the [QA skill](.factory/skills/qa/SKILL.md) to choose complete user journeys
 from the changed behavior and actual regression starting state, including for
 configuration/bridge/fixture/packaging changes. The golden path is onboarding →
-database/project → request → accepted plan → worker → review → apply → undo,
-with renderer reload and a declined apply confirmation. It uses the existing
+database/project → request → accepted plan → worker → automatic edits →
+read-only diff → code reference → message Undo,
+with renderer reload and a declined Undo confirmation. It uses the existing
 fake-provider/Linux-container harness, not a new plugin or live provider.
 
 Collect without launching Electron:
 `npx --no-install playwright test --list agent-workflow.e2e.ts`.
-Run via `npm run test:desktop:container -- --grep "workflow: first use through plan, review, apply and undo"`.
+Run via `npm run test:desktop:container -- --grep "workflow: first use through plan, automatic edits, code references and message Undo"`.
 Collection, unit/static checks and screenshots do not prove workflow success.
 Report PASS/FAIL/BLOCKED and exact gaps; disk pressure or unavailable Docker is
 BLOCKED, never permission for a host Electron fallback. Save sanitized evidence

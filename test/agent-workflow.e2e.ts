@@ -244,7 +244,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
 }
 
-test("workflow: first use through plan, review, apply and undo", async () => {
+test("workflow: first use through plan, automatic edits, code references and message Undo", async () => {
   const info = test.info();
   test.setTimeout(120_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-user-workflow-")));
@@ -308,11 +308,12 @@ test("workflow: first use through plan, review, apply and undo", async () => {
   await expect(readFile(join(directory, "state/code60/desktop.json"))).rejects.toMatchObject({
     code: "ENOENT",
   });
-  const confirmation = (title: string, response: number): NativeDialog => ({
+  const requestText = `Plan a change in ${repo}\nCreate result.txt containing "human accepted target" followed by a newline. Use an isolated worktree and wait for my approval.`;
+  const confirmation = (response: number): NativeDialog => ({
     kind: "message",
-    title,
-    message: title,
-    detail: `${repo}\n1 file changes. Newer edits are rechecked before writing.`,
+    title: "Undo this request?",
+    message: "Undo this request?",
+    detail: `Rewind to before “${requestText.slice(0, 240)}” and restore this request's changes in:\n${repo}\nYour unsent composer draft will be replaced with the original request.`,
     buttons: ["Cancel", "Confirm"],
     defaultId: 0,
     cancelId: 0,
@@ -335,9 +336,8 @@ test("workflow: first use through plan, review, apply and undo", async () => {
       cancelId: 0,
       response: 1,
     },
-    confirmation("Apply reviewed changes?", 0),
-    confirmation("Apply reviewed changes?", 1),
-    confirmation("Undo reviewed changes?", 1),
+    confirmation(0),
+    confirmation(1),
   ];
   let application: ElectronApplication | undefined;
   const checks: string[] = [];
@@ -426,15 +426,13 @@ test("workflow: first use through plan, review, apply and undo", async () => {
       "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
     );
 
-    // Relay owns checkout-local apply/undo; project revision tabs are read-only.
+    // Plan approval stays explicit; working files integrate without an Apply step.
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await expect(composer).toBeEditable();
-    await composer.fill(
-      `Plan a change in ${repo}\nCreate result.txt containing "human accepted target" followed by a newline. Use an isolated worktree and wait for my approval.`,
-    );
+    await composer.fill(requestText);
     await composer.press("Enter");
     const plan = page.getByRole("region", { name: "Plan", exact: true });
     await expect(
@@ -474,8 +472,49 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     const workerProcesses = (await processes()).filter((entry) => entry.cwd === worktree);
     expect(workerProcesses).toHaveLength(1);
     expect(alive(workerProcesses[0]?.pid as number)).toBe(true);
-    await checkCheckout("original\n");
-    checks.push("A real fake-provider subprocess changed only its accepted isolated worktree.");
+    await expect
+      .poll(() => readFile(join(repo, "result.txt"), "utf8"))
+      .toBe("human accepted target\n");
+    await checkCheckout("human accepted target\n");
+    expect((await dialogs())?.observed).toHaveLength(3);
+    checks.push(
+      "An accepted isolated worker integrated automatically without another approval, preserving staging and HEAD.",
+    );
+
+    const panel = page.locator("#relay-plan-panel");
+    const changes = page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("button", { name: "1 file changed", exact: true });
+    await expect(changes).toHaveCount(1);
+    await changes.click();
+    const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
+    for (let step = 0; step < 20; step++) await resize.press("ArrowLeft");
+    await expect(panel.locator(".review-panel .review-diff-editor")).toContainText(
+      "human accepted target",
+    );
+    await expect(panel.locator("form, .task-actions")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Apply changes…", exact: true })).toHaveCount(0);
+    const draft = "An existing unsent draft.";
+    await composer.fill(draft);
+    const promptsBeforeAttachment = (
+      await page.evaluate(() => window.desktop.snapshot())
+    ).chat.events.filter((entry) => entry.event.type === "prompt").length;
+    const editor = panel.locator(".modified .inputarea").last();
+    await editor.press("Control+Home");
+    await editor.press("Shift+End");
+    await panel.getByRole("button", { name: "Add to chat", exact: true }).click();
+    await expect(composer).toHaveValue(draft);
+    await expect(
+      page.getByRole("list", { name: "Attached code references", exact: true }),
+    ).toContainText("result.txt:1-1 (modified)");
+    expect(
+      (await page.evaluate(() => window.desktop.snapshot())).chat.events.filter(
+        (entry) => entry.event.type === "prompt",
+      ),
+    ).toHaveLength(promptsBeforeAttachment);
+    checks.push(
+      "Diff selection attached its exact version, side and lines without replacing or sending the draft.",
+    );
 
     await page.reload();
     await page.setViewportSize({ width: 1600, height: 1000 });
@@ -484,7 +523,10 @@ test("workflow: first use through plan, review, apply and undo", async () => {
     const restored = await page.evaluate(() => window.desktop.snapshot());
     expect(restored.runs.map((run) => run.record.id)).toEqual([worker.record.id]);
     expect(restored.chat.conversationId).toBe(completed.chat.conversationId);
-    const panel = page.locator("#relay-plan-panel");
+    await expect(composer).toHaveValue(draft);
+    await expect(page.getByRole("list", { name: "Attached code references" })).toContainText(
+      "result.txt:1-1 (modified)",
+    );
     if ((await panel.getAttribute("aria-hidden")) === "true")
       await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
     const blank = panel.locator(".file-panel-empty");
@@ -512,67 +554,48 @@ test("workflow: first use through plan, review, apply and undo", async () => {
       }
       previousBottom = box.y + box.height;
     }
-    await panel.getByRole("button", { name: "Open Changes", exact: true }).click();
-    const changes = panel.getByRole("region", { name: "Relay changes by target" });
-    await expect(changes.getByRole("heading", { name: repo, exact: true })).toBeVisible();
-    await changes.getByRole("button", { name: / · Current generation$/, exact: false }).click();
-    const review = changes.getByRole("region", { name: "Selected Relay review" });
-    await review.getByRole("button", { name: "Refresh changes", exact: true }).click();
-    await expect(review.getByLabel("Revision", { exact: true })).not.toHaveValue("");
-    // Monaco renders only the visible columns. Widen the real panel to read the whole line.
-    const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
+    await changes.click();
     for (let step = 0; step < 20; step++) await resize.press("ArrowLeft");
-    await expect(review.locator(".review-panel .review-diff-editor")).toContainText(
+    await expect(panel.locator(".review-panel .review-diff-editor")).toContainText(
       "human accepted target",
     );
-    await review.getByRole("checkbox", { name: "Mark file reviewed", exact: true }).check();
-    await expect(
-      review.getByRole("checkbox", { name: "Mark file reviewed", exact: true }),
-    ).toBeChecked();
-    const checkout = review.getByRole("region", {
-      name: "Checkout-local application",
-      exact: true,
-    });
-    await checkout.getByRole("button", { name: "Use these changes…", exact: true }).click();
-    await expect(checkout.getByRole("status")).toHaveText("prepared");
-    await checkout
-      .getByRole("list", { name: "Application files", exact: true })
-      .getByRole("button", { name: "result.txt", exact: true })
-      .click();
-    await expect(checkout.locator(".review-diff-editor")).toContainText("human accepted target");
-    await checkCheckout("original\n");
+    await checkCheckout("human accepted target\n");
     checks.push(
-      "Renderer reload retained the same worker; review and application preview show its actual diff.",
+      "Renderer reload retained the same worker, draft and pinned reference without duplicate dispatch; blank-tab actions stayed centered.",
     );
 
-    const apply = checkout.getByRole("button", { name: "Apply changes…", exact: true });
-    await apply.click();
+    const message = page
+      .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic)")
+      .last();
+    await message.hover();
+    const undo = message.getByRole("button", { name: "Undo", exact: true });
+    await undo.click();
     await expect.poll(async () => (await dialogs())?.observed.length).toBe(4);
-    await expect(apply).toBeEnabled();
-    await expect(checkout.getByRole("status")).toHaveText("prepared");
-    await checkCheckout("original\n");
-    checks.push("Declined native application leaves checkout, staged entries and HEAD unchanged.");
-    await apply.click();
-    await expect(checkout.getByRole("status")).toHaveText("applied");
+    await expect(undo).toBeEnabled();
+    await expect(composer).toHaveValue(draft);
     await checkCheckout("human accepted target\n");
-    await checkout.getByRole("button", { name: "Undo application…", exact: true }).click();
-    await expect(checkout.getByRole("status")).toHaveText("undone");
+    checks.push(
+      "Declined Undo preserves the request, existing draft, working changes, staging and HEAD.",
+    );
+    await undo.click();
+    await expect(composer).toHaveValue(requestText);
+    await expect(page.getByRole("list", { name: "Attached code references" })).toHaveCount(0);
+    await expect(message).toHaveCount(0);
     await checkCheckout("original\n");
     expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
     expect(git("worktree", "list", "--porcelain").replaceAll("\\", "/")).toContain(
       `worktree ${worktree.replaceAll("\\", "/")}`,
     );
     expect((await processes()).filter((entry) => entry.cwd === worktree)).toEqual(workerProcesses);
-    expect(
-      (await page.evaluate(() => window.desktop.snapshot())).runs.map((run) => run.record.id),
-    ).toEqual([worker.record.id]);
+    expect(alive(workerProcesses[0]?.pid as number)).toBe(false);
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
     expect(errors).toEqual([]);
     const native = await dialogs();
     expect(native?.expected).toEqual([]);
     expect(native?.unexpected).toEqual([]);
-    expect(native?.observed).toHaveLength(6);
+    expect(native?.observed).toHaveLength(5);
     checks.push(
-      "Confirmed apply and undo preserve unrelated staged/unstaged edits, index entries, HEAD and worker evidence.",
+      "Confirmed message Undo restores code and conversation, returns the unsent request, stops owned workers and preserves private evidence, unrelated edits, index bytes and HEAD.",
     );
     await info.attach("workflow-checkpoints", {
       body: JSON.stringify(

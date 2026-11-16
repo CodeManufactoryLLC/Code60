@@ -109,6 +109,8 @@ export interface Orchestrator {
   finish(runId: string): void;
   /** Resolves after this run's cleanup and final record write, independently of other runs. */
   settled(runId: string): Promise<void>;
+  /** Stop just this owned run, without interrupting other conversations' workers. */
+  stop(runId: string): Promise<void>;
   cancelTurn(runId: string): boolean;
   answerPermission(permissionId: string, answer: PermissionAnswer): boolean;
   /** Cancels every active turn and ends every run. With `force`, skips the grace periods. */
@@ -263,6 +265,7 @@ export async function createOrchestrator(
       find(runId).handoff(summary, text, reason, deliveredText, origin),
     setMode: (runId, change) => find(runId).setMode(change),
     finish: (runId) => find(runId).finish(),
+    stop: (runId) => find(runId).shutdown(false),
     cancelTurn: (runId) => find(runId).cancelTurn("user"),
     answerPermission(permissionId, answer) {
       return runs.some((run) => run.answerPermission(permissionId, answer));

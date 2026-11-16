@@ -116,6 +116,8 @@ beforeEach(async () => {
         return store.checkpoint(String(args[0]));
       case "tail":
         return store.tail(String(args[0]));
+      case "rewind":
+        return store.rewind(String(args[0]), Number(args[1]));
       case "used":
         return store.markUsed(args[0] as string[]);
       case "snapshot":
@@ -175,6 +177,26 @@ function exchange(memory: RunMemory, text = "Redis cache uses local storage.") {
   emit(memory, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
 }
 describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
+  it("invalidates prepared recalled context only for the rewound conversation", async () => {
+    const key = "rewound-conversation";
+    const memory = must(service.attach(deps, "relay", null, key).memory)(
+      { id: randomUUID() } as RunRecord,
+      dir,
+    );
+    exchange(memory, "Discarded cache setting.");
+    const prepared = await memory.prepare(turn(), new AbortController().signal);
+    expect(prepared.context).toContain("Discarded cache setting");
+    const other = runtime("project");
+    const unrelated = await other.prepare(turn(), new AbortController().signal);
+    await service.rewind(`relay:${key}`, 1);
+    expect(() => prepared.validate?.()).toThrow("changed");
+    expect(() => unrelated.validate?.()).not.toThrow();
+    const fresh = await memory.prepare(turn(), new AbortController().signal);
+    expect(fresh.context).toBe("");
+    expect(fresh.rollover).toBe(true);
+    memory.dispose();
+    other.dispose();
+  });
   it.each([
     { used: 95000, enabled: false },
     { used: 1000, enabled: false },

@@ -104,6 +104,7 @@ export class RelayReviewStore {
     baseline = worker.taskBaseline?.taskId === worker.owner.taskId
       ? worker.taskBaseline.commit
       : undefined,
+    origin?: { chatId: string; turn: number },
   ): Promise<string | undefined> {
     if (worker.workspaceMode === "direct") return Promise.resolve(undefined);
     const epoch = this.epoch;
@@ -151,17 +152,22 @@ export class RelayReviewStore {
       if (!store) {
         store = await this.read(id, true);
         valid();
-        await store.create(this.id, 0, worker.label ?? `${worker.provider} changes`, {
-          conversationId: this.id,
-          generation: worker.owner.generation,
-          taskId: worker.owner.taskId,
-          targetId: worker.target.id,
-          cwd: worker.target.cwd,
-          device: worker.target.device.toString(),
-          inode: worker.target.inode.toString(),
-          workspaceMode: worker.workspaceMode,
-          ...(baseline ? { baseline } : {}),
-        });
+        await store.create(
+          origin?.chatId ?? this.id,
+          origin?.turn ?? 0,
+          worker.label ?? `${worker.provider} changes`,
+          {
+            conversationId: this.id,
+            generation: worker.owner.generation,
+            taskId: worker.owner.taskId,
+            targetId: worker.target.id,
+            cwd: worker.target.cwd,
+            device: worker.target.device.toString(),
+            inode: worker.target.inode.toString(),
+            workspaceMode: worker.workspaceMode,
+            ...(baseline ? { baseline } : {}),
+          },
+        );
       }
       valid();
       if (baseline && !store.get(id).relay?.baseline)

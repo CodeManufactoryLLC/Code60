@@ -99,6 +99,174 @@ async function relayTool(name: string, args: unknown = {}) {
   if (!response.ok) throw new Error(body.error);
   return body.result;
 }
+it("automatically captures settled work once and publishes only compact conversation metadata", async () => {
+  const source = await ready();
+  const worktree = required(source.accepted.orchestrator.runs()[0]?.worktree);
+  await writeFile(join(worktree, "file.txt"), "Automatic result\n");
+  for (let i = 0; i < 3; i++) required(manager).scheduleCapture(source.address);
+  await vi.waitFor(
+    async () => {
+      const review = (await reviews.read(source.id)).get(source.id);
+      expect(review.revisions).toHaveLength(1);
+      expect(review.revisions[0]?.files[0]?.path).toBe("file.txt");
+    },
+    { timeout: 10_000 },
+  );
+  const timeline = await required(manager).request({
+    type: "timeline",
+    conversationId: owner.id,
+    generation: owner.generation,
+  });
+  expect(timeline).toMatchObject({
+    type: "timeline",
+    entries: [
+      {
+        summary: {
+          revisions: [
+            {
+              fileCount: 1,
+              incomplete: false,
+              outcomes: [{ runId: source.accepted.id, status: "finished" }],
+            },
+          ],
+        },
+      },
+    ],
+    cursor: null,
+  });
+  expect(JSON.stringify(timeline)).not.toContain("Automatic result");
+  expect(JSON.stringify(timeline)).not.toContain('"sources"');
+  expect(JSON.stringify(timeline)).not.toContain('"checkout"');
+  expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
+  expect(confirm).not.toHaveBeenCalled();
+});
+it("lets an explicit action preempt automatic capture without saving a failure or applying files", async () => {
+  const source = await ready();
+  const snapshot = required(deps.git.tasks).snapshot.bind(required(deps.git.tasks));
+  let started = false;
+  let cancelled = false;
+  vi.spyOn(required(deps.git.tasks), "snapshot").mockImplementation(
+    async (cwd, options, signal) => {
+      if (cwd !== source.accepted.record.worktree) return snapshot(cwd, options, signal);
+      started = true;
+      await new Promise<void>((resolve) => {
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+        if (signal?.aborted) resolve();
+      });
+      cancelled = true;
+      signal?.throwIfAborted();
+      throw new Error("Expected capture cancellation");
+    },
+  );
+  required(manager).scheduleCapture(source.address);
+  await vi.waitFor(() => expect(started).toBe(true));
+  expect(() => required(manager).assertWritableTarget(source.accepted.target)).not.toThrow();
+  await vi.waitFor(() => expect(cancelled).toBe(true));
+  await required(manager).rendererGone();
+  const review = (await reviews.read(source.id)).get(source.id);
+  expect(review.revisions).toHaveLength(0);
+  expect(review.error).toBeUndefined();
+  expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
+});
+it("keeps partial automatic capture failures visible and allows explicit refresh", async () => {
+  const source = await ready();
+  const read = vi
+    .spyOn(deps.git, "reviewSnapshot")
+    .mockRejectedValue(new Error("Snapshot unavailable"));
+  required(manager).scheduleCapture(source.address);
+  await vi.waitFor(async () =>
+    expect((await reviews.read(source.id)).get(source.id).revisions[0]?.errors).toEqual([
+      { runId: source.accepted.id, message: "Snapshot unavailable" },
+    ]),
+  );
+  read.mockRestore();
+  await required(manager).rendererGone();
+  const review = await capture(source);
+  expect(review.revisions.at(-1)?.errors).toEqual([]);
+});
+it("reports damaged conversation evidence per review without hiding other records", async () => {
+  const a = await ready();
+  const b = await ready(join(root, "b"), "second");
+  await capture(a);
+  await capture(b);
+  const store = await reviews.read(a.id);
+  await writeFile(join(store.root, `${a.id}.json`), "broken");
+  const result = await required(manager).request({
+    type: "timeline",
+    conversationId: owner.id,
+    generation: owner.generation,
+  });
+  if (result.type !== "timeline") throw new Error("Missing timeline");
+  expect(result.entries.find(({ entry }) => entry.id === a.id)?.error).toBeTruthy();
+  expect(result.entries.find(({ entry }) => entry.id === b.id)?.summary?.revisions).toHaveLength(1);
+});
+it.each(["failed", "cancelled"] as const)(
+  "automatically captures partial work and the actual %s worker turn outcome",
+  async (status) => {
+    agents.script = (text) => (text === "Worker with partial changes" ? "hang" : "end_turn");
+    service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
+      confirm,
+    });
+    await service.sync("claude", DEFAULT_CONFIG);
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+    await service.action({
+      type: "send",
+      id: required(service.snapshot().run?.id),
+      text: "Partial task",
+    });
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+    const context = await relayTool("code60_get_context");
+    const accepted = await relayTool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "partial-worker",
+      cwd: join(root, "a"),
+      workspaceMode: "worktree",
+      prompt: "Worker with partial changes",
+    });
+    await vi.waitFor(() =>
+      expect(
+        agents.sessions.some((session) => session.prompts.includes("Worker with partial changes")),
+      ).toBe(true),
+    );
+    const worker = required(
+      service.execution.list().find((worker) => worker.id === accepted.runId),
+    );
+    const worktree = required(worker.orchestrator.runs()[0]?.worktree);
+    await writeFile(join(worktree, "file.txt"), "Partial retained result\n");
+    const session = required(
+      agents.sessions.find((session) => session.prompts.includes("Worker with partial changes")),
+    );
+    if (status === "failed") session.failTurn(new Error("Synthetic worker failure"));
+    else expect(worker.orchestrator.cancelTurn(worker.id)).toBe(true);
+    if (status === "failed") await worker.orchestrator.done;
+    else await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));
+    await vi.waitFor(
+      async () => {
+        const result = await service?.reviewRequest({
+          type: "timeline",
+          conversationId: required(service.snapshot().conversationId),
+          generation: required(service.snapshot().generation),
+        });
+        expect(result).toMatchObject({
+          type: "timeline",
+          entries: [
+            {
+              summary: {
+                revisions: [{ fileCount: 1, outcomes: [{ runId: worker.id, status }] }],
+              },
+            },
+          ],
+        });
+      },
+      { timeout: 10_000 },
+    );
+    expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
+    expect(await readFile(join(worktree, "file.txt"), "utf8")).toBe("Partial retained result\n");
+    expect(session.stops).toHaveLength(status === "failed" ? 1 : 0);
+    expect(session.cancels).toBe(status === "cancelled" ? 1 : 0);
+    expect(confirm).not.toHaveBeenCalled();
+  },
+);
 it("routes real Relay dispatch, review capture and between-turn feedback to the originating task", async () => {
   const associations = vi.spyOn(RelayReviewStore.prototype, "associate");
   service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
@@ -143,6 +311,8 @@ it("routes real Relay dispatch, review capture and between-turn feedback to the 
     requestId: randomUUID(),
   });
   if (captured.type !== "review") throw new Error("Missing captured Relay review");
+  expect(captured.review.originChatId).toBe(service.snapshot().run?.id);
+  expect(captured.review.turn).toBe(1);
   expect(service.workerSnapshot(true).runs[0]?.relay?.reviewId).toBe(request.reviewId);
   await service.action({
     type: "send",

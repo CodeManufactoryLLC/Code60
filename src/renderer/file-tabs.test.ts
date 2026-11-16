@@ -2,6 +2,69 @@ import { describe, expect, it } from "vitest";
 import { emptyFileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 
 describe("Chat file tabs", () => {
+  it("retains every pinned target in a grouped request preview without reusing a single-target tab", () => {
+    const scope = {
+      kind: "relay" as const,
+      conversationId: "relay",
+      generation: 1,
+      targetId: "a",
+      reviewId: "review-a",
+    };
+    const first = { scope, revisionId: "one", title: "Change files" };
+    const related = [first, { ...first, scope: { ...scope, targetId: "b", reviewId: "review-b" } }];
+    const action = { type: "revision" as const, reviewId: scope.reviewId, ...first };
+    let state = updateFileTabs(emptyFileTabs("relay"), action);
+    state = updateFileTabs(state, { ...action, related });
+    expect(state.entries).toHaveLength(2);
+    expect(state.entries[1]).toMatchObject({ related });
+    state = updateFileTabs(state, { ...action, related });
+    expect(state.entries).toHaveLength(2);
+  });
+  it("pins application files to their proposal and owner without replacing revision tabs", () => {
+    const scope = {
+      kind: "relay" as const,
+      conversationId: "relay",
+      generation: 2,
+      targetId: "target",
+      reviewId: "review",
+    };
+    const preview = {
+      scope,
+      revisionId: "revision",
+      title: "same.ts",
+      application: { operationId: "operation", fileId: "file" },
+    };
+    let state = updateFileTabs(emptyFileTabs("relay"), {
+      type: "revision",
+      reviewId: "review",
+      revisionId: "revision",
+      title: "Revision 1",
+      scope,
+    });
+    state = updateFileTabs(state, { type: "application", preview });
+    const application = state.active;
+    state = updateFileTabs(state, { type: "application", preview });
+    expect(state.entries).toHaveLength(2);
+    expect(state.active).toBe(application);
+    state = updateFileTabs(state, {
+      type: "application",
+      preview: { ...preview, scope: { ...scope, targetId: "other" } },
+    });
+    expect(state.entries).toHaveLength(3);
+    const tab = state.entries[1];
+    if (!tab) throw new Error("Missing application tab");
+    expect(fileTabLabel(tab, state.entries)).toBe("Application · same.ts");
+    expect(state.entries[0]).toMatchObject({ kind: "revision", scope });
+    state = updateFileTabs(state, {
+      type: "revision",
+      reviewId: "review",
+      revisionId: "revision",
+      title: "New owner",
+      scope: { ...scope, generation: 3 },
+    });
+    expect(state.entries).toHaveLength(4);
+    expect(state.entries[0]).toMatchObject({ scope });
+  });
   it("opens, reorders, closes and reopens a single Memory Recall tab without affecting other tabs", () => {
     let state = updateFileTabs(emptyFileTabs("project"), { type: "browse" });
     state = updateFileTabs(state, { type: "blank" });

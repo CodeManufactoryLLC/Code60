@@ -322,6 +322,18 @@ export function createFakeAgent(options = {}) {
             ]),
           });
           steps = [{ message: "Review the task result" }];
+        } else if (request === "Keep the user edit and add worker correction") {
+          const { scope } = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope,
+            requestId: "ordinary-correction",
+            label: "Correction",
+            prompt: JSON.stringify([
+              { write: { path: "second.txt", content: "user edit\nworker correction\n" } },
+              { message: "Correction ready" },
+            ]),
+          });
+          steps = [{ message: "Corrected through ordinary chat." }];
         } else if (request === "Implement validation") {
           const { scope } = await tool("code60_get_context");
           for (const label of ["Validation", "Regression tests"])

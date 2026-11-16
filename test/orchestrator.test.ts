@@ -55,6 +55,24 @@ async function setup(
   const status = (id: string) => orch.runs().find((r) => r.id === id)?.status;
   return { clock, agents, git, store, processes, orch, status };
 }
+it("stops one owned interactive run without stopping its sibling or pending work", async () => {
+  const { orch, agents, status } = await setup({
+    mode: "interactive",
+    count: 2,
+    script: () => "hang",
+  });
+  orch.start();
+  await vi.waitFor(() => expect(agents.sessions).toHaveLength(2));
+  await orch.stop("r1");
+  expect(status("r1")).toBe("cancelled");
+  expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+  expect(agents.sessions[1]?.stops).toEqual([]);
+  expect(status("r2")).toBe("running");
+  await orch.stop("r2");
+  await orch.done;
+  expect(status("r2")).toBe("cancelled");
+  expect(() => orch.stop("missing")).toThrow("no run with ID 'missing'");
+});
 
 it("cancels interactive worktree preparation and awaits started cleanup before shutdown", async () => {
   const { orch, agents, git, status } = await setup({ mode: "interactive" });
@@ -364,6 +382,7 @@ describe("turn timeouts and cancellation", () => {
       completedAt: clock.now().toISOString(),
     });
     expect(orch.runs()[0]?.reason).toBe("turn 1 ended: cancelled (turn timed out)");
+    expect(orch.runs()[0]?.lastOutcome).toBe("timed_out");
     await clock.advance(120 * MIN);
     expect(status("r1")).toBe("idle");
     orch.finish("r1");
@@ -439,12 +458,14 @@ describe("follow-up turns (desktop app)", () => {
     expect(orch.runs()[0]).toMatchObject({
       status: "idle",
       lastStopReason: "max_tokens",
+      lastOutcome: "failed",
       reason: "turn 1 ended: max_tokens",
     });
     orch.reply("r1", "keep going");
     await flush();
     expect(agents.sessions).toHaveLength(1);
     expect(agents.sessions[0]?.prompts).toEqual(["do the thing", "keep going"]);
+    expect(orch.runs()[0]?.lastOutcome).toBe("finished");
     expect(
       store.events.filter((e) => e.type === "prompt").map((e) => (e as { turn: number }).turn),
     ).toEqual([1, 2]);

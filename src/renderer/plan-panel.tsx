@@ -137,7 +137,7 @@ export function PlanPanel({
                 <p className="plan-task-note">
                   Target: <code>{task.target.cwd}</code> (
                   {task.target.workspaceMode === "direct"
-                    ? "direct edits, no isolated apply or undo"
+                    ? "direct edits; Undo also rewinds manual edits since the checkpoint"
                     : "isolated worktree"}
                   )
                 </p>

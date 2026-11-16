@@ -16,8 +16,8 @@ Use the existing harness, not a new QA plugin or a live agent.
    Configuration, IPC, fixtures and packaging can break complete journeys without
    changing renderer source. Do not automatically classify them as “no UI impact.”
 3. Read the matching [workflow cards](references/workflows.md). Start with the
-   golden path: request → plan → human acceptance → worker change → review →
-   preview → declined application → confirmed application → undo. Add affected
+   golden path: request → plan → human acceptance → automatic working changes →
+   read-only diff → code attachment → declined Undo → confirmed message Undo. Add affected
    first-use, navigation, restart, cancellation, scheduler or memory scenarios.
 4. Write the selected starting states, checkpoints, independent expected outcomes
    and cleanup plan before running anything. Use the [report template](assets/report.md).
@@ -37,7 +37,7 @@ Use the existing harness, not a new QA plugin or a live agent.
   tests may be useful **supporting integration tests**, not full user journeys.
 - Assert intermediate invariants, not just final screenshots. Observe that no
   worker exists before acceptance; pin ownership through navigation/reload;
-  compare exact files and Git index before/after decline, apply and undo.
+  compare exact files and Git index before/after automatic integration and Undo.
   Read-only snapshots may supplement UI evidence but cannot replace user actions.
 - Use bounded condition-based assertions. Do not add arbitrary sleeps or retries
   that mask races. Do not require live providers, credentials or network access.
@@ -49,7 +49,7 @@ Use the existing harness, not a new QA plugin or a live agent.
 - Collect with `npx --no-install playwright test --list agent-workflow.e2e.ts`.
   Collection only proves selection, not runtime success.
 - Local desktop execution uses only
-  `npm run test:desktop:container -- --grep "workflow: first use through plan, review, apply and undo"`.
+  `npm run test:desktop:container -- --grep "workflow: first use through plan, automatic edits, code references and message Undo"`.
   Use the same container entry point with other matching scenario names.
   CI already runs registered Playwright tests. Do not create duplicate QA CI.
 - If Docker, disk space, assets or sandboxing blocks execution, stop that step
