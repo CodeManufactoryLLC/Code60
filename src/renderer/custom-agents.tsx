@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
   CustomAgent,
   CustomAgentRequest,
@@ -124,7 +124,7 @@ export function CustomAgentsPage({
   );
 }
 
-function AgentEditor({
+export function AgentEditor({
   agent,
   api,
   onClose,
@@ -133,6 +133,7 @@ function AgentEditor({
   api: DesktopApi;
   onClose(): void;
 }) {
+  const id = useId();
   const [name, setName] = useState(agent === "new" ? "" : agent.name);
   const [instructions, setInstructions] = useState(agent === "new" ? "" : agent.instructions);
   const [busy, setBusy] = useState(false);
@@ -163,27 +164,25 @@ function AgentEditor({
             });
         }}
       >
-        <label>
-          Name
-          <input
-            required
-            maxLength={120}
-            value={name}
-            disabled={busy}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <label>
-          Special instructions
-          <textarea
-            required
-            rows={12}
-            maxLength={32_000}
-            value={instructions}
-            disabled={busy}
-            onChange={(e) => setInstructions(e.target.value)}
-          />
-        </label>
+        <label htmlFor={`${id}-name`}>Name</label>
+        <input
+          id={`${id}-name`}
+          required
+          maxLength={120}
+          value={name}
+          disabled={busy}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <label htmlFor={`${id}-instructions`}>Special instructions</label>
+        <textarea
+          id={`${id}-instructions`}
+          required
+          rows={12}
+          maxLength={32_000}
+          value={instructions}
+          disabled={busy}
+          onChange={(e) => setInstructions(e.target.value)}
+        />
         {error && <p role="alert">{error}</p>}
         <div className="dialog-actions">
           <button type="button" disabled={busy} onClick={onClose}>

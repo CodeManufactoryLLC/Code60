@@ -19,6 +19,14 @@ async function open() {
   stores.push(store);
   return store;
 }
+it("shares one lock release across concurrent and repeated closes", async () => {
+  const store = await open();
+  const closing = store.close();
+  expect(store.close()).toBe(closing);
+  await closing;
+  expect(store.close()).toBe(closing);
+  await expect(open()).resolves.toBeInstanceOf(CustomAgentStore);
+});
 it("persists revision-checked definitions without instruction bodies in summaries", async () => {
   let store = await open();
   const a = await store.save({ name: "Reviewer", instructions: "Inspect changes" });

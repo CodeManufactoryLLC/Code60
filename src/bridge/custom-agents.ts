@@ -23,7 +23,6 @@ export const customAgentSchema = z.strictObject({
 });
 const identity = { id: z.string().uuid(), revision: customAgentSchema.shape.revision };
 const requestSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("list") }),
   z.strictObject({ type: z.literal("read"), id: identity.id }),
   z.strictObject({ type: z.literal("create"), ...fields }),
   z.strictObject({ type: z.literal("edit"), ...identity, ...fields }),
@@ -34,7 +33,6 @@ export type CustomAgent = z.infer<typeof customAgentSchema>;
 export type CustomAgentSummary = Omit<CustomAgent, "instructions">;
 export type CustomAgentRequest = z.infer<typeof requestSchema>;
 export interface CustomAgentResponse {
-  agents: CustomAgentSummary[];
   agent?: CustomAgent;
   conversationId?: string;
 }

@@ -46,14 +46,14 @@ export function ChatWorkspace({
   navigation,
 }: ChatWorkspaceProps) {
   const snapshot = state?.snapshot;
-  const conversationActive = tabs.active === "chat" && !navigation.projectPending;
+  const conversationActive =
+    tabs.active === "chat" && !navigation.projectPending && !navigation.conversationPending;
   const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
   const panelKey =
     snapshot?.runs.find((run) => run.record.id === workerId)?.relay?.conversationId ??
     snapshot?.chat.conversationId ??
     "";
   const relayPanelOpen = panelOpen[panelKey] ?? false;
-  const setRelayPanelOpen = (open: boolean) => setPanelOpen((s) => ({ ...s, [panelKey]: open }));
   const [revisionPreview, setRevisionPreview] = useState<{ id: number; preview: ReviewPreview }>();
   const {
     scope,
@@ -175,7 +175,7 @@ export function ChatWorkspace({
             onRevisionPreview={(preview) => {
               if (preview.scope.kind === "relay") {
                 setRevisionPreview((current) => ({ id: (current?.id ?? 0) + 1, preview }));
-                setRelayPanelOpen(true);
+                setPanelOpen((s) => ({ ...s, [panelKey]: true }));
               } else {
                 fileAction({ type: "ensure-changes" });
                 fileAction(

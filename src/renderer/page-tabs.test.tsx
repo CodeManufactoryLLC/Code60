@@ -35,6 +35,7 @@ function navigation(
         invalidate: () => {},
         pending: false,
         projectPending: false,
+        conversationPending: false,
         error: "",
       }}
       chats={[]}

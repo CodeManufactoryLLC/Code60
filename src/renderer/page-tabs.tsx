@@ -753,7 +753,7 @@ function PageTabList({
           .filter((agent) => !agent.archived)
           .map((agent) => {
             const chat = chats.find((chat) => chat.customAgentId === agent.id);
-            return chat ? (
+            return chat && conversationId(chat) ? (
               <ChatSidebar
                 key={agent.id}
                 chats={[chat]}
