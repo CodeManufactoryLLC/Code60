@@ -200,7 +200,13 @@ export class FakeGit implements Git {
     if (this.addError !== undefined) throw this.addError;
     this.worktrees.push(spec);
   }
-  async removeWorktree(_repo: string, path: string, branch: string) {
+  async removeWorktree(
+    _repo: string,
+    path: string,
+    branch: string,
+    revalidate?: () => Promise<void>,
+  ) {
+    await revalidate?.();
     this.removed.push({ path, branch });
   }
   async diff(_worktree?: string, _base?: string, _signal?: AbortSignal) {

@@ -142,17 +142,20 @@ export async function discardRun(
   // Confirmation is external code and can yield while another owner changes the run.
   const approvedFiles = JSON.stringify(files);
   if (!(await confirm(files, record))) return { discarded: false, files, record };
-  if (JSON.stringify(await inspect()) !== approvedFiles) {
-    throw new RefusedError(`changes for run ${id} changed during confirmation; review and retry`);
-  }
-  const latest = await deps.store.read(id);
-  if (JSON.stringify(latest) !== identity || JSON.stringify(record) !== identity) {
-    throw new RefusedError(`run ${id} changed during confirmation; review its owner and retry`);
-  }
-  if (await recordedAgentAlive(deps.processes, latest)) {
-    throw new RefusedError(`the agent for run ${id} may still be running; stop it before retrying`);
-  }
-  await deps.git.removeWorktree(repoDir, record.worktree, branch);
+  await deps.git.removeWorktree(repoDir, record.worktree, branch, async () => {
+    if (JSON.stringify(await inspect()) !== approvedFiles) {
+      throw new RefusedError(`changes for run ${id} changed during confirmation; review and retry`);
+    }
+    const latest = await deps.store.read(id);
+    if (JSON.stringify(latest) !== identity || JSON.stringify(record) !== identity) {
+      throw new RefusedError(`run ${id} changed during confirmation; review its owner and retry`);
+    }
+    if (await recordedAgentAlive(deps.processes, latest)) {
+      throw new RefusedError(
+        `the agent for run ${id} may still be running; stop it before retrying`,
+      );
+    }
+  });
   record.discardedAt = deps.clock.now().toISOString();
   await deps.store.save(record);
   return { discarded: true, files, record };
