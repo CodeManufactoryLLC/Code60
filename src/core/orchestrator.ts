@@ -13,7 +13,7 @@ import type { Clock } from "./clock.js";
 import { decide, type PolicyOverrides } from "./policy.js";
 import type { Processes } from "./processes.js";
 import type { RecordStore } from "./records.js";
-import { Run } from "./run.js";
+import { Run, type SessionSelection } from "./run.js";
 import type {
   AgentConfig,
   FinalRunStatus,
@@ -72,6 +72,8 @@ export interface OrchestratorOptions {
   promptContext?: () => string;
   /** Recorded on new runs so project history readers can exclude Relay-owned workers. */
   owner?: "relay";
+  /** Interactive only: saved session-option defaults for each provider's new sessions. */
+  initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
 }
 
 /** Drives a set of runs. The CLI renders it; nothing here needs a terminal. */
@@ -174,7 +176,15 @@ export async function createOrchestrator(
     }
   };
 
-  const runSettings = (config: AgentConfig) => ({
+  const runSettings = (name: string, config: AgentConfig) => {
+    const initialSettings =
+      options.mode === "interactive" ? options.initialSettings?.(name) : undefined;
+    return {
+      ...baseSettings(config),
+      ...(initialSettings?.length ? { initialSettings } : {}),
+    };
+  };
+  const baseSettings = (config: AgentConfig) => ({
     mode: options.mode,
     repoDir: options.repoDir,
     command: config.command,
@@ -194,7 +204,7 @@ export async function createOrchestrator(
         (() => {
           const agent = options.agents.find(({ name }) => name === options.recovery?.agent);
           if (!agent) throw new Error(`agent '${options.recovery.agent}' is not configured`);
-          return new Run(options.recovery, runDeps, runSettings(agent.config));
+          return new Run(options.recovery, runDeps, runSettings(agent.name, agent.config));
         })(),
       ]
     : options.agents.map(({ name, config }) => {
@@ -217,7 +227,7 @@ export async function createOrchestrator(
           ...(options.owner === undefined ? {} : { owner: options.owner }),
           startedAt,
         };
-        return new Run(record, runDeps, runSettings(config));
+        return new Run(record, runDeps, runSettings(name, config));
       });
   if (!options.recovery) await Promise.all(runs.map((run) => run.queue()));
 

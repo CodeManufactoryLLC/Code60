@@ -44,6 +44,7 @@ import {
   parseMemoryDetail,
   parseMemoryExtraction,
   parseMemoryRequestId,
+  parseModelDefaultAction,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
   parsePlanAction,
@@ -447,6 +448,9 @@ async function ready(): Promise<void> {
     });
   handle("desktop:app-update", (value) => updates?.action(parseUpdateAction(value)));
   handle("desktop:automation", (value) => automations.request(value));
+  handle("desktop:model-default", (value) =>
+    controller.modelDefault(parseModelDefaultAction(value)),
+  );
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };

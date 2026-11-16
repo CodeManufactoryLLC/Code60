@@ -244,6 +244,11 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No verified enabled provider.";
       action = "Settings → Agents.";
+    } else if (cap.id === "model-settings") {
+      status = "unknown";
+      reason =
+        "Human-only controls require a connected idle session and connector-advertised choices; provider verification alone does not establish model switching availability.";
+      action = "Inspect the session's Model picker. Clear saved defaults in Settings → Agents.";
     } else if (cap.prerequisite === "project" && !state.projectOpen) {
       status = "blocked";
       reason = "Caller has no bound open project.";

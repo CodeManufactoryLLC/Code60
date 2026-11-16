@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supportsModeChange } from "../contracts/index.js";
+import { defaultableSelections, supportsModeChange } from "../contracts/index.js";
 import { SessionStateTracker } from "./session-state.js";
 
 const at = "2026-11-07T12:00:00.000Z";
@@ -26,6 +26,53 @@ const model = {
 const modes = { currentModeId: "legacy", availableModes: [{ id: "legacy", name: "Legacy" }] };
 
 describe("ACP session state", () => {
+  it("retains reasoning and uncategorized selects, replaces dependent choices, and saves only confirmed defaults", () => {
+    const tracker = new SessionStateTracker(() => at);
+    const reasoning = {
+      ...mode,
+      id: "effortLevel",
+      category: "thought_level",
+      currentValue: "low",
+      options: [
+        { value: "low", name: "Low" },
+        { value: "high", name: "High" },
+      ],
+    };
+    tracker.setup({
+      configOptions: [reasoning, model, mode, { ...mode, id: "other", category: null }],
+    });
+    expect(tracker.state.settings?.controls.map((c) => c.id)).toEqual([
+      "effortLevel",
+      "model",
+      "other",
+    ]);
+    expect(tracker.state.settings?.controls[1]?.options[0]).toMatchObject({
+      group: "Recommended",
+      groupId: "recommended",
+    });
+    expect(defaultableSelections(tracker.state).map((c) => c.configId)).toEqual([
+      "model",
+      "effortLevel",
+    ]);
+    expect(
+      supportsModeChange(tracker.state, { source: "config", configId: "other", value: "full" }),
+    ).toBe(true);
+    tracker.unconfirmed();
+    expect(defaultableSelections(tracker.state)).toEqual([]);
+    tracker.config([
+      { ...model, currentValue: "m2", options: [{ value: "m2", name: "Model Two" }] },
+      { ...reasoning, currentValue: "auto", options: [{ value: "auto", name: "Automatic" }] },
+    ]);
+    expect(tracker.state.settings?.confirmed).toBe(true);
+    expect(
+      supportsModeChange(tracker.state, {
+        source: "config",
+        configId: "effortLevel",
+        value: "high",
+      }),
+    ).toBe(false);
+    expect(defaultableSelections(tracker.state).map((c) => c.value)).toEqual(["m2", "auto"]);
+  });
   it("prefers categorized config, preserves groups, and never infers unrelated controls", () => {
     const tracker = new SessionStateTracker(() => at);
     tracker.setup({

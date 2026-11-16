@@ -53,6 +53,7 @@ import {
 } from "./mcp-control.js";
 import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
 import type { MemoryService } from "./memory-service.js";
+import type { ModelDefaults } from "./model-defaults.js";
 import type { RelayFileRoot } from "./relay-files.js";
 import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
@@ -154,6 +155,7 @@ export class RelayService {
     },
     private readonly memory?: MemoryService,
     private readonly identity?: { id: string; name: string; instructions: string; root: string },
+    private readonly modelDefaults?: ModelDefaults,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -172,6 +174,7 @@ export class RelayService {
       checkout: (worker) =>
         this.associateReview(worker, Math.max(1, worker.orchestrator.runs()[0]?.turns ?? 1)),
       changed: (targetId) => this.changed(targetId),
+      initialSettings: (provider) => this.modelDefaults?.selections(provider, "worker") ?? [],
       warning: () => {
         this.error = "A worker record could not be saved. Inspect the worker before retrying work.";
         changed();
@@ -418,7 +421,11 @@ export class RelayService {
         await this.associateReview(worker, worker.orchestrator.runs()[0]?.turns ?? 1);
       } else if (request.type === "set-mode")
         await worker.orchestrator.setMode(worker.id, request.change);
-      else if (request.type === "permission") {
+      else if (request.type === "save-model-default") {
+        const run = worker.orchestrator.runs().find((run) => run.id === worker.id);
+        if (!run || !this.modelDefaults) throw new Error("Model defaults are unavailable");
+        await this.modelDefaults.save(run, "worker");
+      } else if (request.type === "permission") {
         if (!worker.orchestrator.answerPermission(request.id, request.answer))
           throw new Error("This approval request is no longer pending");
       } else if (request.type === "stop") await worker.orchestrator.shutdown();
@@ -693,6 +700,7 @@ export class RelayService {
           prompts: DEFAULT_PROMPT_TEMPLATES,
         },
         {
+          initialSettings: this.modelDefaults?.selections(provider, "orchestrator") ?? [],
           mcpServers: [
             {
               name: "code60",
@@ -921,7 +929,16 @@ export class RelayService {
       const chat = this.chat;
       const run = chat?.runs()[0];
       if (!chat || !run) throw new Error("Relay is not connected. Retry the connection.");
+      if (
+        (request.type === "set-mode" || request.type === "save-model-default") &&
+        request.id !== run.id
+      )
+        throw new Error("This session is no longer current");
       if (request.type === "set-mode") return chat.setMode(run.id, request.change);
+      if (request.type === "save-model-default") {
+        if (!this.modelDefaults) throw new Error("Model defaults are unavailable");
+        return this.modelDefaults.save(run, "orchestrator");
+      }
       if (request.type === "stop" || request.type === "cancel") {
         this.paused = true;
         if (request.type === "cancel") chat.cancelTurn(run.id);

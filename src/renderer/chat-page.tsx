@@ -673,6 +673,10 @@ export function ChatPage({
             editable={ready && !busy}
             changing={!!run?.modeChanging || pending === "set-mode"}
             autoApproval
+            sessionRole="orchestrator"
+            onSaveDefault={() => {
+              if (run) void action({ type: "save-model-default", id: run.id });
+            }}
             onMode={(change) => {
               if (run) void action({ type: "set-mode", id: run.id, change });
             }}

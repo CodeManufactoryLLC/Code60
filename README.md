@@ -64,6 +64,15 @@ existing files remain untouched.
 See [implementation and validation notes](docs/relay-implementation.md) for limits
 and platform-validation status.
 
+## Models
+
+In any connected chat, use the **Model** picker between turns to choose the
+connector's advertised model and reasoning settings. **Save as default** applies
+to new sessions for that connector and role, orchestrator (Relay, project chats
+and Custom Agents) or worker. Clear saved choices in **Settings → Agents →
+Default models**. Existing sessions and CLI/automation defaults do not change.
+Unavailable defaults produce a note; Code60 never substitutes a model.
+
 ## Memory
 
 **Settings → Memory** has one application-wide On/Off switch. On learns useful

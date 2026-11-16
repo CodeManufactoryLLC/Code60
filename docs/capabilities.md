@@ -190,7 +190,7 @@ Schema version: 1
 
 - ID: `providers`
 - Status: shipped
-- Purpose: Verify and choose coding-agent providers.
+- Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
 - Access: Settings → Agents
 - Prerequisite: none
 - Agent access: read
@@ -198,6 +198,20 @@ Schema version: 1
 - Limits: Configured does not mean detected, verified, or connected. No automatic installation.
 - Pages: none
 - Settings sections: `agents`
+- Tools: none
+
+## Model and reasoning
+
+- ID: `model-settings`
+- Status: shipped
+- Purpose: Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.
+- Access: Chat or worker composer → Model; Settings → Agents → Default models to clear
+- Prerequisite: provider
+- Agent access: human-only
+- Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.
+- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.
+- Pages: none
+- Settings sections: none
 - Tools: none
 
 ## Memory

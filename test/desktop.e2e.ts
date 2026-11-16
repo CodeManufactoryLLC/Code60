@@ -5051,9 +5051,9 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
     await composer.fill("Implement second task loop");
     await composer.press("Enter");
     await waitForCapture("Implement second task loop", "second.txt");
-    await expect
-      .poll(() => readFile(join(repo, "second.txt"), "utf8"))
-      .toBe("accepted task result\n");
+    await expect(async () => {
+      expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("accepted task result\n");
+    }).toPass({ timeout: 5_000 });
     await expect(links).toHaveCount(2);
     await links.last().click();
     await expect(page.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(1);

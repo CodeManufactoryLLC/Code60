@@ -58,6 +58,11 @@ Choosing an Ask mode does not turn off Code60 auto-approval in orchestration
 chats or workers. Any provider sandbox or other restrictions depend on that
 provider and its configuration.
 
+Model and reasoning changes accept only current connector-advertised values
+between turns. Saving a role default derives confirmed selections in main, not
+from renderer-supplied values. Defaults do not change approval policy or grant
+new worker authority.
+
 See [permissions](ARCHITECTURE.md#permissions) and
 [harness modes](ARCHITECTURE.md#session-information-and-harness-modes).
 
