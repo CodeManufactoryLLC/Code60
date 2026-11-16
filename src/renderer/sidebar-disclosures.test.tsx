@@ -163,6 +163,7 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
       invalidate: vi.fn(),
       pending: false,
       projectPending: false,
+      conversationPending: false,
       error: "",
     },
     ...overrides,
@@ -174,6 +175,31 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   );
   return mount(list.type as (value: typeof props) => ReactNode, list.props as typeof props);
 }
+
+it("keeps an unidentified failed custom agent reachable through its definition entry", () => {
+  const view = tabList({
+    customAgents: [{ id: "unavailable", name: "Recovery Agent", revision: 1, archived: false }],
+    chats: [
+      ...chats,
+      {
+        kind: "relay",
+        customAgentId: "unavailable",
+        run: null,
+        directory: null,
+        error: "Storage is unavailable",
+      } as OrchestrationChat,
+    ],
+  });
+  const entry = find(
+    view.tree(),
+    (element) => element.type === "button" && element.props.className === "chat-sidebar-entry",
+  );
+  expect(
+    find(entry.props.children as ReactNode, (element) => element.type === "span").props.children,
+  ).toBe("Recovery Agent");
+  expect(entry.props.disabled).toBe(false);
+  expect(entry.props.onClick).toBeTypeOf("function");
+});
 
 it.each([
   ["finished", "Finished"],
@@ -281,6 +307,7 @@ it("does not reveal Projects for Relay while its selection snapshot is delayed",
     invalidate: vi.fn(),
     pending: false,
     projectPending: false,
+    conversationPending: false,
     error: "",
     destination: { kind: "conversation", id: "relay" } as const,
   };
@@ -312,6 +339,7 @@ it("keeps the row selected without marking hidden streaming replies read during 
       invalidate: vi.fn(),
       pending: false,
       projectPending: true,
+      conversationPending: false,
       error: "",
     },
   });

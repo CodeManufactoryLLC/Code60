@@ -27,6 +27,7 @@ export {
 export * from "./automation.js";
 export type { ChatReference, ChatUndoResult } from "./chat-context.js";
 export { chatReferenceSchema } from "./chat-context.js";
+export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
 export * from "./logs.js";
@@ -285,6 +286,8 @@ export interface Versions {
 }
 
 export interface Snapshot {
+  customAgentError?: string | undefined;
+  customAgents?: import("./custom-agents.js").CustomAgentSummary[];
   /** App metadata only. Detail revisions and caches are independent. */
   summaryOnly?: true;
   /** At most 128 active subscription UUIDs, with their last publication revisions. */
@@ -352,6 +355,9 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  customAgent?(
+    request: import("./custom-agents.js").CustomAgentRequest,
+  ): Promise<import("./custom-agents.js").CustomAgentResponse>;
   automation(request: import("./automation.js").AutomationUiRequest): Promise<unknown>;
   onAutomationChanged(listener: () => void): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
@@ -513,6 +519,7 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  customAgentId?: string;
   rewindRevision?: number;
   checkpoint?: { id: string; turn: number; phase: "active" | "undoing" };
   historySaving?: "available" | "unavailable";

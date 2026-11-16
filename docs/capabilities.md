@@ -32,6 +32,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Custom Agents
+
+- ID: `custom-agents`
+- Status: shipped
+- Purpose: Create application-wide agents with special instructions and one persistent Relay-style conversation each.
+- Access: Home → Custom Agents (also in the sidebar) → New Agent; Edit; Archive; Archived → Restore
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Archiving confirms natively, stops only the agent and preserves history.
+- Limits: Up to 64 agents, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop agent and workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.
+- Pages: `custom-agents`
+- Settings sections: none
+- Tools: none
+
 ## Projects
 
 - ID: `projects`

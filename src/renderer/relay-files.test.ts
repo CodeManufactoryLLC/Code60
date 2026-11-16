@@ -39,3 +39,38 @@ it("offers only Relay workspace and unique current-generation owned targets, ind
   expect(relayFileRoots(disconnected)).toEqual([]);
   expect(relayFileScope(disconnected, "workspace")).toBeUndefined();
 });
+
+it("binds custom agent file roots to its own conversation instead of the first Relay", () => {
+  const custom = {
+    kind: "relay",
+    customAgentId: "agent-a",
+    title: "Reviewer",
+    conversationId: "custom-id",
+    generation: 7,
+  } as const;
+  const state = {
+    ...snapshot,
+    chat: custom,
+    chats: [...snapshot.chats, custom],
+    runs: [
+      ...snapshot.runs,
+      {
+        relay: {
+          conversationId: "custom-id",
+          generation: 7,
+          targetId: "custom-target",
+          cwd: "/custom",
+        },
+      },
+    ],
+  } as unknown as Snapshot;
+  expect(relayFileRoots(state)).toEqual([
+    { path: "workspace", label: "Reviewer workspace" },
+    { path: "target:custom-target", label: "Target · /custom" },
+  ]);
+  expect(relayFileScope(state, "target:a")).toBeUndefined();
+  expect(relayFileScope(state, "workspace")).toMatchObject({
+    conversationId: "custom-id",
+    generation: 7,
+  });
+});

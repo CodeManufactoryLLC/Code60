@@ -31,6 +31,15 @@ export const parentPageIds = [
 export type ParentPageId = (typeof parentPageIds)[number];
 export const pages = [
   {
+    id: "custom-agents",
+    label: "Custom Agents",
+    group: "primary",
+    order: 0,
+    initialOrder: 23,
+    database: false,
+    icon: "app-helmet",
+  },
+  {
     id: "projects",
     label: "Projects",
     group: "chat",

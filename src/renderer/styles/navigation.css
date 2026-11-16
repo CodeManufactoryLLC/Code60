@@ -684,6 +684,14 @@
   --nav-indent: var(--nav-step);
 }
 
+#custom-agent-pages {
+  --nav-indent: var(--nav-step);
+}
+
+#custom-agent-pages .chat-sidebar-entry {
+  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent));
+}
+
 .sidebar :is(button, [role="tab"]):focus-visible,
 .message-copy button:focus-visible {
   outline: 2px solid var(--focus-outline);

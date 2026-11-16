@@ -76,15 +76,16 @@
   New chat action per project. Selecting a project never retargets Relay.
   Closing a project and stopping a folder are distinct confirmed operations.
 - Show only Relay and project-bound conversations, not database-wide legacy chats.
-  Put Home first in the sidebar’s page list, followed by Relay, Search and Projects.
+  Put Home first in the sidebar’s page list, followed by Relay, Custom Agents, Search and Projects.
   Home uses a Phosphor house icon and a standard table-controls page heading.
   Show “Welcome to Code60” above its cards, centered with the card group in the
   same scrollable content. Do not add this greeting to other navigation homes.
-  Show exactly five clickable, title-only feature cards in this order:
-  Relay, Search, Projects, Apps and Sessions. Use theme-aware artwork, restrained blue
-  accents, shared focus styles and responsive stacking. Relay selects the
+  Show exactly six clickable, title-only feature cards in this order:
+  Relay, Custom Agents, Search, Projects, Apps and Sessions. Use theme-aware
+  artwork, restrained blue accents, shared focus styles and responsive stacking. Relay selects the
   application conversation and clears worker selection. Search and Sessions retain
-  database gating; Projects and Apps remain available without a database.
+  database gating; Custom Agents, Projects and Apps remain available without a database.
+  The Custom Agents card opens management without opening a chat or connecting an agent.
   Keep errors inline and prevent duplicate Relay selections.
   Keep the existing startup destination. Remove the sidebar wordmark, retaining
   the splash wordmark. Search is a regular labelled page tab with the same selected,
@@ -429,3 +430,11 @@
 - After successfully archiving the currently displayed chat, show “Chat archived.”
   through the shared success toast and select Relay. Archiving other chats leaves
   the current page and conversation unchanged; failures retain inline feedback.
+
+## Custom Agents
+
+The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+Reuse the Relay runtime for custom application-owned conversations. Route all
+requests by explicit conversation/generation ownership, including file previews,
+worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
+Custom definitions are private, revision-checked and database-independent.

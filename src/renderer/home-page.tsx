@@ -11,7 +11,7 @@ export function HomePage({
   database: string | null;
   relayAvailable: boolean;
   onOpenRelay(): Promise<void>;
-  onOpenPage(id: "search" | "projects" | "apps" | "sessions"): void;
+  onOpenPage(id: "custom-agents" | "search" | "projects" | "apps" | "sessions"): void;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +39,7 @@ export function HomePage({
       reason: pending ? "Opening Relay" : "Relay is unavailable",
       action: () => void openRelay(),
     },
-    ...(["search", "projects", "apps", "sessions"] as const).map((id) => {
+    ...(["custom-agents", "search", "projects", "apps", "sessions"] as const).map((id) => {
       const page = pageDefinitions[id];
       return {
         id,

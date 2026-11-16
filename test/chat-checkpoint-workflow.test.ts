@@ -191,6 +191,12 @@ it("enrolls idle direct-worker chat follow-ups in the new request before replyin
   });
   await vi.waitFor(() => expect(relay.workerSnapshot().runs[0]?.view?.status).toBe("idle"));
   expect(await readFile(join(cwd, "file.txt"), "utf8")).toBe("first");
+  // Drain the expected automatic result before asserting that a rejected reply sends nothing.
+  await vi.waitFor(() =>
+    expect(agents.sessions[0]?.prompts.some((text) => text.includes(String(worker.runId)))).toBe(
+      true,
+    ),
+  );
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
   await relay.action({ type: "send", id, text: "Second request" });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
@@ -518,6 +524,10 @@ it("returns exact saved-code references with a rewound correction without resend
     replacesDraft: false,
   });
   expect(result).toMatchObject({ text: "Correct this exact saved line", references: [reference] });
+  await vi.waitFor(() => {
+    expect(relay.snapshot().run?.status).toBe("idle");
+    expect(relay.snapshot().run?.id).not.toBe(id);
+  });
   expect(agents.sessions.at(-1)?.prompts).toEqual([]);
   expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("working edit\n");
   expect(await readFile(join(target.cwd, ".git", "index"))).toEqual(target.index);

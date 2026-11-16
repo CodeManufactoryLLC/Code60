@@ -2343,7 +2343,7 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(scheme);
       await selectSidebarPage(page, "Home");
       const cards = page.locator("#panel-home .home-card");
-      await expect(cards).toHaveCount(5);
+      await expect(cards).toHaveCount(6);
       await expect(page.locator("#panel-home .home-cards")).toHaveCSS("gap", "32px");
       for (const card of await cards.all()) {
         await expect(card).toHaveCSS("width", "224px");
@@ -2497,6 +2497,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     const homeTab = page.getByRole("tab", { name: "Home", exact: true });
     const home = page.locator("#panel-home");
     const relay = home.getByRole("button", { name: "Open Relay", exact: true });
+    const customAgents = home.getByRole("button", { name: "Open Custom Agents", exact: true });
     const search = home.getByRole("button", { name: "Open Search", exact: true });
     const projects = home.getByRole("button", { name: "Open Projects", exact: true });
     const apps = home.getByRole("button", { name: "Open Apps", exact: true });
@@ -2510,29 +2511,40 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     expect(welcomeBounds.y + welcomeBounds.height).toBeLessThan(cardsBounds.y);
     await expect(home.locator(".home-card")).toHaveText([
       "Relay",
+      "Custom Agents",
       "Search",
       "Projects",
       "Apps",
       "Sessions",
     ]);
     await expect(relay).toBeEnabled();
+    await expect(customAgents).toBeEnabled();
     await expect(search).toBeDisabled();
     await expect(sessions).toBeDisabled();
     await expect(projects).toBeEnabled();
     await expect(apps).toBeEnabled();
+    await customAgents.click();
+    await expect(page.locator("#panel-custom-agents")).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Agent", exact: true })).toBeVisible();
+    await homeTab.click();
     await projects.click();
     await expect(page.locator("#panel-projects")).toBeVisible();
     await homeTab.click();
     await apps.click();
     await expect(page.locator("#panel-apps")).toBeVisible();
     const relayTab = page.getByRole("button", { name: "Relay", exact: true });
+    const customAgentsTab = page.getByRole("tab", { name: "Custom Agents", exact: true });
     const searchTab = page.getByRole("tab", { name: "Search", exact: true });
     const projectsTab = page.locator("#tab-chat");
     await expect(searchTab).toBeDisabled();
     await relayTab.focus();
     await relayTab.press("ArrowDown");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowDown");
     await expect(projectsTab).toBeFocused();
     await projectsTab.press("ArrowUp");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowUp");
     await expect(relayTab).toBeFocused();
     await homeTab.click();
     await expect(home.locator(".home-card-description")).toHaveCount(0);
@@ -2566,6 +2578,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
       .locator(".page-breadcrumbs")
       .boundingBox();
     for (const [id, name] of [
+      ["custom-agents", "Custom Agents"],
       ["search", "Search"],
       ["projects", "Projects"],
       ["apps", "Apps"],
@@ -2588,6 +2601,8 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     }
     await relayTab.focus();
     await relayTab.press("ArrowDown");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowDown");
     await expect(searchTab).toBeFocused();
     await expect(searchTab).toHaveAttribute("aria-selected", "true");
     await searchTab.press("ArrowDown");
@@ -2595,6 +2610,8 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     await projectsTab.press("ArrowUp");
     await expect(searchTab).toBeFocused();
     await searchTab.press("ArrowUp");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowUp");
     await expect(relayTab).toBeFocused();
     await homeTab.click();
     for (const scheme of ["light", "dark"]) {
@@ -3172,8 +3189,9 @@ test("desktop: Relay connects without a database and retains identity, draft and
     const sidebarRows = page.locator(".page-tabs");
     await expect(sidebarRows.locator(":scope > :first-child")).toHaveText("Home");
     await expect(sidebarRows.locator(":scope > :nth-child(2)")).toHaveClass(/\brelay-sidebar\b/);
-    await expect(sidebarRows.locator(":scope > :nth-child(3)")).toHaveText("Search");
-    await expect(sidebarRows.locator(":scope > :nth-child(4)")).toHaveText("Projects");
+    await expect(sidebarRows.locator(":scope > :nth-child(3)")).toHaveText("Custom Agents");
+    await expect(sidebarRows.locator(":scope > :nth-child(5)")).toHaveText("Search");
+    await expect(sidebarRows.locator(":scope > :nth-child(6)")).toHaveText("Projects");
     await expect(page.locator(".sidebar .wordmark")).toHaveCount(0);
     const home = page.getByRole("tab", { name: "Home", exact: true });
     await expect(home.locator('[data-icon="app-home2"]')).toHaveCount(1);
@@ -5180,8 +5198,13 @@ test("desktop: database connection gates splash and workspace controls", async (
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.kind).toBe("relay");
     const relay = page.getByRole("button", { name: "Relay", exact: true });
     const chatTab = page.getByRole("tab", { name: "Projects", exact: true });
+    const customAgents = page.getByRole("tab", { name: "Custom Agents", exact: true });
     await chatTab.press("ArrowUp");
+    await expect(customAgents).toBeFocused();
+    await customAgents.press("ArrowUp");
     await expect(relay).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(customAgents).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(chatTab).toBeFocused();
     await page.keyboard.press("Tab");
@@ -5189,7 +5212,11 @@ test("desktop: database connection gates splash and workspace controls", async (
     await card.press("Shift+Tab");
     await expect(chatTab).toBeFocused();
     await chatTab.press("Shift+Tab");
+    await expect(customAgents).toBeFocused();
+    await customAgents.press("Shift+Tab");
     await expect(relay).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(customAgents).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(chatTab).toBeFocused();
     await page.keyboard.press("ArrowDown");
@@ -5820,6 +5847,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
     const pageIcons = [
       ["tab-home", "app-home2"],
+      ["tab-custom-agents", "app-helmet"],
       ["tab-search", "app-search"],
       ["tab-apps", "app-apps"],
       ["tab-chat", "app-backlog"],
@@ -6272,7 +6300,11 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await page.locator("#tab-chat").press("ArrowUp");
     await expect(page.locator("#tab-search")).toBeFocused();
     await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#tab-custom-agents")).toBeFocused();
+    await page.keyboard.press("ArrowUp");
     await expect(relay).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#tab-custom-agents")).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.locator("#tab-search")).toBeFocused();
     await page.keyboard.press("ArrowDown");
@@ -6376,7 +6408,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(sidebarHeader).toHaveCSS("border-radius", "0px");
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(28);
+    await expect(tabs).toHaveCount(29);
     await expect(tabs.filter({ hasText: "System Manager" })).toHaveCount(1);
     const searchAction = page.locator("#tab-search");
     await expect(searchAction).toHaveAccessibleName("Search");
@@ -6385,15 +6417,27 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await expect(page.locator(".sidebar-toolbar")).toHaveCount(0);
     const homeBounds = await page.locator("#tab-home").boundingBox();
     const relayBounds = await page.locator(".relay-sidebar").boundingBox();
+    const customBounds = await page.locator("#tab-custom-agents").boundingBox();
     const searchBounds = await searchAction.boundingBox();
     const projectsBounds = await page.locator("#tab-chat").boundingBox();
     const navBounds = await page.locator(".sidebar").boundingBox();
-    if (!homeBounds || !relayBounds || !searchBounds || !projectsBounds || !navBounds)
+    if (
+      !homeBounds ||
+      !relayBounds ||
+      !customBounds ||
+      !searchBounds ||
+      !projectsBounds ||
+      !navBounds
+    )
       throw new Error("Sidebar navigation row is missing");
     expect(searchBounds.height).toBe(40);
+    expect(customBounds.height).toBe(40);
     expect(relayBounds.y).toBe(homeBounds.y + homeBounds.height);
-    expect(searchBounds.y).toBe(relayBounds.y + relayBounds.height);
+    expect(customBounds.y).toBe(relayBounds.y + relayBounds.height);
+    expect(searchBounds.y).toBe(customBounds.y + customBounds.height);
     expect(projectsBounds.y).toBe(searchBounds.y + searchBounds.height);
+    expect(customBounds.x).toBe(homeBounds.x);
+    expect(customBounds.width).toBe(homeBounds.width);
     expect(searchBounds.x).toBe(homeBounds.x);
     expect(searchBounds.width).toBe(homeBounds.width);
     const originalScheme = await page.evaluate(() =>
@@ -6874,7 +6918,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(25);
+    await expect(page.getByRole("tab")).toHaveCount(26);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -7318,7 +7362,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     ).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(25);
+    await expect(page.getByRole("tab")).toHaveCount(26);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await selectSettingsPage(page, "Text");
@@ -7348,6 +7392,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     if ((await settingsDisclosure.getAttribute("aria-expanded")) === "false")
       await settingsDisclosure.click();
     const sidebarPages = [
+      "Custom Agents",
       "Search",
       "Projects",
       "Apps",
@@ -7445,11 +7490,13 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(relay).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#tab-custom-agents")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(page.locator("#tab-search")).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Projects", exact: true })).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(28);
+    await expect(page.getByRole("tab")).toHaveCount(29);
     await selectSettingsPage(page, "Appearance");
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
@@ -10338,6 +10385,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(tables).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("tab")).toHaveText([
       "Home",
+      "Custom Agents",
       "Search",
       "Projects",
       "Apps",
@@ -10351,6 +10399,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(tables).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab")).toHaveText([
       "Home",
+      "Custom Agents",
       "Search",
       "Projects",
       "Apps",

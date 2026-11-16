@@ -16,6 +16,7 @@ import type { NavigationIconName } from "./navigation-icons.js";
 import { pathLabel } from "./path-label.js";
 
 export type NavigationTarget =
+  | { kind: "custom-agent"; id: string }
   | { kind: "page"; id: PageId }
   | { kind: "settings"; id: SettingsSectionId }
   | { kind: "project"; id: string }

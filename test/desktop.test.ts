@@ -1841,6 +1841,64 @@ describe("retained project runtimes", () => {
     await controller.projectAction({ type: "close", projectId: a.id });
     await expect(controller.start({ ...request, ...identity })).rejects.toThrow("no longer open");
   });
+  it("retains independent custom-agent work and details across project closure and database replacement", async () => {
+    await prepareRelay();
+    const a = (
+      await controller.customAgent({
+        type: "create",
+        name: "Reviewer",
+        instructions: "Only Reviewer",
+      })
+    ).agent;
+    const b = (
+      await controller.customAgent({ type: "create", name: "Writer", instructions: "Only Writer" })
+    ).agent;
+    if (!a || !b) throw new Error("Missing custom agents");
+    await controller.customAgent({ type: "open", id: a.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const aChat = controller.snapshot().chat;
+    const aSession = agents.sessions.at(-1);
+    const subscription = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation" as const,
+        conversationId: aChat.conversationId!,
+        generation: aChat.generation!,
+      },
+    };
+    controller.subscribeDetails(subscription, () => {});
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: aChat.run!.id,
+      text: "Reviewer evidence",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    agents.script = () => "hang";
+    await controller.customAgent({ type: "open", id: b.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const bChat = controller.snapshot().chat;
+    const bSession = agents.sessions.at(-1);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: bChat.run!.id,
+      text: "Continue Writer work",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("running"));
+    const p = await project("custom-unrelated");
+    await controller.projectAction({ type: "close", projectId: p.id });
+    await controller.connect(join(directory, "custom-replacement.sqlite"), true);
+    expect(aSession?.stops).toHaveLength(0);
+    expect(bSession?.stops).toHaveLength(0);
+    const details = controller.readDetails(subscription);
+    expect(JSON.stringify(details)).toContain("Reviewer evidence");
+    expect(JSON.stringify(details)).not.toContain("Continue Writer work");
+    const chats = controller.snapshot().chats;
+    expect(chats.find((chat) => chat.customAgentId === b.id)?.run?.status).toBe("running");
+    expect(chats.find((chat) => chat.customAgentId === a.id)?.conversationId).toBe(
+      aChat.conversationId,
+    );
+    controller.unsubscribeDetails({ subscriptionId: subscription.subscriptionId });
+  });
   async function prepareRelay() {
     await controller.shutdown(true);
     orchestrationProvider = "claude";

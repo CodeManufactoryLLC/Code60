@@ -247,3 +247,14 @@ command with the same name takes precedence.
 - [Release process](RELEASING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE)
+
+### Custom Agents
+
+Open **Custom Agents** from Home or beneath Relay in the sidebar and choose
+**New Agent**. Set a name and special instructions, then open its persistent chat.
+Each agent uses the shared
+verified provider and Relay's plans, workers, Files, Changes and message Undo.
+No database is required. Stop the agent and its workers before editing its
+instructions. Editing keeps history and uses fresh provider context on the next
+Send. **Archive** stops only that agent and preserves its data; use **Archived**
+then **Restore** to bring it back. Restart and Restore never resume work.

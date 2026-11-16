@@ -35,6 +35,7 @@ export function PageTabBar({
   onConnectDatabase,
   projectDisabled,
   navigation,
+  customAgents = [],
   chats,
   runs,
   selectedId,
@@ -52,6 +53,7 @@ export function PageTabBar({
   onConnectDatabase?(): void;
   projectDisabled: boolean;
   navigation: NavigationActions;
+  customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
   selectedId: string | undefined;
@@ -135,6 +137,7 @@ export function PageTabBar({
             onSelect={onSelect}
             onSettingsSectionSelect={onSettingsSectionSelect}
             navigation={navigation}
+            customAgents={customAgents}
             chats={chats}
             runs={runs}
             selectedId={selectedId}
@@ -176,6 +179,7 @@ function PageTabList({
   onSelect,
   onSettingsSectionSelect,
   navigation,
+  customAgents = [],
   chats,
   runs,
   selectedId,
@@ -192,6 +196,7 @@ function PageTabList({
   onSelect(id: PageId): void;
   onSettingsSectionSelect(id: SettingsSectionId | null): void;
   navigation: NavigationActions;
+  customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
   selectedId: string | undefined;
@@ -202,7 +207,22 @@ function PageTabList({
   selectedProjectId?: string | null | undefined;
 }) {
   const { pending: chatPending, error: chatError, chatAction, projectAction } = navigation;
-  const relay = chats.find((chat) => chat.kind === "relay");
+  const relay = chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
+  const [customExpanded, setCustomExpanded] = useState(
+    () => localStorage.getItem("code60.customAgentsExpanded") !== "false",
+  );
+  useEffect(() => {
+    localStorage.setItem("code60.customAgentsExpanded", String(customExpanded));
+  }, [customExpanded]);
+  const selectedCustomAgent = chats.find(
+    (chat) =>
+      chat.customAgentId &&
+      (conversationId(chat) === selectedId || chat.workers?.includes(selectedId ?? "")),
+  )?.customAgentId;
+  useEffect(() => {
+    if (navigation.destination?.kind === "custom-agent" || selectedCustomAgent)
+      setCustomExpanded(true);
+  }, [navigation.destination, selectedCustomAgent]);
   const relayId = relay && conversationId(relay);
   const relaySelected = relayId !== undefined && relayId === selectedId;
   const [chatExpanded, setChatExpanded] = useState(
@@ -332,6 +352,7 @@ function PageTabList({
   const destinations: (PageId | SettingsSectionId | "relay")[] = [
     "home",
     ...(relay && !chatPending ? ["relay" as const] : []),
+    "custom-agents",
     "search",
     "chat",
     "apps",
@@ -359,7 +380,7 @@ function PageTabList({
       pageAvailable(id, database),
   );
   const afterChat = visible[visible.indexOf("chat") + 1];
-  const afterRelay = pageAvailable("search", database) ? "search" : "chat";
+  const afterRelay = "custom-agents";
   const relayButtons = () =>
     [...document.querySelectorAll<HTMLButtonElement>(".relay-sidebar button:enabled")].filter(
       (button) => !button.closest("[hidden]"),
@@ -401,6 +422,41 @@ function PageTabList({
     if (navigationFrame.current !== undefined) {
       cancelAnimationFrame(navigationFrame.current);
       navigationFrame.current = undefined;
+    }
+    if (id === "custom-agents" && event.key === "ArrowRight") {
+      event.preventDefault();
+      setCustomExpanded(true);
+      document.querySelector<HTMLButtonElement>("#custom-agent-pages button")?.focus();
+      return;
+    }
+    if (id === "custom-agents" && event.key === "ArrowLeft") {
+      event.preventDefault();
+      setCustomExpanded(false);
+      return;
+    }
+    if (id === "custom-agents" && event.key === "ArrowDown" && customExpanded) {
+      const first = document.querySelector<HTMLButtonElement>("#custom-agent-pages button:enabled");
+      if (first) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+    }
+    if (
+      id === (pageAvailable("search", database) ? "search" : "chat") &&
+      event.key === "ArrowUp" &&
+      customExpanded
+    ) {
+      const last = [
+        ...document.querySelectorAll<HTMLButtonElement>("#custom-agent-pages button:enabled"),
+      ]
+        .filter((b) => !b.closest("[hidden]"))
+        .at(-1);
+      if (last) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
     }
     if (id === afterRelay && event.key === "ArrowUp") {
       const lastRelayButton = relayButtons().at(-1);
@@ -505,14 +561,22 @@ function PageTabList({
           id={`tab-${id}`}
           className={id === "apps" ? "page-group-toggle" : undefined}
           aria-controls={
-            id === "settings"
-              ? "panel-settings settings-pages"
-              : id === "apps"
-                ? "panel-apps app-pages"
-                : `panel-${id}`
+            id === "custom-agents"
+              ? "panel-custom-agents custom-agent-pages"
+              : id === "settings"
+                ? "panel-settings settings-pages"
+                : id === "apps"
+                  ? "panel-apps app-pages"
+                  : `panel-${id}`
           }
           aria-expanded={
-            id === "settings" ? settingsExpanded : id === "apps" ? appsExpanded : undefined
+            id === "custom-agents"
+              ? customExpanded
+              : id === "settings"
+                ? settingsExpanded
+                : id === "apps"
+                  ? appsExpanded
+                  : undefined
           }
           aria-selected={
             tabs.active === id &&
@@ -527,6 +591,14 @@ function PageTabList({
             tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
           }
           onClick={() => {
+            if (id === "custom-agents") {
+              if (tabs.active === id) setCustomExpanded((v) => !v);
+              else {
+                setCustomExpanded(true);
+                onSelect(id);
+              }
+              return;
+            }
             if (id === "settings" || id === "apps") {
               activateParent(id);
               return;
@@ -617,7 +689,7 @@ function PageTabList({
         <ChatSidebar
           relayNavigation
           chats={[relay]}
-          runs={runs.filter((run) => run.relay)}
+          runs={runs.filter((run) => run.relay?.conversationId === relay.conversationId)}
           selectedId={selectedId}
           navigationSerial={navigationSerial}
           database={database}
@@ -643,6 +715,74 @@ function PageTabList({
           }}
         />
       )}
+      <div role="tablist" aria-label="Custom Agents page" aria-orientation="vertical">
+        {page("custom-agents", false)}
+      </div>
+      {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
+      <div
+        role="group"
+        aria-label="Custom agent conversations"
+        id="custom-agent-pages"
+        aria-hidden={!customExpanded}
+        className="page-group-pages"
+        hidden={!customExpanded}
+        inert={!customExpanded}
+        onKeyDown={(event) => {
+          if (event.defaultPrevented) return;
+          const buttons = [
+            ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled"),
+          ].filter((button) => !button.closest("[hidden]"));
+          const index = buttons.indexOf(event.target as HTMLButtonElement);
+          if (index < 0) return;
+          if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
+            event.preventDefault();
+            if (event.key === "ArrowLeft") setCustomExpanded(false);
+            document.getElementById("tab-custom-agents")?.focus();
+          } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+            if (next) next.focus();
+            else moveTo(pageAvailable("search", database) ? "search" : "chat");
+          } else if (event.key === "Home" || event.key === "End") {
+            event.preventDefault();
+            moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
+          }
+        }}
+      >
+        {customAgents
+          .filter((agent) => !agent.archived)
+          .map((agent) => {
+            const chat = chats.find((chat) => chat.customAgentId === agent.id);
+            return chat && conversationId(chat) ? (
+              <ChatSidebar
+                key={agent.id}
+                chats={[chat]}
+                runs={runs.filter((run) => run.relay?.conversationId === chat.conversationId)}
+                selectedId={selectedId}
+                navigationSerial={navigationSerial}
+                database={database}
+                eventsByRun={eventsByRun}
+                open={tabs.active === "chat"}
+                pending={chatPending}
+                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                onSelect={selectConversation}
+                ancestorsExpanded={customExpanded}
+              />
+            ) : (
+              <div key={agent.id} className="chat-sidebar-row">
+                <button
+                  type="button"
+                  className="chat-sidebar-entry"
+                  disabled={chatPending}
+                  onClick={() => void navigation.open({ kind: "custom-agent", id: agent.id })}
+                >
+                  <NavigationIcon name="app-helmet" />
+                  <span className="chat-sidebar-label">{agent.name}</span>
+                </button>
+              </div>
+            );
+          })}
+      </div>
       <div role="tablist" aria-label="Search page" aria-orientation="vertical">
         {page("search", false)}
       </div>
