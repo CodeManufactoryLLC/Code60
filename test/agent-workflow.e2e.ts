@@ -578,6 +578,7 @@ for (const custom of [false, true]) {
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
         await page
+          .locator(".sidebar")
           .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
           .click();
         await expect(modelPicker).toHaveText("Fixture Two");
@@ -596,9 +597,9 @@ for (const custom of [false, true]) {
         const workerProcesses = (await processes()).filter((entry) => entry.cwd === worktree);
         expect(workerProcesses).toHaveLength(1);
         expect(alive(workerProcesses[0]?.pid as number)).toBe(true);
-        await expect
-          .poll(() => readFile(join(repo, "result.txt"), "utf8"))
-          .toBe("human accepted target\n");
+        await expect(async () => {
+          expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
+        }).toPass({ timeout: 5_000 });
         await checkCheckout("human accepted target\n");
         expect((await dialogs())?.observed).toHaveLength(3);
         checks.push(
