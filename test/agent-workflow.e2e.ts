@@ -37,15 +37,21 @@ function alive(pid: number) {
 }
 
 async function checkSidebarIconSpacing(entry: Locator) {
-  await expect(entry).toBeVisible();
-  const icon = await entry.locator(".navigation-icon").boundingBox();
-  const label = await entry.locator(".chat-sidebar-label").boundingBox();
-  const row = await entry.boundingBox();
-  if (!icon || !label || !row) throw new Error("Missing sidebar row geometry");
-  expect(icon.x).toBeGreaterThanOrEqual(row.x);
-  expect(label.width).toBeGreaterThan(0);
-  expect(icon.x + icon.width + 8).toBeLessThanOrEqual(label.x + 0.5);
-  expect(label.x + label.width).toBeLessThanOrEqual(row.x + row.width + 0.5);
+  // Opening lazily replaces the placeholder row. Sample all boxes in the same frame.
+  await expect(async () => {
+    await expect(entry).toBeVisible();
+    const { icon, label, row } = await entry.evaluate((element) => ({
+      icon: element.querySelector(".navigation-icon")?.getBoundingClientRect().toJSON(),
+      label: element.querySelector(".chat-sidebar-label")?.getBoundingClientRect().toJSON(),
+      row: element.getBoundingClientRect().toJSON(),
+    }));
+    if (!icon || !label) throw new Error("Missing sidebar icon or label");
+    expect(icon.width).toBeGreaterThan(0);
+    expect(icon.x).toBeGreaterThanOrEqual(row.x);
+    expect(label.width).toBeGreaterThan(0);
+    expect(icon.x + icon.width + 8).toBeLessThanOrEqual(label.x + 0.5);
+    expect(label.x + label.width).toBeLessThanOrEqual(row.x + row.width + 0.5);
+  }).toPass({ timeout: 5_000 });
 }
 
 async function checkHeaderBreadcrumbs(page: Page) {

@@ -13,8 +13,10 @@ import { useRelayFiles } from "../../src/renderer/relay-files.js";
 
 const conversationId = "0805849b-dcb7-483c-87a6-d819a95b0011";
 const targetId = "956232e0-1bcb-4a9e-9ca7-3b96884ec371";
+const chat = { kind: "relay", conversationId, generation: 1 };
 const snapshot = {
-  chats: [{ kind: "relay", conversationId, generation: 1 }],
+  chat,
+  chats: [chat],
   runs: [{ relay: { conversationId, generation: 1, targetId, cwd: "/target" } }],
 } as unknown as Snapshot;
 const listeners = new Set<(frame: DetailFrame) => void>();
