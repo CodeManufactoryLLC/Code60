@@ -26,6 +26,7 @@ it.each(["readable", "legacy"] as const)(
     const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
     git("init", "-q", "-b", "main");
+    git("config", "core.autocrlf", "false");
     await writeFile(join(repo, "result.txt"), "original\n");
     await writeFile(join(repo, "notes.txt"), "committed notes\n");
     git("add", ".");

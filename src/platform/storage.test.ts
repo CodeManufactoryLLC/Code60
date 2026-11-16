@@ -93,6 +93,17 @@ describe("atomic replacement", () => {
   );
 });
 describe("exclusive private directories", () => {
+  it("reports EEXIST for synchronous private file creation without changing its contents", async () => {
+    const root = await mkdtemp(join(tmpdir(), "code60-exclusive-file-"));
+    directories.push(root);
+    const file = join(root, "memory.sqlite");
+    createPrivateFileSync(file);
+    await writeFile(file, "saved database");
+    expect(() => createPrivateFileSync(file)).toThrowError(
+      expect.objectContaining({ code: "EEXIST" }),
+    );
+    expect(await readFile(file, "utf8")).toBe("saved database");
+  });
   it("creates one private directory and reports EEXIST without touching an existing one", async () => {
     const root = await mkdtemp(join(tmpdir(), "code60-exclusive-"));
     directories.push(root);

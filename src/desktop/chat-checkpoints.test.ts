@@ -37,6 +37,7 @@ async function project(name: string) {
   const directory = join(root, name);
   await mkdir(directory);
   command(directory, "init", "-q");
+  command(directory, "config", "core.autocrlf", "false");
   command(directory, "config", "user.name", "Test");
   command(directory, "config", "user.email", "test@example.invalid");
   await writeFile(join(directory, "file.txt"), "before\n");

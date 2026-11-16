@@ -17,6 +17,10 @@ import { RelayService } from "../src/desktop/relay-service.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
+// These real-Git/private-storage journeys exceed 5 s on Windows (the native
+// log also has passing cases above 5 s); keep the same assertions and bounds.
+if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 let root: string;
 let deps: CoreDeps;
 let host: ExecutionHost;
@@ -67,6 +71,7 @@ beforeEach(async () => {
   for (const name of ["a", "b"]) {
     const cwd = join(root, name);
     execFileSync("git", ["init", "-q", cwd]);
+    execFileSync("git", ["config", "core.autocrlf", "false"], { cwd });
     execFileSync("git", ["config", "core.hooksPath", join(root, "no-hooks")], { cwd });
     await writeFile(join(cwd, "file.txt"), "Before\n");
     execFileSync("git", ["add", "."], { cwd });
@@ -174,10 +179,12 @@ it("keeps partial automatic capture failures visible and allows explicit refresh
     .spyOn(deps.git, "reviewSnapshot")
     .mockRejectedValue(new Error("Snapshot unavailable"));
   required(manager).scheduleCapture(source.address);
-  await vi.waitFor(async () =>
-    expect((await reviews.read(source.id)).get(source.id).revisions[0]?.errors).toEqual([
-      { runId: source.accepted.id, message: "Snapshot unavailable" },
-    ]),
+  await vi.waitFor(
+    async () =>
+      expect((await reviews.read(source.id)).get(source.id).revisions[0]?.errors).toEqual([
+        { runId: source.accepted.id, message: "Snapshot unavailable" },
+      ]),
+    { timeout: 5000 },
   );
   read.mockRestore();
   await required(manager).rendererGone();

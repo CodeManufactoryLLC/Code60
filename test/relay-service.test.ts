@@ -21,7 +21,12 @@ import { MemoryService } from "../src/desktop/memory-service.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import * as storage from "../src/desktop/relay-storage.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
+
+// Native helper launches make real private writes/stream-draining slower than
+// POSIX. The Windows log already has passing lifecycle cases taking 4–5 s.
+if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let agents: FakeAgents;
@@ -81,7 +86,7 @@ async function connect() {
     ...DEFAULT_CONFIG,
     agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
   });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
 }
 it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
   const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
@@ -178,7 +183,7 @@ it("does not await a worker update queued behind the native Undo confirmation", 
     }
     for (const entry of wrapped) running.add(entry);
     accept(true);
-    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }));
+    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }), { timeout: 5000 });
   } finally {
     accept(true);
     releaseCleanup();
@@ -260,7 +265,7 @@ it("revalidates workspace identity between preparation and agent launch", async 
     replace = false;
     const workspace = required(relay.snapshot().directory);
     await rename(workspace, `${workspace}-saved`);
-    await mkdir(workspace, { mode: 0o700 });
+    await privateDirectory(workspace);
   });
   await connect();
   await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -796,6 +801,9 @@ it("refreshes verified providers without reconnecting and freezes each task's pr
   expect(worker.provider).toBe("codex");
   if (typeof worker.runId !== "string") throw new Error("Dispatch must return a run ID");
   const workerId = worker.runId;
+  // A newly constructed session is also inactive while native preparation is
+  // pending. Wait for the first completed prompt, not that pre-launch state.
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1), { timeout: 5000 });
   await vi.waitFor(() => expect(agents.sessions[1]?.turnActive).toBe(false));
   await relay.action({ type: "cancel", id });
   await relay.sync("claude", {

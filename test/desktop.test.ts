@@ -38,6 +38,7 @@ import { RagStore } from "../src/desktop/rag-store.js";
 import type { RagConversation } from "../src/desktop/rag-worker.js";
 import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -225,7 +226,9 @@ const controllerDeps = (): CoreDeps => {
 };
 
 beforeEach(async () => {
-  directory = await fs.mkdtemp(join(tmpdir(), "code60-desktop-"));
+  // Project chat roots include a SHA-256 key, UUID and atomic-write suffix.
+  // Keep those generated paths below the Windows helper's 248-character limit.
+  directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
   agents = new FakeAgents();
   git = new FakeGit();
   git.repoInfo = async () => ({ topLevel: directory, commonDir: join(directory, ".git") });
@@ -310,7 +313,7 @@ describe("database-wide RAG discovery", () => {
     await controller.rebuildRag(identity());
     const previous = controller.rag.snapshot().index;
     const root = join(directory, ".code60_workspace", "chats");
-    await fs.mkdir(root, { recursive: true });
+    await privateDirectory(root);
     const corrupt = join(root, `${randomUUID()}.json`);
     await fs.writeFile(corrupt, "{}");
     await expect(controller.rebuildRag(identity())).rejects.toThrow("unreadable");
@@ -405,64 +408,70 @@ async function configureMcp(version = "first") {
 }
 
 describe("retained project runtimes", () => {
-  it("restores open projects and stopped chats on Relay without starting project providers", async () => {
-    await prepareRelay();
-    const a = await project("restart-a");
-    const chat = await newChat(a.id);
-    const id = chat.run?.id as string;
-    await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
-    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
-    const archived = await newChat(a.id);
-    await controller.orchestrationChatAction({
-      type: "archive",
-      id: archived.run?.id as string,
-    });
-    const b = await project("restart-b");
-    const closed = await project("restart-closed");
-    await newChat(closed.id);
-    await controller.projectAction({ type: "close", projectId: closed.id });
-    const database = controller.snapshot().database as string;
-    const before = controller.snapshot().projects;
-    const starts = agents.specs.length;
-    const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
-    try {
-      await prepareRelay(); // A new controller and Relay using the same private state.
-      const restored = controller.snapshot();
-      expect(restored.chat.kind).toBe("relay");
-      expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
-      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
-      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
-      expect(restored.projects).toEqual(before); // Startup is not a new human open.
-      expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
-        title: "Saved title",
-        restored: true,
-        workers: [],
-        events: [],
-        updates: { paused: true },
+  it(
+    "restores open projects and stopped chats on Relay without starting project providers",
+    async () => {
+      await prepareRelay();
+      const a = await project("restart-a");
+      const chat = await newChat(a.id);
+      const id = chat.run?.id as string;
+      await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
+      const archived = await newChat(a.id);
+      await controller.orchestrationChatAction({
+        type: "archive",
+        id: archived.run?.id as string,
       });
-      expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
-        true,
-      );
-      expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
-      expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([restored.chat.directory]);
-      expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
-        true,
-      );
-      expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
-      await controller.orchestrationChatAction({ type: "select", id });
-      expect(controller.snapshot().chat.events).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
-          }),
-        ]),
-      );
-      expect(agents.specs).toHaveLength(starts + 1);
-    } finally {
-      readHistory.mockRestore();
-    }
-  });
+      const b = await project("restart-b");
+      const closed = await project("restart-closed");
+      await newChat(closed.id);
+      await controller.projectAction({ type: "close", projectId: closed.id });
+      const database = controller.snapshot().database as string;
+      const before = controller.snapshot().projects;
+      const starts = agents.specs.length;
+      const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
+      try {
+        await prepareRelay(); // A new controller and Relay using the same private state.
+        const restored = controller.snapshot();
+        expect(restored.chat.kind).toBe("relay");
+        expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
+        expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
+        expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
+        expect(restored.projects).toEqual(before); // Startup is not a new human open.
+        expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
+          title: "Saved title",
+          restored: true,
+          workers: [],
+          events: [],
+          updates: { paused: true },
+        });
+        expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
+          true,
+        );
+        expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
+        expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([
+          restored.chat.directory,
+        ]);
+        expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
+          true,
+        );
+        expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+        await controller.orchestrationChatAction({ type: "select", id });
+        expect(controller.snapshot().chat.events).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
+            }),
+          ]),
+        );
+        expect(agents.specs).toHaveLength(starts + 1);
+      } finally {
+        readHistory.mockRestore();
+      }
+    },
+    process.platform === "win32" ? 30_000 : 5000,
+  ); // Multiple native-backed chat saves/reopens exceeded 5 s in CI.
 
   it("persists confirmed closes, preserves cancelled closes, and isolates database replacement", async () => {
     await prepareRelay();

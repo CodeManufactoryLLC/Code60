@@ -45,6 +45,7 @@ async function project(name: string) {
   const cwd = join(root, name);
   await mkdir(cwd);
   git(cwd, "init", "-q");
+  git(cwd, "config", "core.autocrlf", "false");
   git(cwd, "config", "user.name", "Checkpoint fixture");
   git(cwd, "config", "user.email", "checkpoint@example.invalid");
   git(cwd, "config", "commit.gpgsign", "false");

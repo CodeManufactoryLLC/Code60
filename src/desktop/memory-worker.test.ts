@@ -58,7 +58,8 @@ function seed(cid: string, count: number, label: string) {
 const vector = () => Float32Array.from({ length: 768 }, (_, i) => (i === 0 ? 1 : 0));
 describe.skipIf(!sqliteAvailable())("memory index", () => {
   it("refuses a second writer before it can prune another owner's incomplete exchange", async () => {
-    const path = join(dir, "exclusive");
+    // The lock verifies both its root and its private application-state parent.
+    const path = join(dir, "state", "exclusive");
     const first = await openMemoryStore(path);
     try {
       const cid = first.store.register("owner", "Owner", null).id;

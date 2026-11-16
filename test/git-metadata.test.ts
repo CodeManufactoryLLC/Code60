@@ -242,11 +242,17 @@ it("refuses a linked checkout redirected to another still-existing repository wh
   const waiting = vi.fn(async () => {});
   const next = coordinateMetadata(linked, waiting);
   const rejected = expect(next).rejects.toThrow("changed while waiting");
-  await queued(linked);
-  await writeFile(join(linked, ".git"), `gitdir: ${join(b, ".git")}\n`);
-  gate.release();
-  await first;
-  await rejected;
+  try {
+    await queued(linked);
+    // Git marks worktree .git pointers hidden on Windows; truncating a hidden
+    // file with CREATE_ALWAYS fails with EPERM. Replace the entry instead.
+    await rm(join(linked, ".git"));
+    await writeFile(join(linked, ".git"), `gitdir: ${join(b, ".git")}\n`);
+  } finally {
+    gate.release();
+    await first;
+    await rejected;
+  }
   expect(waiting).not.toHaveBeenCalled();
 });
 it("refuses a replaced checkout even when it still points to the original common directory", async () => {

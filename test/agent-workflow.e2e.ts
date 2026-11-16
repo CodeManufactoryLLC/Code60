@@ -486,6 +486,9 @@ test("workflow: first use through plan, automatic edits, code references and mes
       .locator(".orchestration-chat-page:visible")
       .getByRole("button", { name: "1 file changed", exact: true });
     await expect(changes).toHaveCount(1);
+    // Narrow layouts (<=1200px) stack the panel and hide its resize handle. The default
+    // window can be clamped below that on small native displays, such as macOS runners.
+    await page.setViewportSize({ width: 1600, height: 1000 });
     await changes.click();
     const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
     for (let step = 0; step < 20; step++) await resize.press("ArrowLeft");

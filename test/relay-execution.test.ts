@@ -161,6 +161,7 @@ it("starts real worktrees from saved files without changing HEAD or staging", as
   const command = (...args: string[]) =>
     execFileSync("git", args, { cwd: target, encoding: "utf8" }).trim();
   command("init", "-q");
+  command("config", "core.autocrlf", "false");
   await writeFile(join(target, "tracked.txt"), "committed\n");
   command("add", "tracked.txt");
   commitFixture(target);
