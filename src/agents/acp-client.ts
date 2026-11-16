@@ -302,21 +302,25 @@ async function connectSession(
       }
     })
     .onRequest(methods.client.session.requestPermission, async ({ params, signal }) => {
-      if (params.sessionId !== sessionId || permissionHandler === undefined) return CANCELLED;
+      if (params.sessionId !== sessionId || permissionHandler === undefined || signal.aborted)
+        return CANCELLED;
       const controller = new AbortController();
       const abort = () => controller.abort();
       signal.addEventListener("abort", abort, { once: true });
       pendingPermissions.add(controller);
       try {
         const { toolCall } = params;
+        // Permission requests carry partial tool-call updates, just like notifications.
+        // Merge before policy evaluation and retain explicit changes for later requests.
+        const normalized = mapUpdate({ ...toolCall, sessionUpdate: "tool_call_update" }, toolCalls);
+        if (normalized?.type !== "toolCall") return CANCELLED;
         const answer = await new Promise<"allow" | "deny" | undefined>((resolve, reject) => {
           controller.signal.addEventListener("abort", () => resolve(undefined), { once: true });
           (permissionHandler as PermissionHandler)(
             {
               toolCallId: toolCall.toolCallId,
-              title:
-                toolCall.title ?? toolCalls.get(toolCall.toolCallId)?.title ?? toolCall.toolCallId,
-              kind: toToolKind(toolCall.kind),
+              title: normalized.title,
+              kind: normalized.kind,
               options: params.options.map((option) => ({
                 optionId: option.optionId,
                 name: option.name,

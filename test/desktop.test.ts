@@ -3130,6 +3130,18 @@ describe("desktop orchestration", () => {
     expect(controller.snapshot().runs[0]?.record.discardedAt).toBeDefined();
   });
 
+  it("does not display an empty-files discard confirmation when Git inspection fails", async () => {
+    const id = await start("go");
+    await controller.action({ type: "finish", id });
+    await vi.waitFor(() => expect(controller.active).toBe(false));
+    confirm.mockClear();
+    vi.spyOn(git, "changedFiles").mockRejectedValue(new Error("Git unavailable"));
+    await expect(controller.action({ type: "discard", id })).rejects.toThrow(/inspect.*retry/i);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(git.removed).toEqual([]);
+    expect(controller.snapshot().runs[0]?.record.discardedAt).toBeUndefined();
+  });
+
   it("rejects actions on a run from another workspace", async () => {
     const id = await start();
     await controller.stopAll();

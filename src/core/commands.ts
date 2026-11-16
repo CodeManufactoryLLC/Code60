@@ -128,8 +128,30 @@ export async function discardRun(
       `the agent for run ${id} may still be running (process group ${record.agentPid}); stop it first with 'code60 stop ${id}'`,
     );
   }
-  const files = await deps.git.changedFiles(record.worktree, base).catch(() => []);
+  const identity = JSON.stringify(record);
+  const inspect = async () => {
+    try {
+      return await deps.git.changedFiles(record.worktree, base);
+    } catch {
+      throw new RefusedError(
+        `cannot inspect changes for run ${id}; no worktree was removed. Check Git access and retry`,
+      );
+    }
+  };
+  const files = await inspect();
+  // Confirmation is external code and can yield while another owner changes the run.
+  const approvedFiles = JSON.stringify(files);
   if (!(await confirm(files, record))) return { discarded: false, files, record };
+  if (JSON.stringify(await inspect()) !== approvedFiles) {
+    throw new RefusedError(`changes for run ${id} changed during confirmation; review and retry`);
+  }
+  const latest = await deps.store.read(id);
+  if (JSON.stringify(latest) !== identity || JSON.stringify(record) !== identity) {
+    throw new RefusedError(`run ${id} changed during confirmation; review its owner and retry`);
+  }
+  if (await recordedAgentAlive(deps.processes, latest)) {
+    throw new RefusedError(`the agent for run ${id} may still be running; stop it before retrying`);
+  }
   await deps.git.removeWorktree(repoDir, record.worktree, branch);
   record.discardedAt = deps.clock.now().toISOString();
   await deps.store.save(record);

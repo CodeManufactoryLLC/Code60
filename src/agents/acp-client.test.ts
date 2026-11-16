@@ -76,6 +76,8 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
   const writer = responses.writable.getWriter();
   const seen: string[] = [];
   const received: Rpc[] = [];
+  let permissionId = 1000;
+  const replies = new Map<number | string, (value: unknown) => void>();
   const stream = {
     writable: requests.writable,
     readable: responses.readable,
@@ -84,12 +86,31 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
     for (;;) {
       const { value, done } = await reader.read();
       if (done) return;
-      if (value?.method === undefined) continue;
+      if (value?.method === undefined) {
+        if (value?.id !== undefined) {
+          replies.get(value.id)?.(value.result);
+          replies.delete(value.id);
+        }
+        continue;
+      }
       const request = value;
       const method = request.method as string;
       seen.push(method);
       received.push(request);
       if (method === "session/load") {
+        await writer.write({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: "saved-session",
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "replayed-execute",
+              title: "Execute from history",
+              kind: "execute",
+            },
+          },
+        });
         await writer.write({
           jsonrpc: "2.0",
           method: "session/update",
@@ -126,6 +147,24 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
     stream,
     seen,
     received,
+    async permission(
+      toolCall: Record<string, unknown>,
+      options = [
+        { optionId: "allow", name: "Allow once", kind: "allow_once" },
+        { optionId: "deny", name: "Reject once", kind: "reject_once" },
+      ],
+      sessionId = "new-session",
+    ) {
+      const id = permissionId++;
+      const response = new Promise<unknown>((resolve) => replies.set(id, resolve));
+      await writer.write({
+        jsonrpc: "2.0",
+        id,
+        method: "session/request_permission",
+        params: { sessionId, toolCall, options },
+      });
+      return response;
+    },
     async toolUpdate(update: SessionUpdate) {
       await writer.write({
         jsonrpc: "2.0",
@@ -153,6 +192,128 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
     serve,
   };
 }
+
+describe("partial permission requests", () => {
+  it.each([undefined, null])("preserves execute for an omitted/null kind: %s", async (kind) => {
+    const agent = fakeAgent({});
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    const requests: string[] = [];
+    session.onPermission(async (request) => {
+      requests.push(request.kind);
+      return request.kind === "other" ? "allow" : "deny";
+    });
+    try {
+      await agent.toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "exec",
+        title: "Execute",
+        kind: "execute",
+      });
+      await agent.toolUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "read",
+        title: "Read",
+        kind: "read",
+      });
+      expect(await agent.permission({ toolCallId: "exec", kind })).toEqual({
+        outcome: { outcome: "selected", optionId: "deny" },
+      });
+      expect(requests).toEqual(["execute"]);
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+
+  it("tracks explicit permission metadata updates and isolates unknown tool IDs", async () => {
+    const agent = fakeAgent({});
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    const seen: { kind: string; title: string }[] = [];
+    session.onPermission(async ({ kind, title }) => {
+      seen.push({ kind, title });
+      return "deny";
+    });
+    try {
+      await agent.permission({ toolCallId: "one", title: "Run", kind: "execute" });
+      await agent.permission({ toolCallId: "one" });
+      await agent.permission({ toolCallId: "two" });
+      await agent.permission({ toolCallId: "one", title: "Inspect", kind: "read" });
+      await agent.permission({ toolCallId: "one", kind: null, title: null });
+      expect(seen).toEqual([
+        { kind: "execute", title: "Run" },
+        { kind: "execute", title: "Run" },
+        { kind: "other", title: "two" },
+        { kind: "read", title: "Inspect" },
+        { kind: "read", title: "Inspect" },
+      ]);
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+
+  it("uses replayed metadata without publishing replayed transcript events", async () => {
+    const agent = fakeAgent({ loadSession: true });
+    const session = await restoreSession(agent.stream, {
+      cwd: "/work",
+      agentName: "fake",
+      sessionId: "saved-session",
+    });
+    const seen: string[] = [];
+    session.onPermission(async (request) => {
+      seen.push(request.kind);
+      return "deny";
+    });
+    try {
+      expect(
+        await agent.permission({ toolCallId: "replayed-execute" }, undefined, "saved-session"),
+      ).toEqual({ outcome: { outcome: "selected", optionId: "deny" } });
+      expect(seen).toEqual(["execute"]);
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+
+  it("never allows mismatched sessions, missing once-only options, or cancelled concurrent requests", async () => {
+    const agent = fakeAgent({});
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    let calls = 0;
+    session.onPermission(async () => {
+      calls++;
+      return "allow";
+    });
+    const cancelled = { outcome: { outcome: "cancelled" } };
+    try {
+      expect(await agent.permission({ toolCallId: "wrong" }, undefined, "wrong-session")).toEqual(
+        cancelled,
+      );
+      expect(calls).toBe(0);
+      expect(
+        await agent.permission({ toolCallId: "always" }, [
+          { optionId: "always", name: "Always", kind: "allow_always" },
+        ]),
+      ).toEqual(cancelled);
+      const pending: (() => void)[] = [];
+      session.onPermission(
+        () =>
+          new Promise((resolve) => {
+            pending.push(() => resolve("allow"));
+          }),
+      );
+      const first = agent.permission({ toolCallId: "one", kind: "execute" });
+      const second = agent.permission({ toolCallId: "two", kind: "read" });
+      await expect.poll(() => pending.length).toBe(2);
+      await session.cancel();
+      for (const allow of pending) allow();
+      expect(await first).toEqual(cancelled);
+      expect(await second).toEqual(cancelled);
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+});
 
 describe("MCP tool attribution", () => {
   const call = (extra: Record<string, unknown> = {}): SessionUpdate => ({
