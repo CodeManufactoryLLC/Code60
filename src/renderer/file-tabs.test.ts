@@ -32,7 +32,7 @@ describe("Chat file tabs", () => {
       scope,
       revisionId: "revision",
       title: "same.ts",
-      application: { operationId: "operation", fileId: "file", path: "same.ts" },
+      application: { operationId: "operation", fileId: "file" },
     };
     let state = updateFileTabs(emptyFileTabs("relay"), {
       type: "revision",

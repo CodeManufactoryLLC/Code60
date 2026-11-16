@@ -5038,7 +5038,7 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
     await expect(page.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(1);
     await expect(review.locator(".review-files")).toContainText("second.txt");
     const secondTab = await page
-      .getByRole("tab", { name: /Revision \d+ · Implement second task loop/ })
+      .getByRole("tab", { name: "Implement second task loop", exact: true })
       .getAttribute("aria-selected");
     expect(secondTab).toBe("true");
     // The next request starts from the user's actual working edit, not a clean checkout.
@@ -13785,7 +13785,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
     await composer.fill("Implement validation");
     await composer.press("Enter");
-    await expect(page.getByRole("button", { name: "View diff", exact: true }).last()).toBeVisible();
+    await expect(page.locator(".conversation-changes-link").last()).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(
@@ -13812,7 +13812,12 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         }),
       )
       .toBe(2);
-    await page.getByRole("button", { name: "View diff", exact: true }).last().click();
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Task revisions" })
+      .getByRole("button")
+      .last()
+      .click();
     let review = page.getByRole("region", { name: "Revision diff", exact: true });
     await expect(review).toBeVisible();
     const files = review.getByRole("navigation", { name: "Changed files" }).getByRole("button");

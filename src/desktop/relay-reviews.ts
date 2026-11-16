@@ -699,7 +699,7 @@ export class RelayReviews {
                 review.revisions.at(-1)?.sources?.some((source) => source.runId === worker.runId),
             ),
           source: origin(review).baseline ? "Current saved files" : "Selected Git revision",
-          ...(undo ? { undoId: undo.id, undoRevisionId: undo.revisionId } : {}),
+          ...(undo ? { undoId: undo.id } : {}),
           ...(proposal
             ? {
                 operation: {

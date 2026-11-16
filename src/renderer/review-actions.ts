@@ -26,7 +26,7 @@ export interface ReviewPreview {
   revisionId: string;
   title: string;
   related?: Omit<ReviewPreview, "related" | "application">[];
-  application?: { operationId: string; fileId: string; path: string };
+  application?: { operationId: string; fileId: string };
 }
 
 type Request = RelayReviewRequest extends infer R

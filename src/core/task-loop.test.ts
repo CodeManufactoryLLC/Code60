@@ -329,6 +329,40 @@ it("rolls back an interrupted multi-file write and allows a fresh proposal", asy
   expect((await capture([w])).conflicts).toEqual([]);
 });
 
+it("revalidates turn authority after awaited file preparation before any checkout replacement", async () => {
+  const w = await worker("stale-turn");
+  await fs.writeFile(join(w.path, "file.txt"), "result\n");
+  const proposal = await capture([w]);
+  const target = join(project, "file.txt");
+  const before = await fs.readFile(target);
+  const index = await fs.readFile(join(project, ".git", "index"));
+  const head = command(project, "rev-parse", "HEAD");
+  let current = true;
+  let replacements = 0;
+  const guarded = new TaskLoop(project, join(root, "tasks"), tasks, {
+    ...fs,
+    open: async (...args) => {
+      const handle = await fs.open(...args);
+      if (String(args[0]).startsWith(join(project, ".code60-"))) current = false;
+      return handle;
+    },
+    rename: async (from, to) => {
+      if (to === target) replacements++;
+      await fs.rename(from, to);
+    },
+  });
+  await expect(
+    guarded.execute(task, proposal.id, "apply", undefined, () => {
+      if (!current) throw new Error("Worker turn changed");
+    }),
+  ).rejects.toThrow("Worker turn changed");
+  expect(replacements).toBe(0);
+  expect(await fs.readFile(target)).toEqual(before);
+  expect(await fs.readFile(join(project, ".git", "index"))).toEqual(index);
+  expect(command(project, "rev-parse", "HEAD")).toBe(head);
+  expect(await guarded.pendingOperation(task)).toBeNull();
+});
+
 it("preserves private file modes, renames, deletions and binary contents through Undo", async () => {
   if (process.platform !== "win32") await fs.chmod(join(project, "file.txt"), 0o600);
   const w = await worker("files");

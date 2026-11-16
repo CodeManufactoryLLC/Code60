@@ -21,18 +21,16 @@ const summary: ReviewSummary = {
   submissions: [],
 };
 
-it("orders immutable captures chronologically while keeping review-local numbering", () => {
+it("orders immutable captures chronologically across reviews", () => {
   const other = {
     ...summary,
     id: "other",
     revisions: [{ id: "three", at: "2026-11-15T01:02:00Z" }],
   };
-  expect(
-    revisionCards([{ summary: other }, { summary }]).map(({ key, number }) => [key, number]),
-  ).toEqual([
-    ["review:one", 1],
-    ["other:three", 1],
-    ["review:two", 2],
+  expect(revisionCards([{ summary: other }, { summary }]).map(({ key }) => key)).toEqual([
+    "review:one",
+    "other:three",
+    "review:two",
   ]);
 });
 it("places cards between messages by capture time only for their actual originating chat", () => {
@@ -44,11 +42,9 @@ it("places cards between messages by capture time only for their actual originat
 });
 it("deduplicates repeated summaries and revision IDs without merging distinct captures", () => {
   const repeated = { ...summary, revisions: [...summary.revisions, ...summary.revisions] };
-  expect(
-    revisionCards([{ summary }, { summary: repeated }]).map(({ key, number }) => [key, number]),
-  ).toEqual([
-    ["review:one", 1],
-    ["review:two", 2],
+  expect(revisionCards([{ summary }, { summary: repeated }]).map(({ key }) => key)).toEqual([
+    "review:one",
+    "review:two",
   ]);
   expect(render([summary, summary]).match(/class="conversation-changes"/g)).toHaveLength(1);
 });

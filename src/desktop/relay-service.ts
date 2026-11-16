@@ -855,6 +855,10 @@ export class RelayService {
       return;
     this.rewinding = true;
     try {
+      await checkpoints.retainWorkers(
+        checkpoint.id,
+        this.currentWorkers().map((worker) => worker.id),
+      );
       await this.stopChat();
       const restored = await checkpoints.restore(
         checkpoint.id,
@@ -864,11 +868,8 @@ export class RelayService {
       await this.plans?.rewind(restored.plans);
       if (restored.continuityKey)
         await this.memory?.rewind(`relay:${restored.continuityKey}`, restored.turn);
-      for (const worker of this.execution.list())
-        await this.memory?.rewind(
-          `worker:${worker.id}`,
-          restored.workers.find((saved) => saved.runId === worker.id)?.turn ?? 0,
-        );
+      for (const worker of restored.workers)
+        await this.memory?.rewind(`worker:${worker.runId}`, worker.turn);
       this.replySummary.reset(
         this.events
           .read()
@@ -1351,6 +1352,8 @@ export class RelayService {
       this.delivery = undefined;
       const deliveryEpoch = this.connectionEpoch;
       const operation = this.turns.then(async () => {
+        // Stop drains started deliveries, never work queued behind the stopping turn.
+        this.deliveries.add(operation);
         const run = this.chat?.runs()[0];
         if (
           this.paused ||
@@ -1470,7 +1473,6 @@ export class RelayService {
         for (const update of updates) this.inbox.splice(this.inbox.indexOf(update), 1);
         this.activity.received();
       });
-      this.deliveries.add(operation);
       void operation.finally(() => this.deliveries.delete(operation)).catch(() => {});
       this.turns = operation.catch(() => {
         if (deliveryEpoch !== this.connectionEpoch) return;

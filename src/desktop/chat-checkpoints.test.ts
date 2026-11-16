@@ -7,6 +7,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { defaultDeps, TaskLoop } from "../core/index.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 
+// Match TaskLoop's real-Git allowance, including native private writes on Windows.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const git = defaultDeps().git;
 const tasks = git.tasks;
 if (!tasks) throw new Error("Task Git unavailable");
@@ -49,14 +52,32 @@ const begin = () =>
     before: 4,
     taskCount: 0,
   });
+async function associate(id: string, store = checkpoints) {
+  await store.integrate(
+    new TaskLoop(root, join(root, "associations"), taskGit),
+    async () => ({
+      format: 1,
+      id: randomUUID(),
+      taskId: randomUUID(),
+      revisionId: id,
+      identity: "",
+      status: "prepared",
+      changes: [],
+      conflicts: [],
+      sources: [],
+      previousSources: [],
+    }),
+    () => {},
+  );
+}
 it("retains bounded request associations across checkpoints and reopening", async () => {
   await begin();
   const firstSource = randomUUID();
-  await checkpoints.source(firstSource);
+  await associate(firstSource);
   await checkpoints.begin({ runId: "chat", turn: 2, text: "Next", before: 8, taskCount: 1 });
   const nextSource = randomUUID();
-  await checkpoints.source(nextSource);
-  await checkpoints.source(firstSource);
+  await associate(nextSource);
+  await associate(firstSource);
   checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
   expect(checkpoints.requestForSource(firstSource)).toEqual({ chatId: "chat", turn: 1 });
   expect(checkpoints.requestForSource(nextSource)).toEqual({ chatId: "chat", turn: 2 });
@@ -83,6 +104,25 @@ it("retains the original saved-code references through reopening and conversatio
   });
   checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
   expect((await checkpoints.restore(id, 2)).references).toEqual(references);
+});
+it("persists worker rewind boundaries before execution ownership can be forgotten", async () => {
+  const id = await checkpoints.begin({
+    runId: "chat",
+    turn: 3,
+    text: "Undo this worker request",
+    before: 10,
+    taskCount: 1,
+    workers: [{ runId: "surviving-worker", turn: 2 }],
+  });
+  await checkpoints.retainWorkers(id, ["surviving-worker", "new-worker"]);
+  checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
+  await checkpoints.restore(id, 20);
+  checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
+  expect(checkpoints.pendingRewind).toBe(true);
+  expect(checkpoints.undoTarget?.workers).toEqual([
+    { runId: "surviving-worker", turn: 2 },
+    { runId: "new-worker", turn: 0 },
+  ]);
 });
 it("counts unchanged direct contents toward the combined current-folder Undo bound", async () => {
   const second = join(root, "large-b");
@@ -133,6 +173,82 @@ it("deduplicates direct preimages, survives restart without Git and restores rep
   await checkpoints.restore(first, 12);
   expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("original");
 });
+it.each([false, true])(
+  "consolidates nested isolated inverses with direct coverage enrolled after earlier writes: %s",
+  async (earlier) => {
+    const parent = join(root, "parent");
+    await mkdir(parent);
+    const child = await project("parent/child");
+    const head = command(child, "rev-parse", "HEAD");
+    const index = await readFile(join(child, ".git", "index"));
+    const id = await begin();
+    if (earlier) {
+      const { loop, operation } = await proposal(child, "earlier isolated\n");
+      await checkpoints.integrate(
+        loop,
+        async () => operation,
+        () => {},
+      );
+    }
+    await checkpoints.coverDirect(parent, () => {});
+    const { loop, operation } = await proposal(child, "later isolated\n");
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
+    await writeFile(join(parent, "manual.txt"), "manual edits are covered too");
+    checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
+    await checkpoints.restore(id, 12);
+    expect(checkpoints.latest?.restores).toHaveLength(1);
+    expect(await readFile(join(child, "file.txt"), "utf8")).toBe("before\n");
+    await expect(readFile(join(parent, "manual.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(command(child, "rev-parse", "HEAD")).toBe(head);
+    expect(await readFile(join(child, ".git", "index"))).toEqual(index);
+  },
+);
+
+it.each(["prepared", "applied"] as const)(
+  "recovers an inverse lock retained around its %s status write",
+  async (status) => {
+    const directory = await project("locked");
+    const id = await begin();
+    const { loop, operation } = await proposal(directory, "after\n");
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
+    const interrupt = vi
+      .spyOn(TaskLoop.prototype, "execute")
+      .mockRejectedValueOnce(new Error("Stopped before inverse execution"));
+    await expect(checkpoints.restore(id, 12)).rejects.toThrow("Stopped");
+    interrupt.mockRestore();
+    const entry = checkpoints.latest?.restores[0];
+    if (!entry) throw new Error("Missing inverse");
+    const inverseLoop = new TaskLoop(entry.project, entry.root, taskGit);
+    const inverse = await inverseLoop.proposal(entry.taskId, entry.operationId);
+    inverse.status = status;
+    if (status === "applied") await writeFile(join(directory, "file.txt"), "before\n");
+    await writeFile(join(entry.root, `${inverse.id}.op`), JSON.stringify(inverse));
+    await writeFile(
+      await taskGit.lockPath(directory),
+      JSON.stringify({
+        pid: process.pid,
+        taskId: id,
+        operation: inverse.id,
+        root: createHash("sha256").update(entry.root).digest("hex"),
+      }),
+    );
+    checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
+    await checkpoints.restore(id, 12);
+    expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before\n");
+    expect(await inverseLoop.pendingOperation(id)).toBeNull();
+    await checkpoints.complete(id);
+    await begin();
+  },
+);
+
 it("preflights mixed direct and isolated targets before restoring either", async () => {
   const a = await project("direct"),
     b = await project("isolated");
@@ -140,7 +256,11 @@ it("preflights mixed direct and isolated targets before restoring either", async
   await checkpoints.coverDirect(a, () => {});
   await writeFile(join(a, "file.txt"), "direct result");
   const { loop, operation } = await proposal(b, "isolated result");
-  await checkpoints.integrate(loop, operation, () => {});
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
+  );
   await writeFile(join(b, "file.txt"), "conflicting manual change");
   await expect(checkpoints.restore(id, 12)).rejects.toThrow("blocked");
   expect(await readFile(join(a, "file.txt"), "utf8")).toBe("direct result");
@@ -184,7 +304,11 @@ it("requires explicit restart recovery after a mixed folder and Git restore is i
   await checkpoints.coverDirect(a, () => {});
   await writeFile(join(a, "file.txt"), "direct result");
   const { loop, operation } = await proposal(b, "isolated result");
-  await checkpoints.integrate(loop, operation, () => {});
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
+  );
   const execute = TaskLoop.prototype.execute;
   const interrupt = vi.spyOn(TaskLoop.prototype, "execute").mockImplementation(function (
     this: TaskLoop,
@@ -230,7 +354,7 @@ async function proposal(directory: string, text: string) {
 it("persists a zero-edit checkpoint and rewinds its transcript/source boundary idempotently", async () => {
   const id = await begin();
   const source = randomUUID();
-  await checkpoints.source(source);
+  await associate(source);
   checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
   const restored = await checkpoints.restore(id, 12);
   expect(restored).toMatchObject({ phase: "restored", text: "Change the files" });
@@ -240,7 +364,7 @@ it("persists a zero-edit checkpoint and rewinds its transcript/source boundary i
   expect(checkpoints.visible("chat", 12)).toBe(true);
   expect(checkpoints.visible("another-chat", 4)).toBe(true);
   await expect(checkpoints.restore(id, 20)).resolves.toEqual(restored);
-  await checkpoints.source(randomUUID());
+  await expect(associate(randomUUID())).rejects.toThrow("no longer writable");
   expect(checkpoints.latest?.sources).toEqual([source]);
 });
 it("automatically integrates and restores two targets without changing their indexes or HEADs", async () => {
@@ -250,7 +374,11 @@ it("automatically integrates and restores two targets without changing their ind
   const id = await begin();
   for (const directory of [a, b]) {
     const { loop, operation } = await proposal(directory, "after\n");
-    await checkpoints.integrate(loop, operation, () => {});
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
     expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("after\n");
   }
   checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
@@ -266,7 +394,11 @@ it("preflights all targets and preserves both if one has conflicting newer edits
   const id = await begin();
   for (const directory of [a, b]) {
     const { loop, operation } = await proposal(directory, "after\n");
-    await checkpoints.integrate(loop, operation, () => {});
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
   }
   await writeFile(join(b, "file.txt"), "manual edit\n");
   await expect(checkpoints.restore(id, 12)).rejects.toThrow("newer edits");
@@ -279,7 +411,13 @@ it("keeps durable intent when integration fails and never treats an unexecuted p
   const id = await begin();
   const { loop, operation } = await proposal(directory, "after\n");
   vi.spyOn(loop, "execute").mockRejectedValueOnce(new Error("Synthetic interrupted integration"));
-  await expect(checkpoints.integrate(loop, operation, () => {})).rejects.toThrow("interrupted");
+  await expect(
+    checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    ),
+  ).rejects.toThrow("interrupted");
   checkpoints = await ChatCheckpoints.open(checkpoints.root, taskGit);
   expect(checkpoints.latest?.operations).toHaveLength(1);
   await checkpoints.restore(id, 12);
@@ -324,8 +462,8 @@ it("rejects changed metadata rather than overwriting a successor's checkpoint", 
   ).rejects.toThrow("already exists");
   const current = await ChatCheckpoints.open(checkpoints.root, taskGit);
   expect(current.latest?.id).toBe(id);
-  await checkpoints.source(randomUUID());
-  await expect(current.source(randomUUID())).rejects.toThrow("metadata changed");
+  await associate(randomUUID());
+  await expect(associate(randomUUID(), current)).rejects.toThrow("metadata changed");
 });
 it("rejects stale restoration requests and late integration after restoration", async () => {
   const directory = await project("a");
@@ -333,23 +471,34 @@ it("rejects stale restoration requests and late integration after restoration", 
   const { loop, operation } = await proposal(directory, "after\n");
   await expect(checkpoints.restore(randomUUID(), 12)).rejects.toThrow("no longer the latest");
   await checkpoints.restore(id, 12);
-  await expect(checkpoints.integrate(loop, operation, () => {})).rejects.toThrow(
-    "no longer writable",
-  );
+  await expect(
+    checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    ),
+  ).rejects.toThrow("no longer writable");
   expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before\n");
 });
-it("does not prepare or integrate a capture after its captured request checkpoint changes", async () => {
+it("binds a capture crossing a new Send to the latest checkpoint at actual integration", async () => {
   const directory = await project("a");
-  const previous = await begin();
-  const { loop, operation } = await proposal(directory, "after\n");
   await begin();
-  const prepare = vi.fn().mockResolvedValue(operation);
-  await expect(checkpoints.integrate(loop, prepare, () => {}, previous)).rejects.toThrow(
-    "no longer writable",
+  const { loop, operation } = await proposal(directory, "after\n");
+  const latest = await checkpoints.begin({
+    runId: "chat",
+    turn: 2,
+    text: "Next request",
+    before: 10,
+    taskCount: 1,
+  });
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
   );
-  await expect(checkpoints.source(operation.revisionId, previous)).rejects.toThrow("changed");
-  expect(prepare).not.toHaveBeenCalled();
-  expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before\n");
+  expect(checkpoints.latest?.id).toBe(latest);
+  expect(checkpoints.requestForSource(operation.revisionId)).toEqual({ chatId: "chat", turn: 2 });
+  expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("after\n");
 });
 it("rejects an exhausted journal budget before another preparation or checkout write", async () => {
   const directory = await project("a");
@@ -389,7 +538,11 @@ it("pins native checkout identities and refuses replacement even when the file b
   const directory = await project("a");
   const id = await begin();
   const { loop, operation } = await proposal(directory, "after\n");
-  await checkpoints.integrate(loop, operation, () => {});
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
+  );
   await rename(directory, `${directory}-saved`);
   await mkdir(directory);
   await writeFile(join(directory, "file.txt"), "after\n");
@@ -403,7 +556,11 @@ it("persists a half-finished multi-target restore and resumes explicitly without
   const id = await begin();
   for (const directory of [a, b]) {
     const { loop, operation } = await proposal(directory, "after\n");
-    await checkpoints.integrate(loop, operation, () => {});
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
   }
   const execute = TaskLoop.prototype.execute;
   const interrupt = vi.spyOn(TaskLoop.prototype, "execute").mockImplementation(function (
@@ -435,7 +592,11 @@ it("recovers a partially written inverse journal without overwriting newer files
   const id = await begin();
   for (const directory of [a, b]) {
     const { loop, operation } = await proposal(directory, "after\n");
-    await checkpoints.integrate(loop, operation, () => {});
+    await checkpoints.integrate(
+      loop,
+      async () => operation,
+      () => {},
+    );
   }
   const interrupt = vi
     .spyOn(TaskLoop.prototype, "execute")

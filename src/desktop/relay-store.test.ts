@@ -30,6 +30,20 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
+it("keeps the owned checkpoint boundary without trusting externally changed history", async () => {
+  const store = await open();
+  const at = new Date().toISOString();
+  await store.append({ id: randomUUID(), role: "human", at, text: "Owned" });
+  const boundary = await store.boundary();
+  await appendFile(join(store.root, "history.frames"), "outside");
+  expect(await store.boundary()).toBe(boundary);
+  expect(await store.history()).toMatchObject({ damaged: true, messages: [] });
+  await expect(
+    store.append({ id: randomUUID(), role: "human", at, text: "Not replayed" }),
+  ).rejects.toThrow();
+  expect(await store.boundary()).toBe(boundary);
+});
+
 it.each(["open", "validate", "write", "sync", "close"] as const)(
   "retains the %s failure stage and allowlisted code",
   async (stage) => {

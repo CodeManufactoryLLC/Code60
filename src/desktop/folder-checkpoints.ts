@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 import { TaskLoop, type TaskProposal } from "../core/index.js";
-import { privateDirectory } from "../platform/index.js";
+import { containedPath, privateDirectory } from "../platform/index.js";
 import { readRelayState, storageCode, writeRelayState } from "./relay-storage.js";
 
 const digest = (data: string) =>
@@ -27,10 +27,9 @@ export class FolderCheckpoints {
   ) {}
   loop(project: string, root = this.root): TaskLoop {
     if (
-      this.exclude.some((excluded) => {
-        const path = relative(resolve(excluded).toLowerCase(), resolve(project).toLowerCase());
-        return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
-      })
+      this.exclude.some((excluded) =>
+        containedPath(resolve(excluded).toLowerCase(), resolve(project).toLowerCase()),
+      )
     )
       throw new Error("Direct snapshots cannot target Code60's private state");
     return new TaskLoop(project, root, this.git, undefined, this.exclude);

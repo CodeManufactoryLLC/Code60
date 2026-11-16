@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DesktopApi, Review, TaskView } from "../bridge/index.js";
-import { type ReviewPreview, type ReviewScope, reviewRequest } from "./review-actions.js";
+import { type ReviewScope, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 import { reviewSession } from "./review-session.js";
 
@@ -10,22 +10,12 @@ export function ReviewFlow(props: {
   scope: ReviewScope;
   active: boolean;
   hint: number;
-  pinnedRevision?: string;
-  onPreview?: ((preview: ReviewPreview) => void) | undefined;
-  initialAction?: "prepare" | "feedback" | "review";
 }) {
   return <SavedChanges key={JSON.stringify(props.scope)} {...props} />;
 }
-function SavedChanges({
-  api,
-  scope,
-  active,
-  hint,
-  pinnedRevision,
-  onPreview,
-}: Parameters<typeof ReviewFlow>[0]) {
+function SavedChanges({ api, scope, active, hint }: Parameters<typeof ReviewFlow>[0]) {
   const [loaded, setLoaded] = useState<{ review: Review; task: TaskView }>();
-  const [revisionId, select] = useState(pinnedRevision ?? "");
+  const [revisionId, select] = useState("");
   const [error, setError] = useState("");
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -74,20 +64,6 @@ function SavedChanges({
               ))}
             </select>
           </label>
-          {onPreview && revisionId && (
-            <button
-              type="button"
-              onClick={() =>
-                onPreview({
-                  scope,
-                  revisionId,
-                  title: loaded.review.title,
-                })
-              }
-            >
-              View diff
-            </button>
-          )}
           {loaded.task.operation &&
             ["applying", "undoing", "recovery"].includes(loaded.task.operation.status) && (
               <div role="alert">

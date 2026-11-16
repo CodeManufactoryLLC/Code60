@@ -120,6 +120,7 @@ import {
   type ReviewRead,
   renderPrompt,
   type SavedChat,
+  summarizeReview,
   TACTICS,
   tacticPrompt,
 } from "../bridge/index.js";
@@ -579,7 +580,10 @@ export class DesktopController {
         saved: s.saved,
         run: s.run,
         title: s.title,
-        events: s.chatEvents.map((e) => e.event),
+        events: s.chatEvents
+          .filter((_, index) => s.checkpoints?.visible(s.run?.id ?? "", index) !== false)
+          .map((e) => e.event),
+        checkpoints: s.checkpoints,
         root: owner.state.chatStore?.root ?? root,
         project: owner.state.chatStore?.root === root ? null : (owner.state.workspace?.dir ?? null),
       })),
@@ -636,6 +640,8 @@ export class DesktopController {
           if (history.record.agent !== chat.provider)
             throw new Error("Saved RAG chat identity mismatch");
           const session = sessions.find((s) => s.root === store.root && s.run?.id === chat.runId);
+          const checkpoints =
+            session?.checkpoints ?? (await ChatCheckpoints.read(join(directory, "checkpoints")));
           add({
             source: {
               version: 1,
@@ -646,7 +652,10 @@ export class DesktopController {
               agent: chat.provider,
               project,
             },
-            events: mergeRagEvents(history.events, session?.events ?? []),
+            events: mergeRagEvents(
+              history.events.filter((_, index) => checkpoints.visible(chat.runId, index)),
+              session?.events ?? [],
+            ),
           });
           seen.add(JSON.stringify([store.root, chat.runId]));
         }
@@ -1299,7 +1308,7 @@ export class DesktopController {
             sources.some((source) => source.runId === worker.runId),
           ),
         source: state.baseline ? "Current saved files" : "Selected Git revision",
-        ...(undo ? { undoId: undo.id, undoRevisionId: undo.revisionId } : {}),
+        ...(undo ? { undoId: undo.id } : {}),
         ...(operation
           ? {
               operation: {
@@ -1533,12 +1542,24 @@ export class DesktopController {
           const targets = [];
           for (const worker of store.get(request.reviewId).workers) {
             const view = this.liveView(worker.runId);
+            const settled =
+              !view ||
+              !(
+                view.stopping ||
+                view.modeChanging ||
+                (ACTIVE_STATUSES.has(view.status) && view.status !== "idle")
+              );
+            const turn =
+              view?.turns ??
+              this.history.find((run) => run.record.id === worker.runId)?.record.turns;
             const status =
               (view?.status === "idle" ? (view.lastOutcome ?? view.status) : view?.status) ??
               this.history.find((run) => run.record.id === worker.runId)?.record.status;
             try {
               targets.push({
                 runId: worker.runId,
+                turn,
+                settled,
                 status,
                 target: await prepareDiff(
                   commandDeps(this.deps, this.requireWorkspace()),
@@ -1546,7 +1567,7 @@ export class DesktopController {
                 ),
               });
             } catch (cause) {
-              targets.push({ runId: worker.runId, status, error: message(cause) });
+              targets.push({ runId: worker.runId, turn, settled, status, error: message(cause) });
             }
           }
           return targets;
@@ -1622,6 +1643,7 @@ export class DesktopController {
           !session.rewinding &&
           loop &&
           revision?.sources?.length === review.workers.length &&
+          targets.every((target) => target.settled) &&
           review.workers.every(
             (worker) =>
               this.conversations.workers.get(worker.runId)?.generation === session.chatGeneration,
@@ -1631,6 +1653,20 @@ export class DesktopController {
             signal.throwIfAborted();
             this.conversations.assertCurrent(session);
             if (this.reviews !== store) throw new Error("The working target changed");
+            for (const target of targets) {
+              const view = this.liveView(target.runId);
+              const turn =
+                view?.turns ??
+                this.history.find((run) => run.record.id === target.runId)?.record.turns;
+              if (
+                turn !== target.turn ||
+                (view &&
+                  (view.stopping ||
+                    view.modeChanging ||
+                    (ACTIVE_STATUSES.has(view.status) && view.status !== "idle")))
+              )
+                throw new Error("Worker turn changed. Wait for a settled capture.");
+            }
           };
           valid();
           const revisionSources = revision.sources;
@@ -3087,7 +3123,10 @@ export class DesktopController {
       session.chatError = null;
       session.historyRun = undefined;
       // Recovery does not authorize saved plans, feedback, or historical workers.
-      if (origin === undefined) session.updatesPaused = false;
+      if (origin === undefined) {
+        session.updatesPaused = false;
+        if (chat.runs()[0]?.status === "idle") this.titleChat(session);
+      }
     } catch (cause) {
       // An unstarted recovery retains its historical final status. It has no
       // process to stop and its live-run completion promise has never started.
@@ -3132,12 +3171,14 @@ export class DesktopController {
     this.conversations.pause(session);
     try {
       await this.closeMcpGateway(session);
-      await Promise.allSettled([...session.dispatches.values()].map((entry) => entry.result));
+      // Queued dispatches run behind this action and will reject their retired scope.
+      await this.cancelRag();
       const workers = new Set(
         [...this.conversations.workers]
           .filter(([, worker]) => worker.generation === session.chatGeneration)
           .map(([id]) => id),
       );
+      await checkpoints.retainWorkers(checkpoint.id, [...workers]);
       await Promise.all([
         session.chat?.shutdown(),
         ...[...this.batches.keys()].flatMap((batch) =>
@@ -3164,11 +3205,8 @@ export class DesktopController {
         `project:${restored.continuityKey ?? session.chatDirectory}`,
         restored.turn,
       );
-      for (const id of workers)
-        await this.memory.rewind(
-          `worker:${id}`,
-          restored.workers.find((saved) => saved.runId === id)?.turn ?? 0,
-        );
+      for (const worker of restored.workers)
+        await this.memory.rewind(`worker:${worker.runId}`, worker.turn);
       session.activity.invalidate();
       session.replies.reset(
         session.chatEvents
@@ -3427,12 +3465,15 @@ export class DesktopController {
       session.updatesPaused
     )
       return;
-    const first = session.chatEvents.find(
+    const visible = session.chatEvents.filter(
+      (_, index) => session.checkpoints?.visible(session.run?.id ?? "", index) !== false,
+    );
+    const first = visible.find(
       ({ event }) => event.type === "prompt" && event.origin !== "automatic",
     )?.event;
     if (first?.type !== "prompt") return;
     let reply = "";
-    for (const { event } of session.chatEvents) {
+    for (const { event } of visible) {
       if (event.type === "message") reply += event.text.slice(0, 8_000 - reply.length);
       if (reply.length === 8_000) break;
     }
@@ -4002,57 +4043,27 @@ export class DesktopController {
       files: summary ? null : this.files,
       worktrees: summary ? null : structuredClone(this.worktrees),
       reviews:
-        (summary ? undefined : this.reviews)
-          ?.list()
-          .map(
-            ({
-              id,
-              version,
-              project,
-              title,
-              chatId,
-              originChatId,
-              turn,
-              workers,
-              submissions,
-              revisions,
-              error,
-            }) => ({
-              id,
-              version,
-              project,
-              title,
-              chatId,
-              originChatId,
-              turn,
-              workers,
-              submissions,
-              ...(error ? { error } : {}),
-              revisions: revisions
-                .filter(
-                  (revision) =>
-                    !this.conversations.sessions
-                      .find((session) => session.run?.id === chatId)
-                      ?.checkpoints?.hidden.has(revision.id),
-                )
-                .map(({ id, at, files, errors, outcomes }) => ({
-                  id,
-                  at,
-                  fileCount: new Set(files.map((file) => file.path)).size,
-                  incomplete: errors.length > 0,
-                  ...(outcomes ? { outcomes } : {}),
-                  request: this.conversations.sessions
-                    .find((session) => session.run?.id === chatId)
-                    ?.checkpoints?.requestForSource(id),
-                })),
-              ...(this.relay
-                ? {
-                    projectId: this.projectHost.current.id,
-                    databaseEpoch: this.projectHost.current.epoch,
-                  }
-                : {}),
-            }),
-          ) ?? [],
+        (summary ? undefined : this.reviews)?.list().map((review) => {
+          const view = summarizeReview(review);
+          const checkpoints = this.conversations.sessions.find(
+            (session) => session.run?.id === review.chatId,
+          )?.checkpoints;
+          return {
+            ...view,
+            revisions: view.revisions
+              .filter((revision) => !checkpoints?.hidden.has(revision.id))
+              .map((revision) => ({
+                ...revision,
+                request: checkpoints?.requestForSource(revision.id),
+              })),
+            ...(this.relay
+              ? {
+                  projectId: this.projectHost.current.id,
+                  databaseEpoch: this.projectHost.current.epoch,
+                }
+              : {}),
+          };
+        }) ?? [],
     };
   }
 

@@ -68,7 +68,7 @@ it("stops one owned interactive run without stopping its sibling or pending work
   expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
   expect(agents.sessions[1]?.stops).toEqual([]);
   expect(status("r2")).toBe("running");
-  await orch.stop("r2", true);
+  await orch.stop("r2");
   await orch.done;
   expect(status("r2")).toBe("cancelled");
   expect(() => orch.stop("missing")).toThrow("no run with ID 'missing'");

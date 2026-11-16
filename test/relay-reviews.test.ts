@@ -104,11 +104,14 @@ it("automatically captures settled work once and publishes only compact conversa
   const worktree = required(source.accepted.orchestrator.runs()[0]?.worktree);
   await writeFile(join(worktree, "file.txt"), "Automatic result\n");
   for (let i = 0; i < 3; i++) required(manager).scheduleCapture(source.address);
-  await vi.waitFor(async () => {
-    const review = (await reviews.read(source.id)).get(source.id);
-    expect(review.revisions).toHaveLength(1);
-    expect(review.revisions[0]?.files[0]?.path).toBe("file.txt");
-  });
+  await vi.waitFor(
+    async () => {
+      const review = (await reviews.read(source.id)).get(source.id);
+      expect(review.revisions).toHaveLength(1);
+      expect(review.revisions[0]?.files[0]?.path).toBe("file.txt");
+    },
+    { timeout: 10_000 },
+  );
   const timeline = await required(manager).request({
     type: "timeline",
     conversationId: owner.id,

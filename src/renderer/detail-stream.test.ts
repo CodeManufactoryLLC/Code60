@@ -114,6 +114,25 @@ const revisions = (frame: DetailFrame | undefined) =>
     : [];
 
 describe("owner-scoped detail stream", () => {
+  it("replaces a rewound project accumulator with a fresh surviving-prefix read", async () => {
+    const s = source();
+    await s.ready(frame(3, null, [1, 2, 3]));
+    const rewind = frame(4, 3, []);
+    const full = frame(4, null, [1]);
+    for (const item of [rewind, full])
+      if (!item.closed && item.payload.kind === "conversation")
+        item.payload.chat.rewindRevision = 1;
+    s.read.mockResolvedValue(full);
+    s.push(rewind);
+    await vi.waitFor(() => expect(revisions(s.published.at(-1))).toEqual([1]));
+    const next = frame(5, 4, [5]);
+    if (!next.closed && next.payload.kind === "conversation") next.payload.chat.rewindRevision = 1;
+    s.push(next);
+    await vi.waitFor(() => expect(revisions(s.published.at(-1))).toEqual([1, 5]));
+    expect(s.read).toHaveBeenCalledTimes(2);
+    s.stop();
+  });
+
   it("recovers a dropped final frame from its own summary hint with a single flight", async () => {
     const s = source(true);
     await s.ready();

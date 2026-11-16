@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
-import { join, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { chatReferenceSchema, planSchema } from "../bridge/index.js";
 import { type CoreDeps, TaskLoop, type TaskProposal } from "../core/index.js";
-import { privateDirectory } from "../platform/index.js";
+import { containedPath, privateDirectory } from "../platform/index.js";
 import { FolderCheckpoints } from "./folder-checkpoints.js";
 import { readRelayState, storageCode, writeRelayState } from "./relay-storage.js";
 
@@ -15,7 +15,8 @@ const reference = z.strictObject({
   operationId: z.string().uuid(),
   device: z.string().regex(/^\d+$/),
   inode: z.string().regex(/^\d+$/),
-  bytes: z.number().int().nonnegative(),
+  // Accepted for format-1 journals written before quota accounting moved to recordedBytes.
+  bytes: z.number().int().nonnegative().optional(),
   filesystem: z.boolean().optional(),
 });
 const directTarget = z.strictObject({
@@ -80,8 +81,7 @@ type State = z.infer<typeof schema>;
 type TaskGit = NonNullable<CoreDeps["git"]["tasks"]>;
 type Reference = z.infer<typeof reference>;
 export type ChatCheckpoint = z.infer<typeof checkpoint>;
-const covers = (parent: string, child: string) =>
-  parent === child || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+const covers = containedPath;
 
 /** Private rollback evidence. Opening history never authorizes execution or restoration. */
 export class ChatCheckpoints {
@@ -107,8 +107,16 @@ export class ChatCheckpoints {
     git?: TaskGit,
     excludedPaths: string[] = [],
   ): Promise<ChatCheckpoints> {
-    const store = new ChatCheckpoints(root, git, [root, ...excludedPaths]);
     await privateDirectory(root);
+    return ChatCheckpoints.read(root, git, excludedPaths);
+  }
+  /** Read-only consumers must not create missing checkpoint storage. */
+  static async read(
+    root: string,
+    git?: TaskGit,
+    excludedPaths: string[] = [],
+  ): Promise<ChatCheckpoints> {
+    const store = new ChatCheckpoints(root, git, [root, ...excludedPaths]);
     try {
       store.persisted = await readRelayState(join(root, "state.json"), 4_194_304);
       store.state = schema.parse(store.persisted, {
@@ -135,6 +143,21 @@ export class ChatCheckpoints {
   }
   get pendingRewind(): boolean {
     return this.state.rewindPending;
+  }
+  retainWorkers(id: string, runIds: readonly string[]): Promise<void> {
+    return this.serial(async () => {
+      const current = this.undoTarget;
+      if (!current || current.id !== id) throw new Error("The Undo checkpoint changed");
+      const workers = new Map(current.workers.map((worker) => [worker.runId, worker]));
+      for (const runId of runIds) if (!workers.has(runId)) workers.set(runId, { runId, turn: 0 });
+      const next = { ...current, workers: [...workers.values()] };
+      await this.save({
+        ...this.state,
+        ...(this.latest?.id === id
+          ? { latest: next }
+          : { previous: this.state.previous.map((entry) => (entry.id === id ? next : entry)) }),
+      });
+    });
   }
   complete(id: string): Promise<void> {
     return this.serial(async () => {
@@ -179,9 +202,6 @@ export class ChatCheckpoints {
     const result = this.writes.then(work);
     this.writes = result.catch(() => {});
     return result;
-  }
-  settled(): Promise<void> {
-    return this.writes.then(() => {});
   }
   private async save(next: State): Promise<void> {
     schema.parse(next, { jitless: true });
@@ -303,35 +323,20 @@ export class ChatCheckpoints {
       }),
     );
   }
-  source(id: string, expected = this.latest?.id): Promise<void> {
-    return this.serial(async () => {
-      const current = this.latest;
-      if (current?.id !== expected) throw new Error("The request checkpoint changed");
-      if (current?.phase !== "active" || this.requestForSource(id)) return;
-      await this.save({ ...this.state, latest: { ...current, sources: [...current.sources, id] } });
-    });
-  }
-  /** Bind live captures at serialized integration time; explicit expected IDs reject stale callers. */
+  /** Bind live captures to the latest request at serialized integration time. */
   integrate(
     loop: TaskLoop,
-    prepare:
-      | TaskProposal
-      | ((
-          availableBytes: number,
-          reserve: (bytes: number) => Promise<void>,
-        ) => Promise<TaskProposal>),
+    prepare: (
+      availableBytes: number,
+      reserve: (bytes: number) => Promise<void>,
+    ) => Promise<TaskProposal>,
     valid: () => void,
-    expected?: string,
   ): Promise<void> {
     return this.serial(() =>
       TaskLoop.coordinate([loop.project], async () => {
         valid();
         const current = this.latest;
-        if (
-          !current ||
-          (expected !== undefined && current.id !== expected) ||
-          current.phase !== "active"
-        )
+        if (current?.phase !== "active")
           throw new Error("The request checkpoint is no longer writable");
         const availableBytes = Math.floor(
           (268_435_456 - this.state.recordedBytes - (current.direct.length ? 134_217_728 : 0)) / 2,
@@ -347,8 +352,7 @@ export class ChatCheckpoints {
           await this.reserve(bytes);
           reserved = true;
         };
-        const proposal =
-          typeof prepare === "function" ? await prepare(availableBytes, reserve) : prepare;
+        const proposal = await prepare(availableBytes, reserve);
         if (!reserved) await reserve(Buffer.byteLength(JSON.stringify(proposal)) + 1024);
         valid();
         const sourced = {
@@ -368,7 +372,6 @@ export class ChatCheckpoints {
           taskId: proposal.taskId,
           operationId: proposal.id,
           ...(await this.pin(loop.project)),
-          bytes: Buffer.byteLength(JSON.stringify(proposal)),
         };
         await this.save({
           ...this.state,
@@ -378,7 +381,7 @@ export class ChatCheckpoints {
           },
         });
         valid();
-        await loop.execute(proposal.taskId, proposal.id, "apply");
+        await loop.execute(proposal.taskId, proposal.id, "apply", undefined, valid);
         valid();
       }),
     );
@@ -437,18 +440,31 @@ export class ChatCheckpoints {
               (Pick<TaskProposal, "changes"> & { wholeFolder?: boolean })[]
             >();
             for (const [index, entry] of current.operations.entries()) {
-              const direct = current.direct.find((target) => target.project === entry.project);
               await this.validate(entry);
               const loop = this.loop(entry);
               const proposal = await loop.proposal(entry.taskId, entry.operationId);
-              if (["applying", "undoing", "recovery"].includes(proposal.status)) {
+              if (
+                ["applying", "undoing", "recovery"].includes(proposal.status) ||
+                (await loop.pendingOperation(entry.taskId))
+              ) {
                 throw new Error("Recover the interrupted file operation in Changes before Undo");
               }
-              if (direct && index >= direct.operationOffset) continue;
               if (proposal.status !== "applied") continue;
-              const group = groups.get(entry.project) ?? [];
-              group.push(proposal);
-              groups.set(entry.project, group);
+              const translated = new Map<string, TaskProposal["changes"]>();
+              for (const change of proposal.changes) {
+                const path = resolve(entry.project, change.path);
+                const direct = current.direct.find((target) => covers(target.project, path));
+                if (direct && index >= direct.operationOffset) continue;
+                const project = direct?.project ?? entry.project;
+                const changes = translated.get(project) ?? [];
+                changes.push({ ...change, path: relative(project, path).split(sep).join("/") });
+                translated.set(project, changes);
+              }
+              for (const [project, changes] of translated) {
+                const group = groups.get(project) ?? [];
+                group.push({ changes });
+                groups.set(project, group);
+              }
             }
             let directBytes = 0;
             for (const target of current.direct) {
@@ -487,7 +503,6 @@ export class ChatCheckpoints {
                   taskId: id,
                   operationId: proposal.id,
                   ...(await this.pin(project)),
-                  bytes: Buffer.byteLength(JSON.stringify(proposal)),
                   ...(filesystem ? { filesystem: true } : {}),
                 };
                 restores.push(entry);
@@ -501,15 +516,21 @@ export class ChatCheckpoints {
             await this.validate(entry);
             const loop = this.loop(entry);
             const proposal = await loop.proposal(entry.taskId, entry.operationId);
-            if (proposal.status === "prepared") await loop.verifyPrepared(proposal);
-            if (["applying", "undoing", "recovery"].includes(proposal.status))
+            if (
+              ["applying", "undoing", "recovery"].includes(proposal.status) ||
+              (await loop.pendingOperation(entry.taskId))?.id === entry.operationId
+            )
               await loop.verifyRecovery(proposal);
+            else if (proposal.status === "prepared") await loop.verifyPrepared(proposal);
           }
           for (const [index, entry] of current.restores.entries()) {
             await this.validate(entry);
             const loop = this.loop(entry);
             let proposal = await loop.proposal(entry.taskId, entry.operationId);
-            if (["applying", "undoing", "recovery"].includes(proposal.status)) {
+            if (
+              ["applying", "undoing", "recovery"].includes(proposal.status) ||
+              (await loop.pendingOperation(entry.taskId))?.id === entry.operationId
+            ) {
               await loop.execute(entry.taskId, entry.operationId, "recover");
               proposal = await loop.proposal(entry.taskId, entry.operationId);
             }

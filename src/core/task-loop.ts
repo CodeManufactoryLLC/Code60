@@ -4,7 +4,12 @@ import * as fs from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { TaskEntry, TaskGit } from "../git/index.js";
-import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
+import {
+  atomicReplace,
+  containedPath,
+  privateDirectory,
+  writePrivateFile,
+} from "../platform/index.js";
 
 const uuid = z.string().uuid();
 const oid = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
@@ -121,10 +126,8 @@ export class TaskLoop {
         }),
       ),
     ];
-    const contains = (parent: string, child: string) =>
-      parent === child || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
     const previous = [...TaskLoop.writes].filter((entry) =>
-      entry.projects.some((a) => roots.some((b) => contains(a, b) || contains(b, a))),
+      entry.projects.some((a) => roots.some((b) => containedPath(a, b) || containedPath(b, a))),
     );
     const done = Promise.all(previous.map((entry) => entry.done.catch(() => {}))).then(work);
     const entry = { projects: roots, done };
@@ -628,9 +631,10 @@ export class TaskLoop {
         throw new Error(`Newer edits prevent recovery: ${change.path}`);
     }
   }
-  private async write(path: string, expected: Content, value: Content) {
+  private async write(path: string, expected: Content, value: Content, valid?: () => void) {
     const target = await this.safePath(path);
     if (!diskSame(await this.disk(path), expected)) throw new Error(`Project changed: ${path}`);
+    valid?.();
     if (!value) {
       await this.io.unlink(target);
       return;
@@ -652,6 +656,7 @@ export class TaskLoop {
       }
       await this.safePath(path);
       if (!diskSame(await this.disk(path), expected)) throw new Error(`Project changed: ${path}`);
+      valid?.();
       await atomicReplace(temporary, target, this.io === fs ? undefined : this.io.rename);
     } finally {
       await this.io.rm(temporary, { force: true });
@@ -708,6 +713,7 @@ export class TaskLoop {
     operationId: string,
     direction: "apply" | "undo" | "recover",
     signal?: AbortSignal,
+    valid?: () => void,
   ) {
     const proposal = await this.proposal(id, operationId);
     if (
@@ -740,6 +746,7 @@ export class TaskLoop {
       }
       if (direction === "apply" && proposal.identity !== (await this.git.identity(this.project)))
         throw new Error("Git state changed. Refresh the preview.");
+      valid?.();
       const undo = direction === "undo";
       for (const change of proposal.changes)
         if (!diskSame(await this.disk(change.path), undo ? change.after : change.before))
@@ -754,9 +761,11 @@ export class TaskLoop {
             change.path,
             undo ? change.after : change.before,
             undo ? change.before : change.after,
+            valid,
           );
         }
         signal?.throwIfAborted();
+        valid?.();
         const state = await this.state(id);
         state.appliedSources = undo ? [] : proposal.sources;
         if (!undo) state.resolutions = {};

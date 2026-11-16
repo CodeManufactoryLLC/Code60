@@ -1,22 +1,11 @@
 import { z } from "zod";
 import {
   runIdSchema,
+  runStatusSchema,
   sessionStateSchema,
   stopReasonSchema,
   toolKindSchema,
 } from "../contracts/index.js";
-
-const runStatusSchema = z.enum([
-  "queued",
-  "running",
-  "waiting",
-  "idle",
-  "finished",
-  "failed",
-  "cancelled",
-  "timed_out",
-  "interrupted",
-]);
 
 const nativeIdentitySchema = z.object({
   createdAt: z.string().regex(/^\d{1,20}$/),

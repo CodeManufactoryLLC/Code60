@@ -320,10 +320,9 @@ export class RelayStore {
     return this.serial(() => this.readHistory(before, excluded));
   }
   boundary(): Promise<number> {
-    return this.serial(async () => {
-      this.checkJournal(await verifyRelayStorage(this.journal, false));
-      return Number(this.journalIdentity.size);
-    });
+    // This is the last owned append boundary, not permission to read changed history.
+    // Writers and history readers still validate the journal and report unavailable saving.
+    return this.serial(async () => Number(this.journalIdentity.size));
   }
   private checkJournal(info: BigIntStats): void {
     if (journalStamp(info) !== journalStamp(this.journalIdentity))

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runStatusSchema } from "../contracts/index.js";
 import {
   type ProjectRequestIdentity,
   pairedProjectIdentity,
@@ -50,17 +51,7 @@ const reviewRevisionSchema = z.strictObject({
     .array(
       z.strictObject({
         runId: run,
-        status: z.enum([
-          "queued",
-          "running",
-          "waiting",
-          "idle",
-          "finished",
-          "failed",
-          "cancelled",
-          "timed_out",
-          "interrupted",
-        ]),
+        status: runStatusSchema,
       }),
     )
     .max(100)

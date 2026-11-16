@@ -16,11 +16,10 @@ export function revisionCards(entries: readonly Entry[]) {
   return [...new Map(entries.map((item) => [item.summary.id, item])).values()]
     .flatMap(({ summary, entry }) =>
       [...new Map(summary.revisions.map((revision) => [revision.id, revision])).values()].map(
-        (revision, index) => ({
+        (revision) => ({
           key: `${summary.id}:${revision.id}`,
           at: revision.at,
           revision,
-          number: index + 1,
           summary,
           entry,
         }),

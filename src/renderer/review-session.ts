@@ -11,28 +11,18 @@ export function reviewScopeKey(scope: ReviewScope): string {
 }
 
 function createSession() {
-  let state = { busy: false, revision: 0 };
-  const listeners = new Set<() => void>();
-  const publish = (busy: boolean) => {
-    state = { busy, revision: state.revision + 1 };
-    for (const listener of listeners) listener();
-  };
+  let busy = false;
   return {
-    snapshot: () => state,
-    observed: () => listeners.size > 0,
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
+    get busy() {
+      return busy;
     },
     async run<T>(action: () => Promise<T>): Promise<T | undefined> {
-      if (state.busy) return undefined;
-      publish(true);
+      if (busy) return undefined;
+      busy = true;
       try {
         return await action();
       } finally {
-        publish(false);
+        busy = false;
       }
     },
   };
@@ -50,7 +40,7 @@ export function reviewSession(api: DesktopApi, scope: ReviewScope) {
     // Retain only a bounded presentation cache; in-flight entries are never evicted.
     for (const [id, item] of entries) {
       if (entries.size < 128) break;
-      if (!item.snapshot().busy && !item.observed()) entries.delete(id);
+      if (!item.busy) entries.delete(id);
     }
     session = createSession();
     entries.set(key, session);

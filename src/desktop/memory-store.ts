@@ -92,6 +92,10 @@ export class MemoryStore {
       CREATE TABLE IF NOT EXISTS revisions (id TEXT NOT NULL, revision INTEGER NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS suppressed (source TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS suppressed_capture (source TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS state_effects (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, cause TEXT NOT NULL, memory TEXT NOT NULL,
+        before_state TEXT NOT NULL, before_revision INTEGER NOT NULL, after_revision INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS vectors (id TEXT NOT NULL, part INTEGER NOT NULL, model TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY(id, part));
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(id UNINDEXED, text);
     `);
@@ -239,6 +243,41 @@ export class MemoryStore {
           .run(cid, turn);
         this.db.prepare("DELETE FROM checkpoints WHERE cid=?").run(cid);
       }
+      const restored = new Map<string, { record: MemoryRecord; revision: number }>();
+      const effects = this.db
+        .prepare(`SELECT e.* FROM state_effects e JOIN memories m ON m.id=e.cause
+          WHERE EXISTS (
+            SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s
+            ON s.source=json_extract(c.value,'$.sourceId')
+          ) ORDER BY e.seq DESC`)
+        .all();
+      for (const effect of effects) {
+        const id = String(effect.memory);
+        let entry = restored.get(id);
+        if (!entry) {
+          const row = this.db.prepare("SELECT value FROM memories WHERE id=?").get(id);
+          if (row) {
+            const record = parseValue(memoryRecordSchema, decode(row.value));
+            entry = { record, revision: record.revision };
+          }
+        }
+        // A later human edit, resolution or promotion keeps its own revision.
+        if (entry && entry.revision === Number(effect.after_revision)) {
+          entry.record = parseValue(memoryRecordSchema, {
+            ...entry.record,
+            state: String(effect.before_state),
+          });
+          entry.revision = Number(effect.before_revision);
+          restored.set(id, entry);
+        }
+        this.db.prepare("DELETE FROM state_effects WHERE seq=?").run(Number(effect.seq));
+      }
+      for (const { record, revision } of restored.values()) {
+        this.db
+          .prepare("UPDATE state_effects SET after_revision=? WHERE memory=? AND after_revision=?")
+          .run(record.revision + 1, record.id, revision);
+        this.write({ ...record, revision: record.revision + 1, updatedAt: now() });
+      }
       return ids;
     });
   }
@@ -328,7 +367,8 @@ export class MemoryStore {
     const eventAt = sources.find((s) => s.id === candidate.citations[0]?.sourceId)?.at ?? now();
     const duplicate = this.db
       .prepare(
-        "SELECT id FROM memories WHERE fingerprint=? AND project IS ? AND (scope='project' OR cid=?) AND type=? AND json_extract(value,'$.condition') IS ? AND json_extract(value,'$.subject')=? AND (type NOT IN ('episodic','history') OR json_extract(value,'$.eventAt')=?)",
+        `SELECT id FROM memories m WHERE fingerprint=? AND project IS ? AND (scope='project' OR cid=?) AND type=? AND json_extract(value,'$.condition') IS ? AND json_extract(value,'$.subject')=? AND (type NOT IN ('episodic','history') OR json_extract(value,'$.eventAt')=?)
+          AND NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId'))`,
       )
       .get(
         fingerprint,
@@ -344,7 +384,8 @@ export class MemoryStore {
       throw new Error("Memory record limit reached");
     const previous = this.db
       .prepare(
-        "SELECT value FROM memories WHERE project IS ? AND (scope='project' OR cid=?) AND state IN ('active','disputed') AND json_extract(value,'$.subject')=? AND type=? AND json_extract(value,'$.condition') IS ? AND fingerprint<>? LIMIT 65",
+        `SELECT value FROM memories m WHERE project IS ? AND (scope='project' OR cid=?) AND state IN ('active','disputed') AND json_extract(value,'$.subject')=? AND type=? AND json_extract(value,'$.condition') IS ? AND fingerprint<>?
+          AND NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) LIMIT 65`,
       )
       .all(project, cid, candidate.subject, candidate.type, candidate.condition, fingerprint)
       .map((row) => parseValue(memoryRecordSchema, decode(row.value)));
@@ -376,15 +417,27 @@ export class MemoryStore {
       const protectedRecord = previous.some((r) => r.pinned || r.evidence === "human-edited");
       if (candidate.correction && human && !protectedRecord) {
         record.supersedes = previous[0]?.id ?? null;
-        for (const r of previous)
-          this.write({ ...r, state: "superseded", revision: r.revision + 1, updatedAt: stamp });
+        for (const r of previous) this.deriveState(record.id, r, "superseded", stamp);
       } else {
         record.state = "disputed";
         for (const r of previous.filter((r) => !r.pinned && r.evidence !== "human-edited"))
-          this.write({ ...r, state: "disputed", revision: r.revision + 1, updatedAt: stamp });
+          this.deriveState(record.id, r, "disputed", stamp);
       }
     }
     this.write(record);
+  }
+  private deriveState(
+    cause: string,
+    record: MemoryRecord,
+    state: MemoryRecord["state"],
+    at: string,
+  ) {
+    this.db
+      .prepare(
+        "INSERT INTO state_effects(cause,memory,before_state,before_revision,after_revision) VALUES (?,?,?,?,?)",
+      )
+      .run(cause, record.id, record.state, record.revision, record.revision + 1);
+    this.write({ ...record, state, revision: record.revision + 1, updatedAt: at });
   }
   private write(value: MemoryRecord) {
     const record = parseValue(memoryRecordSchema, value);
@@ -538,6 +591,7 @@ export class MemoryStore {
     if (!preserveGlobal)
       this.db.prepare("UPDATE conversations SET cursor=0 WHERE id=?").run(record.conversationId);
     this.db.prepare("DELETE FROM memories WHERE id=?").run(id);
+    this.db.prepare("DELETE FROM state_effects WHERE cause=? OR memory=?").run(id, id);
     this.db.prepare("DELETE FROM revisions WHERE id=?").run(id);
     this.db.prepare("DELETE FROM vectors WHERE id=?").run(id);
     this.db.prepare("DELETE FROM memory_fts WHERE id=?").run(id);

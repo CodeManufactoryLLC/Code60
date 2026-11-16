@@ -9,6 +9,9 @@ import { DEFAULT_CONFIG, defaultDeps, TaskLoop } from "../src/core/index.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 
+// These complete multi-target journeys run real Git and durable journals, not only mocks.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 let root: string;
 let agents: FakeAgents;
 let relay: RelayService;
