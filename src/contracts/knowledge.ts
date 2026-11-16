@@ -352,11 +352,21 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "providers",
     "Agents",
-    "Verify and choose coding-agent providers.",
+    "Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.",
     "Settings → Agents",
     "none",
     "read",
     "Configured does not mean detected, verified, or connected. No automatic installation.",
+  ),
+  feature(
+    "model-settings",
+    "Model and reasoning",
+    "Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.",
+    "Chat or worker composer → Model; Settings → Agents → Default models to clear",
+    "provider",
+    "human-only",
+    "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.",
+    "Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.",
   ),
   feature(
     "memory",

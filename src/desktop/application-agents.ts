@@ -8,6 +8,7 @@ import {
 } from "../bridge/index.js";
 import { stateHome } from "../core/index.js";
 import { CustomAgentStore } from "./custom-agent-store.js";
+import type { ModelDefaults } from "./model-defaults.js";
 import { RelayService } from "./relay-service.js";
 
 type Args = ConstructorParameters<typeof RelayService>;
@@ -36,8 +37,9 @@ export class ApplicationAgents {
     private readonly notify: Args[2],
     private readonly dialogs: NonNullable<Args[3]>,
     private readonly memory: Args[4],
+    private readonly modelDefaults?: ModelDefaults,
   ) {
-    this.relay = new RelayService(deps, env, notify, dialogs, memory);
+    this.relay = new RelayService(deps, env, notify, dialogs, memory, undefined, modelDefaults);
     this.selected = this.relay;
   }
   owner(id: string | null): RelayService | undefined {
@@ -163,10 +165,18 @@ export class ApplicationAgents {
         if (definition.archived) throw new Error("Restore this agent before opening it.");
         let runtime = this.agents.get(request.id);
         if (!runtime) {
-          runtime = new RelayService(this.deps, this.env, this.notify, this.dialogs, this.memory, {
-            ...definition,
-            root: join(store.root, definition.id),
-          });
+          runtime = new RelayService(
+            this.deps,
+            this.env,
+            this.notify,
+            this.dialogs,
+            this.memory,
+            {
+              ...definition,
+              root: join(store.root, definition.id),
+            },
+            this.modelDefaults,
+          );
           if (this.knowledge) runtime.attachKnowledge(this.knowledge);
           this.agents.set(request.id, runtime);
         }

@@ -380,6 +380,9 @@ export function WorkerChat({
               state={run.view?.sessionState ?? run.record.sessionState}
               ended={ended}
               editable={editable && !busy}
+              onSaveDefault={() => {
+                void act({ type: "save-model-default", id });
+              }}
               changing={!!run.view?.modeChanging}
               autoApproval={orchestrated}
               onMode={(change) => {

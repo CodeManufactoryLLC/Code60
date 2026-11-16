@@ -200,6 +200,7 @@ import {
 import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
+import { ModelDefaults } from "./model-defaults.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
@@ -372,6 +373,7 @@ export class DesktopController {
   private projectSessionWarnings: string[] = [];
   readonly rag: RagService;
   readonly memory: MemoryService;
+  readonly modelDefaults: ModelDefaults;
   private readonly agentSetup: AgentSetup;
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
@@ -1877,6 +1879,7 @@ export class DesktopController {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
@@ -1900,7 +1903,14 @@ export class DesktopController {
         this.memory.report("Saved memory is unavailable. Check private storage.");
       });
     this.relay = storage.relay
-      ? new ApplicationAgents(deps, env, () => this.changed(null), dialogs, this.memory)
+      ? new ApplicationAgents(
+          deps,
+          env,
+          () => this.changed(null),
+          dialogs,
+          this.memory,
+          this.modelDefaults,
+        )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
     this.rag = new RagService(
@@ -2930,6 +2940,7 @@ export class DesktopController {
         config,
         {
           mcpServers,
+          initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
@@ -3076,6 +3087,7 @@ export class DesktopController {
         this.config,
         {
           recovery: record,
+          initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
             `${assembleOperatingContract(
@@ -3273,6 +3285,8 @@ export class DesktopController {
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
+    if (request.type === "save-model-default")
+      return this.saveModelDefault(request.id, true).then(() => undefined);
     if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
@@ -4128,6 +4142,7 @@ export class DesktopController {
       ],
       orchestration: { ...this.orchestration },
       agentSetup: this.agentSetup.snapshot(),
+      modelDefaults: this.modelDefaults.snapshot(),
       revision: this.revision,
       database: this.database?.path ?? null,
       databaseError: this.databaseError,
@@ -4228,6 +4243,13 @@ export class DesktopController {
   /** Reconnects to the database remembered from the previous launch, if any. */
   restore(): Promise<void> {
     return this.exclusive(async () => {
+      try {
+        await this.modelDefaults.load();
+      } catch {
+        this.warnings.push(
+          "Saved model defaults could not be read. Existing preferences were preserved.",
+        );
+      }
       try {
         this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
@@ -5044,6 +5066,7 @@ export class DesktopController {
         {},
         this.workerOverrides(id),
         enabledConfig,
+        this.modelDefaults.selections(run.record.agent, "worker"),
       );
     } catch (error) {
       if (
@@ -5100,6 +5123,7 @@ export class DesktopController {
       saved,
       this.workerOverrides(id),
       enabledConfig,
+      this.modelDefaults.selections(run.record.agent, "worker"),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -5177,6 +5201,7 @@ export class DesktopController {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
       enabledConfig,
     );
@@ -5238,6 +5263,21 @@ export class DesktopController {
     return this.projectHost.run(this.projectHost.current, () =>
       this.changeProjectHarnessMode(id, change, chat),
     );
+  }
+
+  modelDefault(value: unknown): Promise<void> {
+    return this.modelDefaults.clear(value);
+  }
+
+  private saveModelDefault(id: string, chat: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      const owner = chat
+        ? this.conversations.sessions.find((session) => session.chat?.runs()[0]?.id === id)?.chat
+        : [...this.batches.keys()].find((batch) => batch.runs().some((run) => run.id === id));
+      const run = owner?.runs().find((run) => run.id === id);
+      if (!run) throw new Error("This session is no longer controlled by this app");
+      await this.modelDefaults.save(run, chat ? "orchestrator" : "worker");
+    });
   }
 
   private async changeProjectHarnessMode(
@@ -5345,6 +5385,8 @@ export class DesktopController {
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
+    if (action.type === "save-model-default")
+      return this.saveModelDefault(action.id, false).then(() => undefined);
     return this.exclusive(async () => {
       const workspace = this.requireWorkspace();
       const cmd = commandDeps(this.deps, workspace);

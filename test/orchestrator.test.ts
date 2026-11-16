@@ -3,8 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { AgentStartError } from "../src/agents/index.js";
 import { diffRun, discardRun, listRuns, stopRun } from "../src/core/commands.js";
 import { DEFAULT_PERMISSIONS } from "../src/core/config.js";
-import { createOrchestrator, type OrchestratorOptions } from "../src/core/orchestrator.js";
-import type { RunRecord } from "../src/core/types.js";
+import {
+  createOrchestrator,
+  type OrchestratorDeps,
+  type OrchestratorOptions,
+} from "../src/core/orchestrator.js";
+import type { ModeChange, RunRecord, SessionState } from "../src/core/types.js";
 import {
   FakeAgents,
   FakeClock,
@@ -22,6 +26,7 @@ async function setup(
     script?: TurnScript;
     count?: number;
     identity?: () => Promise<NonNullable<RunRecord["ownerIdentity"]> | null>;
+    memory?: OrchestratorDeps["memory"];
   } = {},
 ) {
   const clock = new FakeClock();
@@ -35,7 +40,16 @@ async function setup(
   let n = 0;
   const count = options.count ?? 1;
   const orch = await createOrchestrator(
-    { agents, git, store, clock, processes, ownerPid: 42, newRunId: () => `r${++n}` },
+    {
+      agents,
+      git,
+      store,
+      clock,
+      processes,
+      ownerPid: 42,
+      newRunId: () => `r${++n}`,
+      ...(options.memory ? { memory: options.memory } : {}),
+    },
     {
       mode: "headless",
       prompt: "do the thing",
@@ -800,6 +814,123 @@ describe("leftover commands", () => {
 });
 
 describe("harness session controls", () => {
+  const state = (): SessionState => ({
+    model: null,
+    modes: null,
+    usage: null,
+    settings: {
+      confirmed: true,
+      reportedAt: "2026-11-16T00:00:00.000Z",
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [
+            { value: "m1", name: "One" },
+            { value: "m2", name: "Two" },
+          ],
+        },
+        {
+          id: "effort",
+          category: "thought_level",
+          name: "Effort",
+          currentValue: "low",
+          options: [
+            { value: "low", name: "Low" },
+            { value: "high", name: "High" },
+          ],
+        },
+      ],
+    },
+  });
+  const selections = [
+    { configId: "effort", value: "high", name: "High" },
+    { configId: "model", value: "m2", name: "Two" },
+  ];
+  it("applies the model first before prompts and remembers explicit choices on memory replacement", async () => {
+    const { orch, agents, status } = await setup({
+      mode: "interactive",
+      prompt: "",
+      initialSettings: () => selections,
+      memory: () => ({
+        event: () => {},
+        dispose: () => {},
+        prepare: async () => ({ context: "", rollover: true, used: [] }),
+      }),
+    });
+    const calls: string[] = [];
+    const start = agents.start.bind(agents);
+    agents.start = async (spec, signal) => {
+      const session = await start(spec, signal);
+      const current = state();
+      return Object.assign(session, {
+        sessionState: current,
+        setMode: async (change: ModeChange) => {
+          calls.push(`${agents.sessions.length}:${change.configId}:${change.value}`);
+          expect(agents.sessions.at(-1)?.turnActive).toBe(false);
+          const control = current.settings?.controls.find((c) => c.id === change.configId);
+          if (control) control.currentValue = change.value;
+          agents.sessions.at(-1)?.update({ type: "sessionState", state: structuredClone(current) });
+        },
+      });
+    };
+    orch.start();
+    await flush();
+    expect(status("r1")).toBe("idle");
+    expect(calls).toEqual(["1:model:m2", "1:effort:high"]);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+    await orch.setMode("r1", { source: "config", configId: "model", value: "m1" });
+    await orch.setMode("r1", { source: "config", configId: "effort", value: "high" });
+    await orch.reply("r1", "next");
+    await flush();
+    expect(calls.slice(4)).toEqual(["2:effort:high"]);
+    // The chosen model m1 already matches the connector; saved m2 must not return.
+    expect(orch.runs()[0]?.sessionState?.settings?.controls[0]?.currentValue).toBe("m1");
+    await orch.shutdown();
+  });
+  it.each(["missing", "rejected", "no-setter"] as const)(
+    "notes an %s default without preventing startup",
+    async (failure) => {
+      const { orch, agents, store, status } = await setup({
+        mode: "interactive",
+        initialSettings: () => [
+          { configId: "model", value: failure === "missing" ? "gone" : "m2", name: "Saved model" },
+        ],
+      });
+      const start = agents.start.bind(agents);
+      agents.start = async (spec, signal) =>
+        Object.assign(await start(spec, signal), {
+          sessionState: state(),
+          ...(failure === "no-setter"
+            ? {}
+            : {
+                setMode: async () => {
+                  throw new Error("refused");
+                },
+              }),
+        });
+      orch.start();
+      await flush();
+      expect(status("r1")).toBe("idle");
+      expect(store.events.some((e) => e.type === "note" && e.text.includes("Saved default"))).toBe(
+        true,
+      );
+      expect(agents.sessions[0]?.prompts).toEqual(["do the thing"]);
+      await orch.shutdown();
+    },
+  );
+  it("leaves headless provider defaults unchanged", async () => {
+    const { orch, agents } = await setup({ initialSettings: () => selections });
+    const start = agents.start.bind(agents);
+    const setter = vi.fn();
+    agents.start = async (spec, signal) =>
+      Object.assign(await start(spec, signal), { sessionState: state(), setMode: setter });
+    orch.start();
+    await orch.done;
+    expect(setter).not.toHaveBeenCalled();
+  });
   it("persists initial and live state, isolates runs, and gates prompts without changing permissions", async () => {
     const state = {
       model: null,

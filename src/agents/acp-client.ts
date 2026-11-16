@@ -452,7 +452,7 @@ async function connectSession(
     async setMode(change) {
       if (busy || modeRequest) throw new Error("the session is busy");
       if (!supportsModeChange(state.state, change))
-        throw new Error("This harness mode is no longer available");
+        throw new Error("This session option is no longer available");
       const controller = new AbortController();
       modeRequest = controller;
       let timedOut = false;
@@ -499,7 +499,7 @@ async function connectSession(
           state.unconfirmed();
           publishState(previous);
           throw new Error(
-            "Harness mode change timed out; current mode is unconfirmed. Retry to confirm it.",
+            "Session option change timed out; the current value is unconfirmed. Retry to confirm it.",
           );
         }
         throw error;

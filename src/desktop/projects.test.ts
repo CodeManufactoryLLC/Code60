@@ -399,6 +399,26 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
 });
 
 describe("desktop preferences", () => {
+  it("round trips bounded model defaults alongside concurrent preference writes", async () => {
+    const file = join(directory, "desktop.json");
+    const prefs = filePreferences(file);
+    const record = {
+      version: 1 as const,
+      providers: { claude: { worker: [{ configId: "model", value: "m1", name: "Model One" }] } },
+    };
+    expect(await prefs.modelDefaults?.()).toEqual({ version: 1, providers: {} });
+    await Promise.all([
+      prefs.setModelDefaults?.(record),
+      prefs.write("/data/projects.sqlite"),
+      prefs.setTransparent(true),
+    ]);
+    expect(await filePreferences(file).modelDefaults?.()).toEqual(record);
+    expect(await prefs.read()).toBe("/data/projects.sqlite");
+    expect(await prefs.transparent()).toBe(true);
+    await expectPrivate(file, 0o600);
+    await writeFile(file, JSON.stringify({ modelDefaults: { version: 2 } }));
+    await expect(prefs.modelDefaults?.()).rejects.toThrow();
+  });
   it("defaults release checks on and preserves the switch across concurrent writes and restarts", async () => {
     const file = join(directory, "desktop.json");
     const preferences = filePreferences(file);

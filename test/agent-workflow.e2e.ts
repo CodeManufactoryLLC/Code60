@@ -315,6 +315,7 @@ for (const custom of [false, true]) {
                 process.execPath,
                 join(root, "test/fixtures/fake-agent.mjs"),
                 "--relay",
+                "--session-info",
                 "--process-log",
                 processLog,
               ],
@@ -464,6 +465,40 @@ for (const custom of [false, true]) {
           .locator(".orchestration-chat-page:visible")
           .getByRole("combobox", { name: "Message to orchestrator", exact: true });
         await expect(composer).toBeEditable();
+        const modelPicker = page
+          .locator(".orchestration-chat-page:visible")
+          .getByRole("button", { name: "Model", exact: true });
+        await expect(modelPicker).toHaveText("Fixture Model");
+        await modelPicker.press("ArrowDown");
+        const modelMenu = page.getByRole("menu", { name: "Model settings", exact: true });
+        await expect(modelMenu.getByText("Fixture models", { exact: true })).toBeVisible();
+        await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
+        await expect(modelPicker).toHaveText("Fixture Two");
+        await modelPicker.click();
+        await expect(
+          modelMenu.getByRole("menuitemradio", { name: "Low", exact: true }),
+        ).toHaveCount(0);
+        await modelMenu.getByRole("menuitemradio", { name: "High", exact: true }).click();
+        await modelPicker.click();
+        await modelMenu
+          .getByRole("menuitem", {
+            name: "Save as default for new orchestrator sessions",
+            exact: true,
+          })
+          .click();
+        await expect
+          .poll(
+            async () =>
+              JSON.parse(await readFile(join(directory, "state/code60/desktop.json"), "utf8"))
+                .modelDefaults?.providers.claude?.orchestrator,
+          )
+          .toEqual([
+            { configId: "model", value: "fixture-two", name: "Fixture Two" },
+            { configId: "effort", value: "high", name: "High" },
+          ]);
+        checks.push(
+          "Idle model/reasoning changes used grouped connector choices and persisted confirmed orchestrator defaults through the visible picker.",
+        );
         await checkSidebarIconSpacing(
           page.locator(".sidebar").getByRole("button", {
             name: custom ? "Workflow Agent" : "Relay",
@@ -503,6 +538,43 @@ for (const custom of [false, true]) {
         const completed = await page.evaluate(() => window.desktop.snapshot());
         const worker = completed.runs.find((run) => run.relay);
         if (!worker) throw new Error("Accepted plan did not create a worker");
+        // Parent changes are never inherited by workers without their own saved default.
+        expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
+        await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        const workerModel = page
+          .locator(`#chat-${worker.record.id}`)
+          .getByRole("button", { name: "Model", exact: true });
+        await expect(workerModel).toHaveText("Fixture Model");
+        await workerModel.click();
+        await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
+        await expect(workerModel).toHaveText("Fixture Two");
+        await workerModel.click();
+        await modelMenu
+          .getByRole("menuitem", { name: "Save as default for new worker sessions", exact: true })
+          .click();
+        await page.locator("#tab-settings").press("ArrowRight");
+        await page.locator("#tab-settings-agents").click();
+        const defaults = page.getByRole("group", { name: "Default models", exact: true });
+        await expect(defaults).toContainText("orchestrator");
+        await defaults
+          .getByRole("button", { name: "Clear claude worker model default", exact: true })
+          .click();
+        await expect
+          .poll(
+            async () =>
+              JSON.parse(await readFile(join(directory, "state/code60/desktop.json"), "utf8"))
+                .modelDefaults?.providers.claude?.worker,
+          )
+          .toBeUndefined();
+        await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await expect(workerModel).toHaveText("Fixture Two");
+        await page
+          .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
+          .click();
+        await expect(modelPicker).toHaveText("Fixture Two");
+        checks.push(
+          "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
+        );
         await checkSidebarIconSpacing(page.locator(`[id="conversation-${worker.record.id}"]`));
         const worktree = await realpath(worker.record.worktree);
         expect(worktree).not.toBe(repo);

@@ -84,3 +84,29 @@ it.each([false, true])("recovers a Settings setup session only when active is %s
   );
   expect(html.includes("agent-setup-dialog")).toBe(active);
 });
+
+it("lists role-scoped model defaults with bounded clear controls and an empty state", () => {
+  const state = snapshot("select");
+  const props = {
+    snapshot: state,
+    api: { modelDefault: async () => {} } as Partial<DesktopApi> as DesktopApi,
+    active: false,
+  };
+  expect(renderToStaticMarkup(<OrchestrationSettings {...props} />)).toContain(
+    "No saved model defaults.",
+  );
+  state.modelDefaults = {
+    version: 1,
+    providers: {
+      claude: {
+        orchestrator: [{ configId: "model", value: "m1", name: "Model One" }],
+        worker: [{ configId: "model", value: "m2", name: "Model Two" }],
+      },
+    },
+  };
+  const html = renderToStaticMarkup(<OrchestrationSettings {...props} />);
+  expect(html).toContain("Default models");
+  expect(html).toContain("Model One");
+  expect(html).toContain("Model Two");
+  expect(html).toContain('aria-label="Clear claude worker model default"');
+});
