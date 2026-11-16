@@ -9592,10 +9592,15 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(overview).toContainText("The recorded sessions report");
     await expect(overview).toHaveCSS("animation-name", "search-result-reveal");
     await expect(searchContent).toHaveAttribute("data-skeleton-faded", "");
-    const summaryBox = await overview.boundingBox();
-    const resultsBox = await search.locator(".search-results").boundingBox();
-    if (!summaryBox || !resultsBox) throw new Error("Missing results layout");
-    expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(resultsBox.y);
+    // Measure both in one frame: the collapsing placeholders move the whole body between
+    // separate boundingBox calls, but never change the overview/results order.
+    const layout = await search.locator(".search-body").evaluate((body) => {
+      const summary = body.querySelector(".search-overview")?.getBoundingClientRect();
+      const results = body.querySelector(".search-results")?.getBoundingClientRect();
+      return summary && results ? { summaryBottom: summary.bottom, resultsTop: results.top } : null;
+    });
+    if (!layout) throw new Error("Missing results layout");
+    expect(layout.summaryBottom).toBeLessThanOrEqual(layout.resultsTop);
     await expect(search.locator(".search-preview")).toHaveCount(0);
     await page.screenshot({ path: join(root, "test-results", "search-expanded.png") });
     const originalTheme = await page.locator("html").getAttribute("data-color-scheme");

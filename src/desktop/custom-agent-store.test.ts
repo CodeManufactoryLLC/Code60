@@ -15,7 +15,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 async function open() {
-  const store = await CustomAgentStore.open(join(root, "agents"));
+  // The writer lock verifies the store's parent too. On Windows, mkdtemp roots under an
+  // elevated token are owned by Administrators, so use a fresh private child as that parent.
+  const store = await CustomAgentStore.open(join(root, "state", "agents"));
   stores.push(store);
   return store;
 }
