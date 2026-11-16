@@ -483,11 +483,22 @@ for (const custom of [false, true]) {
         await expect(modelMenu.getByText("Fixture models", { exact: true })).toBeVisible();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(modelPicker).toHaveText("Fixture Two");
+        // A confirmed option change dismisses an open picker, so reopen only after it settles.
+        await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
         await modelPicker.click();
         await expect(
           modelMenu.getByRole("menuitemradio", { name: "Low", exact: true }),
         ).toHaveCount(0);
         await modelMenu.getByRole("menuitemradio", { name: "High", exact: true }).click();
+        await expect
+          .poll(async () => {
+            const run = (await page.evaluate(() => window.desktop.snapshot())).chat.run;
+            return run?.modeChanging
+              ? "changing"
+              : run?.sessionState?.settings?.controls.find((c) => c.id === "effort")?.currentValue;
+          })
+          .toBe("high");
+        await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
         await modelPicker.click();
         await modelMenu
           .getByRole("menuitem", {
@@ -557,6 +568,7 @@ for (const custom of [false, true]) {
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
+        await expect(workerModel).toHaveAttribute("aria-disabled", "false");
         await workerModel.click();
         await modelMenu
           .getByRole("menuitem", { name: "Save as default for new worker sessions", exact: true })
