@@ -14326,6 +14326,20 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       ]),
     );
     await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && consoleErrors.length < 20)
+        consoleErrors.push(message.text().slice(0, 300));
+    });
+    page.on("pageerror", (cause) => {
+      if (consoleErrors.length < 20) consoleErrors.push(String(cause).slice(0, 300));
+    });
+    const sentRun = await page.evaluate(async () => {
+      document
+        .querySelector("#panel-chat .orchestration-chat-page textarea")
+        ?.setAttribute("data-qa-mark", "sent");
+      return (await window.desktop.snapshot()).chat.run?.id;
+    });
     await input.press("Enter");
     // The composer clears only after main accepts the send. The agent's declared activity
     // follows that acceptance, so wait for it before checking the cleared draft.
@@ -14333,9 +14347,36 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await expect(input)
       .toHaveValue("")
       .catch(async (error) => {
-        const state = await page.evaluate(async () => {
+        const state = await page.evaluate(async (sentRun) => {
           const snapshot = await window.desktop.snapshot();
+          const composer = document.querySelector<HTMLTextAreaElement>(
+            "#panel-chat .orchestration-chat-page:not([hidden]) textarea",
+          );
+          const keys = Object.keys(sessionStorage).filter((key) => key.includes("Draft"));
           return {
+            sameComposer: composer?.getAttribute("data-qa-mark") === "sent",
+            composerDisabled: composer?.disabled,
+            sameRun: snapshot.chat.run?.id === sentRun,
+            draftKeys: keys.map((key) =>
+              key.endsWith(`:${snapshot.chat.conversationId}`)
+                ? "conversation"
+                : key.endsWith(`:${sentRun}`)
+                  ? "sent-run"
+                  : "other",
+            ),
+            storedMatchesComposer: keys.some(
+              (key) => sessionStorage.getItem(key) === composer?.value,
+            ),
+            buttons: Array.from(
+              document.querySelectorAll("#panel-chat .orchestration-chat-page .composer button"),
+              (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
+            ),
+            errors: Array.from(
+              document.querySelectorAll(
+                "#panel-chat .orchestration-chat-page [class*='error'], #panel-chat .orchestration-chat-page [class*='warning']",
+              ),
+              (node) => node.textContent?.slice(0, 200),
+            ),
             chat: {
               kind: snapshot.chat.kind,
               conversation: !!snapshot.chat.conversationId,
@@ -14348,11 +14389,11 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
             alerts: Array.from(document.querySelectorAll("[role='alert']"), (node) =>
               node.textContent?.slice(0, 200),
             ),
-            drafts: Object.keys(sessionStorage).filter((key) => key.includes("Draft")).length,
+            drafts: keys.length,
           };
-        });
+        }, sentRun);
         await test.info().attach("composer-clear", {
-          body: JSON.stringify(state, null, 2),
+          body: JSON.stringify({ ...state, consoleErrors }, null, 2),
           contentType: "application/json",
         });
         throw error;
