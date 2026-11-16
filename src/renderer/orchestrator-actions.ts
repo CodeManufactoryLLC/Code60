@@ -61,9 +61,12 @@ export function useOrchestratorActions(
   key: string,
   applicationOwned = false,
 ) {
+  const orchestrationChatAction = api.orchestrationChatAction;
+  const identity = JSON.stringify([applicationOwned ? null : database, key]);
+  const enabled = database !== null || applicationOwned;
   const owner = useMemo(
-    () => new OrchestratorActions(api, key, database !== null || applicationOwned),
-    [api, database, key, applicationOwned],
+    () => new OrchestratorActions({ orchestrationChatAction }, identity, enabled),
+    [orchestrationChatAction, identity, enabled],
   );
   useEffect(() => {
     owner.activate();

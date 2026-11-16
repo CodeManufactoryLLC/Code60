@@ -16,6 +16,17 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
+      prerequisite: "provider",
+      agentAccess: "human-only",
+      limitations: expect.stringContaining("Workers do not follow parent changes"),
+      confirmation: expect.stringContaining("Main derives saved values"),
+    });
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "providers")?.purpose).toContain(
+      "clear saved",
+    );
+  });
   it("has unique, fully classified descriptors", () => {
     expect(ids.size).toBe(DESKTOP_CAPABILITIES.length);
     for (const capability of DESKTOP_CAPABILITIES) {

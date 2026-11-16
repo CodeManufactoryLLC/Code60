@@ -247,6 +247,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Requires explicit target and direct/worktree mode; selection and history grant no authority.",
   ),
   feature(
+    "custom-agents",
+    "Custom Agents",
+    "Create application-wide agents with special instructions and one persistent Relay-style conversation each.",
+    "Home → Custom Agents (also in the sidebar) → New Agent; Edit; Archive; Archived → Restore",
+    "none",
+    "human-only",
+    "Up to 64 agents, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop agent and workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.",
+    "Archiving confirms natively, stops only the agent and preserves history.",
+  ),
+  feature(
     "projects",
     "Projects",
     "Retain independent project workspaces and conversations.",
@@ -342,11 +352,21 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "providers",
     "Agents",
-    "Verify and choose coding-agent providers.",
+    "Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.",
     "Settings → Agents",
     "none",
     "read",
     "Configured does not mean detected, verified, or connected. No automatic installation.",
+  ),
+  feature(
+    "model-settings",
+    "Model and reasoning",
+    "Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.",
+    "Chat or worker composer → Model; Settings → Agents → Default models to clear",
+    "provider",
+    "human-only",
+    "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.",
+    "Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.",
   ),
   feature(
     "memory",
@@ -486,6 +506,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   ),
 ];
 export const PAGE_CAPABILITIES = {
+  "custom-agents": "custom-agents",
   home: "knowledge",
   apps: "settings",
   projects: "projects",

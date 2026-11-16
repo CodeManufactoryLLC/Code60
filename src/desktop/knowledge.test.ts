@@ -113,6 +113,41 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it.each([false, true])(
+    "does not infer model switching availability from provider verification: %s",
+    async (verified) => {
+      const { knowledge } = setup({ providers: verified ? ["claude"] : [] });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "Model and reasoning" }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "model-settings",
+          agentAccess: "human-only",
+          availability: expect.objectContaining({ status: verified ? "unknown" : "blocked" }),
+        }),
+      ]);
+    },
+  );
+  it("discovers bounded human-only custom agents without a database or verified provider", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Custom Agents" }, relay),
+    );
+    expect(capabilities.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "custom-agents",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("human-only"),
+            action: expect.stringContaining("Home → Custom Agents"),
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(capabilities)).not.toContain("code60_create_agent");
+  });
   it("keeps Relay application target-scoped instead of borrowing selected-project Git readiness", async () => {
     const { knowledge } = setup({ gitReady: false });
     const capabilities = result(

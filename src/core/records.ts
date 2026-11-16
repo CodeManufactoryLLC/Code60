@@ -130,8 +130,6 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       throw cause;
     }));
   const appends = new Map<string, AppendBatch>();
-  const temporaryId = randomUUID();
-  let tmpCounter = 0;
 
   const queueKey = async (id: string): Promise<string> => {
     assertRunId(id);
@@ -161,7 +159,8 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       return enqueue(record.id, async () => {
         const target = runDir(record.id);
         await fs.mkdir(target, { recursive: true, mode: 0o700 });
-        const tmp = join(target, `.run.json.${process.pid}.${temporaryId}.${tmpCounter++}.tmp`);
+        // Keep the exclusive sibling short enough for nested Windows project chats.
+        const tmp = join(target, `${randomUUID()}.tmp`);
         try {
           await fs.writeFile(tmp, snapshot, { mode: 0o600, flag: "wx" });
           await atomicReplace(tmp, join(target, "run.json"), (from, to, timeoutMs) =>

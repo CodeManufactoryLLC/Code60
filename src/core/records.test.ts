@@ -72,6 +72,27 @@ function memoryFs() {
 }
 
 describe("shared record-store coordination", () => {
+  it("saves nested project records within the Windows private-path limit", async () => {
+    const fs = memoryFs();
+    const directory = join(root, "project".padEnd(182 - root.length - 1, "x"));
+    const id = "20261116-170358-b546d5";
+    const write = fs.writeFile.getMockImplementation();
+    if (!write) throw new Error("Missing fixture writer");
+    fs.writeFile.mockImplementation(async (path, data) => {
+      if (path.length > 247) throw new Error("Unsupported Windows path");
+      await write(path, data);
+    });
+    const store = createRecordStore(fs, directory);
+    expect(join(directory, id, "run.json")).toHaveLength(214);
+    await store.save(record(id));
+    await store.save({ ...record(id), status: "running" });
+    expect((await store.read(id)).status).toBe("running");
+    expect(await fs.readdir(join(directory, id))).toEqual(["run.json"]);
+    const temporaryPaths = fs.writeFile.mock.calls.map(([path]) => path);
+    expect(new Set(temporaryPaths).size).toBe(2);
+    for (const path of temporaryPaths) expect(path.length).toBeLessThanOrEqual(247);
+  });
+
   it("shares native storage scope across independently created dependencies", () => {
     expect(defaultDeps().fs.recordStoreScope).toBe(defaultDeps().fs.recordStoreScope);
   });

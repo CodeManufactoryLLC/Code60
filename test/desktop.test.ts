@@ -11,6 +11,7 @@ import {
   DEFAULT_PROMPT_TEMPLATES,
   type DetailFrame,
   type DetailRequest,
+  type ModelDefaultsRecord,
   type Plan,
   type PollSettingsPatch,
   type ProjectRequestIdentity,
@@ -52,6 +53,7 @@ let tick = 0;
 let stored: string | undefined;
 let preferencesFail = false;
 let orchestrationProvider: string | null = null;
+let modelDefaults: ModelDefaultsRecord = { version: 1, providers: {} };
 let listGate: (() => Promise<void>) | undefined;
 let ragSources: RagConversation[];
 let ragWaitForAbort = false;
@@ -174,6 +176,10 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   };
 });
 const preferences: DesktopPreferences = {
+  modelDefaults: async () => modelDefaults,
+  setModelDefaults: async (record) => {
+    modelDefaults = structuredClone(record);
+  },
   agentSetup: async () =>
     orchestrationProvider
       ? verifiedAgents(
@@ -237,6 +243,7 @@ beforeEach(async () => {
   stored = undefined;
   preferencesFail = false;
   orchestrationProvider = null;
+  modelDefaults = { version: 1, providers: {} };
   listGate = undefined;
   ragSources = [];
   ragWaitForAbort = false;
@@ -262,6 +269,73 @@ beforeEach(async () => {
 afterEach(async () => {
   await controller.shutdown(true);
   await fs.rm(directory, { recursive: true, force: true });
+});
+
+it("saves main-owned confirmed model defaults by role, applies only to new sessions, and clears independently", async () => {
+  const startAgent = agents.start.bind(agents);
+  agents.start = async (spec, signal) => {
+    const session = await startAgent(spec, signal);
+    const settings = {
+      confirmed: true,
+      reportedAt: "2026-11-16T00:00:00.000Z",
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [
+            { value: "m1", name: "One" },
+            { value: "m2", name: "Two" },
+          ],
+        },
+      ],
+    };
+    const state = { model: null, modes: null, usage: null, settings };
+    return Object.assign(session, {
+      sessionState: state,
+      setMode: async (change: { configId: string; value: string }) => {
+        const control = settings.controls.find((c) => c.id === change.configId);
+        if (control) control.currentValue = change.value;
+        agents.sessions
+          .find((s) => s.sessionId === session.sessionId)
+          ?.update({ type: "sessionState", state: structuredClone(state) });
+      },
+    });
+  };
+  await setProvider("claude");
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  const chatId = controller.snapshot().chat.run?.id as string;
+  await controller.orchestrationChatAction({
+    type: "set-mode",
+    id: chatId,
+    change: { source: "config", configId: "model", value: "m2" },
+  });
+  await controller.orchestrationChatAction({ type: "save-model-default", id: chatId });
+  expect(modelDefaults.providers.claude?.orchestrator).toEqual([
+    { configId: "model", value: "m2", name: "Two" },
+  ]);
+  const workerId = await start();
+  expect(
+    controller.snapshot().runs.find((r) => r.record.id === workerId)?.view?.sessionState?.settings
+      ?.controls[0]?.currentValue,
+  ).toBe("m1");
+  await controller.action({ type: "save-model-default", id: workerId });
+  expect(modelDefaults.providers.claude?.worker?.[0]?.value).toBe("m1");
+  await controller.orchestrationChatAction({ type: "new" });
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await controller.modelDefault({ type: "clear", provider: "claude", role: "orchestrator" });
+  expect(controller.snapshot().modelDefaults?.providers.claude?.orchestrator).toBeUndefined();
+  expect(modelDefaults.providers.claude?.worker).toHaveLength(1);
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await expect(controller.action({ type: "save-model-default", id: chatId })).rejects.toThrow(
+    /no longer controlled/,
+  );
 });
 
 describe("database-wide RAG discovery", () => {
@@ -1852,6 +1926,64 @@ describe("retained project runtimes", {
     ).rejects.toThrow("database changed");
     await controller.projectAction({ type: "close", projectId: a.id });
     await expect(controller.start({ ...request, ...identity })).rejects.toThrow("no longer open");
+  });
+  it("retains independent custom-agent work and details across project closure and database replacement", async () => {
+    await prepareRelay();
+    const a = (
+      await controller.customAgent({
+        type: "create",
+        name: "Reviewer",
+        instructions: "Only Reviewer",
+      })
+    ).agent;
+    const b = (
+      await controller.customAgent({ type: "create", name: "Writer", instructions: "Only Writer" })
+    ).agent;
+    if (!a || !b) throw new Error("Missing custom agents");
+    await controller.customAgent({ type: "open", id: a.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const aChat = controller.snapshot().chat;
+    const aSession = agents.sessions.at(-1);
+    const subscription = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation" as const,
+        conversationId: aChat.conversationId!,
+        generation: aChat.generation!,
+      },
+    };
+    controller.subscribeDetails(subscription, () => {});
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: aChat.run!.id,
+      text: "Reviewer evidence",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    agents.script = () => "hang";
+    await controller.customAgent({ type: "open", id: b.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const bChat = controller.snapshot().chat;
+    const bSession = agents.sessions.at(-1);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: bChat.run!.id,
+      text: "Continue Writer work",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("running"));
+    const p = await project("custom-unrelated");
+    await controller.projectAction({ type: "close", projectId: p.id });
+    await controller.connect(join(directory, "custom-replacement.sqlite"), true);
+    expect(aSession?.stops).toHaveLength(0);
+    expect(bSession?.stops).toHaveLength(0);
+    const details = controller.readDetails(subscription);
+    expect(JSON.stringify(details)).toContain("Reviewer evidence");
+    expect(JSON.stringify(details)).not.toContain("Continue Writer work");
+    const chats = controller.snapshot().chats;
+    expect(chats.find((chat) => chat.customAgentId === b.id)?.run?.status).toBe("running");
+    expect(chats.find((chat) => chat.customAgentId === a.id)?.conversationId).toBe(
+      aChat.conversationId,
+    );
+    controller.unsubscribeDetails({ subscriptionId: subscription.subscriptionId });
   });
   async function prepareRelay() {
     await controller.shutdown(true);

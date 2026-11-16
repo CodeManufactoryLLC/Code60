@@ -5,6 +5,7 @@ export {
   capabilityReference,
   capabilityReferences,
   DESKTOP_CAPABILITIES,
+  defaultableSelections,
   type Group,
   isKnowledgeRelativePath,
   isKnowledgeTool,
@@ -27,9 +28,11 @@ export {
 export * from "./automation.js";
 export type { ChatReference, ChatUndoResult } from "./chat-context.js";
 export { chatReferenceSchema } from "./chat-context.js";
+export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
 export * from "./logs.js";
+export * from "./model-defaults.js";
 export * from "./plans.js";
 export type { ProjectRequestIdentity } from "./project-identity.js";
 export * from "./projects.js";
@@ -285,6 +288,8 @@ export interface Versions {
 }
 
 export interface Snapshot {
+  customAgentError?: string | undefined;
+  customAgents?: import("./custom-agents.js").CustomAgentSummary[];
   /** App metadata only. Detail revisions and caches are independent. */
   summaryOnly?: true;
   /** At most 128 active subscription UUIDs, with their last publication revisions. */
@@ -295,6 +300,7 @@ export interface Snapshot {
   gitReadiness?: import("./git-setup.js").GitReadiness;
   reviews?: import("./reviews.js").ReviewSummary[];
   agentSetup?: AgentSetupSnapshot;
+  modelDefaults?: import("./model-defaults.js").ModelDefaultsRecord;
   versions: Versions;
   chat: OrchestrationChat;
   chats: OrchestrationChat[];
@@ -352,6 +358,10 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
+  customAgent?(
+    request: import("./custom-agents.js").CustomAgentRequest,
+  ): Promise<import("./custom-agents.js").CustomAgentResponse>;
   automation(request: import("./automation.js").AutomationUiRequest): Promise<unknown>;
   onAutomationChanged(listener: () => void): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
@@ -513,6 +523,7 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  customAgentId?: string;
   rewindRevision?: number;
   checkpoint?: { id: string; turn: number; phase: "active" | "undoing" };
   historySaving?: "available" | "unavailable";
@@ -586,6 +597,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("continue-task"), id: runIdSchema, taskId: z.string().uuid() }),
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
+  z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
   z.strictObject({ type: z.literal("new"), projectId: z.string().uuid().optional() }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
   z.strictObject({ type: z.literal("archive"), id: configurationIdSchema }),
@@ -754,6 +766,7 @@ const actionSchema = z.discriminatedUnion(
   "type",
   [
     z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
+    z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
     z.strictObject(
       {
         type: z.enum(["reply", "continue"]),

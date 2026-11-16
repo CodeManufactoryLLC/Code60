@@ -102,3 +102,18 @@ export function reconcileDisclosure(
   }
   return result;
 }
+
+/** Application conversations share a null directory, so presentation needs their explicit owner. */
+export function isSelectedConversation(
+  chat: OrchestrationChat | undefined,
+  selected: OrchestrationChat | undefined,
+): boolean {
+  if (chat?.kind === "relay" || selected?.kind === "relay")
+    return (
+      chat?.kind === "relay" &&
+      selected?.kind === "relay" &&
+      chat.customAgentId === selected.customAgentId &&
+      chat.conversationId === selected.conversationId
+    );
+  return chat?.directory === selected?.directory;
+}

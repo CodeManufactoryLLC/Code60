@@ -353,7 +353,7 @@ export function ChatPage({
     >
       <header className="orchestration-chat-heading">
         <PageTitle
-          page={relay ? "relay" : chat ? "orchestrator" : "chat"}
+          page={relay && !chat?.customAgentId ? "relay" : chat ? "orchestrator" : "chat"}
           id={id}
           target={titleTarget ? { kind: "conversation", id: titleTarget } : undefined}
         >
@@ -673,6 +673,10 @@ export function ChatPage({
             editable={ready && !busy}
             changing={!!run?.modeChanging || pending === "set-mode"}
             autoApproval
+            sessionRole="orchestrator"
+            onSaveDefault={() => {
+              if (run) void action({ type: "save-model-default", id: run.id });
+            }}
             onMode={(change) => {
               if (run) void action({ type: "set-mode", id: run.id, change });
             }}

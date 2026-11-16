@@ -29,14 +29,39 @@ export function createFakeAgent(options = {}) {
   let cancelWaiters = new Set();
   let cancelled = false;
   let mode = "ask";
+  let selectedModel = "fixture-model";
+  let effort = "low";
   const configOptions = () => [
     {
       id: "model",
       name: "Model",
       category: "model",
       type: "select",
-      currentValue: "fixture-model",
-      options: [{ value: "fixture-model", name: "Fixture Model" }],
+      currentValue: selectedModel,
+      options: [
+        {
+          group: "fixture",
+          name: "Fixture models",
+          options: [
+            { value: "fixture-model", name: "Fixture Model" },
+            { value: "fixture-two", name: "Fixture Two" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "effort",
+      name: "Reasoning",
+      category: "thought_level",
+      type: "select",
+      currentValue: effort,
+      options:
+        selectedModel === "fixture-model"
+          ? [{ value: "low", name: "Low" }]
+          : [
+              { value: "auto", name: "Automatic" },
+              { value: "high", name: "High" },
+            ],
     },
     {
       id: "permissions",
@@ -83,13 +108,22 @@ export function createFakeAgent(options = {}) {
       };
     })
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
-      if (
-        !options.sessionInfo ||
-        params.configId !== "permissions" ||
-        !["ask", "full"].includes(params.value)
+      if (!options.sessionInfo) throw RequestError.invalidParams();
+      if (params.configId === "permissions" && ["ask", "full"].includes(params.value))
+        mode = params.value;
+      else if (
+        params.configId === "model" &&
+        ["fixture-model", "fixture-two"].includes(params.value)
+      ) {
+        selectedModel = params.value;
+        effort = selectedModel === "fixture-model" ? "low" : "auto";
+      } else if (
+        params.configId === "effort" &&
+        selectedModel === "fixture-two" &&
+        ["auto", "high"].includes(params.value)
       )
-        throw RequestError.invalidParams();
-      mode = params.value;
+        effort = params.value;
+      else throw RequestError.invalidParams();
       return { configOptions: configOptions() };
     })
     .onNotification(methods.agent.session.cancel, () => {

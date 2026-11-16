@@ -7,6 +7,7 @@ import type {
   Orchestrator,
   RunEvent,
   RunRecord,
+  SessionSelection,
   Workspace,
 } from "../core/index.js";
 import { ACTIVE_STATUSES, prepareRuns } from "../core/index.js";
@@ -80,6 +81,7 @@ export class ExecutionHost {
       event(worker: ExecutionWorker, event: RunEvent): void;
       changed(targetId?: string): void;
       warning(message: string): void;
+      initialSettings?(provider: string): readonly SessionSelection[];
       checkout?(worker: ExecutionWorker): Promise<void>;
       checkpoint?(
         owner: ExecutionOwner,
@@ -292,6 +294,7 @@ export class ExecutionHost {
         prompt: request.prompt,
         allowAll: true,
         owner: "relay",
+        initialSettings: (provider) => this.hooks.initialSettings?.(provider),
         ...(base === undefined ? {} : { base }),
         ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
       },

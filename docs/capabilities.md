@@ -32,6 +32,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Custom Agents
+
+- ID: `custom-agents`
+- Status: shipped
+- Purpose: Create application-wide agents with special instructions and one persistent Relay-style conversation each.
+- Access: Home → Custom Agents (also in the sidebar) → New Agent; Edit; Archive; Archived → Restore
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Archiving confirms natively, stops only the agent and preserves history.
+- Limits: Up to 64 agents, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop agent and workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.
+- Pages: `custom-agents`
+- Settings sections: none
+- Tools: none
+
 ## Projects
 
 - ID: `projects`
@@ -176,7 +190,7 @@ Schema version: 1
 
 - ID: `providers`
 - Status: shipped
-- Purpose: Verify and choose coding-agent providers.
+- Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
 - Access: Settings → Agents
 - Prerequisite: none
 - Agent access: read
@@ -184,6 +198,20 @@ Schema version: 1
 - Limits: Configured does not mean detected, verified, or connected. No automatic installation.
 - Pages: none
 - Settings sections: `agents`
+- Tools: none
+
+## Model and reasoning
+
+- ID: `model-settings`
+- Status: shipped
+- Purpose: Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.
+- Access: Chat or worker composer → Model; Settings → Agents → Default models to clear
+- Prerequisite: provider
+- Agent access: human-only
+- Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.
+- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.
+- Pages: none
+- Settings sections: none
 - Tools: none
 
 ## Memory

@@ -25,6 +25,7 @@ import {
   type RecordStore,
   runsDir,
 } from "./records.js";
+import type { SessionSelection } from "./run.js";
 import {
   ACTIVE_STATUSES,
   type Config,
@@ -37,6 +38,7 @@ import { CODE60_VERSION } from "./version.js";
 
 export type { AgentMcpServer } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
+export { defaultableSelections } from "../contracts/index.js";
 export type {
   GitReadiness,
   GitSetupFile,
@@ -61,6 +63,7 @@ export type { Orchestrator } from "./orchestrator.js";
 export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";
 export * from "./recurrence.js";
+export type { SessionSelection } from "./run.js";
 export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
@@ -111,6 +114,8 @@ export async function prepareOrchestrationChat(
     mcpServers?: readonly AgentMcpServer[];
     promptContext?: () => string;
     recovery?: RunRecord;
+    /** Saved session-option defaults applied to each newly created session. */
+    initialSettings?: readonly SessionSelection[];
   } = {},
 ): Promise<Orchestrator> {
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
@@ -135,6 +140,9 @@ export async function prepareOrchestrationChat(
       prompts: config.prompts,
       mcpServers: [...configuredMcpServers(config), ...(options.mcpServers ?? [])],
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
+      ...(options.initialSettings?.length
+        ? { initialSettings: () => options.initialSettings }
+        : {}),
     },
   );
 }
@@ -248,6 +256,8 @@ export interface RunRequest {
   allowAll?: boolean;
   /** Internal desktop marker for Relay-owned workers. */
   owner?: "relay";
+  /** Internal desktop-only saved session-option defaults per provider. */
+  initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
 }
 
 /** Why runs go directly into the workspace directory instead of worktrees. */
@@ -380,6 +390,9 @@ export async function prepareRuns(
       prompts: config.prompts,
       ...(mcpServers.length ? { mcpServers } : {}),
       ...(request.owner === undefined ? {} : { owner: request.owner }),
+      ...(request.initialSettings === undefined
+        ? {}
+        : { initialSettings: request.initialSettings }),
     },
   );
   return {
@@ -407,6 +420,8 @@ export async function prepareRecovery(
   /** Permission overrides, such as the fixed allow-all policy of orchestrated workers. */
   overrides?: PolicyOverrides,
   configuration?: Config,
+  /** Desktop-only saved session-option defaults for a fresh handoff session. */
+  initialSettings?: readonly SessionSelection[],
 ): Promise<PreparedRecovery> {
   if (ACTIVE_STATUSES.has(record.status)) {
     throw new RefusedError(
@@ -438,6 +453,7 @@ export async function prepareRecovery(
       ...(overrides === undefined ? {} : { overrides }),
       prompts: { ...config.prompts, ...prompts },
       ...(mcpServers.length ? { mcpServers } : {}),
+      ...(initialSettings?.length ? { initialSettings: () => initialSettings } : {}),
     },
   );
   return { orchestrator, config };

@@ -8,9 +8,11 @@ export interface ChatAttachment {
   label: string;
 }
 const drafts = new Map<string, ChatDraft>();
-export const relayDraftKey = "code60.orchestrationDraft:relay";
 export function chatDraftKey(chat: OrchestrationChat | undefined): string {
-  if (chat?.kind === "relay") return relayDraftKey;
+  if (chat?.kind === "relay")
+    return chat.customAgentId
+      ? `code60.orchestrationDraft:custom:${chat.customAgentId}`
+      : "code60.orchestrationDraft:relay";
   const id = chat?.conversationId ?? chat?.run?.id;
   return id ? `code60.orchestrationDraft:${id}` : "";
 }

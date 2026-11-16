@@ -60,6 +60,8 @@ describe("sandboxed diagnostic preload", () => {
     expect(invoke).toHaveBeenLastCalledWith("desktop:knowledge-renderer");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
+      modelDefault: "model-default",
+      customAgent: "custom-agent",
       automation: "automation",
       browseMemories: "memory-browse",
       memoryDetail: "memory-detail",

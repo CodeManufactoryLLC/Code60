@@ -152,7 +152,7 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
-    const relayHeading = relayNavigation && chat?.kind === "relay";
+    const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
@@ -224,7 +224,9 @@ export function ChatSidebar({
               }
             }}
           >
-            {relayHeading && <NavigationIcon name="app-steering-wheel" />}
+            {relayHeading && (
+              <NavigationIcon name={chat?.customAgentId ? "app-helmet" : "app-steering-wheel"} />
+            )}
             {entry.role === "orchestrator" && chat?.kind !== "relay" && (
               <NavigationIcon name="app-communication" />
             )}

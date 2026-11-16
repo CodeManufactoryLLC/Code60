@@ -56,7 +56,7 @@ describe("navigation registry", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
     expect(pagesInGroup("apps")).toEqual(["automations", "commands", "prompts", "system-manager"]);
-    expect(pagesInGroup("primary")).toEqual(["home", "apps", "search"]);
+    expect(pagesInGroup("primary")).toEqual(["home", "custom-agents", "apps", "search"]);
     expect(pageGroup("automations")).toBe("apps");
     expect(pageDefinitions.automations.label).toBe("Automation Studio");
     expect(pageGroup("system-manager")).toBe("apps");

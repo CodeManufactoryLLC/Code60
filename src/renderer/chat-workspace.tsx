@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
+import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
-import { conversationTitle, workerLabel } from "./chats.js";
+import { conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
 import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
@@ -46,8 +47,14 @@ export function ChatWorkspace({
   navigation,
 }: ChatWorkspaceProps) {
   const snapshot = state?.snapshot;
-  const conversationActive = tabs.active === "chat" && !navigation.projectPending;
-  const [relayPanelOpen, setRelayPanelOpen] = useState(false);
+  const conversationActive =
+    tabs.active === "chat" && !navigation.projectPending && !navigation.conversationPending;
+  const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
+  const panelKey =
+    snapshot?.runs.find((run) => run.record.id === workerId)?.relay?.conversationId ??
+    snapshot?.chat.conversationId ??
+    "";
+  const relayPanelOpen = panelOpen[panelKey] ?? false;
   const [revisionPreview, setRevisionPreview] = useState<{ id: number; preview: ReviewPreview }>();
   const {
     scope,
@@ -83,7 +90,14 @@ export function ChatWorkspace({
   const plans =
     snapshot?.chats.filter((chat) => chat.kind !== "relay").flatMap((chat) => chat.plans ?? []) ??
     [];
-  const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const relayWorker = snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
+  const relay = snapshot?.chats.find(
+    (chat) =>
+      chat.kind === "relay" &&
+      (relayWorker
+        ? chat.conversationId === relayWorker.conversationId
+        : chat.conversationId === snapshot?.chat.conversationId),
+  );
   const relayActive = snapshot?.chat.kind === "relay" && !workerId;
   const relayWorkerActive = !!snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
   const recallSource = selectedRecallSource(state, workerId, transcripts, scope.viewKey);
@@ -134,7 +148,7 @@ export function ChatWorkspace({
           <ChatPage
             key={
               chat?.kind === "relay"
-                ? "relay"
+                ? chatDraftKey(chat)
                 : `${database}:${chat?.run?.id ?? chat?.directory ?? "disconnected"}`
             }
             api={api}
@@ -143,7 +157,7 @@ export function ChatWorkspace({
               chat ? { ...chat, title: conversationTitle(snapshot?.chats ?? [], chat) } : undefined
             }
             hidden={
-              !conversationActive || !!workerId || chat?.directory !== snapshot?.chat.directory
+              !conversationActive || !!workerId || !isSelectedConversation(chat, snapshot?.chat)
             }
             events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
             database={chat?.kind === "relay" ? null : database}
@@ -162,7 +176,7 @@ export function ChatWorkspace({
             onRevisionPreview={(preview) => {
               if (preview.scope.kind === "relay") {
                 setRevisionPreview((current) => ({ id: (current?.id ?? 0) + 1, preview }));
-                setRelayPanelOpen(true);
+                setPanelOpen((s) => ({ ...s, [panelKey]: true }));
               } else {
                 fileAction({ type: "ensure-changes" });
                 fileAction(
@@ -184,7 +198,7 @@ export function ChatWorkspace({
               !splash &&
               conversationActive &&
               !workerId &&
-              chat?.directory === snapshot?.chat.directory
+              isSelectedConversation(chat, snapshot?.chat)
             }
             onDatabase={() => showPicker("database")}
             onCopied={() => notify("Copied.")}
@@ -258,21 +272,29 @@ export function ChatWorkspace({
           />
         </RetainedProjectPanels>
       </section>
-      <RelayPlansPanel
-        key={`${relay?.conversationId}:${relay?.generation}`}
-        snapshot={snapshot}
-        api={api}
-        plans={relay?.plans ?? []}
-        conversationId={relay?.conversationId}
-        generation={relay?.generation}
-        active={
-          !splash && conversationActive && (relayActive || relayWorkerActive) && !projectFiles
-        }
-        recallSource={recallSource}
-        open={relayPanelOpen}
-        onOpen={setRelayPanelOpen}
-        revisionPreview={revisionPreview}
-      />
+      {snapshot?.chats
+        .filter((chat) => chat.kind === "relay")
+        .map((owner) => (
+          <RelayPlansPanel
+            key={`${owner.conversationId}:${owner.generation}`}
+            snapshot={{ ...snapshot, chat: owner }}
+            api={api}
+            plans={owner.plans ?? []}
+            conversationId={owner.conversationId}
+            generation={owner.generation}
+            active={
+              !splash &&
+              conversationActive &&
+              owner.conversationId === relay?.conversationId &&
+              (relayActive || relayWorkerActive) &&
+              !projectFiles
+            }
+            recallSource={recallSource}
+            open={panelOpen[owner.conversationId ?? ""] ?? false}
+            onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
+            revisionPreview={revisionPreview}
+          />
+        ))}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { ChatWorkspace } from "./chat-workspace.js";
 import { conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
+import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
@@ -146,6 +147,15 @@ export function AppPages(props: AppPagesProps) {
     />
   );
   const views = {
+    "custom-agents": (
+      <CustomAgentsPage
+        storageError={snapshot?.customAgentError}
+        api={api}
+        agents={snapshot?.customAgents ?? []}
+        active={!splash && tabs.active === "custom-agents"}
+        onOpen={(id) => navigation.open({ kind: "custom-agent", id })}
+      />
+    ),
     projects: (
       <ProjectsHomePage
         projects={snapshot?.openProjects ?? []}

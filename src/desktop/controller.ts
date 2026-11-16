@@ -168,6 +168,7 @@ import {
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import { ApplicationAgents } from "./application-agents.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
@@ -199,6 +200,7 @@ import {
 import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
+import { ModelDefaults } from "./model-defaults.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
@@ -211,7 +213,6 @@ import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
 import { RAG_LIMITS } from "./rag-store.js";
 import type { RagConversation } from "./rag-worker.js";
 import { RelayFiles } from "./relay-files.js";
-import { RelayService } from "./relay-service.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
@@ -365,13 +366,14 @@ export class DesktopController {
   private get conversations() {
     return this.projectState.conversations;
   }
-  private readonly relay: RelayService | undefined;
+  private readonly relay: ApplicationAgents | undefined;
   private relaySelected = true;
   private projectSession: ProjectSessionStore | undefined;
   private projectSessionPaths: string[] = [];
   private projectSessionWarnings: string[] = [];
   readonly rag: RagService;
   readonly memory: MemoryService;
+  readonly modelDefaults: ModelDefaults;
   private readonly agentSetup: AgentSetup;
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
@@ -1877,6 +1879,7 @@ export class DesktopController {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
@@ -1900,7 +1903,14 @@ export class DesktopController {
         this.memory.report("Saved memory is unavailable. Check private storage.");
       });
     this.relay = storage.relay
-      ? new RelayService(deps, env, () => this.changed(null), dialogs, this.memory)
+      ? new ApplicationAgents(
+          deps,
+          env,
+          () => this.changed(null),
+          dialogs,
+          this.memory,
+          this.modelDefaults,
+        )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
     this.rag = new RagService(
@@ -2930,6 +2940,7 @@ export class DesktopController {
         config,
         {
           mcpServers,
+          initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
@@ -3076,6 +3087,7 @@ export class DesktopController {
         this.config,
         {
           recovery: record,
+          initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
             `${assembleOperatingContract(
@@ -3227,6 +3239,14 @@ export class DesktopController {
       this.changed();
     }
   }
+  async customAgent(value: unknown) {
+    if (!this.relay) throw new Error("Custom agents are unavailable");
+    const response = await this.relay.manage(value);
+    if (response.conversationId) this.relaySelected = true;
+    this.changed();
+    return response;
+  }
+
   orchestrationChatAction(value: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const request = parseOrchestrationChatAction(value);
     if (
@@ -3265,6 +3285,8 @@ export class DesktopController {
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
+    if (request.type === "save-model-default")
+      return this.saveModelDefault(request.id, true).then(() => undefined);
     if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
@@ -3552,7 +3574,12 @@ export class DesktopController {
     const owner = this.details.capture(context.subscriptionId);
     if (!this.relay || this.closing) throw new Error("Relay files are unavailable");
     const root = this.relay.fileRoot(owner.scope);
-    this.relayFiles.set(context, root, owner.valid);
+    this.relayFiles.set(
+      context,
+      root,
+      owner.valid,
+      owner.scope.kind === "project" ? undefined : owner.scope.conversationId,
+    );
   }
 
   private detailSource(
@@ -3563,7 +3590,7 @@ export class DesktopController {
     read(allEvents: boolean): DetailPayload;
     version(): string | number;
   } {
-    const relay = this.relay;
+    const relay = scope.kind === "project" ? undefined : this.relay?.owner(scope.conversationId);
     const relayAddress = () => {
       if (this.closing || !relay || scope.kind === "project")
         throw new Error("This Relay detail generation is no longer available");
@@ -3657,9 +3684,10 @@ export class DesktopController {
     validOwner: (owner) => this.validKnowledgeOwner(owner),
     readView: async (caller, _panel, tab) => {
       if (caller.kind === "relay") {
-        if (tab.kind === "plan") return this.relay?.knowledgePlan(tab.planId);
+        if (tab.kind === "plan")
+          return this.relay?.owner(caller.conversationId)?.knowledgePlan(tab.planId);
         if (tab.kind === "file" && !tab.savedRevision)
-          return this.relayFiles.knowledgePreview(tab.path);
+          return this.relayFiles.knowledgePreview(tab.path, caller.conversationId);
         return undefined;
       }
       const owner = this.projectHost.byId(caller.projectId);
@@ -3696,7 +3724,7 @@ export class DesktopController {
       if (runtime.epoch !== owner.databaseEpoch || !runtime.state.workspace)
         throw new Error("Stale project owner");
     } else {
-      const relay = this.relay?.snapshot(true);
+      const relay = this.relay?.owner(owner.conversationId)?.snapshot(true);
       if (relay?.conversationId !== owner.conversationId || relay.generation !== owner.generation)
         throw new Error("Stale Relay owner");
     }
@@ -3749,15 +3777,15 @@ export class DesktopController {
     const conversations: Record<string, unknown>[] = [];
     const sessions: Record<string, unknown>[] = [];
     const relay = this.relay?.snapshot(true);
-    if (relay)
+    for (const applicationChat of this.relay?.snapshots(true) ?? [])
       conversations.push({
-        id: relay.conversationId,
+        id: applicationChat.conversationId,
         kind: "relay",
-        generation: relay.generation,
-        title: "Relay",
-        status: relay.run?.status ?? "disconnected",
+        generation: applicationChat.generation,
+        title: applicationChat.title,
+        status: applicationChat.run?.status ?? "disconnected",
         historical: false,
-        selected: this.relaySelected,
+        selected: this.relaySelected && relay?.conversationId === applicationChat.conversationId,
       });
     for (const owner of this.projectHost.all()) {
       const state = owner.state;
@@ -3916,7 +3944,9 @@ export class DesktopController {
       liveWorkers:
         session && state
           ? state.conversations.liveWorkerCount(session)
-          : (this.relay?.knowledgeLiveWorkers() ?? 0),
+          : caller.kind === "relay"
+            ? (this.relay?.owner(caller.conversationId)?.knowledgeLiveWorkers() ?? 0)
+            : 0,
       gitReady: state?.gitState ? state.gitState.status === "ready" : null,
       projectOpen: !!state?.workspace,
       customizations,
@@ -4074,6 +4104,8 @@ export class DesktopController {
     const chatSnapshot = (current: ChatSession) => this.chatSnapshot(current, allEvents, summaries);
     return {
       ...project,
+      customAgents: this.relay?.summaries() ?? [],
+      customAgentError: this.relay?.error,
       ...(summaries
         ? { summaryOnly: true as const, detailRevisions: this.details.revisions() }
         : {}),
@@ -4092,7 +4124,7 @@ export class DesktopController {
       chat:
         this.relay && this.relaySelected ? this.relay.snapshot(summaries) : chatSnapshot(session),
       chats: [
-        ...(this.relay ? [this.relay.snapshot(summaries)] : []),
+        ...(this.relay?.snapshots(summaries) ?? []),
         ...this.projectHost
           .all()
           .filter((owner) => !this.relay || owner.state.workspace)
@@ -4110,6 +4142,7 @@ export class DesktopController {
       ],
       orchestration: { ...this.orchestration },
       agentSetup: this.agentSetup.snapshot(),
+      modelDefaults: this.modelDefaults.snapshot(),
       revision: this.revision,
       database: this.database?.path ?? null,
       databaseError: this.databaseError,
@@ -4210,6 +4243,13 @@ export class DesktopController {
   /** Reconnects to the database remembered from the previous launch, if any. */
   restore(): Promise<void> {
     return this.exclusive(async () => {
+      try {
+        await this.modelDefaults.load();
+      } catch {
+        this.warnings.push(
+          "Saved model defaults could not be read. Existing preferences were preserved.",
+        );
+      }
       try {
         this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
@@ -5026,6 +5066,7 @@ export class DesktopController {
         {},
         this.workerOverrides(id),
         enabledConfig,
+        this.modelDefaults.selections(run.record.agent, "worker"),
       );
     } catch (error) {
       if (
@@ -5082,6 +5123,7 @@ export class DesktopController {
       saved,
       this.workerOverrides(id),
       enabledConfig,
+      this.modelDefaults.selections(run.record.agent, "worker"),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -5159,6 +5201,7 @@ export class DesktopController {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
       enabledConfig,
     );
@@ -5220,6 +5263,21 @@ export class DesktopController {
     return this.projectHost.run(this.projectHost.current, () =>
       this.changeProjectHarnessMode(id, change, chat),
     );
+  }
+
+  modelDefault(value: unknown): Promise<void> {
+    return this.modelDefaults.clear(value);
+  }
+
+  private saveModelDefault(id: string, chat: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      const owner = chat
+        ? this.conversations.sessions.find((session) => session.chat?.runs()[0]?.id === id)?.chat
+        : [...this.batches.keys()].find((batch) => batch.runs().some((run) => run.id === id));
+      const run = owner?.runs().find((run) => run.id === id);
+      if (!run) throw new Error("This session is no longer controlled by this app");
+      await this.modelDefaults.save(run, chat ? "orchestrator" : "worker");
+    });
   }
 
   private async changeProjectHarnessMode(
@@ -5327,6 +5385,8 @@ export class DesktopController {
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
+    if (action.type === "save-model-default")
+      return this.saveModelDefault(action.id, false).then(() => undefined);
     return this.exclusive(async () => {
       const workspace = this.requireWorkspace();
       const cmd = commandDeps(this.deps, workspace);

@@ -3,8 +3,10 @@ import { readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import {
   type AgentSetupRecord,
+  type ModelDefaultsRecord,
   type PollSettingsPatch,
   parseAgentSetupRecord,
+  parseModelDefaults,
   parseOrchestrationProvider,
   parsePollSettings,
 } from "../bridge/index.js";
@@ -12,6 +14,8 @@ import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/i
 
 /** Remembers the selected project database between launches. */
 export interface DesktopPreferences {
+  modelDefaults?(): Promise<ModelDefaultsRecord>;
+  setModelDefaults?(record: ModelDefaultsRecord): Promise<void>;
   agentSetup?(): Promise<AgentSetupRecord | null>;
   setAgentSetup?(record: AgentSetupRecord): Promise<void>;
   read(): Promise<string | undefined>;
@@ -70,6 +74,12 @@ export function filePreferences(file: string): DesktopPreferences & {
     return result;
   }
   return {
+    async modelDefaults() {
+      return parseModelDefaults((await load()).modelDefaults ?? { version: 1, providers: {} });
+    },
+    setModelDefaults(record) {
+      return update({ modelDefaults: parseModelDefaults(record) });
+    },
     async agentSetup() {
       const value = (await load()).agentSetup;
       return value == null ? null : parseAgentSetupRecord(value);

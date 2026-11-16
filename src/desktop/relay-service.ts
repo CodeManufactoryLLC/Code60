@@ -53,6 +53,7 @@ import {
 } from "./mcp-control.js";
 import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
 import type { MemoryService } from "./memory-service.js";
+import type { ModelDefaults } from "./model-defaults.js";
 import type { RelayFileRoot } from "./relay-files.js";
 import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
@@ -153,6 +154,8 @@ export class RelayService {
       confirm: async () => false,
     },
     private readonly memory?: MemoryService,
+    private readonly identity?: { id: string; name: string; instructions: string; root: string },
+    private readonly modelDefaults?: ModelDefaults,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -171,6 +174,7 @@ export class RelayService {
       checkout: (worker) =>
         this.associateReview(worker, Math.max(1, worker.orchestrator.runs()[0]?.turns ?? 1)),
       changed: (targetId) => this.changed(targetId),
+      initialSettings: (provider) => this.modelDefaults?.selections(provider, "worker") ?? [],
       warning: () => {
         this.error = "A worker record could not be saved. Inspect the worker before retrying work.";
         changed();
@@ -185,14 +189,17 @@ export class RelayService {
     return { kind: "relay", conversationId: this.store.id, generation: this.generation };
   }
   private knowledgeContext(): string {
-    if (!this.knowledge) return instructions;
+    const operating = this.identity
+      ? `${instructions.replace("You are Relay,", () => `You are ${this.identity?.name},`)}\n\n--- Special instructions ---\n${this.identity.instructions}`
+      : instructions;
+    if (!this.knowledge) return operating;
     let context: string;
     try {
       context = this.knowledge.context(this.knowledgeCaller());
     } catch {
       context = "--- Code60 awareness unavailable. Do not infer current UI state or authority. ---";
     }
-    return `${instructions}\n\n${context}`;
+    return `${operating}\n\n${context}`;
   }
   knowledgePlan(planId: string): unknown {
     const plan = this.plans?.get(planId);
@@ -414,7 +421,11 @@ export class RelayService {
         await this.associateReview(worker, worker.orchestrator.runs()[0]?.turns ?? 1);
       } else if (request.type === "set-mode")
         await worker.orchestrator.setMode(worker.id, request.change);
-      else if (request.type === "permission") {
+      else if (request.type === "save-model-default") {
+        const run = worker.orchestrator.runs().find((run) => run.id === worker.id);
+        if (!run || !this.modelDefaults) throw new Error("Model defaults are unavailable");
+        await this.modelDefaults.save(run, "worker");
+      } else if (request.type === "permission") {
         if (!worker.orchestrator.answerPermission(request.id, request.answer))
           throw new Error("This approval request is no longer pending");
       } else if (request.type === "stop") await worker.orchestrator.shutdown();
@@ -583,7 +594,9 @@ export class RelayService {
       this.orphans.delete(owner);
     };
     try {
-      this.storeOpening ??= RelayStore.open(join(stateHome(this.env), "code60", "relay")).then(
+      this.storeOpening ??= RelayStore.open(
+        this.identity?.root ?? join(stateHome(this.env), "code60", "relay"),
+      ).then(
         (store) => {
           this.store = store;
           return store;
@@ -687,6 +700,7 @@ export class RelayService {
           prompts: DEFAULT_PROMPT_TEMPLATES,
         },
         {
+          initialSettings: this.modelDefaults?.selections(provider, "orchestrator") ?? [],
           mcpServers: [
             {
               name: "code60",
@@ -753,11 +767,12 @@ export class RelayService {
           }
         : {}),
       kind: "relay",
+      ...(this.identity ? { customAgentId: this.identity.id } : {}),
       ...(this.store ? { conversationId: this.store.id } : {}),
       generation: this.generation,
       reviewRevision: this.reviewRevision,
       replies: this.replySummary.snapshot(),
-      title: "Relay",
+      title: this.identity?.name ?? "Relay",
       run: this.chat?.runs()[0] ?? null,
       directory: this.store?.workspace ?? null,
       error: this.error,
@@ -914,7 +929,16 @@ export class RelayService {
       const chat = this.chat;
       const run = chat?.runs()[0];
       if (!chat || !run) throw new Error("Relay is not connected. Retry the connection.");
+      if (
+        (request.type === "set-mode" || request.type === "save-model-default") &&
+        request.id !== run.id
+      )
+        throw new Error("This session is no longer current");
       if (request.type === "set-mode") return chat.setMode(run.id, request.change);
+      if (request.type === "save-model-default") {
+        if (!this.modelDefaults) throw new Error("Model defaults are unavailable");
+        return this.modelDefaults.save(run, "orchestrator");
+      }
       if (request.type === "stop" || request.type === "cancel") {
         this.paused = true;
         if (request.type === "cancel") chat.cancelTurn(run.id);

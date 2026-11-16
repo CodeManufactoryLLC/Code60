@@ -202,6 +202,12 @@ it("enrolls idle direct-worker chat follow-ups in the new request before replyin
   });
   await vi.waitFor(() => expect(relay.workerSnapshot().runs[0]?.view?.status).toBe("idle"));
   expect(await readFile(join(cwd, "file.txt"), "utf8")).toBe("first");
+  // Drain the expected automatic result before asserting that a rejected reply sends nothing.
+  await vi.waitFor(() =>
+    expect(agents.sessions[0]?.prompts.some((text) => text.includes(String(worker.runId)))).toBe(
+      true,
+    ),
+  );
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
   await relay.action({ type: "send", id, text: "Second request" });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));

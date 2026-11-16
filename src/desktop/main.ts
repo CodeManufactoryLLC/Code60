@@ -44,6 +44,7 @@ import {
   parseMemoryDetail,
   parseMemoryExtraction,
   parseMemoryRequestId,
+  parseModelDefaultAction,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
   parsePlanAction,
@@ -447,6 +448,9 @@ async function ready(): Promise<void> {
     });
   handle("desktop:app-update", (value) => updates?.action(parseUpdateAction(value)));
   handle("desktop:automation", (value) => automations.request(value));
+  handle("desktop:model-default", (value) =>
+    controller.modelDefault(parseModelDefaultAction(value)),
+  );
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };
@@ -504,6 +508,7 @@ async function ready(): Promise<void> {
     });
   });
   handle("desktop:detail-read", (value) => controller.readDetails(parseDetailRequest(value)));
+  handle("desktop:custom-agent", (value) => controller.customAgent(value));
   handle("desktop:relay-files", (value) => controller.setRelayFileContext(value));
   handle("desktop:knowledge-renderer", () => controller.knowledge.rendererIdentity());
   handle("desktop:knowledge-report", (value) => controller.knowledge.report(value));

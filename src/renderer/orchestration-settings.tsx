@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { DesktopApi, ModelDefaultAction, Snapshot } from "../bridge/index.js";
 import { AgentLogo, AgentSetupWizard } from "./agent-setup.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
@@ -15,6 +15,8 @@ export function OrchestrationSettings({
   const id = useId();
   const [mode, setMode] = useState<"primary" | "add" | null>(null);
   const setup = snapshot.agentSetup;
+  const [error, setError] = useState("");
+  const [clearing, setClearing] = useState(false);
   return (
     <section className="settings-section" aria-labelledby={id}>
       <SettingsHeader page="agents" id={id}>
@@ -46,6 +48,45 @@ export function OrchestrationSettings({
         ) : (
           <p className="settings-empty">No agents set up yet.</p>
         )}
+      </SettingsCard>
+      <SettingsCard title="Default models">
+        {Object.entries(snapshot.modelDefaults?.providers ?? {}).flatMap(([provider, roles]) =>
+          (["orchestrator", "worker"] as const).flatMap((role) => {
+            const values = roles?.[role];
+            if (!values?.length) return [];
+            return [
+              <div className="settings-row" key={`${provider}:${role}`}>
+                <span>
+                  {setup?.providers.find((p) => p.id === provider)?.name ?? provider} / {role}
+                  <small>{values.map((value) => value.name).join(" · ")}</small>
+                </span>
+                <button
+                  type="button"
+                  disabled={clearing || !api.modelDefault}
+                  onClick={() => {
+                    setClearing(true);
+                    setError("");
+                    void api
+                      .modelDefault?.({
+                        type: "clear",
+                        provider: provider as ModelDefaultAction["provider"],
+                        role,
+                      })
+                      .catch(() => setError("Could not clear the saved model default. Retry."))
+                      .finally(() => setClearing(false));
+                  }}
+                  aria-label={`Clear ${provider} ${role} model default`}
+                >
+                  Clear
+                </button>
+              </div>,
+            ];
+          }),
+        )}
+        {!Object.values(snapshot.modelDefaults?.providers ?? {}).some(
+          (roles) => roles?.orchestrator?.length || roles?.worker?.length,
+        ) && <p className="settings-empty">No saved model defaults.</p>}
+        {error && <p role="alert">{error}</p>}
       </SettingsCard>
       <SettingsCard title="Permissions">
         <label className="settings-row">

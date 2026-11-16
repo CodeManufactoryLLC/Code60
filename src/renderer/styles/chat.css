@@ -814,7 +814,8 @@
   min-width: 0;
 }
 
-.composer-mode {
+.composer-mode,
+.session-option-picker {
   min-width: 0;
   max-width: 100%;
 }
@@ -918,7 +919,7 @@
   box-shadow: var(--overlay-shadow);
 }
 
-.session-info .composer-mode .harness-mode-menu button {
+.session-info .harness-mode-menu button {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -931,7 +932,7 @@
   overflow-wrap: anywhere;
 }
 
-.session-info .composer-mode .harness-mode-menu button:focus-visible {
+.session-info .harness-mode-menu button:focus-visible {
   background: var(--hover-bg);
   outline: 1px solid var(--focus-line);
   outline-offset: -1px;
