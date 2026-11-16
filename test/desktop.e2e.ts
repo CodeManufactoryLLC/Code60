@@ -13836,7 +13836,9 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await expect(review.locator(".monaco-diff-editor")).toBeVisible();
     const pinned = await page.getByRole("tab", { name: /^Revision \d+ ·/ }).textContent();
     if (!pinned) throw new Error("Missing pinned revision tab");
-    const saved = await page.evaluate(async () => {
+    // Automatic captures may append a revision after the tab opens. Address the pinned one.
+    const pinnedIndex = Number(/^Revision (\d+) ·/.exec(pinned)?.[1]) - 1;
+    const saved = await page.evaluate(async (index) => {
       const snapshot = await window.desktop.snapshot();
       const summary = snapshot.reviews?.[0];
       if (!summary || !snapshot.directory) throw new Error("Missing review");
@@ -13850,7 +13852,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         ...identity,
         requestId: crypto.randomUUID(),
       });
-      const revision = review.revisions.at(-1);
+      const revision = review.revisions[index];
       if (!revision) throw new Error("Missing revision");
       for (const file of revision.files)
         await window.desktop.reviewAction({
@@ -13868,7 +13870,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         fileKey: file.key,
         worktree: snapshot.runs.find((run) => run.record.id === file.runId)?.record.worktree,
       };
-    });
+    }, pinnedIndex);
     // Existing reviewed state must never hide saved file versions in this read-only browser.
     await expect(files).toHaveCount(2);
     await files.last().click();
@@ -14328,7 +14330,33 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     // The composer clears only after main accepts the send. The agent's declared activity
     // follows that acceptance, so wait for it before checking the cleared draft.
     await expect(status).toHaveAttribute("data-source", "declared");
-    await expect(input).toHaveValue("");
+    await expect(input)
+      .toHaveValue("")
+      .catch(async (error) => {
+        const state = await page.evaluate(async () => {
+          const snapshot = await window.desktop.snapshot();
+          return {
+            chat: {
+              kind: snapshot.chat.kind,
+              conversation: !!snapshot.chat.conversationId,
+              status: snapshot.chat.run?.status,
+              turns: snapshot.chat.run?.turns,
+              error: snapshot.chat.error,
+            },
+            chats: snapshot.chats.map((chat) => chat.kind),
+            pages: document.querySelectorAll(".orchestration-chat-page").length,
+            alerts: Array.from(document.querySelectorAll("[role='alert']"), (node) =>
+              node.textContent?.slice(0, 200),
+            ),
+            drafts: Object.keys(sessionStorage).filter((key) => key.includes("Draft")).length,
+          };
+        });
+        await test.info().attach("composer-clear", {
+          body: JSON.stringify(state, null, 2),
+          contentType: "application/json",
+        });
+        throw error;
+      });
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     const activityTimer = status.getByRole("timer");
     await expect(activityTimer).not.toHaveText("0s");

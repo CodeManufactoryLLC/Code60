@@ -3280,7 +3280,10 @@ function withoutAwareness(prompt: string | undefined): string {
   return (prompt ?? "").replace(AWARENESS, "");
 }
 
-describe("app-wide orchestration chat", () => {
+// Windows CI took 2.1-2.3 s per two-send sibling journey; some cases send eight times.
+describe("app-wide orchestration chat", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
