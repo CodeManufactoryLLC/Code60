@@ -259,6 +259,8 @@ async function dispatch(op: string, args: unknown[]) {
     }
     case "range":
       return store.range(String(args[0]));
+    case "rewind":
+      return store.rewind(String(args[0]), Number(args[1]));
     case "publish": {
       const result = store.publish(
         String(args[0]),

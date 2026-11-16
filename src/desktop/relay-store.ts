@@ -316,8 +316,14 @@ export class RelayStore {
   }
 
   /** Opaque cursors are byte boundaries, never caller-provided filesystem paths. */
-  history(before?: number) {
-    return this.serial(() => this.readHistory(before));
+  history(before?: number, excluded: readonly { from: number; to: number }[] = []) {
+    return this.serial(() => this.readHistory(before, excluded));
+  }
+  boundary(): Promise<number> {
+    return this.serial(async () => {
+      this.checkJournal(await verifyRelayStorage(this.journal, false));
+      return Number(this.journalIdentity.size);
+    });
   }
   private checkJournal(info: BigIntStats): void {
     if (journalStamp(info) !== journalStamp(this.journalIdentity))
@@ -328,7 +334,10 @@ export class RelayStore {
         changedJournalFields(this.journalIdentity, info),
       );
   }
-  private async readHistory(before?: number) {
+  private async readHistory(
+    before?: number,
+    excluded: readonly { from: number; to: number }[] = [],
+  ) {
     const file = await relayFile(this.journal);
     let bytesRead = 0;
     const messages: RelayMessage[] = [];
@@ -348,6 +357,12 @@ export class RelayStore {
       if (!Number.isSafeInteger(position) || position < 0 || position > size)
         throw new Error("Invalid Relay history cursor");
       for (let count = 0; position > 0 && count < MAX_READ_FRAMES; count++) {
+        for (let skipped = 0; skipped < excluded.length; skipped++) {
+          const range = excluded.find((item) => position > item.from && position <= item.to);
+          if (!range) break;
+          position = range.from;
+        }
+        if (position === 0) break;
         if (position < FOOTER_BYTES) {
           damaged = true;
           break;

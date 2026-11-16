@@ -1,5 +1,17 @@
 # Relay implementation status
 
+## Conversation checkpoint follow-up
+
+Project chats and Relay now checkpoint human requests, automatically integrate
+settled isolated edits and expose confirmed code-and-conversation Undo beside
+the latest human message. Direct workers stay writable under bounded folder
+snapshots, with a warning that manual edits since the snapshot also rewind.
+Undo returns the request and its saved-code references unsent. Recovery remains
+explicit, including after provider shutdown; restart never replays work.
+The earlier measured desktop results below describe the previous workflow,
+not validation of this follow-up. Its desktop execution is blocked by the
+active disk-pressure restriction on test-image builds.
+
 ## PR review correctness follow-up
 
 Reconnect validates the retained private workspace before preparation and again
@@ -56,13 +68,15 @@ This branch implements Relay and retained project runtimes as described in
 - Conversation-wide capacity reservations across targets, accepted-request
   deduplication, task-qualified authority and originating-task result delivery.
 - Target-labelled worker rows, bounded live transcript windows and human worker
-  controls without an open project or database. Direct workers show the absence
-  of isolated apply, undo and discard.
+  controls without an open project or database. Direct workers warn that
+  message Undo also rewinds concurrent manual edits; they do not offer isolated
+  application or discard.
 - Target-qualified plans with revision-specific human acceptance, live task
   authority and first-default-dispatch baselines shared per task and target.
   Saved plans never regain execution authority from a request retry.
-- Target-grouped Changes, bounded review pages, pinned revision diffs, reviewed
-  files, line-anchored feedback and checkout-local prepare/preview/apply/undo.
+- Target-grouped Changes, bounded review pages, pinned read-only revision diffs,
+  quiet request-level links and exact Add to chat code references. Corrections
+  use the ordinary composer; host checkpoints own integration and message Undo.
   Direct edits are labelled separately and never offer isolated application.
   Review records, immutable source captures and application journals are private,
   application-owned evidence, independent of any project database.
@@ -71,7 +85,7 @@ This branch implements Relay and retained project runtimes as described in
   worker turns, process ownership and current files, including after native
   confirmation. Redirecting a run record to another checkout in the same Git
   repository cannot redirect review. Older unpinned evidence stays readable only.
-- Feedback delivery runs between Relay turns with originating-task context,
+- Legacy feedback delivery runs between Relay turns with originating-task context,
   bounded queues and delivery receipts. Failures preserve editable evidence;
   restart never reconnects workers or replays pending submissions. Interrupted
   review-index rollover recovers only a validated single pending page, without
@@ -171,7 +185,7 @@ CLI defaults, run-record format and SQLite schema 5 are unchanged.
 
 Execution now freezes current saved files per live conversation generation,
 human task and canonical target. Explicit Git bases resolve to commits; direct
-mode never captures a baseline. Concurrent dispatches share preparation, failures
+mode captures bounded filesystem preimages instead of Git baselines. Concurrent dispatches share preparation, failures
 remain retryable, and folder/Stop all cancels pending captures. Real-Git tests
 check isolated contents, ignored credential fixtures, unchanged HEAD and staging.
 Target-qualified plans and review bindings share these baselines.

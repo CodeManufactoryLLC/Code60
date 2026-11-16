@@ -50,6 +50,25 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe("conversation coordination", () => {
+  it("revokes discarded worker authority and deliveries without disturbing another conversation", () => {
+    const h = harness();
+    h.end();
+    const originalScope = h.session.workerScope;
+    const other = h.coordinator.create();
+    h.coordinator.register("other", other, "/project", "claude");
+    h.session.rewinding = true;
+    expect(() => h.coordinator.requireScope(originalScope, h.session)).toThrow("no longer current");
+    h.coordinator.forgetWorkers(h.session);
+    h.session.rewinding = false;
+    expect(h.coordinator.workers.has("worker")).toBe(false);
+    expect(h.coordinator.workers.has("other")).toBe(true);
+    expect(h.session.inbox).toEqual([]);
+    expect(h.session.dispatches.size).toBe(0);
+    expect(h.session.workerScope).not.toBe(originalScope);
+    h.end();
+    expect(h.session.inbox).toEqual([]);
+    h.coordinator.stop();
+  });
   it("keeps worker updates queued and pauses delivery when the chat refuses dispatch", async () => {
     vi.useFakeTimers();
     const h = harness();

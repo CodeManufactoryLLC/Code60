@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { parseValue } from "../contracts/index.js";
-import { type Review, type ReviewContent, reviewAnchorSchema } from "./reviews.js";
+import {
+  type Review,
+  type ReviewContent,
+  type ReviewSummary,
+  reviewAnchorSchema,
+} from "./reviews.js";
 import type { TaskView } from "./tasks.js";
 
 const uuid = z.string().uuid();
@@ -38,6 +43,7 @@ const task = z.discriminatedUnion("type", [
 ]);
 const requestSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...identity, type: z.literal("list"), cursor: uuid.optional() }),
+  z.strictObject({ ...identity, type: z.literal("timeline"), cursor: uuid.optional() }),
   z.strictObject({
     ...review,
     type: z.literal("read"),
@@ -71,6 +77,11 @@ export type RelayReviewEntry = z.infer<typeof relayReviewEntrySchema>;
 export type RelayReviewRequest = z.infer<typeof requestSchema>;
 export type RelayReviewResponse =
   | { type: "list"; entries: RelayReviewEntry[]; cursor: string | null }
+  | {
+      type: "timeline";
+      entries: { entry: RelayReviewEntry; summary?: ReviewSummary; error?: string }[];
+      cursor: string | null;
+    }
   | { type: "review"; review: Review; live: boolean }
   | { type: "file"; content: ReviewContent }
   | { type: "task"; task: TaskView }

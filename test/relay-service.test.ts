@@ -36,7 +36,11 @@ beforeEach(async () => {
   relay = create();
   await mkdir(join(root, "target"));
 });
-function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn()) {
+function create(
+  beforeMkdir?: () => Promise<void>,
+  notify: () => void = vi.fn(),
+  confirm: (title: string, detail: string) => Promise<boolean> = async () => false,
+) {
   const deps = defaultDeps();
   const git = new FakeGit();
   git.repoInfo = async () => {
@@ -58,6 +62,7 @@ function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn())
     },
     { XDG_STATE_HOME: join(root, "state") },
     notify,
+    { confirm },
   );
   services.push(service);
   return service;
@@ -74,6 +79,47 @@ async function connect() {
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
 }
+it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
+  const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+  relay = create(undefined, vi.fn(), confirm);
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Surviving prefix" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({ type: "send", id, text: "Discarded request marker" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const checkpointId = required(relay.snapshot().checkpoint).id;
+  const request = { type: "undo-request" as const, id, checkpointId, replacesDraft: true };
+  expect(await relay.action(request)).toBeUndefined();
+  expect(agents.sessions[0]?.stops).toHaveLength(0);
+  expect(await relay.action(request)).toEqual({
+    type: "rewound",
+    checkpointId,
+    text: "Discarded request marker",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect(confirm).toHaveBeenLastCalledWith("Undo this request?", expect.stringContaining("unsent"));
+  expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+  expect(agents.sessions[1]?.prompts).toHaveLength(0);
+  expect(JSON.stringify(relay.snapshot().events)).not.toContain("Discarded request marker");
+  const nextId = required(relay.snapshot().run).id;
+  expect(nextId).not.toBe(id);
+  await relay.action({ type: "send", id: nextId, text: "A fresh follow-up" });
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1));
+  expect(agents.sessions[1]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[1]?.prompts[0]).not.toContain("Discarded request marker");
+  await relay.shutdown();
+  relay = create();
+  await connect();
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "After restart",
+  });
+  await vi.waitFor(() => expect(agents.sessions[2]?.prompts).toHaveLength(1));
+  expect(agents.sessions[2]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[2]?.prompts[0]).not.toContain("Discarded request marker");
+});
 it.each(["removed", "replaced", "symlink"])(
   "refuses a %s workspace on in-process Retry",
   async (kind) => {

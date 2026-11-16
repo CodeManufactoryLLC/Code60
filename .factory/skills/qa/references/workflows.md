@@ -13,15 +13,21 @@ and supported controls before extending tests. Retain evidence under ignored
   verified setup; repository has unrelated staged and unstaged edits.
 - **Actions:** choose/connect provider in setup, close setup, create database,
   Start, open project, select Relay; send a readable target request, inspect plan,
-  Accept; wait for worker completion, reload renderer, open Changes and revision,
-  review exact diff, prepare application, decline once, confirm once, undo.
+  Accept; wait for automatic checkout changes and one quiet files-changed link.
+  Open the pinned read-only diff, select code and Add to chat with an existing
+  draft. Reload, verify retained draft/reference, decline Undo on the latest
+  user message, then confirm it. Verify returned unsent request and chat rewind.
 - **Intermediate invariants:** no worker worktree/process before Accept; one
-  accepted plan owns worker dispatch; worker edits its own real worktree, not
-  checkout; reload retains result/review evidence without redispatch; cancellation
-  of confirmation leaves checkout untouched.
+  accepted plan owns worker dispatch; isolated work integrates automatically
+  without Apply; incoming results do not open panels or steal focus. Attachment
+  preserves the draft and sends nothing. Reload does not redispatch; declined
+  Undo leaves changes/context/draft untouched. Confirmed Undo never resends.
 - **Independent checks:** exact worker and checkout bytes, worktree inventory,
-  unchanged unrelated staged/unstaged bytes and Git index throughout apply/undo;
-  worker result still exists after undo; owned child PIDs exit after shutdown.
+  unchanged unrelated staged/unstaged bytes, index and HEAD throughout isolated
+  integration/Undo; worker evidence survives privately; owned workers exit on
+  Undo, unrelated conversations remain active, and discarded provider context
+  cannot return on the next Send or restart. Direct-folder snapshots explicitly
+  warn and test that manual edits since their checkpoint rewind too.
 - **Evidence:** selected plan/revision and dialog assertions, worker/result paths
   in synthetic artifacts, Git/index comparisons, retained failure trace.
 - **Cleanup:** close app, verify owned processes gone, remove isolated fixture

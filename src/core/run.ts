@@ -214,6 +214,7 @@ export class Run {
       branch: r.branch,
       worktree: r.worktree,
       ...(r.lastStopReason === undefined ? {} : { lastStopReason: r.lastStopReason }),
+      ...(this.lastOutcome ? { lastOutcome: this.lastOutcome.status } : {}),
       ...(r.sessionState === undefined ? {} : { sessionState: r.sessionState }),
       modeChanging: this.modeChanging,
       pending: [...this.pending.values()].map((p) => p.view),

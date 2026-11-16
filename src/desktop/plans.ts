@@ -140,11 +140,11 @@ export class PlanStore {
     return store;
   }
   list() {
-    return [...this.records.values()].map(planSummary);
+    return [...this.records.values()].filter((plan) => !plan.rewound).map(planSummary);
   }
   active() {
     return [...this.records.values()].find(
-      (plan) => !["completed", "dismissed"].includes(plan.state),
+      (plan) => !plan.rewound && !["completed", "dismissed"].includes(plan.state),
     );
   }
   get(id: string): Plan {
@@ -223,9 +223,32 @@ export class PlanStore {
   mutate(id: string, edit: (plan: Plan) => void) {
     return this.serialized(async () => {
       const plan = this.get(id);
+      if (plan.rewound) throw new Error("This plan was discarded by Undo");
       edit(plan);
       plan.revision++;
       return this.save(plan);
+    });
+  }
+  rewind(prefix: readonly Plan[]): Promise<void> {
+    return this.serialized(async () => {
+      const kept = new Set(prefix.map((plan) => plan.id));
+      for (const current of this.records.values())
+        if (!kept.has(current.id) && !current.rewound)
+          await this.save({
+            ...current,
+            state: "dismissed",
+            rewound: true,
+            revision: current.revision + 1,
+          });
+      for (const original of prefix) {
+        if (original.chatId !== this.chatId) throw new Error("Checkpoint plan owner changed");
+        await this.save({
+          ...original,
+          revision: Math.max(original.revision, this.records.get(original.id)?.revision ?? 0) + 1,
+          state: ["queued", "running"].includes(original.state) ? "paused" : original.state,
+          tasks: original.tasks.map((task) => ({ ...task, workerIds: [] })),
+        });
+      }
     });
   }
   update(request: PlanUpdate, targets?: readonly PlanTarget[]) {
@@ -274,6 +297,7 @@ export class PlanStore {
       if (request.chatId !== this.chatId)
         throw new Error("This plan belongs to another conversation");
       const plan = this.get(request.planId);
+      if (plan.rewound) throw new Error("This plan was discarded by Undo");
       if (request.type === "accept" && plan.acceptedRevision === request.revision) return plan;
       if (plan.revision !== request.revision)
         throw new Error("Plan changed; review the latest revision");

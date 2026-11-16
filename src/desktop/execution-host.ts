@@ -81,6 +81,11 @@ export class ExecutionHost {
       changed(targetId?: string): void;
       warning(message: string): void;
       checkout?(worker: ExecutionWorker): Promise<void>;
+      checkpoint?(
+        owner: ExecutionOwner,
+        target: ExecutionTarget,
+        mode: WorkspaceMode,
+      ): Promise<void>;
       authorizeTarget?(
         owner: ExecutionOwner,
         request: TargetDispatch,
@@ -222,6 +227,9 @@ export class ExecutionHost {
       request.workspaceMode === "worktree"
         ? await this.baselines.capture(owner, target, request.base, signal)
         : request.base;
+    authorize();
+    await this.hooks.checkpoint?.(owner, target, request.workspaceMode);
+    await this.revalidate(request.cwd, target);
     authorize();
     let accepted: ExecutionWorker | undefined;
     const pinCheckout = async (cwd: string) => {

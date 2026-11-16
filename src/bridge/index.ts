@@ -1,3 +1,5 @@
+import { type ChatUndoResult, chatReferenceSchema } from "./chat-context.js";
+
 export {
   type Capability,
   capabilityReference,
@@ -23,6 +25,8 @@ export {
   settingsSections,
 } from "../contracts/index.js";
 export * from "./automation.js";
+export type { ChatReference, ChatUndoResult } from "./chat-context.js";
+export { chatReferenceSchema } from "./chat-context.js";
 export * from "./database.js";
 export * from "./details.js";
 export * from "./logs.js";
@@ -426,7 +430,7 @@ export interface DesktopApi {
   extractMemory(request: MemoryExtractionRequest): Promise<MemoryExtractionResult>;
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
-  orchestrationChatAction(request: OrchestrationChatAction): Promise<void>;
+  orchestrationChatAction(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined>;
   windowAppearance(): Promise<{ transparent: boolean; enabled: boolean; clickThrough: boolean }>;
   setWindowTheme(dark: boolean): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
@@ -509,6 +513,8 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  rewindRevision?: number;
+  checkpoint?: { id: string; turn: number; phase: "active" | "undoing" };
   historySaving?: "available" | "unavailable";
   projectId?: string;
   kind?: "relay" | "project";
@@ -562,6 +568,12 @@ const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({
+    type: z.literal("undo-request"),
+    id: runIdSchema,
+    checkpointId: z.string().uuid(),
+    replacesDraft: z.boolean(),
+  }),
+  z.strictObject({
     type: z.literal("history"),
     id: runIdSchema,
     before: z.string().uuid().nullable(),
@@ -593,6 +605,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
     type: z.literal("send"),
     id: configurationIdSchema,
     command: commandNameSchema.optional(),
+    references: z.array(chatReferenceSchema).max(8).optional(),
     text: boundedString("message", 1_000_000).refine(
       (text) => text.trim().length > 0,
       "The message is empty",

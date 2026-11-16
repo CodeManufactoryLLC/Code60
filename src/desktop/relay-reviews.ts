@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import type { RelayReviewRequest, RelayReviewResponse, Review, TaskView } from "../bridge/index.js";
-import { parseRelayReview } from "../bridge/index.js";
+import { parseRelayReview, summarizeReview } from "../bridge/index.js";
 import {
   ACTIVE_STATUSES,
   type CoreDeps,
@@ -10,6 +10,7 @@ import {
   prepareDiff,
   type ReviewSnapshotFile,
   recordedAgentAlive,
+  type TaskLoop,
   type TaskProposal,
   type TaskSource,
 } from "../core/index.js";
@@ -27,6 +28,7 @@ interface Lease {
   abort: AbortController;
   done: Promise<void>;
   finish(): void;
+  automatic?: string;
 }
 const ownerKey = (request: Address) =>
   JSON.stringify([request.conversationId, request.generation, request.targetId]);
@@ -36,7 +38,7 @@ const origin = (review: Review) => {
   return review.relay;
 };
 
-/** Human-only review operations. Saved evidence is never a worker-control capability. */
+/** Saved reviews support read-only inspection and host-owned automatic integration. */
 export class RelayReviews {
   private readonly reads = new DiffReads();
   private readonly operations = new Map<string, Lease>();
@@ -50,6 +52,71 @@ export class RelayReviews {
   >();
   private readonly acceptedFeedback = new Set<string>();
   private epoch = 0;
+  private readonly pendingCaptures = new Map<string, Address>();
+  private automaticCapture: Promise<void> | undefined;
+  private readonly automaticRequests = new Set<string>();
+  private readonly yieldedCaptures = new Set<string>();
+
+  /** Coalesce settled worker turns without blocking conversation delivery. */
+  scheduleCapture(request: Address): void {
+    if (this.pendingCaptures.size >= 256 && !this.pendingCaptures.has(request.reviewId)) return;
+    this.pendingCaptures.set(request.reviewId, request);
+    this.drainCaptures();
+  }
+  private drainCaptures(): void {
+    if (this.automaticCapture || this.operations.size >= 2) return;
+    const request = [...this.pendingCaptures.values()].find(
+      (item) => !this.operations.has(item.targetId),
+    );
+    if (!request) return;
+    this.pendingCaptures.delete(request.reviewId);
+    const epoch = this.epoch;
+    const requestId = randomUUID();
+    this.automaticRequests.add(requestId);
+    this.automaticCapture = (async () => {
+      await this.store.settled();
+      if (epoch !== this.epoch) return;
+      this.hooks.valid(request);
+      const store = await this.store.read(request.reviewId);
+      if (epoch !== this.epoch) return;
+      const review = this.checked(store, request);
+      if (
+        !this.live(review) ||
+        review.workers.some((saved) => {
+          const view = this.execution
+            .list()
+            .find((worker) => worker.id === saved.runId)
+            ?.orchestrator.runs()[0];
+          return view && view.status !== "idle" && ACTIVE_STATUSES.has(view.status);
+        })
+      )
+        return;
+      for (const saved of review.workers) {
+        const worker = this.execution.list().find((worker) => worker.id === saved.runId);
+        const view = worker?.orchestrator.runs()[0];
+        // Terminal status is emitted before its run record finishes saving.
+        if (worker && view && !ACTIVE_STATUSES.has(view.status)) await worker.orchestrator.done;
+        if (epoch !== this.epoch) return;
+      }
+      await this.request({ type: "capture", ...request, requestId });
+    })()
+      .catch(async (cause) => {
+        if (epoch !== this.epoch || this.yieldedCaptures.has(requestId)) return;
+        try {
+          this.hooks.valid(request);
+          await this.store.write(request.reviewId, (store) => store.fail(request.reviewId, cause));
+          this.hooks.changed();
+        } catch {
+          // Owner replacement/storage failure cannot authorize retry or execution.
+        }
+      })
+      .finally(() => {
+        this.automaticRequests.delete(requestId);
+        this.yieldedCaptures.delete(requestId);
+        this.automaticCapture = undefined;
+        this.drainCaptures();
+      });
+  }
   constructor(
     readonly store: RelayReviewStore,
     private readonly deps: CoreDeps,
@@ -62,6 +129,19 @@ export class RelayReviews {
       feedback(review: Review, batchId: string, text: string): void;
       withdraw(reviewId: string, batchId: string): void;
       confirm(title: string, detail: string): Promise<boolean>;
+      checkpoint?(): string | undefined;
+      integrate?(
+        review: Review,
+        loop: TaskLoop,
+        prepare: (
+          availableBytes: number,
+          reserve: (bytes: number) => Promise<void>,
+        ) => Promise<TaskProposal>,
+        valid: Valid,
+        checkpointId: string | undefined,
+      ): Promise<void>;
+      visibleRevision?(id: string): boolean;
+      requestForSource?(id: string): { chatId: string; turn: number } | undefined;
     },
   ) {}
   private checked(store: ReviewStore, request: Address): Review {
@@ -89,7 +169,18 @@ export class RelayReviews {
       this.hooks.valid(request);
     };
     valid();
-    if (request.type === "list")
+    if (
+      (request.type === "capture" && !this.automaticRequests.has(request.requestId)) ||
+      (request.type === "task" && !["status", "file", "cancel"].includes(request.action.type))
+    ) {
+      const automatic = this.operations.get(request.targetId);
+      if (automatic?.automatic) {
+        this.yieldCapture(automatic);
+        await automatic.done;
+        valid();
+      }
+    }
+    if (request.type === "list" || request.type === "timeline")
       return this.reads.read(
         { id: "index", requestId: randomUUID() },
         async () => {
@@ -116,6 +207,35 @@ export class RelayReviews {
               expires: Date.now() + 300_000,
             });
           }
+          if (request.type === "timeline") {
+            const entries = [];
+            for (const entry of page.entries) {
+              valid();
+              try {
+                const store = await this.store.read(entry.id);
+                valid();
+                const review = store.get(entry.id);
+                const summary = summarizeReview({
+                  ...review,
+                  revisions: review.revisions.filter(
+                    (revision) => this.hooks.visibleRevision?.(revision.id) !== false,
+                  ),
+                });
+                summary.revisions = summary.revisions.map((revision) => {
+                  const request = this.hooks.requestForSource?.(revision.id);
+                  return request ? { ...revision, request } : revision;
+                });
+                entries.push({
+                  entry,
+                  summary,
+                });
+              } catch (cause) {
+                valid();
+                entries.push({ entry, error: failure(cause) });
+              }
+            }
+            return { type: "timeline", entries, cursor };
+          }
           return { type: "list", entries: page.entries, cursor };
         },
         JSON.stringify([request.conversationId, request.generation, "index"]),
@@ -136,6 +256,8 @@ export class RelayReviews {
       return this.task(request, valid);
     }
     const lease = request.type === "capture" ? this.reserve(request) : undefined;
+    if (lease && request.type === "capture" && this.automaticRequests.has(request.requestId))
+      lease.automatic = request.requestId;
     try {
       return await this.reads.read(
         { id: request.reviewId, requestId: request.requestId },
@@ -195,8 +317,15 @@ export class RelayReviews {
     );
   }
   assertWritableTarget(target: ExecutionTarget): void {
-    if ([...this.operations].some(([id, lease]) => id === target.id || lease.cwd === target.cwd))
-      throw new Error("Wait for this target's review operation to finish");
+    for (const [id, lease] of this.operations) {
+      if (id !== target.id && lease.cwd !== target.cwd) continue;
+      if (lease.automatic) this.yieldCapture(lease);
+      else throw new Error("Wait for this target's review operation to finish");
+    }
+  }
+  private yieldCapture(lease: Lease): void {
+    if (lease.automatic) this.yieldedCaptures.add(lease.automatic);
+    lease.abort.abort(new Error("Background capture yielded to an explicit action"));
   }
   private reserve(request: Address): Lease {
     if (this.operations.has(request.targetId)) throw new Error("This target's review is busy");
@@ -213,6 +342,7 @@ export class RelayReviews {
   private release(targetId: string, lease: Lease): void {
     if (this.operations.get(targetId) === lease) this.operations.delete(targetId);
     lease.finish();
+    this.drainCaptures();
   }
   private async target(review: Review, lease: Lease, valid: Valid): Promise<void> {
     lease.abort.signal.throwIfAborted();
@@ -321,6 +451,9 @@ export class RelayReviews {
       await currentCheckout();
       targets.push({
         runId: saved.runId,
+        status:
+          (view?.status === "idle" ? (view.lastOutcome ?? view.status) : view?.status) ??
+          record.status,
         ...prepared,
       });
       valid();
@@ -334,11 +467,11 @@ export class RelayReviews {
     valid: Valid,
   ): Promise<void> {
     const signal = lease.abort.signal;
+    const checkpointId = this.hooks.checkpoint?.();
     await this.target(review, lease, valid);
     const targets = await this.sources(review, valid, signal);
     const git = this.deps.git.tasks;
     if (!git || !this.deps.git.reviewSnapshot) throw new Error("Structured review is unavailable");
-    const applied = (await (await this.store.loop(review))?.state(review.id))?.appliedSources ?? [];
     const results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[] = [];
     const sources: TaskSource[] = [];
     let fileCount = 0;
@@ -349,7 +482,7 @@ export class RelayReviews {
         const commit = await git.snapshot(target.worktree, undefined, signal);
         const snapshot = await this.deps.git.reviewSnapshot(
           target.worktree,
-          applied.find((source) => source.runId === target.runId)?.commit ?? target.base,
+          target.base,
           signal,
           commit,
         );
@@ -389,7 +522,29 @@ export class RelayReviews {
       const current = this.checked(store, request);
       if (JSON.stringify(current.workers) !== JSON.stringify(review.workers))
         throw new Error("Review workers changed. Refresh changes.");
-      await store.capture(review.id, results, sources);
+      await store.capture(
+        review.id,
+        results,
+        sources,
+        targets.map(({ runId, status }) => ({ runId, status })),
+      );
+      if (this.hooks.integrate && this.live(review) && sources.length === review.workers.length) {
+        const revision = store.get(review.id).revisions.at(-1);
+        const loop = await this.store.loop(review);
+        if (revision && loop) {
+          await this.hooks.integrate(
+            review,
+            loop,
+            (availableBytes, reserve) =>
+              loop.prepare(review.id, revision.id, sources, signal, availableBytes, reserve),
+            () => {
+              valid();
+              signal.throwIfAborted();
+            },
+            checkpointId,
+          );
+        }
+      }
     });
     this.hooks.changed();
   }
@@ -544,7 +699,7 @@ export class RelayReviews {
                 review.revisions.at(-1)?.sources?.some((source) => source.runId === worker.runId),
             ),
           source: origin(review).baseline ? "Current saved files" : "Selected Git revision",
-          ...(undo ? { undoId: undo.id } : {}),
+          ...(undo ? { undoId: undo.id, undoRevisionId: undo.revisionId } : {}),
           ...(proposal
             ? {
                 operation: {
@@ -686,10 +841,12 @@ export class RelayReviews {
   }
   async rendererGone(): Promise<void> {
     this.epoch++;
+    this.pendingCaptures.clear();
     this.cursors.clear();
     const active = [...this.operations.values()];
     for (const lease of active) lease.abort.abort(new Error("Relay review operations stopped"));
     await Promise.allSettled([this.reads.cancel(), ...active.map((lease) => lease.done)]);
+    await this.automaticCapture;
   }
   async stop(): Promise<void> {
     await this.rendererGone();

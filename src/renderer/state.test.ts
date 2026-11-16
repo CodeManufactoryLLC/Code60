@@ -96,6 +96,53 @@ it("updates tool attribution without duplicating blocks and accepts corrected me
 });
 
 describe("desktop stream state", () => {
+  it.each(["project", "relay"] as const)(
+    "discards %s rewind caches and accepts the surviving prefix after a summary-only update",
+    (kind) => {
+      const initial = snapshot(10);
+      const chat = {
+        ...initial.chat,
+        kind,
+        generation: 1,
+        run: {
+          id: "r1",
+          agent: "claude",
+          status: "idle" as const,
+          turns: 2,
+          branch: null,
+          worktree: "/chat",
+          pending: [],
+          stopping: false,
+        },
+        events: [entry(2, "surviving prefix"), entry(9, "discarded context")],
+      };
+      initial.chat = chat;
+      initial.chats = [chat];
+      const first = applyUpdate(undefined, initial);
+      const summary: Snapshot = {
+        ...initial,
+        revision: 11,
+        summaryOnly: true,
+        chat: { ...chat, rewindRevision: 1, events: [] },
+      };
+      summary.chats = [summary.chat];
+      const rewound = applyUpdate(first, summary);
+      expect(rewound.chatEvents).toEqual([]);
+      expect(rewound.chatEventRevisions?.r1).toBe(-1);
+      const detail: Snapshot = {
+        ...summary,
+        revision: 12,
+        chat: { ...summary.chat, events: [entry(2, "surviving prefix")] },
+      };
+      delete detail.summaryOnly;
+      detail.chats = [detail.chat];
+      const restored = applyUpdate(rewound, detail);
+      expect(restored.chatEvents).toEqual([entry(2, "surviving prefix").event]);
+      expect(applyUpdate(restored, { ...detail, revision: 13 }).chatEvents).toEqual(
+        restored.chatEvents,
+      );
+    },
+  );
   it("merges background chat events once and preserves them when selecting another chat", () => {
     const initial = snapshot(1);
     const makeChat = (id: string) => ({

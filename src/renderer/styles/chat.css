@@ -1,5 +1,53 @@
 /* Chat styles. Imported into its declared layer by style.css. */
 
+.conversation-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.conversation-changes-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.conversation-changes-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-attachments li,
+.revision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-attachments li {
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--control-border);
+  overflow-wrap: anywhere;
+}
+
 .project-file-panel-scope:not([hidden]) {
   display: contents;
 }
@@ -1231,6 +1279,12 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   background-image: none;
   box-shadow: none;
   color: var(--muted);
+}
+
+.message-copy .message-undo {
+  width: auto;
+  flex-basis: auto;
+  padding-inline: 8px;
 }
 
 .event:is(:hover, :focus-within) > .message-copy {

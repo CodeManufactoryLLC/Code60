@@ -51,6 +51,7 @@ export const planSchema = z.strictObject({
   title,
   description: z.string().max(16_000),
   state: z.enum(["draft", "queued", "running", "paused", "failed", "completed", "dismissed"]),
+  rewound: z.literal(true).optional(),
   acceptedRevision: revision.optional(),
   error: z.string().max(2_000).optional(),
   tasks: z

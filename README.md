@@ -5,10 +5,18 @@ in parallel. The CLI uses isolated worktrees in Git repositories with a commit
 and runs directly in the current directory otherwise. Desktop project workers
 require Git isolation; Relay workers explicitly choose isolated or direct work.
 
-In desktop Chat, open **Review changes** to inspect a task revision. **Use these changes…**
-opens a preview before applying the worker's result to your project. **Ask workers to revise**
-sends application conflicts back through Chat. **Undo application** restores the previous
-contents if the applied files still match. Applying and undoing preserve Git staging.
+Desktop project chats and Relay checkpoint requests and automatically integrate
+isolated worker changes, without Apply. A quiet **files changed** link opens a
+read-only diff; **Changes** keeps older snapshots. Select code and **Add to chat**
+to attach its exact saved version and lines without replacing or sending a draft.
+Request corrections in ordinary chat. Plan and permission approvals stay explicit.
+
+**Undo**, beside the latest user message, confirms the request and targets, stops
+owned work, restores covered files and rewinds conversation context. It returns
+the original request to the composer without resending. Conflicting newer edits
+block isolated restoration; staging and HEAD stay untouched. Direct-folder Undo
+also rewinds manual edits made since its snapshot, with an explicit warning.
+Undo does not reverse deployments, database changes or other external effects.
 
 ## Relay and projects
 
@@ -22,14 +30,22 @@ Relay state lives under `$XDG_STATE_HOME/code60/relay` (by default
 
 Give Relay each intended target directory explicitly. It can dispatch to unopened
 Git repositories and, in **direct** mode, non-Git folders the harness permits.
-Direct changes are not isolated or automatically reversible. Relay never silently
+Direct changes are not isolated. Before execution, bounded private snapshots
+cover regular files, including additions, deletions and renames on restoration.
+Direct snapshots exclude Git and Code60 state; links and unsupported coverage
+block editable launch. They allow 32 MiB total preimage contents per request,
+10,000 entries per folder and 64 directory levels. Relay never silently
 switches modes or redirects a refused launch to another folder.
+Nested direct targets share existing parent coverage. Adding a parent after its
+child has started requires a new request. Current direct contents must also fit
+the combined 32 MiB limit for Undo.
 
-Open Relay's Files panel and choose **Open Changes** to review isolated results
-grouped by target. Capture a revision, inspect its diff, send feedback or preview
-checkout-local application. Apply and undo require confirmation and recheck newer
-edits. Saved reviews remain historical evidence after restart, without reconnecting
-workers or replaying feedback. Human **Accept** authorizes the displayed plan
+Relay captures and integrates isolated changes after worker turns settle; partial
+work and failures remain explicit. Files → **Open Changes** is a secondary
+target-grouped history browser. Request checkpoints retain at most 100 prior
+requests and 256 MiB of recorded rollback data; interrupted Undo requires explicit
+recovery. Saved, unapplied reviews remain read-only historical evidence after
+restart, never work to integrate automatically. Human **Accept** authorizes the displayed plan
 revision and target assignments, not later target changes.
 
 Project accordions retain independent chats, drafts and file views. Project chats

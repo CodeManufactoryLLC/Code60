@@ -18,6 +18,7 @@ export function ChatMessage({
   onCopied,
   copyable = true,
   readSource,
+  actions,
 }: {
   block: Block;
   at?: string | undefined;
@@ -32,6 +33,7 @@ export function ChatMessage({
   onCopied?: (() => void) | undefined;
   copyable?: boolean;
   readSource?: (() => Promise<string>) | undefined;
+  actions?: ReactNode;
 }) {
   const [entering, setEntering] = useState(incoming);
   useEffect(() => {
@@ -94,6 +96,7 @@ export function ChatMessage({
           visible={visible}
           onCopied={onCopied}
           readSource={readSource}
+          actions={actions}
         />
       )}
       {detail ?? (block.detail && <pre>{block.detail}</pre>)}

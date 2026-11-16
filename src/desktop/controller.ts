@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type {
   Action,
   ActionResult,
+  ChatUndoResult,
   Command,
   DeleteCommand,
   DesktopRun,
@@ -166,6 +167,8 @@ import {
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import { ChatCheckpoints } from "./chat-checkpoints.js";
+import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
 import {
   type ChatSession,
@@ -693,9 +696,14 @@ export class DesktopController {
     if (!session.restored || session.historyLoaded || !session.saved || !session.chatDirectory)
       return;
     const { events } = await this.chatHistory(session.saved);
+    await this.chatCheckpoints(session);
     session.plans = await PlanStore.open(session.chatDirectory, session.saved.runId);
     session.chatEvents = events.map((event) => ({ revision: ++this.revision, event }));
-    session.replies.reset(events);
+    session.replies.reset(
+      events.filter(
+        (_, index) => session.checkpoints?.visible(session.saved?.runId ?? "", index) !== false,
+      ),
+    );
     session.chatPending = [...session.chatEvents];
     session.historyLoaded = true;
   }
@@ -801,6 +809,14 @@ export class DesktopController {
       database ? [database, `${database}-wal`, `${database}-shm`, `${database}-journal`] : [],
     );
     return this.tasks;
+  }
+  private async chatCheckpoints(session: ChatSession): Promise<ChatCheckpoints> {
+    if (!session.chatDirectory) throw new Error("This chat cannot create a safe file checkpoint");
+    session.checkpoints ??= await ChatCheckpoints.open(
+      join(session.chatDirectory, "checkpoints"),
+      this.deps.git.tasks,
+    );
+    return session.checkpoints;
   }
 
   private get gitState(): GitReadiness | undefined {
@@ -1283,7 +1299,7 @@ export class DesktopController {
             sources.some((source) => source.runId === worker.runId),
           ),
         source: state.baseline ? "Current saved files" : "Selected Git revision",
-        ...(undo ? { undoId: undo.id } : {}),
+        ...(undo ? { undoId: undo.id, undoRevisionId: undo.revisionId } : {}),
         ...(operation
           ? {
               operation: {
@@ -1503,6 +1519,9 @@ export class DesktopController {
     if (this.taskOperation)
       return Promise.reject(new Error("Wait for the task operation to finish"));
     const store = this.reviewStore(request.project);
+    const checkpointId = this.conversations.sessions.find(
+      (session) => session.run?.id === store.get(request.reviewId).chatId,
+    )?.checkpoints?.latest?.id;
     return this.diffReads.read(
       { requestId: request.requestId, id: `capture:${request.reviewId}` },
       (signal) =>
@@ -1513,16 +1532,21 @@ export class DesktopController {
             throw new Error("Review context changed");
           const targets = [];
           for (const worker of store.get(request.reviewId).workers) {
+            const view = this.liveView(worker.runId);
+            const status =
+              (view?.status === "idle" ? (view.lastOutcome ?? view.status) : view?.status) ??
+              this.history.find((run) => run.record.id === worker.runId)?.record.status;
             try {
               targets.push({
                 runId: worker.runId,
+                status,
                 target: await prepareDiff(
                   commandDeps(this.deps, this.requireWorkspace()),
                   worker.runId,
                 ),
               });
             } catch (cause) {
-              targets.push({ runId: worker.runId, error: message(cause) });
+              targets.push({ runId: worker.runId, status, error: message(cause) });
             }
           }
           return targets;
@@ -1532,7 +1556,6 @@ export class DesktopController {
         const loop = this.taskLoop(store);
         const git = loop ? this.deps.git.tasks : undefined;
         const sources: TaskSource[] = [];
-        const applied = loop ? (await loop.state(request.reviewId)).appliedSources : [];
         let fileCount = 0;
         let contentBytes = 0;
         for (const target of targets) {
@@ -1548,7 +1571,7 @@ export class DesktopController {
               : undefined;
             const snapshot = await this.deps.git.reviewSnapshot(
               target.target.worktree,
-              applied.find((source) => source.runId === target.runId)?.commit ?? target.target.base,
+              target.target.base,
               signal,
               captured,
             );
@@ -1581,7 +1604,50 @@ export class DesktopController {
         }
         signal.throwIfAborted();
         if (store !== this.reviewStore(request.project)) throw new Error("Review context changed");
-        await store.capture(request.reviewId, results, sources.length ? sources : undefined);
+        await store.capture(
+          request.reviewId,
+          results,
+          sources.length ? sources : undefined,
+          targets.flatMap(({ runId, status }) => (status ? [{ runId, status }] : [])),
+        );
+        const review = store.get(request.reviewId);
+        const session = this.conversations.sessions.find(
+          (entry) => entry.run?.id === review.chatId,
+        );
+        const revision = review.revisions.at(-1);
+        if (
+          session?.checkpoints?.latest?.phase === "active" &&
+          checkpointId !== undefined &&
+          session.writableReviews.has(review.id) &&
+          !session.rewinding &&
+          loop &&
+          revision?.sources?.length === review.workers.length &&
+          review.workers.every(
+            (worker) =>
+              this.conversations.workers.get(worker.runId)?.generation === session.chatGeneration,
+          )
+        ) {
+          const valid = () => {
+            signal.throwIfAborted();
+            this.conversations.assertCurrent(session);
+            if (this.reviews !== store) throw new Error("The working target changed");
+          };
+          valid();
+          const revisionSources = revision.sources;
+          await session.checkpoints.integrate(
+            loop,
+            (availableBytes, reserve) =>
+              loop.prepare(
+                review.id,
+                revision.id,
+                revisionSources,
+                signal,
+                availableBytes,
+                reserve,
+              ),
+            valid,
+          );
+        }
         signal.throwIfAborted();
         this.changed();
       },
@@ -2801,7 +2867,12 @@ export class DesktopController {
     try {
       const mcpServers = await this.mcpAgentServer(session);
       const chat = await prepareOrchestrationChat(
-        this.memory.attach(this.deps, "project", this.workspace?.dir ?? null, directory),
+        this.memory.attach(
+          this.deps,
+          "project",
+          this.workspace?.dir ?? null,
+          `${directory}:branch:0`,
+        ),
         directory,
         provider,
         config,
@@ -2942,7 +3013,12 @@ export class DesktopController {
       session.chatDisposers = [];
       await this.closeMcpGateway(session);
       chat = await prepareOrchestrationChat(
-        this.memory.attach(this.deps, "project", this.workspace?.dir ?? null, directory),
+        this.memory.attach(
+          this.deps,
+          "project",
+          this.workspace?.dir ?? null,
+          `${directory}:branch:${session.checkpoints?.revision ?? 0}`,
+        ),
         directory,
         saved.provider,
         this.config,
@@ -2962,11 +3038,23 @@ export class DesktopController {
         turn: task.turn,
         ...(task.reviewId ? { reviewId: task.reviewId } : {}),
       };
-      const recovery = await chat.restore(record.id);
+      const recovery = session.checkpoints?.rewound
+        ? { type: "handoff-required" as const, reason: "The conversation was rewound" }
+        : await chat.restore(record.id);
       if (recovery.type === "handoff-required") {
         const summary = buildHandoffPrompt(
-          record,
-          events,
+          session.checkpoints?.rewound
+            ? {
+                ...record,
+                firstPrompt: "",
+                reason: "",
+                turns: events.filter(
+                  (event, index) =>
+                    event.type === "prompt" && session.checkpoints?.visible(record.id, index),
+                ).length,
+              }
+            : record,
+          events.filter((_, index) => session.checkpoints?.visible(record.id, index) !== false),
           effectivePrompts(this.config.prompts, this.savedPrompts).handoffSummary,
         );
         await chat.handoff(
@@ -2979,6 +3067,7 @@ export class DesktopController {
         );
       } else this.conversations.send(session, text, origin, deliveredText, taskId);
       session.restored = false;
+      if (session.checkpoints?.rewound) await session.checkpoints.continued();
       session.chatError = null;
       session.historyRun = undefined;
       // Recovery does not authorize saved plans, feedback, or historical workers.
@@ -2998,7 +3087,93 @@ export class DesktopController {
       throw cause;
     }
   }
-  orchestrationChatAction(value: OrchestrationChatAction): Promise<void> {
+  private async undoChatRequest(
+    session: ChatSession,
+    request: Extract<OrchestrationChatAction, { type: "undo-request" }>,
+  ): Promise<ChatUndoResult | undefined> {
+    const checkpoints = await this.chatCheckpoints(session);
+    const checkpoint = checkpoints.undoTarget;
+    if (!checkpoint || checkpoint.id !== request.checkpointId)
+      throw new Error("This request is no longer the latest checkpoint");
+    const targets = [
+      ...new Set([
+        ...checkpoint.operations.map((entry) => entry.project),
+        ...[...this.conversations.workers.values()]
+          .filter((worker) => worker.generation === session.chatGeneration)
+          .map((worker) => worker.directory),
+      ]),
+    ];
+    if (
+      !(await this.dialogs.confirm(
+        "Undo this request?",
+        `Rewind to before “${checkpoint.text.slice(0, 240)}” and restore this conversation's changes.\n${targets.join("\n") || "No recorded file changes."}${request.replacesDraft ? "\nYour unsent composer draft will be replaced with the original request." : ""}`,
+      ))
+    )
+      return;
+    session.rewinding = true;
+    session.titleTask?.abort.abort();
+    session.workerScope = randomUUID();
+    this.conversations.pause(session);
+    try {
+      await this.closeMcpGateway(session);
+      await Promise.allSettled([...session.dispatches.values()].map((entry) => entry.result));
+      const workers = new Set(
+        [...this.conversations.workers]
+          .filter(([, worker]) => worker.generation === session.chatGeneration)
+          .map(([id]) => id),
+      );
+      await Promise.all([
+        session.chat?.shutdown(),
+        ...[...this.batches.keys()].flatMap((batch) =>
+          batch
+            .runs()
+            .filter((run) => workers.has(run.id))
+            .map((run) => batch.stop(run.id)),
+        ),
+      ]);
+      for (const task of session.tasks)
+        if (task.reviewId) await this.diffReads.cancel(undefined, `capture:${task.reviewId}`);
+      session.restored = true;
+      this.memory.cancelConversation(session.run?.id ?? "");
+      const restored = await checkpoints.restore(checkpoint.id, session.chatEvents.length);
+      session.tasks = session.tasks.slice(0, restored.taskCount);
+      session.taskId = session.tasks.at(-1)?.id;
+      session.reviewTask = undefined;
+      this.conversations.forgetWorkers(session);
+      await session.titleTask?.done;
+      session.title = restored.title ?? undefined;
+      session.titleAttempted = restored.title != null;
+      await session.plans?.rewind(restored.plans);
+      await this.memory.rewind(
+        `project:${restored.continuityKey ?? session.chatDirectory}`,
+        restored.turn,
+      );
+      for (const id of workers)
+        await this.memory.rewind(
+          `worker:${id}`,
+          restored.workers.find((saved) => saved.runId === id)?.turn ?? 0,
+        );
+      session.activity.invalidate();
+      session.replies.reset(
+        session.chatEvents
+          .filter((_, index) => checkpoints.visible(restored.runId, index))
+          .map((entry) => entry.event),
+      );
+      await this.saveChat(session);
+      await checkpoints.complete(checkpoint.id);
+      this.changed();
+      return {
+        type: "rewound",
+        checkpointId: checkpoint.id,
+        text: restored.text,
+        ...(restored.references.length ? { references: restored.references } : {}),
+      };
+    } finally {
+      session.rewinding = false;
+      this.changed();
+    }
+  }
+  orchestrationChatAction(value: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const request = parseOrchestrationChatAction(value);
     if (
       this.relay &&
@@ -3006,7 +3181,10 @@ export class DesktopController {
       (this.relay.owns(request.id) || (request.id === null && this.relaySelected))
     ) {
       if (request.type === "select") this.relaySelected = true;
-      return this.relay.action(request).then(() => this.changed());
+      return this.relay.action(request).then((result) => {
+        this.changed();
+        return result;
+      });
     }
     if (request.type === "history")
       return Promise.reject(new Error("History paging is Relay-only"));
@@ -3032,7 +3210,7 @@ export class DesktopController {
       return Promise.reject(new Error("Open a project to create or use a project chat."));
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
     if (request.type === "set-mode")
-      return this.changeHarnessMode(request.id, request.change, true);
+      return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
     if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
@@ -3051,6 +3229,7 @@ export class DesktopController {
       const run = session?.run;
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
+      if (request.type === "undo-request") return this.undoChatRequest(session, request);
       if (request.type === "set-tactic") {
         if (
           session !== this.conversations.current ||
@@ -3130,6 +3309,42 @@ export class DesktopController {
         if (!run) throw new Error("No orchestration session is available");
         if (!session.restored && run.status !== "idle" && ACTIVE_STATUSES.has(run.status))
           throw new Error("Wait for the current turn to end before sending");
+        const checkpoints = await this.chatCheckpoints(session);
+        if (request.references?.length)
+          deliveredText =
+            (deliveredText ?? request.text) +
+            (await savedChatReferences(request.references, (id) => {
+              const store = this.reviewStore(this.requireWorkspace().dir);
+              if (store.get(id).chatId !== run.id)
+                throw new Error("The reference belongs to another chat");
+              return store;
+            }));
+        await checkpoints.begin({
+          runId: run.id,
+          turn: run.turns + 1,
+          text: request.text,
+          references: request.references ?? [],
+          before: session.chatEvents.length,
+          taskCount: session.tasks.length,
+          title: session.title ?? null,
+          continuityKey: `${session.chatDirectory}:branch:${checkpoints.revision}`,
+          workers: [...this.conversations.workers]
+            .filter(([, worker]) => worker.generation === session.chatGeneration)
+            .map(([runId]) => {
+              const view = this.liveView(runId);
+              return {
+                runId,
+                turn:
+                  (view?.turns ?? 0) +
+                  (view && (view.status === "running" || view.status === "waiting") ? 0 : 1),
+              };
+            }),
+          plans:
+            session.plans
+              ?.list()
+              .map((plan) => session.plans?.get(plan.id))
+              .filter((plan): plan is Plan => !!plan) ?? [],
+        });
         const task = captureTask(
           session.tactic,
           request.text,
@@ -3675,6 +3890,20 @@ export class DesktopController {
         worker.generation === session.chatGeneration && worker.directory === this.workspace?.dir,
     );
     return {
+      rewindRevision: session.checkpoints?.revision ?? 0,
+      ...(session.checkpoints?.undoTarget
+        ? {
+            checkpoint: {
+              id: session.checkpoints.undoTarget.id,
+              turn: session.checkpoints.undoTarget.turn,
+              phase:
+                session.checkpoints.undoTarget.phase === "undoing" ||
+                session.checkpoints.pendingRewind
+                  ? ("undoing" as const)
+                  : ("active" as const),
+            },
+          }
+        : {}),
       generation: session.chatGeneration,
       replies: session.replies.snapshot(),
       ...(session.tactic === undefined ? {} : { tactic: session.tactic }),
@@ -3696,7 +3925,15 @@ export class DesktopController {
       run: session.run ?? null,
       directory: session.chatDirectory,
       error: session.chatError,
-      events: summary ? [] : [...(allEvents ? session.chatEvents : session.chatPending)],
+      events: summary
+        ? []
+        : (allEvents ? session.chatEvents : session.chatPending).filter(
+            (_, index) =>
+              session.checkpoints?.visible(
+                session.run?.id ?? "",
+                (allEvents ? 0 : session.chatEvents.length - session.chatPending.length) + index,
+              ) !== false,
+          ),
       updates: { paused: session.updatesPaused, pending: session.inbox.length },
       activity: session.activity.snapshot(
         session.chat?.runs()[0] ?? null,
@@ -3763,6 +4000,7 @@ export class DesktopController {
               workers,
               submissions,
               revisions,
+              error,
             }) => ({
               id,
               version,
@@ -3773,7 +4011,24 @@ export class DesktopController {
               turn,
               workers,
               submissions,
-              revisions: revisions.map(({ id, at }) => ({ id, at })),
+              ...(error ? { error } : {}),
+              revisions: revisions
+                .filter(
+                  (revision) =>
+                    !this.conversations.sessions
+                      .find((session) => session.run?.id === chatId)
+                      ?.checkpoints?.hidden.has(revision.id),
+                )
+                .map(({ id, at, files, errors, outcomes }) => ({
+                  id,
+                  at,
+                  fileCount: new Set(files.map((file) => file.path)).size,
+                  incomplete: errors.length > 0,
+                  ...(outcomes ? { outcomes } : {}),
+                  request: this.conversations.sessions
+                    .find((session) => session.run?.id === chatId)
+                    ?.checkpoints?.requestForSource(id),
+                })),
               ...(this.relay
                 ? {
                     projectId: this.projectHost.current.id,
@@ -5401,6 +5656,8 @@ export class DesktopController {
           const id = request.reviewId ?? session.reviewTask?.reviewId;
           if (id) {
             review = reviewStore.get(id);
+            if (!session.writableReviews.has(id))
+              throw new Error("Earlier saved changes are read-only. Start a new request instead.");
             if (review.chatId !== session.chat?.runs()[0]?.id)
               throw new Error("This review belongs to another conversation");
           } else {
@@ -5409,6 +5666,7 @@ export class DesktopController {
               session.reviewTask?.turn ?? 0,
               session.reviewTask?.title ?? request.prompt,
             );
+            session.writableReviews.add(review.id);
           }
           session.reviewTask = { title: review.title, turn: review.turn, reviewId: review.id };
           const task = session.tasks.find((task) => task.id === session.taskId);

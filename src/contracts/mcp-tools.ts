@@ -58,7 +58,7 @@ export function mcpToolsForRole(role: "relay" | "project") {
     return {
       ...tool,
       description:
-        "Dispatch one Relay-owned worker to an explicit absolute cwd. No open project or database is required. Direct edits affect that exact directory and have no isolated apply/undo/discard. Worktree requires Git with a valid base. No fallback or permission bypass.",
+        "Dispatch one Relay-owned worker to an explicit absolute cwd. No open project or database is required. Direct edits affect that exact directory; bounded folder snapshots cover message Undo, including concurrent manual edits. Unsupported coverage blocks launch. Worktree requires Git with a valid base and integrates automatically. No fallback or permission bypass.",
       inputSchema: {
         ...tool.inputSchema,
         properties: {

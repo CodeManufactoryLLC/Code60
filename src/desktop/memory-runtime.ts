@@ -53,6 +53,9 @@ export class MemoryRuntime implements RunMemory {
     this.sources = this.split(context, "assistant", new Date().toISOString());
     this.used = estimateMemoryTokens(context);
   }
+  matches(key: string): boolean {
+    return `${this.role}:${this.key}` === key;
+  }
   resumeLearning() {
     if (!this.stopped && this.capturedId && this.service.learning)
       this.scheduleGeneration(this.capturedId);
@@ -295,6 +298,7 @@ export class MemoryRuntime implements RunMemory {
       warning = "Saved memory is unavailable. Conversation continuity remains independent.";
     }
     const revision = this.service.generationRevision;
+    const contextEpoch = this.learningEpoch;
     const targets = this.targets?.().map((target) => ({ ...target })) ?? [];
     await this.pending;
     signal.throwIfAborted();
@@ -353,12 +357,12 @@ export class MemoryRuntime implements RunMemory {
       }
     }
     signal.throwIfAborted();
-    if (revision !== this.service.generationRevision)
+    if (revision !== this.service.generationRevision || contextEpoch !== this.learningEpoch)
       throw new Error("Memory settings or sources changed; retry the unsent request");
     return {
       validate: () => {
         signal.throwIfAborted();
-        if (revision !== this.service.generationRevision)
+        if (revision !== this.service.generationRevision || contextEpoch !== this.learningEpoch)
           throw new Error("Memory settings or sources changed; retry the unsent request");
         this.forceRollover = false;
         this.used =

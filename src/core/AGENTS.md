@@ -26,9 +26,13 @@
 - Never pick an ACP "always" permission option.
 - Headless runs are exactly one turn. Only the desktop app (`interactive` mode) sends follow-up prompts, and only after the previous turn ended.
 - Never decide from an agent's message text whether it asked a question or is done.
-- Never commit to project branches, merge, push, or remove a worktree without an explicit user
-  command. Desktop task snapshots may use internal refs. Applying and undoing task files
-  require human action, guarded file writes and a private recovery journal.
+- Never commit to project branches, merge Git branches, push, or remove a worktree
+  without an explicit user command. Desktop task snapshots may use internal refs.
+  Authorized desktop requests automatically integrate isolated working-file edits
+  through guarded journals; message Undo requires human confirmation. Serialize
+  complete preparation/write transactions per checkout. Direct-folder preimages
+  reuse guarded filesystem reads and inverse journals without requiring Git;
+  desktop owns their bounded private storage and manual-edit warning.
 - Mark a run `interrupted` only when its owning process is gone. Never guess a different outcome.
 - Write `run.json` atomically and append to `events.jsonl`. Create both with mode `0600`.
 - Stay within the non-goals in ARCHITECTURE.md. Retries, durable queues, budgets, and automatic recovery are out of scope.

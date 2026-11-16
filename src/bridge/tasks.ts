@@ -30,6 +30,7 @@ export interface TaskView {
   canPrepare: boolean;
   source: "Current saved files" | "Selected Git revision";
   undoId?: string;
+  undoRevisionId?: string;
   operation?: {
     id: string;
     revisionId: string;

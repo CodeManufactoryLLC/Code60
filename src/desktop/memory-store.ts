@@ -219,6 +219,29 @@ export class MemoryStore {
     if (!row) throw new Error("Memory conversation is unavailable");
     return row;
   }
+  rewind(key: string, turn: number): string[] {
+    if (!Number.isSafeInteger(turn) || turn < 0) throw new Error("Invalid memory rewind boundary");
+    return this.transaction(() => {
+      const rows = this.db
+        .prepare("SELECT id FROM conversations WHERE json_extract(key,'$[0]')=?")
+        .all(key);
+      const ids = rows.map((row) => String(row.id));
+      for (const cid of ids) {
+        this.db
+          .prepare(
+            "INSERT OR IGNORE INTO suppressed SELECT id FROM sources WHERE cid=? AND json_extract(value,'$.ordinal')>=?",
+          )
+          .run(cid, turn);
+        this.db
+          .prepare(
+            "INSERT OR IGNORE INTO suppressed_capture SELECT id FROM sources WHERE cid=? AND json_extract(value,'$.ordinal')>=?",
+          )
+          .run(cid, turn);
+        this.db.prepare("DELETE FROM checkpoints WHERE cid=?").run(cid);
+      }
+      return ids;
+    });
+  }
   append(cid: string, turn: string | number, sources: MemorySource[], complete: boolean) {
     this.conversation(cid);
     if (!this.settings().enabled) return;

@@ -86,6 +86,51 @@ async function readExact(file: fs.FileHandle, size: number): Promise<Buffer> {
 
 /** Desktop task data and recoverable file application; no agent or UI authority is stored. */
 export class TaskLoop {
+  private static readonly writes = new Set<{ projects: string[]; done: Promise<unknown> }>();
+  /** Filesystem-only journals never read or modify Git metadata. */
+  static folderGit(root: string, merge?: TaskGit["merge"]): TaskGit {
+    const unsupported = async (): Promise<never> => {
+      throw new Error("Folder journals do not provide Git snapshots");
+    };
+    return {
+      snapshot: unsupported,
+      tree: unsupported,
+      blob: unsupported,
+      merge: merge ?? (async () => null),
+      identity: async (project) => {
+        const canonical = await fs.realpath(project);
+        const info = await fs.lstat(project, { bigint: true });
+        if (canonical !== project || !info.isDirectory() || info.isSymbolicLink())
+          throw new Error("The checkpoint target moved");
+        return `${info.dev}:${info.ino}`;
+      },
+      lockPath: async (project) => {
+        const directory = join(root, "folder-locks");
+        await privateDirectory(directory);
+        return join(directory, `${createHash("sha256").update(project).digest("hex")}.lock`);
+      },
+    };
+  }
+  /** Checkout leases include nested roots; filesystem locks cover other processes. */
+  static coordinate<T>(projects: readonly string[], work: () => Promise<T>): Promise<T> {
+    const roots = [
+      ...new Set(
+        projects.map((project) => {
+          const path = resolve(project);
+          return process.platform === "linux" ? path : path.toLowerCase();
+        }),
+      ),
+    ];
+    const contains = (parent: string, child: string) =>
+      parent === child || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+    const previous = [...TaskLoop.writes].filter((entry) =>
+      entry.projects.some((a) => roots.some((b) => contains(a, b) || contains(b, a))),
+    );
+    const done = Promise.all(previous.map((entry) => entry.done.catch(() => {}))).then(work);
+    const entry = { projects: roots, done };
+    TaskLoop.writes.add(entry);
+    return done.finally(() => TaskLoop.writes.delete(entry));
+  }
   constructor(
     readonly project: string,
     readonly root: string,
@@ -304,6 +349,56 @@ export class TaskLoop {
       await handle.close();
     }
   }
+  /** A bounded direct-folder preimage; links and unsupported paths fail before launch. */
+  async snapshotFolder(availableBytes = 32 * 1024 * 1024) {
+    const files = new Map<string, NonNullable<Content>>();
+    let bytes = 0;
+    let entries = 0;
+    const visit = async (relative: string, depth: number): Promise<void> => {
+      if (depth > 64) throw new Error("Direct snapshot exceeds 64 directory levels");
+      const directory = join(this.project, relative);
+      const before = await this.io.lstat(directory, { bigint: true });
+      if (
+        before.isSymbolicLink() ||
+        !before.isDirectory() ||
+        (await this.io.realpath(directory)) !== directory
+      )
+        throw new Error("Direct snapshot cannot traverse a symbolic link");
+      const handle = await this.io.opendir(directory);
+      for await (const entry of handle) {
+        if (++entries > 10_000) throw new Error("Direct snapshot exceeds 10,000 entries");
+        if ([".git", ".code60_workspace"].includes(entry.name.toLowerCase())) continue;
+        const path = relative ? `${relative}/${entry.name}` : entry.name;
+        const absolute = resolve(this.project, path);
+        if (
+          this.excludedPaths.some(
+            (excluded) => resolve(excluded).toLowerCase() === absolute.toLowerCase(),
+          )
+        )
+          continue;
+        await this.safePath(path);
+        if (entry.isDirectory()) await visit(path, depth + 1);
+        else {
+          const value = await this.disk(path);
+          if (!value) throw new Error("Direct snapshot changed while reading");
+          bytes += Buffer.byteLength(value.data, "base64");
+          if (bytes > Math.min(32 * 1024 * 1024, availableBytes))
+            throw new Error("Direct snapshots exceed their 32 MiB total file limit");
+          files.set(path, value);
+        }
+      }
+      const after = await this.io.lstat(directory, { bigint: true });
+      if (
+        before.dev !== after.dev ||
+        before.ino !== after.ino ||
+        before.mtimeNs !== after.mtimeNs ||
+        after.isSymbolicLink()
+      )
+        throw new Error("Direct snapshot directory changed while reading");
+    };
+    await visit("", 0);
+    return files;
+  }
   private async content(entry: TaskEntry | undefined, path: string): Promise<Content> {
     if (!entry) return null;
     if (entry.mode !== "100644" && entry.mode !== "100755")
@@ -343,6 +438,8 @@ export class TaskLoop {
     revisionId: string,
     sources: TaskSource[],
     signal?: AbortSignal,
+    availableBytes = 128 * 1024 * 1024,
+    reserve?: (bytes: number) => Promise<void>,
   ): Promise<TaskProposal> {
     const state = await this.state(id);
     if (!sources.length)
@@ -434,18 +531,102 @@ export class TaskLoop {
       }
       proposal.changes.push({ id: randomUUID(), path, ...value });
     }
-    if (bytes > 128 * 1024 * 1024)
-      throw new Error("Task exceeds the 128 MiB application journal limit");
+    if (
+      Math.max(bytes, Buffer.byteLength(JSON.stringify(proposal))) >
+      Math.min(128 * 1024 * 1024, availableBytes)
+    )
+      throw new Error("Task exceeds the available application journal limit (128 MiB maximum)");
     for (const change of proposal.changes)
       if (!diskSame(change.before, await this.disk(change.path)))
         throw new Error("Project changed while preparing the application. Refresh the preview.");
     if (proposal.identity !== (await this.git.identity(this.project)))
       throw new Error("Git state changed. Refresh the preview.");
     signal?.throwIfAborted();
+    await reserve?.(Buffer.byteLength(JSON.stringify(proposal)) + 1024);
     await this.saveProposal(proposal);
     state.operations.push(proposal.id);
     await this.saveState(state);
     return proposal;
+  }
+  /** Prepare one inverse transaction, preserving independent edits between worker updates. */
+  async prepareRewind(
+    id: string,
+    operations: readonly (Pick<TaskProposal, "changes"> & { wholeFolder?: boolean })[],
+    availableBytes = 128 * 1024 * 1024,
+    reserve?: (bytes: number) => Promise<void>,
+  ): Promise<TaskProposal> {
+    const state = await this.state(id);
+    if (await this.pendingOperation(id)) throw new Error("Recover the interrupted operation first");
+    const identity = await this.git.identity(this.project);
+    const paths = new Map<string, { before: Content; after: Content }>();
+    const conflicts: TaskProposal["conflicts"] = [];
+    for (const operation of [...operations].reverse()) {
+      for (const change of [...operation.changes].reverse()) {
+        try {
+          this.path(change.path);
+          const current = paths.get(change.path) ?? {
+            before: await this.disk(change.path),
+            after: await this.disk(change.path),
+          };
+          const restored = operation.wholeFolder
+            ? change.before
+            : await this.combine(change.after, current.after, change.before);
+          if (restored === undefined) throw new Error("Newer edits conflict with Undo");
+          if (restored) {
+            const permissions = operation.wholeFolder
+              ? (restored.permissions ?? 0o666 & ~process.umask())
+              : (current.before?.permissions ?? restored.permissions ?? 0o666 & ~process.umask());
+            current.after = {
+              ...restored,
+              permissions: operation.wholeFolder
+                ? permissions
+                : (permissions & ~0o111) |
+                  (restored.mode === "100755" ? (permissions & 0o444) >> 2 : 0),
+            };
+          } else current.after = null;
+          paths.set(change.path, current);
+        } catch (cause) {
+          conflicts.push({ path: change.path, reason: explain(cause) });
+        }
+      }
+    }
+    const proposal: TaskProposal = {
+      format: 1,
+      id: randomUUID(),
+      taskId: id,
+      revisionId: id,
+      identity,
+      status: "prepared",
+      sources: [],
+      previousSources: state.appliedSources,
+      conflicts,
+      changes: [...paths].flatMap(([path, value]) =>
+        diskSame(value.before, value.after) ? [] : [{ id: randomUUID(), path, ...value }],
+      ),
+    };
+    if (Buffer.byteLength(JSON.stringify(proposal)) > Math.min(128 * 1024 * 1024, availableBytes))
+      throw new Error("Undo exceeds the available journal limit (128 MiB maximum)");
+    await this.verifyPrepared(proposal);
+    await reserve?.(Buffer.byteLength(JSON.stringify(proposal)) + 1024);
+    await this.saveProposal(proposal);
+    state.operations.push(proposal.id);
+    await this.saveState(state);
+    return proposal;
+  }
+  /** Preflight every target before a multi-target restore starts writing. */
+  async verifyPrepared(proposal: TaskProposal): Promise<void> {
+    if (proposal.identity !== (await this.git.identity(this.project)))
+      throw new Error("Git state changed. Undo was not started.");
+    for (const change of proposal.changes)
+      if (!diskSame(change.before, await this.disk(change.path)))
+        throw new Error(`Newer edits prevent Undo: ${change.path}`);
+  }
+  async verifyRecovery(proposal: TaskProposal): Promise<void> {
+    for (const change of proposal.changes) {
+      const current = await this.disk(change.path);
+      if (!diskSame(current, change.before) && !diskSame(current, change.after))
+        throw new Error(`Newer edits prevent recovery: ${change.path}`);
+    }
   }
   private async write(path: string, expected: Content, value: Content) {
     const target = await this.safePath(path);

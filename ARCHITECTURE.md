@@ -4,7 +4,10 @@ Status: implemented (first version). Code60 has two interfaces: the Electron des
 
 ## What it does
 
-`code60` runs coding agents in parallel on one Git repository. Each run gets its own worktree, so the agents cannot overwrite each other. When the agents finish, you review each worktree's diff and decide what to keep.
+`code60` runs coding agents in parallel. Isolated runs get their own worktrees.
+Desktop chats checkpoint human requests and automatically integrate isolated
+working-file changes at safe turn boundaries, with message-level Undo. Headless
+CLI runs retain their existing review-only worktree behavior.
 
 Git is not required for headless CLI runs. Desktop project workers require a Git repository with an initial commit. In the CLI, outside a Git repository, or in a repository with no commits yet, every run works directly in the current directory instead (see [Runs without a worktree](#runs-without-a-worktree)).
 
@@ -72,8 +75,10 @@ features, resource bounds and remaining native-platform validation.
   Keep filesystem device/inode comparisons at full integer precision, including
   Windows file identities above JavaScript's safe-number range. These internal
   identities are not renderer capabilities or persisted execution authority.
-- Explicit direct mode runs in the exact directory, even inside Git, and has no
-  isolated apply/undo/discard semantics. Worktree mode requires a valid Git base.
+- Explicit direct mode runs in the exact directory, even inside Git. Host-owned
+  bounded folder preimages cover files before execution; Undo also rewinds manual
+  edits since that snapshot and must warn explicitly. This is not isolated
+  application/discard. Worktree mode requires a valid Git base.
   CLI defaults and existing run-record format remain unchanged.
 - Relay lives in `$XDG_STATE_HOME/code60/relay` (default
   `~/.local/state/code60/relay`). `state.json` sits outside `workspace/`, its
@@ -138,7 +143,7 @@ features, resource bounds and remaining native-platform validation.
   independently. Revalidate directory identity after waiting. Queued cancellation
   performs no mutation; cancellation after starting awaits subprocess cleanup.
   Git's own filesystem locks remain authoritative across processes. Never remove
-  a Git lock or hold this metadata queue over human apply/undo file writes.
+  a Git lock or hold this metadata queue over working-file integration/Undo writes.
   Interactive run shutdown cancels queued worktree creation without waiting for
   another owner's metadata operation. Started worktree commands use owned process
   trees and settle cleanup before shutdown returns. Headless CLI execution keeps
@@ -270,23 +275,77 @@ features, resource bounds and remaining native-platform validation.
   review collection into startup work or an in-memory collection. Preserve old
   records on disk. Reuse immutable review contents and checkout-local TaskLoop
   journals, seeding its baseline from first-default-dispatch capture rather than
-  recapturing at Accept or human application.
+  recapturing at Accept or integration.
   Relay-only review requests carry current conversation/generation plus generated
   target/review/revision/file IDs, never a renderer-supplied cwd or project fallback.
   Historical reviews remain readable; feedback requires live originating task,
   generation and worker-turn ownership. Restart fails pending delivery and never
   reconnects saved workers or feedback automatically.
   Group Changes by target, splitting bounded worker groups rather than silently
-  dropping assignments. Direct targets show their actual cwd and transcripts,
-  with no isolated apply/undo/discard. Human application remains checkout-local,
-  revalidates target identity, immutable sources, workers and affected files, and
-  requires confirmation. Navigation and database replacement do not retarget it.
+  dropping assignments. Direct targets show their actual cwd, transcripts and
+  snapshot warning. Automatic isolated integration remains checkout-local and
+  revalidates native target identity, immutable sources and affected files.
+  Navigation and database replacement do not retarget it.
   Push a constant-size review revision hint with Relay metadata, not review
-  collections or file contents. Only an active Changes view reads its bounded
-  index page or selected review. Renderer reload cancels human reads/operations
+  collections or file contents. An active conversation or Changes view reads its
+  bounded index page; only requested controls/diffs load individual review content.
+  Conversation timeline reads project at most 32 review records into compact
+  metadata per page, without reading immutable file bodies or loading lifetime history.
+  Renderer reload cancels human reads/operations
   without revoking Relay's worker assignments or replaying feedback.
   Worker summaries may retain an opaque review link even if creation-index
   persistence failed. It identifies saved evidence only, never a path capability.
+  Settled isolated worker turns schedule bounded, coalesced automatic captures.
+  Background capture yields to explicit worker actions and human review operations;
+  eligible captures integrate through the active request's durable write journal,
+  without replaying work or treating captured bytes as success. Captures revalidate
+  source ownership before publication; shutdown cancels and settles them.
+  Project chats and Relay render one quiet files-changed link per request.
+  Ordinary-chat corrections share the existing composer. Older snapshots remain
+  in Changes; zero-edit turns have no empty card. No feedback forms, line inputs,
+  review checklists, Preview application or Apply controls remain in normal Chat.
+  Side-panel revision/application tabs remain read-only and pinned. No revision
+  arrival opens a panel, steals focus or changes the main composer draft.
+  Freeze the actual completed turn outcome in each capture. An interactive
+  session returning to idle is not evidence that its last turn succeeded.
+  Application tab metadata is observable, but its contents are not agent-readable
+  through desktop awareness. Existing native confirmation and ownership checks apply.
+
+### Conversation checkpoints and message Undo
+
+Persist a checkpoint before editable human work, with additional direct targets
+covered before execution or follow-up. Direct preimages are content-addressed and
+deduplicated across checkpoints, exclude Git and Code60 state, and reject links,
+unsupported paths, more than 10,000 entries per folder, 64 directory levels or
+32 MiB total source contents before editable launch. Charge quota before private
+snapshot writes, including interrupted captures. Recorded rollback storage is
+bounded to 256 MiB; retain at most 100 prior request checkpoints. Journal payloads
+remain independent of bounded display diffs.
+
+Checkout leases include overlapping parent/child roots. Covered direct children
+share their parent's snapshot; enlarging coverage to a parent after execution
+is refused until a new request. Both preimages and current Undo reads share the
+32 MiB aggregate direct-content bound. A live older worker's integration belongs
+to the checkpoint active when its serialized checkout write begins, even when
+capture reads span a newer human request. Preserve immutable capture associations
+on unchanged recaptures and retain one latest capture per review per request.
+
+Undo belongs beside Copy on the latest human message, including zero-edit turns.
+Confirm the request, targets, unsent-draft replacement and the direct-folder
+manual-edit warning. Stop and drain only owned work, invalidate late results,
+preflight every target, then execute guarded inverse journals. Isolated conflicts
+block rather than overwrite newer edits. Preserve Git HEAD/staging. Rewind the
+active transcript, tasks, plans, scoped memory and continuity; keep discarded
+evidence privately. Return the original request and exact saved-code references
+unsent. Retire provider context
+and hand off only surviving history on the next Send.
+
+Interrupted multi-target restoration and conversation rewind are approved durable
+recovery exceptions, resumed only explicitly, including when no provider remains.
+Restart never replays work.
+Legacy unapplied reviews remain read-only and never integrate automatically;
+preserve existing journals and explicit recovery. Checkpoints are not Git commits
+or machine snapshots and cannot reverse external effects.
 
 Deferred: workspace relocation, durable recovery, automatic task continuation,
 RAG, semantic retrieval and automatic history retrieval outside the window.
@@ -482,8 +541,8 @@ deduplication, automatic inbox or plan authority. Continue task explicitly uses 
 frozen task instructions; Send is a new request with the current selection. ACP
 restore/fresh handoff keeps existing process/provider checks and re-establishes a
 new scoped gateway only on explicit continuation. Saved plans remain paused until
-human continuation, revised plans still need Accept, and applying changes remains
-human-only. Roles, review stability and correction limits are prompt instructions,
+human continuation and revised plans still need Accept. New authorized desktop
+work integrates automatically through request checkpoints. Roles, review stability and correction limits are prompt instructions,
 not a hard workflow engine or additional worker permissions. Failed/incomplete
 evidence must not be represented as verified completion.
 
@@ -501,22 +560,22 @@ with the task text.
 
 
 Exception for Chat review: desktop-only review records, immutable bounded file snapshots,
-human review decisions and editable pending feedback are persisted beneath the private
+legacy human review decisions and pending feedback are persisted beneath the private
 `.code60_workspace/reviews` directory beside the project database. This is not a general
 job queue. Restart never automatically delivers saved feedback or grants worker authority.
-Users explicitly reconnect saved reviews to a current chat. A human can preview and apply a
-reviewed result to the open project and can undo an application. Agents can revise their
-isolated work through feedback. CLI records and the database schema are unchanged.
+Historical reviews remain read-only; they cannot silently become new work. New
+requests use ordinary-chat corrections, automatic integration and message Undo.
+CLI records and the database schema are unchanged.
 
 Chat review groups workers by the human request that dispatched them. A Changes tab shares
 the Chat side panel with project and revision-specific file tabs. Overlapping paths in
 different workers remain distinct. Git snapshots use a temporary index and immutable blob
 content, with limits and explicit unavailable/partial states. Revision selection remains
-stable as new captures arrive. Feedback anchors carry revision, worker, path, side and lines;
-changed content invalidates reviewed state and marks earlier anchors outdated. Only humans
-resolve feedback or mark files reviewed. Pending feedback is delivered through the conversation
-coordinator between turns, with explicit status, retry and withdrawal. Saved provenance never
-authorizes a worker mutation. Existing ownership, scope and recovery checks still apply.
+stable as new captures arrive. Add to chat carries an exact revision, worker, path,
+side and line range into the existing composer without sending or replacing its
+draft. Legacy feedback anchors, decisions and receipts remain private compatibility
+evidence, not normal review controls. Saved provenance never authorizes a worker
+mutation. Existing ownership, scope and recovery checks still apply.
 
 New Chat tasks at the repository root share a frozen baseline of current saved files unless a
 worker uses an explicit Git base. A temporary index captures tracked changes and eligible
@@ -524,12 +583,11 @@ untracked files while respecting Git ignores and excluding Code60 storage, commo
 files and known untracked credential filenames. Internal snapshot commits use
 `refs/code60/tasks/` and leave HEAD, branches and staging alone. Each review revision can
 reference immutable worker captures independently of bounded display text. Older reviews
-remain readable and need a new capture before application.
+remain readable without historical automatic integration.
 
-**Use these changes…** previews the worker changes combined with the current project. Applying
-requires confirmation and idle or ended workers. Conflicts leave the project untouched.
-**Ask workers to revise** sends a separate feedback batch to the attached conversation and
-records the conflicting context so a correction can preserve the user's edit. Apply and undo
+Automatic integration combines isolated worker changes with the current project
+at settled turn boundaries. Conflicts leave the project untouched and require
+ordinary-chat corrections, never forced overwrites. Integration and message Undo
 recheck affected files, serialize writes per checkout and record before and after contents in
 private review storage. Interrupted writes require explicit recovery, which preserves newer
 edits and reports unresolved paths. Worktrees and internal snapshots are retained. The
@@ -1200,7 +1258,7 @@ Current-project sessions, including history, appear beneath Chat in the primary 
 One selected conversation fills the normal Chat workspace beside the shared file panel. Sessions, Events, Search, Open chat and Resume all navigate there, never into a popup. Worker selection does not change backend orchestrator selection, ownership, automatic updates, sendability or Stop semantics. The footer retains polling, updates and an actionable approval count, but no chat dock. Opening a session preserves other conversations' drafts and scroll positions. New or discovered sessions never replace the selected conversation. Worker drafts survive renderer reload for the same run; reload otherwise starts on the selected orchestrator. Workspace changes clear worker selection and view state. Historical transcripts are loaded on demand through the existing bounded, project-scoped cache, with retryable failures. Agent output remains plain text; thoughts, tools, permissions and recovery notes are in expandable Activity. Copy and turn timing use the shared components.
 - **Controls.** Worker composers send follow-ups to idle runs or explicitly continue ended runs using existing ACP restoration/handoff safeguards. Enter sends and Shift+Enter adds a line. Stop cancels the selected worker's active turn; Finish run, leftover stop and worktree deletion remain in session actions. Deleted worktrees show an inactive message; other blockers explain why sending is unavailable. Approvals retain Allow once and Deny, with other runs continuing independently. Chat no longer has window, minimize, close, fullscreen or dock-reordering controls.
 
-- **Review.** Review Changes opens a Changes tab beside orchestrator Chat, showing captured worker revisions, file diffs, review decisions and anchored feedback. It includes untracked files and retains branch/worktree provenance. Delete Worktree is enabled once the session has ended and its agent is gone. Delete Worktree and Stop leftover agent use the same core commands and safeguards as `discard` and `stop`; discard lists the files that will be lost in a native confirmation dialog.
+- **Review.** Quiet files-changed links open pinned read-only diffs. Changes retains captured worker revisions and branch/worktree provenance, including untracked files. Corrections use ordinary chat and exact Add to chat references; message Undo restores code and conversation. Delete Worktree is enabled once the session has ended and its agent is gone. Delete Worktree and Stop leftover agent use the same core commands and safeguards as `discard` and `stop`; discard lists the files that will be lost in a native confirmation dialog.
 - **Worktrees.** A permanent Worktrees tab lists every existing Git worktree registered with the currently open repository, including worktrees created outside Code60. Each row shows its path, an Actions menu with Browse project files, branch (or detached), filesystem creation time, repository name, and logical size. Creation time uses the directory's birth time when available. Size is the sum of regular-file byte sizes, excluding symlinks and the top-level `.git` entry so shared Git objects are not attributed to one worktree; inaccessible or missing values show as unknown. The shared table header names the page; refresh uses the application footer. The tab scans when selected and then polls in the background while it and the window stay visible; the listing arrives in the revisioned snapshot. A failed scan keeps the last listing and shows the error. It never changes, removes, or prunes worktrees. A non-Git project shows an explanatory empty state.
 - **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Search and Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
 - **Messages.** A permanent Messages tab lists every prompt, agent message, and thought from every run in the open project. Adjacent streamed message and thought updates are combined into one row. The table shows time, agent, session ID, type, and message text; tool calls, status events, permissions, and stderr are not message rows.

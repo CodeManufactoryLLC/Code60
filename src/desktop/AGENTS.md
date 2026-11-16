@@ -1,5 +1,24 @@
 # Desktop
 
+## Conversation checkpoints
+
+- Project chats and Relay persist a host-owned checkpoint before editable human
+  work. Enroll additional direct targets before execution, including follow-ups.
+  Isolated captures integrate automatically at safe turn boundaries through
+  TaskLoop checkout leases and guarded journals, never automatic commits.
+- Keep direct workers writable. Snapshot their bounded regular files and warn
+  that Undo also rewinds manual edits since that snapshot. Deduplicate immutable
+  preimages; exclude Git and Code60 state, reject unsupported coverage before
+  launch, and account for failed/interrupted storage writes.
+- Undo confirms the latest request and affected targets, warns before replacing
+  a draft, stops/drains only owned work and invalidates late authority. Preflight
+  all targets before guarded inverse writes, then rewind transcript, tasks,
+  plans, memory and continuity. Return the original request unsent. Retire old
+  provider context and hand off only surviving history on the next Send.
+- Persist interrupted restore/rewind progress. Recovery is explicit; reopening
+  never replays execution. Preserve discarded evidence privately and historical
+  unapplied reviews read-only, including legacy journals and recovery.
+
 - Settings About metadata reads the pinned embedding configuration from its
   side-effect-free shared module and resolves the ONNX package version beside
   Transformers. Read package JSON only, once; never import native inference into

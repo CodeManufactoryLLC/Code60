@@ -52,9 +52,22 @@
   the active panel offers a Files toggle, including Relay without a database.
 - Relay Changes groups bounded review pages by target and labels direct edits
   separately. Send only opaque review/revision/file IDs with its captured Relay
-  generation. Keep historical evidence readable, disable historical feedback,
-  and require the human-only confirmed checkout-local apply/undo flow. Read
+  generation. Keep historical evidence read-only, without historical execution
+  or automatic integration. Preserve explicit interrupted-journal recovery. Read
   review details only while requested and active; revision hints are not payloads.
+- Project chats and Relay use one composer and ordinary-chat corrections, not
+  feedback forms, line inputs, checklists or Apply controls. Retain plan and
+  permission approval. Show one quiet files-changed link per request; zero-edit
+  requests have no empty card. Open pinned read-only diffs only on user action.
+  Keep metadata reads bounded and visible-only; Changes retains older snapshots.
+  Partial work and failures remain explicit and never imply success.
+- Diff selection offers Add to chat with a removable exact review/revision/file/
+  side/line reference, without replacing a draft, sending or stealing focus.
+  Undo appears beside Copy on the latest user message on hover and keyboard
+  focus. Route confirmation/restoration through main; restore its returned
+  request unsent while preserving newer draft edits. Direct-folder snapshots
+  must warn that Undo also rewinds manual edits. Interrupted Undo blocks Send
+  until explicit recovery. Rewind revisions invalidate stale transcript caches.
 
 - When `openProjects` is present, project-instance identities supersede the old
   single-project disposal rules below. Retain each open project's views on

@@ -35,7 +35,10 @@ const tab = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ id: sequence, kind: z.literal("plan"), planId: uuid }),
   z.strictObject({ id: sequence, kind: z.literal("revision"), reviewId: uuid, revisionId: uuid }),
-  z.strictObject({ id: sequence, kind: z.enum(["blank", "explorer", "changes", "recall"]) }),
+  z.strictObject({
+    id: sequence,
+    kind: z.enum(["blank", "explorer", "changes", "recall", "application"]),
+  }),
 ]);
 const owner = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("project"), projectId: uuid, databaseEpoch: sequence }),
@@ -275,21 +278,21 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "reviews",
     "Reviews",
-    "Inspect pinned revisions and review feedback.",
-    "Chat → Changes",
+    "Inspect pinned revisions and captured worker changes through quiet change links; add exact saved code references to the existing composer.",
+    "Chat → files changed → read-only diff → select code → Add to chat; Changes → older snapshots",
     "runtime",
     "existing-tools",
-    "Historical evidence does not restore worker ownership.",
+    "At most eight removable references per message. Corrections use normal chat. Historical evidence does not restore worker ownership; partial changes do not imply success.",
   ),
   feature(
     "apply-undo",
-    "Apply and undo",
-    "Apply isolated worker changes to the checkout or undo application.",
-    "Changes → application review",
-    "git",
+    "Checkpoints and message Undo",
+    "Automatically checkpoint requests and integrate isolated worker edits; Undo restores covered files and rewinds conversation context without resending.",
+    "Chat → latest user message → Undo",
+    "runtime",
     "human-only",
-    "Direct mode has no isolated apply/undo/discard.",
-    "Native human confirmation; preserve unrelated edits.",
+    "Zero-edit requests can rewind. The request and saved-code references return unsent. Direct-folder snapshots also rewind manual edits since their checkpoint; Git metadata and Code60 state are excluded. Direct preimages and current Undo reads allow 32 MiB total regular-file contents, 10,000 entries per folder and 64 directory levels; links are unsupported. Nested children share parent coverage; adding a parent after child execution needs a new request. Checkpoints have bounded 256 MiB storage and 100 prior requests. Interrupted Undo requires explicit recovery, even without a live provider. No automatic commit or reversal of external effects.",
+    "Native confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.",
   ),
   feature(
     "files",

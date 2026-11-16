@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { DesktopApi, OrchestrationChatAction } from "../bridge/index.js";
+import type { ChatUndoResult, DesktopApi, OrchestrationChatAction } from "../bridge/index.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 
 interface State {
@@ -36,12 +36,16 @@ export class OrchestratorActions extends ScopeLifetime {
   setError = (error: string) => {
     if (this.capture()()) this.publish({ ...this.state, error });
   };
-  action = async (request: OrchestrationChatAction): Promise<boolean> => {
+  action = async (
+    request: OrchestrationChatAction,
+    receive?: (result: ChatUndoResult) => void,
+  ): Promise<boolean> => {
     const current = this.capture();
     if (!this.enabled || !current() || this.state.pending !== null) return false;
     this.publish({ pending: request.type, error: "" });
     try {
-      await this.api.orchestrationChatAction(request);
+      const result = await this.api.orchestrationChatAction(request);
+      if (current() && result) receive?.(result);
       return current();
     } catch (cause) {
       if (current()) this.setError(cause instanceof Error ? cause.message : String(cause));

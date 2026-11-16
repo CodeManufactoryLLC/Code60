@@ -78,26 +78,26 @@ Schema version: 1
 
 - ID: `reviews`
 - Status: shipped
-- Purpose: Inspect pinned revisions and review feedback.
-- Access: Chat → Changes
+- Purpose: Inspect pinned revisions and captured worker changes through quiet change links; add exact saved code references to the existing composer.
+- Access: Chat → files changed → read-only diff → select code → Add to chat; Changes → older snapshots
 - Prerequisite: runtime
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Historical evidence does not restore worker ownership.
+- Limits: At most eight removable references per message. Corrections use normal chat. Historical evidence does not restore worker ownership; partial changes do not imply success.
 - Pages: none
 - Settings sections: none
 - Tools: `code60_read_review`, `code60_address_feedback`
 
-## Apply and undo
+## Checkpoints and message Undo
 
 - ID: `apply-undo`
 - Status: shipped
-- Purpose: Apply isolated worker changes to the checkout or undo application.
-- Access: Changes → application review
-- Prerequisite: git
+- Purpose: Automatically checkpoint requests and integrate isolated worker edits; Undo restores covered files and rewinds conversation context without resending.
+- Access: Chat → latest user message → Undo
+- Prerequisite: runtime
 - Agent access: human-only
-- Confirmation: Native human confirmation; preserve unrelated edits.
-- Limits: Direct mode has no isolated apply/undo/discard.
+- Confirmation: Native confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.
+- Limits: Zero-edit requests can rewind. The request and saved-code references return unsent. Direct-folder snapshots also rewind manual edits since their checkpoint; Git metadata and Code60 state are excluded. Direct preimages and current Undo reads allow 32 MiB total regular-file contents, 10,000 entries per folder and 64 directory levels; links are unsupported. Nested children share parent coverage; adding a parent after child execution needs a new request. Checkpoints have bounded 256 MiB storage and 100 prior requests. Interrupted Undo requires explicit recovery, even without a live provider. No automatic commit or reversal of external effects.
 - Pages: none
 - Settings sections: none
 - Tools: none

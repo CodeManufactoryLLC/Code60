@@ -8,17 +8,27 @@ export default function MonacoDiff({
   modified,
   path,
   address,
+  onAddToChat,
 }: {
   original: string;
   modified: string;
   path: string;
   address: string;
+  onAddToChat?:
+    | ((selection: { side: "original" | "modified"; start: number; end: number }) => void)
+    | undefined;
 }) {
   useMonacoTheme();
   const container = useRef<HTMLDivElement>(null);
   const editor = useRef<monaco.editor.IStandaloneDiffEditor | null>(null);
   const currentAddress = useRef(address);
   const [height, setHeight] = useState(240);
+  const [selection, setSelection] = useState<{
+    address: string;
+    side: "original" | "modified";
+    start: number;
+    end: number;
+  }>();
   useEffect(() => {
     if (!container.current) return;
     const instance = monaco.editor.createDiffEditor(container.current, {
@@ -40,6 +50,26 @@ export default function MonacoDiff({
       modifiedAriaLabel: "Modified review version",
     });
     editor.current = instance;
+    const selections = (["original", "modified"] as const).map((side) => {
+      const source =
+        side === "original" ? instance.getOriginalEditor() : instance.getModifiedEditor();
+      return source.onDidChangeCursorSelection((event) => {
+        const range = event.selection;
+        setSelection(
+          range.isEmpty()
+            ? undefined
+            : {
+                address: currentAddress.current,
+                side,
+                start: range.startLineNumber,
+                end:
+                  range.endColumn === 1 && range.endLineNumber > range.startLineNumber
+                    ? range.endLineNumber - 1
+                    : range.endLineNumber,
+              },
+        );
+      });
+    });
     instance.getOriginalEditor().updateOptions({ ariaLabel: "Original review version" });
     instance.getModifiedEditor().updateOptions({ ariaLabel: "Modified review version" });
     const size = instance
@@ -49,6 +79,7 @@ export default function MonacoDiff({
       );
     return () => {
       size.dispose();
+      for (const listener of selections) listener.dispose();
       const view = instance.saveViewState();
       if (view) views.set(currentAddress.current, view);
       instance.dispose();
@@ -75,5 +106,23 @@ export default function MonacoDiff({
       after.dispose();
     };
   }, [address, original, modified, path]);
-  return <div className="review-diff-editor" style={{ height }} ref={container} />;
+  return (
+    <>
+      {onAddToChat && selection?.address === address && (
+        <div className="diff-selection-actions">
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onAddToChat(selection)}
+          >
+            Add to chat
+          </button>
+          <span>
+            {selection.side} lines {selection.start}-{selection.end}
+          </span>
+        </div>
+      )}
+      <div className="review-diff-editor" style={{ height }} ref={container} />
+    </>
+  );
 }

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { DesktopApi, Review, ReviewSummary } from "../bridge/index.js";
+import { attachToChat } from "./chat-draft.js";
 import { useReviewFile } from "./review-content.js";
 
 const MonacoDiff = lazy(() => import("./monaco-diff.js"));
@@ -22,6 +23,7 @@ export function ReviewPanel({
   const owner = review.projectId ? `${review.projectId}:${review.databaseEpoch}:` : "";
   const storageKey = `code60.review:${project}:${owner}${review.id}:${revisionId}`;
   const [fileKey, setFileKey] = useState(() => sessionStorage.getItem(`${storageKey}:file`) ?? "");
+  const [attachmentNotice, setAttachmentNotice] = useState("");
   const revision = review.revisions.find((item) => item.id === revisionId);
   useEffect(() => {
     sessionStorage.setItem(`${storageKey}:file`, fileKey);
@@ -80,6 +82,7 @@ export function ReviewPanel({
             ))}
           </nav>
           <div className="review-file">
+            {attachmentNotice && <p role="status">{attachmentNotice}</p>}
             {content.error ? (
               <div role="alert">
                 {content.error}
@@ -98,6 +101,25 @@ export function ReviewPanel({
                   path={content.content.file.path}
                   original={content.content.original}
                   modified={content.content.modified}
+                  onAddToChat={(selection) => {
+                    const chat = review.relay?.conversationId ?? review.chatId;
+                    const added = attachToChat(`code60.orchestrationDraft:${chat}`, {
+                      reference: {
+                        reviewId: review.id,
+                        revisionId,
+                        fileKey: file.key,
+                        side: selection.side,
+                        start: selection.start,
+                        end: selection.end,
+                      },
+                      label: `${file.path}:${selection.start}-${selection.end} (${selection.side})`,
+                    });
+                    setAttachmentNotice(
+                      added
+                        ? "Added to chat. Your draft is unchanged."
+                        : "Open the owning chat, or remove an attachment before adding another.",
+                    );
+                  }}
                 />
               </Suspense>
             )}

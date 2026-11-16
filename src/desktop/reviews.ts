@@ -224,6 +224,7 @@ export class ReviewStore {
     id: string,
     results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[],
     sources?: TaskSource[],
+    outcomes?: ReviewRevision["outcomes"],
   ): Promise<void> {
     const contents = results.flatMap((result) =>
       (result.files ?? []).map((file) => ({
@@ -245,8 +246,8 @@ export class ReviewStore {
       const previous = review.revisions.at(-1);
       if (
         previous &&
-        JSON.stringify([previous.files, previous.errors, previous.sources]) ===
-          JSON.stringify([files, errors, sources])
+        JSON.stringify([previous.files, previous.errors, previous.sources, previous.outcomes]) ===
+          JSON.stringify([files, errors, sources, outcomes])
       ) {
         delete review.error;
         return;
@@ -259,6 +260,7 @@ export class ReviewStore {
         files,
         errors,
         ...(sources ? { sources } : {}),
+        ...(outcomes ? { outcomes } : {}),
       };
       // Keep revision paths no longer than review metadata paths on Windows.
       await save(join(this.root, `${revision.id}.rev`), contents);

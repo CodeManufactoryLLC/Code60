@@ -46,6 +46,25 @@ const reviewRevisionSchema = z.strictObject({
     .max(100)
     .optional(),
   errors: z.array(z.strictObject({ runId: run, message: z.string().max(2_000) })).max(100),
+  outcomes: z
+    .array(
+      z.strictObject({
+        runId: run,
+        status: z.enum([
+          "queued",
+          "running",
+          "waiting",
+          "idle",
+          "finished",
+          "failed",
+          "cancelled",
+          "timed_out",
+          "interrupted",
+        ]),
+      }),
+    )
+    .max(100)
+    .optional(),
 });
 const reviewCommentSchema = z.strictObject({
   id: uuid,
@@ -126,7 +145,42 @@ export type ReviewSummary = Pick<
   | "workers"
   | "submissions"
 > &
-  ProjectRequestIdentity & { revisions: Pick<ReviewRevision, "id" | "at">[] };
+  ProjectRequestIdentity & {
+    error?: string;
+    revisions: (Pick<ReviewRevision, "id" | "at" | "outcomes"> & {
+      fileCount?: number;
+      incomplete?: boolean;
+      request?: { chatId: string; turn: number } | undefined;
+    })[];
+  };
+
+export function summarizeReview(review: Review): ReviewSummary {
+  const { id, version, project, title, chatId, originChatId, turn, workers, submissions, error } =
+    review;
+  return {
+    id,
+    version,
+    project,
+    title,
+    chatId,
+    originChatId,
+    turn,
+    workers: workers.map(({ runId, label, turn }) => ({
+      runId,
+      label,
+      ...(turn === undefined ? {} : { turn }),
+    })),
+    submissions,
+    ...(error ? { error } : {}),
+    revisions: review.revisions.map(({ id, at, files, errors, outcomes }) => ({
+      id,
+      at,
+      fileCount: new Set(files.map((file) => file.path)).size,
+      incomplete: errors.length > 0,
+      ...(outcomes ? { outcomes } : {}),
+    })),
+  };
+}
 export type ReviewRevision = z.infer<typeof reviewRevisionSchema>;
 export type ReviewFile = z.infer<typeof reviewFileSchema>;
 export interface ReviewContent {

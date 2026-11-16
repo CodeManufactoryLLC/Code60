@@ -4538,6 +4538,77 @@ describe("orchestrated workers over ACP", () => {
     return { call, scope: context.body.result.scope as string };
   }
 
+  it("rewinds an active project request, stops only owned work and uses a fresh surviving-history provider on Send", async () => {
+    const { call } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "SURVIVING_PROJECT_PREFIX",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const discarded = "DISCARDED_PROJECT_Z9 HANG";
+    await controller.orchestrationChatAction({ type: "send", id, text: discarded });
+    const { scope } = (await call("code60_get_context")).body.result;
+    const owned = await dispatch(call, scope, "HANG owned worker");
+    const [unrelated] = await controller.start({ ...request, prompt: "HANG unrelated worker" });
+    await vi.waitFor(() =>
+      expect(agents.sessions.filter((session) => session.turnActive)).toHaveLength(3),
+    );
+    await vi.waitFor(() =>
+      expect(
+        controller.snapshot().runs.filter((run) => run.view?.status === "running"),
+      ).toHaveLength(2),
+    );
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    const starts = agents.sessions.length;
+    confirm.mockResolvedValueOnce(false);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toBeUndefined();
+    expect(chatStatus()).toBe("running");
+    expect(confirm.mock.calls.at(-1)?.[1]).toContain(discarded);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toEqual({ type: "rewound", checkpointId, text: discarded });
+    expect(agents.sessions).toHaveLength(starts);
+    expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+    expect(session(owned)?.stops.length).toBeGreaterThan(0);
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    expect((await workspace.store.read(owned)).status).toBe("cancelled");
+    expect(
+      controller.snapshot().runs.find((run) => run.record.id === unrelated)?.view?.status,
+    ).toBe("running");
+    expect(JSON.stringify(controller.snapshot().chat.events)).not.toContain("DISCARDED_PROJECT_Z9");
+    expect(controller.snapshot().chat.workers).toEqual([]);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "Continue from the surviving prefix.",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const freshIndex = agents.specs.findLastIndex((spec) =>
+      spec.mcpServers?.some((server) => server.name === "code60"),
+    );
+    expect(freshIndex).toBeGreaterThan(0);
+    const fresh = agents.sessions[freshIndex];
+    expect(fresh?.prompts).toHaveLength(1);
+    expect(fresh?.prompts[0]).toContain("SURVIVING_PROJECT_PREFIX");
+    expect(fresh?.prompts[0]).not.toContain("DISCARDED_PROJECT_Z9");
+  });
+
   it("creates reusable commands through the chat gateway without executing or overwriting them", async () => {
     const { call } = await setup();
     const prompts = [...chatPrompts()];

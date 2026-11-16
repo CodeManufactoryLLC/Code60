@@ -10,6 +10,7 @@ import { PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
+import { ReviewPreviewPanel } from "./review-preview.js";
 
 function revisionTime(at: string, now = new Date()): string {
   const date = new Date(at);
@@ -255,8 +256,24 @@ export function FilePanel({
                 }}
               />
             )
+          ) : selected.kind === "application" ? (
+            api && active && open && visible ? (
+              <ReviewPreviewPanel api={api} preview={selected.preview} />
+            ) : null
           ) : selected.kind === "revision" ? (
-            api && active && open && selectedReview ? (
+            selected.scope ? (
+              api && active && open && visible ? (
+                <ReviewPreviewPanel
+                  api={api}
+                  preview={{
+                    scope: selected.scope,
+                    revisionId: selected.revisionId,
+                    title: selected.title,
+                    ...(selected.related ? { related: selected.related } : {}),
+                  }}
+                />
+              ) : null
+            ) : api && active && open && selectedReview ? (
               <ReviewPanelLoader
                 key={`${selected.reviewId}:${selected.revisionId}`}
                 api={api}

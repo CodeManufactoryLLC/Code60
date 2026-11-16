@@ -8,6 +8,7 @@ import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
+import type { ReviewPreview } from "./review-actions.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -47,6 +48,7 @@ export function ChatWorkspace({
   const snapshot = state?.snapshot;
   const conversationActive = tabs.active === "chat" && !navigation.projectPending;
   const [relayPanelOpen, setRelayPanelOpen] = useState(false);
+  const [revisionPreview, setRevisionPreview] = useState<{ id: number; preview: ReviewPreview }>();
   const {
     scope,
     gitSetupProject,
@@ -157,6 +159,27 @@ export function ChatWorkspace({
             runs={snapshot?.runs ?? []}
             reviews={reviewSummaries}
             onReview={openReview}
+            onRevisionPreview={(preview) => {
+              if (preview.scope.kind === "relay") {
+                setRevisionPreview((current) => ({ id: (current?.id ?? 0) + 1, preview }));
+                setRelayPanelOpen(true);
+              } else {
+                fileAction({ type: "ensure-changes" });
+                fileAction(
+                  preview.application
+                    ? { type: "application", preview }
+                    : {
+                        type: "revision",
+                        reviewId: preview.scope.reviewId,
+                        revisionId: preview.revisionId,
+                        title: preview.title,
+                        scope: preview.scope,
+                        ...(preview.related ? { related: preview.related } : {}),
+                      },
+                );
+                setExplorerOpen(true);
+              }
+            }}
             active={
               !splash &&
               conversationActive &&
@@ -236,6 +259,7 @@ export function ChatWorkspace({
         </RetainedProjectPanels>
       </section>
       <RelayPlansPanel
+        key={`${relay?.conversationId}:${relay?.generation}`}
         snapshot={snapshot}
         api={api}
         plans={relay?.plans ?? []}
@@ -247,6 +271,7 @@ export function ChatWorkspace({
         recallSource={recallSource}
         open={relayPanelOpen}
         onOpen={setRelayPanelOpen}
+        revisionPreview={revisionPreview}
       />
     </div>
   );

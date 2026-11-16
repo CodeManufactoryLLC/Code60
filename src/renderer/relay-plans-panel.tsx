@@ -5,6 +5,7 @@ import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.j
 import type { RecallSource } from "./memory-recall.js";
 import { RelayChanges } from "./relay-changes.js";
 import { useRelayFiles } from "./relay-files.js";
+import type { ReviewPreview } from "./review-actions.js";
 
 /** Application-owned files and plans never borrow a project's file context or database. */
 export function RelayPlansPanel({
@@ -17,6 +18,7 @@ export function RelayPlansPanel({
   onOpen,
   snapshot,
   recallSource,
+  revisionPreview,
 }: {
   api: DesktopApi;
   plans: PlanSummary[];
@@ -27,11 +29,37 @@ export function RelayPlansPanel({
   onOpen(value: boolean): void;
   snapshot: Snapshot | undefined;
   recallSource?: RecallSource | undefined;
+  revisionPreview?: { id: number; preview: ReviewPreview } | undefined;
 }) {
   const [tabs, setTabs] = useState(() => emptyFileTabs("relay"));
   const proposals = useRef(new Map<string, number>());
   const discoveredPlans = useRef(false);
   const [root, setRoot] = useState("workspace");
+  useEffect(() => {
+    if (!revisionPreview) return;
+    const { preview } = revisionPreview;
+    if (
+      preview.scope.kind !== "relay" ||
+      preview.scope.conversationId !== conversationId ||
+      preview.scope.generation !== generation
+    )
+      return;
+    setTabs((tabs) =>
+      updateFileTabs(
+        tabs,
+        preview.application
+          ? { type: "application", preview }
+          : {
+              type: "revision",
+              reviewId: preview.scope.reviewId,
+              revisionId: preview.revisionId,
+              title: preview.title,
+              scope: preview.scope,
+              ...(preview.related ? { related: preview.related } : {}),
+            },
+      ),
+    );
+  }, [revisionPreview, conversationId, generation]);
   useEffect(() => {
     if (plans.length && !discoveredPlans.current) {
       discoveredPlans.current = true;
@@ -65,7 +93,12 @@ export function RelayPlansPanel({
           {
             ...tabs,
             entries: tabs.entries.filter(
-              (tab) => tab.kind === "plan" || tab.kind === "changes" || tab.kind === "recall",
+              (tab) =>
+                tab.kind === "plan" ||
+                tab.kind === "changes" ||
+                tab.kind === "recall" ||
+                tab.kind === "revision" ||
+                tab.kind === "application",
             ),
             active: null,
           },

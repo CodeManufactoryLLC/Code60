@@ -27,6 +27,17 @@
   the current presentation generation, with no cwd or project-path fallback.
   Worker evidence may include a pinned checkout identity, canonical directory,
   branch and base. These are main-produced provenance, never request fields.
+- Conversation timeline pages contain bounded capture metadata and optional
+  frozen worker outcomes, not full reviews, checkout provenance or file bodies.
+  Older revisions without outcomes remain valid evidence; never infer success
+  or turn associations for them. Application tabs carry opaque proposal/file
+  identities and remain read-only. Host-owned checkpoints integrate edits;
+  message Undo and explicit interrupted-operation recovery retain confirmation.
+- Send accepts at most eight strict saved-code references with generated review/
+  revision IDs and optional file/side/line bounds, never filesystem capabilities.
+  Undo accepts only the chat, checkpoint UUID and draft-replacement status.
+  Its result returns the original unsent text and saved-code references; renderer fields grant no restore
+  authority. Initialize Zod jitless parsing before constructing exported schemas.
 - RAG requests accept only opaque database identity, request UUID, captured
   database epoch and bounded query text. Relay-enabled main requires the epoch.
   Expose status/rebuild/retrieve/cancel/clear and pushed progress,
