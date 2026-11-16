@@ -5720,6 +5720,53 @@ describe("orchestrated workers over ACP", () => {
     expect(chatPrompts()[3]).toContain(`Worker ${one} (claude): idle after turn 2`);
   });
 
+  it("retains a worker's terminal view when an older history read finishes after Stop", async () => {
+    const { call, scope } = await setup();
+    const runId = await dispatch(call, scope, "HANG work");
+    await vi.waitFor(() => expect(session(runId)?.turnActive).toBe(true));
+    await controller.poll(["history"]);
+    // biome-ignore lint/complexity/useLiteralKeys: Hold the host history boundary across real worker cleanup.
+    const store = controller["workspace"]?.store;
+    if (!store) throw new Error("Missing fixture workspace");
+    const list = store.list.bind(store);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let captured = false;
+    const listing = vi.spyOn(store, "list").mockImplementationOnce(async (...args) => {
+      const records = await list(...args);
+      expect(records.find((record) => record.id === runId)?.status).toBe("running");
+      captured = true;
+      await gate;
+      return records;
+    });
+    const pending = controller.poll(["history"]);
+    try {
+      await vi.waitFor(() => expect(captured).toBe(true));
+      expect((await call("code60_stop_agent", { scope, runId })).status).toBe(200);
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      release();
+      await pending;
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.view?.status).toBe(
+        "cancelled",
+      );
+      expect((await call("code60_list_agents")).body.result.workers[0]).toMatchObject({
+        status: "cancelled",
+        actions: ["resume"],
+      });
+      await controller.poll(["history"]);
+      expect((await store.read(runId)).status).toBe("cancelled");
+      expect(
+        controller.snapshot().runs.find((run) => run.record.id === runId)?.view,
+      ).toBeUndefined();
+    } finally {
+      release();
+      await pending;
+      listing.mockRestore();
+    }
+  });
+
   it("stops and resumes owned workers with allow-all, and revokes tools when the chat is replaced", async () => {
     const { call, scope } = await setup();
     const runId = await dispatch(call, scope, "HANG work");

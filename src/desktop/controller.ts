@@ -1986,7 +1986,23 @@ export class DesktopController {
       const history = await listRuns(commandDeps(this.deps, workspace));
       if (current() && this.workspace === workspace) {
         this.history = history;
-        for (const [batch, state] of this.batches) if (!state.active) this.batches.delete(batch);
+        const records = new Map(history.map(({ record }) => [record.id, record]));
+        // An overlapping read may predate completion. Retain terminal views until history agrees.
+        for (const [batch, state] of this.batches) {
+          if (
+            !state.active &&
+            batch.runs().every((view) => {
+              const record = records.get(view.id);
+              return (
+                record?.status === view.status &&
+                record.turns === view.turns &&
+                record.reason === view.reason &&
+                record.lastStopReason === view.lastStopReason
+              );
+            })
+          )
+            this.batches.delete(batch);
+        }
       }
       return;
     }
