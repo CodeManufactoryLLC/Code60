@@ -5004,6 +5004,9 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
     const links = page.locator(".orchestration-chat-page:visible .conversation-changes-link");
     await expect(links).toHaveCount(1);
     await links.last().click();
+    const firstTab = page.getByRole("tab", { name: "Implement task loop", exact: true });
+    await expect(firstTab).toHaveAttribute("aria-selected", "true");
+    const firstTabId = await firstTab.getAttribute("id");
     const review = page.getByRole("region", { name: "Revision diff", exact: true });
     await expect(review.locator(".monaco-diff-editor")).toBeVisible();
     await expect(review.locator(".modified .view-lines:not([monaco-view-zone])")).toContainText(
@@ -5100,9 +5103,10 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
     await firstTask.getByRole("button").last().focus();
     await page.keyboard.press("Enter");
     await expect(review.locator(".review-files")).toContainText("task.txt");
-    await expect(
-      page.getByRole("tab", { name: /Revision \d+ · Implement task loop$/ }),
-    ).toHaveCount(1);
+    // Opening the same immutable revision reuses the tab first opened by its quiet link.
+    await expect(firstTab).toHaveCount(1);
+    await expect(firstTab).toHaveAttribute("id", firstTabId ?? "");
+    await expect(firstTab).toHaveAttribute("aria-selected", "true");
     expect(await readFile(join(next.record.worktree, "second.txt"), "utf8")).toBe(
       "user edit\nworker correction\n",
     );
@@ -13812,6 +13816,9 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         }),
       )
       .toBe(2);
+    const filesToggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    await expect(filesToggle).toHaveAttribute("aria-expanded", "false");
+    await filesToggle.click();
     await page.getByRole("tab", { name: "Changes", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Task revisions" })
