@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { parseValue, sessionValueSchema } from "../contracts/index.js";
+import { logInputSchema, parseValue, sessionValueSchema } from "../contracts/index.js";
 
 z.config({ jitless: true });
-const provider = z.enum(["antigravity", "claude", "codex", "copilot", "droid", "kiro", "opencode"]);
+const provider = logInputSchema.shape.provider.unwrap();
 const role = z.enum(["orchestrator", "worker"]);
 const selections = z
   .array(
@@ -20,13 +20,7 @@ const selections = z
   );
 const schema = z.strictObject({
   version: z.literal(1),
-  providers: z.partialRecord(
-    provider,
-    z.strictObject({
-      orchestrator: selections.optional(),
-      worker: selections.optional(),
-    }),
-  ),
+  providers: z.partialRecord(provider, z.partialRecord(role, selections)),
 });
 const action = z.strictObject({ type: z.literal("clear"), provider, role });
 export type ModelDefaultsRecord = z.infer<typeof schema>;

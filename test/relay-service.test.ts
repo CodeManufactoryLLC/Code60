@@ -796,6 +796,7 @@ it("refreshes verified providers without reconnecting and freezes each task's pr
   expect(worker.provider).toBe("codex");
   if (typeof worker.runId !== "string") throw new Error("Dispatch must return a run ID");
   const workerId = worker.runId;
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1));
   await vi.waitFor(() => expect(agents.sessions[1]?.turnActive).toBe(false));
   await relay.action({ type: "cancel", id });
   await relay.sync("claude", {

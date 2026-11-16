@@ -610,6 +610,8 @@ export class Run {
     if (this.shutdownRequested) {
       return this.end({ status: "cancelled", reason: "cancelled before the first prompt" });
     }
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited before the first prompt" });
     if (record.firstPrompt === "") {
       this.lastOutcome = { status: "finished", reason: "no prompt was sent" };
       await this.setStatus("idle", "no prompt yet");
@@ -633,7 +635,10 @@ export class Run {
    * Applies saved or explicit session options to a newly created session. Unavailable or refused
    * values are reported and skipped; the session keeps the connector's own current value.
    */
-  private async applySelections(session: AgentSession): Promise<void> {
+  private async applySelections(
+    session: AgentSession,
+    signal = this.startAbort.signal,
+  ): Promise<void> {
     const selections = this.selections();
     if (selections.length === 0) return;
     const controls = session.sessionState?.settings?.controls;
@@ -646,6 +651,8 @@ export class Run {
     this.deps.onChange();
     try {
       for (const selection of selections) {
+        signal.throwIfAborted();
+        if (this.sessionExited) throw new Error("the agent exited while applying session settings");
         if (this.session !== session || this.shutdownRequested || this.ending) return;
         const state = session.sessionState ?? emptySessionState();
         const control = state.settings?.controls.find((item) => item.id === selection.configId);
@@ -662,19 +669,43 @@ export class Run {
           });
           continue;
         }
+        let abort = () => {};
         try {
-          await session.setMode(change);
+          await Promise.race([
+            session.setMode(change),
+            new Promise<never>((_, reject) => {
+              abort = () => reject(new Error("session settings cancelled"));
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+            }),
+            session.exited.then(() => {
+              throw new Error("the agent exited while applying session settings");
+            }),
+          ]);
+          signal.throwIfAborted();
+          if (this.sessionExited)
+            throw new Error("the agent exited while applying session settings");
           if (
             !session.sessionState?.settings?.confirmed ||
             session.sessionState.settings.controls.find((c) => c.id === selection.configId)
               ?.currentValue !== selection.value
           )
             throw new Error("Session option was not confirmed");
-        } catch {
+        } catch (error) {
+          if (signal.aborted) {
+            // A pending setter must not outlive preparation or leave a busy session reusable.
+            await session.stop(this.forced ? 0 : this.settings.killGraceMs);
+            if (this.session === session) this.session = undefined;
+            if (this.shutdownRequested) return;
+            throw error;
+          }
+          if (this.sessionExited) throw error;
           this.emit({
             type: "note",
             text: `Saved default "${selection.name}" could not be confirmed; using the connector's reported value (which may be unconfirmed).`,
           });
+        } finally {
+          signal.removeEventListener("abort", abort);
         }
       }
     } finally {
@@ -782,6 +813,8 @@ export class Run {
           ? { status: "cancelled", reason: "cancelled during context handoff" }
           : { status: "failed", reason: "the context handoff session could not start" },
       );
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited during context handoff" });
     await this.setStatus("idle", "Message not sent.");
   }
 
@@ -868,7 +901,7 @@ export class Run {
                 signal,
               );
               await this.installSession(session);
-              await this.applySelections(session);
+              await this.applySelections(session, signal);
             } catch (error) {
               return await this.notSent(
                 statusSaved,
