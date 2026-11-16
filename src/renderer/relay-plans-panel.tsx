@@ -110,7 +110,9 @@ export function RelayPlansPanel({
   return (
     <section className="project-file-panel-scope" hidden={!active}>
       <FilePanel
-        panelId="relay-plan-panel"
+        panelId={
+          snapshot?.chat.customAgentId ? `relay-plan-panel-${conversationId}` : "relay-plan-panel"
+        }
         tabs={tabs}
         onAction={act}
         browser={browser}

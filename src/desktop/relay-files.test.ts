@@ -149,3 +149,20 @@ it("bounds contexts, applies saved settings, and releases closed roots", async (
   expect(read).toHaveBeenCalledTimes(before);
   expect(files.snapshot(visible.subscriptionId).filePolling?.status).toBe("disabled");
 });
+
+it("never exposes another application's same-relative-path preview through awareness", async () => {
+  const { files } = fixture();
+  const a = context(),
+    b = context();
+  files.set(a, { cwd: "/a", check: async () => {} }, () => {}, "agent-a");
+  files.set(b, { cwd: "/b", check: async () => {} }, () => {}, "agent-b");
+  disposers.push(
+    () => files.remove(a.subscriptionId),
+    () => files.remove(b.subscriptionId),
+  );
+  await vi.waitFor(() => expect(files.snapshot(a.subscriptionId).files?.preview?.text).toBe("/a"));
+  await vi.waitFor(() => expect(files.snapshot(b.subscriptionId).files?.preview?.text).toBe("/b"));
+  expect(files.knowledgePreview("note.txt", "agent-a")?.text).toBe("/a");
+  expect(files.knowledgePreview("note.txt", "agent-b")?.text).toBe("/b");
+  expect(files.knowledgePreview("note.txt", "agent-c")).toBeUndefined();
+});

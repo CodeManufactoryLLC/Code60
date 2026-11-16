@@ -63,18 +63,25 @@ function pageAncestors(
       : source.projects.find((project) =>
           owner?.projectId ? project.id === owner.projectId : project.workerIds.includes(target.id),
         );
-  const ancestors: Breadcrumb[] = project
-    ? [
-        pageCrumb("projects"),
-        {
-          label: pathLabel(project.path),
-          icon: "app-folder",
-          target: { kind: "project", id: project.id },
-        },
-      ]
-    : [];
+  const ancestors: Breadcrumb[] = owner?.customAgentId
+    ? [pageCrumb("custom-agents")]
+    : project
+      ? [
+          pageCrumb("projects"),
+          {
+            label: pathLabel(project.path),
+            icon: "app-folder",
+            target: { kind: "project", id: project.id },
+          },
+        ]
+      : [];
   if (page === "worker") {
-    const chat = owner ?? (run?.relay && source.chats.find((chat) => chat.kind === "relay"));
+    const chat =
+      owner ??
+      (run?.relay &&
+        source.chats.find(
+          (chat) => chat.kind === "relay" && chat.conversationId === run.relay?.conversationId,
+        ));
     const id = chat && !chat.archived ? conversationId(chat) : undefined;
     if (chat && id)
       ancestors.push({

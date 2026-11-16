@@ -96,3 +96,11 @@
 - Diff reads accept only a UUID request ID and validated run ID; cancellation accepts only the request ID. Reject unknown fields and paths. Keep the existing diff action as a compatibility adapter.
 
 - Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; agents have no setup mutation capability.
+
+## Custom Agents
+
+The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+Reuse the Relay runtime for custom application-owned conversations. Route all
+requests by explicit conversation/generation ownership, including file previews,
+worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
+Custom definitions are private, revision-checked and database-independent.

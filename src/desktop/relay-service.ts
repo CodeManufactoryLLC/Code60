@@ -153,6 +153,7 @@ export class RelayService {
       confirm: async () => false,
     },
     private readonly memory?: MemoryService,
+    private readonly identity?: { id: string; name: string; instructions: string; root: string },
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -185,14 +186,17 @@ export class RelayService {
     return { kind: "relay", conversationId: this.store.id, generation: this.generation };
   }
   private knowledgeContext(): string {
-    if (!this.knowledge) return instructions;
+    const operating = this.identity
+      ? `${instructions.replace("You are Relay,", () => `You are ${this.identity?.name},`)}\n\n--- Special instructions ---\n${this.identity.instructions}`
+      : instructions;
+    if (!this.knowledge) return operating;
     let context: string;
     try {
       context = this.knowledge.context(this.knowledgeCaller());
     } catch {
       context = "--- Code60 awareness unavailable. Do not infer current UI state or authority. ---";
     }
-    return `${instructions}\n\n${context}`;
+    return `${operating}\n\n${context}`;
   }
   knowledgePlan(planId: string): unknown {
     const plan = this.plans?.get(planId);
@@ -583,7 +587,9 @@ export class RelayService {
       this.orphans.delete(owner);
     };
     try {
-      this.storeOpening ??= RelayStore.open(join(stateHome(this.env), "code60", "relay")).then(
+      this.storeOpening ??= RelayStore.open(
+        this.identity?.root ?? join(stateHome(this.env), "code60", "relay"),
+      ).then(
         (store) => {
           this.store = store;
           return store;
@@ -753,11 +759,12 @@ export class RelayService {
           }
         : {}),
       kind: "relay",
+      ...(this.identity ? { customAgentId: this.identity.id } : {}),
       ...(this.store ? { conversationId: this.store.id } : {}),
       generation: this.generation,
       reviewRevision: this.reviewRevision,
       replies: this.replySummary.snapshot(),
-      title: "Relay",
+      title: this.identity?.name ?? "Relay",
       run: this.chat?.runs()[0] ?? null,
       directory: this.store?.workspace ?? null,
       error: this.error,

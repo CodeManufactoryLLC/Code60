@@ -325,6 +325,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
             navigation={navigation}
             openProjects={snapshot?.openProjects}
             selectedProjectId={snapshot?.projectInstanceId}
+            customAgents={snapshot?.customAgents ?? []}
             chats={snapshot?.chats ?? []}
             selectedId={navigationSelectedId}
             navigationSerial={chatRequest?.serial}
@@ -367,7 +368,9 @@ export function App({ api: transport }: { api: DesktopApi }) {
           openChat={openChat}
           openReview={openReview}
           openRelay={async () => {
-            const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+            const relay = snapshot?.chats.find(
+              (chat) => chat.kind === "relay" && !chat.customAgentId,
+            );
             const id = relay && conversationId(relay);
             if (!id) throw new Error("Relay is unavailable. Try again shortly.");
             if (!(await navigation.open({ kind: "conversation", id })))

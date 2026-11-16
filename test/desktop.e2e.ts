@@ -2497,6 +2497,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     const homeTab = page.getByRole("tab", { name: "Home", exact: true });
     const home = page.locator("#panel-home");
     const relay = home.getByRole("button", { name: "Open Relay", exact: true });
+    const customAgents = home.getByRole("button", { name: "Open Custom Agents", exact: true });
     const search = home.getByRole("button", { name: "Open Search", exact: true });
     const projects = home.getByRole("button", { name: "Open Projects", exact: true });
     const apps = home.getByRole("button", { name: "Open Apps", exact: true });
@@ -2510,29 +2511,40 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     expect(welcomeBounds.y + welcomeBounds.height).toBeLessThan(cardsBounds.y);
     await expect(home.locator(".home-card")).toHaveText([
       "Relay",
+      "Custom Agents",
       "Search",
       "Projects",
       "Apps",
       "Sessions",
     ]);
     await expect(relay).toBeEnabled();
+    await expect(customAgents).toBeEnabled();
     await expect(search).toBeDisabled();
     await expect(sessions).toBeDisabled();
     await expect(projects).toBeEnabled();
     await expect(apps).toBeEnabled();
+    await customAgents.click();
+    await expect(page.locator("#panel-custom-agents")).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Agent", exact: true })).toBeVisible();
+    await homeTab.click();
     await projects.click();
     await expect(page.locator("#panel-projects")).toBeVisible();
     await homeTab.click();
     await apps.click();
     await expect(page.locator("#panel-apps")).toBeVisible();
     const relayTab = page.getByRole("button", { name: "Relay", exact: true });
+    const customAgentsTab = page.getByRole("tab", { name: "Custom Agents", exact: true });
     const searchTab = page.getByRole("tab", { name: "Search", exact: true });
     const projectsTab = page.locator("#tab-chat");
     await expect(searchTab).toBeDisabled();
     await relayTab.focus();
     await relayTab.press("ArrowDown");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowDown");
     await expect(projectsTab).toBeFocused();
     await projectsTab.press("ArrowUp");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowUp");
     await expect(relayTab).toBeFocused();
     await homeTab.click();
     await expect(home.locator(".home-card-description")).toHaveCount(0);
@@ -2566,6 +2578,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
       .locator(".page-breadcrumbs")
       .boundingBox();
     for (const [id, name] of [
+      ["custom-agents", "Custom Agents"],
       ["search", "Search"],
       ["projects", "Projects"],
       ["apps", "Apps"],
@@ -2588,6 +2601,8 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     }
     await relayTab.focus();
     await relayTab.press("ArrowDown");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowDown");
     await expect(searchTab).toBeFocused();
     await expect(searchTab).toHaveAttribute("aria-selected", "true");
     await searchTab.press("ArrowDown");
@@ -2595,6 +2610,8 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
     await projectsTab.press("ArrowUp");
     await expect(searchTab).toBeFocused();
     await searchTab.press("ArrowUp");
+    await expect(customAgentsTab).toBeFocused();
+    await customAgentsTab.press("ArrowUp");
     await expect(relayTab).toBeFocused();
     await homeTab.click();
     for (const scheme of ["light", "dark"]) {

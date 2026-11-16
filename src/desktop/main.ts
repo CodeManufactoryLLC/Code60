@@ -504,6 +504,7 @@ async function ready(): Promise<void> {
     });
   });
   handle("desktop:detail-read", (value) => controller.readDetails(parseDetailRequest(value)));
+  handle("desktop:custom-agent", (value) => controller.customAgent(value));
   handle("desktop:relay-files", (value) => controller.setRelayFileContext(value));
   handle("desktop:knowledge-renderer", () => controller.knowledge.rendererIdentity());
   handle("desktop:knowledge-report", (value) => controller.knowledge.report(value));

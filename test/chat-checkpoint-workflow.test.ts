@@ -518,6 +518,10 @@ it("returns exact saved-code references with a rewound correction without resend
     replacesDraft: false,
   });
   expect(result).toMatchObject({ text: "Correct this exact saved line", references: [reference] });
+  await vi.waitFor(() => {
+    expect(relay.snapshot().run?.status).toBe("idle");
+    expect(relay.snapshot().run?.id).not.toBe(id);
+  });
   expect(agents.sessions.at(-1)?.prompts).toEqual([]);
   expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("working edit\n");
   expect(await readFile(join(target.cwd, ".git", "index"))).toEqual(target.index);

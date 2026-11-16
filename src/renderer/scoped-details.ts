@@ -32,7 +32,7 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
   if (!state) return [];
   const { snapshot } = state;
   const epoch = snapshot.databaseEpoch;
-  const relay = snapshot.chats.find((chat) => chat.kind === "relay");
+  const relays = snapshot.chats.filter((chat) => chat.kind === "relay");
   const targets = new Set<string>();
   return [
     ...(epoch === undefined
@@ -56,8 +56,11 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
       if (
         !target ||
         targets.has(target.targetId) ||
-        target.conversationId !== relay?.conversationId ||
-        target.generation !== relay?.generation
+        !relays.some(
+          (relay) =>
+            target.conversationId === relay.conversationId &&
+            target.generation === relay.generation,
+        )
       )
         return [];
       targets.add(target.targetId);

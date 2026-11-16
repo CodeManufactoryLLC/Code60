@@ -14,7 +14,7 @@ export function RelayChanges({
   snapshot: Snapshot | undefined;
   active: boolean;
 }) {
-  const chat = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const chat = snapshot?.chat.kind === "relay" ? snapshot.chat : undefined;
   const conversationId = chat?.conversationId;
   const generation = chat?.generation;
   const owner = JSON.stringify([conversationId, generation]);

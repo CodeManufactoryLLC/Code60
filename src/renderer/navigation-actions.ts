@@ -77,10 +77,13 @@ export function createNavigationActions(
   }
   const chatAction = (request: OrchestrationChatAction) => {
     const before = read();
-    const relay = before.chats.find((chat) => chat.kind === "relay");
+    const relay = before.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
     const relayId = relay && conversationId(relay);
     const id = "id" in request ? request.id : undefined;
-    if (!before.database && !(request.type === "select" && id === relayId))
+    if (
+      !before.database &&
+      !before.chats.some((chat) => chat.kind === "relay" && conversationId(chat) === id)
+    )
       return Promise.resolve(false);
     const archiveCurrent =
       request.type === "archive" && id === before.selectedId && before.tabs.active === "chat";
@@ -121,6 +124,18 @@ export function createNavigationActions(
   const open = async (target: NavigationTarget) => {
     const context = read();
     switch (target.kind) {
+      case "custom-agent":
+        return run(
+          async () => {
+            if (!context.api.customAgent) throw new Error("Custom agents are unavailable");
+            await context.api.customAgent({ type: "open", id: target.id });
+          },
+          () => {
+            read().selectWorker(undefined, null);
+            read().onPage("chat");
+            reveal(target);
+          },
+        );
       case "page":
         ++serial;
         if (target.id === "settings") context.onSection(null);

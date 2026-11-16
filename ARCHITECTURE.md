@@ -28,11 +28,12 @@ features, resource bounds and remaining native-platform validation.
   Project chats belong to individual open projects. Selecting or expanding a
   project changes presentation, never Relay's authority.
   Home is the first sidebar page-list destination, with a Phosphor house icon
-  and a database-independent launchpad, followed by Relay, Search and Projects. Home
-  uses the standard page title position and “Welcome to Code60” above exactly five title-only feature cards,
-  ordered Relay, Search, Projects, Apps and Sessions. The Relay card selects Relay
+  and a database-independent launchpad, followed by Relay, Custom Agents, Search and Projects. Home
+  uses the standard page title position and “Welcome to Code60” above exactly six title-only feature cards,
+  ordered Relay, Custom Agents, Search, Projects, Apps and Sessions. The Relay card selects Relay
   and clears worker selection; Search and Sessions require a database, while
-  Projects and Apps do not. Cards adapt to narrow
+  Custom Agents, Projects and Apps do not. The Custom Agents card opens management,
+  not an agent conversation or provider connection. Cards adapt to narrow
   layouts and enlarged text, with shared keyboard focus and theme colors.
   Startup remains on Chat. Search is a regular labelled sidebar page tab with
   selected, disabled and arrow-key behavior; there is no utility row or sidebar wordmark.
@@ -1860,3 +1861,34 @@ Worker conversation headers place status as a subtitle under the agent name. Bra
 The left navigation has no border or divider overlay, including across the
 native-control drag strip and application footer. Sidebar content bounds, resizing
 and footer placement remain unchanged.
+
+## Custom Agents
+
+Custom Agents is a database-independent top-level destination immediately after
+Relay. Users create up to 64 application-owned agents with a name (120 characters)
+and special instructions (32,000 characters), using the shared verified provider.
+Each agent has one persistent conversation and the same guarded orchestration
+capabilities as Relay. The built-in Relay remains a singleton.
+
+`ApplicationAgents` routes requests to captured conversation owners, never UI
+selection. Each custom agent reuses `RelayService` with an immutable instruction
+revision and its own private UUID directory under `code60/custom-agents` in the
+application state directory. The revision-checked, locked catalog is independent
+of project databases. The compact catalog references immutable instruction
+files, which load only on explicit definition reads or agent Open. Catalog failure
+must not disable built-in Relay.
+
+Custom sessions connect lazily on explicit Open. Startup restores definitions,
+not processes or execution authority. History is evidence on the next human Send.
+Workers, plans, checkpoints, file contexts, reviews and memory scopes stay
+conversation-owned. Stop all, folder-stop, provider replacement and shutdown cover
+all application owners; database/project changes cannot retarget them.
+Special instructions supplement the operating contract and cannot bypass host
+permissions or change target authority.
+
+Editing requires stopped agent work, retires provider context and keeps history.
+Archive confirms natively and stops only that agent; Restore never resumes work.
+Both preserve histories, workspaces and review evidence. There is no permanent
+deletion, per-agent provider choice, management MCP tool or CLI change.
+These rules extend earlier Relay-only ownership and bridge rules to custom agents;
+the built-in Relay's identity, store and navigation entry remain unchanged.

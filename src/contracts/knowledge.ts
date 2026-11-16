@@ -247,6 +247,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Requires explicit target and direct/worktree mode; selection and history grant no authority.",
   ),
   feature(
+    "custom-agents",
+    "Custom Agents",
+    "Create application-wide agents with special instructions and one persistent Relay-style conversation each.",
+    "Home → Custom Agents (also in the sidebar) → New Agent; Edit; Archive; Archived → Restore",
+    "none",
+    "human-only",
+    "Up to 64 agents, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop agent and workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.",
+    "Archiving confirms natively, stops only the agent and preserves history.",
+  ),
+  feature(
     "projects",
     "Projects",
     "Retain independent project workspaces and conversations.",
@@ -486,6 +496,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   ),
 ];
 export const PAGE_CAPABILITIES = {
+  "custom-agents": "custom-agents",
   home: "knowledge",
   apps: "settings",
   projects: "projects",

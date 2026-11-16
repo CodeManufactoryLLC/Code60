@@ -43,6 +43,16 @@ function deferred() {
 }
 
 describe("shared navigation actions", () => {
+  it("opens Custom Agents management without a database or conversation action", async () => {
+    const { actions, context } = fixture();
+    context.database = null;
+    expect(await actions.open({ kind: "page", id: "custom-agents" })).toBe(true);
+    expect(context.onPage).toHaveBeenCalledExactlyOnceWith("custom-agents");
+    expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
+    expect(context.api.projectAction).not.toHaveBeenCalled();
+    expect(context.selectWorker).not.toHaveBeenCalled();
+  });
+
   it("selects a project home without opening/creating a conversation or clearing its worker", async () => {
     const { actions, context, status } = fixture();
     expect(await actions.open({ kind: "project", id: "a" })).toBe(true);
@@ -183,5 +193,29 @@ describe("shared navigation actions", () => {
     });
     expect(context.onArchived).toHaveBeenCalledOnce();
     expect(context.onPage).toHaveBeenCalledWith("chat");
+  });
+});
+
+it("opens custom agents without a database and selects existing custom conversations", async () => {
+  const { actions, context } = fixture();
+  context.database = null;
+  context.api.customAgent = vi.fn(async () => ({ agents: [], conversationId: "custom-run" }));
+  expect(await actions.open({ kind: "custom-agent", id: "custom-definition" })).toBe(true);
+  expect(context.api.customAgent).toHaveBeenCalledWith({ type: "open", id: "custom-definition" });
+  expect(context.selectWorker).toHaveBeenCalledWith(undefined, null);
+  expect(context.onPage).toHaveBeenCalledWith("chat");
+  context.chats = [
+    ...context.chats,
+    {
+      kind: "relay",
+      customAgentId: "custom-definition",
+      conversationId: "custom-conversation",
+      run: { id: "custom-run" },
+    } as OrchestrationChat,
+  ];
+  expect(await actions.open({ kind: "conversation", id: "custom-run" })).toBe(true);
+  expect(context.api.orchestrationChatAction).toHaveBeenCalledWith({
+    type: "select",
+    id: "custom-run",
   });
 });

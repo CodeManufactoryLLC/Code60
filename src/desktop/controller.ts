@@ -168,6 +168,7 @@ import {
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import { ApplicationAgents } from "./application-agents.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
@@ -211,7 +212,6 @@ import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
 import { RAG_LIMITS } from "./rag-store.js";
 import type { RagConversation } from "./rag-worker.js";
 import { RelayFiles } from "./relay-files.js";
-import { RelayService } from "./relay-service.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
@@ -365,7 +365,7 @@ export class DesktopController {
   private get conversations() {
     return this.projectState.conversations;
   }
-  private readonly relay: RelayService | undefined;
+  private readonly relay: ApplicationAgents | undefined;
   private relaySelected = true;
   private projectSession: ProjectSessionStore | undefined;
   private projectSessionPaths: string[] = [];
@@ -1900,7 +1900,7 @@ export class DesktopController {
         this.memory.report("Saved memory is unavailable. Check private storage.");
       });
     this.relay = storage.relay
-      ? new RelayService(deps, env, () => this.changed(null), dialogs, this.memory)
+      ? new ApplicationAgents(deps, env, () => this.changed(null), dialogs, this.memory)
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
     this.rag = new RagService(
@@ -3227,6 +3227,14 @@ export class DesktopController {
       this.changed();
     }
   }
+  async customAgent(value: unknown) {
+    if (!this.relay) throw new Error("Custom agents are unavailable");
+    const response = await this.relay.manage(value);
+    if (response.conversationId) this.relaySelected = true;
+    this.changed();
+    return response;
+  }
+
   orchestrationChatAction(value: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const request = parseOrchestrationChatAction(value);
     if (
@@ -3552,7 +3560,12 @@ export class DesktopController {
     const owner = this.details.capture(context.subscriptionId);
     if (!this.relay || this.closing) throw new Error("Relay files are unavailable");
     const root = this.relay.fileRoot(owner.scope);
-    this.relayFiles.set(context, root, owner.valid);
+    this.relayFiles.set(
+      context,
+      root,
+      owner.valid,
+      owner.scope.kind === "project" ? undefined : owner.scope.conversationId,
+    );
   }
 
   private detailSource(
@@ -3563,7 +3576,7 @@ export class DesktopController {
     read(allEvents: boolean): DetailPayload;
     version(): string | number;
   } {
-    const relay = this.relay;
+    const relay = scope.kind === "project" ? undefined : this.relay?.owner(scope.conversationId);
     const relayAddress = () => {
       if (this.closing || !relay || scope.kind === "project")
         throw new Error("This Relay detail generation is no longer available");
@@ -3657,9 +3670,10 @@ export class DesktopController {
     validOwner: (owner) => this.validKnowledgeOwner(owner),
     readView: async (caller, _panel, tab) => {
       if (caller.kind === "relay") {
-        if (tab.kind === "plan") return this.relay?.knowledgePlan(tab.planId);
+        if (tab.kind === "plan")
+          return this.relay?.owner(caller.conversationId)?.knowledgePlan(tab.planId);
         if (tab.kind === "file" && !tab.savedRevision)
-          return this.relayFiles.knowledgePreview(tab.path);
+          return this.relayFiles.knowledgePreview(tab.path, caller.conversationId);
         return undefined;
       }
       const owner = this.projectHost.byId(caller.projectId);
@@ -3696,7 +3710,7 @@ export class DesktopController {
       if (runtime.epoch !== owner.databaseEpoch || !runtime.state.workspace)
         throw new Error("Stale project owner");
     } else {
-      const relay = this.relay?.snapshot(true);
+      const relay = this.relay?.owner(owner.conversationId)?.snapshot(true);
       if (relay?.conversationId !== owner.conversationId || relay.generation !== owner.generation)
         throw new Error("Stale Relay owner");
     }
@@ -3749,15 +3763,15 @@ export class DesktopController {
     const conversations: Record<string, unknown>[] = [];
     const sessions: Record<string, unknown>[] = [];
     const relay = this.relay?.snapshot(true);
-    if (relay)
+    for (const applicationChat of this.relay?.snapshots(true) ?? [])
       conversations.push({
-        id: relay.conversationId,
+        id: applicationChat.conversationId,
         kind: "relay",
-        generation: relay.generation,
-        title: "Relay",
-        status: relay.run?.status ?? "disconnected",
+        generation: applicationChat.generation,
+        title: applicationChat.title,
+        status: applicationChat.run?.status ?? "disconnected",
         historical: false,
-        selected: this.relaySelected,
+        selected: this.relaySelected && relay?.conversationId === applicationChat.conversationId,
       });
     for (const owner of this.projectHost.all()) {
       const state = owner.state;
@@ -3916,7 +3930,9 @@ export class DesktopController {
       liveWorkers:
         session && state
           ? state.conversations.liveWorkerCount(session)
-          : (this.relay?.knowledgeLiveWorkers() ?? 0),
+          : caller.kind === "relay"
+            ? (this.relay?.owner(caller.conversationId)?.knowledgeLiveWorkers() ?? 0)
+            : 0,
       gitReady: state?.gitState ? state.gitState.status === "ready" : null,
       projectOpen: !!state?.workspace,
       customizations,
@@ -4074,6 +4090,8 @@ export class DesktopController {
     const chatSnapshot = (current: ChatSession) => this.chatSnapshot(current, allEvents, summaries);
     return {
       ...project,
+      customAgents: this.relay?.summaries() ?? [],
+      customAgentError: this.relay?.error,
       ...(summaries
         ? { summaryOnly: true as const, detailRevisions: this.details.revisions() }
         : {}),
@@ -4092,7 +4110,7 @@ export class DesktopController {
       chat:
         this.relay && this.relaySelected ? this.relay.snapshot(summaries) : chatSnapshot(session),
       chats: [
-        ...(this.relay ? [this.relay.snapshot(summaries)] : []),
+        ...(this.relay?.snapshots(summaries) ?? []),
         ...this.projectHost
           .all()
           .filter((owner) => !this.relay || owner.state.workspace)

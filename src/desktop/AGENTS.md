@@ -205,3 +205,11 @@
   and keep credentials, environments, drafts, logs and memory records out of it.
 
 - GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.
+
+## Custom Agents
+
+The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+Reuse the Relay runtime for custom application-owned conversations. Route all
+requests by explicit conversation/generation ownership, including file previews,
+worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
+Custom definitions are private, revision-checked and database-independent.
