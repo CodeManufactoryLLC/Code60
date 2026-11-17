@@ -11098,6 +11098,8 @@ test("desktop: simplified memory settings save immediately and manage automatic 
     await retention.selectOption("30");
     await expect(retention).toHaveValue("30");
     const toggle = memory.getByRole("switch", { name: "Memory", exact: true });
+    // The optimistic value appears before the save settles; controls stay disabled until then.
+    await expect(toggle).toBeEnabled();
     await toggle.focus();
     await toggle.press("Space");
     await expect(toggle).not.toBeChecked();
