@@ -204,6 +204,15 @@ it("uses the documented thread-only PSS flags and thread walk class at both call
   expect(source.match(/PssWalkSnapshot\(snapshot, PssWalkThreads,/g)).toHaveLength(2);
   expect(source).toContain("process, PssCaptureThreads | PssCaptureThreadContext,");
   expect(source).not.toMatch(/PssWalkSnapshot\(snapshot, 0,/);
+  // ADDRESS64 includes WORD Segment before the 32-bit addressing mode.
+  expect(source).toContain("public ushort Segment;");
+  expect(source).toContain("AddressModeOffset = 12");
+  expect(source).toContain(
+    'Marshal.OffsetOf(typeof(NativeAddress64), "Mode").ToInt32() == AddressModeOffset',
+  );
+  expect(
+    source.match(/Marshal.WriteInt32\(stackFrame, (?:\d+ \+ )?AddressModeOffset, 3\)/g),
+  ).toHaveLength(4);
 });
 
 it.skipIf(process.platform !== "win32")(

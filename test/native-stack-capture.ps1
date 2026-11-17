@@ -63,6 +63,7 @@ using System.Text.RegularExpressions;
 [StructLayout(LayoutKind.Sequential)]
 public struct NativeAddress64 {
   public ulong Offset;
+  public ushort Segment;
   public uint Mode;
 }
 
@@ -178,6 +179,7 @@ public static class NativeStackCapture {
   private const int ContextRspOffset = 152;
   private const int ContextRbpOffset = 160;
   private const int ContextRipOffset = 248;
+  private const int AddressModeOffset = 12;
 
   private static readonly Regex ModulePattern =
     new Regex(@"^[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant);
@@ -253,6 +255,8 @@ public static class NativeStackCapture {
   public static bool ValidateLayouts() {
     return IntPtr.Size == 8 &&
       Marshal.SizeOf(typeof(NativeAddress64)) == 16 &&
+      Marshal.OffsetOf(typeof(NativeAddress64), "Segment").ToInt32() == 8 &&
+      Marshal.OffsetOf(typeof(NativeAddress64), "Mode").ToInt32() == AddressModeOffset &&
       Marshal.SizeOf(typeof(NativeKdHelp64)) == 112 &&
       Marshal.SizeOf(typeof(NativeStackFrame64)) == 264 &&
       Marshal.OffsetOf(typeof(NativeStackFrame64), "AddrFrame").ToInt32() == 32 &&
@@ -351,12 +355,12 @@ public static class NativeStackCapture {
       stackFrame = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(NativeStackFrame64)));
       ZeroMemory(stackFrame, new UIntPtr((uint)Marshal.SizeOf(typeof(NativeStackFrame64))));
       Marshal.WriteInt64(stackFrame, 0, Marshal.ReadInt64(context, ContextRipOffset));
-      Marshal.WriteInt32(stackFrame, 8, 3);
+      Marshal.WriteInt32(stackFrame, AddressModeOffset, 3);
       Marshal.WriteInt64(stackFrame, 32, Marshal.ReadInt64(context, ContextRbpOffset));
-      Marshal.WriteInt32(stackFrame, 40, 3);
+      Marshal.WriteInt32(stackFrame, 32 + AddressModeOffset, 3);
       Marshal.WriteInt64(stackFrame, 48, Marshal.ReadInt64(context, ContextRspOffset));
-      Marshal.WriteInt32(stackFrame, 56, 3);
-      Marshal.WriteInt32(stackFrame, 72, 3);
+      Marshal.WriteInt32(stackFrame, 48 + AddressModeOffset, 3);
+      Marshal.WriteInt32(stackFrame, 64 + AddressModeOffset, 3);
       symbol = Marshal.AllocHGlobal(
         Marshal.SizeOf(typeof(NativeSymbolInfo64)) + SymbolNameCapacity - 1);
 
