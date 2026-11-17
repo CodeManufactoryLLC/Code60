@@ -82,6 +82,20 @@ it("uses a fresh five-second capture budget after bounded preparation and idle w
   expect(f.child.kill).toHaveBeenCalledTimes(1);
 });
 
+it("gives each completed capture sample a fresh five-second bound", async () => {
+  const f = fixture();
+  f.record({ observerPhase: "stack-capture-ready" });
+  expect(await f.observer.ready).toBe(true);
+  f.observer.capture();
+  vi.advanceTimersByTime(4000);
+  f.record({ observerPhase: "stack-capture-result", sample: 0, state: "completed" });
+  vi.advanceTimersByTime(4999);
+  expect(f.child.kill).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1);
+  await f.observer.done;
+  expect(f.child.kill).toHaveBeenCalledTimes(1);
+});
+
 it("bounds preparation and resolves readiness false if startup stalls", async () => {
   const f = fixture();
   vi.advanceTimersByTime(5000);

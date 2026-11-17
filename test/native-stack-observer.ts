@@ -83,6 +83,8 @@ export function controlNativeStackObserver(
         armDeadline();
         readyResolve(true);
       }
+      // Each completed sample earns a fresh bound for the next one.
+      if (record.observerPhase === "stack-capture-result" && stage === "capturing") armDeadline();
     }
   });
   child.on("error", () => finish("observer-unavailable"));

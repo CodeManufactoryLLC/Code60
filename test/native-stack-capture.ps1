@@ -551,14 +551,20 @@ try {
     }
   }
   Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-triggered' })
-  $capture = [NativeStackCapture]::Capture($processHandle, 3500)
-  Write-Observation ([pscustomobject]@{
-    observerPhase = 'stack-capture-result'
-    state = $capture.State
-    threadCount = $capture.ThreadCount
-    truncated = $capture.Truncated
-    elapsedMs = $capture.ElapsedMs
-  })
+  # Diagnostic sampling only: the second sample observes the steady hang state.
+  foreach ($sample in 0, 1) {
+    if ($sample -gt 0) { Start-Sleep -Milliseconds 3000 }
+    Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-sample'; sample = $sample })
+    $capture = [NativeStackCapture]::Capture($processHandle, 3500)
+    Write-Observation ([pscustomobject]@{
+      observerPhase = 'stack-capture-result'
+      sample = $sample
+      state = $capture.State
+      threadCount = $capture.ThreadCount
+      truncated = $capture.Truncated
+      elapsedMs = $capture.ElapsedMs
+    })
+  }
 } finally {
   [NativeStackCapture]::ReleaseProcess($processHandle)
 }
