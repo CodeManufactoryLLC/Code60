@@ -1,6 +1,6 @@
 # Temporary stack-only probe for one owned Electron process. It never attaches
 # a debugger, writes a dump, enables privileges, or terminates the target.
-param([uint32]$RootPid)
+param([uint32]$RootPid, [switch]$WaitForCapture, [switch]$ValidateOnly)
 $ErrorActionPreference = 'Stop'
 
 function Write-Observation([object]$Value) {
@@ -38,6 +38,7 @@ $counts = @($tree | Group-Object kind | ForEach-Object {
 })
 Write-Observation ([pscustomobject]@{ observerPhase = 'owned-process-tree'; kinds = $counts })
 
+Write-Observation ([pscustomobject]@{ observerPhase = 'electron-target-selection'; state = 'started' })
 $electronProcesses = @($all | Where-Object {
   $owned.Contains([uint32]$_.ProcessId) -and $_.Name -ieq 'electron.exe'
 })
@@ -48,6 +49,8 @@ foreach ($electron in $electronProcesses) {
 $targets = @($electronProcesses | Where-Object {
   -not $electronIds.Contains([uint32]$_.ParentProcessId)
 })
+Write-Observation ([pscustomobject]@{ observerPhase = 'electron-target-selection'; state = 'completed' })
+Write-Observation ([pscustomobject]@{ observerPhase = 'native-helper-compilation'; state = 'started' })
 Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -159,7 +162,7 @@ public static class NativeStackCapture {
   private const uint PssCaptureThreads = 0x00000080;
   private const uint PssCaptureThreadContext = 0x00000100;
   private const uint PssWalkThreads = 3;
-  private const uint ContextFullAmd64 = 0x0010000B;
+  private const uint ContextControlIntegerAmd64 = 0x00100003;
   private const uint ErrorNoMoreItems = 259;
   private const uint MachineAmd64 = 0x8664;
   private const uint SymoptUndname = 0x00000002;
@@ -305,6 +308,30 @@ public static class NativeStackCapture {
     return new NativeStackFrameRecord { Module = moduleName, Function = functionName };
   }
 
+  private static void WritePhase(string phase, string state) {
+    Console.Out.WriteLine("{\"observerPhase\":\"" + phase + "\",\"state\":\"" + state + "\"}");
+    Console.Out.Flush();
+  }
+
+  private static void WriteThread(NativeThreadStackRecord thread) {
+    StringBuilder json = new StringBuilder();
+    json.Append("{\"observerPhase\":\"thread-stack\",\"ordinal\":");
+    json.Append(thread.Ordinal);
+    json.Append(",\"frames\":[");
+    for (int index = 0; index < thread.Frames.Length; index++) {
+      if (index > 0) json.Append(',');
+      NativeStackFrameRecord frame = thread.Frames[index];
+      // Both strings have already passed the strict basename/function allowlists.
+      json.Append("{\"module\":\"").Append(frame.Module).Append('"');
+      if (frame.Function != null)
+        json.Append(",\"function\":\"").Append(frame.Function).Append('"');
+      json.Append('}');
+    }
+    json.Append("]}");
+    Console.Out.WriteLine(json.ToString());
+    Console.Out.Flush();
+  }
+
   private static List<NativeStackFrameRecord> WalkThread(
     IntPtr process, NativePssThreadEntry entry, IntPtr functionTable, IntPtr moduleBase,
     Stopwatch timer, int budgetMs, ref bool budgetExpired) {
@@ -339,15 +366,19 @@ public static class NativeStackCapture {
           budgetExpired = true;
           break;
         }
+        if (!StackWalk64(
+          MachineAmd64, process, thread, stackFrame, context, IntPtr.Zero,
+          functionTable, moduleBase, IntPtr.Zero)) {
+          if (frames.Count == 0)
+            frames.Add(DescribeFrame(
+              process, unchecked((ulong)Marshal.ReadInt64(context, ContextRipOffset)), symbol));
+          break;
+        }
         ulong programCounter = unchecked((ulong)Marshal.ReadInt64(stackFrame, 0));
         ulong stackPointer = unchecked((ulong)Marshal.ReadInt64(stackFrame, 48));
         if (programCounter == 0 || (index > 0 && stackPointer <= previousStack)) break;
         frames.Add(DescribeFrame(process, programCounter, symbol));
         previousStack = stackPointer;
-        if (!StackWalk64(
-          MachineAmd64, process, thread, stackFrame, context, IntPtr.Zero,
-          functionTable, moduleBase, IntPtr.Zero))
-          break;
       }
     } finally {
       if (symbol != IntPtr.Zero) Marshal.FreeHGlobal(symbol);
@@ -358,39 +389,43 @@ public static class NativeStackCapture {
     return frames;
   }
 
-  public static NativeStackCaptureRecord Capture(uint processId, int budgetMs) {
+  public static IntPtr PinProcess(uint processId) {
+    IntPtr process = OpenProcess(
+      ProcessQueryInformation | ProcessVmRead | ProcessVmOperation | ProcessDupHandle,
+      false, processId);
+    if (process == IntPtr.Zero) return IntPtr.Zero;
+    ushort processMachine, nativeMachine;
+    if (!IsWow64Process2(process, out processMachine, out nativeMachine) ||
+        processMachine != 0 || nativeMachine != MachineAmd64) {
+      CloseHandle(process);
+      return IntPtr.Zero;
+    }
+    return process;
+  }
+
+  public static void ReleaseProcess(IntPtr process) {
+    if (process != IntPtr.Zero) CloseHandle(process);
+  }
+
+  public static NativeStackCaptureRecord Capture(IntPtr process, int budgetMs) {
     Stopwatch timer = Stopwatch.StartNew();
     NativeStackCaptureRecord result = new NativeStackCaptureRecord {
       State = "unavailable", Threads = new NativeThreadStackRecord[0]
     };
-    IntPtr process = OpenProcess(
-      ProcessQueryInformation | ProcessVmRead | ProcessVmOperation | ProcessDupHandle,
-      false, processId);
-    if (process == IntPtr.Zero) {
-      result.State = "process-unavailable";
-      result.ElapsedMs = (int)timer.ElapsedMilliseconds;
-      return result;
-    }
-
     IntPtr snapshot = IntPtr.Zero;
     IntPtr marker = IntPtr.Zero;
     bool symbolsInitialized = false;
     try {
-      ushort processMachine, nativeMachine;
-      if (!IsWow64Process2(process, out processMachine, out nativeMachine) ||
-          processMachine != 0 || nativeMachine != MachineAmd64) {
-        result.State = "unsupported-target-architecture";
-        return result;
-      }
-
       // Capture thread metadata and control/integer registers only. In
       // particular, no VA clone, VA-space, handles, or dump is requested.
+      WritePhase("thread-snapshot", "started");
       uint status = PssCaptureSnapshot(
-        process, PssCaptureThreads | PssCaptureThreadContext, ContextFullAmd64, out snapshot);
+        process, PssCaptureThreads | PssCaptureThreadContext, ContextControlIntegerAmd64, out snapshot);
       if (status != 0 || snapshot == IntPtr.Zero) {
         result.State = "snapshot-unavailable";
         return result;
       }
+      WritePhase("thread-snapshot", "completed");
 
       status = PssWalkMarkerCreate(IntPtr.Zero, out marker);
       if (status != 0 || marker == IntPtr.Zero) {
@@ -404,11 +439,13 @@ public static class NativeStackCapture {
       Environment.SetEnvironmentVariable("_NT_ALTERNATE_SYMBOL_PATH", String.Empty);
       SymSetOptions(SymoptUndname | SymoptDeferredLoads |
         SymoptFailCriticalErrors | SymoptNoPrompts);
+      WritePhase("symbol-initialization", "started");
       if (!SymInitialize(process, String.Empty, true)) {
         result.State = "symbols-unavailable";
         return result;
       }
       symbolsInitialized = true;
+      WritePhase("symbol-initialization", "completed");
 
       FunctionTableAccessCallback functionTableCallback = FunctionTableAccess;
       ModuleBaseCallback moduleBaseCallback = ModuleBase;
@@ -431,7 +468,9 @@ public static class NativeStackCapture {
             (uint)Marshal.SizeOf(typeof(NativePssThreadEntry)));
           if (status == ErrorNoMoreItems) break;
           if (status != 0) {
-            result.State = "partial";
+            result.State = status == 24 ? "walk-bad-length" :
+              status == 87 ? "walk-invalid-parameter" :
+              status == 1168 ? "walk-data-not-found" : "walk-unavailable";
             break;
           }
 
@@ -440,9 +479,11 @@ public static class NativeStackCapture {
           int ordinal = threads.Count;
           List<NativeStackFrameRecord> frames = WalkThread(
             process, entry, functionTable, moduleBase, timer, budgetMs, ref budgetExpired);
-          threads.Add(new NativeThreadStackRecord {
+          NativeThreadStackRecord thread = new NativeThreadStackRecord {
             Ordinal = ordinal, Frames = frames.ToArray()
-          });
+          };
+          threads.Add(thread);
+          WriteThread(thread);
           if (budgetExpired) break;
         }
       } finally {
@@ -456,7 +497,7 @@ public static class NativeStackCapture {
       result.Truncated = truncated;
       if (budgetExpired || timer.ElapsedMilliseconds >= budgetMs)
         result.State = "budget-exhausted";
-      else if (result.State != "partial")
+      else if (result.State == "unavailable")
         result.State = "completed";
       return result;
     } catch {
@@ -466,12 +507,12 @@ public static class NativeStackCapture {
       if (marker != IntPtr.Zero) PssWalkMarkerFree(marker);
       if (symbolsInitialized) SymCleanup(process);
       if (snapshot != IntPtr.Zero) PssFreeSnapshot(GetCurrentProcess(), snapshot);
-      CloseHandle(process);
       result.ElapsedMs = (int)timer.ElapsedMilliseconds;
     }
   }
 }
 '@
+Write-Observation ([pscustomobject]@{ observerPhase = 'native-helper-compilation'; state = 'completed' })
 
 if (-not [NativeStackCapture]::ValidateLayouts() -or
     [NativeStackCapture]::SanitizeModule('C:\synthetic\kernelbase.dll') -ne 'kernelbase.dll' -or
@@ -481,6 +522,7 @@ if (-not [NativeStackCapture]::ValidateLayouts() -or
   exit 0
 }
 Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-validation'; state = 'passed' })
+if ($ValidateOnly) { return }
 if ([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -ne 'X64') {
   Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture'; state = 'unsupported-architecture' })
   exit 0
@@ -491,20 +533,28 @@ if ($targets.Count -ne 1) {
 }
 
 Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-started' })
-$capture = [NativeStackCapture]::Capture([uint32]$targets[0].ProcessId, 3500)
-$threadStacks = @($capture.Threads | ForEach-Object {
-  $frames = @($_.Frames | ForEach-Object {
-    $frame = [ordered]@{ module = $_.Module }
-    if ($_.Function) { $frame.function = $_.Function }
-    [pscustomobject]$frame
+$processHandle = [NativeStackCapture]::PinProcess([uint32]$targets[0].ProcessId)
+if ($processHandle -eq [IntPtr]::Zero) {
+  Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture'; state = 'process-unavailable' })
+  exit 0
+}
+try {
+  if ($WaitForCapture) {
+    Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-ready' })
+    if ([Console]::In.ReadLine() -cne 'capture') {
+      Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture'; state = 'cancelled' })
+      return
+    }
+  }
+  Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-triggered' })
+  $capture = [NativeStackCapture]::Capture($processHandle, 3500)
+  Write-Observation ([pscustomobject]@{
+    observerPhase = 'stack-capture-result'
+    state = $capture.State
+    threadCount = $capture.ThreadCount
+    truncated = $capture.Truncated
+    elapsedMs = $capture.ElapsedMs
   })
-  [pscustomobject]@{ ordinal = $_.Ordinal; frames = $frames }
-})
-Write-Observation ([pscustomobject]@{
-  observerPhase = 'stack-capture-result'
-  state = $capture.State
-  threadCount = $capture.ThreadCount
-  truncated = $capture.Truncated
-  elapsedMs = $capture.ElapsedMs
-  threads = $threadStacks
-})
+} finally {
+  [NativeStackCapture]::ReleaseProcess($processHandle)
+}

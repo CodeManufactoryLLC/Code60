@@ -1,9 +1,10 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { _electron, test } from "@playwright/test";
+import { controlNativeStackObserver } from "./native-stack-observer.js";
 
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, "..");
@@ -104,7 +105,9 @@ export async function launchDesktop(
     cwd: directory,
     env,
   });
+  let stackObserver: ReturnType<typeof controlNativeStackObserver> | undefined;
   launched.process().on("exit", (code) => {
+    stackObserver?.cancel();
     process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.exit", code })}\n`);
   });
   launched.process().on("close", (code) => {
@@ -123,45 +126,9 @@ export async function launchDesktop(
         );
       if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":')) {
         process.stderr.write(`${line}\n`);
-        const pid = launched.process().pid;
-        if (
-          process.platform === "win32" &&
-          pid &&
-          !sampledQuit &&
-          line.startsWith('{"nativePhase":"app.quit-event"')
-        ) {
+        if (!sampledQuit && line.startsWith('{"nativePhase":"app.quit-event"')) {
           sampledQuit = true;
-          const startedAt = performance.now();
-          // Capture bounded, sanitized stacks from this launcher's Electron only.
-          // The observer uses PSS thread contexts, not a debugger or memory dump.
-          execFile(
-            "powershell.exe",
-            [
-              "-NoProfile",
-              "-NonInteractive",
-              "-File",
-              join(root, "test", "native-stack-capture.ps1"),
-              "-RootPid",
-              String(pid),
-            ],
-            { windowsHide: true, timeout: 5000 },
-            (error, stdout) => {
-              const observations: unknown[] = [];
-              for (const record of stdout.split(/\r?\n/)) {
-                try {
-                  observations.push(JSON.parse(record));
-                } catch {}
-              }
-              process.stderr.write(
-                `${JSON.stringify({
-                  nativePhase: "launcher.stack-capture",
-                  state: error ? "failed" : "succeeded",
-                  elapsed: performance.now() - startedAt,
-                  observations,
-                })}\n`,
-              );
-            },
-          );
+          stackObserver?.capture();
         }
       }
     }
@@ -174,7 +141,41 @@ export async function launchDesktop(
     await test
       .info()
       .attach("native-browser-trace", { path: trace, contentType: "application/zip" });
-    await close();
+    const pid = launched.process().pid;
+    if (
+      process.platform === "win32" &&
+      process.arch === "x64" &&
+      process.env.GITHUB_ACTIONS === "true" &&
+      test.info().title.includes("tiny streamed replies") &&
+      pid &&
+      launched.process().exitCode === null
+    ) {
+      // Compile, discover and pin the owned process before requesting shutdown.
+      // Only the capture command runs after app.quit-event; no debugger or dump.
+      stackObserver = controlNativeStackObserver(
+        spawn(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            join(root, "test", "native-stack-capture.ps1"),
+            "-RootPid",
+            String(pid),
+            "-WaitForCapture",
+          ],
+          { windowsHide: true, stdio: "pipe" },
+        ),
+        (record) => process.stderr.write(`${JSON.stringify(record)}\n`),
+      );
+      await stackObserver.ready;
+    }
+    try {
+      await close();
+    } finally {
+      stackObserver?.cancel();
+      await stackObserver?.done;
+    }
   };
   await launched.evaluate(
     ({ dialog }, paths) => {
