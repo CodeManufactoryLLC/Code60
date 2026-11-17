@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -110,13 +111,72 @@ export async function launchDesktop(
     process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.close", code })}\n`);
   });
   let diagnosticBuffer = "";
+  let sampledQuit = false;
   launched.process().stderr?.on("data", (chunk: Buffer) => {
     diagnosticBuffer += chunk.toString();
     const lines = diagnosticBuffer.split("\n");
     diagnosticBuffer = (lines.pop() ?? "").slice(-65536);
-    for (const line of lines)
-      if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":'))
+    for (const line of lines) {
+      if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":')) {
         process.stderr.write(`${line}\n`);
+        const pid = launched.process().pid;
+        if (
+          process.platform === "win32" &&
+          pid &&
+          !sampledQuit &&
+          line.startsWith('{"nativePhase":"app.quit-event"')
+        ) {
+          sampledQuit = true;
+          const startedAt = performance.now();
+          // One read-only OS snapshot after quit, scoped to this launcher's tree.
+          // No command lines, paths, environments, user names or unrelated PIDs.
+          execFile(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              `$all = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name)
+              $owned = New-Object 'System.Collections.Generic.HashSet[uint32]'
+              [void]$owned.Add(${pid})
+              do {
+                $added = $false
+                foreach ($p in $all) {
+                  if ($owned.Contains([uint32]$p.ParentProcessId) -and $owned.Add([uint32]$p.ProcessId)) { $added = $true }
+                }
+              } while ($added)
+              $tree = @($all | Where-Object { $owned.Contains([uint32]$_.ProcessId) } | ForEach-Object {
+                $kind = switch ($_.Name) {
+                  'electron.exe' { 'electron' }
+                  'cmd.exe' { 'shell' }
+                  'node.exe' { 'node' }
+                  'code60-host.exe' { 'helper' }
+                  default { 'other' }
+                }
+                [pscustomobject]@{ pid = $_.ProcessId; parent = $_.ParentProcessId; kind = $kind }
+              })
+              ConvertTo-Json -Compress -InputObject $tree`,
+            ],
+            { windowsHide: true, timeout: 5000 },
+            (error, stdout) => {
+              let tree: unknown;
+              try {
+                tree = JSON.parse(stdout);
+              } catch {}
+              process.stderr.write(
+                `${JSON.stringify({
+                  nativePhase: "launcher.process-tree",
+                  state: error ? "failed" : "succeeded",
+                  elapsed: performance.now() - startedAt,
+                  root: pid,
+                  tree,
+                })}\n`,
+              );
+            },
+          );
+        }
+      }
+    }
   });
   await launched.context().tracing.start({ snapshots: true, screenshots: true, sources: true });
   const close = launched.close.bind(launched);

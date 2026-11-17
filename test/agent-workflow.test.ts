@@ -150,14 +150,13 @@ it.each(["readable", "legacy"] as const)(
       expect(service.snapshot().plans).toHaveLength(0);
     } finally {
       await service.shutdown(true);
-      const evidence = await Promise.all(
-        (await readdir(processLog)).map(
-          async (file) =>
-            JSON.parse(await readFile(join(processLog, file), "utf8")) as { pid: number },
-        ),
-      );
+      // Shutdown can stop a starting helper after creating its PID entry but
+      // before writing the JSON body. Its filename still identifies that process.
+      const evidence = await readdir(processLog);
       expect(evidence.length).toBeGreaterThanOrEqual(2);
-      for (const { pid } of evidence) {
+      for (const file of evidence) {
+        expect(file).toMatch(/^[1-9]\d*\.json$/);
+        const pid = Number(file.slice(0, -5));
         expect(() => process.kill(pid, 0)).toThrow();
       }
       await rm(root, { recursive: true, force: true });

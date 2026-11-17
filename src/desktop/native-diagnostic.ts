@@ -36,6 +36,16 @@ type Phase =
   | "capture.missing-checkout"
   | "associate.pinned"
   | "associate.unpinned"
+  | "associate.cached"
+  | "associate.read"
+  | "associate.create"
+  | "associate.baseline"
+  | "associate.worker"
+  | "associate.baseline-mismatch"
+  | "associate.checkout-mismatch"
+  | "associate.storage-busy"
+  | "associate.invalid"
+  | "associate.other"
   | "associate.saved-pinned"
   | "associate.saved-unpinned";
 

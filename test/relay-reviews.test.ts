@@ -32,6 +32,7 @@ let service: RelayService | undefined;
 const feedback = vi.fn();
 const confirm = vi.fn(async () => true);
 beforeEach(async () => {
+  vi.stubEnv("CODE60_NATIVE_DIAG", "1");
   root = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-reviews-")));
   owner = { id: randomUUID(), generation: 1, taskId: randomUUID() };
   agents = new FakeAgents();
@@ -85,6 +86,7 @@ afterEach(async () => {
   await reviews.settled();
   await rm(root, { recursive: true, force: true });
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 async function relayTool(name: string, args: unknown = {}) {
   const server = agents.specs
@@ -372,6 +374,66 @@ it("routes real Relay dispatch, review capture and between-turn feedback to the 
   });
   await service.cancelReviewReads();
   expect(service.workerSnapshot(true).runs[0]?.relay?.reviewId).toBe(request.reviewId);
+});
+it("saves checkout pins for sequential human requests in two target owners", async () => {
+  const associations = vi.spyOn(RelayReviewStore.prototype, "associate");
+  service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
+    confirm,
+  });
+  await service.sync("claude", DEFAULT_CONFIG);
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  const tasks = new Set<string>();
+  for (const name of ["a", "b"]) {
+    await service.action({
+      type: "send",
+      id: required(service.snapshot().run?.id),
+      text: `Human request for target ${name}`,
+    });
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+    const context = await relayTool("code60_get_context");
+    const accepted = await relayTool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: `worker-${name}`,
+      cwd: join(root, name),
+      workspaceMode: "worktree",
+      prompt: `Target ${name} work`,
+    });
+    const worker = required(
+      service.execution.list().find((worker) => worker.id === accepted.runId),
+    );
+    await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));
+    for (const result of associations.mock.results)
+      await expect(result.value).resolves.toEqual(expect.any(String));
+    const response = await service.reviewRequest({
+      type: "read",
+      conversationId: required(service.snapshot().conversationId),
+      generation: required(service.snapshot().generation),
+      targetId: accepted.targetId as string,
+      reviewId: accepted.reviewId as string,
+      requestId: randomUUID(),
+    });
+    expect(response).toMatchObject({
+      type: "review",
+      review: {
+        relay: { cwd: join(root, name), taskId: accepted.taskId },
+        workers: [
+          {
+            runId: worker.id,
+            checkout: {
+              cwd: worker.checkout?.cwd,
+              device: worker.checkout?.device.toString(),
+              inode: worker.checkout?.inode.toString(),
+              base: worker.record.base,
+              branch: worker.record.branch,
+            },
+          },
+        ],
+      },
+    });
+    expect(worker.checkout).toBeDefined();
+    tasks.add(accepted.taskId as string);
+  }
+  expect(tasks.size).toBe(2);
 });
 it("cancels one target's capture after cleanup without holding another target's review", async () => {
   const a = await ready();

@@ -5,7 +5,7 @@ import type { RelayReviewEntry, Review } from "../bridge/index.js";
 import { type CoreDeps, TaskLoop } from "../core/index.js";
 import { privateDirectory } from "../platform/index.js";
 import type { ExecutionWorker } from "./execution-host.js";
-import { nativeEvent } from "./native-diagnostic.js";
+import { nativeEvent, nativeWait } from "./native-diagnostic.js";
 import { RelayReviewIndex } from "./relay-review-index.js";
 import { readRelayState, verifyRelayStorage } from "./relay-storage.js";
 import { ReviewStore } from "./reviews.js";
@@ -119,10 +119,16 @@ export class RelayReviewStore {
       nativeEvent(worker.checkout ? "associate.pinned" : "associate.unpinned");
       if (worker.owner.id !== this.id) throw new Error("Worker belongs to another Relay");
       const previous = this.assignments.get(worker.id);
-      if (previous?.key === key && previous.turn === turn && previous.pinned === !!worker.checkout)
+      if (
+        previous?.key === key &&
+        previous.turn === turn &&
+        previous.pinned === !!worker.checkout
+      ) {
+        nativeEvent("associate.cached");
         return previous.reviewId;
+      }
       let id = previous?.key === key ? previous.reviewId : this.groups.get(key);
-      let store = id ? await this.read(id) : undefined;
+      let store = id ? await nativeWait("associate.read", this.read(id)) : undefined;
       valid();
       if (
         store &&
@@ -152,23 +158,26 @@ export class RelayReviewStore {
         this.groups.delete(previous.key);
       if (fresh || !this.groups.has(key)) this.groups.set(key, id);
       if (!store) {
-        store = await this.read(id, true);
+        store = await nativeWait("associate.read", this.read(id, true));
         valid();
-        await store.create(
-          origin?.chatId ?? this.id,
-          origin?.turn ?? 0,
-          worker.label ?? `${worker.provider} changes`,
-          {
-            conversationId: this.id,
-            generation: worker.owner.generation,
-            taskId: worker.owner.taskId,
-            targetId: worker.target.id,
-            cwd: worker.target.cwd,
-            device: worker.target.device.toString(),
-            inode: worker.target.inode.toString(),
-            workspaceMode: worker.workspaceMode,
-            ...(baseline ? { baseline } : {}),
-          },
+        await nativeWait(
+          "associate.create",
+          store.create(
+            origin?.chatId ?? this.id,
+            origin?.turn ?? 0,
+            worker.label ?? `${worker.provider} changes`,
+            {
+              conversationId: this.id,
+              generation: worker.owner.generation,
+              taskId: worker.owner.taskId,
+              targetId: worker.target.id,
+              cwd: worker.target.cwd,
+              device: worker.target.device.toString(),
+              inode: worker.target.inode.toString(),
+              workspaceMode: worker.workspaceMode,
+              ...(baseline ? { baseline } : {}),
+            },
+          ),
         );
       }
       valid();
@@ -180,25 +189,31 @@ export class RelayReviewStore {
       const review = store.get(id);
       if (baseline && review.relay?.baseline !== baseline)
         throw new Error("Relay task target already has another baseline");
-      if (review.relay?.baseline)
+      if (review.relay?.baseline) {
+        nativeEvent("associate.baseline", "started");
         await (await this.loop(review))?.baseline(id, review.relay.baseline);
+        nativeEvent("associate.baseline");
+      }
       valid();
       if (!worker.record.base || !worker.record.branch)
         throw new Error("Relay review requires the accepted isolated worker checkout");
-      await store.addWorker(
-        id,
-        worker.id,
-        worker.label ?? worker.provider,
-        turn,
-        worker.checkout
-          ? {
-              cwd: worker.checkout.cwd,
-              device: worker.checkout.device.toString(),
-              inode: worker.checkout.inode.toString(),
-              base: worker.record.base,
-              branch: worker.record.branch,
-            }
-          : undefined,
+      await nativeWait(
+        "associate.worker",
+        store.addWorker(
+          id,
+          worker.id,
+          worker.label ?? worker.provider,
+          turn,
+          worker.checkout
+            ? {
+                cwd: worker.checkout.cwd,
+                device: worker.checkout.device.toString(),
+                inode: worker.checkout.inode.toString(),
+                base: worker.record.base,
+                branch: worker.record.branch,
+              }
+            : undefined,
+        ),
       );
       nativeEvent(
         store.get(id).workers.find((item) => item.runId === worker.id)?.checkout
@@ -222,6 +237,23 @@ export class RelayReviewStore {
         await this.index.append(entry);
       }
       return id;
+    }).catch((cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : "";
+      const code = (cause as NodeJS.ErrnoException | undefined)?.code;
+      nativeEvent(
+        message === "Relay task target already has another baseline" ||
+          message === "Task baseline is already bound to another capture"
+          ? "associate.baseline-mismatch"
+          : message === "Review worker checkout identity changed"
+            ? "associate.checkout-mismatch"
+            : code === "EBUSY" || code === "EPERM" || code === "EACCES"
+              ? "associate.storage-busy"
+              : cause instanceof Error && cause.name === "ZodError"
+                ? "associate.invalid"
+                : "associate.other",
+        "failed",
+      );
+      throw cause;
     });
   }
   async settled(): Promise<void> {
