@@ -132,33 +132,32 @@ export async function launchDesktop(
         ) {
           sampledQuit = true;
           const startedAt = performance.now();
-          // One read-only OS snapshot after quit, scoped to this launcher's tree.
-          // No command lines, paths, environments, user names or unrelated PIDs.
+          // Capture bounded, sanitized stacks from this launcher's Electron only.
+          // The observer uses PSS thread contexts, not a debugger or memory dump.
           execFile(
             "powershell.exe",
             [
               "-NoProfile",
               "-NonInteractive",
               "-File",
-              join(root, "test", "native-wait-chain.ps1"),
+              join(root, "test", "native-stack-capture.ps1"),
               "-RootPid",
               String(pid),
             ],
             { windowsHide: true, timeout: 5000 },
             (error, stdout) => {
-              const snapshots: unknown[] = [];
+              const observations: unknown[] = [];
               for (const record of stdout.split(/\r?\n/)) {
                 try {
-                  snapshots.push(JSON.parse(record));
+                  observations.push(JSON.parse(record));
                 } catch {}
               }
               process.stderr.write(
                 `${JSON.stringify({
-                  nativePhase: "launcher.process-tree",
+                  nativePhase: "launcher.stack-capture",
                   state: error ? "failed" : "succeeded",
                   elapsed: performance.now() - startedAt,
-                  root: pid,
-                  snapshots,
+                  observations,
                 })}\n`,
               );
             },
