@@ -4198,14 +4198,18 @@ export class DesktopController {
     if (this.timer !== undefined) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      this.details.publish(this.revision);
+      // A change while building these frames schedules another frame; label both with
+      // the revision captured here so its predecessor matches what listeners received.
+      const revision = this.revision;
+      const previousRevision = this.publishedRevision;
+      this.details.publish(revision);
       const snapshot = this.listeners.size
-        ? { ...this.snapshot(false), previousRevision: this.publishedRevision }
+        ? { ...this.snapshot(false), revision, previousRevision }
         : undefined;
       const summary = this.summaryListeners.size
-        ? { ...this.snapshot(false, true), previousRevision: this.publishedRevision }
+        ? { ...this.snapshot(false, true), revision, previousRevision }
         : undefined;
-      this.publishedRevision = this.revision;
+      this.publishedRevision = revision;
       for (const runtime of this.projectHost.all()) {
         runtime.state.pending = [];
         for (const session of runtime.state.conversations.sessions) session.chatPending = [];

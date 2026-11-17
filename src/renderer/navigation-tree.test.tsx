@@ -45,6 +45,7 @@ const navigation: NavigationActions = {
   projectAction: vi.fn(async () => true),
   invalidate: vi.fn(),
   pending: false,
+  busy: false,
   projectPending: false,
   conversationPending: false,
   error: "",

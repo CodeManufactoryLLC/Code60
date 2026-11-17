@@ -101,7 +101,11 @@ it("resolves a symbolic base again for distinct dispatches but not accepted retr
   expect(await host.dispatch(owner, req, DEFAULT_CONFIG)).toBe(first);
   expect(first.record.base).toBe("a".repeat(40));
 });
-it("freezes current files by task and target while resolving explicit bases independently", async () => {
+// Seven dispatches each create private run records; on Windows every durable write runs the
+// native ACL/atomic-replace helper, which alone took about 4.6 seconds on an ARM64 VM.
+it("freezes current files by task and target while resolving explicit bases independently", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, async () => {
   const initial = "a".repeat(40);
   let current = "b".repeat(40);
   const snapshot = vi.fn(async () => current);

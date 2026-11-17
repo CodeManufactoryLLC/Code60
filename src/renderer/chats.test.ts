@@ -1,10 +1,17 @@
 import { expect, it } from "vitest";
 import type { OrchestrationChat } from "../bridge/index.js";
-import { isSelectedConversation } from "./chats.js";
+import { builtinRelayId, isSelectedConversation } from "./chats.js";
 
 const relay = { kind: "relay", directory: null, conversationId: "relay" } as OrchestrationChat;
 const a = { ...relay, customAgentId: "a", conversationId: "a-chat" };
 const b = { ...relay, customAgentId: "b", conversationId: "b-chat" };
+it("enables Relay navigation only after the built-in owner has an address", () => {
+  expect(builtinRelayId([])).toBeUndefined();
+  expect(builtinRelayId([a, b])).toBeUndefined();
+  const { conversationId: _, ...disconnected } = relay;
+  expect(builtinRelayId([disconnected, a])).toBeUndefined();
+  expect(builtinRelayId([a, relay, b])).toBe("relay");
+});
 it.each([relay, a, b])("activates only the selected application conversation", (selected) => {
   expect([relay, a, b].filter((chat) => isSelectedConversation(chat, selected))).toEqual([
     selected,

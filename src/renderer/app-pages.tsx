@@ -4,7 +4,7 @@ import type { AppPagesProps } from "./app-page-props.js";
 import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
 import { ChatWorkspace } from "./chat-workspace.js";
-import { conversationId } from "./chats.js";
+import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
 import { CustomAgentsPage } from "./custom-agents.js";
@@ -207,7 +207,7 @@ export function AppPages(props: AppPagesProps) {
     home: (
       <HomePage
         database={database}
-        relayAvailable={Boolean(snapshot?.chats.some((chat) => chat.kind === "relay"))}
+        relayAvailable={Boolean(builtinRelayId(snapshot?.chats ?? []))}
         onOpenRelay={props.openRelay}
         onOpenPage={(id) => void navigation.open({ kind: "page", id })}
       />

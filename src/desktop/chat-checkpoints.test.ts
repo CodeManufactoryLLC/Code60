@@ -389,6 +389,25 @@ it("automatically integrates and restores two targets without changing their ind
     expect(await taskGit.identity(directory)).toBe(identity[index]);
   }
 });
+it("keeps inverse journals within the Windows helper path limit beneath deep chat storage", async () => {
+  const directory = await project("deep");
+  // Project chats keep checkpoints several generated directories below the database.
+  const parent = join(root, "c".repeat(Math.max(1, 185 - root.length - "/checkpoints".length - 1)));
+  await mkdir(parent);
+  checkpoints = await ChatCheckpoints.open(join(parent, "checkpoints"), taskGit);
+  const id = await begin();
+  const { loop, operation } = await proposal(directory, "after\n");
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
+  );
+  await checkpoints.restore(id, 12);
+  expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before\n");
+  const entry = checkpoints.latest?.restores[0];
+  if (!entry) throw new Error("Missing inverse");
+  expect(join(entry.root, `${randomUUID()}.tmp`).length).toBeLessThan(248);
+});
 it("preflights all targets and preserves both if one has conflicting newer edits", async () => {
   const a = await project("a"),
     b = await project("b");

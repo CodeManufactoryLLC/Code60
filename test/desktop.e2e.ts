@@ -211,7 +211,15 @@ async function selectSidebarPage(page: Page, name: string) {
       if ((await project.count()) && (await project.getAttribute("aria-expanded")) === "false")
         await project.press("ArrowRight");
     }
-    await page.locator(`[id="conversation-${id}"]`).click();
+    const row = page.locator(`[id="conversation-${id}"]`);
+    // Reselecting the open conversation would start a save that ignores the next click.
+    if (
+      (await page.locator("#panel-chat").isVisible()) &&
+      (await row.getAttribute("aria-current")) === "true"
+    )
+      return;
+    await row.click();
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     return;
   }
   if (name === "Files") {
@@ -1172,9 +1180,13 @@ test("desktop: project chat recovers a missed update without losing messages or 
       await window.desktop.chooseFolder(opened.databaseEpoch);
     });
     await page.getByRole("button", { name: "New chat in project", exact: true }).click();
+    // The project chat is selected before its session run exists; wait for the run.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("project");
+      .poll(async () => {
+        const { chat } = await page.evaluate(() => window.desktop.snapshot());
+        return chat.kind === "project" && !!chat.run?.id;
+      })
+      .toBe(true);
     const selectedChat = await page.evaluate(
       async () => (await window.desktop.snapshot()).chat.run?.id,
     );
@@ -1251,9 +1263,13 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
       await window.desktop.chooseFolder((await window.desktop.snapshot()).databaseEpoch);
     });
     await page.getByRole("button", { name: "New chat in project", exact: true }).click();
+    // The project chat is selected before its session run exists; wait for the run.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("project");
+      .poll(async () => {
+        const { chat } = await page.evaluate(() => window.desktop.snapshot());
+        return chat.kind === "project" && !!chat.run?.id;
+      })
+      .toBe(true);
     const selected = await page.evaluate(
       async () => (await window.desktop.snapshot()).chat.run?.id,
     );
@@ -2900,6 +2916,7 @@ test("desktop: cards and text inputs use 5px corners alongside buttons", async (
     for (const card of await home.locator(".home-card").all())
       await expect(card).toHaveCSS("border-radius", "5px");
     const relay = home.getByRole("button", { name: "Open Relay", exact: true });
+    await expect(relay).toBeEnabled();
     await relay.focus();
     await expect(relay).toBeFocused();
     await expect(relay).toHaveCSS("overflow", "visible");
@@ -3984,6 +4001,8 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
       .click();
     await cGroup.getByRole("button", { name: "Chat 1", exact: true }).click();
     await expect(composer()).toHaveValue("project-c draft 0");
+    // The composer can switch before the selection request settles; a click meanwhile is ignored.
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await aChat.click();
     await expect(composer()).toHaveValue("project-a draft 1");
     const retained = await page.evaluate(() => window.desktop.snapshot());
@@ -6082,9 +6101,11 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       `Code60 ${version}`,
     );
     const source = "  ```ts\n  const value = '<not markup>';\n```\n";
+    // The later chunk waits for Copy, so Copy is proven to use the source at invocation.
+    const laterChunkGate = join(directory, "later-chunk-gate");
     const prompt = JSON.stringify([
       { message: source },
-      { sleep: 2000 },
+      { waitForFile: laterChunkGate },
       { message: "later chunk" },
       { hang: "cancellable" },
     ]);
@@ -6145,6 +6166,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       return selection?.toString();
     });
     await agentCopy.click();
+    await writeFile(laterChunkGate, "");
     await expect(composer).toBeFocused();
     expect(await page.evaluate(() => getSelection()?.toString())).toBe(selectedText);
     await expect(agentCopy).toHaveAttribute("aria-disabled", "true");
@@ -13850,7 +13872,11 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     const initialIndex = await readFile(join(repo, ".git", "index"));
     await composer.fill("Implement validation");
     await composer.press("Enter");
-    await expect(page.locator(".conversation-changes-link").last()).toBeVisible();
+    // Windows creates both worker worktrees and captures them through owned native Git and
+    // helper processes before the link appears; this took 11.2 seconds on an ARM64 VM.
+    await expect(page.locator(".conversation-changes-link").last()).toBeVisible({
+      timeout: process.platform === "win32" ? 30_000 : 5_000,
+    });
     await expect
       .poll(() =>
         page.evaluate(
@@ -14721,6 +14747,8 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
         { sleep: 1200 },
       ]),
     );
+    // Cancellation is shown before the stopped turn settles; Enter waits for readiness.
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await input.press("Enter");
     await expect(status).toHaveAttribute("data-activity", "waiting_for_workers");
     await expect(status).toHaveText(/^Monitoring subagents\.\.\. \d+s$/);
@@ -15248,6 +15276,8 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
       await composer.fill(text);
       await expect(composer).toHaveAttribute("aria-expanded", "false");
       await expect(chat.locator(".command-plain-text")).toHaveCount(0);
+      // The previous reply can render before its turn ends; Enter waits for readiness.
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
       await composer.press("Enter");
       await expect(chat.locator(".event.prompt pre").last()).toHaveText(text);
       await expect(chat.locator(".event.prompt").last().locator("mark")).toHaveCount(0);

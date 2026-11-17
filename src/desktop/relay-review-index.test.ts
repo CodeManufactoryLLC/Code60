@@ -8,8 +8,9 @@ import { RelayReviewIndex } from "./relay-review-index.js";
 import * as storage from "./relay-storage.js";
 
 // Rollover fixtures publish 129 durable records, each with native ACL checks and
-// atomic replacement on Windows, rather than in-memory index operations.
-if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+// atomic replacement on Windows, rather than in-memory index operations. The
+// 129-record cases take about 27 s alone on native ARM64, before suite contention.
+if (process.platform === "win32") vi.setConfig({ testTimeout: 60_000, hookTimeout: 30_000 });
 
 let root: string;
 let parent: string;

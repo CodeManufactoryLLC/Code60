@@ -96,6 +96,7 @@ export function PageTabBar({
         id="navigation-sidebar"
         className="sidebar"
         aria-label="Sidebar"
+        aria-busy={navigation.busy || undefined}
         data-open={open}
         inert={!open}
         aria-hidden={!open}

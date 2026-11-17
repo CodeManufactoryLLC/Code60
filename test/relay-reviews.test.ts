@@ -265,8 +265,9 @@ it.each(["failed", "cancelled"] as const)(
           ],
         });
       },
-      // Windows CI needed up to 16 s for sibling automatic captures.
-      { timeout: 20_000 },
+      // Windows CI needed up to 16 s for sibling automatic captures. Under the full
+      // parallel suite, native worktree and snapshot processes on an ARM64 VM needed more.
+      { timeout: process.platform === "win32" ? 45_000 : 20_000 },
     );
     expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
     expect(await readFile(join(worktree, "file.txt"), "utf8")).toBe("Partial retained result\n");
@@ -274,6 +275,7 @@ it.each(["failed", "cancelled"] as const)(
     expect(session.cancels).toBe(status === "cancelled" ? 1 : 0);
     expect(confirm).not.toHaveBeenCalled();
   },
+  process.platform === "win32" ? 60_000 : undefined,
 );
 it("routes real Relay dispatch, review capture and between-turn feedback to the originating task", async () => {
   const associations = vi.spyOn(RelayReviewStore.prototype, "associate");

@@ -7,6 +7,10 @@ import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
+// Automatic integration and message Undo each write several private checkpoint and
+// journal records; on Windows every write launches the native owner/ACL helper and
+// atomic replacement. Native ARM64 measured about 5 s for each step.
+const nativeJournalTimeout = process.platform === "win32" ? 15_000 : 5_000;
 type NativeDialog = {
   kind: "save" | "open" | "message";
   title?: string;
@@ -612,7 +616,7 @@ for (const custom of [false, true]) {
         await expect(async () => {
           expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
         })
-          .toPass({ timeout: 5_000 })
+          .toPass({ timeout: nativeJournalTimeout })
           .catch(async (error) => {
             await info.attach("integration-failure", {
               body: JSON.stringify(await page.evaluate(() => window.desktop.snapshot()), null, 2),
@@ -730,7 +734,7 @@ for (const custom of [false, true]) {
           "Declined Undo preserves the request, existing draft, working changes, staging and HEAD.",
         );
         await undo.click();
-        await expect(composer).toHaveValue(requestText);
+        await expect(composer).toHaveValue(requestText, { timeout: nativeJournalTimeout });
         await expect(page.getByRole("list", { name: "Attached code references" })).toHaveCount(0);
         await expect(message).toHaveCount(0);
         await checkCheckout("original\n");

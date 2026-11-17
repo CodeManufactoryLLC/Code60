@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -157,11 +157,18 @@ it("repairs Markdown from its record and never resumes execution on reopen", asy
 it("rejects links and preserves visible state on a failed write", async () => {
   const { root, store } = await setup();
   const plan = await store.create(draft, null);
-  const target = join(root, "outside.txt");
+  const directory = join(root, "outside");
+  await mkdir(directory);
+  const target = join(process.platform === "win32" ? directory : root, "outside.txt");
   await writeFile(target, "untouched");
   const path = join(root, "plans", `${plan.id}.md`);
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(
+    process.platform === "win32" ? directory : target,
+    path,
+    process.platform === "win32" ? "junction" : "file",
+  );
   await expect(
     store.action({ type: "accept", chatId: "chat", planId: plan.id, revision: 1 }),
   ).rejects.toThrow("Unsafe");
@@ -193,10 +200,17 @@ it("rolls back the document if its record cannot be committed", async () => {
   const markdown = join(root, "plans", `${plan.id}.md`);
   const before = await readFile(markdown, "utf8");
   const path = join(root, ".code60", "plans", `${plan.id}.json`);
-  const target = join(root, "unrelated.txt");
+  const directory = join(root, "outside");
+  await mkdir(directory);
+  const target = join(process.platform === "win32" ? directory : root, "unrelated.txt");
   await writeFile(target, "untouched");
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(
+    process.platform === "win32" ? directory : target,
+    path,
+    process.platform === "win32" ? "junction" : "file",
+  );
   await expect(
     store.update({
       operation: "revise",

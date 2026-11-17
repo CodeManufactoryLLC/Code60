@@ -338,7 +338,11 @@ it("saves main-owned confirmed model defaults by role, applies only to new sessi
   );
 });
 
-describe("database-wide RAG discovery", () => {
+// These journeys persist multiple chats, run records and private RAG files;
+// each durable write launches native owner/ACL verification on Windows.
+describe("database-wide RAG discovery", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   const identity = () => ({
     databaseKey: controller.rag.snapshot().databaseKey ?? "",
     requestId: randomUUID(),
@@ -3154,6 +3158,26 @@ describe("desktop orchestration", () => {
     await expect(controller.action({ type: "diff", id })).rejects.toThrow(/Unknown run/);
   });
 
+  it("chains published revisions when state changes while a frame is being built", async () => {
+    const updates: number[] = [];
+    const previous: (number | undefined)[] = [];
+    controller.subscribe((snapshot) => {
+      updates.push(snapshot.revision);
+      previous.push(snapshot.previousRevision);
+    });
+    const internal = controller as unknown as {
+      poller: { snapshot(): unknown };
+      changed(): void;
+    };
+    const original = internal.poller.snapshot.bind(internal.poller);
+    vi.spyOn(internal.poller, "snapshot").mockImplementationOnce(() => {
+      internal.changed();
+      return original();
+    });
+    internal.changed();
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(1));
+    expect(previous[1]).toBe(updates[0]);
+  });
   it("sends batched updates and stops idle agents on shutdown", async () => {
     const updates: number[] = [];
     const previous: (number | undefined)[] = [];
@@ -4594,7 +4618,11 @@ it("refuses Git setup while project workers are still owned", async () => {
   expect(preview).not.toHaveBeenCalled();
 });
 
-describe("orchestrated workers over ACP", () => {
+// Worker dispatch and Undo persist real private checkpoint/chat/run records,
+// each requiring native ACL checks and atomic replacement on Windows.
+describe("orchestrated workers over ACP", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   it("keeps correction and failure updates with the original tactic after a newer human task and capacity rejection", async () => {
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
@@ -4781,7 +4809,11 @@ describe("orchestrated workers over ACP", () => {
       entry.result = Promise.race([entry.result, cleanupGate]);
       void entry.result.catch(() => {});
       confirmUndo(true);
-      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }));
+      // Undo stops the chat process and atomically rewrites checkpoint and chat records;
+      // each private write runs the native helper on Windows.
+      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }), {
+        timeout: process.platform === "win32" ? 10_000 : 1000,
+      });
       expect(agents.specs).toHaveLength(starts);
     } finally {
       confirmUndo(true);
@@ -5215,6 +5247,9 @@ describe("orchestrated workers over ACP", () => {
         blob: vi.fn(async (_path: string, oid: string) =>
           oid === before ? Buffer.from("before\n") : content,
         ),
+        hash: vi.fn<TaskGit["hash"]>(async () => {
+          throw new Error("This fixture does not convert checkout line endings");
+        }),
         merge: vi.fn<TaskGit["merge"]>(async (_base, _current, proposed) => proposed),
         identity: vi.fn(async () => "unchanged-head-and-index"),
         lockPath: async () => join(project, ".git", "task.lock"),

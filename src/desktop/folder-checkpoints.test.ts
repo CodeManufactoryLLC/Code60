@@ -76,7 +76,12 @@ it("refuses links and raw-byte or storage overflow before reserving a snapshot",
   await expect(folders.capture(project, 1_048_576, 1, reserve)).rejects.toThrow("32 MiB");
   await expect(folders.capture(project, 1, 1024, reserve)).rejects.toThrow("storage limit");
   expect(reserve).not.toHaveBeenCalled();
-  await symlink(join(project, "file"), join(project, "symbolic"));
+  // Directory junctions need no symlink privilege on non-elevated Windows.
+  await symlink(
+    process.platform === "win32" ? root : join(project, "file"),
+    join(project, "symbolic"),
+    process.platform === "win32" ? "junction" : "file",
+  );
   await expect(folders.capture(project, 1_048_576, 1024, reserve)).rejects.toThrow();
   await rm(join(project, "symbolic"));
   await link(join(project, "file"), join(project, "hard"));
