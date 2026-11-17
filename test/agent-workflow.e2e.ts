@@ -634,8 +634,24 @@ for (const custom of [false, true]) {
         const changes = page
           .locator(".orchestration-chat-page:visible")
           .getByRole("button", { name: "1 file changed", exact: true });
+        const linkStarted = Date.now();
+        const linkNavigation = await page.evaluate(() => ({
+          busy: document.querySelector("#navigation-sidebar")?.getAttribute("aria-busy"),
+          selected: [...document.querySelectorAll('[aria-current="true"]')].map((element) => ({
+            id: element.id,
+            label: element.textContent,
+          })),
+        }));
         await expect(changes)
-          .toHaveCount(1)
+          .toHaveCount(1, { timeout: 30_000 })
+          .then(() => {
+            const elapsed = Date.now() - linkStarted;
+            console.log(
+              "changes-link-measurement",
+              JSON.stringify({ custom, elapsed, linkNavigation }),
+            );
+            expect(elapsed).toBeLessThan(5_000);
+          })
           .catch(async (error) => {
             const evidence = await page.evaluate(async () => {
               const snapshot = await window.desktop.snapshot();
