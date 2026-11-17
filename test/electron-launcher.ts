@@ -199,6 +199,15 @@ export async function launchDesktop(
     { folder, database },
   );
   await launched.firstWindow();
+  if (
+    process.platform === "win32" &&
+    process.env.GITHUB_ACTIONS === "true" &&
+    test.info().title.includes("tiny streamed replies")
+  ) {
+    // Temporary causal A/B diagnostic for the Windows shutdown stall.
+    await launched.evaluate(({ session }) => session.defaultSession.setSpellCheckerEnabled(false));
+    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.spellcheck-disabled" })}\n`);
+  }
   await launched.evaluate(({ app, BrowserWindow }) => {
     app.focus({ steal: true });
     BrowserWindow.getAllWindows()[0]?.focus();
