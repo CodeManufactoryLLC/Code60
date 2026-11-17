@@ -39,6 +39,9 @@ User MCP servers use the same read-only configuration file. See
 requirements, session lifecycle and credential cautions. Use installed executable
 commands and escape Windows path backslashes in JSON.
 
+The chat composer does not spellcheck. Windows native spellchecking of long
+pasted code or JSON could keep the app from exiting after quit.
+
 ## Headless CLI and development
 
 Install Node.js 22.12 or later, Git for Windows, Microsoft C++ Build Tools with

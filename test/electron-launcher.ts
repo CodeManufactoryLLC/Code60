@@ -1,10 +1,7 @@
-import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import { _electron, test } from "@playwright/test";
-import { controlNativeStackObserver } from "./native-stack-observer.js";
+import { _electron } from "@playwright/test";
 
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, "..");
@@ -96,7 +93,6 @@ export async function launchDesktop(
     }
   }
   Object.assign(env, environment);
-  env.CODE60_NATIVE_DIAG = "1";
   const launched = await _electron.launch({
     // Playwright otherwise injects --no-sandbox on Linux.
     chromiumSandbox: true,
@@ -105,109 +101,15 @@ export async function launchDesktop(
     cwd: directory,
     env,
   });
-  let stackObserver: ReturnType<typeof controlNativeStackObserver> | undefined;
-  launched.process().on("exit", (code) => {
-    stackObserver?.cancel();
-    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.exit", code })}\n`);
-  });
-  launched.process().on("close", (code) => {
-    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.close", code })}\n`);
-  });
-  let diagnosticBuffer = "";
-  let sampledQuit = false;
-  launched.process().stderr?.on("data", (chunk: Buffer) => {
-    diagnosticBuffer += chunk.toString();
-    const lines = diagnosticBuffer.split("\n");
-    diagnosticBuffer = (lines.pop() ?? "").slice(-65536);
-    for (const line of lines) {
-      if (line.trim() === "Waiting for the debugger to disconnect...")
-        process.stderr.write(
-          `${JSON.stringify({ nativePhase: "launcher.inspector-wait", state: "started" })}\n`,
-        );
-      if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":')) {
-        process.stderr.write(`${line}\n`);
-        if (!sampledQuit && line.startsWith('{"nativePhase":"app.quit-event"')) {
-          sampledQuit = true;
-          stackObserver?.capture();
-        }
-      }
-    }
-  });
-  await launched.context().tracing.start({ snapshots: true, screenshots: true, sources: true });
-  const close = launched.close.bind(launched);
-  launched.close = async () => {
-    const trace = test.info().outputPath(`browser-${randomUUID()}.zip`);
-    await launched.context().tracing.stop({ path: trace });
-    await test
-      .info()
-      .attach("native-browser-trace", { path: trace, contentType: "application/zip" });
-    const pid = launched.process().pid;
-    if (
-      process.platform === "win32" &&
-      process.arch === "x64" &&
-      process.env.GITHUB_ACTIONS === "true" &&
-      test.info().title.includes("tiny streamed replies") &&
-      pid &&
-      launched.process().exitCode === null
-    ) {
-      // Compile, discover and pin the owned process before requesting shutdown.
-      // Only the capture command runs after app.quit-event; no debugger or dump.
-      stackObserver = controlNativeStackObserver(
-        spawn(
-          "pwsh.exe",
-          [
-            "-NoProfile",
-            "-NonInteractive",
-            "-File",
-            join(root, "test", "native-stack-capture.ps1"),
-            "-RootPid",
-            String(pid),
-            "-WaitForCapture",
-          ],
-          { windowsHide: true, stdio: "pipe" },
-        ),
-        (record) => process.stderr.write(`${JSON.stringify(record)}\n`),
-      );
-      await stackObserver.ready;
-    }
-    try {
-      await close();
-    } finally {
-      stackObserver?.cancel();
-      await stackObserver?.done;
-    }
-  };
   await launched.evaluate(
     ({ dialog }, paths) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths.folder] });
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: paths.database });
-      dialog.showMessageBox = async (options) => {
-        process.stderr.write(
-          `${JSON.stringify({
-            nativeDialog:
-              "message" in options &&
-              options.message === "Could not stop all agents. Try quitting again."
-                ? "shutdown-failed"
-                : "message" in options && options.message === "Quit Code60?"
-                  ? "quit"
-                  : "other",
-          })}\n`,
-        );
-        return { response: 1, checkboxChecked: false };
-      };
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     },
     { folder, database },
   );
   await launched.firstWindow();
-  if (
-    process.platform === "win32" &&
-    process.env.GITHUB_ACTIONS === "true" &&
-    test.info().title.includes("tiny streamed replies")
-  ) {
-    // Temporary causal A/B diagnostic for the Windows shutdown stall.
-    await launched.evaluate(({ session }) => session.defaultSession.setSpellCheckerEnabled(false));
-    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.spellcheck-disabled" })}\n`);
-  }
   await launched.evaluate(({ app, BrowserWindow }) => {
     app.focus({ steal: true });
     BrowserWindow.getAllWindows()[0]?.focus();

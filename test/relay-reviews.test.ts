@@ -34,7 +34,6 @@ let service: RelayService | undefined;
 const feedback = vi.fn();
 const confirm = vi.fn(async () => true);
 beforeEach(async () => {
-  vi.stubEnv("CODE60_NATIVE_DIAG", "1");
   root = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-reviews-")));
   owner = { id: randomUUID(), generation: 1, taskId: randomUUID() };
   agents = new FakeAgents();
