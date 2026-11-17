@@ -47,9 +47,10 @@ async function lock(path: string) {
     },
   );
   const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+  const lockStarted = performance.now();
   try {
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Sharing-lock fixture timed out")), 5_000);
+      const timer = setTimeout(() => reject(new Error("Sharing-lock fixture timed out")), 60_000);
       child.once("error", reject);
       child.once("exit", () => reject(new Error("Sharing-lock fixture exited before readiness")));
       child.stdout.once("data", () => {
@@ -57,6 +58,10 @@ async function lock(path: string) {
         resolve();
       });
     });
+    const lockElapsed = performance.now() - lockStarted;
+    console.log("native-launch-measurement", JSON.stringify({ lock: lockElapsed }));
+    if (lockElapsed >= 5_000)
+      throw new Error("Sharing-lock fixture exceeded its 5 s readiness bound");
   } catch (error) {
     child.kill();
     throw error;
@@ -116,6 +121,7 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
     ];
     for (const path of paths) expect(() => verifyPrivateSync(path)).not.toThrow();
     // Use .NET directly, independent of the helper and PowerShell's module search path.
+    const aclStarted = performance.now();
     execFileSync(
       "powershell.exe",
       [
@@ -141,11 +147,14 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
         env: { ...process.env, CODE60_ACL_PATHS: JSON.stringify(paths) },
         windowsHide: true,
         // Cold PowerShell startup on hosted Windows runners can exceed eight seconds.
-        timeout: 20_000,
+        timeout: 60_000,
         stdio: "pipe",
       },
     );
-  }, 30_000);
+    const aclElapsed = performance.now() - aclStarted;
+    console.log("native-launch-measurement", JSON.stringify({ acl: aclElapsed }));
+    expect(aclElapsed).toBeLessThan(20_000);
+  }, 120_000);
   it("retries an actual sharing violation and never removes the old destination", async () => {
     const dir = await directory();
     const from = join(dir, "new"),
@@ -165,7 +174,7 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
       clearTimeout(release);
       await handle.close();
     }
-  });
+  }, 120_000);
   it("bounds persistent sharing violations and preserves both files", async () => {
     const dir = await directory();
     const from = join(dir, "new"),
@@ -182,5 +191,5 @@ describe.runIf(process.platform === "win32")("real Windows storage", () => {
     } finally {
       await handle.close();
     }
-  });
+  }, 120_000);
 });
