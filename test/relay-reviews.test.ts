@@ -14,6 +14,8 @@ import {
 import { RelayReviewStore } from "../src/desktop/relay-review-store.js";
 import { RelayReviews } from "../src/desktop/relay-reviews.js";
 import { RelayService } from "../src/desktop/relay-service.js";
+import * as relayStorage from "../src/desktop/relay-storage.js";
+import { ReviewStore } from "../src/desktop/reviews.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
@@ -192,6 +194,72 @@ it("keeps partial automatic capture failures visible and allows explicit refresh
   await required(manager).rendererGone();
   const review = await capture(source);
   expect(review.revisions.at(-1)?.errors).toEqual([]);
+});
+it("finishes an owned metadata read before starting an owned review write", async () => {
+  const source = await ready();
+  const original = await reviews.read(source.id);
+  const title = original.get(source.id).title;
+  let enter!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const verify = relayStorage.verifyRelayStorage;
+  const verification = vi
+    .spyOn(relayStorage, "verifyRelayStorage")
+    .mockImplementationOnce(async (...args) => {
+      enter();
+      await held;
+      return verify(...args);
+    });
+  const reading = reviews.read(source.id);
+  await entered;
+  const writing = reviews.write(source.id, (store) =>
+    store.mutate(source.id, (review) => {
+      review.title = "Published after read";
+    }),
+  );
+  // Run the already queued writer microtask, not a timer or a retry.
+  await Promise.resolve();
+  const checksWhileHeld = verification.mock.calls.length;
+  release();
+  const [snapshot] = await Promise.all([reading, writing]);
+  expect(checksWhileHeld).toBe(1);
+  expect(snapshot.get(source.id).title).toBe(title);
+  expect(original.get(source.id).title).toBe(title);
+  expect((await reviews.read(source.id)).get(source.id).title).toBe("Published after read");
+});
+it("finishes an owned review write before opening the next metadata reader", async () => {
+  const source = await ready();
+  const original = await reviews.read(source.id);
+  const title = original.get(source.id).title;
+  let enter!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const writing = reviews.write(source.id, async (store) => {
+    enter();
+    await held;
+    await store.mutate(source.id, (review) => {
+      review.title = "Published before read";
+    });
+  });
+  await entered;
+  const verification = vi.spyOn(relayStorage, "verifyRelayStorage");
+  const reading = reviews.read(source.id);
+  const checksWhileHeld = verification.mock.calls.length;
+  release();
+  const [, snapshot] = await Promise.all([writing, reading]);
+  expect(checksWhileHeld).toBe(0);
+  expect(snapshot.get(source.id).title).toBe("Published before read");
+  expect(original.get(source.id).title).toBe(title);
 });
 it("reports damaged conversation evidence per review without hiding other records", async () => {
   const a = await ready();
@@ -847,6 +915,27 @@ it("separates task and target groups and keeps old evidence after generation res
   expect((await reopened.index.read()).entries).toHaveLength(3);
   expect((await reopened.read(a)).get(a).workers[0]?.turn).toBe(1);
 });
+it("does not cache a failed checkout-pin publication as a saved association", async () => {
+  const accepted = await worker();
+  await vi.waitFor(() => expect(accepted.orchestrator.runs()[0]?.status).toBe("idle"));
+  const checkout = required(accepted.checkout);
+  delete accepted.checkout;
+  const id = required(await reviews.associate(accepted, 1));
+  accepted.checkout = checkout;
+  const save = vi
+    .spyOn(ReviewStore.prototype, "addWorker")
+    .mockRejectedValue(new Error("Synthetic checkout publication failure"));
+  for (let call = 0; call < 2; call++)
+    await expect(reviews.associate(accepted, 1)).rejects.toThrow(
+      "Synthetic checkout publication failure",
+    );
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(reviews.assignment(accepted.id)?.reviewId).toBe(id);
+  expect((await reviews.read(id)).get(id).workers[0]?.checkout).toBeUndefined();
+  expect(await worker()).toBe(accepted);
+  expect(host.list()).toHaveLength(1);
+  expect(agents.specs).toHaveLength(1);
+});
 it("retains the accepted worker's review link after an index failure without repeating association", async () => {
   const accepted = await worker();
   const append = vi.spyOn(reviews.index, "append").mockRejectedValueOnce(new Error("Index failed"));
@@ -880,7 +969,7 @@ it("does not restore an assignment when a queued association outlives reset", as
   const first = await worker();
   await reviews.associate(first, 1);
   const second = await worker(join(root, "a"), "second");
-  const read = reviews.read.bind(reviews);
+  const read = ReviewStore.open.bind(ReviewStore);
   let enter!: () => void;
   const entered = new Promise<void>((resolve) => {
     enter = resolve;
@@ -889,7 +978,7 @@ it("does not restore an assignment when a queued association outlives reset", as
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  vi.spyOn(reviews, "read").mockImplementationOnce(async (...args) => {
+  vi.spyOn(ReviewStore, "open").mockImplementationOnce(async (...args) => {
     enter();
     await held;
     return read(...args);

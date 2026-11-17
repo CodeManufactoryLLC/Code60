@@ -135,41 +135,26 @@ export async function launchDesktop(
             [
               "-NoProfile",
               "-NonInteractive",
-              "-Command",
-              `$all = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name)
-              $owned = New-Object 'System.Collections.Generic.HashSet[uint32]'
-              [void]$owned.Add(${pid})
-              do {
-                $added = $false
-                foreach ($p in $all) {
-                  if ($owned.Contains([uint32]$p.ParentProcessId) -and $owned.Add([uint32]$p.ProcessId)) { $added = $true }
-                }
-              } while ($added)
-              $tree = @($all | Where-Object { $owned.Contains([uint32]$_.ProcessId) } | ForEach-Object {
-                $kind = switch ($_.Name) {
-                  'electron.exe' { 'electron' }
-                  'cmd.exe' { 'shell' }
-                  'node.exe' { 'node' }
-                  'code60-host.exe' { 'helper' }
-                  default { 'other' }
-                }
-                [pscustomobject]@{ pid = $_.ProcessId; parent = $_.ParentProcessId; kind = $kind }
-              })
-              ConvertTo-Json -Compress -InputObject $tree`,
+              "-File",
+              join(root, "test", "native-wait-chain.ps1"),
+              "-RootPid",
+              String(pid),
             ],
             { windowsHide: true, timeout: 5000 },
             (error, stdout) => {
-              let tree: unknown;
-              try {
-                tree = JSON.parse(stdout);
-              } catch {}
+              const snapshots: unknown[] = [];
+              for (const record of stdout.split(/\r?\n/)) {
+                try {
+                  snapshots.push(JSON.parse(record));
+                } catch {}
+              }
               process.stderr.write(
                 `${JSON.stringify({
                   nativePhase: "launcher.process-tree",
                   state: error ? "failed" : "succeeded",
                   elapsed: performance.now() - startedAt,
                   root: pid,
-                  tree,
+                  snapshots,
                 })}\n`,
               );
             },

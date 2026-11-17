@@ -63,7 +63,17 @@ export async function nativeWait<T>(phase: Phase, task: Promise<T>): Promise<T> 
     nativeEvent(phase);
     return result;
   } catch (cause) {
-    nativeEvent(phase, "failed");
+    const code = (cause as NodeJS.ErrnoException | undefined)?.code;
+    const allowed = ["EACCES", "EPERM", "EBUSY", "ENOENT", "EEXIST", "ETIMEDOUT"];
+    if (process.env.CODE60_NATIVE_DIAG === "1")
+      process.stderr.write(
+        `${JSON.stringify({
+          nativePhase: phase,
+          state: "failed",
+          code: code && allowed.includes(code) ? code : "other",
+          at: performance.now(),
+        })}\n`,
+      );
     throw cause;
   }
 }
