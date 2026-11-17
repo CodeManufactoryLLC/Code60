@@ -81,6 +81,7 @@ import { DesktopController } from "./controller.js";
 import { installDeb } from "./deb-update.js";
 import { desktopPath } from "./environment.js";
 import { DesktopLogStore, logProjectId } from "./log-store.js";
+import { nativeWait } from "./native-diagnostic.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
@@ -197,11 +198,10 @@ function shutdownDesktop(force = false): Promise<void> {
     return shutdownTask;
   }
   logs.sink({ event: "app.stop", operationId: launchOperation, outcome: "started" });
-  shutdownTask = controller
-    .shutdown(force)
+  shutdownTask = nativeWait("desktop.controller", controller.shutdown(force))
     .then(async () => {
       logs.sink({ event: "app.stopped", operationId: launchOperation, outcome: "succeeded" });
-      await logs.close();
+      await nativeWait("desktop.logs", logs.close());
     })
     .catch((error: unknown) => {
       shutdownTask = undefined;
@@ -221,7 +221,10 @@ async function quit(confirm: boolean): Promise<void> {
   quitPending = true;
   try {
     const background = confirm
-      ? await automationClient(process.env)({ action: "status" }).catch(() => null)
+      ? await nativeWait(
+          "quit.status",
+          automationClient(process.env)({ action: "status" }).catch(() => null),
+        )
       : null;
     if (confirm && (controller.hasActiveWork || background)) {
       const result = await dialog.showMessageBox({
@@ -237,7 +240,7 @@ async function quit(confirm: boolean): Promise<void> {
     }
     startup.abort();
     updates?.close();
-    await shutdownDesktop();
+    await nativeWait("quit.shutdown", shutdownDesktop());
     exiting = true;
     app.quit();
   } catch {

@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import { _electron } from "@playwright/test";
+import { _electron, test } from "@playwright/test";
 
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, "..");
@@ -93,6 +94,7 @@ export async function launchDesktop(
     }
   }
   Object.assign(env, environment);
+  env.CODE60_NATIVE_DIAG = "1";
   const launched = await _electron.launch({
     // Playwright otherwise injects --no-sandbox on Linux.
     chromiumSandbox: true,
@@ -101,11 +103,43 @@ export async function launchDesktop(
     cwd: directory,
     env,
   });
+  let diagnosticBuffer = "";
+  launched.process().stderr?.on("data", (chunk: Buffer) => {
+    diagnosticBuffer += chunk.toString();
+    const lines = diagnosticBuffer.split("\n");
+    diagnosticBuffer = lines.pop() ?? "";
+    for (const line of lines)
+      if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":'))
+        process.stderr.write(`${line}\n`);
+  });
+  await launched.context().tracing.start({ snapshots: true, screenshots: true, sources: true });
+  const close = launched.close.bind(launched);
+  launched.close = async () => {
+    const trace = test.info().outputPath(`browser-${randomUUID()}.zip`);
+    await launched.context().tracing.stop({ path: trace });
+    await test
+      .info()
+      .attach("native-browser-trace", { path: trace, contentType: "application/zip" });
+    await close();
+  };
   await launched.evaluate(
     ({ dialog }, paths) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths.folder] });
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: paths.database });
-      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+      dialog.showMessageBox = async (options) => {
+        process.stderr.write(
+          `${JSON.stringify({
+            nativeDialog:
+              "message" in options &&
+              options.message === "Could not stop all agents. Try quitting again."
+                ? "shutdown-failed"
+                : "message" in options && options.message === "Quit Code60?"
+                  ? "quit"
+                  : "other",
+          })}\n`,
+        );
+        return { response: 1, checkboxChecked: false };
+      };
     },
     { folder, database },
   );

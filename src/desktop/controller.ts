@@ -201,6 +201,7 @@ import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
 import { ModelDefaults } from "./model-defaults.js";
+import { nativeWait } from "./native-diagnostic.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
@@ -5972,9 +5973,9 @@ export class DesktopController {
     this.details.clear();
     this.closing = true;
     const results = await Promise.allSettled([
-      this.memory.close(),
-      this.cancelRag(),
-      this.shutdownAgents(force),
+      nativeWait("controller.memory", this.memory.close()),
+      nativeWait("controller.rag", this.cancelRag()),
+      nativeWait("controller.agents", this.shutdownAgents(force)),
     ]);
     if (results.some((result) => result.status === "rejected"))
       throw new Error(
@@ -6038,12 +6039,12 @@ export class DesktopController {
       ...owners.map((owner) =>
         this.projectHost.run(owner, () => this.stopProject(this.forceClosing)),
       ),
-      this.relay?.shutdown(this.forceClosing),
+      nativeWait("owners.relay", this.relay?.shutdown(this.forceClosing) ?? Promise.resolve()),
       this.agentSetup.cancel(),
       this.cancelOrchestrationTest(),
-      this.cancelDiffReads(),
+      nativeWait("owners.diff", this.cancelDiffReads()),
     ]);
-    await this.queue;
+    await nativeWait("owners.queue", this.queue);
     const final = await Promise.allSettled([
       ...owners.map((owner) =>
         this.projectHost.run(owner, () => this.stopProject(this.forceClosing)),

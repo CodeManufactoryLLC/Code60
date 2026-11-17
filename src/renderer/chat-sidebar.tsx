@@ -4,7 +4,13 @@ import type { RunEvent } from "../core/index.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
-import { type Conversation, conversationId, conversations, reconcileDisclosure } from "./chats.js";
+import {
+  type Conversation,
+  conversationId,
+  conversations,
+  hasConversationRun,
+  reconcileDisclosure,
+} from "./chats.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { statusSpec } from "./session-presentation.js";
@@ -86,7 +92,9 @@ export function ChatSidebar({
   const markerKey = (scope: string, id: string) =>
     readMarkerKey(scope, id, summaries.has(id) ? "reply-count" : undefined);
   const selectedMarkerKey =
-    selectedMarkerScope && selectedId ? markerKey(selectedMarkerScope, selectedId) : null;
+    selectedMarkerScope && selectedId && hasConversationRun(chats, runs, selectedId)
+      ? markerKey(selectedMarkerScope, selectedId)
+      : null;
   const selectedReplies = summaries.get(selectedId ?? "")?.count;
   useLayoutEffect(() => {
     const prior = previous.current;

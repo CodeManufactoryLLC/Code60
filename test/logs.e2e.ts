@@ -171,29 +171,37 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     page = await application.firstWindow();
     await page.locator(".splash").getByRole("button", { name: "Start", exact: true }).click();
     await openLogs(page);
+    await page
+      .locator("#panel-logs")
+      .getByRole("button", { name: "Pause viewing", exact: true })
+      .click();
+    const clearLogs = page
+      .locator("#panel-logs")
+      .getByRole("button", { name: "Clear logs", exact: true });
+    const refreshed = page
+      .locator("#panel-logs")
+      .getByRole("button", { name: /^(Refresh logs|New records available, show latest)$/ });
+    await expect(refreshed).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
-    await page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Clear logs", exact: true })
-      .click();
+    await clearLogs.click();
+    await expect(clearLogs).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Clear logs", exact: true })
-      .click();
-    await expect
-      .poll(() => page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id))
-      .toBeNull();
+    await clearLogs.click();
+    await expect(clearLogs).toBeEnabled();
+    await expect(refreshed).toBeEnabled();
+    expect(
+      await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
+    ).toBeNull();
     expect((await readFile(database)).byteLength).toBeGreaterThan(0);
     expect(errors).toEqual([]);
   } finally {

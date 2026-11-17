@@ -54,6 +54,7 @@ import {
 import { createMcpGateway, type McpGateway } from "./mcp-gateway.js";
 import type { MemoryService } from "./memory-service.js";
 import type { ModelDefaults } from "./model-defaults.js";
+import { nativeWait } from "./native-diagnostic.js";
 import type { RelayFileRoot } from "./relay-files.js";
 import { RelayPlans } from "./relay-plans.js";
 import { RelayReviewStore } from "./relay-review-store.js";
@@ -1518,15 +1519,15 @@ export class RelayService {
   async shutdown(force = false): Promise<void> {
     this.closing = true;
     const results = await Promise.allSettled([
-      this.stopChat(force),
-      this.execution.shutdown(force),
+      nativeWait("relay.chat", this.stopChat(force)),
+      nativeWait("relay.execution", this.execution.shutdown(force)),
       ...this.connections,
     ]);
     if (this.orphans.size) await this.stopChat(force);
-    await this.writer?.flush();
+    await nativeWait("relay.writer", this.writer?.flush() ?? Promise.resolve());
     // Do not release writer ownership while cleanup is unverified.
     if (results.some((result) => result.status === "rejected"))
       throw new Error("Relay cleanup failed; its writer lock was retained.");
-    await this.store?.close();
+    await nativeWait("relay.store", this.store?.close() ?? Promise.resolve());
   }
 }
