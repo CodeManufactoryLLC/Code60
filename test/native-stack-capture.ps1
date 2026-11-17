@@ -158,6 +158,7 @@ public static class NativeStackCapture {
   private const uint ThreadQueryLimitedInformation = 0x0800;
   private const uint PssCaptureThreads = 0x00000080;
   private const uint PssCaptureThreadContext = 0x00000100;
+  private const uint PssWalkThreads = 3;
   private const uint ContextFullAmd64 = 0x0010000B;
   private const uint ErrorNoMoreItems = 259;
   private const uint MachineAmd64 = 0x8664;
@@ -420,13 +421,13 @@ public static class NativeStackCapture {
       try {
         while (timer.ElapsedMilliseconds < budgetMs) {
           if (threads.Count >= MaximumThreads) {
-            status = PssWalkSnapshot(snapshot, 0, marker, entryBuffer,
+            status = PssWalkSnapshot(snapshot, PssWalkThreads, marker, entryBuffer,
               (uint)Marshal.SizeOf(typeof(NativePssThreadEntry)));
             truncated = status == 0;
             break;
           }
 
-          status = PssWalkSnapshot(snapshot, 0, marker, entryBuffer,
+          status = PssWalkSnapshot(snapshot, PssWalkThreads, marker, entryBuffer,
             (uint)Marshal.SizeOf(typeof(NativePssThreadEntry)));
           if (status == ErrorNoMoreItems) break;
           if (status != 0) {
