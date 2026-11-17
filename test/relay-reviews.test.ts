@@ -280,6 +280,19 @@ it("reports damaged conversation evidence per review without hiding other record
 it.each(["failed", "cancelled"] as const)(
   "automatically captures partial work and the actual %s worker turn outcome",
   async (status) => {
+    const requests = vi.spyOn(RelayReviews.prototype, "request");
+    const settleCaptures = async () => {
+      for (const [index, [request]] of requests.mock.calls.entries())
+        if (
+          request &&
+          typeof request === "object" &&
+          "type" in request &&
+          request.type === "capture"
+        )
+          await expect(requests.mock.results[index]?.value).resolves.toMatchObject({
+            type: "review",
+          });
+    };
     agents.script = (text) => (text === "Worker with partial changes" ? "hang" : "end_turn");
     service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
       confirm,
@@ -339,11 +352,48 @@ it.each(["failed", "cancelled"] as const)(
       // parallel suite, native worktree and snapshot processes on an ARM64 VM needed more.
       { timeout: process.platform === "win32" ? 45_000 : 20_000 },
     );
+    await settleCaptures();
     expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
     expect(await readFile(join(worktree, "file.txt"), "utf8")).toBe("Partial retained result\n");
     expect(session.stops).toHaveLength(status === "failed" ? 1 : 0);
     expect(session.cancels).toBe(status === "cancelled" ? 1 : 0);
     expect(confirm).not.toHaveBeenCalled();
+    if (status === "cancelled") {
+      await service.workerAction({ type: "reply", id: worker.id, text: "Complete the next turn" });
+      await vi.waitFor(() =>
+        expect(worker.orchestrator.runs()[0]).toMatchObject({
+          status: "idle",
+          turns: 2,
+          lastOutcome: "finished",
+        }),
+      );
+      await vi.waitFor(
+        async () => {
+          const result = await service?.reviewRequest({
+            type: "timeline",
+            conversationId: required(service.snapshot().conversationId),
+            generation: required(service.snapshot().generation),
+          });
+          expect(result).toMatchObject({
+            type: "timeline",
+            entries: [
+              {
+                summary: {
+                  revisions: [
+                    { outcomes: [{ runId: worker.id, status: "cancelled" }] },
+                    { outcomes: [{ runId: worker.id, status: "finished" }] },
+                  ],
+                },
+              },
+            ],
+          });
+        },
+        { timeout: process.platform === "win32" ? 45_000 : 20_000 },
+      );
+      await settleCaptures();
+      expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Partial retained result\n");
+      expect(service.execution.list()).toEqual([worker]);
+    }
   },
   process.platform === "win32" ? 60_000 : undefined,
 );

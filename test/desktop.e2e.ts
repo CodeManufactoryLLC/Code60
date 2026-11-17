@@ -4476,6 +4476,12 @@ test("desktop: Relay automatic edits preserve two target owners through latest-m
       await expect
         .poll(async () => {
           const snapshot = await page.evaluate(() => window.desktop.snapshot());
+          return snapshot.runs.filter((run) => run.relay).length;
+        })
+        .toBe(index + 1);
+      await expect
+        .poll(async () => {
+          const snapshot = await page.evaluate(() => window.desktop.snapshot());
           return snapshot.runs.filter((run) => run.relay && run.view?.status === "idle").length;
         })
         .toBe(index + 1);

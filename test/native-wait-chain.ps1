@@ -27,6 +27,24 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class NativeWaitChain {
+  private static readonly IntPtr Ole = LoadLibrary(
+    System.IO.Path.Combine(Environment.SystemDirectory, "ole32.dll"));
+  public static readonly bool ComAvailable = RegisterCom();
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern IntPtr LoadLibrary(string path);
+  [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
+  private static extern IntPtr GetProcAddress(IntPtr module, string name);
+  [DllImport("advapi32.dll")]
+  private static extern void RegisterWaitChainCOMCallback(IntPtr call, IntPtr activation);
+  private static bool RegisterCom() {
+    if (Ole == IntPtr.Zero) return false;
+    var call = GetProcAddress(Ole, "CoGetCallState");
+    var activation = GetProcAddress(Ole, "CoGetActivationState");
+    if (call == IntPtr.Zero || activation == IntPtr.Zero) return false;
+    // Callbacks live only in this observer. No debug privilege is enabled.
+    RegisterWaitChainCOMCallback(call, activation);
+    return true;
+  }
   // WAITCHAIN_NODE_INFO is 280 bytes on both x86 and x64. Omit the lock-name
   // union entirely; only fixed types/statuses and thread ownership are read.
   [StructLayout(LayoutKind.Explicit, Size = 280)]
@@ -95,7 +113,8 @@ foreach ($p in @($tree | Where-Object { $_.kind -eq 'electron' })) {
       }
     })
     ConvertTo-Json -Compress -Depth 7 -InputObject ([pscustomobject]@{
-      pid = $p.pid; threadCount = $threads.Count; truncated = $threads.Count -gt 128; threads = $details
+      pid = $p.pid; comAvailable = [NativeWaitChain]::ComAvailable
+      threadCount = $threads.Count; truncated = $threads.Count -gt 128; threads = $details
     })
   } catch {
     ConvertTo-Json -Compress -InputObject ([pscustomobject]@{ pid = $p.pid; state = 'unavailable' })

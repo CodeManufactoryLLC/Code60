@@ -117,6 +117,10 @@ export async function launchDesktop(
     const lines = diagnosticBuffer.split("\n");
     diagnosticBuffer = (lines.pop() ?? "").slice(-65536);
     for (const line of lines) {
+      if (line.trim() === "Waiting for the debugger to disconnect...")
+        process.stderr.write(
+          `${JSON.stringify({ nativePhase: "launcher.inspector-wait", state: "started" })}\n`,
+        );
       if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":')) {
         process.stderr.write(`${line}\n`);
         const pid = launched.process().pid;
