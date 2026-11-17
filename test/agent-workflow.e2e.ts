@@ -634,7 +634,34 @@ for (const custom of [false, true]) {
         const changes = page
           .locator(".orchestration-chat-page:visible")
           .getByRole("button", { name: "1 file changed", exact: true });
-        await expect(changes).toHaveCount(1);
+        await expect(changes)
+          .toHaveCount(1)
+          .catch(async (error) => {
+            const evidence = await page.evaluate(async () => {
+              const snapshot = await window.desktop.snapshot();
+              const chat = snapshot.chat;
+              return {
+                snapshot,
+                visibleChat: document.querySelector(".orchestration-chat-page:not([hidden])")
+                  ?.textContent,
+                sidebar: document.querySelector(".sidebar")?.outerHTML,
+                timeline:
+                  chat.conversationId && chat.generation !== undefined
+                    ? await window.desktop.relayReview({
+                        type: "timeline",
+                        conversationId: chat.conversationId,
+                        generation: chat.generation,
+                      })
+                    : null,
+              };
+            });
+            await info.attach("changes-link-failure", {
+              body: JSON.stringify(evidence, null, 2),
+              contentType: "application/json",
+            });
+            await page.screenshot({ path: info.outputPath("changes-link-failure.png") });
+            throw error;
+          });
         // Native displays can clamp the default window below the panel's
         // 1200px stacked-layout breakpoint, which hides its resize handle.
         await page.setViewportSize({ width: 1600, height: 1000 });
