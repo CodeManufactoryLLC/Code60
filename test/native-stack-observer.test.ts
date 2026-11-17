@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { afterEach, expect, it, vi } from "vitest";
 import { controlNativeStackObserver } from "./native-stack-observer.js";
 
@@ -204,3 +205,41 @@ it("uses the documented thread-only PSS flags and thread walk class at both call
   expect(source).toContain("process, PssCaptureThreads | PssCaptureThreadContext,");
   expect(source).not.toMatch(/PssWalkSnapshot\(snapshot, 0,/);
 });
+
+it.skipIf(process.platform !== "win32")(
+  "runs the real PowerShell validation-only helper without process capture",
+  async () => {
+    const emit = vi.fn();
+    const observer = controlNativeStackObserver(
+      spawn(
+        process.env.GITHUB_ACTIONS === "true" ? "pwsh.exe" : "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-File",
+          fileURLToPath(new URL("./native-stack-capture.ps1", import.meta.url)),
+          "-RootPid",
+          String(process.pid),
+          "-ValidateOnly",
+        ],
+        { windowsHide: true, stdio: "pipe" },
+      ),
+      emit,
+    );
+    try {
+      await observer.done;
+      expect(await observer.ready).toBe(false);
+      expect(emit).toHaveBeenCalledWith({
+        nativePhase: "launcher.stack-observation",
+        observation: { observerPhase: "stack-capture-validation", state: "passed" },
+      });
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ state: "completed", stage: "preparing" }),
+      );
+      expect(JSON.stringify(emit.mock.calls)).not.toContain("thread-stack");
+    } finally {
+      observer.cancel();
+      await observer.done;
+    }
+  },
+);

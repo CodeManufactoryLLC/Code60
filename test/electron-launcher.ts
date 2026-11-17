@@ -154,7 +154,7 @@ export async function launchDesktop(
       // Only the capture command runs after app.quit-event; no debugger or dump.
       stackObserver = controlNativeStackObserver(
         spawn(
-          "powershell.exe",
+          "pwsh.exe",
           [
             "-NoProfile",
             "-NonInteractive",
