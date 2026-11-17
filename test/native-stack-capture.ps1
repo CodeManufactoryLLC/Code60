@@ -8,7 +8,10 @@ function Write-Observation([object]$Value) {
   [Console]::Out.Flush()
 }
 
+Write-Observation ([pscustomobject]@{ observerPhase = 'stack-capture-script'; state = 'started' })
+Write-Observation ([pscustomobject]@{ observerPhase = 'process-inventory'; state = 'started' })
 $all = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name)
+Write-Observation ([pscustomobject]@{ observerPhase = 'process-inventory'; state = 'completed' })
 $owned = New-Object 'System.Collections.Generic.HashSet[uint32]'
 [void]$owned.Add($RootPid)
 do {
