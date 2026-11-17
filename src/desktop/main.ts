@@ -81,7 +81,7 @@ import { DesktopController } from "./controller.js";
 import { installDeb } from "./deb-update.js";
 import { desktopPath } from "./environment.js";
 import { DesktopLogStore, logProjectId } from "./log-store.js";
-import { nativeWait } from "./native-diagnostic.js";
+import { nativeEvent, nativeWait } from "./native-diagnostic.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
@@ -242,7 +242,9 @@ async function quit(confirm: boolean): Promise<void> {
     updates?.close();
     await nativeWait("quit.shutdown", shutdownDesktop());
     exiting = true;
+    nativeEvent("app.quit-call", "started");
     app.quit();
+    nativeEvent("app.quit-call");
   } catch {
     await dialog.showMessageBox({
       type: "error",
@@ -337,10 +339,14 @@ app.setAboutPanelOptions({
   copyright: CODE60_COPYRIGHT,
 });
 app.on("before-quit", (event) => {
+  nativeEvent("app.before-quit", exiting ? "succeeded" : "started");
   if (exiting) return;
   event.preventDefault();
   void quit(true);
 });
+app.on("will-quit", () => nativeEvent("app.will-quit"));
+app.on("quit", () => nativeEvent("app.quit-event"));
+process.on("exit", () => nativeEvent("process.exit"));
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (quitPending) void shutdownDesktop(true).catch(() => {});
@@ -753,6 +759,8 @@ async function ready(): Promise<void> {
   });
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("render-process-gone", () => void quit(false));
+  window.webContents.on("destroyed", () => nativeEvent("renderer.destroyed"));
+  window.on("closed", () => nativeEvent("window.closed"));
   window.webContents.on("did-start-loading", () => {
     automations.reset();
     controller.clearDetailSubscriptions();
@@ -765,6 +773,7 @@ async function ready(): Promise<void> {
     controller.setVisibility({ visible: false, worktrees: false });
   });
   window.on("close", (event) => {
+    nativeEvent("window.close", exiting ? "succeeded" : "started");
     if (exiting) return;
     event.preventDefault();
     void quit(true);

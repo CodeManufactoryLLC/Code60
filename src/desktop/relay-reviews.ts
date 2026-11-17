@@ -16,6 +16,7 @@ import {
 } from "../core/index.js";
 import { DiffReads } from "./diff-reads.js";
 import type { ExecutionHost, ExecutionTarget } from "./execution-host.js";
+import { nativeEvent, nativeWait } from "./native-diagnostic.js";
 import type { RelayReviewIndexCursor } from "./relay-review-index.js";
 import type { RelayReviewStore } from "./relay-review-store.js";
 import type { ReviewStore } from "./reviews.js";
@@ -74,10 +75,10 @@ export class RelayReviews {
     const requestId = randomUUID();
     this.automaticRequests.add(requestId);
     this.automaticCapture = (async () => {
-      await this.store.settled();
+      await nativeWait("capture.settled", this.store.settled());
       if (epoch !== this.epoch) return;
       this.hooks.valid(request);
-      const store = await this.store.read(request.reviewId);
+      const store = await nativeWait("capture.load", this.store.read(request.reviewId));
       if (epoch !== this.epoch) return;
       const review = this.checked(store, request);
       if (
@@ -95,10 +96,11 @@ export class RelayReviews {
         const worker = this.execution.list().find((worker) => worker.id === saved.runId);
         const view = worker?.orchestrator.runs()[0];
         // Terminal status is emitted before its run record finishes saving.
-        if (worker && view && !ACTIVE_STATUSES.has(view.status)) await worker.orchestrator.done;
+        if (worker && view && !ACTIVE_STATUSES.has(view.status))
+          await nativeWait("capture.worker-done", worker.orchestrator.done);
         if (epoch !== this.epoch) return;
       }
-      await this.request({ type: "capture", ...request, requestId });
+      await nativeWait("capture.request", this.request({ type: "capture", ...request, requestId }));
     })()
       .catch(async (cause) => {
         if (epoch !== this.epoch || this.yieldedCaptures.has(requestId)) return;
@@ -357,6 +359,7 @@ export class RelayReviews {
       .list()
       .filter((worker) => worker.target.cwd === source.cwd)) {
       const view = worker.orchestrator.runs()[0];
+      if (view?.modeChanging) nativeEvent("capture.mode-changing");
       if (
         view &&
         (view.stopping ||
@@ -389,10 +392,12 @@ export class RelayReviews {
     for (const saved of review.workers) {
       signal?.throwIfAborted();
       const checkout = saved.checkout;
-      if (!checkout)
+      if (!checkout) {
+        nativeEvent("capture.missing-checkout");
         throw new Error(
           "Saved worker checkout identity is unavailable. Earlier captures remain evidence only.",
         );
+      }
       const currentCheckout = async () => {
         const canonical = await realpath(checkout.cwd);
         const info = await stat(canonical, { bigint: true });
@@ -411,6 +416,7 @@ export class RelayReviews {
       const repo = await this.deps.git.repoInfo(record.worktree);
       valid();
       const view = live?.orchestrator.runs()[0];
+      if (view?.modeChanging) nativeEvent("capture.mode-changing");
       if (
         !repo ||
         !workspace.repo ||
@@ -468,8 +474,8 @@ export class RelayReviews {
   ): Promise<void> {
     const signal = lease.abort.signal;
     const checkpointId = this.hooks.checkpoint?.();
-    await this.target(review, lease, valid);
-    const targets = await this.sources(review, valid, signal);
+    await nativeWait("capture.target", this.target(review, lease, valid));
+    const targets = await nativeWait("capture.sources", this.sources(review, valid, signal));
     const git = this.deps.git.tasks;
     if (!git || !this.deps.git.reviewSnapshot) throw new Error("Structured review is unavailable");
     const results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[] = [];
@@ -479,12 +485,13 @@ export class RelayReviews {
     for (const target of targets) {
       signal.throwIfAborted();
       try {
-        const commit = await git.snapshot(target.worktree, undefined, signal);
-        const snapshot = await this.deps.git.reviewSnapshot(
-          target.worktree,
-          target.base,
-          signal,
-          commit,
+        const commit = await nativeWait(
+          "capture.snapshot",
+          git.snapshot(target.worktree, undefined, signal),
+        );
+        const snapshot = await nativeWait(
+          "capture.review",
+          this.deps.git.reviewSnapshot(target.worktree, target.base, signal, commit),
         );
         const files = snapshot.files.slice(0, Math.max(0, 2_000 - fileCount)).map((file) => {
           const size = Buffer.byteLength(file.original) + Buffer.byteLength(file.modified);
@@ -515,7 +522,8 @@ export class RelayReviews {
     }
     signal.throwIfAborted();
     await this.identity(review, valid);
-    await this.sources(review, valid, signal);
+    await nativeWait("capture.sources", this.sources(review, valid, signal));
+    nativeEvent("capture.persist", "started");
     await this.store.write(review.id, async (store) => {
       valid();
       signal.throwIfAborted();
@@ -532,20 +540,24 @@ export class RelayReviews {
         const revision = store.get(review.id).revisions.at(-1);
         const loop = await this.store.loop(review);
         if (revision && loop) {
-          await this.hooks.integrate(
-            review,
-            loop,
-            (availableBytes, reserve) =>
-              loop.prepare(review.id, revision.id, sources, signal, availableBytes, reserve),
-            () => {
-              valid();
-              signal.throwIfAborted();
-            },
-            checkpointId,
+          await nativeWait(
+            "capture.integrate",
+            this.hooks.integrate(
+              review,
+              loop,
+              (availableBytes, reserve) =>
+                loop.prepare(review.id, revision.id, sources, signal, availableBytes, reserve),
+              () => {
+                valid();
+                signal.throwIfAborted();
+              },
+              checkpointId,
+            ),
           );
         }
       }
     });
+    nativeEvent("capture.persist");
     this.hooks.changed();
   }
   private async action(

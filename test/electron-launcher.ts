@@ -103,11 +103,17 @@ export async function launchDesktop(
     cwd: directory,
     env,
   });
+  launched.process().on("exit", (code) => {
+    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.exit", code })}\n`);
+  });
+  launched.process().on("close", (code) => {
+    process.stderr.write(`${JSON.stringify({ nativePhase: "launcher.close", code })}\n`);
+  });
   let diagnosticBuffer = "";
   launched.process().stderr?.on("data", (chunk: Buffer) => {
     diagnosticBuffer += chunk.toString();
     const lines = diagnosticBuffer.split("\n");
-    diagnosticBuffer = lines.pop() ?? "";
+    diagnosticBuffer = (lines.pop() ?? "").slice(-65536);
     for (const line of lines)
       if (line.startsWith('{"nativePhase":') || line.startsWith('{"nativeDialog":'))
         process.stderr.write(`${line}\n`);

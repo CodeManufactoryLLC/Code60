@@ -5,6 +5,7 @@ import type { RelayReviewEntry, Review } from "../bridge/index.js";
 import { type CoreDeps, TaskLoop } from "../core/index.js";
 import { privateDirectory } from "../platform/index.js";
 import type { ExecutionWorker } from "./execution-host.js";
+import { nativeEvent } from "./native-diagnostic.js";
 import { RelayReviewIndex } from "./relay-review-index.js";
 import { readRelayState, verifyRelayStorage } from "./relay-storage.js";
 import { ReviewStore } from "./reviews.js";
@@ -115,6 +116,7 @@ export class RelayReviewStore {
     };
     return this.serial(async () => {
       valid();
+      nativeEvent(worker.checkout ? "associate.pinned" : "associate.unpinned");
       if (worker.owner.id !== this.id) throw new Error("Worker belongs to another Relay");
       const previous = this.assignments.get(worker.id);
       if (previous?.key === key && previous.turn === turn && previous.pinned === !!worker.checkout)
@@ -197,6 +199,11 @@ export class RelayReviewStore {
               branch: worker.record.branch,
             }
           : undefined,
+      );
+      nativeEvent(
+        store.get(id).workers.find((item) => item.runId === worker.id)?.checkout
+          ? "associate.saved-pinned"
+          : "associate.saved-unpinned",
       );
       valid();
       if (fresh) {

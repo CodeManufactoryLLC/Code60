@@ -1317,8 +1317,8 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
     await composer.fill("Warmup for the independent detail stream");
     await composer.press("Enter");
     await expect(chat.locator(".event.message .chat-markdown")).toHaveText("ok");
-    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.fill(text);
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.press("Enter");
     await expect
       .poll(() =>
