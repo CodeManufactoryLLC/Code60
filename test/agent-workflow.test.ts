@@ -155,8 +155,8 @@ it.each(["readable", "legacy"] as const)(
       const evidence = await readdir(processLog);
       expect(evidence.length).toBeGreaterThanOrEqual(2);
       for (const file of evidence) {
-        expect(file).toMatch(/^[1-9]\d*\.json$/);
-        const pid = Number(file.slice(0, -5));
+        const pid = Number(/^([1-9]\d*)-[0-9a-f-]{36}\.json$/.exec(file)?.[1]);
+        expect(pid).toBeGreaterThan(0);
         expect(() => process.kill(pid, 0)).toThrow();
       }
       await rm(root, { recursive: true, force: true });

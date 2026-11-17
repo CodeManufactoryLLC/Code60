@@ -10653,6 +10653,8 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     );
     await expect(input()).toHaveValue("second draft");
     await expect(chat.locator(".event.prompt")).toHaveCount(1);
+    // The composer can switch before the selection request settles; a click meanwhile is ignored.
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await chatList().getByRole("button", { name: "Chat 1", exact: true }).click();
     await expect(input()).toHaveValue("draft retained");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(id);
@@ -10682,8 +10684,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const composer = chat.getByRole("region", { name: "Chat composer" });
     await expect(composer).toHaveCSS("border-radius", "5px");
     await idleCard.click();
+    await expect(idleCard).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(chatList().locator(".chat-loader")).toHaveCount(0);
     await activeCard.click();
+    await expect(activeCard).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(activityName).toBeVisible();
 
     for (const [theme, neutral, bubble, text] of [

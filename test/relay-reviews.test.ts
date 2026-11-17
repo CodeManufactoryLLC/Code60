@@ -549,6 +549,18 @@ it("saves checkout pins for sequential human requests in two target owners", asy
     });
     expect(worker.checkout).toBeDefined();
     tasks.add(accepted.taskId as string);
+    // Delivering this worker's results makes its task current again, so let that
+    // turn finish before the next human request starts a new task.
+    await vi.waitFor(() =>
+      expect(
+        agents.sessions.some((session) =>
+          session.prompts.some((prompt) =>
+            prompt.includes(`Worker results for originating task ${accepted.taskId}`),
+          ),
+        ),
+      ).toBe(true),
+    );
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
   }
   expect(tasks.size).toBe(2);
 });
