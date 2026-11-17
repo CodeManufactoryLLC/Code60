@@ -95,13 +95,37 @@ Apply and verify the [versioned branch ruleset](.github/rulesets/README.md).
 It requires reviewed PRs, up-to-date CI, and resolved discussions, and prevents
 direct pushes, force pushes, and deletion without administrator bypasses.
 
-Before tagging a candidate, run **Native release validation** on its branch with
-`gh workflow run native-validation.yml --ref <branch>`. This runs the unit and
-Electron suites on both native platforms without signing secrets or publication
-rights. It does not replace the release workflow's installer, signing, notarization,
-and installed-app checks. A failed candidate tag stays immutable; validate fixes
-before creating the next version.
-Desktop jobs install Electron explicitly before tests. An official GitHub asset
+Before tagging a candidate, run an **acceptance** run of **Native release
+validation** on its branch with `gh workflow run native-validation.yml --ref <branch>`.
+Acceptance means every input at its default: both platforms, the full unit suite
+with coverage gates, and the desktop suite in three shards. Only an acceptance run
+counts as release evidence; a newer acceptance run for the same branch cancels an
+older one. It runs without signing secrets or publication rights and does not
+replace the release workflow's installer, signing, notarization, and installed-app
+checks. A failed candidate tag stays immutable; validate fixes before creating
+the next version.
+
+Each platform runs one unit job and three desktop shard jobs in parallel. Desktop
+shards do not wait for the unit job, so one run reports failures in both layers.
+Shards split individual tests (`--fully-parallel --shard=N/3`), not files; local
+and container desktop runs are unchanged.
+
+Use a **diagnosis** run to check a targeted fix quickly. Any non-default input
+makes a run diagnosis: `platform` (`both`, `windows`, `macos`), `suite` (`full`,
+`unit`, `desktop`), `unit_filter` (a Vitest file filter that skips coverage gates)
+and `desktop_grep` (a Playwright `--grep` pattern run as one shard). For example:
+
+```sh
+gh workflow run native-validation.yml --ref <branch> \
+  -f platform=windows -f suite=desktop -f desktop_grep="saved project history"
+gh workflow run native-validation.yml --ref <branch> \
+  -f platform=windows -f suite=unit -f unit_filter=src/desktop/custom-agent-store.test.ts
+```
+
+Diagnosis runs never cancel other runs and are never cancelled by them. Their
+**Native validation passed** summary is labeled "not release evidence"; rerun an
+acceptance run before tagging. To retry only failed jobs or shards of a run, use
+`gh run rerun <run-id> --failed`; reruns test the run's original commit.Desktop jobs install Electron explicitly before tests. An official GitHub asset
 server error gets one retry with a cache-busting query; the locked package’s
 bundled checksums still apply. Checksum, access, and repeated download failures
 stop validation.
@@ -216,12 +240,23 @@ A release is a manual `Release installers` workflow dispatch from `main`, with
 one existing version tag. The workflow validates the exact tagged commit and
 both package versions; tags outside main, missing tags, published releases, and
 conflicting drafts fail. It runs Linux checks first.
-After Linux checks pass, the macOS, Windows and Linux installer jobs run in parallel. macOS runs
-checks, desktop tests, packaging,
-Developer ID signing, app and DMG notarization/stapling, and verification of the
+After Linux checks pass, the Linux installer job and the native test jobs run in
+parallel. Each native platform runs a unit job and three desktop shards through the
+same secret-free `native-tests.yml` workflow that native validation uses, with no
+signing environment. Its packaging job starts only after all of them pass:
+
+```text
+preflight → linux-check → linux-installers ───────────────────────────→ publish
+                        → mac-unit + mac-desktop (3 shards) → mac ─────→ publish
+                        → win-unit + win-desktop (3 shards) → windows ─→ publish
+```
+
+The macOS packaging job builds, runs CLI smoke checks, packages, performs
+Developer ID signing and app and DMG notarization/stapling, and verifies the
 application copied from the final mounted DMG.
-Windows repeats checks and desktop tests, then builds and verifies the signed
-installer (or the explicitly selected unsigned beta). Installer tests retain real application profiles, configuration,
+The Windows packaging job builds and runs CLI smoke checks, then builds and
+verifies the signed installer (or the explicitly selected unsigned beta).
+Publication requires every test and packaging job to succeed. Installer tests retain real application profiles, configuration,
 SQLite databases, records and worktrees and compare their hashes after reinstall
 and uninstall. Staging requires a verification report bound to the installer hash.
 

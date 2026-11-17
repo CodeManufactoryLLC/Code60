@@ -85,6 +85,60 @@ jobs:
           node dist/cli/main.js --help
           node dist/cli/main.js --version
 
+  # Native test jobs reuse native-validation's workflow: no secrets, no signing
+  # environment, and per-job or per-shard reruns.
+  mac-unit:
+    name: macOS unit
+    needs: [preflight, linux-check]
+    uses: ./.github/workflows/native-tests.yml
+    with:
+      os: macos-15
+      ref: ${{ needs.preflight.outputs.sha }}
+      suite: unit
+      release: true
+
+  mac-desktop:
+    name: macOS desktop ${{ matrix.shard }}
+    needs: [preflight, linux-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    uses: ./.github/workflows/native-tests.yml
+    with:
+      os: macos-15
+      ref: ${{ needs.preflight.outputs.sha }}
+      suite: desktop
+      shard: ${{ matrix.shard }}
+      shards: 3
+      release: true
+
+  win-unit:
+    name: Windows unit
+    needs: [preflight, linux-check]
+    uses: ./.github/workflows/native-tests.yml
+    with:
+      os: windows-2025
+      ref: ${{ needs.preflight.outputs.sha }}
+      suite: unit
+      release: true
+
+  win-desktop:
+    name: Windows desktop ${{ matrix.shard }}
+    needs: [preflight, linux-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    uses: ./.github/workflows/native-tests.yml
+    with:
+      os: windows-2025
+      ref: ${{ needs.preflight.outputs.sha }}
+      suite: desktop
+      shard: ${{ matrix.shard }}
+      shards: 3
+      release: true
+
   linux-installers:
     needs: [preflight, linux-check]
     runs-on: ubuntu-24.04
@@ -125,7 +179,7 @@ jobs:
           if-no-files-found: ignore
 
   mac:
-    needs: [preflight, linux-check]
+    needs: [preflight, linux-check, mac-unit, mac-desktop]
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -149,8 +203,7 @@ jobs:
       - run: npm ci
       - run: npm run prepare:models
       - run: node scripts/install-electron.mjs
-      - run: npm run check
-      - run: npm run test:desktop
+      - run: npm run build
       - run: |
           node dist/cli/main.js --help
           node dist/cli/main.js --version
@@ -187,7 +240,7 @@ jobs:
           if-no-files-found: ignore
 
   windows:
-    needs: [preflight, linux-check]
+    needs: [preflight, linux-check, win-unit, win-desktop]
     runs-on: windows-2025
     timeout-minutes: 45
     # The Azure federated credential trusts only this main-restricted environment.
@@ -220,8 +273,7 @@ jobs:
       - run: npm ci
       - run: npm run prepare:models
       - run: node scripts/install-electron.mjs
-      - run: npm run check
-      - run: npm run test:desktop
+      - run: npm run build
       - name: CLI smoke checks
         run: |
           node dist/cli/main.js --help
@@ -260,8 +312,19 @@ jobs:
     concurrency:
       group: code60-release-publication
       cancel-in-progress: false
-    needs: [preflight, linux-check, linux-installers, mac, windows]
-    if: ${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac.result == 'success' && needs.windows.result == 'success' }}
+    needs:
+      [
+        preflight,
+        linux-check,
+        linux-installers,
+        mac-unit,
+        mac-desktop,
+        mac,
+        win-unit,
+        win-desktop,
+        windows,
+      ]
+    if: ${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac-unit.result == 'success' && needs.mac-desktop.result == 'success' && needs.mac.result == 'success' && needs.win-unit.result == 'success' && needs.win-desktop.result == 'success' && needs.windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
