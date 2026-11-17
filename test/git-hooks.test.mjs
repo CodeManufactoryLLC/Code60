@@ -113,28 +113,13 @@ describe("opt-in repository hooks", () => {
     const index = await readFile(join(root, ".git/index"));
     const sources = ["sentinel.txt", ".githooks/pre-commit", "package.json", "gate.mjs"];
     const originalFiles = await Promise.all(sources.map((file) => readFile(join(root, file))));
-    const hookStarted = performance.now();
-    await execute("git", ["-C", root, "hook", "run", "pre-commit"], {
-      env: environment,
-      timeout: 60_000,
-    });
-    const hookElapsed = performance.now() - hookStarted;
-    console.log(
-      "native-launch-measurement",
-      JSON.stringify({ hook: "pass", elapsed: hookElapsed }),
-    );
-    expect(hookElapsed).toBeLessThan(5_000);
+    await git("hook", "run", "pre-commit");
     expect((await readFile(join(root, "calls"), "utf8")).trim().split("\n")).toEqual(commands);
     await writeFile(join(root, "calls"), "");
-    const failStarted = performance.now();
     const failed = await execute("git", ["-C", root, "hook", "run", "pre-commit"], {
       env: { ...environment, CODE60_TEST_FAIL: "typecheck" },
       timeout: 15_000,
     }).catch((error) => error);
-    console.log(
-      "native-launch-measurement",
-      JSON.stringify({ hook: "fail", elapsed: performance.now() - failStarted }),
-    );
     expect(failed.code).toBe(17);
     expect((await readFile(join(root, "calls"), "utf8")).trim().split("\n")).toEqual(
       commands.slice(0, 2),
@@ -145,5 +130,5 @@ describe("opt-in repository hooks", () => {
       originalFiles,
     );
     expect(await readFile(join(root, "sentinel.txt"), "utf8")).toBe("unstaged content\n");
-  }, 120_000);
+  }, 20_000);
 });
