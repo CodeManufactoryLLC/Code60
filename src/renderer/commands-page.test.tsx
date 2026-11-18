@@ -100,6 +100,7 @@ it("shows the plain-text fallback and marks only a recognized leading command", 
     />,
   );
   expect(html).toContain('role="combobox"');
+  expect(html).toContain('spellCheck="false"');
   expect(html).toContain("type $ for commands");
   expect(html).toContain('aria-expanded="false"');
   expect(html).toContain("will be sent as plain text");

@@ -44,7 +44,7 @@ describe("agent instruction references", () => {
     );
     expect(manifest.scripts.check).toMatch(/^npm run check:instructions && /);
     expect(manifest.scripts["check:instructions"]).toBe("node scripts/check-instructions.mjs");
-  });
+  }, 30_000); // Scanning the whole repository took 5.4 s on Windows CI.
   it("accepts existing scripts, links, punctuation and duplicate heading anchors", async () => {
     expect(await checkInstructions(await fixture())).toEqual([]);
   });

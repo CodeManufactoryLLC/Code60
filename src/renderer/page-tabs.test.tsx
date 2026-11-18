@@ -12,6 +12,7 @@ function navigation(
   active = initialTabs.active,
   expanded = true,
   sidebarOpen = true,
+  busy = false,
 ) {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) =>
@@ -34,6 +35,7 @@ function navigation(
         projectAction: async () => true,
         invalidate: () => {},
         pending: false,
+        busy,
         projectPending: false,
         conversationPending: false,
         error: "",
@@ -48,6 +50,14 @@ function navigation(
 }
 
 describe("database connection navigation", () => {
+  it.each([true, false])(
+    "marks the sidebar busy only while navigation is in flight (%s)",
+    (busy) => {
+      const html = navigation(null, undefined, null, "home", true, true, busy);
+      const sidebar = html.match(/<nav[^>]*id="navigation-sidebar"[^>]*>/)?.[0];
+      expect(sidebar?.includes('aria-busy="true"')).toBe(busy);
+    },
+  );
   it.each([true, false])(
     "keeps a reachable external toggle and mounted navigation (open %s)",
     (open) => {

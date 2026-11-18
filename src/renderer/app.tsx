@@ -7,7 +7,7 @@ import { AppFooter } from "./app-footer.js";
 import { AppMenus } from "./app-menus.js";
 import { AppPages } from "./app-pages.js";
 import { useAppPreferences } from "./app-preferences.js";
-import { conversationId } from "./chats.js";
+import { builtinRelayId, conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
@@ -368,10 +368,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
           openChat={openChat}
           openReview={openReview}
           openRelay={async () => {
-            const relay = snapshot?.chats.find(
-              (chat) => chat.kind === "relay" && !chat.customAgentId,
-            );
-            const id = relay && conversationId(relay);
+            const id = builtinRelayId(snapshot?.chats ?? []);
             if (!id) throw new Error("Relay is unavailable. Try again shortly.");
             if (!(await navigation.open({ kind: "conversation", id })))
               throw new Error("Unable to open Relay. Try again shortly.");

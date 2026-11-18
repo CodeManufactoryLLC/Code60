@@ -305,12 +305,14 @@ for (const kind of ["Relay", "project"] as const) {
         await expect(plan.locator(".plan-state")).toHaveText("Dismissed");
         await send(page, "Start a memory recall worker");
       }
+      // Native Windows worker startup (worktree plus provider spawn) measured 4.4-5.5 s.
       await expect
         .poll(
           async () =>
             (await page.evaluate(() => window.desktop.snapshot())).runs.find(
               (run) => run.view?.status === "idle",
             )?.record.id,
+          { timeout: 15_000 },
         )
         .toBeTruthy();
       snapshot = await page.evaluate(() => window.desktop.snapshot());

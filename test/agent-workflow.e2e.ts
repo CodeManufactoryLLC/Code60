@@ -7,6 +7,10 @@ import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
+// Automatic integration and message Undo each write several private checkpoint and
+// journal records; on Windows every write launches the native owner/ACL helper and
+// atomic replacement. Native ARM64 measured about 5 s for each step.
+const nativeJournalTimeout = process.platform === "win32" ? 15_000 : 5_000;
 type NativeDialog = {
   kind: "save" | "open" | "message";
   title?: string;
@@ -589,10 +593,17 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
+        // Cached worker text can show before selection settles; a click meanwhile is ignored.
+        await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
           .locator(".sidebar")
           .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
           .click();
+        await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+        // Worker pages share this class and model text, so prove the parent chat is shown.
+        await expect(
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
+        ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
@@ -611,7 +622,15 @@ for (const custom of [false, true]) {
         expect(alive(workerProcesses[0]?.pid as number)).toBe(true);
         await expect(async () => {
           expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
-        }).toPass({ timeout: 5_000 });
+        })
+          .toPass({ timeout: nativeJournalTimeout })
+          .catch(async (error) => {
+            await info.attach("integration-failure", {
+              body: JSON.stringify(await page.evaluate(() => window.desktop.snapshot()), null, 2),
+              contentType: "application/json",
+            });
+            throw error;
+          });
         await checkCheckout("human accepted target\n");
         expect((await dialogs())?.observed).toHaveLength(3);
         checks.push(
@@ -623,6 +642,9 @@ for (const custom of [false, true]) {
           .locator(".orchestration-chat-page:visible")
           .getByRole("button", { name: "1 file changed", exact: true });
         await expect(changes).toHaveCount(1);
+        // Native displays can clamp the default window below the panel's
+        // 1200px stacked-layout breakpoint, which hides its resize handle.
+        await page.setViewportSize({ width: 1600, height: 1000 });
         await changes.click();
         const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
         for (let step = 0; step < 20; step++) await resize.press("ArrowLeft");
@@ -719,7 +741,7 @@ for (const custom of [false, true]) {
           "Declined Undo preserves the request, existing draft, working changes, staging and HEAD.",
         );
         await undo.click();
-        await expect(composer).toHaveValue(requestText);
+        await expect(composer).toHaveValue(requestText, { timeout: nativeJournalTimeout });
         await expect(page.getByRole("list", { name: "Attached code references" })).toHaveCount(0);
         await expect(message).toHaveCount(0);
         await checkCheckout("original\n");
@@ -1180,6 +1202,16 @@ test("workflow: custom agents without a database, instruction edits, archive, re
       .getByRole("button", { name: "Writer", exact: true })
       .click();
     await expect(composer).toHaveValue("Writer unsent draft");
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(composer).toHaveValue("");
+    await composer.fill("Relay unsent draft");
+    await page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Reviewer", exact: true })
+      .click();
+    await expect(composer).toHaveValue("Reviewer unsent draft");
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(composer).toHaveValue("Relay unsent draft");
     await page
       .locator("#custom-agent-pages")
       .getByRole("button", { name: "Reviewer", exact: true })

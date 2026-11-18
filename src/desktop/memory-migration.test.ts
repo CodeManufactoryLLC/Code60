@@ -84,7 +84,8 @@ describe("private memory settings migration", () => {
     "migrates a v1 database atomically without deleting saved memories or citations",
     async () => {
       const root = await mkdtemp(join(tmpdir(), "code60-memory-migration-"));
-      let store = new MemoryStore(root);
+      const state = join(root, "memory");
+      let store = new MemoryStore(state);
       try {
         const conversation = store.register("old", "Old chat", null);
         const source: MemorySource = {
@@ -130,7 +131,7 @@ describe("private memory settings migration", () => {
         if (!record) throw new Error("Missing migration fixture");
         store.close();
         const sqlite = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
-        const db = new sqlite.DatabaseSync(join(root, "memory.sqlite"));
+        const db = new sqlite.DatabaseSync(join(state, "memory.sqlite"));
         try {
           db.prepare("UPDATE meta SET value=? WHERE key='settings'").run(JSON.stringify(legacy()));
           db.exec(
@@ -139,7 +140,7 @@ describe("private memory settings migration", () => {
         } finally {
           db.close();
         }
-        store = new MemoryStore(root);
+        store = new MemoryStore(state);
         expect(store.settings()).toEqual({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
         expect(store.snapshot().count).toBe(1);
         expect(store.detail(record.id).sources).toEqual([source]);
@@ -148,7 +149,7 @@ describe("private memory settings migration", () => {
         store.configure(DEFAULT_MEMORY_SETTINGS);
         expect(store.eligible(conversation.id).map((r) => r.id)).toEqual([record.id]);
         store.close();
-        store = new MemoryStore(root);
+        store = new MemoryStore(state);
         expect(store.settings()).toEqual(DEFAULT_MEMORY_SETTINGS);
       } finally {
         store.close();

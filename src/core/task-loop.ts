@@ -101,6 +101,7 @@ export class TaskLoop {
       snapshot: unsupported,
       tree: unsupported,
       blob: unsupported,
+      hash: unsupported,
       merge: merge ?? (async () => null),
       identity: async (project) => {
         const canonical = await fs.realpath(project);
@@ -411,6 +412,32 @@ export class TaskLoop {
       data: (await this.git.blob(this.project, entry.oid, path)).toString("base64"),
     };
   }
+  private async checkoutContent(
+    entry: TaskEntry | undefined,
+    path: string,
+    content: Content,
+    current: Content,
+  ): Promise<Content> {
+    if (!entry || !content || !current) return content;
+    const bytes = Buffer.from(content.data, "base64");
+    const disk = Buffer.from(current.data, "base64");
+    if (
+      [bytes, disk].some(
+        (data) => data.includes(0) || !Buffer.from(data.toString("utf8")).equals(data),
+      )
+    )
+      return content;
+    const text = disk.toString("utf8");
+    // Mixed endings have no single checkout convention; do not guess.
+    const crlf = text.includes("\r\n");
+    if (crlf && /(?<!\r)\n/.test(text)) return content;
+    const rendered = Buffer.from(bytes.toString("utf8").replace(/\r?\n/g, crlf ? "\r\n" : "\n"));
+    if (rendered.equals(bytes)) return content;
+    // EOL conversion is allowed only when Git's actual clean filters prove
+    // these bytes still represent this exact blob. Never normalize write guards.
+    if ((await this.git.hash(this.project, path, rendered)) !== entry.oid) return content;
+    return { ...content, data: rendered.toString("base64") };
+  }
   private async combine(
     base: Content,
     current: Content,
@@ -483,7 +510,7 @@ export class TaskLoop {
             throw new Error("Ambiguous case or Unicode path");
           folded.set(alias, path);
           let original = await this.content(base[path], path);
-          const proposed = await this.content(after[path], path);
+          let proposed = await this.content(after[path], path);
           const resolution = Object.hasOwn(state.resolutions, path)
             ? state.resolutions[path]
             : undefined;
@@ -498,10 +525,11 @@ export class TaskLoop {
             original?.mode !== "100755"
           )
             throw new Error("New executable file modes cannot be applied on Windows");
-          const current = paths.get(path) ?? {
-            before: await this.disk(path),
-            after: await this.disk(path),
-          };
+          const disk = paths.has(path) ? null : await this.disk(path);
+          const current = paths.get(path) ?? { before: disk, after: disk };
+          if (!resolution)
+            original = await this.checkoutContent(base[path], path, original, current.after);
+          proposed = await this.checkoutContent(after[path], path, proposed, current.after);
           const merged = await this.combine(original, current.after, proposed);
           if (merged === undefined)
             throw new Error("Worker changes conflict with another worker or current project edits");

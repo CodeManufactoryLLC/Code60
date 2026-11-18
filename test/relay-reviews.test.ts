@@ -14,8 +14,14 @@ import {
 import { RelayReviewStore } from "../src/desktop/relay-review-store.js";
 import { RelayReviews } from "../src/desktop/relay-reviews.js";
 import { RelayService } from "../src/desktop/relay-service.js";
+import * as relayStorage from "../src/desktop/relay-storage.js";
+import { ReviewStore } from "../src/desktop/reviews.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+
+// These real-Git/private-storage journeys exceed 5 s on Windows (the native
+// log also has passing cases above 5 s); keep the same assertions and bounds.
+if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let deps: CoreDeps;
@@ -67,6 +73,7 @@ beforeEach(async () => {
   for (const name of ["a", "b"]) {
     const cwd = join(root, name);
     execFileSync("git", ["init", "-q", cwd]);
+    execFileSync("git", ["config", "core.autocrlf", "false"], { cwd });
     execFileSync("git", ["config", "core.hooksPath", join(root, "no-hooks")], { cwd });
     await writeFile(join(cwd, "file.txt"), "Before\n");
     execFileSync("git", ["add", "."], { cwd });
@@ -80,6 +87,7 @@ afterEach(async () => {
   await reviews.settled();
   await rm(root, { recursive: true, force: true });
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 async function relayTool(name: string, args: unknown = {}) {
   const server = agents.specs
@@ -174,15 +182,83 @@ it("keeps partial automatic capture failures visible and allows explicit refresh
     .spyOn(deps.git, "reviewSnapshot")
     .mockRejectedValue(new Error("Snapshot unavailable"));
   required(manager).scheduleCapture(source.address);
-  await vi.waitFor(async () =>
-    expect((await reviews.read(source.id)).get(source.id).revisions[0]?.errors).toEqual([
-      { runId: source.accepted.id, message: "Snapshot unavailable" },
-    ]),
+  await vi.waitFor(
+    async () =>
+      expect((await reviews.read(source.id)).get(source.id).revisions[0]?.errors).toEqual([
+        { runId: source.accepted.id, message: "Snapshot unavailable" },
+      ]),
+    { timeout: 5000 },
   );
   read.mockRestore();
   await required(manager).rendererGone();
   const review = await capture(source);
   expect(review.revisions.at(-1)?.errors).toEqual([]);
+});
+it("finishes an owned metadata read before starting an owned review write", async () => {
+  const source = await ready();
+  const original = await reviews.read(source.id);
+  const title = original.get(source.id).title;
+  let enter!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const verify = relayStorage.verifyRelayStorage;
+  const verification = vi
+    .spyOn(relayStorage, "verifyRelayStorage")
+    .mockImplementationOnce(async (...args) => {
+      enter();
+      await held;
+      return verify(...args);
+    });
+  const reading = reviews.read(source.id);
+  await entered;
+  const writing = reviews.write(source.id, (store) =>
+    store.mutate(source.id, (review) => {
+      review.title = "Published after read";
+    }),
+  );
+  // Run the already queued writer microtask, not a timer or a retry.
+  await Promise.resolve();
+  const checksWhileHeld = verification.mock.calls.length;
+  release();
+  const [snapshot] = await Promise.all([reading, writing]);
+  expect(checksWhileHeld).toBe(1);
+  expect(snapshot.get(source.id).title).toBe(title);
+  expect(original.get(source.id).title).toBe(title);
+  expect((await reviews.read(source.id)).get(source.id).title).toBe("Published after read");
+});
+it("finishes an owned review write before opening the next metadata reader", async () => {
+  const source = await ready();
+  const original = await reviews.read(source.id);
+  const title = original.get(source.id).title;
+  let enter!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const writing = reviews.write(source.id, async (store) => {
+    enter();
+    await held;
+    await store.mutate(source.id, (review) => {
+      review.title = "Published before read";
+    });
+  });
+  await entered;
+  const verification = vi.spyOn(relayStorage, "verifyRelayStorage");
+  const reading = reviews.read(source.id);
+  const checksWhileHeld = verification.mock.calls.length;
+  release();
+  const [, snapshot] = await Promise.all([writing, reading]);
+  expect(checksWhileHeld).toBe(0);
+  expect(snapshot.get(source.id).title).toBe("Published before read");
+  expect(original.get(source.id).title).toBe(title);
 });
 it("reports damaged conversation evidence per review without hiding other records", async () => {
   const a = await ready();
@@ -203,6 +279,19 @@ it("reports damaged conversation evidence per review without hiding other record
 it.each(["failed", "cancelled"] as const)(
   "automatically captures partial work and the actual %s worker turn outcome",
   async (status) => {
+    const requests = vi.spyOn(RelayReviews.prototype, "request");
+    const settleCaptures = async () => {
+      for (const [index, [request]] of requests.mock.calls.entries())
+        if (
+          request &&
+          typeof request === "object" &&
+          "type" in request &&
+          request.type === "capture"
+        )
+          await expect(requests.mock.results[index]?.value).resolves.toMatchObject({
+            type: "review",
+          });
+    };
     agents.script = (text) => (text === "Worker with partial changes" ? "hang" : "end_turn");
     service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
       confirm,
@@ -258,14 +347,54 @@ it.each(["failed", "cancelled"] as const)(
           ],
         });
       },
-      { timeout: 10_000 },
+      // Windows CI needed up to 16 s for sibling automatic captures. Under the full
+      // parallel suite, native worktree and snapshot processes on an ARM64 VM needed more.
+      { timeout: process.platform === "win32" ? 45_000 : 20_000 },
     );
+    await settleCaptures();
     expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
     expect(await readFile(join(worktree, "file.txt"), "utf8")).toBe("Partial retained result\n");
     expect(session.stops).toHaveLength(status === "failed" ? 1 : 0);
     expect(session.cancels).toBe(status === "cancelled" ? 1 : 0);
     expect(confirm).not.toHaveBeenCalled();
+    if (status === "cancelled") {
+      await service.workerAction({ type: "reply", id: worker.id, text: "Complete the next turn" });
+      await vi.waitFor(() =>
+        expect(worker.orchestrator.runs()[0]).toMatchObject({
+          status: "idle",
+          turns: 2,
+          lastOutcome: "finished",
+        }),
+      );
+      await vi.waitFor(
+        async () => {
+          const result = await service?.reviewRequest({
+            type: "timeline",
+            conversationId: required(service.snapshot().conversationId),
+            generation: required(service.snapshot().generation),
+          });
+          expect(result).toMatchObject({
+            type: "timeline",
+            entries: [
+              {
+                summary: {
+                  revisions: [
+                    { outcomes: [{ runId: worker.id, status: "cancelled" }] },
+                    { outcomes: [{ runId: worker.id, status: "finished" }] },
+                  ],
+                },
+              },
+            ],
+          });
+        },
+        { timeout: process.platform === "win32" ? 45_000 : 20_000 },
+      );
+      await settleCaptures();
+      expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Partial retained result\n");
+      expect(service.execution.list()).toEqual([worker]);
+    }
   },
+  process.platform === "win32" ? 60_000 : undefined,
 );
 it("routes real Relay dispatch, review capture and between-turn feedback to the originating task", async () => {
   const associations = vi.spyOn(RelayReviewStore.prototype, "associate");
@@ -362,6 +491,78 @@ it("routes real Relay dispatch, review capture and between-turn feedback to the 
   });
   await service.cancelReviewReads();
   expect(service.workerSnapshot(true).runs[0]?.relay?.reviewId).toBe(request.reviewId);
+});
+it("saves checkout pins for sequential human requests in two target owners", async () => {
+  const associations = vi.spyOn(RelayReviewStore.prototype, "associate");
+  service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
+    confirm,
+  });
+  await service.sync("claude", DEFAULT_CONFIG);
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  const tasks = new Set<string>();
+  for (const name of ["a", "b"]) {
+    await service.action({
+      type: "send",
+      id: required(service.snapshot().run?.id),
+      text: `Human request for target ${name}`,
+    });
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+    const context = await relayTool("code60_get_context");
+    const accepted = await relayTool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: `worker-${name}`,
+      cwd: join(root, name),
+      workspaceMode: "worktree",
+      prompt: `Target ${name} work`,
+    });
+    const worker = required(
+      service.execution.list().find((worker) => worker.id === accepted.runId),
+    );
+    await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("idle"));
+    for (const result of associations.mock.results)
+      await expect(result.value).resolves.toEqual(expect.any(String));
+    const response = await service.reviewRequest({
+      type: "read",
+      conversationId: required(service.snapshot().conversationId),
+      generation: required(service.snapshot().generation),
+      targetId: accepted.targetId as string,
+      reviewId: accepted.reviewId as string,
+      requestId: randomUUID(),
+    });
+    expect(response).toMatchObject({
+      type: "review",
+      review: {
+        relay: { cwd: join(root, name), taskId: accepted.taskId },
+        workers: [
+          {
+            runId: worker.id,
+            checkout: {
+              cwd: worker.checkout?.cwd,
+              device: worker.checkout?.device.toString(),
+              inode: worker.checkout?.inode.toString(),
+              base: worker.record.base,
+              branch: worker.record.branch,
+            },
+          },
+        ],
+      },
+    });
+    expect(worker.checkout).toBeDefined();
+    tasks.add(accepted.taskId as string);
+    // Delivering this worker's results makes its task current again, so let that
+    // turn finish before the next human request starts a new task.
+    await vi.waitFor(() =>
+      expect(
+        agents.sessions.some((session) =>
+          session.prompts.some((prompt) =>
+            prompt.includes(`Worker results for originating task ${accepted.taskId}`),
+          ),
+        ),
+      ).toBe(true),
+    );
+    await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  }
+  expect(tasks.size).toBe(2);
 });
 it("cancels one target's capture after cleanup without holding another target's review", async () => {
   const a = await ready();
@@ -775,6 +976,27 @@ it("separates task and target groups and keeps old evidence after generation res
   expect((await reopened.index.read()).entries).toHaveLength(3);
   expect((await reopened.read(a)).get(a).workers[0]?.turn).toBe(1);
 });
+it("does not cache a failed checkout-pin publication as a saved association", async () => {
+  const accepted = await worker();
+  await vi.waitFor(() => expect(accepted.orchestrator.runs()[0]?.status).toBe("idle"));
+  const checkout = required(accepted.checkout);
+  delete accepted.checkout;
+  const id = required(await reviews.associate(accepted, 1));
+  accepted.checkout = checkout;
+  const save = vi
+    .spyOn(ReviewStore.prototype, "addWorker")
+    .mockRejectedValue(new Error("Synthetic checkout publication failure"));
+  for (let call = 0; call < 2; call++)
+    await expect(reviews.associate(accepted, 1)).rejects.toThrow(
+      "Synthetic checkout publication failure",
+    );
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(reviews.assignment(accepted.id)?.reviewId).toBe(id);
+  expect((await reviews.read(id)).get(id).workers[0]?.checkout).toBeUndefined();
+  expect(await worker()).toBe(accepted);
+  expect(host.list()).toHaveLength(1);
+  expect(agents.specs).toHaveLength(1);
+});
 it("retains the accepted worker's review link after an index failure without repeating association", async () => {
   const accepted = await worker();
   const append = vi.spyOn(reviews.index, "append").mockRejectedValueOnce(new Error("Index failed"));
@@ -803,12 +1025,12 @@ it("splits bounded worker groups without moving earlier workers or losing new as
   expect((await reviews.read(first)).get(first).workers).toHaveLength(100);
   expect((await reviews.read(second)).get(second).workers).toHaveLength(2);
   expect((await reviews.index.read()).entries).toHaveLength(2);
-});
+}, 120_000); // 102 private review writes took 32 s on Windows, one helper launch each.
 it("does not restore an assignment when a queued association outlives reset", async () => {
   const first = await worker();
   await reviews.associate(first, 1);
   const second = await worker(join(root, "a"), "second");
-  const read = reviews.read.bind(reviews);
+  const read = ReviewStore.open.bind(ReviewStore);
   let enter!: () => void;
   const entered = new Promise<void>((resolve) => {
     enter = resolve;
@@ -817,7 +1039,7 @@ it("does not restore an assignment when a queued association outlives reset", as
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  vi.spyOn(reviews, "read").mockImplementationOnce(async (...args) => {
+  vi.spyOn(ReviewStore, "open").mockImplementationOnce(async (...args) => {
     enter();
     await held;
     return read(...args);

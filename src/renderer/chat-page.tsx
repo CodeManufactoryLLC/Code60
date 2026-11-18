@@ -99,7 +99,7 @@ export function ChatPage({
   const key = chatDraftKey(chat);
   const currentKey = useRef(key);
   currentKey.current = key;
-  const draftState = useChatDraft(key, run?.id);
+  const draftState = useChatDraft(key, run?.id, chat?.conversationId);
   const { draft, edit } = draftState;
   const {
     pending,

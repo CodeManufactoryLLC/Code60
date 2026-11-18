@@ -534,3 +534,63 @@ it("preserves checkout line endings during apply and Undo", async () => {
   await loop.execute(task, proposal.id, "undo");
   expect(await fs.readFile(join(project, "file.txt"), "utf8")).toContain("first\r\nsecond\r\n");
 });
+
+it("applies and undoes worker edits in an LF checkout with autocrlf enabled", async () => {
+  command(project, "config", "core.autocrlf", "true");
+  const before = await fs.readFile(join(project, "file.txt"), "utf8");
+  const identity = await tasks.identity(project);
+  const w = await worker("lf-checkout");
+  await fs.writeFile(join(w.path, "file.txt"), "worker result\r\n");
+  const proposal = await capture([w]);
+  expect(proposal.conflicts).toEqual([]);
+  await loop.execute(task, proposal.id, "apply");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe("worker result\n");
+  await loop.execute(task, proposal.id, "undo");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(before);
+  expect(await tasks.identity(project)).toBe(identity);
+});
+
+it("merges independent LF checkout edits with autocrlf enabled but rejects overlaps", async () => {
+  command(project, "config", "core.autocrlf", "true");
+  const w = await worker("lf-merge");
+  await fs.writeFile(join(w.path, "file.txt"), "worker\r\nsecond\r\nthird\r\nfourth\r\nfifth\r\n");
+  const before = "first\nsecond\nthird\nfourth\nuser\n";
+  await fs.writeFile(join(project, "file.txt"), before);
+  const proposal = await capture([w]);
+  expect(proposal.conflicts).toEqual([]);
+  await loop.execute(task, proposal.id, "apply");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(
+    "worker\nsecond\nthird\nfourth\nuser\n",
+  );
+  await loop.execute(task, proposal.id, "undo");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(before);
+  await fs.writeFile(join(project, "file.txt"), "user\nsecond\nthird\nfourth\nfifth\n");
+  expect((await capture([w])).conflicts).toHaveLength(1);
+});
+
+it("rejects a line-ending change after preparing an LF checkout application", async () => {
+  command(project, "config", "core.autocrlf", "true");
+  const w = await worker("lf-guard");
+  await fs.writeFile(join(w.path, "file.txt"), "worker result\r\n");
+  const proposal = await capture([w]);
+  expect(proposal.conflicts).toEqual([]);
+  const changed = "first\r\nsecond\r\nthird\r\nfourth\r\nfifth\r\n";
+  await fs.writeFile(join(project, "file.txt"), changed);
+  await expect(loop.execute(task, proposal.id, "apply")).rejects.toThrow("Project changed");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(changed);
+});
+
+it("does not normalize bytes when Git attributes disable text conversion", async () => {
+  command(project, "config", "core.autocrlf", "true");
+  await fs.writeFile(join(project, ".gitattributes"), "file.txt -text\n");
+  const w = await worker("no-text-conversion");
+  await fs.writeFile(join(w.path, "file.txt"), "worker result\r\n");
+  const proposal = await capture([w]);
+  expect(proposal.conflicts).toEqual([]);
+  await loop.execute(task, proposal.id, "apply");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe("worker result\r\n");
+  await loop.execute(task, proposal.id, "undo");
+  expect(await fs.readFile(join(project, "file.txt"), "utf8")).toBe(
+    "first\nsecond\nthird\nfourth\nfifth\n",
+  );
+});

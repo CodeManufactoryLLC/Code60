@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
+import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
 import { conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
 import { showsProjectFiles } from "./file-navigation.js";
@@ -147,7 +148,7 @@ export function ChatWorkspace({
           <ChatPage
             key={
               chat?.kind === "relay"
-                ? (chat.conversationId ?? "relay")
+                ? chatDraftKey(chat)
                 : `${database}:${chat?.run?.id ?? chat?.directory ?? "disconnected"}`
             }
             api={api}

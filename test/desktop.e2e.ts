@@ -211,7 +211,15 @@ async function selectSidebarPage(page: Page, name: string) {
       if ((await project.count()) && (await project.getAttribute("aria-expanded")) === "false")
         await project.press("ArrowRight");
     }
-    await page.locator(`[id="conversation-${id}"]`).click();
+    const row = page.locator(`[id="conversation-${id}"]`);
+    // Reselecting the open conversation would start a save that ignores the next click.
+    if (
+      (await page.locator("#panel-chat").isVisible()) &&
+      (await row.getAttribute("aria-current")) === "true"
+    )
+      return;
+    await row.click();
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     return;
   }
   if (name === "Files") {
@@ -1158,7 +1166,7 @@ async function launch(directory: string, folder: string, database: string, confi
 }
 
 test("desktop: project chat recovers a missed update without losing messages or drafts", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-snapshot-gap-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-snapshot-gap-")));
   const project = join(directory, "project");
   await mkdir(project);
   try {
@@ -1172,9 +1180,13 @@ test("desktop: project chat recovers a missed update without losing messages or 
       await window.desktop.chooseFolder(opened.databaseEpoch);
     });
     await page.getByRole("button", { name: "New chat in project", exact: true }).click();
+    // The project chat is selected before its session run exists; wait for the run.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("project");
+      .poll(async () => {
+        const { chat } = await page.evaluate(() => window.desktop.snapshot());
+        return chat.kind === "project" && !!chat.run?.id;
+      })
+      .toBe(true);
     const selectedChat = await page.evaluate(
       async () => (await window.desktop.snapshot()).chat.run?.id,
     );
@@ -1238,7 +1250,7 @@ test("desktop: project chat recovers a missed update without losing messages or 
 });
 
 test("desktop: project chat recovers a missed detail frame without app transcript fallback", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-detail-gap-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-detail-gap-")));
   const project = join(directory, "project");
   await mkdir(project);
   try {
@@ -1251,9 +1263,13 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
       await window.desktop.chooseFolder((await window.desktop.snapshot()).databaseEpoch);
     });
     await page.getByRole("button", { name: "New chat in project", exact: true }).click();
+    // The project chat is selected before its session run exists; wait for the run.
     await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("project");
+      .poll(async () => {
+        const { chat } = await page.evaluate(() => window.desktop.snapshot());
+        return chat.kind === "project" && !!chat.run?.id;
+      })
+      .toBe(true);
     const selected = await page.evaluate(
       async () => (await window.desktop.snapshot()).chat.run?.id,
     );
@@ -1301,8 +1317,8 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
     await composer.fill("Warmup for the independent detail stream");
     await composer.press("Enter");
     await expect(chat.locator(".event.message .chat-markdown")).toHaveText("ok");
-    await expect(composer).toBeEnabled();
     await composer.fill(text);
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await composer.press("Enter");
     await expect
       .poll(() =>
@@ -1328,7 +1344,7 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
 });
 
 test("desktop: Automation Studio excludes service controls and adapts its editor to narrow windows", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-automations-layout-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-automations-layout-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -1406,7 +1422,7 @@ test("desktop: Automation Studio excludes service controls and adapts its editor
 });
 
 test("desktop: System Manager card opens the moved service section without a database", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-system-manager-layout-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-system-manager-layout-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -1473,7 +1489,7 @@ test("desktop: System Manager card opens the moved service section without a dat
 
 test("desktop: breadcrumb titles navigate parents and preserve settings with keyboard access", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-breadcrumbs-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-breadcrumbs-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -1618,7 +1634,7 @@ test("desktop: breadcrumb titles navigate parents and preserve settings with key
 
 test("desktop: page fades preserve drafts and respect reduced motion", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-page-fades-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-page-fades-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -1682,7 +1698,7 @@ test("desktop: page fades preserve drafts and respect reduced motion", async () 
 
 test("desktop: Settings home cards open every page and preserve navigation and preferences", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-settings-home-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-settings-home-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -1871,7 +1887,7 @@ test("desktop: Settings home cards open every page and preserve navigation and p
 
 test("desktop: page title icons match navigation and Settings sub-pages are alphabetical", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-page-title-icons-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-page-title-icons-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2104,7 +2120,7 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
 });
 
 test("desktop: sidebar reveal motion preserves drafts and remains borderless", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-reveal-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-reveal-")));
   try {
     application = await launch(directory, directory, join(directory, "relay.sqlite"));
     const page = await application.firstWindow();
@@ -2228,7 +2244,7 @@ test("desktop: sidebar reveal motion preserves drafts and remains borderless", a
 
 test("desktop: rounded controls, compact cards and collapsible navigation", async () => {
   test.setTimeout(180_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-layout-refinements-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-layout-refinements-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     let page = await application.firstWindow();
@@ -2489,7 +2505,7 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
 });
 
 test("desktop: Home cards navigate, align with page titles and adapt to themes and large text", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-home-cards-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-home-cards-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2654,7 +2670,7 @@ test("desktop: Home cards navigate, align with page titles and adapt to themes a
 
 test("desktop: fixed navigation cards, bounded Polling, page gaps and responsive press feedback", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-page-layout-feedback-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-page-layout-feedback-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2776,7 +2792,7 @@ test("desktop: fixed navigation cards, bounded Polling, page gaps and responsive
 });
 
 test("desktop: pressed top-level navigation keeps one stationary selection edge", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-nav-pressed-borders-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-nav-pressed-borders-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2837,7 +2853,7 @@ test("desktop: pressed top-level navigation keeps one stationary selection edge"
 });
 
 test("desktop: charcoal Dark and System retain blue accents and preserve Light through reload", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-charcoal-theme-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-charcoal-theme-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2889,7 +2905,7 @@ test("desktop: charcoal Dark and System retain blue accents and preserve Light t
 });
 
 test("desktop: cards and text inputs use 5px corners alongside buttons", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-card-input-radius-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-card-input-radius-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -2900,6 +2916,7 @@ test("desktop: cards and text inputs use 5px corners alongside buttons", async (
     for (const card of await home.locator(".home-card").all())
       await expect(card).toHaveCSS("border-radius", "5px");
     const relay = home.getByRole("button", { name: "Open Relay", exact: true });
+    await expect(relay).toBeEnabled();
     await relay.focus();
     await expect(relay).toBeFocused();
     await expect(relay).toHaveCSS("overflow", "visible");
@@ -2955,7 +2972,7 @@ test("desktop: cards and text inputs use 5px corners alongside buttons", async (
 });
 
 test("desktop: IBM Plex defaults, Light faces and independent card-title settings persist and reset", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-typography-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-typography-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -3063,7 +3080,7 @@ test("desktop: IBM Plex defaults, Light faces and independent card-title setting
 
 test("desktop: Relay fills the content track with navigation and files open or closed", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-width-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-width-")));
   try {
     application = await launch(directory, directory, join(directory, "relay.sqlite"));
     const page = await application.firstWindow();
@@ -3166,7 +3183,7 @@ test("desktop: Relay fills the content track with navigation and files open or c
 });
 
 test("desktop: Relay connects without a database and retains identity, draft and bounded restart history", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-desktop-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-desktop-")));
   const project = join(directory, "project");
   await mkdir(project);
   try {
@@ -3338,7 +3355,7 @@ test("desktop: Relay connects without a database and retains identity, draft and
 });
 
 test("desktop: incomplete Relay history remains usable and navigable from a project", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-failed-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-failed-")));
   const project = join(directory, "project");
   await mkdir(project);
   const store = await RelayStore.open(join(directory, "state", "code60", "relay"));
@@ -3506,7 +3523,7 @@ test("desktop: Relay shows live chat without a historical transcript or history 
 });
 
 test("desktop: database writes reject stale epochs without retargeting Relay", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-database-epoch-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-database-epoch-")));
   const firstPath = join(directory, "first.sqlite");
   const secondPath = join(directory, "second.sqlite");
   application = await launch(directory, directory, firstPath);
@@ -3615,7 +3632,7 @@ test("desktop: database writes reject stale epochs without retargeting Relay", a
 
 for (const stage of ["database", "folder", "confirmation"] as const) {
   test(`desktop: stale native ${stage} result cannot act after same-path database reopen`, async () => {
-    const directory = await mkdtemp(join(tmpdir(), "code60-picker-epoch-"));
+    const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-picker-epoch-")));
     const firstPath = join(directory, "first.sqlite");
     const secondPath = join(directory, "second.sqlite");
     const stalePath = join(directory, "must-not-create.sqlite");
@@ -3646,7 +3663,8 @@ for (const stage of ["database", "folder", "confirmation"] as const) {
             });
           };
           dialog.showMessageBox = async () => {
-            if (stage !== "confirmation") return { response: 1, checkboxChecked: false };
+            if (stage !== "confirmation" || scope.__code60PickerRelease)
+              return { response: 1, checkboxChecked: false };
             return new Promise((resolve) => {
               scope.__code60PickerRelease = () => resolve({ response: 1, checkboxChecked: false });
             });
@@ -3721,7 +3739,7 @@ for (const stage of ["database", "folder", "confirmation"] as const) {
 
 test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-layout-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-layout-")));
   const folders = ["project-a", "project-b", "project-c"].map((name) => join(directory, name));
   for (const folder of folders) {
     await mkdir(folder);
@@ -3983,6 +4001,8 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
       .click();
     await cGroup.getByRole("button", { name: "Chat 1", exact: true }).click();
     await expect(composer()).toHaveValue("project-c draft 0");
+    // The composer can switch before the selection request settles; a click meanwhile is ignored.
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await aChat.click();
     await expect(composer()).toHaveValue("project-a draft 1");
     const retained = await page.evaluate(() => window.desktop.snapshot());
@@ -4055,7 +4075,7 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
 });
 
 test("desktop: Relay project accordions retain independent chat and file views", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-projects-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-projects-")));
   const a = join(directory, "project-a");
   const b = join(directory, "project-b");
   await mkdir(a);
@@ -4211,7 +4231,7 @@ test("desktop: Relay project accordions retain independent chat and file views",
 
 test("desktop: Relay files explicitly browse workspace or owned targets without borrowing the selected project", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-files-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-files-ui-")));
   const target = join(directory, "target");
   await mkdir(target);
   await writeFile(join(target, "note.txt"), "target version");
@@ -4340,7 +4360,7 @@ test("desktop: Relay files explicitly browse workspace or owned targets without 
 });
 
 test("desktop: Relay direct workers remain visible and controllable without a project or database", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-worker-desktop-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-worker-desktop-")));
   const target = join(directory, "unopened-target");
   await mkdir(target);
   await mkdir(join(directory, "config", "code60"), { recursive: true });
@@ -4398,7 +4418,7 @@ test("desktop: Relay direct workers remain visible and controllable without a pr
 
 test("desktop: Relay automatic edits preserve two target owners through latest-message Undo and restart", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-changes-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-changes-ui-")));
   const targets = [join(directory, "target-a"), join(directory, "target-b")] as const;
   for (const target of targets) {
     await mkdir(target);
@@ -4453,6 +4473,12 @@ test("desktop: Relay automatic edits preserve two target owners through latest-m
       ).toBeEnabled();
       await composer.press("Enter");
       await expect(composer).toHaveValue("");
+      await expect
+        .poll(async () => {
+          const snapshot = await page.evaluate(() => window.desktop.snapshot());
+          return snapshot.runs.filter((run) => run.relay).length;
+        })
+        .toBe(index + 1);
       await expect
         .poll(async () => {
           const snapshot = await page.evaluate(() => window.desktop.snapshot());
@@ -4549,7 +4575,7 @@ test("desktop: Relay automatic edits preserve two target owners through latest-m
 });
 
 test("desktop: Relay plans bind human acceptance to explicit targets without a database", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-relay-plan-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-plan-ui-")));
   const target = join(directory, "target");
   await mkdir(target);
   await mkdir(join(directory, "config", "code60"), { recursive: true });
@@ -4640,7 +4666,7 @@ test("desktop: Relay plans bind human acceptance to explicit targets without a d
 });
 
 test("desktop: renderer scopes retain Relay and database drafts and project views across A to B to A", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-renderer-scopes-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-renderer-scopes-")));
   const first = join(directory, "project-a");
   const second = join(directory, "project-b");
   await mkdir(first);
@@ -4744,7 +4770,7 @@ test("desktop: renderer scopes retain Relay and database drafts and project view
 
 test("desktop: Tactics preview, keyboard selection, draft preservation and stopped-chat recovery", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-tactics-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-tactics-ui-")));
   const project = join(directory, "project");
   const database = join(directory, "projects.sqlite");
   await mkdir(project);
@@ -5141,7 +5167,7 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
 });
 
 test("desktop: database connection gates splash and workspace controls", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-database-gate-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-database-gate-")));
   const database = join(directory, "projects.sqlite");
   const invalid = join(directory, "invalid.sqlite");
   await writeFile(invalid, "Not a SQLite database");
@@ -5266,7 +5292,7 @@ test("desktop: database connection gates splash and workspace controls", async (
 });
 
 test("desktop: database connection from splash restores normal entry", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-splash-database-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-splash-database-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -5294,7 +5320,7 @@ test("desktop: database connection from splash restores normal entry", async () 
 });
 
 test("desktop: chat titles, context menus, archive and advanced navigation", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-chat-names-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chat-names-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -5438,7 +5464,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
 });
 
 test("desktop: update footer, once-per-version popup, download and automatic-check preference", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-updates-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-updates-")));
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
   try {
     const page = await application.firstWindow();
@@ -5573,7 +5599,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
 
 test("desktop: navigation sidebar resizes without closing or losing state", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-")));
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
   try {
     const page = await application.firstWindow();
@@ -5713,7 +5739,7 @@ test("desktop: navigation sidebar resizes without closing or losing state", asyn
 
 test("desktop: unread turns stay isolated and survive renderer reloads", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-unread-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-unread-")));
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
   try {
     const page = await application.firstWindow();
@@ -6050,7 +6076,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
 
 test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-qol-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-qol-")));
   execFileSync("git", ["init", "-q", directory]);
   commitFixture(directory);
   application = await launch(directory, directory, join(directory, "projects.sqlite"));
@@ -6081,9 +6107,11 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       `Code60 ${version}`,
     );
     const source = "  ```ts\n  const value = '<not markup>';\n```\n";
+    // The later chunk waits for Copy, so Copy is proven to use the source at invocation.
+    const laterChunkGate = join(directory, "later-chunk-gate");
     const prompt = JSON.stringify([
       { message: source },
-      { sleep: 2000 },
+      { waitForFile: laterChunkGate },
       { message: "later chunk" },
       { hang: "cancellable" },
     ]);
@@ -6144,6 +6172,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
       return selection?.toString();
     });
     await agentCopy.click();
+    await writeFile(laterChunkGate, "");
     await expect(composer).toBeFocused();
     expect(await page.evaluate(() => getSelection()?.toString())).toBe(selectedText);
     await expect(agentCopy).toHaveAttribute("aria-disabled", "true");
@@ -6383,7 +6412,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
 });
 
 test("desktop: sidebar tabs, solid background, and restart-only transparent background", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-appearance-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-appearance-")));
   const database = join(directory, "projects.sqlite");
   const enter = async () => {
     const page = await application.firstWindow();
@@ -6636,8 +6665,9 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     // The enclosing sidebar stays opaque and interactive between its buttons.
     await move(firstTab.x + firstTab.width / 2, firstTab.y + firstTab.height + 2);
     await expect.poll(ignored).toBe(false);
+    // Returning to the outer left gap passes through again.
     await move(16, 200);
-    await expect.poll(ignored).toBe(false);
+    await expect.poll(ignored).toBe(mac);
     const navigationToggle = page.locator(".sidebar-toggle");
     const nativeToggle = await navigationToggle.boundingBox();
     if (!nativeToggle) throw new Error("Missing title-bar navigation toggle");
@@ -6670,8 +6700,9 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
 });
 
 test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutdown", async () => {
-  test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-electron-"));
+  // Three app launches and the complete workspace journey took 58.5s on native CI.
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-electron-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });
@@ -8166,7 +8197,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
 
 test("desktop: agent setup wizard gates legacy entry, connects three agents without a database and reconfigures Settings", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-onboarding-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-onboarding-")));
   const database = join(directory, "projects.sqlite");
   const file = join(directory, "state/code60/desktop.json");
   const configFile = join(directory, "config/code60/config.json");
@@ -8304,7 +8335,7 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
 
 test("desktop: Apps cards open nested pages and preserve drafts, disclosure and keyboard navigation", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-apps-nav-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-apps-nav-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
@@ -8455,7 +8486,7 @@ test("desktop: Apps cards open nested pages and preserve drafts, disclosure and 
 });
 test("desktop: parent project cards preserve conversations, unread state, workers and live changes", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-parent-projects-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-parent-projects-")));
   const a = join(directory, "project-a"),
     b = join(directory, "project-b");
   for (const path of [a, b]) {
@@ -8653,7 +8684,7 @@ test("desktop: parent project cards preserve conversations, unread state, worker
 });
 
 test("desktop: prompt template editing and persistence", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-prompts-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-prompts-")));
   application = await launch(directory, directory, join(directory, "code60.sqlite"));
   try {
     const page = await application.firstWindow();
@@ -8893,7 +8924,7 @@ test("desktop: prompt template editing and persistence", async () => {
 
 test("desktop: run configurations, launch selection, and post-launch saving", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-configurations-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-configurations-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   execFileSync("git", ["init", "-q", repo]);
@@ -9050,7 +9081,7 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
 
 test("desktop: workers use the Chat hierarchy with independent full-page conversations", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-chats-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chats-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });
@@ -9413,7 +9444,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
 
 test("desktop: project search, shared transcripts, and saved filters", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-project-pages-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-project-pages-")));
   const repo = join(directory, "recorded-project");
   const other = join(directory, "other-project");
   execFileSync("git", ["init", "-q", repo]);
@@ -9589,10 +9620,15 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(overview).toContainText("The recorded sessions report");
     await expect(overview).toHaveCSS("animation-name", "search-result-reveal");
     await expect(searchContent).toHaveAttribute("data-skeleton-faded", "");
-    const summaryBox = await overview.boundingBox();
-    const resultsBox = await search.locator(".search-results").boundingBox();
-    if (!summaryBox || !resultsBox) throw new Error("Missing results layout");
-    expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(resultsBox.y);
+    // Measure both in one frame: the collapsing placeholders move the whole body between
+    // separate boundingBox calls, but never change the overview/results order.
+    const layout = await search.locator(".search-body").evaluate((body) => {
+      const summary = body.querySelector(".search-overview")?.getBoundingClientRect();
+      const results = body.querySelector(".search-results")?.getBoundingClientRect();
+      return summary && results ? { summaryBottom: summary.bottom, resultsTop: results.top } : null;
+    });
+    if (!layout) throw new Error("Missing results layout");
+    expect(layout.summaryBottom).toBeLessThanOrEqual(layout.resultsTop);
     await expect(search.locator(".search-preview")).toHaveCount(0);
     await page.screenshot({ path: join(root, "test-results", "search-expanded.png") });
     const originalTheme = await page.locator("html").getAttribute("data-color-scheme");
@@ -10093,7 +10129,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
 });
 
 test("desktop: project questions use files without saved sessions", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-project-question-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-project-question-")));
   const repo = join(directory, "palette-project");
   await mkdir(repo);
   await writeFile(join(repo, "README.md"), "A color wheel for building accessible palettes.");
@@ -10134,7 +10170,7 @@ test("desktop: project questions use files without saved sessions", async () => 
 
 test("desktop: MCP badges, saved attribution and Server table controls", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-mcp-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-mcp-ui-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });
@@ -10245,7 +10281,7 @@ test("desktop: MCP badges, saved attribution and Server table controls", async (
 
 test("desktop: Chat landing, automatic ACP conversation, navigation, cancellation, and stopped startup", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-chat-page-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chat-page-")));
   const firstProject = join(directory, "first-project");
   const secondProject = join(directory, "second-project");
   const database = join(directory, "projects.sqlite");
@@ -10617,6 +10653,8 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     );
     await expect(input()).toHaveValue("second draft");
     await expect(chat.locator(".event.prompt")).toHaveCount(1);
+    // The composer can switch before the selection request settles; a click meanwhile is ignored.
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await chatList().getByRole("button", { name: "Chat 1", exact: true }).click();
     await expect(input()).toHaveValue("draft retained");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(id);
@@ -10646,8 +10684,12 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     const composer = chat.getByRole("region", { name: "Chat composer" });
     await expect(composer).toHaveCSS("border-radius", "5px");
     await idleCard.click();
+    await expect(idleCard).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(chatList().locator(".chat-loader")).toHaveCount(0);
     await activeCard.click();
+    await expect(activeCard).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(activityName).toBeVisible();
 
     for (const [theme, neutral, bubble, text] of [
@@ -10778,7 +10820,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
 });
 
 test("desktop: Memories data viewer is database-independent, paged and supports evidence and confirmed actions", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-memories-table-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-memories-table-")));
   const project = join(directory, "memory-project");
   await mkdir(project);
   const store = new MemoryStore(join(directory, "state", "code60", "memory"));
@@ -10931,13 +10973,13 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
     await expect(panel.getByText("25 memories", { exact: true })).toBeVisible();
     await panel.getByLabel("Memory project", { exact: true }).selectOption(projectId ?? "");
     await panel.getByLabel("Memory type", { exact: true }).selectOption("semantic");
-    // One edited/forgotten row may have been semantic.
-    await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(13);
-    await expect.poll(() => rows.count()).toBeLessThanOrEqual(14);
+    // One edited/forgotten row may have been semantic. The grid virtualizes its accessible
+    // rows to the visible height, so count the page's records instead of rendered rows.
+    await expect(panel.getByText(/^1[34] memories$/)).toBeVisible();
     await panel.getByLabel("Memory status", { exact: true }).selectOption("stale");
     await expect(panel.getByText("No memories in this view.", { exact: true })).toBeVisible();
     await panel.getByLabel("Memory status", { exact: true }).selectOption("active");
-    await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(13);
+    await expect(panel.getByText(/^1[34] memories$/)).toBeVisible();
     await panel.getByRole("button", { name: "Settings", exact: true }).click();
     const settings = page.getByRole("dialog", { name: "Memories table settings", exact: true });
     await expect(settings.locator(".table-preview-grid")).toBeVisible();
@@ -10958,7 +11000,7 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
 
 test("desktop: simplified memory settings save immediately and manage automatic memories", async () => {
   test.setTimeout(120_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-scoped-memory-e2e-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-scoped-memory-e2e-")));
   const project = join(directory, "project");
   const database = join(directory, "projects.sqlite");
   await mkdir(project);
@@ -11056,6 +11098,8 @@ test("desktop: simplified memory settings save immediately and manage automatic 
     await retention.selectOption("30");
     await expect(retention).toHaveValue("30");
     const toggle = memory.getByRole("switch", { name: "Memory", exact: true });
+    // The optimistic value appears before the save settles; controls stay disabled until then.
+    await expect(toggle).toBeEnabled();
     await toggle.focus();
     await toggle.press("Space");
     await expect(toggle).not.toBeChecked();
@@ -11083,7 +11127,8 @@ test("desktop: simplified memory settings save immediately and manage automatic 
         throw new Error("Fixture save failure");
       });
     });
-    await memory.getByRole("switch", { name: "Memory", exact: true }).uncheck();
+    // A rejected save restores On, potentially before uncheck() verifies Off.
+    await memory.getByRole("switch", { name: "Memory", exact: true }).click();
     await expect(memory.getByRole("alert")).toContainText("could not be confirmed");
     await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeChecked();
     await memory.getByRole("button", { name: "Refresh", exact: true }).click();
@@ -11098,7 +11143,7 @@ test("desktop: simplified memory settings save immediately and manage automatic 
 
 test("desktop: memory browser reaches records older than 500 without unbounded rendering", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-memory-pages-e2e-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-memory-pages-e2e-")));
   const project = join(directory, "project");
   await mkdir(project);
   const store = new MemoryStore(join(directory, "state", "code60", "memory"));
@@ -11202,7 +11247,7 @@ test("desktop: memory browser reaches records older than 500 without unbounded r
 
 test("desktop: RAG manually indexes, retrieves and retains its database snapshot", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-rag-e2e-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-rag-e2e-")));
   const project = join(directory, "project");
   const database = join(directory, "projects.sqlite");
   execFileSync("git", ["init", "-q", project]);
@@ -11297,7 +11342,7 @@ test("desktop: RAG manually indexes, retrieves and retains its database snapshot
 });
 
 test("desktop: Episodic Memory extracts event statements, edits prompts, clears, and cancels", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-memory-e2e-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-memory-e2e-")));
   const project = join(directory, "project");
   const database = join(directory, "projects.sqlite");
   const config = join(directory, "config", "code60", "config.json");
@@ -11479,7 +11524,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
 });
 
 test("desktop: table settings modal previews drafts, applies, resets, and discards", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-table-settings-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-table-settings-")));
   const database = join(directory, "projects.sqlite");
   const errors: string[] = [];
   try {
@@ -11775,7 +11820,7 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
 });
 
 test("desktop: sidebar disclosure motion and stable pointer-pressed borders", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-sidebar-motion-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-motion-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -11937,7 +11982,7 @@ test("desktop: sidebar disclosure motion and stable pointer-pressed borders", as
 });
 
 test("desktop: transition preferences halve legacy values once and retain subsequent edits", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-halved-transitions-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-halved-transitions-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -11982,7 +12027,7 @@ test("desktop: transition preferences halve legacy values once and retain subseq
 });
 
 test("desktop: scrollbars keep content geometry stable across wrapping and overflow", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-stable-scrollbars-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-stable-scrollbars-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -12117,7 +12162,7 @@ test("desktop: scrollbars keep content geometry stable across wrapping and overf
 });
 
 test("desktop: keyboard focus is visible and enhanced focus is persistent", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-focus-highlight-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-focus-highlight-")));
   const database = join(directory, "projects.sqlite");
   try {
     application = await launch(directory, directory, database);
@@ -12226,7 +12271,7 @@ test("desktop: keyboard focus is visible and enhanced focus is persistent", asyn
 });
 
 test("desktop: Text settings preview each role, switch case and reset per role", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-text-settings-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-text-settings-")));
   const database = join(directory, "projects.sqlite");
   try {
     application = await launch(directory, directory, database);
@@ -12295,7 +12340,7 @@ test("desktop: Text settings preview each role, switch case and reset per role",
 });
 
 test("desktop: Settings explanations sit behind information tooltips", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-settings-tips-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-settings-tips-")));
   const database = join(directory, "projects.sqlite");
   try {
     application = await launch(directory, directory, database);
@@ -12368,7 +12413,7 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
 });
 
 test("desktop: Settings pages share one card layout", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-settings-layout-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-settings-layout-")));
   const database = join(directory, "projects.sqlite");
   try {
     application = await launch(directory, directory, database);
@@ -12441,7 +12486,7 @@ test("desktop: Settings pages share one card layout", async () => {
 
 test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-files-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-files-ui-")));
   const folder = join(directory, "repo");
   await mkdir(join(folder, "src"), { recursive: true });
   await mkdir(join(folder, "test"));
@@ -12972,7 +13017,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
 
 test("desktop: Browse project files from sessions and worktrees", async () => {
   test.setTimeout(60000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-browse-actions-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browse-actions-")));
   const folder = join(directory, "repo");
   const external = join(directory, "external");
   await mkdir(folder);
@@ -13098,7 +13143,7 @@ test("desktop: Browse project files from sessions and worktrees", async () => {
 });
 
 test("desktop: Projects plus opens projects, cancels, and confirms selection", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code60-project-card-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-project-card-")));
   const folder = join(directory, "project-one");
   const second = join(directory, "project-two");
   execFileSync("git", ["init", "-q", folder]);
@@ -13386,7 +13431,7 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
 
 test("desktop: agent setup wizard handles missing agents, authentication, timeout, cancellation and retry", async () => {
   test.setTimeout(75_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-setup-failures-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-setup-failures-")));
   const configFile = join(directory, "config/code60/config.json");
   const command = [process.execPath, join(root, "test/fixtures/fake-agent.mjs")];
   const agents = {
@@ -13446,7 +13491,7 @@ test("desktop: agent setup wizard handles missing agents, authentication, timeou
 test("desktop: ACP session information and idle-only harness modes", async () => {
   const testInfo = test.info();
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-session-info-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-session-info-")));
   execFileSync("git", ["init", "-q", directory]);
   commitFixture(directory);
   const configFile = join(directory, "config", "code60", "config.json");
@@ -13601,7 +13646,7 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
 
 test("desktop: review failures, retry, cancellation and late responses", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-diff-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-diff-ui-")));
   const repo = join(directory, "repo");
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   await writeFile(join(repo, "hello.txt"), "before\n");
@@ -13780,7 +13825,7 @@ test("desktop: review failures, retry, cancellation and late responses", async (
 
 test("desktop: read-only revisions span workers and preserve saved diffs after restart", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-chat-review-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chat-review-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });
@@ -13841,7 +13886,11 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     const initialIndex = await readFile(join(repo, ".git", "index"));
     await composer.fill("Implement validation");
     await composer.press("Enter");
-    await expect(page.locator(".conversation-changes-link").last()).toBeVisible();
+    // Windows creates both worker worktrees and captures them through owned native Git and
+    // helper processes before the link appears; this took 11.2 seconds on an ARM64 VM.
+    await expect(page.locator(".conversation-changes-link").last()).toBeVisible({
+      timeout: process.platform === "win32" ? 30_000 : 5_000,
+    });
     await expect
       .poll(() =>
         page.evaluate(
@@ -13884,7 +13933,9 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     await expect(review.locator(".monaco-diff-editor")).toBeVisible();
     const pinned = await page.getByRole("tab", { name: /^Revision \d+ ·/ }).textContent();
     if (!pinned) throw new Error("Missing pinned revision tab");
-    const saved = await page.evaluate(async () => {
+    // Automatic captures may append a revision after the tab opens. Address the pinned one.
+    const pinnedIndex = Number(/^Revision (\d+) ·/.exec(pinned)?.[1]) - 1;
+    const saved = await page.evaluate(async (index) => {
       const snapshot = await window.desktop.snapshot();
       const summary = snapshot.reviews?.[0];
       if (!summary || !snapshot.directory) throw new Error("Missing review");
@@ -13898,7 +13949,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         ...identity,
         requestId: crypto.randomUUID(),
       });
-      const revision = review.revisions.at(-1);
+      const revision = review.revisions[index];
       if (!revision) throw new Error("Missing revision");
       for (const file of revision.files)
         await window.desktop.reviewAction({
@@ -13916,7 +13967,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
         fileKey: file.key,
         worktree: snapshot.runs.find((run) => run.record.id === file.runId)?.record.worktree,
       };
-    });
+    }, pinnedIndex);
     // Existing reviewed state must never hide saved file versions in this read-only browser.
     await expect(files).toHaveCount(2);
     await files.last().click();
@@ -14099,7 +14150,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
 
 test("desktop: incoming message height moves status smoothly and keeps it anchored while following", async () => {
   test.setTimeout(60_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-status-motion-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-status-motion-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -14198,7 +14249,7 @@ test("desktop: incoming message height moves status smoothly and keeps it anchor
 
 test("desktop: main Chat eases new replies once and preserves streaming, history and reduced motion", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-chat-motion-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chat-motion-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -14306,7 +14357,7 @@ test("desktop: main Chat eases new replies once and preserves streaming, history
 
 test("desktop: semantic activity preserves provenance, reload state and reduced motion", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-activity-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-activity-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
@@ -14372,9 +14423,79 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       ]),
     );
     await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && consoleErrors.length < 20)
+        consoleErrors.push(message.text().slice(0, 300));
+    });
+    page.on("pageerror", (cause) => {
+      if (consoleErrors.length < 20) consoleErrors.push(String(cause).slice(0, 300));
+    });
+    const sentRun = await page.evaluate(async () => {
+      document
+        .querySelector("#panel-chat .orchestration-chat-page:not([hidden]) textarea")
+        ?.setAttribute("data-qa-mark", "sent");
+      return (await window.desktop.snapshot()).chat.run?.id;
+    });
     await input.press("Enter");
-    await expect(input).toHaveValue("");
+    // The composer clears only after main accepts the send. The agent's declared activity
+    // follows that acceptance, so wait for it before checking the cleared draft.
     await expect(status).toHaveAttribute("data-source", "declared");
+    await expect(input)
+      .toHaveValue("")
+      .catch(async (error) => {
+        const state = await page.evaluate(async (sentRun) => {
+          const snapshot = await window.desktop.snapshot();
+          const composer = document.querySelector<HTMLTextAreaElement>(
+            "#panel-chat .orchestration-chat-page:not([hidden]) textarea",
+          );
+          const keys = Object.keys(sessionStorage).filter((key) => key.includes("Draft"));
+          return {
+            sameComposer: composer?.getAttribute("data-qa-mark") === "sent",
+            composerDisabled: composer?.disabled,
+            sameRun: snapshot.chat.run?.id === sentRun,
+            draftKeys: keys.map((key) =>
+              key.endsWith(`:${snapshot.chat.conversationId}`)
+                ? "conversation"
+                : key.endsWith(`:${sentRun}`)
+                  ? "sent-run"
+                  : "other",
+            ),
+            storedMatchesComposer: keys.some(
+              (key) => sessionStorage.getItem(key) === composer?.value,
+            ),
+            buttons: Array.from(
+              document.querySelectorAll("#panel-chat .orchestration-chat-page .composer button"),
+              (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
+            ),
+            errors: Array.from(
+              document.querySelectorAll(
+                "#panel-chat .orchestration-chat-page [class*='error'], #panel-chat .orchestration-chat-page [class*='warning']",
+              ),
+              (node) => node.textContent?.slice(0, 200),
+            ),
+            chat: {
+              kind: snapshot.chat.kind,
+              conversation: !!snapshot.chat.conversationId,
+              status: snapshot.chat.run?.status,
+              turns: snapshot.chat.run?.turns,
+              error: snapshot.chat.error,
+            },
+            chats: snapshot.chats.map((chat) => chat.kind),
+            pages: document.querySelectorAll(".orchestration-chat-page").length,
+            alerts: Array.from(document.querySelectorAll("[role='alert']"), (node) =>
+              node.textContent?.slice(0, 200),
+            ),
+            drafts: keys.length,
+          };
+        }, sentRun);
+        await test.info().attach("composer-clear", {
+          body: JSON.stringify({ ...state, consoleErrors }, null, 2),
+          contentType: "application/json",
+        });
+        throw error;
+      });
+    await expect(input).toHaveAttribute("data-qa-mark", "sent");
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     const activityTimer = status.getByRole("timer");
     await expect(activityTimer).not.toHaveText("0s");
@@ -14640,6 +14761,8 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
         { sleep: 1200 },
       ]),
     );
+    // Cancellation is shown before the stopped turn settles; Enter waits for readiness.
+    await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
     await input.press("Enter");
     await expect(status).toHaveAttribute("data-activity", "waiting_for_workers");
     await expect(status).toHaveText(/^Monitoring subagents\.\.\. \d+s$/);
@@ -14688,7 +14811,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
 
 test("desktop: accepted plans show task progress outside their Markdown document", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-planning-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-planning-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });
@@ -14811,7 +14934,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
 
 test("desktop: safe Markdown replies, source Copy, confirmed links and streaming scroll", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-markdown-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-markdown-ui-")));
   execFileSync("git", ["init", "-q", directory]);
   commitFixture(directory);
   application = await launch(directory, directory, join(directory, "markdown.sqlite"));
@@ -15030,7 +15153,7 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
 
 test("desktop: Command Builder drafts, keyboard picker and send-time expansion", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-commands-ui-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-commands-ui-")));
   const repo = join(directory, "repo");
   await mkdir(repo);
   try {
@@ -15167,6 +15290,8 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
       await composer.fill(text);
       await expect(composer).toHaveAttribute("aria-expanded", "false");
       await expect(chat.locator(".command-plain-text")).toHaveCount(0);
+      // The previous reply can render before its turn ends; Enter waits for readiness.
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
       await composer.press("Enter");
       await expect(chat.locator(".event.prompt pre").last()).toHaveText(text);
       await expect(chat.locator(".event.prompt").last().locator("mark")).toHaveCount(0);
@@ -15199,7 +15324,7 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
 
 test("desktop: plan task rows align checkboxes with their first line of text", async () => {
   test.setTimeout(90_000);
-  const directory = await mkdtemp(join(tmpdir(), "code60-plan-layout-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-plan-layout-")));
   const repo = join(directory, "repo");
   const config = join(directory, "config", "code60");
   await mkdir(config, { recursive: true });

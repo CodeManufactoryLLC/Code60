@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { SavedChat } from "../bridge/index.js";
+import { privateDirectory } from "../platform/index.js";
 import { ChatStore } from "./chat-store.js";
 import { captureTask } from "./tactic-context.js";
 
@@ -12,8 +13,10 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function setup() {
-  const root = await mkdtemp(join(tmpdir(), "code60-chats-"));
-  roots.push(root);
+  const parent = await mkdtemp(join(tmpdir(), "code60-chats-"));
+  roots.push(parent);
+  const root = join(parent, "state");
+  await privateDirectory(root);
   const record: SavedChat = {
     format: 1,
     directoryId: randomUUID(),

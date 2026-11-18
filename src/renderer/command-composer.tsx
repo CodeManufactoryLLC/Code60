@@ -102,6 +102,9 @@ export function CommandComposer({
         value={value}
         disabled={disabled}
         maxLength={1_000_000}
+        // Windows native spellchecking of long pasted code or JSON can keep Electron
+        // from exiting after quit. Prompts are often code, like the other code editors.
+        spellCheck={false}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onSelect={(event) => setCursor(event.currentTarget.selectionStart)}

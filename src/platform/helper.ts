@@ -93,7 +93,7 @@ export function helperSync(args: readonly string[]): string {
     });
   } catch (error) {
     const stderr = (error as { stderr?: Buffer | string }).stderr?.toString().trim();
-    throw new Error(
+    throw nativeError(
       stderr || (error instanceof Error ? error.message : "Windows helper operation failed"),
     );
   }

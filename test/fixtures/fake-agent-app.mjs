@@ -1,7 +1,7 @@
 // A scriptable ACP agent for tests. Each prompt is a JSON array of steps; any
 // other prompt text gets one "ok" message and `end_turn`.
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprotocol/sdk";
 
@@ -524,6 +524,9 @@ export function createFakeAgent(options = {}) {
           process.stderr.write(step.stderr);
         } else if (step.sleep !== undefined) {
           await Promise.race([sleep(step.sleep), waitForCancel()]);
+        } else if (step.waitForFile !== undefined) {
+          // A test-controlled gate, for ordering that must not depend on host speed.
+          while (!cancelled && !existsSync(step.waitForFile)) await sleep(25);
         } else if (step.hang === "cancellable") {
           await waitForCancel();
           return { stopReason: "cancelled" };

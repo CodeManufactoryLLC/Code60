@@ -528,7 +528,12 @@ export class RelayReviews {
         sources,
         targets.map(({ runId, status }) => ({ runId, status })),
       );
-      if (this.hooks.integrate && this.live(review) && sources.length === review.workers.length) {
+      if (
+        this.hooks.integrate &&
+        this.live(review) &&
+        sources.length === review.workers.length &&
+        targets.every((target) => target.status === "finished")
+      ) {
         const revision = store.get(review.id).revisions.at(-1);
         const loop = await this.store.loop(review);
         if (revision && loop) {

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,11 +8,17 @@ import { manageHooks } from "../scripts/git-hooks.mjs";
 
 const execute = promisify(execFile);
 const directories = [];
-const environment = { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull };
 const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "code60 hook fixture "));
   directories.push(root);
+  const emptyConfig = join(root, "empty.gitconfig");
+  await writeFile(emptyConfig, "");
+  const environment = {
+    ...process.env,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: emptyConfig,
+  };
   const git = (...args) =>
     execute("git", ["-C", root, ...args], { env: environment, timeout: 5000 });
   await git("init", "-q");
@@ -25,7 +31,7 @@ async function fixture() {
   await writeFile(join(root, "sentinel.txt"), "staged content\n");
   await git("add", "sentinel.txt");
   await writeFile(join(root, "sentinel.txt"), "unstaged content\n");
-  return { root, git };
+  return { root, git, environment };
 }
 afterEach(async () => {
   await Promise.all(
@@ -35,7 +41,7 @@ afterEach(async () => {
 
 describe("opt-in repository hooks", () => {
   it("installs explicitly, reports status, and uninstalls only its own setting", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     expect(await manageHooks(root, "status", environment)).toEqual({ state: "not-installed" });
     expect(await manageHooks(root, "install", environment)).toEqual({ state: "installed" });
     expect(await manageHooks(root, "install", environment)).toEqual({ state: "installed" });
@@ -47,7 +53,7 @@ describe("opt-in repository hooks", () => {
     await expect(manageHooks(root, "uninstall", environment)).rejects.toThrow("Refusing");
   });
   it("preserves configured hook paths and existing active hooks", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     await git("config", "--local", "core.hooksPath", "user hooks");
     await expect(manageHooks(root, "install", environment)).rejects.toThrow("preserved");
     await expect(manageHooks(root, "uninstall", environment)).rejects.toThrow("Refusing");
@@ -59,7 +65,7 @@ describe("opt-in repository hooks", () => {
     await expect(manageHooks(root, "install", environment)).rejects.toThrow("would be hidden");
   });
   it("does not override inherited hook policy", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     const global = join(root, "global.gitconfig");
     await writeFile(global, '[core]\n\thooksPath = "global hooks"\n');
     const env = { ...environment, GIT_CONFIG_GLOBAL: global };
@@ -69,7 +75,7 @@ describe("opt-in repository hooks", () => {
     });
   });
   it("preserves hook policy whose whitespace differs from the owned value", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     for (const value of [".githooks ", " .githooks", ".githooks\r", ".githooks\n", ""]) {
       await git("config", "--local", "core.hooksPath", value);
       expect(await manageHooks(root, "status", environment)).toEqual({ state: "conflict" });
@@ -79,7 +85,7 @@ describe("opt-in repository hooks", () => {
     }
   });
   it("refuses missing/nonexecutable hooks without changing Git configuration", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     if (process.platform === "win32") await rm(join(root, ".githooks/pre-commit"));
     else await chmod(join(root, ".githooks/pre-commit"), 0o644);
     await expect(manageHooks(root, "install", environment)).rejects.toThrow();
@@ -89,7 +95,7 @@ describe("opt-in repository hooks", () => {
     await expect(manageHooks(root, "unknown", environment)).rejects.toThrow("hooks:install");
   });
   it("runs the real hook in a space-containing checkout, stops on failure, and preserves the index", async () => {
-    const { root, git } = await fixture();
+    const { root, git, environment } = await fixture();
     const commands = ["check:instructions", "typecheck", "lint", "check:unused"];
     expect(manifest.scripts["check:precommit"]).toBe(
       commands.map((name) => `npm run ${name}`).join(" && "),

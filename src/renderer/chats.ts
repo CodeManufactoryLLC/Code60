@@ -24,6 +24,21 @@ export function conversationTitle(
 export const conversationId = (chat: OrchestrationChat): string | undefined =>
   chat.run?.id ?? (chat.kind === "relay" ? chat.conversationId : undefined);
 
+export function hasConversationRun(
+  chats: readonly OrchestrationChat[],
+  runs: readonly DesktopRun[],
+  id: string | undefined,
+): boolean {
+  return (
+    !!id && (chats.some((chat) => chat.run?.id === id) || runs.some((run) => run.record.id === id))
+  );
+}
+
+export const builtinRelayId = (chats: readonly OrchestrationChat[]): string | undefined => {
+  const relay = chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
+  return relay && conversationId(relay);
+};
+
 /** The orchestrator's role name for a worker, or its provider and short run ID. */
 export function workerLabel(chats: readonly OrchestrationChat[], run: DesktopRun): string {
   for (const chat of chats) {

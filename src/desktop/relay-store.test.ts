@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createPrivateDirectory, createPrivateFileSync } from "../platform/index.js";
 import * as storage from "./relay-storage.js";
 import { type RelaySourceCursor, RelayStore } from "./relay-store.js";
 
@@ -224,7 +225,7 @@ it.skipIf(process.platform === "win32")(
 it("never displaces an unverifiable lock owner", async () => {
   const store = await open();
   await store.close();
-  await mkdir(join(store.root, ".writer"), { mode: 0o700 });
+  await createPrivateDirectory(join(store.root, ".writer"));
   await expect(open()).rejects.toThrow("cannot be verified");
 });
 
@@ -399,7 +400,8 @@ it.each(["same-size valid UTF-8", "identical replacement", "mutation before appe
     const bytes = await readFile(path);
     if (kind === "identical replacement") {
       await rename(path, `${path}.retained`);
-      await writeFile(path, bytes, { mode: 0o600, flag: "wx" });
+      createPrivateFileSync(path);
+      await writeFile(path, bytes);
     } else {
       bytes[bytes.indexOf(Buffer.from("Original"))] = "X".charCodeAt(0);
       await writeFile(path, bytes);

@@ -199,11 +199,13 @@ export function useNavigationActions(context: Context) {
   latest.current = context;
   const [state, setState] = useState<{
     pending: boolean;
+    /** Any navigation is in flight, including non-blocking selections that ignore new clicks. */
+    busy: boolean;
     error: string;
     projectPending: boolean;
     destination?: NavigationTarget;
     expectedConversation?: NavigationTarget | undefined;
-  }>({ pending: false, error: "", projectPending: false });
+  }>({ pending: false, busy: false, error: "", projectPending: false });
   const [actions] = useState(() =>
     createNavigationActions(
       () => latest.current,
@@ -214,6 +216,7 @@ export function useNavigationActions(context: Context) {
           setState((previous) => ({
             ...previous,
             pending: pending && blocking,
+            busy: pending,
             projectPending,
             error: pending ? error : previous.error,
           }));

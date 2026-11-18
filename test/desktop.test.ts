@@ -39,6 +39,7 @@ import { RagStore } from "../src/desktop/rag-store.js";
 import type { RagConversation } from "../src/desktop/rag-worker.js";
 import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -231,7 +232,9 @@ const controllerDeps = (): CoreDeps => {
 };
 
 beforeEach(async () => {
-  directory = await fs.mkdtemp(join(tmpdir(), "code60-desktop-"));
+  // Project chat roots include a SHA-256 key, UUID and atomic-write suffix.
+  // Keep those generated paths below the Windows helper's 248-character limit.
+  directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
   agents = new FakeAgents();
   git = new FakeGit();
   git.repoInfo = async () => ({ topLevel: directory, commonDir: join(directory, ".git") });
@@ -335,7 +338,11 @@ it("saves main-owned confirmed model defaults by role, applies only to new sessi
   );
 });
 
-describe("database-wide RAG discovery", () => {
+// These journeys persist multiple chats, run records and private RAG files;
+// each durable write launches native owner/ACL verification on Windows.
+describe("database-wide RAG discovery", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   const identity = () => ({
     databaseKey: controller.rag.snapshot().databaseKey ?? "",
     requestId: randomUUID(),
@@ -384,7 +391,7 @@ describe("database-wide RAG discovery", () => {
     await controller.rebuildRag(identity());
     const previous = controller.rag.snapshot().index;
     const root = join(directory, ".code60_workspace", "chats");
-    await fs.mkdir(root, { recursive: true });
+    await privateDirectory(root);
     const corrupt = join(root, `${randomUUID()}.json`);
     await fs.writeFile(corrupt, "{}");
     await expect(controller.rebuildRag(identity())).rejects.toThrow("unreadable");
@@ -478,65 +485,74 @@ async function configureMcp(version = "first") {
   ];
 }
 
-describe("retained project runtimes", () => {
-  it("restores open projects and stopped chats on Relay without starting project providers", async () => {
-    await prepareRelay();
-    const a = await project("restart-a");
-    const chat = await newChat(a.id);
-    const id = chat.run?.id as string;
-    await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
-    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
-    const archived = await newChat(a.id);
-    await controller.orchestrationChatAction({
-      type: "archive",
-      id: archived.run?.id as string,
-    });
-    const b = await project("restart-b");
-    const closed = await project("restart-closed");
-    await newChat(closed.id);
-    await controller.projectAction({ type: "close", projectId: closed.id });
-    const database = controller.snapshot().database as string;
-    const before = controller.snapshot().projects;
-    const starts = agents.specs.length;
-    const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
-    try {
-      await prepareRelay(); // A new controller and Relay using the same private state.
-      const restored = controller.snapshot();
-      expect(restored.chat.kind).toBe("relay");
-      expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
-      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
-      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
-      expect(restored.projects).toEqual(before); // Startup is not a new human open.
-      expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
-        title: "Saved title",
-        restored: true,
-        workers: [],
-        events: [],
-        updates: { paused: true },
+// Windows CI completed sibling native-backed save/reopen journeys in up to 8.7 s.
+describe("retained project runtimes", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
+  it(
+    "restores open projects and stopped chats on Relay without starting project providers",
+    async () => {
+      await prepareRelay();
+      const a = await project("restart-a");
+      const chat = await newChat(a.id);
+      const id = chat.run?.id as string;
+      await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
+      const archived = await newChat(a.id);
+      await controller.orchestrationChatAction({
+        type: "archive",
+        id: archived.run?.id as string,
       });
-      expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
-        true,
-      );
-      expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
-      expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([restored.chat.directory]);
-      expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
-        true,
-      );
-      expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
-      await controller.orchestrationChatAction({ type: "select", id });
-      expect(controller.snapshot().chat.events).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
-          }),
-        ]),
-      );
-      expect(agents.specs).toHaveLength(starts + 1);
-    } finally {
-      readHistory.mockRestore();
-    }
-  });
+      const b = await project("restart-b");
+      const closed = await project("restart-closed");
+      await newChat(closed.id);
+      await controller.projectAction({ type: "close", projectId: closed.id });
+      const database = controller.snapshot().database as string;
+      const before = controller.snapshot().projects;
+      const starts = agents.specs.length;
+      const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
+      try {
+        await prepareRelay(); // A new controller and Relay using the same private state.
+        const restored = controller.snapshot();
+        expect(restored.chat.kind).toBe("relay");
+        expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
+        expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
+        expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
+        expect(restored.projects).toEqual(before); // Startup is not a new human open.
+        expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
+          title: "Saved title",
+          restored: true,
+          workers: [],
+          events: [],
+          updates: { paused: true },
+        });
+        expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
+          true,
+        );
+        expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
+        expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([
+          restored.chat.directory,
+        ]);
+        expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
+          true,
+        );
+        expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+        await controller.orchestrationChatAction({ type: "select", id });
+        expect(controller.snapshot().chat.events).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
+            }),
+          ]),
+        );
+        expect(agents.specs).toHaveLength(starts + 1);
+      } finally {
+        readHistory.mockRestore();
+      }
+    },
+    process.platform === "win32" ? 30_000 : 5000,
+  ); // Multiple native-backed chat saves/reopens exceeded 5 s in CI.
 
   it("persists confirmed closes, preserves cancelled closes, and isolates database replacement", async () => {
     await prepareRelay();
@@ -3142,6 +3158,26 @@ describe("desktop orchestration", () => {
     await expect(controller.action({ type: "diff", id })).rejects.toThrow(/Unknown run/);
   });
 
+  it("chains published revisions when state changes while a frame is being built", async () => {
+    const updates: number[] = [];
+    const previous: (number | undefined)[] = [];
+    controller.subscribe((snapshot) => {
+      updates.push(snapshot.revision);
+      previous.push(snapshot.previousRevision);
+    });
+    const internal = controller as unknown as {
+      poller: { snapshot(): unknown };
+      changed(): void;
+    };
+    const original = internal.poller.snapshot.bind(internal.poller);
+    vi.spyOn(internal.poller, "snapshot").mockImplementationOnce(() => {
+      internal.changed();
+      return original();
+    });
+    internal.changed();
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(1));
+    expect(previous[1]).toBe(updates[0]);
+  });
   it("sends batched updates and stops idle agents on shutdown", async () => {
     const updates: number[] = [];
     const previous: (number | undefined)[] = [];
@@ -3400,7 +3436,10 @@ function withoutAwareness(prompt: string | undefined): string {
   return (prompt ?? "").replace(AWARENESS, "");
 }
 
-describe("app-wide orchestration chat", () => {
+// Windows CI took 2.1-2.3 s per two-send sibling journey; some cases send eight times.
+describe("app-wide orchestration chat", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -4579,7 +4618,11 @@ it("refuses Git setup while project workers are still owned", async () => {
   expect(preview).not.toHaveBeenCalled();
 });
 
-describe("orchestrated workers over ACP", () => {
+// Worker dispatch and Undo persist real private checkpoint/chat/run records,
+// each requiring native ACL checks and atomic replacement on Windows.
+describe("orchestrated workers over ACP", {
+  timeout: process.platform === "win32" ? 30_000 : 5000,
+}, () => {
   it("keeps correction and failure updates with the original tactic after a newer human task and capacity rejection", async () => {
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
@@ -4766,7 +4809,11 @@ describe("orchestrated workers over ACP", () => {
       entry.result = Promise.race([entry.result, cleanupGate]);
       void entry.result.catch(() => {});
       confirmUndo(true);
-      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }));
+      // Undo stops the chat process and atomically rewrites checkpoint and chat records;
+      // each private write runs the native helper on Windows.
+      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }), {
+        timeout: process.platform === "win32" ? 10_000 : 1000,
+      });
       expect(agents.specs).toHaveLength(starts);
     } finally {
       confirmUndo(true);
@@ -5200,6 +5247,9 @@ describe("orchestrated workers over ACP", () => {
         blob: vi.fn(async (_path: string, oid: string) =>
           oid === before ? Buffer.from("before\n") : content,
         ),
+        hash: vi.fn<TaskGit["hash"]>(async () => {
+          throw new Error("This fixture does not convert checkout line endings");
+        }),
         merge: vi.fn<TaskGit["merge"]>(async (_base, _current, proposed) => proposed),
         identity: vi.fn(async () => "unchanged-head-and-index"),
         lockPath: async () => join(project, ".git", "task.lock"),
@@ -5254,8 +5304,11 @@ describe("orchestrated workers over ACP", () => {
       await controller.captureReview({ ...identity, requestId: randomUUID() });
       expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
       session(worker)?.endTurn("end_turn");
-      await vi.waitFor(async () =>
-        expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+      // Integration writes several private journals; each is a native helper launch on Windows.
+      await vi.waitFor(
+        async () =>
+          expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+        { timeout: 10_000 },
       );
     });
 

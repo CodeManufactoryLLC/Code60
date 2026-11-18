@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChatDraft } from "./chat-draft.js";
+import type { OrchestrationChat } from "../bridge/index.js";
+import { ChatDraft, chatDraftKey } from "./chat-draft.js";
 
 const attachment = {
   reference: {
@@ -26,6 +27,46 @@ function storage() {
   };
 }
 describe("conversation drafts", () => {
+  it("keeps the Relay draft owner stable as its conversation identity appears", () => {
+    const beforeConnection = {
+      kind: "relay",
+      run: { id: "relay-run" } as NonNullable<OrchestrationChat["run"]>,
+    } as OrchestrationChat;
+    const afterConnection = {
+      ...beforeConnection,
+      conversationId: "relay-conversation",
+    };
+
+    expect(chatDraftKey(beforeConnection)).toBe("code60.orchestrationDraft:relay");
+    expect(chatDraftKey(afterConnection)).toBe(chatDraftKey(beforeConnection));
+  });
+
+  it("keeps custom drafts separate from Relay and each other across connection hydration", () => {
+    const relay = { kind: "relay" } as OrchestrationChat;
+    const reviewer = { ...relay, customAgentId: "reviewer" };
+    const writer = { ...relay, customAgentId: "writer" };
+    const owners = [relay, reviewer, writer];
+    const keys = owners.map(chatDraftKey);
+    expect(new Set(keys).size).toBe(3);
+    const saved = storage();
+    for (const [index, chat] of owners.entries()) {
+      const key = chatDraftKey(chat);
+      const draft = new ChatDraft(key, saved);
+      draft.edit(`Draft ${index}`);
+      draft.attach(attachment);
+      const hydrated = { ...chat, conversationId: `conversation-${index}` };
+      expect(chatDraftKey(hydrated)).toBe(key);
+      expect(new ChatDraft(chatDraftKey(hydrated), saved).snapshot()).toMatchObject({
+        text: `Draft ${index}`,
+        attachments: [attachment],
+      });
+    }
+    const reviewerDraft = new ChatDraft(chatDraftKey(reviewer), saved);
+    reviewerDraft.clear(reviewerDraft.sent());
+    expect(new ChatDraft(chatDraftKey(relay), saved).snapshot().text).toBe("Draft 0");
+    expect(new ChatDraft(chatDraftKey(writer), saved).snapshot().text).toBe("Draft 2");
+  });
+
   it("keeps pinned code references across reload and removes them only after a matching Send", () => {
     const saved = storage();
     const draft = new ChatDraft("key", saved);

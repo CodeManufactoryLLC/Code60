@@ -144,3 +144,19 @@ it("does not hide the current conversation after a failed open", async () => {
   expect(render().conversationPending).toBe(false);
   expect(render().error).toBe("Unavailable");
 });
+
+it("reports a non-blocking selection as busy until its request settles", async () => {
+  const { context, reviewer, render } = fixture();
+  context.chats = [...context.chats, reviewer];
+  let finish!: () => void;
+  vi.mocked(context.api.orchestrationChatAction).mockImplementationOnce(
+    () => new Promise<undefined>((resolve) => (finish = () => resolve(undefined))),
+  );
+  const selection = render().open({ kind: "conversation", id: "reviewer" });
+  // Selection leaves controls enabled, but another navigation is ignored until it settles.
+  expect(render()).toMatchObject({ pending: false, busy: true });
+  expect(await render().open({ kind: "conversation", id: "relay" })).toBe(false);
+  finish();
+  expect(await selection).toBe(true);
+  expect(render().busy).toBe(false);
+});
