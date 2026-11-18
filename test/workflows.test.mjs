@@ -61,6 +61,22 @@ describe("branch protection policy", () => {
 });
 
 describe("CI and release gates", () => {
+  it("passes only declared inputs to every reusable native test call", () => {
+    const inputs = nativeTests.on.workflow_call.inputs;
+    for (const workflow of [native, release]) {
+      for (const [name, job] of Object.entries(workflow.jobs)) {
+        if (job.uses !== "./.github/workflows/native-tests.yml") continue;
+        const supplied = job.with ?? {};
+        expect(
+          Object.keys(supplied).filter((key) => !(key in inputs)),
+          name,
+        ).toEqual([]);
+        for (const [key, definition] of Object.entries(inputs)) {
+          if (definition.required) expect(supplied, `${name}.${key}`).toHaveProperty(key);
+        }
+      }
+    }
+  });
   it("shares one secret-free native test workflow between validation and release", () => {
     expect(Object.keys(nativeTests.on)).toEqual(["workflow_call"]);
     expect(Object.keys(nativeTests.on.workflow_call.inputs).sort()).toEqual([
@@ -178,10 +194,10 @@ describe("CI and release gates", () => {
     expect(release.jobs.mac.needs).toEqual(["preflight", "linux-check", "mac-unit", "mac-desktop"]);
     expect(release.jobs.mac["runs-on"]).toBe("macos-15");
     const tests = {
-      "mac-unit": ["macos-15", "unit"],
-      "mac-desktop": ["macos-15", "desktop"],
+      "mac-unit": "unit",
+      "mac-desktop": "desktop",
     };
-    for (const [name, [, suite]] of Object.entries(tests)) {
+    for (const [name, suite] of Object.entries(tests)) {
       const job = release.jobs[name];
       expect(job.needs).toEqual(["preflight", "linux-check"]);
       expect(job.uses).toBe("./.github/workflows/native-tests.yml");

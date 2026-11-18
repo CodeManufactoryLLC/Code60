@@ -6360,7 +6360,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await historical.getByRole("button", { name: "Copy message" }).click();
     await expect(copyToast).toBeVisible();
     await expect(historical.getByRole("status")).toHaveCount(0);
-    // Native Windows clipboard text uses CRLF; the write harness above checks exact source.
+    // The write harness above checks exact source.
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
       ["permission qol-approval: opt-allow_once  historical", "```code```", ""].join("\n"),
     );
@@ -14239,7 +14239,7 @@ test("desktop: main Chat eases new replies once and preserves streaming, history
     await messages.last().getByRole("button", { name: "Copy message", exact: true }).click();
     await expect(page.locator(".toast-stack").getByRole("status")).toHaveText("Done: Copied.");
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
-      chunks.join("").replaceAll("\n", "\n"),
+      chunks.join(""),
     );
     await selectSidebarPage(page, "Settings");
     await selectSidebarPage(page, "Chat");
