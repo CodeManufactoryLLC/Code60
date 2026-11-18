@@ -64,8 +64,13 @@ export interface Git {
   /** Resolves a revision to a full commit hash. */
   resolveCommit(repoDir: string, rev: string): Promise<string>;
   addWorktree(spec: WorktreeSpec, signal?: AbortSignal): Promise<void>;
-  /** Removes the worktree, then deletes its branch. */
-  removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
+  /** Revalidates under the metadata queue, then removes the worktree and its branch. */
+  removeWorktree(
+    repoDir: string,
+    path: string,
+    branch: string,
+    revalidate?: () => Promise<void>,
+  ): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
   diff(worktree: string, base: string, signal?: AbortSignal): Promise<string>;
   reviewSnapshot?(
@@ -350,7 +355,7 @@ export function createGit(): Git {
       );
     },
 
-    async removeWorktree(repoDir, path, branch) {
+    async removeWorktree(repoDir, path, branch, revalidate) {
       assertOwnBranch(branch);
       return coordinateMetadata(repoDir, async () => {
         const list = await runGit(["worktree", "list", "--porcelain", "-z"], repoDir);
@@ -362,9 +367,10 @@ export function createGit(): Git {
             break;
           }
         }
+        if (registered && registered.branch !== branch)
+          throw new Error("refusing to remove a worktree whose branch does not match the run");
+        await revalidate?.();
         if (registered) {
-          if (registered.branch !== branch)
-            throw new Error("refusing to remove a worktree whose branch does not match the run");
           // A removal failure must never fall through to branch deletion.
           await runGit(["worktree", "remove", "--force", registered.path], repoDir);
         }

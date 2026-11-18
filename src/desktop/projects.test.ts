@@ -173,34 +173,58 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     }
   });
 
-  it.runIf(process.platform === "win32")(
-    "bounds a real competing writer and works after the lock is released",
-    () => {
-      const path = join(directory, "contended.sqlite");
-      const db = openProjectDatabase(path, true);
-      const other = new (sqlite().DatabaseSync)(path);
+  it("bounds a real competing writer and works after the lock is released", () => {
+    const path = join(directory, "contended.sqlite");
+    const db = openProjectDatabase(path, true);
+    const other = new (sqlite().DatabaseSync)(path);
+    try {
+      other.exec("BEGIN EXCLUSIVE");
+      let error: unknown;
+      const started = performance.now();
       try {
-        other.exec("BEGIN EXCLUSIVE");
-        let error: unknown;
-        const started = performance.now();
-        try {
-          db.record("C:\\project", "2026-01-01");
-        } catch (cause) {
-          error = cause;
-        }
-        const elapsed = performance.now() - started;
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toMatch(/locked/);
-        expect(elapsed).toBeLessThan(150);
-        other.exec("ROLLBACK");
         db.record("C:\\project", "2026-01-01");
-        expect(db.list()).toEqual([{ path: "C:\\project", openedAt: "2026-01-01" }]);
-      } finally {
-        other.close();
-        db.close();
+      } catch (cause) {
+        error = cause;
       }
-    },
-  );
+      const elapsed = performance.now() - started;
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(/locked/);
+      expect(elapsed).toBeLessThan(150);
+      other.exec("ROLLBACK");
+      db.record("C:\\project", "2026-01-01");
+      expect(db.list()).toEqual([{ path: "C:\\project", openedAt: "2026-01-01" }]);
+    } finally {
+      other.close();
+      db.close();
+    }
+  });
+
+  it("lets a pending cancellation timer run during persistent writer contention", async () => {
+    const path = join(directory, "responsive.sqlite");
+    const db = openProjectDatabase(path, true);
+    const other = new (sqlite().DatabaseSync)(path);
+    const controller = new AbortController();
+    const started = performance.now();
+    const cancelled = new Promise<number>((resolve) => {
+      setTimeout(() => {
+        controller.abort();
+        resolve(performance.now() - started);
+      }, 10);
+    });
+    try {
+      other.exec("BEGIN IMMEDIATE");
+      expect(() => db.record("/project", "a")).toThrow(/locked/);
+      expect(await cancelled).toBeLessThan(150);
+      expect(controller.signal.aborted).toBe(true);
+      expect(db.list()).toEqual([]);
+      other.exec("ROLLBACK");
+      db.record("/project", "b");
+      expect(db.list()).toEqual([{ path: "/project", openedAt: "b" }]);
+    } finally {
+      other.close();
+      db.close();
+    }
+  });
 
   it("migrates schema 1 without losing project history and persists configurations", () => {
     const path = join(directory, "old.sqlite");

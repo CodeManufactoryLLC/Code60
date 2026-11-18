@@ -14,8 +14,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { discardRun } from "../src/core/commands.js";
+import type { RunRecord } from "../src/core/types.js";
 import { createGit } from "../src/git/index.js";
 import { coordinateMetadata } from "../src/git/metadata.js";
+import { FakeClock, FakeProcesses, MemoryStore } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 vi.mock("node:fs/promises", async (original) => {
@@ -90,6 +93,71 @@ it("uses the shared common directory for linked checkouts", async () => {
   await Promise.all([first, next]);
   expect(waiting).toHaveBeenCalledOnce();
 });
+it.each(["files", "agent", "owner"] as const)(
+  "revalidates %s after discard acquires a previously busy metadata queue",
+  async (change) => {
+    commitFixture(a);
+    const git = createGit();
+    const path = join(root, "discard-worker");
+    const branch = "code60/discard-worker";
+    const base = await git.resolveCommit(a, "HEAD");
+    await git.addWorktree({ repoDir: a, path, branch, base });
+    const record: RunRecord = {
+      id: "discard-worker",
+      agent: "fake",
+      status: "finished",
+      firstPrompt: "synthetic",
+      turns: 1,
+      base,
+      branch,
+      worktree: path,
+      ownerPid: 42,
+      agentPid: 900,
+      startedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const store = new MemoryStore();
+    await store.save(record);
+    const processes = new FakeProcesses();
+    const gate = deferred();
+    const holding = deferred();
+    let blocker: Promise<void> | undefined;
+    const result = discardRun(
+      { git, store, processes, clock: new FakeClock() },
+      a,
+      record.id,
+      async () => {
+        blocker = coordinateMetadata(a, async () => {
+          holding.release();
+          await gate.promise;
+        });
+        await holding.promise;
+        vi.mocked(stat).mockClear();
+        return true;
+      },
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    try {
+      await holding.promise;
+      await queued();
+      if (change === "files") await writeFile(join(path, "new-unapproved.txt"), "preserve me");
+      if (change === "agent") processes.groups.add(900);
+      if (change === "owner") await store.save({ ...record, ownerPid: 43 });
+    } finally {
+      gate.release();
+      await blocker;
+    }
+    expect(await result).toBeInstanceOf(Error);
+    expect((await stat(path)).isDirectory()).toBe(true);
+    expect((await store.read(record.id)).discardedAt).toBeUndefined();
+    expect(
+      execFileSync("git", ["branch", "--list", branch], { cwd: a, encoding: "utf8" }),
+    ).toContain(branch);
+    if (change === "files")
+      expect(await readFile(join(path, "new-unapproved.txt"), "utf8")).toBe("preserve me");
+  },
+);
 it("cancels queued work without waiting for another owner's active operation", async () => {
   const gate = deferred();
   const entered = vi.fn(async () => gate.promise);

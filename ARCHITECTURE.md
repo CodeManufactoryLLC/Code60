@@ -821,7 +821,7 @@ On SIGINT or SIGTERM, the CLI cancels every active turn and ends every run. It w
 
 ## Permissions
 
-ACP permission requests carry a tool-call kind: `read`, `edit`, `delete`, `move`, `search`, `execute`, `think`, `fetch`, `switch_mode`, or `other`. A request with a missing or unknown kind is treated as `other`. The policy maps each kind to `allow`, `deny`, or `ask`:
+ACP permission requests carry a tool-call kind: `read`, `edit`, `delete`, `move`, `search`, `execute`, `think`, `fetch`, `switch_mode`, or `other`. Partial requests retain the last known kind and title for that tool-call ID when the corresponding field is absent or null, including replayed tool-call metadata. Explicit changes replace the known values. A genuinely unknown kind or an unknown call with no kind is treated as `other`. The policy maps each kind to `allow`, `deny`, or `ask`:
 
 ```json
 { "read": "allow", "search": "allow", "think": "allow", "edit": "allow", "default": "ask" }
@@ -1105,7 +1105,7 @@ code60 --version
 
 - `run` is always headless and runs exactly one turn per run. It reads the prompt from the argument, `--prompt-file`, or standard input, and exactly one of them must be given. Standard input is read only when neither of the others is given and it is not a TTY. `--headless` is accepted for compatibility and changes nothing. Use the desktop app for interactive runs.
 - In headless mode, progress goes to standard error: status changes, new tool calls, and permission decisions, without tool/permission titles or status reasons that may echo task content. `--json` writes one result object to standard output, `{"runs": [...]}`, with every run's ID, agent, status, reason, branch, worktree, and changed-file count. Diagnostic reasons receive best-effort credential redaction; fields and exit-code semantics stay unchanged. Without `--json`, a short table goes to standard output.
-- `discard` refuses while the run is active or its agent process is alive. It shows the files that would be lost, then removes the worktree and its `code60/<run-id>` branch. It asks for confirmation in a TTY and requires `--yes` otherwise.
+- `discard` refuses while the run is active or its agent process is alive. Failed Git inspection refuses before confirmation rather than presenting an empty file list. It shows the files that would be lost, then rechecks the file list, run identity/ownership and agent liveness after acquiring the Git metadata queue, before removing the worktree and its `code60/<run-id>` branch. Changed evidence requires a fresh review and confirmation. It asks for confirmation in a TTY and requires `--yes` otherwise.
 
 ### Exit codes
 

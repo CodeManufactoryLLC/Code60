@@ -790,6 +790,61 @@ describe("leftover commands", () => {
     expect(d.processes.signals).toEqual([]);
   });
 
+  it("refuses discard when Git inspection fails, without confirming or saving a discard", async () => {
+    const d = await deps(base({}));
+    vi.spyOn(d.git, "changedFiles").mockRejectedValue(new Error("Git unavailable"));
+    const confirm = vi.fn(async () => true);
+    await expect(discardRun(d, "/repo", "r1", confirm)).rejects.toThrow(/inspect.*retry/i);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(d.git.removed).toEqual([]);
+    expect((await d.store.read("r1")).discardedAt).toBeUndefined();
+  });
+
+  it("allows an inspected empty worktree only after explicit confirmation", async () => {
+    const d = await deps(base({}));
+    const confirm = vi.fn(async () => true);
+    expect((await discardRun(d, "/repo", "r1", confirm)).discarded).toBe(true);
+    expect(confirm).toHaveBeenCalledWith([], expect.objectContaining({ id: "r1" }));
+    expect(d.git.removed).toHaveLength(1);
+    expect((await d.store.read("r1")).discardedAt).toBeDefined();
+  });
+
+  it.each([
+    { worktree: "/w/replaced" },
+    { branch: "code60/replaced" },
+    { base: "new-base" },
+    { ownerPid: 8 },
+    { agentPid: 901 },
+    { status: "running" as const },
+    { discardedAt: "already" },
+  ])("refuses a changed discard target or owner after confirmation: %j", async (change) => {
+    const d = await deps(base({}));
+    await expect(
+      discardRun(d, "/repo", "r1", async () => {
+        await d.store.save(base(change));
+        return true;
+      }),
+    ).rejects.toThrow(/changed.*retry/i);
+    expect(d.git.removed).toEqual([]);
+  });
+
+  it("refuses a newly live agent or changed file list after confirmation", async () => {
+    for (const change of ["agent", "files", "inspection"] as const) {
+      const d = await deps(base({}));
+      await expect(
+        discardRun(d, "/repo", "r1", async () => {
+          if (change === "agent") d.processes.groups.add(900);
+          if (change === "files") d.git.files = [{ path: "new.txt", status: "untracked" }];
+          if (change === "inspection")
+            vi.spyOn(d.git, "changedFiles").mockRejectedValue(new Error("Git failed"));
+          return true;
+        }),
+      ).rejects.toThrow();
+      expect(d.git.removed).toEqual([]);
+      expect((await d.store.read("r1")).discardedAt).toBeUndefined();
+    }
+  });
+
   it("stop kills a matching agent, escalating to SIGKILL", async () => {
     const d = await deps(base({ status: "interrupted" }));
     d.processes.groups.add(900);
