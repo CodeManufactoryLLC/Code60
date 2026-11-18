@@ -5,10 +5,10 @@ export const rowDensities = [
 ] as const;
 export type RowDensity = (typeof rowDensities)[number]["id"];
 export function parseRowDensity(value: string | null): RowDensity {
-  return rowDensities.find((density) => density.id === value)?.id ?? "high";
+  return rowDensities.find((density) => density.id === value)?.id ?? "low";
 }
 export function rowHeight(density: RowDensity): number {
-  return rowDensities.find((entry) => entry.id === density)?.height ?? 32;
+  return rowDensities.find((entry) => entry.id === density)?.height ?? 44;
 }
 /** `heading` is the pair of lines directly above and below the column headings. */
 /**

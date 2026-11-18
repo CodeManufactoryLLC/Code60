@@ -1937,7 +1937,7 @@ describe("retained project runtimes", {
     const b = (
       await controller.customAgent({ type: "create", name: "Writer", instructions: "Only Writer" })
     ).agent;
-    if (!a || !b) throw new Error("Missing custom agents");
+    if (!a || !b) throw new Error("Missing custom assistants");
     await controller.customAgent({ type: "open", id: a.id });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     const aChat = controller.snapshot().chat;

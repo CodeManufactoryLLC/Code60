@@ -22,22 +22,27 @@
   position: relative;
   --button-size: var(--nav-font-size, 15px);
   --nav-step: 24px;
-  --nav-row-height: max(40px, calc(1.25 * var(--button-size) + 8px));
+  --nav-item-padding: 15px;
   --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
-  --control-fill: var(--surface);
-  --disabled-fill: var(--surface);
+  --control-fill: transparent;
+  --disabled-fill: transparent;
   grid-column: 1;
-  grid-row: 2;
+  /* Breadcrumb height belongs to the content column, never to navigation. */
+  grid-row: 1 / -1;
+  /* Reserve shadow paint space without moving cards or the resize divider. */
+  margin-left: calc(-4px * var(--sidebar-reveal));
+  padding: 0 0 0 calc(4px * var(--sidebar-reveal));
   align-self: stretch;
   max-height: 100%;
   margin-bottom: var(--page-margin);
   border: 0;
   border-radius: 0;
-  background: var(--surface);
+  background: transparent;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* Only .page-tabs scrolls; a clipped ancestor must not auto-scroll on focus. */
+  overflow: clip;
   min-width: 0;
   min-height: 0;
   opacity: 1;
@@ -52,13 +57,138 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0;
+  padding: 0 12px 0 0;
   min-width: 0;
   min-height: 0;
 }
 
 .sidebar button {
-  border-radius: 0;
+  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
+    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+}
+
+.sidebar [data-card-first] {
+  --nav-row-top-radius: 5px;
+  --button-weight: 500;
+  font-weight: 500;
+}
+
+.sidebar [data-card-last] {
+  --nav-row-bottom-radius: 5px;
+}
+
+/* Space rows themselves so nesting does not multiply container gaps. */
+.sidebar
+  :is(
+    .page-tab,
+    .chat-sidebar-row,
+    .project-chat-heading,
+    .chat-page-heading,
+    .sidebar-settings-heading,
+    .project-sidebar-open,
+    .project-session-new
+  ) {
+  margin-bottom: 2.5px;
+}
+
+.sidebar-navigation-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  margin-block: 3px;
+  padding: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  isolation: isolate;
+  box-shadow: var(--card-shadow);
+}
+
+/* Keep the solid header band behind controls without clipping focus outlines. */
+.sidebar-navigation-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(var(--nav-row-height) + 9px);
+  border-radius: 10px 10px 0 0;
+  background: var(--card-header-fill);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Adjacent 8px + 3px margins leave 11px between cards. */
+.sidebar-navigation-card + .sidebar-navigation-card {
+  margin-top: 8px;
+}
+
+/* Preserve the first row's alignment with the breadcrumb header. */
+.sidebar-navigation-card:first-child {
+  margin-top: 6px;
+}
+
+.sidebar .sidebar-card-header :is([role="tab"], .page-group-toggle, .page-group-label) {
+  padding-right: 48px;
+}
+
+.sidebar .sidebar-card-toggle {
+  position: absolute;
+  z-index: 1;
+  top: calc(6px + (var(--nav-row-height) - 28px) / 2);
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--muted);
+  transition: color var(--motion) var(--ease);
+}
+
+.sidebar-card-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: transparent;
+  rotate: -90deg;
+  transition:
+    rotate var(--motion) var(--ease),
+    background-color var(--motion) var(--ease),
+    color var(--motion) var(--ease);
+}
+
+.sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.sidebar-card-toggle[aria-expanded="true"] .sidebar-card-chevron {
+  rotate: 0deg;
+}
+
+.sidebar .sidebar-home-pages {
+  --nav-indent: 0px;
+}
+
+/* Add 3px to the 2.5px row gap before each card's second row. */
+.sidebar-navigation-card > :is([role="tablist"], .page-group-pages):not(:first-child) {
+  margin-top: 3px;
+}
+
+/* Trim the final row's spacing even when it lives inside a disclosure. */
+.sidebar-navigation-card::after {
+  content: "";
+  flex: 0 0 0;
+  margin-top: -2.5px;
+  pointer-events: none;
+}
+
+.sidebar :is(.chat-sidebar-row, .project-chat-heading, .sidebar-settings-heading) {
+  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
+    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
 }
 
 .sidebar[data-open="false"] {
@@ -95,7 +225,10 @@
   gap: 0;
   min-width: 0;
   min-height: 0;
+  margin-inline: -4px;
+  padding: 0 4px 4px;
   overflow-y: auto;
+  overflow-anchor: none;
   scrollbar-width: none;
   background: transparent;
 }
@@ -108,14 +241,21 @@
   -webkit-app-region: no-drag;
 }
 
+.sidebar :is(.chat-page-heading, .sidebar-settings-heading) .page-tab {
+  margin-bottom: 0;
+}
+
 .page-tab [role="tab"],
-.page-tab .page-group-toggle {
-  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent));
+.page-tab .page-group-toggle,
+.page-tab .page-group-label,
+.project-sidebar-open,
+.project-session-new {
+  --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent));
   width: 100%;
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
-  padding: 4px 12px 4px var(--nav-label-inset);
+  padding: 2px 12px 2px var(--nav-label-inset);
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
@@ -127,18 +267,47 @@
   gap: 8px;
 }
 
-.page-tab :is([role="tab"], .page-group-toggle):has(> .navigation-icon[data-animated]),
+.page-tab .page-group-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  font-family: var(--button-font, var(--font));
+  font-size: var(--button-size);
+  text-transform: var(--button-case, none);
+  --letter-spacing: var(--button-spacing, normal);
+  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
+    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+}
+
+.page-tab
+  :is([role="tab"], .page-group-toggle, .page-group-label):has(> .navigation-icon[data-animated]),
 .chat-sidebar-entry:has(> .navigation-icon[data-animated]) {
-  --nav-row-height: max(40px, calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px));
   --nav-label-inset: calc(
     max(var(--nav-inset), calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)) +
-    var(--nav-indent)
+    var(--nav-indent) +
+    var(--nav-item-padding)
   );
 }
 
 .page-tab :is([role="tab"], .page-group-toggle):has(> .navigation-icon[data-enlarged]),
 .chat-sidebar-entry:has(> .navigation-icon[data-enlarged]) {
   --nav-animated-scale: 2.4;
+}
+
+/* Enlarge Apps descendants together, reserving their existing icon-to-label gap. */
+.sidebar #app-pages {
+  --nav-animated-scale: 2.5;
+}
+
+.chat-sidebar-entry:has(> .navigation-icon[data-icon="app-communication"]),
+.chat-sidebar-entry:has(> .navigation-icon[data-icon="app-down-right"]) {
+  --nav-label-inset: calc(
+    var(--nav-item-padding) +
+    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
+    var(--nav-indent) -
+    4px
+  );
 }
 
 /* Center the visible letterforms with the icons and clip only at the end of the label. */
@@ -171,6 +340,24 @@
   pointer-events: none;
 }
 
+/* Fade only leading artwork on non-header rows; row labels/actions stay sharp. */
+.sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+  opacity: 0.75;
+  transition: opacity var(--motion) var(--ease);
+}
+
+.sidebar
+  :is(
+    .page-tab,
+    .chat-sidebar-row,
+    .project-chat-heading,
+    .project-sidebar-open,
+    .project-session-new
+  ):hover
+  .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+  opacity: 1;
+}
+
 .navigation-icon[data-animated] {
   --nav-icon-scale: 2;
 }
@@ -179,12 +366,8 @@
   --nav-icon-scale: 2.4;
 }
 
-.navigation-icon[data-icon="app-text-size"] {
-  background-color: currentColor;
-  mask-position: center;
-  mask-repeat: no-repeat;
-  mask-size: contain;
-  forced-color-adjust: preserve-parent-color;
+:where(.sidebar #app-pages) .navigation-icon[data-animated] {
+  --nav-icon-scale: 2.5;
 }
 
 .page-title {
@@ -200,6 +383,10 @@
 .breadcrumb-label > .navigation-icon {
   position: static;
   transform: none;
+}
+
+.page-title > .navigation-icon[data-icon="app-down-right"] {
+  --nav-icon-scale: 1;
 }
 
 .page-title-text,
@@ -312,10 +499,6 @@
   font-weight: var(--button-weight, 300);
 }
 
-.sidebar-settings {
-  margin-top: 0;
-}
-
 .chat-title {
   display: block;
   min-height: 0;
@@ -418,19 +601,9 @@
   position: relative;
   --control-fill: var(--accent-bg);
   background: var(--accent-bg);
-  border-radius: 0;
+  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
+    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
   color: var(--text);
-}
-
-/* Paint once above the row's opaque buttons, independently of press and focus effects. */
-.sidebar [data-nav-active="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow: inset var(--rule-select) 0 var(--accent);
 }
 
 .sidebar .sidebar-settings-heading:hover,
@@ -446,10 +619,14 @@
 
 .chat-sidebar-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   justify-content: flex-end;
   align-items: center;
   min-width: 0;
+  height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
   color: var(--text);
 }
 
@@ -491,6 +668,8 @@
 
 .project-chat-pages {
   --nav-indent: calc(var(--nav-step) * 2);
+  display: flex;
+  flex-direction: column;
 }
 
 .project-chat-pages .chat-worker-children {
@@ -507,14 +686,21 @@
 }
 
 .project-chat-heading {
-  --project-label-inset: calc(var(--nav-inset) + var(--nav-indent) - 4px);
-  --nav-row-height: max(40px, calc(var(--button-size) * 1.2 + 22px));
+  --project-label-inset: calc(
+    var(--nav-item-padding) +
+    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
+    var(--nav-indent) -
+    4px
+  );
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   justify-content: flex-end;
   align-items: stretch;
   min-width: 0;
+  height: var(--nav-row-height);
   min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
   color: var(--text);
 }
 
@@ -531,15 +717,18 @@
 }
 
 .project-chat-name {
+  --nav-label-inset: var(--project-label-inset);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
   gap: 0;
   flex: 1;
-  min-width: min(100%, calc(var(--project-label-inset) + 2ch));
+  min-width: 0;
   height: var(--nav-row-height);
-  padding: 4px 4px 4px calc(var(--project-label-inset) - 1em - 8px);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
+  padding: 2px 4px 2px var(--project-label-inset);
   border: 0;
   background: transparent;
   text-align: left;
@@ -550,16 +739,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.project-chat-label > .navigation-icon {
-  position: static;
-  transform: none;
+  min-width: 0;
 }
 
 .project-chat-activity {
   overflow: hidden;
-  padding-left: calc(var(--button-size) + 8px);
+  padding-left: 0;
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
@@ -569,6 +754,8 @@
   flex: 0 0 var(--nav-action-width);
   padding-inline: 0;
   height: var(--nav-row-height);
+  min-height: var(--nav-row-height);
+  max-height: var(--nav-row-height);
 }
 
 .chat-worker-children[hidden] {
@@ -608,23 +795,24 @@
   color: var(--text);
 }
 
-.chat-page-heading:has(.project-sidebar-open) .page-group-toggle {
-  padding-right: calc(var(--nav-action-width) + 8px);
-}
-
-.project-sidebar-open {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  transform: translateY(-50%);
-  width: var(--nav-action-width);
-  height: var(--nav-row-height);
-  min-height: var(--nav-row-height);
-  padding: 4px 0;
+.project-sidebar-open,
+.project-session-new {
+  --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
+  position: relative;
+  flex-shrink: 0;
   margin: 0;
   border: 0;
-  background: var(--control-fill);
-  color: inherit;
+}
+
+.project-sidebar-open > .navigation-icon,
+.project-session-new > .navigation-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar :is(.project-sidebar-open, .project-session-new) .carbon-icon {
+  --icon-size: 1em;
 }
 
 .chat-sidebar-list {
@@ -635,9 +823,9 @@
 }
 
 .chat-sidebar-entry {
-  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent) - 4px);
+  --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
   flex: 1;
-  min-width: min(100%, calc(var(--nav-label-inset) + 2ch));
+  min-width: 0;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -648,7 +836,7 @@
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
-  padding: 4px 8px 4px var(--nav-label-inset);
+  padding: 2px 8px 2px var(--nav-label-inset);
   margin: 0;
   border: 0;
   text-align: left;
@@ -698,9 +886,10 @@
   > .chat-sidebar-group
   > .chat-sidebar-row
   > .chat-sidebar-entry {
-  --nav-label-inset: max(
-    var(--nav-inset),
-    calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)
+  --nav-label-inset: calc(
+    var(--nav-item-padding) +
+    max(var(--nav-inset), calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)) +
+    var(--nav-indent)
   );
 }
 
@@ -708,12 +897,25 @@
   --nav-indent: var(--nav-step);
 }
 
-#custom-agent-pages {
+#assistants-pages {
   --nav-indent: var(--nav-step);
 }
 
+#custom-agent-pages .chat-worker-children {
+  --nav-indent: calc(var(--nav-step) * 3);
+}
+
+#assistants-pages > .relay-sidebar .chat-worker-children,
+#custom-agent-pages {
+  --nav-indent: calc(var(--nav-step) * 2);
+}
+
 #custom-agent-pages .chat-sidebar-entry {
-  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent));
+  --nav-label-inset: calc(
+    var(--nav-item-padding) +
+    max(var(--nav-inset), calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)) +
+    var(--nav-indent)
+  );
 }
 
 .sidebar :is(button, [role="tab"]):focus-visible,

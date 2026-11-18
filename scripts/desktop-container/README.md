@@ -15,3 +15,7 @@ upstream changes and test both architectures before replacing this profile.
 Local modification: `clone3` explicitly returns `ENOSYS` (38), matching Docker's
 modern default profile. Bookworm glibc can then fall back to the permitted `clone`
 syscall; the older profile's default `EPERM` prevents that fallback.
+
+Openbox is installed for the isolated window-control journey. That test starts
+and stops its own manager on the disposable Xvfb display so maximize/minimize
+have real desktop behavior. Other journeys run without a manager as before.

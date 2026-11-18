@@ -160,6 +160,12 @@ worker assets remain discoverable through build/Vite/packaging entry points.
 `test/unused-gates.test.mjs` also runs Knip on a fixture containing deliberate
 unused files, exports and a dependency, without suppressing categories.
 
+The explicit external-binary exceptions are `mkfifo` (POSIX storage fixtures)
+and `openbox` (the isolated Linux caption-control journey). Openbox is supplied by
+the container/CI operating-system packages and stopped by its owning test; it is
+not an npm executable. These exceptions do not exclude code, exports or issue
+categories from analysis.
+
 The only dependency exceptions are `@wyw-in-js/shared` and `app-builder-lib`:
 `test/dependency-compatibility.test.ts` intentionally inspects these installed
 transitive dependencies to verify security overrides without adding them as

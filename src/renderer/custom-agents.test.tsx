@@ -12,8 +12,8 @@ it("keeps agent creation available without a database and renders user names as 
       onOpen={async () => true}
     />,
   );
-  expect(html).toContain("New Agent");
-  expect(html).toContain("Custom Agents");
+  expect(html).toContain("New Assistant");
+  expect(html).toContain("Custom Assistants");
   expect(html).toContain("&lt;script&gt;name&lt;/script&gt;");
   expect(html).not.toContain("<script>");
   expect(html).toContain("Archived");

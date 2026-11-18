@@ -106,6 +106,8 @@ describe("sandboxed diagnostic preload", () => {
       orchestrationChatAction: "orchestration-chat",
       setTransparent: "transparent",
       setBackgroundHitTest: "background-hit-test",
+      setSidebarBackdrop: "sidebar-backdrop",
+      controlWindow: "window-control",
       projectAction: "project-action",
       setFileContext: "files",
       setPollSettings: "poll-settings",

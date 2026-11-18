@@ -233,7 +233,9 @@ export function ChatSidebar({
             }}
           >
             {relayHeading && (
-              <NavigationIcon name={chat?.customAgentId ? "app-helmet" : "app-steering-wheel"} />
+              <NavigationIcon
+                name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
+              />
             )}
             {entry.role === "orchestrator" && chat?.kind !== "relay" && (
               <NavigationIcon name="app-communication" />

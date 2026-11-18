@@ -206,10 +206,35 @@
 
 - GitSetup owns project/session/file identities and single-flight cancellation. Run setup outside the action queue after checking stopped workers/leftovers; preserve partial state and probe HEAD after uncertain commits. Never replay dispatch. Cancel on context replacement, renderer reload and shutdown. Desktop history includes legacy directory records and routes writes to their original store.
 
-## Custom Agents
+## Custom Assistants
 
-The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+The Custom Assistants section of `ARCHITECTURE.md` extends the Relay-only rules above.
 Reuse the Relay runtime for custom application-owned conversations. Route all
 requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
 Custom definitions are private, revision-checked and database-independent.
+
+## Sidebar transparency
+
+Create the desktop window with native alpha support and a clear background so the
+sidebar opacity slider can reveal the desktop immediately. The renderer keeps the
+splash and main content opaque. The saved Transparent background flag still gates
+other transparent margins and macOS click-through; it must not gate native alpha
+needed by the sidebar. Do not add click-through to the sidebar itself.
+
+## Native sidebar backdrop
+
+Use only an owned, non-focusable, mouse-transparent BaseWindow with native macOS
+vibrancy behind the main window. It must have no web contents or screen capture.
+Clamp its bounds to the owned main window and follow movement, resize and zoom.
+Strength blends native material opacity, not a configurable Gaussian radius.
+Hide on splash, collapse, opaque tint, minimized/hidden state and forced colors.
+Reset on renderer navigation/loss; close it and remove listeners on owner close or
+shutdown. Validate the narrow width/strength/visibility bridge request. Keep Linux
+supported with blur unavailable rather than an ineffective CSS substitute.
+
+Transparent Linux windows use three renderer caption buttons in the native drag
+strip because Electron hides its native caption controls for translucent windows.
+A strict minimize/maximize/close enum targets only the owned main window. Close
+must call the normal guarded close path, never destroy the window or kill work.
+macOS retains native window controls. No arbitrary window IDs cross the bridge.

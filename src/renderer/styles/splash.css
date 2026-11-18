@@ -15,7 +15,7 @@
   overflow: hidden;
   scrollbar-gutter: auto;
   isolation: isolate;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   -webkit-app-region: no-drag;
 }
@@ -27,7 +27,7 @@
 }
 
 .splash::backdrop {
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .splash > .window-drag-strip {
@@ -48,7 +48,7 @@
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   padding: calc(var(--app-titlebar-height) + 48px) 24px 80px;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .splash-theme-toggle {

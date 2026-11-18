@@ -46,7 +46,7 @@
   --letter-spacing: var(--title-spacing, normal);
   letter-spacing: var(--title-tracking, normal);
   font-size: var(--title-size, 16px);
-  font-weight: var(--title-weight, 300);
+  font-weight: var(--title-weight, 500);
   text-transform: var(--title-case, none);
   line-height: 1.25;
   font-synthesis: none;
@@ -106,10 +106,24 @@
   min-width: 0;
   margin: 0 0 12px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface);
 
-  border-radius: var(--card-radius);
+  border-radius: var(--settings-card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.table-density-selector {
+  border-radius: 5px;
+}
+
+/* Keep fills and focus inside the rounded selector without clipping outlines. */
+.table-density-selector > .segmented-option:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.table-density-selector > .segmented-option:last-child {
+  border-radius: 0 4px 4px 0;
 }
 
 /* A floated legend sits inside the card instead of breaking its top border. */
@@ -256,10 +270,11 @@ button.info-tip {
   min-width: 0;
   margin: 0 0 12px;
   padding: 14px 16px 16px;
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface);
 
-  border-radius: var(--card-radius);
+  border-radius: var(--settings-card-radius);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-group-title {
@@ -337,6 +352,28 @@ button.settings-group-reset {
 
 .transition-settings .settings-group-title {
   padding-right: 140px;
+}
+
+.sidebar-appearance-settings .settings-group-title {
+  padding-right: 120px;
+}
+
+.sidebar-appearance-setting + .sidebar-appearance-setting {
+  margin-top: 16px;
+}
+
+.sidebar-appearance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sidebar-appearance-heading output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .transition-setting + .transition-setting {
@@ -608,7 +645,7 @@ button.settings-group-reset {
   margin: 0;
   font-family: var(--title-font, var(--font));
   font-size: var(--title-size, 16px);
-  font-weight: var(--title-weight, 300);
+  font-weight: var(--title-weight, 500);
   letter-spacing: var(--title-tracking, normal);
   text-transform: var(--title-case, none);
   white-space: normal;

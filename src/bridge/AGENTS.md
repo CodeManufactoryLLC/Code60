@@ -97,10 +97,20 @@
 
 - Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; agents have no setup mutation capability.
 
-## Custom Agents
+## Custom Assistants
 
-The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+The Custom Assistants section of `ARCHITECTURE.md` extends the Relay-only rules above.
 Reuse the Relay runtime for custom application-owned conversations. Route all
 requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
 Custom definitions are private, revision-checked and database-independent.
+
+- Sidebar backdrop updates contain only strict bounded width, 0–100 strength and
+  visibility. Never accept coordinates, window handles, materials, paths or code.
+  Main derives bounds from its owned window; this grants no screen capture access.
+
+Transparent Linux windows use three renderer caption buttons in the native drag
+strip because Electron hides its native caption controls for translucent windows.
+A strict minimize/maximize/close enum targets only the owned main window. Close
+must call the normal guarded close path, never destroy the window or kill work.
+macOS retains native window controls. No arbitrary window IDs cross the bridge.

@@ -75,6 +75,8 @@ contextBridge.exposeInMainWorld("desktop", {
   orchestrationChatAction: (request: unknown) =>
     ipcRenderer.invoke("desktop:orchestration-chat", request),
   windowAppearance: () => ipcRenderer.invoke("desktop:window-appearance"),
+  controlWindow: (action: unknown) => ipcRenderer.invoke("desktop:window-control", action),
+  setSidebarBackdrop: (request: unknown) => ipcRenderer.invoke("desktop:sidebar-backdrop", request),
   setTransparent: (enabled: unknown) => ipcRenderer.invoke("desktop:transparent", enabled),
   setBackgroundHitTest: (ignore: unknown) =>
     ipcRenderer.invoke("desktop:background-hit-test", ignore),

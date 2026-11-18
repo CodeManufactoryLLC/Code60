@@ -116,10 +116,13 @@ export function AppPages(props: AppPagesProps) {
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
-  const { transparent, savingAppearance, saveTransparent } = appearance;
+  const { transparent, savingAppearance, saveTransparent, sidebarBlurSupported } = appearance;
   const {
     theme,
     setTheme,
+    sidebarAppearance,
+    setSidebarAppearance,
+    sidebarAppearanceSaved,
     textStyles,
     setTextStyles,
     lines,
@@ -276,6 +279,10 @@ export function AppPages(props: AppPagesProps) {
           onTransparent={(enabled) => void saveTransparent(enabled)}
           theme={theme}
           onTheme={setTheme}
+          sidebarAppearance={sidebarAppearance}
+          sidebarAppearanceSaved={sidebarAppearanceSaved}
+          sidebarBlurSupported={sidebarBlurSupported}
+          onSidebarAppearance={setSidebarAppearance}
           textStyles={textStyles}
           onTextStyles={setTextStyles}
           lines={lines}

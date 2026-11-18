@@ -4,6 +4,39 @@ export function parseTheme(value: string | null): Theme {
   return value === "light" || value === "dark" ? value : "system";
 }
 
+export interface SidebarAppearance {
+  opacity: number;
+  blur: number;
+}
+export const defaultSidebarAppearance: Readonly<SidebarAppearance> = Object.freeze({
+  opacity: 100,
+  blur: 0,
+});
+
+export function parseSidebarAppearance(raw: string | null): SidebarAppearance {
+  try {
+    const value: unknown = JSON.parse(raw ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return defaultSidebarAppearance;
+    const record = value as Record<string, unknown>;
+    const bounded = (key: keyof SidebarAppearance, max: number) => {
+      const number = record[key];
+      return typeof number === "number" && Number.isFinite(number)
+        ? Math.round(Math.max(0, Math.min(max, number)))
+        : defaultSidebarAppearance[key];
+    };
+    return { opacity: bounded("opacity", 100), blur: bounded("blur", 100) };
+  } catch {
+    return defaultSidebarAppearance;
+  }
+}
+
+export function sidebarAppearanceProperties(appearance: SidebarAppearance): Record<string, string> {
+  return {
+    "--sidebar-background-opacity": `${appearance.opacity}%`,
+  };
+}
+
 /** The selected preference and resolved scheme have distinct, single owners. */
 export function observeColorScheme(
   theme: Theme,

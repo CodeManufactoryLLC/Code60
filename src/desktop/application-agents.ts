@@ -93,7 +93,7 @@ export class ApplicationAgents {
     try {
       await this.load();
     } catch {
-      this.error = "Custom agent storage is unavailable. Existing data was preserved.";
+      this.error = "Custom assistant storage is unavailable. Existing data was preserved.";
     }
     if (this.closing || epoch !== this.epoch) return;
     await this.each((agent) => agent.sync(provider, config));
@@ -116,9 +116,9 @@ export class ApplicationAgents {
     request: CustomAgentRequest,
     epoch: number,
   ): Promise<CustomAgentResponse> {
-    if (this.closing) throw new Error("Custom agents are unavailable");
+    if (this.closing) throw new Error("Custom assistants are unavailable");
     await this.load();
-    if (this.closing || !this.store) throw new Error("Custom agents are unavailable");
+    if (this.closing || !this.store) throw new Error("Custom assistants are unavailable");
     const store = this.store;
     let agent: CustomAgent | undefined;
     let conversationId: string | undefined;
@@ -139,13 +139,13 @@ export class ApplicationAgents {
           if (request.type === "archive") {
             if (
               !(await this.dialogs.confirm(
-                "Archive custom agent?",
-                "Stop this agent and its workers and hide it from navigation? History and files will be preserved.",
+                "Archive custom assistant?",
+                "Stop this assistant and its workers and hide it from navigation? History and files will be preserved.",
               ))
             )
               break;
           } else if (runtime?.active)
-            throw new Error("Stop this agent and its workers before editing.");
+            throw new Error("Stop this assistant and its workers before editing.");
           if (runtime) await runtime.shutdown();
           if (this.closing) throw new Error("Application is stopping");
           if (runtime === this.selected) this.selected = this.relay;

@@ -26,13 +26,17 @@
   padding-right: 64px;
 }
 
-/* Chat's single file workspace shares the navigation fill. */
+/* Chat frames the conversation separately from its adjacent inspector card. */
 #panel-chat {
   flex-direction: column;
-  border-radius: var(--chat-radius);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .chat-workspace-body {
+  --file-panel-gap: var(--page-margin);
   position: relative;
   display: flex;
   flex: 1;
@@ -41,25 +45,42 @@
   overflow: hidden;
 }
 
+/* Extend only the side-by-side card into the space beside the breadcrumb row. */
+@media (min-width: 1201px) {
+  #panel-chat,
+  .chat-workspace-body {
+    overflow: visible;
+  }
+
+  .file-panel:not([data-minimized="true"]) {
+    margin-block-start: calc(-1 * var(--right-panel-rise, 0px));
+  }
+}
+
 .file-panel {
   --control-fill: var(--chat-neutral);
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px));
+  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px - var(--file-panel-gap)));
+  margin-inline-start: var(--file-panel-gap);
   min-width: 0;
   overflow: hidden;
-  transition: width var(--motion) ease;
+  transition:
+    width var(--motion) ease,
+    margin-inline-start var(--motion) ease;
   min-height: 0;
   padding: 0;
-  border: 1px solid var(--border);
-  border-width: 0 0 0 1px;
+  border: 0;
+  border-radius: 10px;
   background: var(--chat-neutral);
+  box-shadow: var(--card-shadow);
 }
 
 .file-panel[data-minimized="true"] {
   width: 0;
+  margin-inline-start: 0;
   border-width: 0;
 }
 
@@ -99,6 +120,7 @@
 
 .file-panel-toolbar {
   align-items: center;
+  background: var(--card-header-fill);
 }
 
 .file-tab {
@@ -221,6 +243,9 @@ button.file-open-link {
 @media (max-width: 1200px) {
   .chat-workspace-body {
     flex-direction: column;
+    /* Let the scroller paint card shadows without shifting its contents. */
+    margin: -4px;
+    padding: 4px;
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -253,11 +278,15 @@ button.file-open-link {
 
 @media (max-width: 1200px) {
   .chat-workspace-body .file-panel {
-    transition: flex-basis var(--motion) ease;
+    transition:
+      flex-basis var(--motion) ease,
+      margin-block-start var(--motion) ease;
     flex: 1 0 max(340px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    margin-inline-start: 0;
+    margin-block-start: var(--file-panel-gap);
     padding-left: 0;
   }
 }
@@ -268,6 +297,7 @@ button.file-open-link {
     height: 0;
     flex-basis: 0;
     flex-grow: 0;
+    margin-block-start: 0;
   }
 }
 
@@ -450,7 +480,7 @@ button.file-open-link {
   border: 0;
   box-shadow: none;
   border-radius: var(--button-radius);
-  background: var(--chat-neutral);
+  background: transparent;
   z-index: 2;
   cursor: col-resize;
   touch-action: none;

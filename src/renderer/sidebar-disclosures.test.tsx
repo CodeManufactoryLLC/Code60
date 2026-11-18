@@ -177,7 +177,78 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   return mount(list.type as (value: typeof props) => ReactNode, list.props as typeof props);
 }
 
-it("keeps an unidentified failed custom agent reachable through its definition entry", () => {
+it.each([
+  ["home-card-toggle", "tab-home", "home-pages", "home"],
+  ["apps-card-toggle", "tab-apps", "app-pages", "apps"],
+  ["projects-card-toggle", "tab-chat", "chat-pages", "projects"],
+  ["settings-card-toggle", "tab-settings", "settings-pages", "settings"],
+] as const)("separates %s disclosure from header navigation", (toggle, header, panel, page) => {
+  const onSelect = vi.fn();
+  const onSettingsSectionSelect = vi.fn();
+  const tabs = { ...initialTabs, active: page };
+  const view = tabList({ tabs, settingsSection: null, onSelect, onSettingsSectionSelect });
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+  click(view.tree(), header);
+  view.render();
+  expect(onSelect).toHaveBeenLastCalledWith(page);
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+  onSelect.mockClear();
+  click(view.tree(), toggle);
+  view.render();
+  expect(byId(view.tree(), panel).props.hidden).toBe(true);
+  expect(byId(view.tree(), panel).props.inert).toBe(true);
+  expect(byId(view.tree(), toggle).props["aria-expanded"]).toBe(false);
+  expect(onSelect).not.toHaveBeenCalled();
+  click(view.tree(), header);
+  view.render({ tabs: { ...tabs } });
+  expect(byId(view.tree(), panel).props.hidden).toBe(true);
+  click(view.tree(), toggle);
+  view.render();
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+});
+
+it("reveals Search after explicit navigation and keeps its current page when collapsed", () => {
+  const view = tabList({ tabs: { ...initialTabs, active: "home" } });
+  click(view.tree(), "home-card-toggle");
+  view.render();
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(true);
+  view.render({ tabs: { ...initialTabs, active: "search" } });
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(false);
+  click(view.tree(), "home-card-toggle");
+  view.render();
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "tab-search").props["aria-selected"]).toBe(true);
+});
+
+it("collapses Assistants without navigating or restoring nested disclosures", () => {
+  const onSelect = vi.fn();
+  const view = tabList({ tabs: { ...initialTabs, active: "custom-agents" }, onSelect });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+  click(view.tree(), "assistants-toggle");
+  view.render();
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "assistants-pages").props.inert).toBe(true);
+  expect(byId(view.tree(), "custom-agent-pages").props.hidden).toBe(true);
+  expect(onSelect).not.toHaveBeenCalled();
+  view.render({ tabs: { ...initialTabs, active: "custom-agents" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+  expect(byId(view.tree(), "custom-agent-pages").props.hidden).toBe(true);
+});
+
+it("honors a saved closed Assistants section even when an assistant view is selected", () => {
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => (key === "code60.assistantsExpanded" ? "false" : "true"),
+    setItem: vi.fn(),
+  });
+  const view = tabList({ tabs: { ...initialTabs, active: "custom-agents" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "assistants-toggle").props["aria-expanded"]).toBe(false);
+  press(view.tree(), "assistants-toggle", "ArrowRight");
+  view.render();
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+});
+
+it("keeps an unidentified failed custom assistant reachable through its definition entry", () => {
   const view = tabList({
     customAgents: [{ id: "unavailable", name: "Recovery Agent", revision: 1, archived: false }],
     chats: [
@@ -274,7 +345,7 @@ it.each(["click", "ArrowLeft"] as const)(
     const view = tabList();
     expect(byId(view.tree(), "advanced-toggle").props["aria-expanded"]).toBe(true);
     expect(byId(view.tree(), "experiments-toggle").props["aria-expanded"]).toBe(true);
-    if (method === "click") click(view.tree(), "tab-settings");
+    if (method === "click") click(view.tree(), "settings-card-toggle");
     else press(view.tree(), "tab-settings", method);
     view.render();
     for (const id of ["settings-pages", "advanced-pages", "experiment-pages"]) {

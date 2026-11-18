@@ -39,7 +39,7 @@ export class CustomAgentStore {
       } catch (error) {
         if (storageCode(error) !== "ENOENT") throw error;
         if ((await readdir(root)).some((name) => name !== ".writer"))
-          throw new Error("Custom agent metadata is missing. Existing data was preserved.");
+          throw new Error("Custom assistant metadata is missing. Existing data was preserved.");
         state = { format: 1, agents: [] };
         await writeRelayState(join(root, "agents.json"), state, undefined, LIMIT);
       }
@@ -54,9 +54,9 @@ export class CustomAgentStore {
   }
   private entry(id: string, revision?: number) {
     const agent = this.state.agents.find((a) => a.id === id);
-    if (!agent) throw new Error("Custom agent is unavailable");
+    if (!agent) throw new Error("Custom assistant is unavailable");
     if (revision !== undefined && agent.revision !== revision)
-      throw new Error("This agent changed. Reopen it before saving.");
+      throw new Error("This assistant changed. Reopen it before saving.");
     return agent;
   }
   async get(id: string, revision?: number): Promise<CustomAgent> {
@@ -67,7 +67,7 @@ export class CustomAgentStore {
       await readRelayState(join(directory, `${definition}.json`), DEFINITION_LIMIT),
     );
     if (content.name !== agent.name)
-      throw new Error("Custom agent definition changed. Existing data was preserved.");
+      throw new Error("Custom assistant definition changed. Existing data was preserved.");
     return { ...content, ...agent };
   }
   async save(value: Pick<CustomAgent, "name" | "instructions">, id?: string, revision?: number) {

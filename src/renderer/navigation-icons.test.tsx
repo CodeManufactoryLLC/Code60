@@ -156,21 +156,31 @@ it.each([
   "renders the original %s artwork locally and decoratively",
   async (name, file, hash) => {
     const html = renderToStaticMarkup(<NavigationIcon name={name} />);
-    if (name === "app-text-size") {
-      expect(html).toContain("<span");
-      expect(html).toContain("mask-image:url(");
-      expect(html).not.toContain("<img");
-    } else {
-      expect(html).toContain("<img");
-      expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
-    }
+    expect(html).toContain("<img");
+    expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
     const animatedPosters: Record<string, string> = {
+      "app-cloud-computing": "download.png",
+      "app-heart-rate": "heartbeat.png",
+      "app-color-palette": "painting.png",
+      "app-text-size": "font-size.png",
+      "app-info": "info.png",
+      "app-analyze": "laptop.png",
+      "app-helmet": "setting.png",
+      "app-bookshelf": "books.png",
+      "app-ai": "spell-book.png",
       "app-cogwheel": "options.png",
       "app-apps": "menu.png",
       "app-backlog": "project-initiation.png",
+      "app-communication": "labour-day.png",
+      "app-database": "database-table.png",
+      "app-down-right": "drone.png",
+      "app-folder": "folder.png",
       "app-home2": "home.png",
+      "app-megaphone": "marketing-automation.png",
+      "app-robotic-arm": "time-management.png",
       "app-search": "search.png",
       "app-steering-wheel": "pet.png",
+      "app-table": "table.png",
     };
     expect(html).toContain(animatedPosters[name] ?? `${file}.svg`);
     expect(html).toContain(`class="navigation-icon" data-icon="${name}"`);

@@ -54,6 +54,7 @@
 }
 
 .home-card {
+  --card-radius: 10px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -62,11 +63,11 @@
   gap: 0;
   min-width: 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--card-radius);
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--group-shadow);
+  box-shadow: var(--card-shadow);
   text-align: left;
   white-space: normal;
   transition:
@@ -80,12 +81,8 @@
   padding: 16px;
   min-height: 72px;
   box-sizing: border-box;
-  border-radius: calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px) 0 0;
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, var(--primary) 14%, var(--surface)),
-    var(--surface)
-  );
+  border-radius: var(--card-radius) var(--card-radius) 0 0;
+  background: var(--card-header-fill);
   color: var(--accent);
 }
 
@@ -116,8 +113,8 @@
   justify-content: center;
   min-height: 160px;
   padding: 16px;
-  border: 3px dashed var(--control-border);
-  background: transparent;
+  border: 0;
+  background: var(--surface);
 }
 
 .home-card-create .home-card-name {
@@ -148,7 +145,7 @@
 .home-card:active:not(:disabled) {
   background: color-mix(in srgb, var(--primary) 5%, var(--surface));
   color: var(--text);
-  box-shadow: var(--overlay-shadow);
+  box-shadow: var(--card-shadow);
 }
 
 .home-card:disabled .home-card-art {
@@ -156,7 +153,7 @@
 }
 
 .home-card:focus-visible {
-  box-shadow: var(--focus-shadow);
+  box-shadow: var(--card-shadow), var(--focus-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -15,7 +15,8 @@ export function focusNavigation(
       return;
     // Search matches and composers can deliberately focus the new page in a child layout effect.
     if (active?.closest(".page-panel") && !active.closest("[hidden], [inert]")) return;
-    root.getElementById(id)?.focus();
+    const target = root.getElementById(id);
+    if (target !== active) target?.focus();
   });
   return () => {
     current = false;

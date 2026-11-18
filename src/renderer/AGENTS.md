@@ -72,20 +72,25 @@
 - When `openProjects` is present, project-instance identities supersede the old
   single-project disposal rules below. Retain each open project's views on
   navigation; dispose only on actual close or database-instance replacement.
-  Project accordions contain project-bound chats and workers, with a separate
-  New chat action per project. Selecting a project never retargets Relay.
+  Project accordions contain project-bound chats and workers. Each expanded
+  project list starts with “+ New Session”, before its existing conversations. Selecting a project never retargets Relay.
   Closing a project and stopping a folder are distinct confirmed operations.
 - Show only Relay and project-bound conversations, not database-wide legacy chats.
-  Put Home first in the sidebar’s page list, followed by Relay, Custom Agents, Search and Projects.
+  Put Home first in the sidebar’s page list, followed by Search, Assistants, Projects,
+  Apps and Settings. Assistants is a disclosure-only section containing Relay and
+  Custom Assistants; keep their existing destinations and Home cards. Remember its
+  expansion locally, keep closed contents inert, close nested disclosures on collapse,
+  and reveal the group for explicit assistant navigation. Never change selection
+  or execution ownership just by opening or closing it.
   Home uses a Phosphor house icon and a standard table-controls page heading.
   Show “Welcome to Code60” above its cards, centered with the card group in the
   same scrollable content. Do not add this greeting to other navigation homes.
   Show exactly six clickable, title-only feature cards in this order:
-  Relay, Custom Agents, Search, Projects, Apps and Sessions. Use theme-aware
+  Relay, Custom Assistants, Search, Projects, Apps and Sessions. Use theme-aware
   artwork, restrained blue accents, shared focus styles and responsive stacking. Relay selects the
   application conversation and clears worker selection. Search and Sessions retain
-  database gating; Custom Agents, Projects and Apps remain available without a database.
-  The Custom Agents card opens management without opening a chat or connecting an agent.
+  database gating; Custom Assistants, Projects and Apps remain available without a database.
+  The Custom Assistants card opens management without opening a chat or connecting an agent.
   Keep errors inline and prevent duplicate Relay selections.
   Keep the existing startup destination. Remove the sidebar wordmark, retaining
   the splash wordmark. Search is a regular labelled page tab with the same selected,
@@ -96,19 +101,20 @@
   forced-colors mode. Reserve enough shared gutter
   and row height for it as text grows. Use shared 24px indentation steps for
   project chats and owned workers, inside labels rather than padded containers.
-  Use project labels to toggle their accordions; keep New chat and More independent.
+  Use project labels to toggle their accordions; keep More independent and place
+  New Session first inside each project list.
   Reuse anchored menu behavior, including bounds, dismissal and keyboard focus.
-  The Projects heading uses a Phosphor clipboard and a separate Carbon plus action
-  labelled Open Project when connected; selection remains visible
-  in the project groups and content, not in that action's label.
+  The Projects list starts with a labelled Carbon plus action, “Add Project”,
+  before all projects. It opens the existing project picker or database connection
+  flow when disconnected. Keep it inside the disclosure and in keyboard order.
 
 - Projects and individual project homes use a first-position creation card,
-  labelled New Project or New Chat with a decorative Carbon plus, instead of a
+  labelled New Project or New Session with a decorative Carbon plus, instead of a
   page-header plus button. Match normal card width/corners, use a thick 3px dashed
   border without gradient artwork or a corner arrow, and center the label.
   Keep these cards present for empty lists, keyboard-native and disabled while
   navigation is pending. New Project uses the existing database/project picker;
-  New Chat captures its rendered project ID. Preserve sidebar add controls,
+  New Session captures its rendered project ID. Preserve sidebar add controls,
   retained view state, errors, database gates and main-process ownership.
 
 ## Visual restraint
@@ -133,9 +139,34 @@
   Preserve project/chat text color on press and selection, and do not briefly
   disable or dim unrelated rows during guarded asynchronous selection.
 
-- Workspace content reserves its measured preceding height again, doubling Home's
-  top clearance, including a wrapped database notice. Observe strip/notice/window
-  resizing, avoid redundant style writes and disconnect on disposal.
+- Workspace content reserves its measured preceding height again for its header,
+  including a wrapped database notice. Observe strip/notice/window resizing, avoid
+  redundant style writes and disconnect on disposal. The sidebar starts immediately
+  below the native drag strip/notice with no extra top padding; its first card keeps
+  only its normal 6px outer margin. Span the sidebar across both workspace rows; keep the
+  breadcrumb header in the content column so its artwork and wrapping cannot
+  move navigation. Align the first breadcrumb row's icon centers with the sidebar
+  Home icon using its shared row height and 12px card-heading inset. Enclose the
+  breadcrumbs in an opaque theme-surface card spanning the content column, with a
+  no border, 10px corners and the shared narrow shadow. Use the same solid
+  theme surface as sidebar cards through `--card-header-fill`. Keep the header above the content in normal
+  flow on all pages, including Chat; content must never scroll beneath the card.
+  Use 6px outer vertical spacing and 6px inner vertical padding
+  to retain icon alignment; keep wrapping and focus outlines unclipped,
+  and use Canvas/CanvasText in forced colors.
+  While Chat is active, track the actual conversation column with a ResizeObserver
+  so the breadcrumb card ends at the conversation edge before the right-panel gap through opening, closing,
+  dragging and sidebar/window resizing. Restore full width for stacked panels or
+  other pages. Read geometry only on resize/media changes; disconnect observers,
+  remove listeners and clear workspace geometry when Chat hides or disposes.
+  Observe header resizing too and measure the open right panel's upward extension
+  from the chat body to the breadcrumb card top. Above 1200px, let only the right
+  card extend into that reserved area, keeping its top aligned with the card and
+  its bottom at the footer inset. Preserve transcript clipping and normal-flow
+  chat positioning. Stacked panels retain their gap above and no upward extension.
+  Reserve header space in normal flow; wrapping and oversized artwork never
+  shift the sidebar. Disable scroll anchoring in the tab list and avoid refocusing
+  an already focused destination. Preserve keyboard and external destination reveal.
   Move only the active breadcrumb trail into the workspace header. Its original
   inert, ID-free marker uses display:none, reserving no title space inside Search,
   app homes, tables, Settings or chat. Collapse title-only table and Settings
@@ -144,7 +175,7 @@
   Feature pages add no extra top padding. Align header contents to the top so
   small title sizes and taller actions do not shift titles. Put project-readiness
   notices below chat headers, not above them.
-- Automation Studio has one page title and two bordered table cards. Use compact,
+- Scheduled Jobs has one page title and two bordered table cards. Use compact,
   icon-free Card Titles headings for Schedules and Execution history, not page trails.
 - Navigation cards use a fixed 224px width, 36px artwork, 18px default titles and
   32px gaps as columns wrap. Scale the independent Card Titles role by 9/11,
@@ -158,14 +189,50 @@
   and skip disabled/inert controls, reduced motion and forced colors. Cancel on
   blur, drag, pointer cancellation, hidden documents and disposal.
 - Sidebar press feedback animates glyphs, not row backgrounds or click targets.
-  Paint each selected row's accent edge once in its stationary overlay, never on
-  both the row and its button. Preserve keyboard-focus and forced-color outlines.
-- Sidebar buttons and selected rows are square, unlike the external toggle and
-  other 5px buttons. Animate the registered reveal progress and sidebar fade over
+  Selected rows use their background fill without an accent edge or border.
+  Preserve keyboard-focus and forced-color outlines. Add 15px of internal left
+  padding to each item's shared icon/text inset, preserving hierarchy and the
+  icon-to-label gap without moving its selection fill.
+- Give each sidebar navigation row 2.5px of bottom margin, including nested rows
+  and creation actions. Apply the margin once per visible row, keeping grouped
+  heading wrappers from adding duplicate space. Add 3px before each card's second
+  row for a 5.5px first-to-second gap; collapsed groups add no space. Preserve shared fixed row heights: 40px at default text size, with 2px vertical
+  item padding. Grow rows for the largest 2.5em sidebar icons plus their borders
+  at larger navigation text sizes; selection must never change row height.
+- Sidebar buttons, hover fills and selected rows have 5px corners. In each foreground
+  card, the first visible row has 5px top corners and the last visible row has
+  5px bottom corners; a single visible row has all four corners at 5px. Update
+  these edges on nested disclosure and row changes, and disconnect observers on disposal.
+  The external toggle and other buttons retain their 5px corners. Animate the registered reveal progress and sidebar fade over
   the shared motion duration, not the saved width itself, so resizing stays
   immediate. Keep closing contents painted until visibility settles, but inert
   and aria-hidden immediately. Do not generate a sidebar divider in either state.
+- Assistants, Apps, Projects and Settings each have an opaque sidebar card enclosing their heading,
+  actions and expanded descendants. Use the theme surface, no border, a narrow shadow and
+  10px corners; sidebar opacity and blur affect only the background behind them.
+  Give sidebar card headers, main navigation-card artwork, breadcrumbs and the
+  right-panel tab header the same solid `--card-header-fill` (the theme surface),
+  with opaque descendants and Canvas in forced colors.
+  Trim the last row's 2.5px margin at the card boundary, including nested or
+  collapsed disclosures, so top and bottom inner padding both remain 6px.
+  Keep fixed row heights, disclosure controls and keyboard navigation intact.
   CSS reversals follow the latest state; reduced motion/forced colors skip motion.
+  Home and Search share one matching opaque card above these sections, with the
+  same 10px corners, balanced 6px padding and 5.5px spacing between their rows.
+  Use 8px top and 3px bottom card margins for an 11px gap; retain the first card's
+  6px top margin to keep Home aligned with the breadcrumb header.
+  Each card has a dedicated top-right chevron button with a state-specific accessible
+  name, aria-expanded and aria-controls. Only that button toggles on click; Home,
+  Projects, Apps and Settings headings navigate without changing expansion, and
+  Assistants is a noninteractive label. Preserve keyboard Left/Right disclosure and
+  descendant reveal on explicit navigation. Home/Search also collapses Search and
+  persists its expansion. Keep collapsed descendants mounted but inert/hidden;
+  recursively close nested disclosures. Rotate the chevron over the shared motion
+  duration, give its glyph a solid primary-color backplate on hover/focus/press,
+  and use shared glyph-only press feedback. Keep aria-labels but suppress native
+  titles and shared tooltips on these chevrons with an empty data-tooltip. Use
+  Highlight/HighlightText for the backplate in forced colors.
+  Respect reduced motion/forced colors and keep header row geometry fixed.
 
 - Prefer quiet, professional layouts over explanatory copy. Do not add sentences
   that explain how a page, filter or control works; name things clearly and use
@@ -202,7 +269,11 @@
   outside the inert navigation. Sidebar and main content share two
   columns; never reserve a narrow content column for the toggle.
   Render Relay as plain title text, not a disabled rename button that compounds
-  title opacity. Project rename actions remain independent.
+  title opacity. In breadcrumbs, label agent chats “Agent” and worker chats
+  “Subagent”, including “Agent” as the parent of a worker. Keep Relay named Relay.
+  Preserve actual titles in sidebar rows, saved records and rename dialogs, and
+  retain the existing rename button action and owner identity. Project rename
+  actions remain independent.
   Size chevrons at 1em. Keep title rename buttons unpadded, without a minimum control
   height, so Relay and orchestrator labels retain the standard 8px icon gap.
   Keep only the current leaf as the heading; preserve icons, rename actions,
@@ -248,7 +319,7 @@
   saved-chat-stopped warning from Chat. Preserve database connection, Cancel,
   Relay Retry connection, connection errors and current history-saving warnings.
 
-- Orchestrator and worker chats use borderless agent text and solid user bubbles: pale blue in Light, dark blue in Dark/System dark, with contrasting black/white text. Activity/tool disclosures remain distinct. Copy uses a 16px Carbon icon without a fill or border, outside user bubbles, with glyph highlighting on keyboard focus and a 24px hit target. Keep a single resizable file panel after the conversation, opening at 20% of Chat width with a 120px panel minimum and 300px conversation minimum, stacking below Chat at 1200px and below. In the stacked layout, size the conversation for its visible notices, approvals and complete composer, with a 300px conversation minimum and a 120px independently scrolling transcript minimum. Give it only a left divider and the main app surface throughout, including Monaco, and a Carbon drawer toggle inside its tab header. Close to zero width with no divider or rail, and zero height on narrow layouts. Show the reopening icon at the chat area's top right when closed, reserving header space so actions do not overlap it. Keep hidden contents inert; preserve toggle focus, tabs, preview state and expanded width. Animate expansion/closing with reduced-motion support. Keep the resize grip borderless at rest, with visible keyboard focus.
+- Orchestrator and worker chats use borderless agent text and solid user bubbles: pale blue in Light, dark blue in Dark/System dark, with contrasting black/white text. Activity/tool disclosures remain distinct. Copy uses a 16px Carbon icon without a fill or border, outside user bubbles, with glyph highlighting on keyboard focus and a 24px hit target. Keep a single resizable file panel after the conversation, opening at 20% of Chat width with a 120px panel minimum and 300px conversation minimum, stacking below Chat at 1200px and below. In the stacked layout, size the conversation for its visible notices, approvals and complete composer, with a 300px conversation minimum and a 120px independently scrolling transcript minimum. Enclose it in an opaque card with no border, the shared narrow shadow, 10px corners and a 12px gap from the conversation/breadcrumb column. The gap moves above the panel when stacked and collapses to zero when closed. Include the gap in both CSS and pointer/keyboard resize bounds to preserve the 300px conversation minimum. Give the tab-header row the same solid `--card-header-fill` as sidebar cards, using Canvas in forced colors. Keep the resize grip transparent so it does not mask that row. Keep content and Monaco on the main app surface, and a Carbon drawer toggle inside the tab header. Close to zero width with no divider or rail, and zero height on narrow layouts. Show the reopening icon at the chat area's top right when closed, reserving header space so actions do not overlap it. Keep hidden contents inert; preserve toggle focus, tabs, preview state and expanded width. Animate expansion/closing with reduced-motion support. Keep the resize grip borderless at rest, with visible keyboard focus.
 - Conversation rows show numeric unread and approval counts, not visible activity, completion or error labels. Keep status in accessible descriptions and tooltips. Keep counts in a separate reserved column; ellipsize names before they overlap those indicators. Count each turn once at its first nonempty agent text. Opening Chat marks all present replies read regardless of scroll; open-chat streams stay read. Persist only database/run-scoped read markers in session storage, never message content; use pushed events without polling or new IPC.
 
 `src/renderer` is the React interface, built by Vite into `dist/renderer`.
@@ -271,18 +342,19 @@
   selected views. Summary revisions never advance detail-data fences. Selected
   Relay workers subscribe to their own target, never the selected project.
 - Show status as text, not only as color. Keep controls labelled, keyboard reachable, and their shortcuts visible.
-- Support Light, Dark, and System appearance, and the opt-in Signal colors (`data-signals`), with the CSS variables in `style.css`. Light uses white surfaces separated by hairline borders, with blue actions (`#5b9fe6`) and pale blue hover fills; selection uses neutral gray; saved Paper selections migrate to Light. Dark and System dark use charcoal (`#252525`) wherever Light uses white for neutral resting surfaces, with raised gray (`#303030`) button groups, neutral gray (`#3c3c3c`) selected fills, white text, `#b1b1b1` muted text, `#484848` subtle borders and `#8c8c8c` control borders. Reserve muted dark blue (`#253347`) for table/dialog header bands and `#1b2d4a` for hover highlights. Use lighter blue actions (`#77b7f5`), related focus and hover colors, and opt-in signals; human bubbles use dark blue (`#1b3a5c`) with white text, or pale blue (`#d8e8fa`) with black text in Light; separate fields and controls with fine borders and keep disabled stripes transparent. The Code60 wordmark’s colored 60 block has a small upper-right, 45-degree chamfer. Chat composers have 5px corners, no border or outer shadow, and a subtle background change on focus. The left sidebar matches the main app surface, white in Light and charcoal (#252525) in Dark/System dark. Composers use light gray (#f3f3f3) in Light and dark gray (#303030) in Dark/System dark; focused composers use #e9e9e9 and #383838 respectively, without geometry changes. Forced colors use Canvas and system-colored composer outlines. The right file panel and previews retain the main app surface. Buttons outside the left sidebar use `--button-radius: 5px`; sidebar buttons and selected row backgrounds are square; the chat surface and composer use `--chat-radius: 5px`. Modal dialogs use `--dialog-radius: 5px` and human message bubbles use `--chat-radius: 5px`. Keep `--ui-radius` at 0 for toasts, checkboxes, menus and segmented radio choices. Cards use `--card-radius: 5px`; editable text/number/date inputs, textareas and composite prompt fields use `--input-radius: 5px`. Selects, checkboxes, switches and range controls keep their existing geometry. Radio buttons and their selected dots, plus small status/attention dots, remain the only true circles; retain the existing full-window splash and native window frame geometry.
+- Support Light, Dark, and System appearance, and the opt-in Signal colors (`data-signals`), with the CSS variables in `style.css`. Light uses white surfaces separated by hairline borders, with blue actions (`#5b9fe6`) and pale blue hover fills; selection uses neutral gray; saved Paper selections migrate to Light. Dark and System dark use charcoal (`#252525`) wherever Light uses white for neutral resting surfaces, with raised gray (`#303030`) button groups, neutral gray (`#3c3c3c`) selected fills, white text, `#b1b1b1` muted text, `#484848` subtle borders and `#8c8c8c` control borders. Reserve muted dark blue (`#253347`) for table/dialog header bands and `#1b2d4a` for hover highlights. Use lighter blue actions (`#77b7f5`), related focus and hover colors, and opt-in signals; human bubbles use dark blue (`#1b3a5c`) with white text, or pale blue (`#d8e8fa`) with black text in Light; separate fields and controls with fine borders and keep disabled stripes transparent. The Code60 wordmark’s colored 60 block has a small upper-right, 45-degree chamfer. Chat composers have 10px corners, no border or outer shadow, and a subtle background change on focus. The sidebar background shares the diagonal blue workspace gradient; foreground cards use white in Light and charcoal (#252525) in Dark/System dark. Composers use light gray (#f3f3f3) in Light and dark gray (#303030) in Dark/System dark; focused composers use #e9e9e9 and #383838 respectively, without geometry changes. Forced colors use Canvas and system-colored composer outlines. The right file panel and previews retain the main app surface. Buttons outside the left sidebar use `--button-radius: 5px`; sidebar buttons and selected row backgrounds use 5px corners, with 5px top corners on the first visible card row and 5px bottom corners on the last; the chat surface uses `--chat-radius: 5px` and composers use `--composer-radius: 10px`. Modal dialogs use `--dialog-radius: 5px` and human message bubbles use `--user-bubble-radius: 5px`. Keep `--ui-radius` at 0 for toasts, checkboxes, menus and segmented radio choices. Settings cards and groups use `--settings-card-radius: 10px`; other cards use `--card-radius: 5px`; editable text/number/date inputs, textareas and composite prompt fields use `--input-radius: 5px`. Selects, checkboxes and range controls keep their existing geometry. Toggle switches app-wide use pill-shaped tracks and circular thumbs; retain their dimensions, ON/OFF text, focus and forced-color styling. Radio buttons, their selected dots, toggle thumbs and small status/attention dots remain circles; retain the existing full-window splash and native window frame geometry.
 - Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline even when Focus highlight border is enabled. Preserve hit targets, accessible labels, disabled semantics and visible keyboard focus. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
-- Use the 16px Carbon icons from `icons.tsx` (`Icon` in the DOM, `drawIcon` on canvas), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, 1em conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
-- Apply the seven text roles (table headings, buttons, agent messages, human messages, page titles, card titles, and normal text) through their CSS properties and the canvas table theme. All seven roles default to Light (300). Page titles use IBM Plex Serif at 16px. Other roles, including card titles and table headings, use IBM Plex Sans; card titles use 22px and independent settings, never page-title settings. All roles preserve sentence case by default. Offer Light (300) and bundle its normal and italic IBM Plex faces locally. Text sizes accept 8–64px. Left navigation labels default to 15px; other buttons retain their 13px default. An explicit Button Text size controls both, including an explicit 13px choice; resetting it restores the separate defaults. Preserve saved role choices and existing migration markers when changing defaults, without another appearance reset. Avoid hard-coded bold or selected-state weight changes. Keep code and diffs monospace and case-preserving. The shared Code60 wordmark uses D-DIN Regular independently of text-role choices; preserve its blue chamfered 60 block and the D-DIN splash subtitle. Bundle fonts locally and retain their licenses; keep `font-src 'self'`.
+- Use the 16px Carbon icons from `icons.tsx` (`Icon` in the DOM, `drawIcon` on canvas), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, animated conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
+- Apply the seven text roles (table headings, buttons, agent messages, human messages, page titles, card titles, and normal text) through their CSS properties and the canvas table theme. Page titles default to IBM Plex Sans Medium (500) at 16px; the other six roles default to Light (300). Other roles, including card titles and table headings, use IBM Plex Sans; card titles use 22px and independent settings, never page-title settings. All roles preserve sentence case by default. Offer Light (300) and bundle its normal and italic IBM Plex faces locally. Text sizes accept 8–64px. Left navigation labels default to 15px; other buttons retain their 13px default. An explicit Button Text size controls both, including an explicit 13px choice; resetting it restores the separate defaults. Preserve saved role choices and existing migration markers when changing defaults, without another appearance reset. Avoid hard-coded bold or selected-state weight changes. Keep code and diffs monospace and case-preserving. The shared Code60 wordmark uses D-DIN Regular independently of text-role choices; preserve its blue chamfered 60 block and the D-DIN splash subtitle. Bundle fonts locally and retain their licenses; keep `font-src 'self'`.
 - Get external data from snapshots and request reads with `poll`; do not start timers that fetch data. Use `useTicker` from `ticker.ts` for clock-only redraws, inside the smallest component that needs it, and report visibility with `setVisibility`.
 - Keep Glide Data Grid imports in the renderer. Import its bundled CSS and pass theme colors resolved from the app's CSS variables, since the grid draws on a canvas; do not inject styles or weaken the Content Security Policy. Preserve row selection by session ID across sorting and data updates, and support clicking a row or pressing Enter on a cell to open its chat. The Actions cell opens its session's actions menu instead; keep that menu keyboard reachable.
 - Build tables with `DataTable` from `data-table.tsx`, so every table shares Glide's search, header-menu filters, add row, and per-table settings. Save table preferences by stable column ID through `useTableView`; keep ad hoc column filters in memory. Named definitions and one active selection persist by table and database/project with `saved-filters.ts`; incompatible definitions must remain visible and unapplied. Use explicit column filter types so empty tables do not change their meaning.
 
-- Precision theme: use 5px button and chat/composer corners through their dedicated tokens, except square left-sidebar navigation. Keep checkboxes, popup menus and segmented radio choices square through `--ui-radius: 0`, while modal dialogs use `--dialog-radius: 5px`, without a trailing-edge border effect. Radio inputs and their selected dots stay circular; preserve the Carbon checkbox mark. Define surfaces with hairline borders rather than soft shadows: `--group-shadow` and `--composer-shadow` are none, and only overlays keep one tight shadow. The selected sidebar row adds a 2px inset accent bar on its left edge. Body text uses tabular numerals; timestamps, counts, versions and fact labels use the compact monospace `--meta-font`. Card titles use the independent Card Titles role. Keep spacing on the 4px scale. Use the 5px card radius for navigation cards, settings cards and field groups, approval cards, agent choices and result cards, without clipping focus indicators. Main page surfaces have no outer border. Hover changes the fill without introducing a border. Text fields and composite prompt editors use the 5px input radius. Selects, scrollbar thumbs and other passive page surfaces stay square; the Code60 wordmark retains its branded upper-right chamfer. Standard button groups use 28px controls (30px overall), with 24px controls for compact groups. Give page headers a small bottom margin. Table headers put the page title and any store-wide selectors on the left and the icon toolbar on the right, wrapping on narrow screens. When the toolbar overflows horizontally, scroll it in a separate container so the scrollbar sits below it. Button groups have no overlap or cutouts; give them a fine outer border, no shadow, and white fills in Light and raised charcoal fills in Dark. Use the standard Carbon checkmark. Keyboard focus uses a subtle shadow by default and a system outline in forced colors. The Focus highlight border preference defaults off and adds an outline and stronger halo where supported. Independent icon actions use glyph highlighting and Chat composers use their focus background. Preserve validation baselines, filled resting controls and restrained overlay shadows.
+- Precision theme: use dedicated tokens for 5px button/chat-surface corners, 10px composer corners and 5px human-bubble corners, with 5px left-sidebar rows and 5px outer corners on each card’s first/last visible rows. Keep checkboxes, popup menus and segmented radio choices square through `--ui-radius: 0`, while modal dialogs use `--dialog-radius: 5px`, without a trailing-edge border effect. Radio inputs and their selected dots stay circular; preserve the Carbon checkbox mark. Cards use the shared narrow shadow without borders. Control groups retain fine borders; `--group-shadow` and `--composer-shadow` are none. The selected sidebar row uses a neutral fill without an accent edge. Body text uses tabular numerals; timestamps, counts, versions and fact labels use the compact monospace `--meta-font`. Card titles use the independent Card Titles role. Keep spacing on the 4px scale. Use the 5px card radius for settings cards and field groups, approval cards, agent choices and result cards, without clipping focus indicators. Navigation cards locally override the card radius to 10px, with matching inner artwork corners. Main page surfaces have no outer border. Hover changes the fill without introducing a border. Text fields and composite prompt editors use the 5px input radius. Selects, scrollbar thumbs and other passive page surfaces stay square; the Code60 wordmark retains its branded upper-right chamfer. Standard button groups use 28px controls (30px overall), with 24px controls for compact groups. Give page headers a small bottom margin. Table headers put the page title and any store-wide selectors on the left and the icon toolbar on the right, wrapping on narrow screens. When the toolbar overflows horizontally, scroll it in a separate container so the scrollbar sits below it. Button groups have no overlap or cutouts; give them a fine outer border, no shadow, and white fills in Light and raised charcoal fills in Dark. Use the standard Carbon checkmark. Keyboard focus uses a subtle shadow by default and a system outline in forced colors. The Focus highlight border preference defaults off and adds an outline and stronger halo where supported. Independent icon actions use glyph highlighting and Chat composers use their focus background. Preserve validation baselines, filled resting controls and restrained overlay shadows.
 - Table Settings opens a native modal with draft controls and a four-row fictional Glide preview. Reuse shared canvas styling and width calculations. Apply commits once; Cancel, Escape and close discard drafts. Reset is draft-only and removes the saved override when applied without further edits. Keep at least one data column visible, including when chart columns are turned off. Restore trigger focus, keep the header/footer visible, use two-column display toggles without row dividers, and discard drafts on workspace replacement. Put column visibility toggles in a closed-by-default dropdown above the orange dotted preview frame; Escape dismisses that dropdown before the modal. Scrollbars should remain subtle in both themes, with stronger hover contrast and system colors in forced-color mode.
 
-- Default canvas gridlines off; preserve per-table line settings. Use white headers and rows in Light, muted blue `#253347` headers over charcoal `#252525` rows in Dark, and resolved CSS colors in Glide. Preserve explicit labels when colors change or forced colors apply.
+- All Settings pages use 10px card corners through `--settings-card-radius`, including shared cards and fieldset groups. Table defaults uses a 5px High/Medium/Low selector, with 4px inner end corners to follow its 1px border. Keep other segmented groups unchanged and preserve focus outlines.
+- Default all tables to Low density (44px rows), with row, column and heading lines off; preserve saved global and per-table settings. Use white headers and rows in Light, muted blue `#253347` headers over charcoal `#252525` rows in Dark, and resolved CSS colors in Glide. Preserve explicit labels when colors change or forced colors apply.
 - Search and Messages use `useTranscripts` and its project-scoped cache. Bound concurrent history reads, deduplicate requests, expose partial failures/retry and discard stale project responses. Search may request the dedicated evidence-only summary helper through its validated bridge; do not expose generic agent execution or telemetry capabilities.
 
 - Use one application footer across the full window bottom without a top border, with a 20px default content height and 4px bottom padding, lifting all compact vertically centered controls above the window edge. Vertically center the last-seen icon/text at its left; only activating it opens a modal with Pause/Start and Refresh polling controls. Keep updates and an actionable pending-approval count in the footer, with the full runtime version at its bottom right. Give polling controls centered equal-width buttons and a 200px minimum dialog height bounded by the viewport. Give last-seen and harness-mode triggers 12px horizontal padding. Keep page panels free of internal footer space and treat the footer as opaque during transparent-window hit testing.
@@ -291,17 +363,17 @@
 - Match the resting Last Message, return and database glyphs to the footer text.
   Independent actions retain shared glyph highlighting and disabled semantics.
 
-- Enclose repository identity and page navigation in one square-edged sidebar without borders or divider overlays, with full-width rows and wider in-row label indents. Align its top and bottom with the desktop right file panel, leaving the shared 12px bottom inset above the footer. Keep the native-control drag strip separate, without extending the sidebar fill into it. Place a labelled icon toggle in the native-control row, outside the sidebar; preserve the workspace header and center its breadcrumbs across the window when closed, restoring content alignment when open. Remember open/closed state locally; collapse its track to zero and make the mounted navigation inert and hidden, without disposing drafts, selection, scroll, disclosures or saved width. Keep the toggle and footer actions reachable when closed. Do not add hover expansion. Provide a borderless right-edge resize handle with visible keyboard focus and Left/Right adjustment. Default to 220px, constrain to 180–480px while reserving content space, and remember the width locally. Preserve navigation, conversations, drafts and disclosure state when resizing. Keep matching 12px workspace insets. Resting labeled controls match the sidebar fill. Enabled hover uses blue. Mark the selected page with a contrasting fill and accessible selection state, without an underline or bottom border. Preserve system selection outlines in forced colors. The tab list scrolls within the available height and uses the full sidebar width. Its filled interior, including gaps between buttons, stays opaque to transparent-window hit testing.
+- Enclose repository identity and page navigation in one square-edged sidebar without borders or divider overlays, with rows filling the navigation area inside a 12px right gutter and wider in-row label indents. Align its top and bottom with the desktop right file panel, leaving the shared 12px bottom inset above the footer. Keep the native-control drag strip separate, without extending the sidebar fill into it. Place a labelled icon toggle in the native-control row, outside the sidebar; preserve the workspace header and center its breadcrumbs across the window when closed, restoring content alignment when open. Remember open/closed state locally; collapse its track to zero and make the mounted navigation inert and hidden, without disposing drafts, selection, scroll, disclosures or saved width. Keep the toggle and footer actions reachable when closed. Do not add hover expansion. Provide a borderless right-edge resize handle with visible keyboard focus and Left/Right adjustment. Default to 220px, constrain to 180–480px while reserving content space, and remember the width locally. Preserve navigation, conversations, drafts and disclosure state when resizing. Keep matching 12px workspace insets. Resting labeled controls match the sidebar fill. Enabled hover uses blue. Mark the selected page with a contrasting fill and accessible selection state, without an underline or bottom border. Preserve system selection outlines in forced colors. The tab list scrolls within the available height and uses the full sidebar width. Its full left background region, including gaps between buttons, remains interactive in transparent windows even at zero background opacity.
 
-- Give project orchestrator conversations a Phosphor chat-circle icon and workers an arrow-elbow-down-right icon. The top-level Relay item uses its own icon. Use local Phosphor duotone icons for pages and navigation groups and a Carbon folder for each project accordion, sized to match the navigation label text. Clicking the project name or row background toggles its accordion. Opening from the row selects the project, and closing keeps the current conversation. Preserve the official paths and 20% secondary layer from @phosphor-icons/core 2.1.1, its MIT license/provenance, and the CSP without adding a dependency or runtime fetch. Let decorative icons inherit the label color, including hover, selection and forced colors. Keep these SVGs non-focusable, with an 8px label gap and at least 12px of leading space. Expand the gutter and 40px minimum rows as needed for larger text, retaining hierarchy alignment and avoiding clipping. Center the project selector with equal horizontal padding. Size Carbon chevrons and action glyphs to match navigation text. Do not show sidebar accordion chevrons or empty toggle buttons. Use labels for page-group and project disclosures, including Settings; retain aria-expanded, arrow-key controls and motion. Use a separate agent-icon toggle for owned workers so collapsing them preserves the open conversation. More uses the horizontal overflow icon, with labelled `icon-button` controls for independent actions. New chat uses a separate labelled Carbon plus action. Stack sidebar rows without gaps, preserving labels, keyboard order, selection, disclosure semantics, unread counts, errors and approvals. The application footer database icon remains separate.
+- Use the labour-day animation for project orchestrator conversations and the drone animation for workers. The top-level Relay item uses its own icon. Use local Phosphor duotone icons for pages and navigation groups and the folder animation for each project accordion. Clicking the project name or row background toggles its accordion. Opening from the row selects the project, and closing keeps the current conversation. Preserve the official paths and 20% secondary layer from @phosphor-icons/core 2.1.1, its MIT license/provenance, and the CSP without adding a dependency or runtime fetch. Let decorative icons inherit the label color, including hover, selection and forced colors. Keep these SVGs non-focusable, with an 8px label gap and at least 12px of leading space. Expand the gutter and shared 40px rows together only for larger saved text, retaining hierarchy alignment and avoiding clipping; clicking never resizes a row. Center the project selector with equal horizontal padding. Size Carbon chevrons and action glyphs to match navigation text. Do not show sidebar accordion chevrons or empty toggle buttons. Use labels for page-group and project disclosures, including Settings; retain aria-expanded, arrow-key controls and motion. Use a separate agent-icon toggle for owned workers so collapsing them preserves the open conversation. More uses the horizontal overflow icon, with labelled `icon-button` controls for independent actions. New chat uses a separate labelled Carbon plus action. Stack sidebar rows without gaps, preserving labels, keyboard order, selection, disclosure semantics, unread counts, errors and approvals. The application footer database icon remains separate.
 
 - Settings exposes the shared agent setup wizard through Add agents and Change primary, plus the fixed allow-all switch. Present bundled logos and alphabetical Antigravity, Claude, Codex, Copilot, Droid, Kiro and OpenCode choices as agent cards that immediately start detection and connection on click or Enter/Space, never radio inputs or a separate Continue step. Use compact wizard typography (16px headings, 13px body and controls), independent of larger page-title settings. Keep arrow/Home/End focus navigation and Enter/Space selection. Select primary first, detect, connect and save automatically through the existing finish action, without further confirmation or review steps. Keep the result open with Close and optional Add another agent; failures offer Close and Retry, including save retry without another probe. Each addition starts a new add transaction so dismissal cannot undo earlier successes. Show only Detected and Connected as agent statuses; use separate progress and error messages with retry/cancel controls. Preserve native keyboard navigation, live progress announcements, shared text-role and theme tokens, and reduced-motion support. Persist no verification in renderer storage.
 
-- Require completed main-process setup before splash entry, including renderer reloads and existing installations. Dismissing unverified setup leaves entry blocked. Render the recoverable main-process session and commit automatically through finishAgentSetup after successful verification. Membership is configured, not a permanently live connection. Share the application's saved Light, Dark or System appearance with the splash. Keep an upper-right Light/Dark button group that selects and saves the application theme, reflects System appearance changes until an explicit selection, and stays non-draggable above the content, painted after the drag strip. Use solid white surfaces with black lettering in Light. Dark/System dark use a solid dark surface with white lettering. Do not add a background selector or read/write the legacy `code60.splashBackground` key. Use locally bundled D-DIN Regular (400) for the shared wordmark, preserving its transparent backing and theme-blue chamfered 60 block. Horizontally center the wordmark and the exact subtitle "v0.2 Paddock (Beta)" as one group, lifted up to 48px above the logo area's center, with the subtitle below in regular 18px D-DIN and its exact case preserved. Reduce that lift on short panels instead of overlapping the database notice or other controls. Use the subtitle as the dialog description and reveal both together only when ready. Keep sidebar text and path labels fully opaque, with transparent resting control fills. After setup, show a single Start button centered beneath the wordmark and subtitle. Do not show project selection on the splash; projects are opened through the Projects plus action after entry. Start and Escape enter without opening or switching a project. Focus Start when configured with a database, otherwise retain the database connection focus. Preserve setup/database gates, errors, theme controls and scrolling on short windows. Only the top strip is draggable. Forced colors use system colors for the wordmark and keyboard focus.
+- Require completed main-process setup before splash entry, including renderer reloads and existing installations. Dismissing unverified setup leaves entry blocked. Render the recoverable main-process session and commit automatically through finishAgentSetup after successful verification. Membership is configured, not a permanently live connection. Share the application's saved Light, Dark or System appearance with the splash. Keep an upper-right Light/Dark button group that selects and saves the application theme, reflects System appearance changes until an explicit selection, and stays non-draggable above the content, painted after the drag strip. Use solid white surfaces with black lettering in Light. Dark/System dark use a solid dark surface with white lettering. Do not add a background selector or read/write the legacy `code60.splashBackground` key. Use locally bundled D-DIN Regular (400) for the shared wordmark, preserving its transparent backing and theme-blue chamfered 60 block. Horizontally center the wordmark and the exact subtitle "v0.2 Paddock (Beta)" as one group, lifted up to 48px above the logo area's center, with the subtitle below in regular 18px D-DIN and its exact case preserved. Reduce that lift on short panels instead of overlapping the database notice or other controls. Use the subtitle as the dialog description and reveal both together only when ready. Keep sidebar text and path labels fully opaque, with transparent resting control fills. After setup, show a single Start button centered beneath the wordmark and subtitle. Do not show project selection on the splash; projects are opened through the Projects → Add Project action after entry. Start and Escape enter without opening or switching a project. Focus Start when configured with a database, otherwise retain the database connection focus. Preserve setup/database gates, errors, theme controls and scrolling on short windows. Only the top strip is draggable. Forced colors use system colors for the wordmark and keyboard focus.
 
 - On the splash, disable Start only for in-flight operations, not active runs. Returning to the workspace preserves projects, chats, drafts and active work.
 
-- Put an icon-only, labelled Carbon plus action beside Chat, as a separate button, never nested in the tab. Keep it reachable when the Chat group is collapsed. Creation reveals the group. Nest only labelled conversations beneath Chat. Use 4px vertical navigation padding and 40px minimum rows, growing to fit proportional icons and larger text. Share in-flight guards and visible errors between creation and conversation selection. Remember expansion; reveal externally selected conversations. Collapse never changes the conversation. Preserve independent drafts, transcripts and scroll positions; unread and approval counts remain visible on background conversations, with status/errors in accessible descriptions and the conversation itself. No secondary sidebar or standalone Files page.
+- Put “+ Add Project” first inside the expanded Projects list, above project entries. Keep it separate from the heading tab, with normal row sizing and keyboard navigation. Collapse hides the action with its siblings. Nest labelled conversations beneath their projects. Use 2px vertical navigation padding and shared fixed 40px rows, growing together only for larger saved navigation text. Share in-flight guards and visible errors between creation and conversation selection. Remember expansion; reveal externally selected conversations. Collapse never changes the conversation. Preserve independent drafts, transcripts and scroll positions; unread and approval counts remain visible on background conversations, with status/errors in accessible descriptions and the conversation itself. No secondary sidebar or standalone Files page.
 
 - Present orchestration Chat as a conversation: right-aligned user messages, borderless assistant replies without repeated speaker labels, inline activity dropdowns for thoughts/tools/permissions, toggled by the live animation/status or completed turn timing, and a persistent composer. Show “Give Code60 a task.” in the empty conversation view. Keep session metadata inside the shared composer footer: mode at left, then context donut/model/harness logo/Send or Stop at right. Use N/A for unavailable metadata, shared keyboard-accessible tooltips, and a custom mode menu preserving advertised option groups and idle-only changes. Keep Code60 approval policy in the mode tooltip. Keep orchestrator progress visible with an activity row below the latest transcript message, with the animation on the left and a Normal Text-weight state name on the right, with a local current-activity timer after its ellipsis. Hide idle activity entirely; keep the name left-aligned within a fixed-width area, and fade ordinary activity changes while respecting reduced motion. Expand/collapse the activity row when opening/closing. Follow transcript size changes only while the user is already following the bottom. Present waiting_for_workers as Monitoring subagents with the radar artwork. Align status text with agent reply text and keep artwork in a reserved left gutter. Activity dropdowns smoothly expand/collapse with reduced-motion support and expand fully with no nested scrolling; preserve per-turn expansion and reading position, and support keyboard toggle/Escape. Composer and sidebar entries have no striped loader; replace Send with Stop during a turn. Errors stay outside collapsed activity.
 
@@ -332,7 +404,7 @@
 
 - Files uses borderless page and inspector surfaces with `--chat-neutral` fill, neutral selection and blue hover. A plus immediately after the last tab creates blank tabs with a single centered, compact, left-aligned list of blank-tab choices, including Open Files and any Open Changes/saved-plan actions. Open Files replaces the blank with Explorer; multiple Explorers are allowed and share expansions and hidden-file preferences. Deduplicate file tabs by relative path. Every tab is closable and draggable; support arrow/Home/End selection, Delete close and Alt+Left/Right reorder, restoring focus after close/reorder. Closing the last tab returns to the empty panel. Keep file names and code case-preserving; resolve Monaco preview colors from the app theme tokens, including System appearance.
 
-- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. The Projects heading’s independent plus action is labelled Connect to database before connection and Open Project afterward, opening the corresponding modal. The Open Project modal has no header bottom border, centers Open Folder below the list, and uses a labelled Carbon close icon at the upper-right of each project row for history-only removal. Keep open/remove buttons independent, with one row hover fill and no separately filled Remove region. Do not show a standalone Open Project header. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
+- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. The first item in the expanded Projects list is “+ Add Project”, opening the database connection flow before connection and the existing project picker afterward. The Projects heading has no separate plus action. The Open Project modal has no header bottom border, centers Open Folder below the list, and uses a labelled Carbon close icon at the upper-right of each project row for history-only removal. Keep open/remove buttons independent, with one row hover fill and no separately filled Remove region. Do not show a standalone Open Project header. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
 
 - Chat File Explorer always opens the current project root. Route legacy Files, palette and Browse project files through Chat to an existing or newly created Explorer tab; Search file sources open or select file tabs directly. Never select a worktree/private orchestration root; offer Open project when absent. Clear stale selections on project changes and discard stale reads. Put Show hidden files only in the native modal opened by the settings icon beside the Explorer title; changes apply immediately, Escape/Done closes and restores trigger focus, and workspace/page/tab changes and hiding the panel dismiss it. Do not show a Reveal in Files preview button.
 - Show current-project worker sessions, including history, in the normal Chat hierarchy. Nest only known owned workers beneath their controlling orchestrator; unknown/manual sessions stay directly beneath Chat, except finished ones, which are hidden unless a current orchestrator owns them or the user opened them. Name workers, in rows and their chat heading, by the role label the orchestrator assigned at dispatch, falling back to provider / short run ID. Keep sidebar names as text beside their decorative icons, with role and status in accessible descriptions and tooltips, plus independent unread/approval counts. Separate worker disclosures expand on new children without changing selection; otherwise retain manual collapse. External navigation reveals ancestors. Preserve visible-row keyboard navigation, drafts, scroll, permissions, recovery, Copy, timing and shared file panel. No popup, dock, fullscreen, close/minimize or reorder controls. Worker selection must not change backend orchestrator selection. Load history on demand through the shared cache, never merely to populate rows.
@@ -353,7 +425,7 @@
 
 - Worker headers place status as a subtitle beneath the agent name. Scale worker heading icons to 1em of the associated text; composer harness logos retain their dedicated size.
 
-- Sidebar navigation rows and the project header have square button corners and extend across the full sidebar width. Keep the tab list scrollable with the scrollbar hidden so the rows stay flush when content overflows. Apply hierarchy indentation inside labeled buttons instead, so nested page and conversation highlights remain full width. Use a 40px minimum base page inset that grows to fit larger icons, with 24px hierarchy steps; conversation labels retain their 4px alignment offset. Selected rows use the neutral selection fill without an underline or bottom border. When Chat is open, highlight the selected conversation rather than the parent Chat disclosure; clear conversation current state on other pages. Keep navigation rows, the project header and their adjacent row actions aligned at a 40px minimum height, expanding consistently for larger text. Settings and orchestrator action controls share their row's highlight. Keep a labelled Carbon database icon action in the application footer, on the same line as the Last Message indicator and aligned to the sidebar's right edge as it resizes. Immediately to its left, put a separate Carbon back-arrow icon action with the tooltip and label “return to splash page”. Returning preserves the database, open project, chats, drafts and active work. Keep that explicit return visible even with an open project and across renderer reload; Start/Escape re-enters the app. Do not block return merely because project runs are active. Use the compact footer height, outside the scrolling tab list; reuse the database modal and project selector's busy/active-project-run restrictions. The right file panel has no top, bottom or left container padding.
+- Sidebar navigation rows and the project header have 5px button and highlight corners, with 5px top corners on each card’s first visible row and 5px bottom corners on its last visible row and fill the navigation area inside a shared 12px right gutter. Keep the tab list scrollable with the scrollbar hidden so the gutter stays consistent when content overflows. Apply hierarchy indentation inside labeled buttons instead, so nested page and conversation highlights remain full width. Use a 40px minimum base page inset that grows to fit larger icons, with 24px hierarchy steps; conversation labels retain their 4px alignment offset. Selected rows use the neutral selection fill without an underline or bottom border. When Chat is open, highlight the selected conversation rather than the parent Chat disclosure; clear conversation current state on other pages. Keep every navigation row, project header and adjacent row action at one shared fixed height: 40px at the default text size, growing together only for larger saved text. Selection, press, disclosure and animation must never resize a row; keep actions on one line and ellipsize long labels. Settings and orchestrator action controls share their row's highlight. Keep a labelled Carbon database icon action in the application footer, on the same line as the Last Message indicator and aligned to the sidebar's right edge as it resizes. Immediately to its left, put a separate Carbon back-arrow icon action with the tooltip and label “return to splash page”. Returning preserves the database, open project, chats, drafts and active work. Keep that explicit return visible even with an open project and across renderer reload; Start/Escape re-enters the app. Do not block return merely because project runs are active. Use the compact footer height, outside the scrolling tab list; reuse the database modal and project selector's busy/active-project-run restrictions. The right file panel has no top, bottom or left container padding.
 
 - Chat bodies have no bottom padding beneath the composer, in both wide and narrow layouts.
 - Main Chat follows streamed growth with one retargetable scroll animation, cancelled
@@ -430,9 +502,9 @@
   through the shared success toast and select Relay. Archiving other chats leaves
   the current page and conversation unchanged; failures retain inline feedback.
 
-## Custom Agents
+## Custom Assistants
 
-The Custom Agents section of `ARCHITECTURE.md` extends the Relay-only rules above.
+The Custom Assistants section of `ARCHITECTURE.md` extends the Relay-only rules above.
 Reuse the Relay runtime for custom application-owned conversations. Route all
 requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
@@ -448,18 +520,127 @@ disclosures, theme behavior and transitions. Search loading artwork is unchanged
 ## Animated navigation artwork
 
 Use the supplied transparent Settings (options.gif), Search (search.gif), Apps (menu.gif),
-Custom Agents, Home, Relay (pet.gif) and Projects (project-initiation.gif) GIFs and first-frame PNGs in shared
+Assistants (speech-bubble.gif), Custom Assistants, Home, Relay (pet.gif) and Projects (project-initiation.gif) GIFs and first-frame PNGs in shared
 navigation icons. On navigation cards, play once per hover or keyboard focus;
 clicking a card does not restart playback. In the left sidebar and breadcrumb
 links, play once per click, including keyboard activation. Hover and focus alone
 never play sidebar animations; noninteractive page headings stay still.
 Preserve every frame and its timing, including the white foreground window in Projects.
-Custom Agents has its own icon identity; Settings → Agents keeps its static helmet.
+Custom Assistants and each nested assistant sidebar item share the enlarged robot
+artwork, including definitions without a conversation and connected conversations.
+Individual projects use folder.gif, project orchestrator chats use labour-day.gif,
+and subagents use drone.gif with matching first-frame PNGs. Preserve the folder
+star while removing its exterior white background; the gear opening is transparent.
+Keep the shared 40px row height and existing label indents; position project icons
+independently of their text/activity so the artwork cannot enlarge the row.
+Worker page headings retain their 1em role icon. Settings → Agents uses the supplied setting.gif artwork.
 Reduced motion and forced
 colors use the still frame. Reset when the document hides and clean up listeners
 on disposal. Keep the icon decorative and retain the containing control's name,
 focus behavior. Animated icons are twice the ordinary icon size: 2em in navigation
-and breadcrumbs, 72px on navigation cards. Relay, Search and Projects are 20%
-larger again: 2.4em and 86.4px respectively. Let rows and the workspace header grow
-to fit enlarged icons without clipping or overlapping content. This adds no new
+and breadcrumbs, 72px on navigation cards. Relay, Search, Projects and Custom Assistants are 20%
+larger again: 2.4em and 86.4px respectively. Apps sidebar descendants, including
+individual Data Viewer tables, use 2.5em icons (25% larger than their previous 2em).
+Reserve the matching label inset without changing row height or navigation-card/breadcrumb sizes. Use the shared fixed row height for
+all sidebar icons; let only the content header grow to fit enlarged artwork
+without shifting navigation or clipping content. This adds no new
 product capability.
+
+## Left sidebar background controls
+
+Settings → Appearance offers saved Background opacity (0–100%, default 100%) and
+Background blur strength (0–100%, default 0), plus Reset sidebar. Persist the bounded values
+in `code60.sidebarAppearance` without advancing migration markers, apply changes
+live and report storage failure beside the controls. Style only the background;
+text and icons stay sharp and fully visible. Cover the entire left region up to
+the resizable divider, including margins, title strip and footer, and track the
+existing width/collapse state. Keep this layer out of the splash, preserve native
+drag areas and keep the whole left region interactive even at zero opacity.
+Forced colors use an opaque system fill without blur. Explain in information tips
+that sidebar opacity applies immediately independently of the restart-only
+Transparent background setting for other margins. Keep body/app paint transparent
+behind the left region, and keep the splash and other content opaque. Explain that
+Native desktop blur is macOS-only and blends system-managed vibrancy, not a pixel radius. Report only bounded sidebar width, strength and visibility. Disable blur on Linux and hide its native backdrop for splash, collapsed navigation, opaque tint and forced colors. Do not expose these
+preferences as agent-write tools or add their values to awareness.
+
+## Neutral card presentation
+
+The workspace and full sidebar background use the static diagonal blue gradient
+described below. The fallback background and footer use `#f3f3f3` in Light and
+`#202020` in Dark/System dark. Card bodies retain their surface fill.
+Sidebar card headers, navigation artwork bands, breadcrumbs and right-panel
+headers use the same surface fill as their card bodies, without a tinted band.
+Sidebar, navigation, breadcrumb, right-panel and shared Settings cards have no
+outer border, including creation cards. Adjust sidebar and breadcrumb padding to
+preserve alignment; keep control borders and keyboard focus. Forced colors
+restore system card outlines and disable decorative shadows.
+Use the shared `--card-shadow` for sidebar, navigation, breadcrumb, right-panel
+and Settings cards: a tight 1px downward offset with 4px blur and a faint 1px
+edge shadow, strengthened for Dark. Keep these shadows narrow on hover and
+preserve keyboard focus indicators.
+
+Leave 11px between adjacent sidebar foreground cards (8px top plus 3px bottom
+margins), preserving the first card's 6px top margin and row spacing.
+
+The primary content area is a borderless surface card with 10px corners and
+the shared narrow card shadow. On Chat, frame `.chat-conversations` separately
+from the right-panel card, leaving their gap and header alignment intact. The
+outer Chat grid panel stays transparent without a second shadow. Other pages
+use their existing `.page-panel` as the card. Preserve mounted page state,
+scrolling, responsive inspector stacking and system high-contrast outlines.
+
+Main page panels have an additional 5px top margin below the workspace header,
+leaving 11px between the breadcrumb card and primary content card. Chat inspector
+top alignment continues to follow the measured breadcrumb position.
+
+Only the first visible sidebar row in each foreground card uses Medium (500),
+independent of selection. Descendant rows retain the Button Text weight. Preserve
+saved text-role overrides and migration markers when adopting page-title defaults.
+
+Paint the workspace background with a static 135-degree blue gradient, with
+pale blue stops in Light and deep blue stops in Dark/System dark. Keep card
+surfaces solid and the splash unchanged. Align the full-height sidebar gradient
+to the viewport and apply saved opacity to its background layer only; never
+paint an opaque gradient beneath the native sidebar transparency. Preserve the
+restart-only transparent-margin preference. Forced colors remove the gradient.
+
+Non-header sidebar rows show their leading navigation artwork at 75% opacity
+at rest, fading to 100% while that row is hovered and back on exit over the
+shared motion duration. Header icons stay full opacity; row labels, status and
+independent action icons keep their existing appearance. This opacity effect
+does not trigger GIF playback. Reduced motion removes its transition and forced
+colors keeps artwork fully opaque.
+
+Offer Scientifica as a locally bundled Text typeface (regular, bold and italic)
+with its upstream license and asset hashes. OCR-A is removed; stale saved OCR-A
+choices fall back through the existing validated role-default behavior without
+resetting other saved typography settings or migration markers.
+
+About, Advanced, Agents and Memory share the supplied info.gif, laptop.gif,
+setting.gif and books.gif navigation animations respectively, with transparent
+exteriors and preserved enclosed white details. Use their still posters at rest,
+click-only sidebar/breadcrumb playback and hover/focus-once navigation cards.
+
+Polling, Appearance and Text use the supplied heartbeat.gif, painting.gif and
+font-size.gif animations and transparent still posters through shared navigation
+artwork. Text uses colored artwork, replacing the former monochrome SVG mask.
+Keep click-only sidebar/breadcrumb playback and hover/focus-once card playback.
+
+Updates uses the supplied download animation with transparent exterior and a
+matching PNG poster, preserving original frames/timing and shared click-only
+sidebar/breadcrumb and hover/focus-once navigation-card playback.
+
+Breadcrumb cards scroll within 40% of the viewport height when large saved title
+sizes wrap, preserving usable content below the header.
+
+Transparent Linux windows use three renderer caption buttons in the native drag
+strip because Electron hides its native caption controls for translucent windows.
+A strict minimize/maximize/close enum targets only the owned main window. Close
+must call the normal guarded close path, never destroy the window or kill work.
+macOS retains native window controls. No arbitrary window IDs cross the bridge.
+
+Breadcrumb right-edge measurement also follows the stacked transcript scrollbar
+gutter, keeping its card aligned with the conversation at narrow widths.
+
+Keep breadcrumb and conversation right edges aligned in stacked layouts too,
+accounting for the transcript scrollport gutter without raising the inspector.

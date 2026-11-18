@@ -243,6 +243,7 @@ input[type="checkbox"][role="switch"] {
   width: 52px;
   height: 26px;
   min-height: 26px;
+  border-radius: 999px;
   background: var(--bg);
 }
 
@@ -256,7 +257,7 @@ input[type="checkbox"][role="switch"]:checked::before {
   height: 18px;
   mask: none;
   background: var(--control-border);
-  border-radius: var(--ui-radius);
+  border-radius: 50%;
   transition: transform var(--motion) var(--ease);
 }
 
@@ -609,7 +610,7 @@ input[type="checkbox"] {
 }
 
 [role="switch"] {
-  border-radius: var(--button-radius);
+  border-radius: 999px;
 }
 
 .icon-button {

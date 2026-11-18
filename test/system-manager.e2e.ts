@@ -54,7 +54,7 @@ test("desktop: System Manager service actions, pushed status and navigation race
     await page.evaluate(() => window.systemManagerFixture.publish({ activeExecutionId: "active" }));
     await expect(service).toContainText("A run is active");
     await page.getByRole("button", { name: "Pause all and cancel active work" }).click();
-    await expect(service).toHaveText("Installed, all automations paused");
+    await expect(service).toHaveText("Installed, all scheduled jobs paused");
     expect(await requests()).toContainEqual({ action: "pauseAll", cancelActive: true });
     await page.getByRole("button", { name: "Resume all", exact: true }).click();
     await expect(service).toHaveText("Installed and running");
@@ -133,7 +133,7 @@ test("desktop: System Manager service actions, pushed status and navigation race
     ).toBeDisabled();
     const pending = (await requests()).filter((request) => request.action === "pauseAll").length;
     await page.evaluate(() => window.systemManagerFixture.releaseAction());
-    await expect(service).toHaveText("Installed, all automations paused");
+    await expect(service).toHaveText("Installed, all scheduled jobs paused");
     await expect(page.getByRole("button", { name: "Resume all", exact: true })).toBeEnabled();
     expect((await requests()).filter((request) => request.action === "pauseAll")).toHaveLength(
       pending,

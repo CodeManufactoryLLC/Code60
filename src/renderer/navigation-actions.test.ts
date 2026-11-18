@@ -43,7 +43,7 @@ function deferred() {
 }
 
 describe("shared navigation actions", () => {
-  it("opens Custom Agents management without a database or conversation action", async () => {
+  it("opens Custom Assistants management without a database or conversation action", async () => {
     const { actions, context } = fixture();
     context.database = null;
     expect(await actions.open({ kind: "page", id: "custom-agents" })).toBe(true);
@@ -196,7 +196,7 @@ describe("shared navigation actions", () => {
   });
 });
 
-it("opens custom agents without a database and selects existing custom conversations", async () => {
+it("opens custom assistants without a database and selects existing custom conversations", async () => {
   const { actions, context } = fixture();
   context.database = null;
   context.api.customAgent = vi.fn(async () => ({ agents: [], conversationId: "custom-run" }));

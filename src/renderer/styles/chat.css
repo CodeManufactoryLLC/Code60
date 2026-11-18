@@ -324,7 +324,7 @@
   background: var(--user-bubble);
   color: var(--on-user-bubble);
 
-  border-radius: var(--chat-radius);
+  border-radius: var(--user-bubble-radius);
 }
 
 .event.toolCall {
@@ -377,7 +377,7 @@
   flex-shrink: 0;
   overflow: hidden;
 
-  border-radius: var(--chat-radius);
+  border-radius: var(--composer-radius);
 }
 
 .composer textarea {
@@ -1176,7 +1176,9 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 
 .chat-conversations {
   flex: 1;
-  border-radius: var(--chat-radius);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
   min-width: 300px;
   min-height: 0;
   overflow: hidden;

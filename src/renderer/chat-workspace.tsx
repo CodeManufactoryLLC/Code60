@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
 import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
@@ -7,6 +7,7 @@ import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
+import { observeBreadcrumbRightInset } from "./page-title-header.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
 import type { ReviewPreview } from "./review-actions.js";
@@ -46,6 +47,11 @@ export function ChatWorkspace({
   setError,
   navigation,
 }: ChatWorkspaceProps) {
+  const body = useRef<HTMLDivElement>(null);
+  const visible = !splash && tabs.active === "chat";
+  useLayoutEffect(() => {
+    if (visible && body.current) return observeBreadcrumbRightInset(body.current);
+  }, [visible]);
   const snapshot = state?.snapshot;
   const conversationActive =
     tabs.active === "chat" && !navigation.projectPending && !navigation.conversationPending;
@@ -127,6 +133,7 @@ export function ChatWorkspace({
     ) : null;
   return (
     <div
+      ref={body}
       className="chat-workspace-body"
       data-file-panel-open={
         projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined

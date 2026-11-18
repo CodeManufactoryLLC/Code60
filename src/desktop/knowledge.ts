@@ -215,9 +215,9 @@ export class DesktopKnowledge {
     let action: string | null = null;
     if (cap.id === "custom-agents") {
       reason =
-        "Agent management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";
+        "Assistant management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";
       action =
-        "Home → Custom Agents or the sidebar; New Agent; stop work before Edit; Archived → Restore.";
+        "Home → Custom Assistants or Sidebar → Assistants → Custom Assistants; New Assistant; stop work before Edit; Archived → Restore.";
     } else if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";

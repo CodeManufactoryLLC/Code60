@@ -1,0 +1,103 @@
+import type { EventEmitter } from "node:events";
+import { BaseWindow, type BrowserWindow } from "electron";
+import type { SidebarBackdropRequest } from "../bridge/index.js";
+
+/** A native, mouse-transparent backdrop behind the owned foreground window only. */
+export class SidebarBackdrop {
+  private backdrop: BaseWindow | undefined;
+  private request: SidebarBackdropRequest = { width: 0, strength: 0, visible: false };
+  private disposed = false;
+  private syncing = false;
+  private readonly events = [
+    "move",
+    "resize",
+    "show",
+    "hide",
+    "minimize",
+    "restore",
+    "focus",
+    "enter-full-screen",
+    "leave-full-screen",
+  ] as const;
+
+  constructor(private readonly owner: BrowserWindow) {
+    for (const event of this.events) (owner as EventEmitter).on(event, this.sync);
+    owner.on("closed", this.dispose);
+    owner.webContents.on("did-start-navigation", this.reset);
+    owner.webContents.on("render-process-gone", this.reset);
+  }
+
+  update(request: SidebarBackdropRequest) {
+    if (this.disposed) return;
+    this.request = request;
+    if (this.sync() === false) throw new Error("Native sidebar blur is unavailable.");
+  }
+
+  private readonly reset = () => {
+    this.request = { width: 0, strength: 0, visible: false };
+    this.backdrop?.hide();
+  };
+
+  private readonly sync = () => {
+    if (this.disposed || this.syncing || this.owner.isDestroyed()) return;
+    const { width, strength, visible } = this.request;
+    if (!visible || !strength || !width || !this.owner.isVisible() || this.owner.isMinimized()) {
+      this.backdrop?.hide();
+      return;
+    }
+    try {
+      this.syncing = true;
+      const bounds = this.owner.getContentBounds();
+      const zoom = this.owner.webContents.getZoomFactor();
+      const pixels = Math.max(0, Math.min(bounds.width, Math.round(width * zoom)));
+      if (!pixels) {
+        this.backdrop?.hide();
+        return;
+      }
+      if (!this.backdrop || this.backdrop.isDestroyed()) {
+        this.backdrop = new BaseWindow({
+          show: false,
+          frame: false,
+          transparent: true,
+          backgroundColor: "#00000000",
+          hasShadow: false,
+          focusable: false,
+          skipTaskbar: true,
+          resizable: false,
+          minimizable: false,
+          maximizable: false,
+          fullscreenable: false,
+          vibrancy: "sidebar",
+          visualEffectState: "active",
+        });
+        this.backdrop.contentView.setBackgroundColor("#00000000");
+        this.backdrop.setIgnoreMouseEvents(true);
+      }
+      this.backdrop.setBounds({ ...bounds, width: pixels });
+      this.backdrop.setOpacity(strength / 100);
+      if (!this.backdrop.isVisible()) this.backdrop.showInactive();
+      this.owner.moveAbove(this.backdrop.getMediaSourceId());
+    } catch {
+      this.closeBackdrop();
+      return false;
+    } finally {
+      this.syncing = false;
+    }
+  };
+
+  private closeBackdrop() {
+    const backdrop = this.backdrop;
+    this.backdrop = undefined;
+    if (backdrop && !backdrop.isDestroyed()) backdrop.close();
+  }
+
+  readonly dispose = () => {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const event of this.events) (this.owner as EventEmitter).removeListener(event, this.sync);
+    this.owner.removeListener("closed", this.dispose);
+    this.owner.webContents.removeListener("did-start-navigation", this.reset);
+    this.owner.webContents.removeListener("render-process-gone", this.reset);
+    this.closeBackdrop();
+  };
+}

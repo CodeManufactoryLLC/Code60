@@ -1,6 +1,32 @@
 /* Accessibility styles. Imported into its declared layer by style.css. */
 
 @media (forced-colors: active) {
+  .sidebar-navigation-card,
+  .sidebar-navigation-card::before,
+  .file-panel-toolbar {
+    background: Canvas;
+  }
+
+  .workspace-breadcrumbs {
+    background: Canvas;
+    border-color: CanvasText;
+  }
+
+  .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .app:has(.sidebar)::before {
+    display: none;
+  }
+
+  .sidebar-background {
+    opacity: 1;
+    background: Canvas;
+    backdrop-filter: none;
+  }
+
   :root {
     --focus-line: Highlight;
     --focus-outline: Highlight;
@@ -16,6 +42,8 @@
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .app,
   .sidebar,
+  .sidebar-card-toggle,
+  .sidebar-card-chevron,
   .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
     transition: none;
   }
@@ -352,5 +380,39 @@
   }
   .plan-toolbar progress::-moz-progress-bar {
     background: Highlight;
+  }
+}
+
+/* Preserve card boundaries in system high-contrast themes. */
+@media (forced-colors: active) {
+  .sidebar-navigation-card,
+  .workspace-breadcrumbs,
+  .page-panel:not(#panel-chat),
+  .chat-conversations,
+  .home-card,
+  .file-panel,
+  .settings-card,
+  .settings-group {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+    opacity: 1;
+  }
+}
+
+@media (forced-colors: active) {
+  .home-card:focus-visible {
+    outline: 2px solid Highlight;
   }
 }

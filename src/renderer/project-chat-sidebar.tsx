@@ -139,16 +139,6 @@ export function ProjectChatSidebar({
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`New chat in ${name}`}
-                title={`New chat in ${project.path}`}
-                disabled={props.pending}
-                onClick={() => void props.onAction?.({ type: "new", projectId: project.id })}
-              >
-                <Icon name="add" />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
                 aria-label={`More for ${project.path}`}
                 title={`More for ${project.path}`}
                 aria-haspopup="menu"
@@ -169,6 +159,31 @@ export function ProjectChatSidebar({
               inert={!open}
               aria-hidden={!open}
             >
+              <button
+                type="button"
+                className="project-session-new"
+                aria-label={`New Session in ${name}`}
+                title={`New Session in ${project.path}`}
+                disabled={props.pending}
+                onClick={() => void props.onAction?.({ type: "new", projectId: project.id })}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowUp" && event.key !== "ArrowLeft") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (event.key === "ArrowLeft")
+                    setExpanded((current) => {
+                      const next = new Set(current);
+                      next.delete(project.id);
+                      return next;
+                    });
+                  document.getElementById(`project-${project.id}`)?.focus();
+                }}
+              >
+                <span className="navigation-icon" aria-hidden="true">
+                  <Icon name="add" />
+                </span>
+                <span className="page-tab-label">New Session</span>
+              </button>
               <ChatSidebar
                 {...props}
                 ancestorsExpanded={ancestorsExpanded && open}

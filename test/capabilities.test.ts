@@ -16,6 +16,63 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes Low density and line-free table defaults without replacing saved choices", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      purpose: expect.stringContaining(
+        "Table defaults start at Low density (44px rows), with row, column and heading lines off",
+      ),
+    });
+  });
+  it("describes Scientifica in human-only text settings", () => {
+    const settings = DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings");
+    expect(settings?.purpose).toContain("locally bundled Scientifica");
+    expect(settings?.agentAccess).toBe("human-only");
+    expect(SETTINGS_CAPABILITIES.text).toBe("settings");
+  });
+  it("names Scheduled Jobs while preserving its stable identity and availability", () => {
+    expect(pages.find((page) => page.id === "automations")).toMatchObject({
+      label: "Scheduled Jobs",
+      database: false,
+    });
+    expect(
+      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
+    ).toMatchObject({
+      label: "Scheduled Jobs",
+      access: "Apps → Scheduled Jobs",
+      prerequisite: "none",
+      agentAccess: "human-only",
+      confirmation: "Human installation and schedule consent.",
+    });
+  });
+  it("uses the Custom Assistants name with the existing stable capability ID", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
+      "Sidebar → Assistants → Relay",
+    );
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")).toMatchObject({
+      label: "Custom Assistants",
+      access: expect.stringContaining("Sidebar → Assistants → Custom Assistants → New Assistant"),
+      prerequisite: "none",
+      agentAccess: "human-only",
+    });
+  });
+  it("describes human-only sidebar appearance controls and their transparency limits", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      purpose: expect.stringContaining("left sidebar background opacity"),
+      access: expect.stringContaining("Appearance → Left sidebar"),
+      limitations: expect.stringContaining("dedicated top-right chevron"),
+    });
+  });
+  it("keeps navigation disclosures human-only and independent from execution", () => {
+    const settings = DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings");
+    expect(settings).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
+    expect(settings?.limitations).toContain("Home/Search is also collapsible");
+    expect(settings?.limitations).toContain("Header navigation never toggles expansion");
+    expect(settings?.limitations).toContain("Native desktop blur is macOS-only");
+  });
   it("describes desktop-only distribution and retained scheduler controls", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "updates")?.purpose).toContain(
       "macOS arm64 and Linux x64",
@@ -81,10 +138,11 @@ describe("desktop capability catalog", () => {
     const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({
       prerequisite: "database",
-      access: expect.stringContaining("Projects → New Project; project home → New Chat"),
+      access: expect.stringContaining("each project list → New Session"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
       limitations: expect.stringContaining("never initializes Git"),
     });
+    expect(projects?.access).toContain("project home → New Session");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",

@@ -24,8 +24,14 @@
   --ui-radius: 0;
   --button-radius: 5px;
   --chat-radius: 5px;
+  --composer-radius: 10px;
+  --user-bubble-radius: 5px;
   --dialog-radius: 5px;
   --card-radius: 5px;
+  --settings-card-radius: 10px;
+  --card-header-fill: var(--surface);
+  --card-shadow: 0 1px 4px rgb(0 0 0 / 16%), 0 0 1px rgb(0 0 0 / 8%);
+  --sidebar-background-opacity: 100%;
   --input-radius: 5px;
   /* Metadata (timestamps, counts, versions) uses a compact monospace face. */
   --meta-font: var(--text-weight, 300) 11px / 16px var(--mono);
@@ -63,18 +69,19 @@
   --group-fill: #ffffff;
   --group-hover: var(--hover-bg);
   --group-border: color-mix(in srgb, var(--border) 75%, var(--muted));
-  /* Surfaces are defined by hairline borders; only overlays keep one tight shadow. */
+  /* Cards use fill contrast; controls retain fine borders and overlays a tight shadow. */
   --group-shadow: none;
   --composer-shadow: none;
   --surface-edge: var(--border);
   --field-fill: var(--surface);
   --surface-band: var(--surface);
-  --footer-bg: var(--surface);
+  --footer-bg: var(--bg);
   --scrollbar-thumb: color-mix(in srgb, var(--surface) 78%, var(--muted));
   --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
   --overlay-shadow: 0 2px 8px rgb(0 0 0 / 20%);
   color-scheme: light;
-  --bg: #ffffff;
+  --bg: #f3f3f3;
+  --workspace-background: linear-gradient(135deg, #dbeafe 0%, #eff5fc 55%, #d5e6fa 100%);
   --surface: #ffffff;
   --surface-hover: #ffffff;
   --row-alt: #ffffff;
@@ -119,12 +126,14 @@
   --control-hover: var(--hover-bg);
   --field-fill: var(--surface);
   --disabled-fill: var(--surface);
-  --footer-bg: var(--surface);
+  --footer-bg: var(--bg);
   --overlay-shadow: 0 2px 8px rgb(0 0 0 / 45%);
+  --card-shadow: 0 1px 4px rgb(0 0 0 / 35%), 0 0 1px rgb(0 0 0 / 15%);
   /* Charcoal surfaces; blue is reserved for header bands and interaction accents. */
   --surface-band: #253347;
   --group-fill: #303030;
-  --bg: #252525;
+  --bg: #202020;
+  --workspace-background: linear-gradient(135deg, #172b43 0%, #202833 55%, #153352 100%);
   --surface: #252525;
   --surface-hover: #252525;
   --row-alt: #252525;

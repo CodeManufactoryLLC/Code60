@@ -1,4 +1,11 @@
-import { createContext, type ReactNode, useContext, useRef } from "react";
+import {
+  cloneElement,
+  createContext,
+  isValidElement,
+  type ReactNode,
+  useContext,
+  useRef,
+} from "react";
 import { createPortal } from "react-dom";
 import { conversationId, conversationTitle } from "./chats.js";
 import { Icon } from "./icons.js";
@@ -57,19 +64,25 @@ export function PageTitle({
     page === "relay"
       ? "Relay"
       : page === "orchestrator"
-        ? "Chat"
+        ? "Agent"
         : page === "worker"
           ? "Subagent"
           : isSettingsSection(page)
             ? settingsLabels[page]
             : pageDefinitions[page].label;
+  const chatBreadcrumb = breadcrumbs && (page === "orchestrator" || page === "worker");
+  const title = chatBreadcrumb
+    ? isValidElement<{ children?: ReactNode }>(children)
+      ? cloneElement(children, undefined, label)
+      : label
+    : (children ?? label);
   const heading = (
     <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
       {icon && <NavigationIcon name={icon} />}
       <span
         className={page === "home" && breadcrumbs ? "page-title-text sr-only" : "page-title-text"}
       >
-        {children ?? label}
+        {title}
       </span>
     </Heading>
   );
@@ -121,8 +134,9 @@ export function PageTitle({
   const chat = target
     ? navigation?.chats.find((chat) => conversationId(chat) === target.id)
     : undefined;
-  const placeholderLabel =
-    typeof children === "string" || typeof children === "number"
+  const placeholderLabel = chatBreadcrumb
+    ? label
+    : typeof children === "string" || typeof children === "number"
       ? children
       : chat && navigation
         ? conversationTitle(navigation.chats, chat)

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { parseCustomAgentRequest } from "./custom-agents.js";
 
-it("bounds custom agent definitions and rejects authority-bearing fields", () => {
+it("bounds custom assistant definitions and rejects authority-bearing fields", () => {
   expect(
     parseCustomAgentRequest({ type: "create", name: " A ", instructions: " Keep spaces " }),
   ).toEqual({ type: "create", name: "A", instructions: " Keep spaces " });

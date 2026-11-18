@@ -25,7 +25,7 @@ const automationColumns = [
   filter: "text" | "date" | "category";
 }[];
 const historyColumns = [
-  { key: "automationName", title: "Automation", width: 160, filter: "text" },
+  { key: "automationName", title: "Scheduled job", width: 160, filter: "text" },
   { key: "status", title: "Turn outcome", width: 120, filter: "category" },
   { key: "reason", title: "Reason", width: 180, filter: "category" },
   { key: "scheduledFor", title: "Scheduled", width: 190, filter: "date" },
@@ -150,8 +150,8 @@ export function AutomationsPage({
           <button
             type="button"
             className="icon-button"
-            aria-label="Refresh automations"
-            title="Refresh automations"
+            aria-label="Refresh scheduled jobs"
+            title="Refresh scheduled jobs"
             disabled={busy}
             onClick={() => void refresh()}
           >
@@ -171,7 +171,7 @@ export function AutomationsPage({
             }
           >
             <Icon name="add" />
-            New automation
+            New scheduled job
           </button>
         </div>
       </header>
@@ -197,7 +197,10 @@ export function AutomationsPage({
         />
       </section>
       {chosen && (
-        <section className="automation-selection-actions" aria-label="Selected automation actions">
+        <section
+          className="automation-selection-actions"
+          aria-label="Selected scheduled job actions"
+        >
           <div className="automation-selection-label">
             <span>Selected schedule</span>
             <strong>{chosen.name}</strong>
@@ -438,7 +441,7 @@ function AutomationForm({
   };
   return (
     <Modal
-      title={editor.id ? "Edit automation" : "New automation"}
+      title={editor.id ? "Edit scheduled job" : "New scheduled job"}
       busy={busy}
       wide
       onClose={onClose}

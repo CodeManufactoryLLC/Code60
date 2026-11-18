@@ -31,12 +31,14 @@ import { useProjectWorkspace } from "./project-workspace.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { useScopedDetails } from "./scoped-details.js";
 import { createSessionCommands } from "./session-commands.js";
+import { useSidebarBackdrop } from "./sidebar-backdrop.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 import { Splash } from "./splash.js";
 import { useSplashEntry } from "./splash-entry.js";
 import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
 import { useUpdateNotice, useUpdates } from "./updates.js";
 import { useWindowAppearance } from "./window-appearance.js";
+import { WindowControls } from "./window-controls.js";
 
 export function App({ api: transport }: { api: DesktopApi }) {
   usePressFeedback();
@@ -77,6 +79,13 @@ export function App({ api: transport }: { api: DesktopApi }) {
   const { theme, setTheme } = preferences;
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const { splash, splashReady, enterApp, returnSplash } = useSplashEntry(snapshot);
+  useSidebarBackdrop(
+    transport,
+    preferences.sidebarAppearance,
+    appearance.sidebarBlurSupported,
+    splash,
+    setError,
+  );
   const returnToSplash = () => {
     returnSplash();
     setPicker(undefined);
@@ -278,6 +287,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
   });
   return (
     <div className="app">
+      {!splash && <div className="sidebar-background" aria-hidden="true" />}
       <Tooltips />
       <Toasts messages={notifications} onDismiss={dismissNotification} />
       <AppMenus
@@ -306,6 +316,15 @@ export function App({ api: transport }: { api: DesktopApi }) {
           onEnter={() => {
             if (!orchestratorConfigured) return;
             enterApp();
+          }}
+        />
+      )}
+      {appearance.customWindowControls && (
+        <WindowControls
+          onAction={(action) => {
+            void transport
+              .controlWindow(action)
+              .catch(() => setError("The window action could not be completed."));
           }}
         />
       )}
