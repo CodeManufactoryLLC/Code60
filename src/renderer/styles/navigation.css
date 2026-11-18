@@ -127,6 +127,20 @@
   gap: 8px;
 }
 
+.page-tab :is([role="tab"], .page-group-toggle):has(> .navigation-icon[data-animated]),
+.chat-sidebar-entry:has(> .navigation-icon[data-animated]) {
+  --nav-row-height: max(40px, calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px));
+  --nav-label-inset: calc(
+    max(var(--nav-inset), calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)) +
+    var(--nav-indent)
+  );
+}
+
+.page-tab :is([role="tab"], .page-group-toggle):has(> .navigation-icon[data-enlarged]),
+.chat-sidebar-entry:has(> .navigation-icon[data-enlarged]) {
+  --nav-animated-scale: 2.4;
+}
+
 /* Center the visible letterforms with the icons and clip only at the end of the label. */
 .page-tab-label,
 .chat-sidebar-label,
@@ -145,15 +159,24 @@
 }
 
 .navigation-icon {
+  --nav-icon-scale: 1;
   position: absolute;
-  left: calc(var(--nav-label-inset) - 1em - 8px);
+  left: calc(var(--nav-label-inset) - 1em * var(--nav-icon-scale) - 8px);
   top: 50%;
   transform: translateY(-50%);
-  width: 1em;
-  height: 1em;
+  width: calc(1em * var(--nav-icon-scale));
+  height: calc(1em * var(--nav-icon-scale));
   object-fit: contain;
   flex-shrink: 0;
   pointer-events: none;
+}
+
+.navigation-icon[data-animated] {
+  --nav-icon-scale: 2;
+}
+
+.navigation-icon[data-enlarged] {
+  --nav-icon-scale: 2.4;
 }
 
 .navigation-icon[data-icon="app-text-size"] {
@@ -191,9 +214,7 @@
 }
 
 .page-title-placeholder {
-  --title-size: var(--page-title-space-size, 64px);
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 
 .page-breadcrumbs ol {
@@ -677,7 +698,10 @@
   > .chat-sidebar-group
   > .chat-sidebar-row
   > .chat-sidebar-entry {
-  --nav-label-inset: var(--nav-inset);
+  --nav-label-inset: max(
+    var(--nav-inset),
+    calc(var(--nav-animated-scale, 2) * var(--button-size) + 8px)
+  );
 }
 
 .relay-sidebar .chat-worker-children {

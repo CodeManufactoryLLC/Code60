@@ -68,20 +68,22 @@ async function checkHeaderBreadcrumbs(page: Page) {
   await expect(slot).toHaveCount(1);
   await expect(slot).toHaveAttribute("aria-hidden", "true");
   await expect(slot).toHaveAttribute("inert", "");
-  await expect(slot).toHaveCSS("visibility", "hidden");
-  await expect(slot).toHaveCSS("font-size", "64px");
+  await expect(slot).toHaveCSS("display", "none");
   await expect(slot.locator("button, h1, h2, [id]")).toHaveCount(0);
   const geometry = await slot.evaluate((element) => {
     const header = document.querySelector(".workspace-header");
     const heading = header?.querySelector("h1, h2");
-    if (!header || !heading) throw new Error("Missing header heading");
+    const panel = element.closest(".page-panel");
+    if (!header || !heading || !panel) throw new Error("Missing header heading or page panel");
     return {
-      slot: element.getBoundingClientRect().top,
+      panel: panel.getBoundingClientRect().top,
+      slotHeight: element.getBoundingClientRect().height,
       header: header.getBoundingClientRect().bottom,
       ids: heading.id ? document.querySelectorAll(`#${CSS.escape(heading.id)}`).length : null,
     };
   });
-  expect(geometry.slot).toBeGreaterThanOrEqual(geometry.header);
+  expect(geometry.panel).toBeGreaterThanOrEqual(geometry.header);
+  expect(geometry.slotHeight).toBe(0);
   if (geometry.ids !== null) expect(geometry.ids).toBe(1);
 }
 

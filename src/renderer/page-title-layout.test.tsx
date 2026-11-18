@@ -12,7 +12,7 @@ vi.mock("react-dom", async (original) => ({
   createPortal: vi.fn((children: ReactNode) => children),
 }));
 
-it("ports the sole interactive heading to the header and leaves an inert, ID-free layout slot", () => {
+it("ports the sole interactive heading to the header and leaves an inert, ID-free marker", () => {
   const header = {} as HTMLElement;
   vi.mocked(useBreadcrumbHeader).mockReturnValue(header);
   const html = renderToStaticMarkup(

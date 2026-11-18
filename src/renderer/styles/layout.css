@@ -50,7 +50,9 @@
 }
 
 .app-workspace:has(> .sidebar) {
-  grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr);
+  grid-template-rows:
+    minmax(var(--workspace-top-inset, var(--app-titlebar-height)), max-content)
+    minmax(0, 1fr);
 }
 
 .workspace-header {

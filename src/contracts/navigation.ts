@@ -37,7 +37,7 @@ export const pages = [
     order: 0,
     initialOrder: 23,
     database: false,
-    icon: "app-helmet",
+    icon: "app-custom-agents",
   },
   {
     id: "projects",

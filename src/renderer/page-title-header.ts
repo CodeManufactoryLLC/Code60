@@ -1,6 +1,6 @@
 import { type RefObject, useLayoutEffect, useState } from "react";
 
-/** Hidden retained pages keep their layout slot, but never publish into the app header. */
+/** Hidden retained pages keep their title marker, but never publish into the app header. */
 export function observeBreadcrumbHeader(
   element: HTMLElement,
   publish: (header: HTMLElement | null) => void,

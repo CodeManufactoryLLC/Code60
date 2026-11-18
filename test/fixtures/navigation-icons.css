@@ -22,8 +22,8 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 48px;
-  height: 48px;
+  flex: 0 0 max(48px, calc(2.4 * var(--fixture-size, 48px)));
+  height: max(48px, calc(2.4 * var(--fixture-size, 48px)));
   font-size: var(--fixture-size, 48px);
 }
 

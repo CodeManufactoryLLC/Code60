@@ -74,6 +74,16 @@
   margin-bottom: var(--page-header-gap);
 }
 
+/* Titles in the workspace header leave no empty heading row inside Settings. */
+.settings-section-header:has(.page-title-placeholder) {
+  min-height: 0;
+  margin-bottom: 12px;
+}
+
+.settings-section-header:has(.page-title-placeholder):not(:has(.settings-actions, .info-tip)) {
+  display: none;
+}
+
 .settings-actions {
   display: flex;
   align-items: center;

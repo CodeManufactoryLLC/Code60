@@ -1288,6 +1288,14 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   padding-inline: 8px;
 }
 
+.event.message > .message-copy {
+  gap: 0;
+}
+
+.event.message > .message-copy > .icon-button {
+  padding-inline: 0 8px;
+}
+
 .event:is(:hover, :focus-within) > .message-copy {
   opacity: 1;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from "react";
 import aiIcon from "./icons/apps/ai.svg?no-inline";
 import analyzeIcon from "./icons/apps/analyze.svg?no-inline";
 import appsIcon from "./icons/apps/apps.svg?no-inline";
@@ -13,10 +14,24 @@ import downRightIcon from "./icons/apps/down-right.svg?no-inline";
 import folderIcon from "./icons/apps/folder.svg?no-inline";
 import heartRateIcon from "./icons/apps/heart-rate.svg?no-inline";
 import helmetIcon from "./icons/apps/helmet.svg?no-inline";
+import homeAnimation from "./icons/apps/home.gif?no-inline";
+import homeStill from "./icons/apps/home.png?no-inline";
 import homeIcon from "./icons/apps/home2.svg?no-inline";
 import infoIcon from "./icons/apps/info.svg?no-inline";
+import labourDayAnimation from "./icons/apps/labour-day.gif?no-inline";
+import labourDayStill from "./icons/apps/labour-day.png?no-inline";
 import megaphoneIcon from "./icons/apps/megaphone.svg?no-inline";
+import menuAnimation from "./icons/apps/menu.gif?no-inline";
+import menuStill from "./icons/apps/menu.png?no-inline";
+import optionsAnimation from "./icons/apps/options.gif?no-inline";
+import optionsStill from "./icons/apps/options.png?no-inline";
+import petAnimation from "./icons/apps/pet.gif?no-inline";
+import petStill from "./icons/apps/pet.png?no-inline";
+import projectInitiationAnimation from "./icons/apps/project-initiation.gif?no-inline";
+import projectInitiationStill from "./icons/apps/project-initiation.png?no-inline";
 import roboticArmIcon from "./icons/apps/robotic-arm.svg?no-inline";
+import searchAnimation from "./icons/apps/search.gif?no-inline";
+import searchStill from "./icons/apps/search.png?no-inline";
 import searchIcon from "./icons/apps/search.svg?no-inline";
 import steeringWheelIcon from "./icons/apps/steering-wheel.svg?no-inline";
 import tableIcon from "./icons/apps/table.svg?no-inline";
@@ -49,6 +64,16 @@ const artwork = {
   "app-table": tableIcon,
   "app-text-size": textSizeIcon,
   "app-under-construction": underConstructionIcon,
+} as const;
+
+const animatedArtwork = {
+  "app-apps": { animation: menuAnimation, still: menuStill },
+  "app-backlog": { animation: projectInitiationAnimation, still: projectInitiationStill },
+  "app-cogwheel": { animation: optionsAnimation, still: optionsStill },
+  "app-custom-agents": { animation: labourDayAnimation, still: labourDayStill },
+  "app-home2": { animation: homeAnimation, still: homeStill },
+  "app-search": { animation: searchAnimation, still: searchStill },
+  "app-steering-wheel": { animation: petAnimation, still: petStill },
 } as const;
 
 /** Phosphor duotone, @phosphor-icons/core 2.1.1 (MIT; see icons/phosphor/). */
@@ -167,9 +192,71 @@ const shapes = {
   ],
 } as const;
 
-export type NavigationIconName = keyof typeof shapes | keyof typeof artwork;
+export type NavigationIconName =
+  | keyof typeof shapes
+  | keyof typeof artwork
+  | keyof typeof animatedArtwork;
+
+function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }) {
+  const { animation, still } = animatedArtwork[name];
+  const enlarged = name === "app-steering-wheel" || name === "app-search" || name === "app-backlog";
+  const image = useRef<HTMLImageElement>(null);
+  const id = useId();
+  const sequence = useRef(0);
+  const [playback, setPlayback] = useState(0);
+  useEffect(() => {
+    const element = image.current;
+    if (!element) return;
+    const target = element.closest("button, a, [role='tab'], [role='button']");
+    if (!target) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
+    const reset = () => setPlayback(0);
+    const play = () => {
+      if (
+        !motion.matches &&
+        !document.hidden &&
+        !element.closest("[hidden], [inert]") &&
+        !target.matches(":disabled, [aria-disabled='true']")
+      )
+        setPlayback(++sequence.current);
+    };
+    const visibility = () => {
+      if (document.hidden) reset();
+    };
+    const hoverCard = target.matches(".home-card");
+    const trigger = hoverCard ? "pointerenter" : "click";
+    const focus = () => {
+      if (target.matches(":focus-visible")) play();
+    };
+    target.addEventListener(trigger, play);
+    if (hoverCard) target.addEventListener("focus", focus);
+    motion.addEventListener("change", reset);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      target.removeEventListener(trigger, play);
+      if (hoverCard) target.removeEventListener("focus", focus);
+      motion.removeEventListener("change", reset);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, []);
+  return (
+    <img
+      ref={image}
+      src={playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
+      className="navigation-icon"
+      data-icon={name}
+      data-animated="true"
+      data-enlarged={enlarged || undefined}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
+  );
+}
 
 export function NavigationIcon({ name }: { name: NavigationIconName }) {
+  if (name in animatedArtwork)
+    return <AnimatedNavigationIcon name={name as keyof typeof animatedArtwork} />;
   if (name === "app-text-size") {
     return (
       <span
@@ -196,7 +283,7 @@ export function NavigationIcon({ name }: { name: NavigationIconName }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={viewBoxes[name]}
+      viewBox={viewBoxes[name as keyof typeof shapes]}
       width="1em"
       height="1em"
       fill="currentColor"

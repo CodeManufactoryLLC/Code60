@@ -27,8 +27,10 @@ it("indents unopened and opened custom agents through the shared label inset", (
 });
 it("keeps icon and text placement tied to the same font-aware inset with an eight-pixel gap", () => {
   expect(rule(".chat-sidebar-entry")).toMatch(/padding:\s*4px 8px 4px var\(--nav-label-inset\);/);
-  expect(rule(".navigation-icon")).toMatch(/left:\s*calc\(var\(--nav-label-inset\) - 1em - 8px\);/);
-  expect(rule(".navigation-icon")).toMatch(/width:\s*1em;/);
+  expect(rule(".navigation-icon")).toContain(
+    "left: calc(var(--nav-label-inset) - 1em * var(--nav-icon-scale) - 8px)",
+  );
+  expect(rule(".navigation-icon")).toContain("width: calc(1em * var(--nav-icon-scale))");
 });
 it("preserves a second indentation step for custom-agent workers", () => {
   expect(rule(".chat-worker-children")).toMatch(/--nav-indent:\s*calc\(var\(--nav-step\) \* 2\);/);

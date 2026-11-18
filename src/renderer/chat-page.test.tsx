@@ -238,7 +238,7 @@ describe("orchestration activity presentation", () => {
       const html = render(status, [], [], [], [], "/db", 0);
       expect(html).toContain('class="chat-connection-frame"');
       expect(html).toContain('class="chat-connecting" role="status"');
-      expect(html).toContain("communicating.gif");
+      expect(html).not.toContain("<img");
       expect(html).toContain(">Connecting...</span>");
       expect(html).toContain(">Cancel</button>");
       expect(html).not.toContain("Give Code60 a task.");

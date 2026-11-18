@@ -105,8 +105,15 @@ test("desktop: all navigation SVGs tightly frame their artwork without distortio
         size,
       );
       for (const icon of await page.locator(".navigation-icon").all()) {
-        await expect(icon).toHaveCSS("width", `${size}px`);
-        await expect(icon).toHaveCSS("height", `${size}px`);
+        const scale =
+          (await icon.getAttribute("data-enlarged")) === "true"
+            ? 2.4
+            : (await icon.getAttribute("data-animated")) === "true"
+              ? 2
+              : 1;
+        const bounds = await icon.boundingBox();
+        expect(bounds?.width ?? 0).toBeCloseTo(size * scale, 1);
+        expect(bounds?.height ?? 0).toBeCloseTo(size * scale, 1);
         await expect(icon).toHaveCSS("object-fit", "contain");
         await expect(icon).toHaveAttribute("aria-hidden", "true");
       }

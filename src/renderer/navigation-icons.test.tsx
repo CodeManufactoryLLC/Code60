@@ -164,7 +164,15 @@ it.each([
       expect(html).toContain("<img");
       expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
     }
-    expect(html).toContain(`${file}.svg`);
+    const animatedPosters: Record<string, string> = {
+      "app-cogwheel": "options.png",
+      "app-apps": "menu.png",
+      "app-backlog": "project-initiation.png",
+      "app-home2": "home.png",
+      "app-search": "search.png",
+      "app-steering-wheel": "pet.png",
+    };
+    expect(html).toContain(animatedPosters[name] ?? `${file}.svg`);
     expect(html).toContain(`class="navigation-icon" data-icon="${name}"`);
     expect(html).toContain('aria-hidden="true"');
     expect(html).not.toMatch(/<svg|<title|aria-label|tabindex|data:image/);

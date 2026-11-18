@@ -77,8 +77,8 @@ it("uses smaller constant-width navigation cards, smaller contents and wider gap
   expect(cards).toContain("max-width: 736px");
   expect(rule("home", ".home-card-art")).toContain("min-height: 72px");
   const art = rule("home", ".home-card-art .navigation-icon");
-  expect(art).toContain("width: 36px");
-  expect(art).toContain("height: 36px");
+  expect(art).toContain("width: calc(36px * var(--nav-icon-scale))");
+  expect(art).toContain("height: calc(36px * var(--nav-icon-scale))");
   expect(rule("home", ".home-card-name")).toContain(
     "max(8px, calc(var(--card-size, 22px) * 9 / 11))",
   );
@@ -127,7 +127,7 @@ it("compacts response-to-timing spacing while retaining separation before the ne
 
 it("preserves the doubled clearance with the persistent toggle in the native-control row", () => {
   expect(rule("layout", ".app-workspace:has(> .sidebar)")).toContain(
-    "grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr)",
+    "minmax(var(--workspace-top-inset, var(--app-titlebar-height)), max-content) minmax(0, 1fr)",
   );
   expect(rule("layout", ".app-workspace")).toContain(
     "grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr)",
@@ -205,17 +205,13 @@ it("keeps sidebar navigation square and borderless, without a full-height divide
   expect(sheet("layout")).not.toMatch(/\.app-workspace:has\([^}]+::before/);
 });
 
-it("moves the visible trail into the header without removing its original layout slot", () => {
+it("moves the visible trail into the header without reserving the original title space", () => {
   expect(rule("layout", ".workspace-header")).toContain(
     "grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr)",
   );
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 2");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("-webkit-app-region: no-drag");
-  expect(rule("navigation", ".page-title-placeholder")).toContain(
-    "--title-size: var(--page-title-space-size, 64px)",
-  );
-  expect(rule("navigation", ".page-title-placeholder")).toContain("visibility: hidden");
-  expect(rule("navigation", ".page-title-placeholder")).not.toContain("display: none");
+  expect(rule("navigation", ".page-title-placeholder")).toContain("display: none");
   expect(rule("chat", ".worker-chat-identity .worker-chat-subtitle")).toContain(
     "calc(var(--page-title-space-size, 64px) + 8px)",
   );
@@ -328,7 +324,10 @@ it("adds the shared header gap to content pages but excludes navigation-card and
   for (const [file, selector] of [
     ["automations", ".automation-page-heading"],
     ["settings", ".settings-section-header:has(.page-breadcrumbs)"],
-    ["tables", ".table-controls:has(> .page-breadcrumbs):not(.home-page > .table-controls)"],
+    [
+      "tables",
+      ".table-controls:has(> .page-breadcrumbs:not(.page-title-placeholder)):not( .home-page > .table-controls )",
+    ],
     ["search", ".search-page > .page-breadcrumbs"],
     ["search", ".memory-heading"],
     ["navigation", ".contributor-tools"],

@@ -80,7 +80,7 @@ export function Splash({
                 Code<b>60</b>
               </span>
               <p id={`${id}-subtitle`} className="splash-subtitle">
-                v0.2 'Paddock' (Beta)
+                v0.2 Paddock (Beta)
               </p>
               {ready && (
                 <>

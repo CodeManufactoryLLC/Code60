@@ -295,12 +295,7 @@ async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light"
     scheme === "dark" ? "rgb(37, 37, 37)" : "rgb(255, 255, 255)",
   );
   await expect(page.locator(".splash-brand")).toHaveCSS("opacity", "1");
-  if (scheme === "dark")
-    await expect(page.locator(".splash-brand")).toHaveCSS(
-      "background-image",
-      /^url\(".*stripes[^"]*\.jpeg"\)$/,
-    );
-  else await expect(page.locator(".splash-brand")).toHaveCSS("background-image", "none");
+  await expect(page.locator(".splash-brand")).toHaveCSS("background-image", "none");
   await expect(page.locator(".splash")).toHaveCSS("overflow", "hidden");
   await expect(page.locator(".splash")).toHaveCSS("filter", "none");
   const background = await page.locator(".splash").evaluate((element) => {
@@ -317,7 +312,7 @@ async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light"
   await expect(page.locator(".splash-title")).toHaveCSS("font-family", /^"?D-DIN"?/);
   await expect(page.locator(".splash-title")).toHaveCSS("font-weight", "400");
   await expect(page.locator(".splash-title")).toHaveCSS("opacity", "1");
-  await expect(page.locator(".splash-subtitle")).toHaveText("v0.2 'Paddock' (Beta)");
+  await expect(page.locator(".splash-subtitle")).toHaveText("v0.2 Paddock (Beta)");
   await expect(page.locator(".splash-subtitle")).toHaveCSS("color", foreground);
   await expect(page.locator(".splash-subtitle")).toHaveCSS("font-family", /^"?D-DIN"?/);
   await expect(page.locator(".splash-subtitle")).toHaveCSS("opacity", "1");
@@ -2333,7 +2328,14 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
       await expect(page.locator("#panel-home .home-cards")).toHaveCSS("gap", "32px");
       for (const card of await cards.all()) {
         await expect(card).toHaveCSS("width", "224px");
-        await expect(card.locator(".navigation-icon")).toHaveCSS("width", "36px");
+        const icon = card.locator(".navigation-icon");
+        const expectedIconWidth =
+          (await icon.getAttribute("data-enlarged")) === "true"
+            ? 86.4
+            : (await icon.getAttribute("data-animated")) === "true"
+              ? 72
+              : 36;
+        expect((await icon.boundingBox())?.width ?? 0).toBeCloseTo(expectedIconWidth, 1);
         await expect(card.locator(".home-card-name")).toHaveCSS("font-size", "18px");
       }
       await page.screenshot({ path: test.info().outputPath(`compact-cards-${scheme}.png`) });
@@ -2366,8 +2368,8 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
         expect(
           await page
             .locator(".page-title-placeholder")
-            .evaluate((element) => element.getBoundingClientRect().y),
-        ).toBe(strip.height * 2);
+            .evaluate((element) => element.getBoundingClientRect().height),
+        ).toBe(0);
         const title = page.locator(".workspace-breadcrumbs .page-breadcrumbs:visible").first();
         await expect(title).toBeVisible();
         await expect.poll(async () => (await title.boundingBox())?.y).toBe(strip.height);
@@ -5843,7 +5845,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
     const pageIcons = [
       ["tab-home", "app-home2"],
-      ["tab-custom-agents", "app-helmet"],
+      ["tab-custom-agents", "app-custom-agents"],
       ["tab-search", "app-search"],
       ["tab-apps", "app-apps"],
       ["tab-chat", "app-backlog"],
@@ -14445,11 +14447,9 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
       /Agent-reported purpose: Checking cancellation/,
     );
     await expect(status.locator("script")).toHaveCount(0);
-    const artwork = status.locator("img");
-    await expect(artwork).toHaveAttribute("src", /verifying.*\.gif$/);
-    await expect
-      .poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth))
-      .toBeGreaterThan(0);
+    const artwork = status.locator(".activity-visual");
+    await expect(status.locator("img")).toHaveCount(0);
+    await expect(status.locator(".activity-visual svg")).toHaveCount(1);
     // Sample the layout together after the opening transition. The scroll offset can round to
     // a whole pixel while the message and composer positions have fractional coordinates.
     await expect
@@ -14616,18 +14616,15 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await input.focus();
     await page.screenshot({ path: test.info().outputPath("activity-light.png") });
     await page.evaluate(() => (document.documentElement.dataset.colorScheme = "dark"));
-    await expect(artwork).toHaveCSS("mix-blend-mode", "screen");
     await page.screenshot({ path: test.info().outputPath("activity-dark.png") });
     await page.evaluate(() => (document.documentElement.dataset.colorScheme = "light"));
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(chat.locator(".activity-details").last()).toHaveCSS("transition-duration", "0s");
     await expect(status.locator(".activity-name")).toHaveCSS("animation-name", "none");
-    await expect(artwork).toHaveCount(0);
+    await expect(status.locator("img")).toHaveCount(0);
     await expect(status.locator("svg")).toHaveCount(1);
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await expect(artwork).toHaveCount(1);
-    await artwork.evaluate((image: HTMLImageElement) => (image.src = "missing-activity.gif"));
-    await expect(artwork).toHaveCount(0);
+    await expect(status.locator("img")).toHaveCount(0);
     await expect(status).toHaveText(/^Verifying\.\.\. \d+s$/);
     await selectSidebarPage(page, "Settings");
     await expect(page.locator("#panel-chat .activity-display").first()).toHaveAttribute(
@@ -14659,7 +14656,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     const labelLeft = await status
       .locator(".activity-name")
       .evaluate((element) => element.getBoundingClientRect().left);
-    await expect(status.locator("img")).toHaveAttribute("src", /executing.*\.gif$/);
+    await expect(status.locator("img")).toHaveCount(0);
     await expect(status).toHaveAttribute("data-tooltip", /1 other operation/);
     await expect(status).toHaveAttribute(
       "data-tooltip",
@@ -14698,7 +14695,7 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
     await input.press("Enter");
     await expect(status).toHaveAttribute("data-activity", "waiting_for_workers");
     await expect(status).toHaveText(/^Monitoring subagents\.\.\. \d+s$/);
-    await expect(status.locator("img")).toHaveAttribute("src", /waiting_for_workers.*\.gif$/);
+    await expect(status.locator("img")).toHaveCount(0);
     await expect(status).toHaveCSS("opacity", "1");
     await page.screenshot({ path: test.info().outputPath("monitoring-subagents.png") });
     await status.focus();

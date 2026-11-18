@@ -91,8 +91,8 @@
 
 .home-card-art .navigation-icon {
   position: static;
-  width: 36px;
-  height: 36px;
+  width: calc(36px * var(--nav-icon-scale));
+  height: calc(36px * var(--nav-icon-scale));
   transform: none;
 }
 

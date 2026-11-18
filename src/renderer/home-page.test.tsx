@@ -66,7 +66,7 @@ describe("Home destinations", () => {
       expect(html).not.toContain("home-card-description");
       for (const [id, icon, available] of [
         ["relay", "app-steering-wheel", relayAvailable],
-        ["custom-agents", "app-helmet", true],
+        ["custom-agents", "app-custom-agents", true],
         ["search", "app-search", Boolean(database)],
         ["projects", "app-backlog", true],
         ["apps", "app-apps", true],
