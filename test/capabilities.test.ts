@@ -16,6 +16,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes desktop-only distribution and retained scheduler controls", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "updates")?.purpose).toContain(
+      "macOS arm64 and Linux x64",
+    );
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "system-manager")?.purpose).toContain(
+      "No public Code60 CLI",
+    );
+  });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
       prerequisite: "provider",

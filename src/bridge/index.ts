@@ -442,7 +442,6 @@ export interface DesktopApi {
   setFileContext(context: FileContext | null): Promise<void>;
   orchestrationChatAction(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined>;
   windowAppearance(): Promise<{ transparent: boolean; enabled: boolean; clickThrough: boolean }>;
-  setWindowTheme(dark: boolean): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;
@@ -847,10 +846,7 @@ const visibilitySchema = z.strictObject(
 );
 const databaseModeSchema = z.enum(["open", "create"], { error: "Invalid database mode" });
 const projectPathSchema = boundedString("project path", 4096).refine(
-  (value) =>
-    !value.includes("\0") &&
-    (value.startsWith("/") ||
-      (/^[a-z]:[\\/]/i.test(value) && !/[\r\n]/.test(value) && !value.slice(2).includes(":"))),
+  (value) => !value.includes("\0") && value.startsWith("/"),
   "Invalid project path",
 );
 
@@ -885,24 +881,6 @@ const fileContextSchema = z
   .refine(
     (context) => (context.projectId === undefined) === (context.databaseEpoch === undefined),
     "Project identity and database epoch are required together",
-  )
-  .refine(
-    (context) =>
-      !/^[a-z]:[\\/]/i.test(context.root) ||
-      [...context.directories, context.preview ?? ""].every(
-        (path) =>
-          path === "" ||
-          (!/[:<>"|?*]/.test(path) &&
-            [...path].every((character) => character.charCodeAt(0) >= 32) &&
-            path
-              .split("/")
-              .every(
-                (part) =>
-                  !/[. ]$/.test(part) &&
-                  !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
-              )),
-      ),
-    "Invalid Windows file path",
   );
 export const parseFileContext = (value: unknown) => parseValue(fileContextSchema.nullable(), value);
 

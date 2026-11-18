@@ -30,36 +30,6 @@ const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 const windowTitle = () =>
   application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
-type TitleBarOverlayCall = {
-  color?: string | undefined;
-  symbolColor?: string | undefined;
-  height?: number | undefined;
-};
-const watchTitleBarOverlay = () =>
-  application.evaluate(({ BrowserWindow }) => {
-    const mainWindow = BrowserWindow.getAllWindows()[0];
-    if (!mainWindow) throw new Error("Desktop window is missing");
-    const scope = globalThis as typeof globalThis & {
-      __code60TitleBarOverlayCalls?: TitleBarOverlayCall[];
-    };
-    scope.__code60TitleBarOverlayCalls = [];
-    const setTitleBarOverlay = mainWindow.setTitleBarOverlay.bind(mainWindow);
-    mainWindow.setTitleBarOverlay = (options) => {
-      scope.__code60TitleBarOverlayCalls?.push({
-        color: options.color,
-        symbolColor: options.symbolColor,
-        height: options.height,
-      });
-      setTitleBarOverlay(options);
-    };
-  });
-const lastTitleBarOverlay = () =>
-  application.evaluate(() => {
-    const scope = globalThis as typeof globalThis & {
-      __code60TitleBarOverlayCalls?: TitleBarOverlayCall[];
-    };
-    return scope.__code60TitleBarOverlayCalls?.at(-1) ?? null;
-  });
 let application: Awaited<ReturnType<typeof _electron.launch>>;
 const menuItem = (id: string) =>
   application.evaluate(({ Menu }, itemId) => {
@@ -3318,7 +3288,7 @@ test("desktop: Relay connects without a database and retains identity, draft and
     expect(restarted.chat.workers).toEqual([]);
     expect(restarted.chat.history?.characters).toBeLessThanOrEqual(64_000);
     expect(restarted.chats.filter((entry) => entry.kind === "relay")).toHaveLength(1);
-    if (process.platform !== "win32") {
+    {
       await page.getByRole("button", { name: "Start", exact: true }).click();
       const journal = join(directory, "state", "code60", "relay", "history.frames");
       await chmod(journal, 0o400);
@@ -6390,11 +6360,9 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await historical.getByRole("button", { name: "Copy message" }).click();
     await expect(copyToast).toBeVisible();
     await expect(historical.getByRole("status")).toHaveCount(0);
-    // Native Windows clipboard text uses CRLF; the write harness above checks exact source.
+    // The write harness above checks exact source.
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
-      ["permission qol-approval: opt-allow_once  historical", "```code```", ""].join(
-        process.platform === "win32" ? "\r\n" : "\n",
-      ),
+      ["permission qol-approval: opt-allow_once  historical", "```code```", ""].join("\n"),
     );
     await selectSidebarPage(page, "Sessions");
     await expect(age).toHaveAttribute("aria-label", /current project sessions/);
@@ -7569,7 +7537,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         : Infinity;
     });
     expect(centered).toBeLessThan(10);
-    if (process.platform === "win32") await watchTitleBarOverlay();
     for (const theme of ["dark", "light", "system"]) {
       await selectSettingsPage(page, "Appearance");
       await page.getByLabel("Theme").selectOption(theme);
@@ -7578,15 +7545,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         theme === "dark" ||
         (theme === "system" &&
           (await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)));
-      if (process.platform === "win32") {
-        await expect
-          .poll(() => lastTitleBarOverlay())
-          .toEqual({
-            color: darkTheme ? "#252525" : "#ffffff",
-            symbolColor: darkTheme ? "#ffffff" : "#000000",
-            height: 28,
-          });
-      }
       await expectThemeContrast(page);
       await expectNeutralTheme(page);
       const chatVisible = await chatPopup.isVisible();
@@ -7601,32 +7559,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expectTabAppearance(page);
       await expectChatFooterLayout();
       await expectDistinctChatSurfaces();
-      if (theme === "system" && process.platform === "win32") {
-        const currentSystemTheme = darkTheme ? "dark" : "light";
-        const alternateSystemTheme = darkTheme ? "light" : "dark";
-        await page.emulateMedia({ colorScheme: alternateSystemTheme });
-        await expect
-          .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
-          .toBe(alternateSystemTheme);
-        await expect
-          .poll(() => lastTitleBarOverlay())
-          .toEqual({
-            color: darkTheme ? "#ffffff" : "#252525",
-            symbolColor: darkTheme ? "#000000" : "#ffffff",
-            height: 28,
-          });
-        await page.emulateMedia({ colorScheme: null });
-        await expect
-          .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
-          .toBe(currentSystemTheme);
-        await expect
-          .poll(() => lastTitleBarOverlay())
-          .toEqual({
-            color: darkTheme ? "#252525" : "#ffffff",
-            symbolColor: darkTheme ? "#ffffff" : "#000000",
-            height: 28,
-          });
-      }
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "font-family",
         /^"?IBM Plex Sans"?/,
@@ -13889,7 +13821,7 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
     // Windows creates both worker worktrees and captures them through owned native Git and
     // helper processes before the link appears; this took 11.2 seconds on an ARM64 VM.
     await expect(page.locator(".conversation-changes-link").last()).toBeVisible({
-      timeout: process.platform === "win32" ? 30_000 : 5_000,
+      timeout: 5_000,
     });
     await expect
       .poll(() =>
@@ -14307,7 +14239,7 @@ test("desktop: main Chat eases new replies once and preserves streaming, history
     await messages.last().getByRole("button", { name: "Copy message", exact: true }).click();
     await expect(page.locator(".toast-stack").getByRole("status")).toHaveText("Done: Copied.");
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toBe(
-      chunks.join("").replaceAll("\n", process.platform === "win32" ? "\r\n" : "\n"),
+      chunks.join(""),
     );
     await selectSidebarPage(page, "Settings");
     await selectSidebarPage(page, "Chat");

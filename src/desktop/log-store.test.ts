@@ -81,8 +81,7 @@ describe("desktop diagnostic storage", () => {
       expect(text).not.toMatch(/secret|雪|Users/);
       expect(Buffer.byteLength(text)).toBeLessThan(2048);
       expect(logRecordSchema.safeParse(JSON.parse(text)).success).toBe(true);
-      if (process.platform !== "win32")
-        expect((await lstat(join(directory, file))).mode & 0o077).toBe(0);
+      expect((await lstat(join(directory, file))).mode & 0o077).toBe(0);
     }
   });
   it("bounds queues, coalesces notices, and never calls a throwing sink into lifecycle code", async () => {
@@ -332,35 +331,32 @@ describe("desktop diagnostic storage", () => {
       ),
     ).toBe(1);
   });
-  it.skipIf(process.platform === "win32")(
-    "rejects unsafe private directories, links, and permissions without modifying targets",
-    async () => {
-      const { root, store, directory } = await fixture();
-      await privateDirectory(join(root, "code60"));
-      await symlink(root, directory);
-      store.sink(input());
-      await store.flush(2000);
-      expect(store.status()).toMatchObject({
-        dropped: 1,
-        persistenceFailures: 1,
-        unavailable: true,
-      });
-      await expect(store.query(parseLogQuery({}))).rejects.toThrow(/unavailable/);
-      await rm(directory);
-      await privateDirectory(directory);
-      const target = join(root, "target");
-      await writeFile(target, "must stay", { mode: 0o600 });
-      const name = `${now}-${randomUUID()}.jsonl`;
-      await symlink(target, join(directory, name));
-      await expect(store.query(parseLogQuery({}))).rejects.toThrow();
-      expect(await readFile(target, "utf8")).toBe("must stay");
-      await rm(join(directory, name));
-      await chmod(directory, 0o755);
-      await expect(store.clear()).rejects.toThrow(/clear/);
-      expect((await stat(directory)).mode & 0o777).toBe(0o755);
-      await chmod(directory, 0o700);
-    },
-  );
+  it("rejects unsafe private directories, links, and permissions without modifying targets", async () => {
+    const { root, store, directory } = await fixture();
+    await privateDirectory(join(root, "code60"));
+    await symlink(root, directory);
+    store.sink(input());
+    await store.flush(2000);
+    expect(store.status()).toMatchObject({
+      dropped: 1,
+      persistenceFailures: 1,
+      unavailable: true,
+    });
+    await expect(store.query(parseLogQuery({}))).rejects.toThrow(/unavailable/);
+    await rm(directory);
+    await privateDirectory(directory);
+    const target = join(root, "target");
+    await writeFile(target, "must stay", { mode: 0o600 });
+    const name = `${now}-${randomUUID()}.jsonl`;
+    await symlink(target, join(directory, name));
+    await expect(store.query(parseLogQuery({}))).rejects.toThrow();
+    expect(await readFile(target, "utf8")).toBe("must stay");
+    await rm(join(directory, name));
+    await chmod(directory, 0o755);
+    await expect(store.clear()).rejects.toThrow(/clear/);
+    expect((await stat(directory)).mode & 0o777).toBe(0o755);
+    await chmod(directory, 0o700);
+  });
   it("coordinates competing instances and keeps accepted records intact", async () => {
     const { store, directory } = await fixture();
     const other = new DesktopLogStore(directory, () => now);

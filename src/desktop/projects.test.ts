@@ -4,13 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { COMMAND_LIMIT, DEFAULT_OPERATING_CONTRACT_CLAUSES } from "../bridge/index.js";
-import { privateDirectory, verifyPrivateSync } from "../platform/index.js";
+import { privateDirectory } from "../platform/index.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase, SCHEMA, sqliteAvailable } from "./projects.js";
 
 async function expectPrivate(path: string, mode: number): Promise<void> {
-  if (process.platform === "win32") expect(() => verifyPrivateSync(path)).not.toThrow();
-  else expect((await stat(path)).mode & 0o777).toBe(mode);
+  expect((await stat(path)).mode & 0o777).toBe(mode);
 }
 
 let root: string;
@@ -172,35 +171,6 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
       db.close();
     }
   });
-
-  it.runIf(process.platform === "win32")(
-    "bounds a real competing writer and works after the lock is released",
-    () => {
-      const path = join(directory, "contended.sqlite");
-      const db = openProjectDatabase(path, true);
-      const other = new (sqlite().DatabaseSync)(path);
-      try {
-        other.exec("BEGIN EXCLUSIVE");
-        let error: unknown;
-        const started = performance.now();
-        try {
-          db.record("C:\\project", "2026-01-01");
-        } catch (cause) {
-          error = cause;
-        }
-        const elapsed = performance.now() - started;
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toMatch(/locked/);
-        expect(elapsed).toBeLessThan(150);
-        other.exec("ROLLBACK");
-        db.record("C:\\project", "2026-01-01");
-        expect(db.list()).toEqual([{ path: "C:\\project", openedAt: "2026-01-01" }]);
-      } finally {
-        other.close();
-        db.close();
-      }
-    },
-  );
 
   it("migrates schema 1 without losing project history and persists configurations", () => {
     const path = join(directory, "old.sqlite");

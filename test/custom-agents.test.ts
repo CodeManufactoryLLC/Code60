@@ -8,7 +8,6 @@ import { ApplicationAgents } from "../src/desktop/application-agents.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 
 // Each owner persists private Relay-style storage through the native ACL helper on Windows.
-if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let agents: FakeAgents;

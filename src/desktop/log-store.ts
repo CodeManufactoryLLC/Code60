@@ -12,12 +12,7 @@ import {
   logInputSchema,
   logRecordSchema,
 } from "../bridge/index.js";
-import {
-  createPrivateDirectory,
-  helperOutput,
-  privateDirectory,
-  writePrivateFile,
-} from "../platform/index.js";
+import { createPrivateDirectory, privateDirectory, writePrivateFile } from "../platform/index.js";
 
 export const LOG_QUOTA = 20 * 1024 * 1024;
 export const LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -201,8 +196,7 @@ export class DesktopLogStore {
       (!directory && stat.nlink !== 1)
     )
       throw new Error("Unsafe diagnostic storage");
-    if (process.platform === "win32") await helperOutput(["verify-private", path]);
-    else if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.())
+    if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.())
       throw new Error("Unsafe diagnostic permissions");
     return stat;
   }
@@ -237,8 +231,8 @@ export class DesktopLogStore {
         stat.dev !== checked.dev ||
         stat.ino !== entry.ino ||
         stat.dev !== entry.dev ||
-        (process.platform !== "win32" &&
-          ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()))
+        (stat.mode & 0o077) !== 0 ||
+        stat.uid !== process.getuid?.()
       )
         throw new Error("Diagnostic file changed");
       return handle;
@@ -255,7 +249,7 @@ export class DesktopLogStore {
     for (;;) {
       let created = false;
       try {
-        // Exclusive on every platform, with an explicit private owner and ACL on Windows.
+        // Exclusive on every platform, with private POSIX permissions.
         await createPrivateDirectory(lock);
         created = true;
         await this.verify(lock, true);

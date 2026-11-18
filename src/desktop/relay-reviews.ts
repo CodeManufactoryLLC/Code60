@@ -437,12 +437,7 @@ export class RelayReviews {
       if (view?.status !== "idle") {
         if (await recordedAgentAlive(this.deps.processes, record))
           throw new Error("Stop the worker's leftover process before using its changes");
-        if (
-          ACTIVE_STATUSES.has(record.status) &&
-          (this.deps.processes.ownerAlive
-            ? await this.deps.processes.ownerAlive(record.ownerPid, record.ownerIdentity)
-            : this.deps.processes.isAlive(record.ownerPid))
-        )
+        if (ACTIVE_STATUSES.has(record.status) && this.deps.processes.isAlive(record.ownerPid))
           throw new Error("Another live process still owns this worker");
       }
       const prepared = await prepareDiff(commandDeps(this.deps, workspace), saved.runId);

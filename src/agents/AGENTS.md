@@ -3,7 +3,7 @@
 `src/agents` starts agent processes and talks to them over ACP with `@agentclientprotocol/sdk`. Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
 - Do not import `core` or `git`.
-- Spawn agents through `platform` with argument arrays, the run's worktree as the working directory, and their own POSIX process group or Windows owned Job Object.
+- Spawn agents through `platform` with argument arrays, the run's worktree as the working directory, and their own POSIX process group.
 - Advertise no ACP file-system or terminal client capabilities.
 - Keep the agent process and session open after a turn ends. Stop the process only when the caller finishes the run or cancellation escalates.
 - Reject a prompt sent while a turn is still in progress.
@@ -13,5 +13,5 @@
 - Optional desktop diagnostics record provider connection boundaries and durations
   once, with allowlisted provider/error metadata and opaque correlation IDs only.
   Never serialize AgentSpec, process arguments/environments or ACP payloads into logs.
-- Cancel with `session/cancel`, then stop through `platform`: POSIX SIGTERM/SIGKILL grace or Windows owned-job termination. Never issue POSIX group signals on Windows.
+- Cancel with `session/cancel`, then stop through `platform`: POSIX SIGTERM/SIGKILL grace.
 - Keep only a bounded, credential-scrubbed tail of stderr through the platform diagnostic utility. Redact before clipping; do not echo provider errors that may contain prompts. Preserve transcript events separately.

@@ -21,7 +21,6 @@ import { commitFixture } from "./fixtures/git-repository.js";
 
 // These real-Git/private-storage journeys exceed 5 s on Windows (the native
 // log also has passing cases above 5 s); keep the same assertions and bounds.
-if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let deps: CoreDeps;
@@ -349,7 +348,7 @@ it.each(["failed", "cancelled"] as const)(
       },
       // Windows CI needed up to 16 s for sibling automatic captures. Under the full
       // parallel suite, native worktree and snapshot processes on an ARM64 VM needed more.
-      { timeout: process.platform === "win32" ? 45_000 : 20_000 },
+      { timeout: 20_000 },
     );
     await settleCaptures();
     expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
@@ -387,14 +386,14 @@ it.each(["failed", "cancelled"] as const)(
             ],
           });
         },
-        { timeout: process.platform === "win32" ? 45_000 : 20_000 },
+        { timeout: 20_000 },
       );
       await settleCaptures();
       expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Partial retained result\n");
       expect(service.execution.list()).toEqual([worker]);
     }
   },
-  process.platform === "win32" ? 60_000 : undefined,
+  undefined,
 );
 it("routes real Relay dispatch, review capture and between-turn feedback to the originating task", async () => {
   const associations = vi.spyOn(RelayReviewStore.prototype, "associate");

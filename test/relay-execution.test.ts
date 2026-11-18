@@ -104,7 +104,7 @@ it("resolves a symbolic base again for distinct dispatches but not accepted retr
 // Seven dispatches each create private run records; on Windows every durable write runs the
 // native ACL/atomic-replace helper, which alone took about 4.6 seconds on an ARM64 VM.
 it("freezes current files by task and target while resolving explicit bases independently", {
-  timeout: process.platform === "win32" ? 30_000 : 5000,
+  timeout: 5000,
 }, async () => {
   const initial = "a".repeat(40);
   let current = "b".repeat(40);
@@ -448,7 +448,7 @@ it("rejects changed directory identities and malformed or relative targets", asy
   await expect(host.dispatch(owner, request(original, "replaced"), DEFAULT_CONFIG)).rejects.toThrow(
     "identity changed",
   );
-  if (process.platform !== "win32") {
+  {
     await symlink(join(root, "b"), join(root, "alias"));
     const b = await host.dispatch(owner, request(join(root, "alias"), "alias"), DEFAULT_CONFIG);
     expect(b.target.cwd).toBe(join(root, "b"));

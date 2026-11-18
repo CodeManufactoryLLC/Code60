@@ -13,8 +13,8 @@ The active policy:
 - Blocks force pushes and deletion.
 - Has no bypass actors, including administrators, apps, or deploy keys.
 
-The aggregate check covers Linux checks/builds, Linux desktop/installers, and
-Windows validation. Do not require release-only checks or enable a merge queue
+The aggregate check covers Linux checks/builds and Linux desktop/installers.
+macOS validation runs separately. Do not require release-only checks or enable a merge queue
 without first adding its `merge_group` CI trigger.
 
 ## Apply or update

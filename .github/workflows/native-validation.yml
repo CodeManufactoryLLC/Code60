@@ -1,22 +1,17 @@
 name: Native release validation
-run-name: >-
-  Native validation (${{ (inputs.platform == 'both' && inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '') && 'acceptance' || 'diagnosis' }}) ${{ inputs.platform }} ${{ inputs.suite }} on ${{ github.ref_name }}
-
+run-name: Native validation (${{ (inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '') && 'acceptance' || 'diagnosis' }}) macos ${{ inputs.suite }} on ${{ github.ref_name }}
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: Native platforms to test
-        required: false
-        default: both
-        type: choice
-        options: [both, windows, macos]
       suite:
         description: Test suites to run
         required: false
         default: full
         type: choice
-        options: [full, unit, desktop]
+        options:
+          - full
+          - unit
+          - desktop
       unit_filter:
         description: Optional Vitest file filter (diagnosis only; skips coverage gates)
         required: false
@@ -27,62 +22,49 @@ on:
         required: false
         default: ""
         type: string
-
 permissions:
   contents: read
-
-# Acceptance runs (all defaults) supersede each other per ref. Diagnosis runs get
-# a unique group, so they never cancel acceptance or each other.
 concurrency:
-  group: native-validation-${{ github.ref }}-${{ (inputs.platform == 'both' && inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '') && 'acceptance' || github.run_id }}
-  cancel-in-progress: ${{ inputs.platform == 'both' && inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '' }}
-
+  group: native-validation-${{ github.ref }}-${{ (inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '') && 'acceptance' || github.run_id }}
+  cancel-in-progress: ${{ inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '' }}
 jobs:
   unit:
-    name: ${{ matrix.os }} unit
+    name: macOS unit
     if: inputs.suite != 'desktop'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2025"]' || inputs.platform == 'macos' && '["macos-15"]' || '["windows-2025","macos-15"]') }}
     uses: ./.github/workflows/native-tests.yml
     with:
-      os: ${{ matrix.os }}
       ref: ${{ github.sha }}
       suite: unit
       unit_filter: ${{ inputs.unit_filter }}
-
-  # Desktop jobs do not wait for unit jobs, so one run shows every failing layer.
   desktop:
-    name: ${{ matrix.os }} desktop ${{ matrix.shard }}
+    name: macOS desktop ${{ matrix.shard }}
     if: inputs.suite != 'unit'
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2025"]' || inputs.platform == 'macos' && '["macos-15"]' || '["windows-2025","macos-15"]') }}
         shard: ${{ fromJSON(inputs.desktop_grep == '' && '[1,2,3]' || '[1]') }}
     uses: ./.github/workflows/native-tests.yml
     with:
-      os: ${{ matrix.os }}
       ref: ${{ github.sha }}
       suite: desktop
       shard: ${{ matrix.shard }}
       shards: ${{ inputs.desktop_grep == '' && 3 || 1 }}
       desktop_grep: ${{ inputs.desktop_grep }}
-
   passed:
     name: Native validation passed
-    needs: [unit, desktop]
+    needs:
+      - unit
+      - desktop
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     steps:
       - name: Summarize and require every selected job to succeed
         env:
-          ACCEPTANCE: ${{ inputs.platform == 'both' && inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '' }}
+          ACCEPTANCE: ${{ inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == '' }}
           UNIT: ${{ needs.unit.result }}
           DESKTOP: ${{ needs.desktop.result }}
-          PLATFORM: ${{ inputs.platform }}
+          PLATFORM: macos
           SUITE: ${{ inputs.suite }}
           UNIT_FILTER: ${{ inputs.unit_filter }}
           DESKTOP_GREP: ${{ inputs.desktop_grep }}

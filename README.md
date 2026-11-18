@@ -1,9 +1,6 @@
 # Code60
 
-Code60 is an Electron desktop app and headless CLI for running coding agents
-in parallel. The CLI uses isolated worktrees in Git repositories with a commit
-and runs directly in the current directory otherwise. Desktop project workers
-require Git isolation; Relay workers explicitly choose isolated or direct work.
+Code60 is an Electron desktop application for running coding agents in parallel on macOS and Linux. Desktop Automations uses an independent background scheduler.
 
 Desktop project chats and Relay checkpoint requests and automatically integrate
 isolated worker changes, without Apply. A quiet **files changed** link opens a
@@ -70,7 +67,7 @@ In any connected chat, use the **Model** picker between turns to choose the
 connector's advertised model and reasoning settings. **Save as default** applies
 to new sessions for that connector and role, orchestrator (Relay, project chats
 and Custom Agents) or worker. Clear saved choices in **Settings → Agents →
-Default models**. Existing sessions and CLI/automation defaults do not change.
+Default models**. Existing sessions and automation defaults do not change.
 Unavailable defaults produce a note; Code60 never substitutes a model.
 
 ## Memory
@@ -110,7 +107,7 @@ with native confirmation, to keep scheduling after Code60 quits.
 The computer must stay awake and the user logged in. Missed occurrences are skipped,
 not replayed, and an agent finishing a turn is not proof the task succeeded.
 
-The CLI exposes `code60 automation --help` and `code60 scheduler --help`.
+Manage schedules in Automations and service installation/recovery in Apps → System Manager.
 For source development, build with `npm run build` and run
 `node dist/automation/main.js` in a separate terminal before saving automations.
 That standalone process is not installed for future logins.
@@ -133,7 +130,7 @@ execute commands beyond their worktree.
   and scoped worker controls.
 - **Agent permissions:** orchestration chats and their workers automatically
   approve supported once-only permission requests. Choosing an Ask mode in
-  the provider's harness does not disable Code60 auto-approval. CLI and manual
+  the provider's harness does not disable Code60 auto-approval. Automation and manual
   desktop runs use a separate permission policy.
 - **Local history, external providers:** Code60 stores run records locally,
   with restrictive permissions for newly created record files. Configured
@@ -162,8 +159,7 @@ npm run dev
 
 Install and authenticate your chosen agent through its own CLI. See
 [contributing](CONTRIBUTING.md#setup-and-checks) for development and validation,
-[architecture](ARCHITECTURE.md#cli) for CLI usage and configuration, and
-[Windows setup](WINDOWS.md) for Windows-specific requirements.
+[architecture](ARCHITECTURE.md#files) for configuration.
 
 ## Agent memory and long conversations
 
@@ -267,3 +263,10 @@ No database is required. Stop the agent and its workers before editing its
 instructions. Editing keeps history and uses fresh provider context on the next
 Send. **Archive** stops only that agent and preserves its data; use **Archived**
 then **Restore** to bring it back. Restart and Restore never resume work.
+
+## Removed interfaces
+
+The public Code60 CLI and Windows support have been removed. There is no replacement
+terminal command or compatibility shim. Existing configuration, databases, run records,
+histories and worktrees are preserved. Provider CLIs remain desktop prerequisites.
+This is a breaking removal for the next release; release preparation sets the version.

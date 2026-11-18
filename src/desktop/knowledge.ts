@@ -273,6 +273,15 @@ export class DesktopKnowledge {
       status = state.gitReady === false ? "blocked" : "unknown";
       reason = "Project workers require Git readiness with an initial commit.";
       action = "Set up Git from Chat, then continue explicitly.";
+    } else if (cap.id === "system-manager") {
+      reason =
+        "Desktop controls manage the independent macOS/Linux service. No public Code60 CLI; awareness never probes or controls the service.";
+      action = "Apps → System Manager.";
+    } else if (cap.id === "updates") {
+      status = "unknown";
+      reason =
+        "Updates ship for macOS arm64 and Linux x64. Development builds may be unavailable; awareness never checks or downloads.";
+      action = "Settings → Updates.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =

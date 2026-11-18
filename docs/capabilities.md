@@ -209,7 +209,7 @@ Schema version: 1
 - Prerequisite: provider
 - Agent access: human-only
 - Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.
-- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.
+- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -260,7 +260,7 @@ Schema version: 1
 
 - ID: `system-manager`
 - Status: shipped
-- Purpose: Install, repair, start, stop or uninstall the background automation service.
+- Purpose: Install, repair, start, stop or uninstall the macOS/Linux background automation service through System Manager. No public Code60 CLI is available.
 - Access: Apps → System Manager
 - Prerequisite: none
 - Agent access: human-only
@@ -302,7 +302,7 @@ Schema version: 1
 
 - ID: `updates`
 - Status: shipped
-- Purpose: Check, download and install platform releases.
+- Purpose: Check, download and install macOS arm64 and Linux x64 desktop releases.
 - Access: Settings → Updates
 - Prerequisite: runtime
 - Agent access: human-only
@@ -405,7 +405,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: No new action authority, workers, CLI, drafts, transcripts, diagnostic logs or credentials.
+- Limits: No new action authority, workers, drafts, transcripts, diagnostic logs or credentials.
 - Pages: `home`
 - Settings sections: none
 - Tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization`, `code60_read_view`

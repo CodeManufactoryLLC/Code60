@@ -240,7 +240,7 @@ export interface ServiceStatus {
 
 const id = z.uuid({ error: "Invalid automation ID" });
 const revision = z.number().int().positive();
-export const automationRequestSchema = z.discriminatedUnion("action", [
+const automationRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("status") }),
   z.strictObject({ action: z.literal("list") }),
   z.strictObject({ action: z.literal("get"), id }),

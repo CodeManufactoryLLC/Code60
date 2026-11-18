@@ -1,17 +1,17 @@
 # Architecture
 
-Status: implemented (first version). Code60 has two interfaces: the Electron desktop app and the headless `code60` command-line tool.
+Status: implemented. Code60 is an Electron desktop application for macOS and Linux.
+The background scheduler retains an internal headless executor; there is no public Code60 CLI.
 
 ## What it does
 
 `code60` runs coding agents in parallel. Isolated runs get their own worktrees.
 Desktop chats checkpoint human requests and automatically integrate isolated
-working-file changes at safe turn boundaries, with message-level Undo. Headless
-CLI runs retain their existing review-only worktree behavior.
+working-file changes at safe turn boundaries, with message-level Undo. Scheduled runs retain review-only worktree behavior.
 
-Git is not required for headless CLI runs. Desktop project workers require a Git repository with an initial commit. In the CLI, outside a Git repository, or in a repository with no commits yet, every run works directly in the current directory instead (see [Runs without a worktree](#runs-without-a-worktree)).
+Project workers and Automations require a Git repository with an initial commit. Relay may explicitly execute in a direct folder (see [Runs without a worktree](#runs-without-a-worktree)).
 
-That is the whole product. The tool talks to agents over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), runs them from an Electron and React desktop app or headless from the CLI, and keeps only the plain files it needs to show what happened.
+That is the whole product. The tool talks to agents over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), runs them from the Electron and React desktop app or its independent scheduler, and keeps only the plain files it needs to show what happened.
 
 ## Relay and multi-project architecture
 
@@ -74,16 +74,16 @@ features, resource bounds and remaining native-platform validation.
   verified provider and the harness's permission decisions remain authoritative.
   Never fall back between modes or retry in a different directory.
   Keep filesystem device/inode comparisons at full integer precision, including
-  Windows file identities above JavaScript's safe-number range. These internal
+  identities above JavaScript's safe-number range. These internal
   identities are not renderer capabilities or persisted execution authority.
 - Explicit direct mode runs in the exact directory, even inside Git. Host-owned
   bounded folder preimages cover files before execution; Undo also rewinds manual
   edits since that snapshot and must warn explicitly. This is not isolated
   application/discard. Worktree mode requires a valid Git base.
-  CLI defaults and existing run-record format remain unchanged.
+  Existing run-record formats remain readable.
 - Relay lives in `$XDG_STATE_HOME/code60/relay` (default
   `~/.local/state/code60/relay`). `state.json` sits outside `workspace/`, its
-  persistent ACP/process directory. Validate private permissions, Windows ACLs,
+  persistent ACP/process directory. Validate private permissions,
   same-handle bounded reads and atomic writes. Never initialize Git, associate it
   with a database, or remove it on shutdown. Missing workspace data, malformed
   metadata and unsafe storage require explicit recovery. An exclusive writer
@@ -147,7 +147,7 @@ features, resource bounds and remaining native-platform validation.
   a Git lock or hold this metadata queue over working-file integration/Undo writes.
   Interactive run shutdown cancels queued worktree creation without waiting for
   another owner's metadata operation. Started worktree commands use owned process
-  trees and settle cleanup before shutdown returns. Headless CLI execution keeps
+  trees and settle cleanup before shutdown returns. Scheduled execution keeps
   its existing subprocess behavior.
 - Freeze instructions per human request. Baselines, worker assignments, plan rows,
   results and reviews are target-qualified. Human Accept authorizes the specific
@@ -220,7 +220,7 @@ features, resource bounds and remaining native-platform validation.
   Explicit hidden worktree inventory reads omit recursive sizes. A visible size
   scan checks its captured owner and visibility throughout traversal, stopping
   on navigation, hide or close rather than finishing an unwanted filesystem scan.
-  Existing CLI worktree listing defaults remain unchanged.
+  Default worktree listing behavior is unchanged.
   Renderer detail readers share the app stream's bounded subscribe-before-read
   recovery protocol, but merge on their own revisions. Retained caches are keyed
   by the complete owner address and pruned on close/generation replacement.
@@ -379,8 +379,8 @@ base branch resolved at launch, explicit deny-by-default permissions and no MCP 
 implicit memory. Pin repository and provider identities; changes require review.
 Worktrees are not sandboxes. Never automatically merge, apply, commit or push.
 
-Installation requires consent. Use per-user launchd, Task Scheduler or systemd
-without linger. No TCP or hosted service. Desktop and CLI use the automation public
+Installation requires consent. Use per-user launchd or systemd
+without linger. No TCP or hosted service. Desktop controls use the automation public
 API; the renderer uses narrow validated preload methods and opaque repository IDs.
 Desktop shutdown and Stop all do not stop service-owned work.
 The database-independent Automation Studio page is nested under Apps, alphabetically
@@ -442,7 +442,7 @@ it never changes project schemas or grants persisted execution authority.
 Automatic extraction uses the verified orchestration provider with tools denied.
 Global promotion is human-only. Memory settings, source provenance, corrections,
 suppression and bounded retrieval are owned by desktop; core receives optional
-injected lifecycle hooks. CLI defaults and the manual RAG experiment stay unchanged.
+injected lifecycle hooks. Scheduler defaults and the manual RAG experiment stay unchanged.
 Only completed, committed source ranges can advance extraction cursors. Provider
 session replacement never replays a dispatched request or restores task authority.
 
@@ -466,7 +466,7 @@ sidecar batches, retaining shared evidence required by surviving records and
 suppressing recreation. Shortening retention requires a main-owned count preview,
 native confirmation and revalidation. Maintenance runs independently of Settings.
 Search indexing retries automatically with bounded backoff; manual repair is shown
-only after those retries fail. CLI, scheduled automations and manual RAG are unchanged.
+only after those retries fail. Scheduled automations and manual RAG are unchanged.
 
 Exception for the desktop RAG experiment: Settings → Advanced → Experiments → RAG
 manually snapshots all saved/live orchestration chats and workers across the
@@ -493,7 +493,7 @@ Private, versioned JSON generations beneath
 `.code60_workspace/rag/<database-path-sha256>` store conversation provenance,
 message ordinal, original offsets/text and little-endian float32 vectors encoded
 as base64. Model, chunker, database, source and vector identities are checked.
-The database schema, CLI, Search and MCP tools are unchanged. Future repository
+The database schema, Search and MCP tools are unchanged. Future repository
 sources must add a distinct versioned source kind, not misuse conversation fields.
 An atomic manifest replacement publishes a completed generation. Failed/cancelled
 builds keep the old manifest; native-confirmed Clear deletes only derived RAG files.
@@ -566,7 +566,7 @@ legacy human review decisions and pending feedback are persisted beneath the pri
 job queue. Restart never automatically delivers saved feedback or grants worker authority.
 Historical reviews remain read-only; they cannot silently become new work. New
 requests use ordinary-chat corrections, automatic integration and message Undo.
-CLI records and the database schema are unchanged.
+run records and the database schema are unchanged.
 
 Chat review groups workers by the human request that dispatched them. A Changes tab shares
 the Chat side panel with project and revision-specific file tabs. Overlapping paths in
@@ -600,7 +600,7 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Merging, committing worker changes to a project branch, pushing, or deciding whether a task succeeded. Exceptions for explicit initial commits and internal desktop task snapshots are described here.
 - Retries, durable task queues, and exactly-once execution. A failed run is reported, and the user starts a new one.
 - Automatic crash recovery. After a crash, the tool lists what was left behind; recovery starts only when the user sends a new message to an ended session in the desktop app.
-- Storing credentials. Agents log in through their own CLIs. The CLI passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
+- Storing credentials. Agents log in through their own CLIs. The scheduler passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
 - Settings profiles, workspace trust, imported project settings, and settings export. The desktop app's saved run configurations (see [Desktop app](#desktop-app)) are the one exception: named batch settings stored in the project database, never applied to the CLI or the config file.
 - CLI orchestration services, external ACP servers, and arbitrary agent-to-agent communication. Only the desktop Orchestration Chat may dispatch and control its own workers in the open project through the scoped MCP tools described below.
 - Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and model changes during a turn. Between-turn model changes and follow-up prompts are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
@@ -609,13 +609,12 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - File watching. The desktop app polls external state on a schedule (see [Polling](#polling)) instead.
 - Shared or remote Code60 servers, and coordination across machines. User-configured remote MCP tool servers are supported as described below.
 - Sandboxing. A worktree is not a security boundary, and the agent runs with the user's permissions.
-- Windows ARM64 and Windows versions older than Windows 11. Windows desktop distribution targets x64 only.
+- Windows desktop execution and distribution.
 
 ## Desktop diagnostic logging
 
 Desktop startup alone enables an optional typed log sink in core and agents. The
-headless CLI does not construct a store or enable capture; its commands, output,
-exit codes and run records are unchanged. Browser-safe record/query schemas live
+scheduler does not construct a desktop diagnostic store or enable capture. Browser-safe record/query schemas live
 in contracts and cross the bridge through its existing entry point. Desktop owns
 the focused JSONL store, not SQLite or the transcript store.
 
@@ -634,7 +633,7 @@ at 256 KiB or one minute. A shared exclusive directory lock serializes every app
 pruning, append, clear and query, with a 300 ms acquisition deadline. Live or
 unverifiable owners are never displaced; dead-owner locks become reclaimable after
 30 seconds. Unique owner filenames prevent stale reclaimers deleting a new owner's
-file. POSIX ownership/modes and Windows private ACL checks reject unsafe storage.
+file. POSIX ownership and private modes reject unsafe storage.
 
 Capture validates an allowlist before serialization. It accepts no arbitrary text,
 exceptions, prompts, transcript fragments, raw ACP/tool payloads, environments,
@@ -672,7 +671,6 @@ The seven-day/20 MiB policy does **not** expire or limit existing transcripts.
 
 | Module | Source | Responsibility |
 | --- | --- | --- |
-| CLI | `src/cli` | Argument parsing, headless output, signals, and exit codes. |
 | Desktop | `src/desktop` | Electron main process: the window, native dialogs, the IPC handlers, one workspace with multiple independent run batches, and shutdown. |
 | Bridge | `src/bridge` | The typed IPC contract between `desktop` and `renderer`, and validation of every request from the renderer. |
 | Renderer | `src/renderer` | The React interface, built with Vite. It runs sandboxed, with no Node.js or Electron access. |
@@ -681,11 +679,10 @@ The seven-day/20 MiB policy does **not** expire or limit existing transcripts.
 | Automation | `src/automation` | Electron-independent scheduled execution service, private metadata, execution integration and local client. |
 | Agents | `src/agents` | Starting an agent process, the ACP client, translating ACP updates into run events, cancelling, and killing the process. |
 | Git | `src/git` | Creating, listing, and removing worktrees, measuring their logical file sizes, diffs, and status, using the `git` executable. |
-| Platform | `src/platform` | Node-only leaf module for executable/environment resolution, owned process trees, native identity, path identity, and private storage. Uses the first-party `native/windows` helper on Windows, never an ABI-dependent addon. |
+| Platform | `src/platform` | Node-only leaf module for executable/environment resolution, owned process trees, native identity, path identity, and private storage. |
 
 ```mermaid
 flowchart LR
-  CLI["cli"] --> Core["core"]
   Renderer["renderer (React)"] -. preload IPC .-> Desktop["desktop (Electron main)"]
   Renderer --> Bridge["bridge"]
   Desktop --> Bridge
@@ -702,51 +699,14 @@ flowchart LR
   Core --> Platform
   Agents --> Platform
   Git --> Platform
-  Platform --> Win32["Win32 helper / Job Objects"]
 ```
 
-- `cli` depends on `core` and `automation`. `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
+- `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
 - `desktop` depends on `core`, `bridge`, `automation` and `platform`. `bridge` and `renderer` may import only types from `core`; neither may import `platform`. The renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
 - `agents` and `git` never import each other or `core`. `core` receives them as injected interfaces, so tests can use fakes.
 - `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP.
 - Domain logic lives in `core` and runs without the desktop app.
 - `core`, `agents`, `git`, and `desktop` may import `platform` only through its index. `platform` imports no application modules, Electron, React, or provider SDKs. Bridge, renderer, and contracts remain browser-safe.
-
-### Native Windows contracts
-
-On Windows, all agent roles use a first-party helper executable outside ASAR.
-It creates agents suspended, assigns them to exclusive kill-on-close Job Objects
-with no breakaway, restricts inherited handles to ACP stdio, and then resumes
-them. A separate authenticated control pipe and an owner-process handle stop
-the job on owner/control loss. Root exit also terminates descendants. Startup
-has a five-second deadline and job exit verification a five-second deadline.
-ACP cancellation and its ten-second wait are unchanged. Windows then terminates
-the owned job, without emulating SIGTERM. POSIX retains its existing grace.
-
-Optional native identities contain creation time, owner SID, and agent job name.
-Legacy records remain readable. Windows never authorizes a leftover stop using
-command text or a PID alone. Missing, inaccessible or mismatched identities
-block continuation/discard and unsafe stops; only a verified absent owned job
-authorizes writing to its worktree again. Owner access failures are conservative.
-Recovery remains explicit and ACP once-only permission rules are unchanged.
-
-Windows desktop discovery reads inherited, user and machine PATH and documented
-installation directories, separated with semicolons. It never runs shell profiles.
-Environment names are case-insensitive on Windows; absolute executable commands
-remain authoritative. Standard npm/npx shims resolve to their CLI JavaScript and
-a matching Node executable. Other batch launchers use one rejecting adapter,
-never blanket shell mode. Prompts stay on ACP stdin.
-
-Browser-relative file paths remain slash-separated. Windows previews/listings
-hold non-delete-sharing handles for every ancestor, reject every reparse point,
-and bound reads. Local absolute drive paths are supported; device/drive-relative
-paths, alternate streams and unsupported long paths fail clearly. Filesystem
-identity uses canonical spelling, not globally lowercased paths. XDG/home config
-and state defaults remain unchanged. New private objects receive restrictive
-owner/SYSTEM ACLs at creation; existing user parent ACLs are never rewritten.
-An unsafe existing Code60-private ACL fails closed. Atomic rename retries only
-Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write. Each
-helper rename attempt keeps the normal seven-second helper bound.
 
 ## A run
 
@@ -754,10 +714,10 @@ A run is one agent session in one new worktree (or, [without a worktree](#runs-w
 
 1. **Create the worktree.** Core creates a run ID, then, when the run has a worktree, `git` runs `git worktree add -b code60/<run-id> <path> <base>`. `<base>` defaults to `HEAD`. Worktrees go in `<repo-parent>/<repo-name>.worktrees/<run-id>` unless the config says otherwise.
 2. **Start the agent.** `agents` spawns the configured command with the worktree as its working directory, in its own process group. It initializes ACP, creates a session rooted at the worktree, and sends the prompt.
-3. **Stream events.** ACP session updates become run events (see [Run events](#run-events)). Core appends each event to the run's event log and forwards it to the CLI.
+3. **Stream events.** ACP session updates become run events (see [Run events](#run-events)). Core appends each event to the run's event log and forwards it to the owning caller.
 4. **Answer permission requests.** Core applies the [permission policy](#permissions). The desktop app may ask the user. Headless mode never waits.
 5. **End the turn.** In headless mode, the turn's stop reason decides the run's final status, and `agents` stops the agent process. In the desktop app, the run becomes `idle` instead (see [Follow-up turns](#follow-up-turns)).
-6. **Review.** `code60 diff <run-id>` shows the worktree's changes against `<base>`, including untracked files and any commits the agent made. The user keeps the work by committing or merging with Git, or removes it with `discard`.
+6. **Review.** Desktop review shows worktree changes against `<base>`. Scheduled changes remain review-only; desktop conversations use guarded automatic integration and message Undo.
 
 The tool advertises no ACP file-system or terminal client capabilities. Agents use their own tools inside the worktree, and permission requests are the only point where the tool approves anything.
 
@@ -765,12 +725,9 @@ If an agent requires ACP authentication, the run fails with a message telling th
 
 ### Runs without a worktree
 
-In the CLI, when the current directory is not inside a Git repository (or `git` is missing), or `HEAD` resolves to no commit because the repository has none yet, the runs have no worktree. The agent starts directly in the current directory, and nothing is created, initialized, or committed for it.
-
-- The CLI says so on standard error before the runs start. With more than one run, it warns that the runs share the directory and can overwrite each other's changes.
-- `--base` still requires a commit and is a usage error (exit code 2) when it cannot be resolved.
-- The record has `base` and `branch` set to `null`, and `worktree` is the directory the agent ran in. `--json` reports `"branch": null` and `"changedFiles": null`.
-- `diff` and `discard` refuse (exit code 1), because there is no separate worktree or branch. Review and undo the changes in the directory itself. `list` and `stop` work as usual.
+Project workers and scheduled automations require a Git repository with an initial commit.
+Relay alone can explicitly select direct-folder execution without Git. Direct mode
+never silently falls back to or from worktree mode. Existing direct-run history stays readable.
 
 ### Run statuses
 
@@ -817,7 +774,7 @@ The turn timeout (`turnTimeout`, default 30 minutes) applies to each turn, not t
 
 Cancelling a turn, whether by the Cancel turn command (context menu or command palette) or timeout, sends ACP `session/cancel` and waits up to 10 seconds for the turn to end. In the desktop app, a turn that ends within that time leaves the run `idle`, so you can reply or finish. In headless mode, or when the turn does not end in time, the run ends: the agent's process group gets SIGTERM, followed by SIGKILL after 5 seconds. Killing the whole group also stops the tool processes the agent started. The worktree is always kept.
 
-On SIGINT or SIGTERM, the CLI cancels every active turn and ends every run. It waits for the agents to stop and exits with code 130. The desktop app does the same on these signals, then quits. A second signal skips the grace periods.
+On SIGINT or SIGTERM, the desktop cancels active turns, stops its owned processes, then quits. A second signal skips the grace periods. The independent scheduler handles its own signals and work.
 
 ## Permissions
 
@@ -863,13 +820,13 @@ To change a mode, wait until the session is idle and use the custom popover menu
 
 The stable ACP v1 adapter retains every valid non-mode select `configOptions` control (including uncategorized and reasoning options) in optional `SessionState.settings`. Model and mode fields remain compatible with older records. It uses legacy `modes` only when config options are absent. It does not advertise boolean-config support or interpret provider metadata. New/load/resume responses and pushed config, mode and usage notifications feed a bounded, validated session snapshot. Setter responses and notifications replace the complete configuration, including dependent reasoning options. Updates before a new session's ID arrives are limited to 128 metadata notifications / 256 KiB and matched to the returned ID. Usage has safe nonnegative integer counts; malformed/unsupported controls cannot grant capabilities.
 
-Optional `sessionState` in `run.json` and `RunView` retains model, usage, mode/setting controls and report timestamps. Deduplicated `sessionState` events use existing ordered writes and snapshot revisions, without polling, SQLite changes or a record-format bump. Older records remain readable. Fresh handoffs clear old reports; restored connections use newly reported state without reapplying saved settings. State events do not become conversation text, unread replies, timing activity or worker summaries. CLI JSON output omits this added record metadata.
+Optional `sessionState` in `run.json` and `RunView` retains model, usage, mode/setting controls and report timestamps. Deduplicated `sessionState` events use existing ordered writes and snapshot revisions, without polling, SQLite changes or a record-format bump. Older records remain readable. Fresh handoffs clear old reports; restored connections use newly reported state without reapplying saved settings. State events do not become conversation text, unread replies, timing activity or worker summaries.
 
 The Model picker shares the mode popover's grouped choices, keyboard navigation and dismissal. It forwards ACP `session/set_config_option` between turns only, using the existing `set-mode` action and idle/single-flight checks. Busy sessions explain **Available after this turn**; missing controls explain **Not advertised by this connector**; timeouts show **Model unconfirmed** without claiming rollback. There are no hard-coded provider models or legacy `session/set_model` calls.
 
 The picker can save confirmed `model`, `thought_level` and `model_config` values as defaults for new orchestrator or worker sessions. Main derives selections from the owned run; the `save-model-default` action accepts only its ID. Orchestrator defaults cover Relay, project chats and Custom Agents. Workers use their own role default and never follow parent changes. Settings → Agents → Default models lists saved connector/role entries; the fixed `modelDefault` preload method clears one entry. Strict, bounded `modelDefaults` version 1 preferences live in `desktop.json`, using its existing serialized atomic writer; compact snapshots contain selections, not option catalogs.
 
-Precedence is explicit in-session choice, then saved role default, then connector default. Interactive core receives optional `initialSettings`, applies the advertised model first after installing a new session, then rechecks dependent controls before applying reasoning. Unavailable, refused or unconfirmed values produce visible notes without preventing startup or choosing substitutes. Explicit choices are retained in memory across session replacement for context handoff; an explicit model change discards prior dependent choices. ACP load/resume does not reapply defaults. Helpers, CLI and scheduled automations keep connector defaults.
+Precedence is explicit in-session choice, then saved role default, then connector default. Interactive core receives optional `initialSettings`, applies the advertised model first after installing a new session, then rechecks dependent controls before applying reasoning. Unavailable, refused or unconfirmed values produce visible notes without preventing startup or choosing substitutes. Explicit choices are retained in memory across session replacement for context handoff; an explicit model change discards prior dependent choices. ACP load/resume does not reapply defaults. Helpers and scheduled automations keep connector defaults.
 
 The existing worker/chat IPC action unions accept a narrow `set-mode` action with a run ID and `{source, configId, value}`. Main-process ownership and core idle-state checks apply, and values must match current advertised choices. Core exposes a pending mode-change flag, rejects overlapping prompts/changes, and automatic worker delivery waits until it clears. The controller releases its action queue while awaiting the RPC so shutdown and other sessions remain responsive. Requests time out after 15 seconds; local waits abort on shutdown. A rejected change retains reported state; a timeout labels mode unconfirmed until a subsequent report or successful retry. No failure claims to roll back the harness.
 
@@ -914,7 +871,7 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
 }
 ```
 
-Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (exit code 2). Durations use the same grammar in CLI configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
+Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (a configuration error). Durations use the same grammar in shared configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
 
 The model is part of an agent's command or of the agent's own configuration. The tool does not pick models; the desktop displays the model reported through ACP configuration.
 
@@ -926,11 +883,11 @@ accepts only `command`, `args` and `env`; HTTP/SSE accept only `url` and `header
 Names and commands must be nonempty, arguments and environment/header values must
 be strings, and URLs must use HTTP(S). Omitted `args`, `env` and `headers` become
 empty collections. Unknown fields and the reserved server name `code60` are usage
-errors (exit code 2). MCP validation and malformed-JSON errors never echo values.
+errors (a configuration error). MCP validation and malformed-JSON errors never echo values.
 
 The distributed `mcp.default.json` is an opt-in starter containing pinned stdio
 Playwright MCP (isolated/headless) and Context7 definitions without credentials.
-It ships in the CLI package root and desktop resources, but is never loaded
+It ships in desktop resources, but is never loaded
 automatically or copied over user configuration. Users explicitly merge selected
 entries into `config.json`; runtime defaults remain empty.
 
@@ -952,10 +909,10 @@ Attribution is presentation metadata, never authority or evidence of success.
 The built-in worker transcript projection flattens attribution to `mcp` and
 `server` fields, keeping its scalar-only contract.
 
-Core resolves a detached server list when preparing headless CLI runs, desktop
+Core resolves a detached server list when preparing scheduled runs, desktop
 manual runs, dispatched workers, orchestration chats and explicit ended-run
 recovery. Only chats also receive their own built-in Code60 stdio gateway.
-Workers, CLI and manual sessions receive configured servers without that gateway.
+Workers and manual sessions receive configured servers without that gateway.
 Setup/connection probes, episodic-memory extraction and search-summary helpers
 receive neither user servers nor the gateway.
 
@@ -971,7 +928,7 @@ Config reloads do not restart or alter active sessions, including idle sessions.
 Later runs/workers, new/retried chats and explicit recovery use the newly resolved
 configuration. Restoration and fresh handoffs do not use saved server definitions.
 Definitions stay in main-process memory and ACP setup requests, not run records,
-transcripts, renderer snapshots or CLI results. The agent owns MCP connections and
+transcripts, renderer snapshots or execution results. The agent owns MCP connections and
 stdio children; Code60 retains its existing agent process-tree cleanup and
 once-only permission policies. This is not a new sandbox or a permission grant.
 
@@ -985,7 +942,7 @@ content in ordinary transcripts. Keep the config private and out of source contr
 
 Orchestration and recovery prompts that Code60 writes itself are templates in `src/contracts/prompts.ts`. Dedicated memory extraction and search overview helpers use fixed prompt-rendering functions in `contracts`; these are not orchestration template overrides. A template marks merge fields as `{{name}}` (spaces inside the braces are allowed). `prompts` in `config.json` may replace any template by its ID. The `operatingContract` is injected before each user message in the orchestration chat; its text is not recorded as if the user wrote it. ACP v1 has no stable system-prompt field, so this context is included in the prompt sent to the selected provider.
 
-The orchestration chat uses the connected database's saved Operating Contract edit first, then `config.json`, then the built-in template, on each new turn. Desktop handoffs resolve each template the same way; edits apply only to later handoffs, never a turn already in progress. Edits are shared by every project in that database. The CLI does not read database edits and never sends these templates.
+The orchestration chat uses the connected database's saved Operating Contract edit first, then `config.json`, then the built-in template, on each new turn. Desktop handoffs resolve each template the same way; edits apply only to later handoffs, never a turn already in progress. Edits are shared by every project in that database. Scheduled execution uses its saved prompt rather than database chat templates.
 
 `operatingContract` is a fixed clause map rather than a string. Its required keys, in assembly order, are
 `role`, `requests`, `delegation`, `planning`, `workers`, `activity`, `updates`, `reviews`,
@@ -1002,10 +959,10 @@ legacy string overrides reset to built-in clauses instead of being migrated.
 | `operatingContract` | Prepended to each user turn in the app-wide orchestration chat. | none |
 | `workerUpdates` | Automatic worker turn-end and failure updates, delivered between orchestration chat turns. | `updates` (required; worker states and bounded reply excerpts) |
 
-- A template is at most 8,000 characters and not empty. An unknown or malformed merge field, an unknown template ID, or a missing required field is a configuration error (exit code 2).
+- A template is at most 8,000 characters and not empty. An unknown or malformed merge field, an unknown template ID, or a missing required field is a configuration error (a configuration error).
 - Merging is one pass: values are inserted as they are, never escaped and never scanned for further merge fields. Saved prompts and agent output are untrusted text inside the prompt.
 - Automatic orchestration turns also receive the Operating Contract, with an explicit automatic-update heading. Their prompt events carry `origin: "automatic"`; older/user prompt events omit it. The saved clause set is assembled immediately before delivery; edits never affect a turn already in progress.
-- The CLI's own prompts are exactly the user's text, so headless runs use no template.
+- Scheduled execution uses exactly the saved prompt text without a chat template.
 
 ### Commands
 
@@ -1077,7 +1034,7 @@ command, and Copy still copies the original message.
 The orchestrator composer exposes a filtered ARIA combobox while the caret is in
 the initial dollar word. Up/Down selects; Enter or Tab inserts `$name ` rather than
 sending; Escape dismisses. Unknown dollar words show a plain-text notice and are
-sent unchanged. Slash-prefixed text, including `/plan` and paths such as `/tmp`, is always plain text. Worker chats and the CLI do not
+sent unchanged. Slash-prefixed text, including `/plan` and paths such as `/tmp`, is always plain text. Worker chats do not
 expand commands.
 
 ## Leftovers after a crash
@@ -1089,35 +1046,6 @@ expand commands.
 - `stop <run-id>` kills that process group, but only after confirming that the live process's command line still matches the recorded one, which guards against reused PIDs. The recorded command line is what `ps` reported right after the agent started, because launchers such as `npx` change how their command line looks. If it does not match, the tool refuses and prints the PID so the user can decide.
 - Worktrees are never removed automatically.
 - In the desktop app, an ended run with its worktree intact may be continued by sending a message after its leftover agent is stopped. It attempts ACP restoration first, then starts a handoff if needed as described above. This is not automatic crash recovery.
-
-## CLI
-
-```text
-code60 run [prompt] [--prompt-file <path>] [--agent <name>]... [--base <rev>]
-           [--turn-timeout <duration>] [--parallel <n>] [--allow <kind>]... [--allow-all]
-           [--headless] [--json]
-code60 list [--json]
-code60 diff <run-id>
-code60 discard <run-id> [--yes]
-code60 stop <run-id>
-code60 --version
-```
-
-- `run` is always headless and runs exactly one turn per run. It reads the prompt from the argument, `--prompt-file`, or standard input, and exactly one of them must be given. Standard input is read only when neither of the others is given and it is not a TTY. `--headless` is accepted for compatibility and changes nothing. Use the desktop app for interactive runs.
-- In headless mode, progress goes to standard error: status changes, new tool calls, and permission decisions, without tool/permission titles or status reasons that may echo task content. `--json` writes one result object to standard output, `{"runs": [...]}`, with every run's ID, agent, status, reason, branch, worktree, and changed-file count. Diagnostic reasons receive best-effort credential redaction; fields and exit-code semantics stay unchanged. Without `--json`, a short table goes to standard output.
-- `discard` refuses while the run is active or its agent process is alive. It shows the files that would be lost, then removes the worktree and its `code60/<run-id>` branch. It asks for confirmation in a TTY and requires `--yes` otherwise.
-
-### Exit codes
-
-When runs end with different statuses, the code earliest in this table wins:
-
-| Code | Meaning |
-| --- | --- |
-| 2 | Invalid usage or configuration, including an unknown run ID. |
-| 130 | Cancelled by a signal, or at least one run was cancelled by the user. |
-| 124 | At least one run timed out. |
-| 1 | At least one run failed or was interrupted. |
-| 0 | Every run finished. |
 
 ## Desktop app
 
@@ -1232,13 +1160,13 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 
 - **Setup transaction and probes.** The main process owns the candidate, role, phase, errors and verified set, recovered through snapshots after renderer reload. A single attempt runs at a time. Detection refreshes desktop PATH and checks provider-specific prerequisites; npx alone does not establish Claude/Codex detection. Configured command overrides remain authoritative. Existing npx adapters may download when connecting; Code60 never installs provider CLIs or stores login credentials. A probe initializes ACP and creates a session in a generated private `code60-agent-probe-*` temporary directory independent of the database. It sends no prompts and creates no runs, transcripts or worktrees. The existing 15-second timeout and process cleanup apply; stop the process before removing the directory. Cancellation, dismissal, config changes, renderer loss/reload and shutdown cancel attempts and discard stale completions. Completed verification stays in memory until committed or abandoned.
 
-- **Enabled agents.** The automatically invoked finish action atomically writes `agentSetup` version 1 to desktop preferences: primary provider, enabled IDs and SHA-256 identities of verified command argument arrays. Legacy preferences never satisfy this gate and available agents are never imported automatically. Persisted membership means configured, not a live connection. Automatic chat startup, manual and MCP worker dispatch, continuation, and saved run configuration validation require completed setup and an enabled provider with an unchanged command identity. Snapshots and MCP provider lists contain only enabled agents. Changing a verified command requires verification again. Core accepts an optional resolved configuration for desktop launches/recovery; the headless CLI still uses its original config, defaults, flags and lifecycle. Native desktop defaults add `agy acp`, `copilot --acp --stdio`, and `kiro-cli acp`, retaining Claude/Codex npx adapters and the existing Droid/OpenCode commands.
+- **Enabled agents.** The automatically invoked finish action atomically writes `agentSetup` version 1 to desktop preferences: primary provider, enabled IDs and SHA-256 identities of verified command argument arrays. Legacy preferences never satisfy this gate and available agents are never imported automatically. Persisted membership means configured, not a live connection. Automatic chat startup, manual and MCP worker dispatch, continuation, and saved run configuration validation require completed setup and an enabled provider with an unchanged command identity. Snapshots and MCP provider lists contain only enabled agents. Changing a verified command requires verification again. Core accepts resolved desktop configuration; scheduled execution uses its saved configuration and lifecycle. Native desktop defaults add `agy acp`, `copilot --acp --stdio`, and `kiro-cli acp`, retaining Claude/Codex npx adapters and the existing Droid/OpenCode commands.
 
 - **Visual system.** Light uses white surfaces except for gray composers and colored user bubbles, including resting controls, table headers and rows, code blocks, disabled controls, and the footer. Hairline borders separate fields, buttons, groups and sections; only overlays keep one tight shadow. Hover uses pale blue fills without adding borders; selection uses neutral gray. Primary actions use blue (`#5b9fe6`). Dark and System dark use charcoal (`#252525`) resting surfaces, including every table row, with dark gray (`#303030`) composers. Button groups use raised gray (`#303030`); table headers and dialog headings retain muted dark blue (`#253347`), and hover highlights retain `#1b2d4a`. Main text is white, muted text is `#b1b1b1`, subtle borders are `#484848`, control borders are `#8c8c8c`, and selection uses neutral gray (`#3c3c3c`). The native title-bar overlay and window background use `#252525`. Fine borders separate controls and fields; disabled controls are dimmed with solid borders, without hatching or dashed outlines, and unavailable sidebar destinations are dimmed labels without outlines. The database notice is a single compact status row with its Connect to database action. Primary actions use a lighter blue (`#77b7f5`), with related shades for focus and hover; human message bubbles use dark blue (`#1b3a5c`) with white text, or pale blue (`#d8e8fa`) with black text in Light. Status signals remain opt-in. The sidebar is square and has no outer border; main page surfaces have no outer border, with 5px corners on Chat. Passive containers other than cards and modal dialogs are square; modal dialogs have 5px corners. The shared Code60 wordmark uses locally bundled D-DIN Regular, independently of text-role preferences, and has a small 45-degree chamfer at the upper-right of its colored 60 block. The subtitle retains its D-DIN font. Cards (including settings groups, agent choices, approvals and result cards) have 5px corners. Buttons outside the left sidebar, switch buttons and new-message composer frames use 5px corners; left-sidebar buttons and selected rows are square; checkboxes and modal/popup windows remain square; radio inputs and their selected dots stay circular, without altering Carbon checkbox marks. The selected sidebar row carries a 2px inset accent bar on its left edge. Digits use tabular numerals, and timestamps, counts, versions and fact labels use a compact monospace metadata face, while card titles use their independent text role. The full-window splash and native window frame retain their existing geometry. Human message bubbles, agent messages, non-Chat page panels and vendor editor/table internals remain square. Editable text/number/date fields, textareas and composite prompt fields have 5px corners. Selects, scrollbar thumbs and other passive containers stay square. Standard controls and composite prompt editors show a subtle shadow on keyboard focus. The Focus highlight border switch adds an outline and stronger halo. Both chat composers use a focus border, and independent icon actions highlight the glyph. The switch defaults off, applies immediately, and persists locally as `code60.focusHighlight`. When enabled, outlines follow control geometry; explicit selection, validation, approval and failure cues remain. Standalone buttons have no trailing-edge border effect. Related controls, including segmented radio choices, form seamless square groups with straight internal separators, with no overlapping hit areas. A fine outer border distinguishes control groups; their fill is white in Light and raised charcoal in Dark. Standard groups use 28px controls (30px including the frame); compact groups use 24px controls. Menus, dialogs, chat windows, the palette and toasts use one tight overlay shadow. Sidebar pages and navigation groups use locally bundled Phosphor duotone icons sized to match their navigation label text. Carbon glyphs in navigation scale with the same setting. Resting left footer glyphs match the footer text. Original paths and 20% secondary-layer opacity are retained from @phosphor-icons/core 2.1.1 (MIT), without a dependency or runtime fetch. Decorative glyphs inherit their label color through hover, selection and forced colors. Icons are decorative, without extra names, focus targets or actions, and retain an 8px label gap and at least 12px of leading space. The gutter and 40px minimum rows expand with larger text to avoid clipping and preserve hierarchy alignment. Other icons use locally bundled IBM Carbon glyphs in the DOM and canvas, with 16px as the standard size. Seven configurable text roles retain their independent choices. Status labels and symbols carry meaning with optional signal colors; nothing blinks. Reduced motion disables functional animation; forced colors retain visible control edges and selection. Scrollbars use subtle theme-relative thumbs and a stronger hover tone app-wide; forced colors retain native contrast. Dialogs, menus, editors and canvas-table scrollers reserve a stable gutter before overflow so wrapping and scrollbar appearance do not shift content sideways. Horizontal tab strips, workflow diagrams and code/table blocks reserve scrollbar height as well. Non-scrolling clipped frames keep automatic gutters, and Monaco retains its own overlay-scrollbar layout. No decorative dots or middle-dot delimiters are added outside the explicitly requested dotted preview frame.
 - **Overlays.** Buttons with an accessible label or a `data-tooltip` show an inverted tooltip after a 500ms hover, or at once on keyboard focus or a quick move from another tooltip; Escape hides it. Tooltips prefer to sit above their control with a 2px stem pointing at it, flip below near the top edge, appear beside menus for menu items, and show shortcuts (from `data-tooltip-keys`) at the right. Unavailable menu items and buttons explain why in their tooltip. Cmd+K (Ctrl+K) opens a command palette, unless a dialog is open. An empty query lists every command in groups: Pages (Chat, File Explorer, and the remaining page tabs, including Prompt Builder and Settings), Project (New agent session, Open project, Connect to database, Poll project data, Stop all runs), Appearance (each theme, Signal colors, and Inline charts, with checkmarks on the current choices), and Session (commands for the selected session). Typing switches to one ranked list: label prefixes first, then word starts, then substrings, then matches in the group or run context, with matched letters bold and underlined. Arrow keys move, Enter runs, Escape closes and restores focus, and the footer counts the results. Unavailable commands are listed but disabled, following the same rules as the buttons they mirror. Right-clicking a session row, pressing the Context Menu key or Shift+F10 on the grid, or activating its Actions cell opens the same actions menu: Open chat and Review changes; Cancel turn, Finish run, Resume, and Stop leftover agent; and Delete worktree last under a 2px rule. Actions menus never have title strips. Items have Carbon icons; unavailable items keep their place, hatched, and say why in a tooltip. Arrow keys, Home, End, and typing a letter move between items; Escape or Tab closes the menu and restores focus, while an outside click, resizing, or window blur closes it without moving focus. Resume is unavailable while the recorded process group is alive or the worktree was deleted; it only opens the chat and focuses the composer. Toasts appear 16px from the window's bottom-left corner, newest at the bottom, at most three (a fourth displaces the oldest). Each has a Carbon icon, a written tone, and a 3px left rule: Note (4 seconds), Done (6 seconds), Warning (8 seconds), and Error (stays until dismissed or displaced). A bottom bar shows the time remaining; hover or focus pauses it, and the dismiss button or Escape closes a focused toast. Notes, Done, and Warning are announced politely; errors use `role="alert"`. Approvals stay in place until handled.
 - **Splash.** Require verified main-process agent setup before entry. The full-window splash uses solid white or midnight slate for the saved Light, Dark or System appearance, with upper-right Light/Dark controls and a separate draggable top strip. Center the bundled D-DIN wordmark and exact subtitle "v0.2 'Paddock' (Beta)" with one Start button below them. Lift the group up to 48px within its available space, reducing the lift on short windows. Project selection is available through the Projects plus action after entry, not on the splash. Start and Escape enter without opening or switching a project; Start receives focus when configured and connected to a database. Retain the database notice and connection action when disconnected, the setup wizard when unverified, and actionable errors. Active runs do not block entry. Returning from the footer preserves projects, chats, drafts and active work; an explicit return remains visible across reloads until Start or Escape. Use system colors and visible focus in forced colors. Dark and System dark show one bundled, licensed background image (`src/renderer/splash-backgrounds/stripes.jpeg`) over the midnight-slate surface; Light and forced colors stay solid. There is no background selector or legacy splash-background preference.
 - **Database.** Edit > Database Connection… in the native application menu, or Connect to database on the start screen, opens a Select database dialog to open an existing SQLite file or create a new one with the native file pickers. The database stores the history of opened project folders (canonical path and last-opened time), saved run configurations, prompt template edits and reusable commands; run records stay where they are. New databases use schema 5. Older Code60 databases upgrade in one transaction: schemas 1 and 2 gain the prompt-template table, schema 1 also gains the run-configuration table, single-block Operating Contract edits are reset once when upgrading from before schema 4, and schemas 1–4 gain the commands table. Other saved prompts, configurations and project history are preserved. Schema 4 introduced Operating Contract clause maps as JSON in its prompt-template row. Opening projects requires a connection. The app remembers the selected database in `$XDG_STATE_HOME/code60/desktop.json` and reconnects on launch; a saved database that is missing or unusable is reported, never recreated. Only empty files and Code60 databases are accepted, and other databases are never modified. Switching databases requires every run to have ended and closes the open project.
-- **Workspace.** File > Open Project… in the native application menu (Cmd+O or Ctrl+O) is enabled while a database is connected and no batch is active. Open Project shows a dialog with a borderless header and the connected database's project history, newest first. Choosing an entry first asks for confirmation; Open Folder is a centered plus-labelled button link below the list. Its native folder picker supports explicitly creating a directory as well as selecting an existing one, then confirms the full selected path before opening. Cancel leaves the current project and history unchanged. Opening never initializes Git or automatically creates project files; a directory explicitly created in the native picker can remain after cancellation. Each opened folder is recorded once. A labelled x icon in the upper-right of each project row removes only that history entry, without touching its folder or runs; the row has one shared hover fill rather than a separate Remove region. The selectors no longer expose a bulk Clear history button. A folder that no longer exists is reported and stays in the history. Run records are found the same way as for the CLI, so the app shows the folder's earlier runs as history. Switching projects requires every run to have ended.
+- **Workspace.** File > Open Project… in the native application menu (Cmd+O or Ctrl+O) is enabled while a database is connected and no batch is active. Open Project shows a dialog with a borderless header and the connected database's project history, newest first. Choosing an entry first asks for confirmation; Open Folder is a centered plus-labelled button link below the list. Its native folder picker supports explicitly creating a directory as well as selecting an existing one, then confirms the full selected path before opening. Cancel leaves the current project and history unchanged. Opening never initializes Git or automatically creates project files; a directory explicitly created in the native picker can remain after cancellation. Each opened folder is recorded once. A labelled x icon in the upper-right of each project row removes only that history entry, without touching its folder or runs; the row has one shared hover fill rather than a separate Remove region. The selectors no longer expose a bulk Clear history button. A folder that no longer exists is reported and stays in the history. Run records are found in their existing storage locations, so the app shows the folder's earlier runs as history. Switching projects requires every run to have ended.
 - **Run batches.** The sessions table's New agent session add row (see [Tables](#tables)), or New agent session in the command palette, starts one batch with an optional first prompt, one or more agents (the same agent may repeat), a parallel count with the same meaning as `--parallel`, and advanced options for the base revision, turn timeout, and per-kind permission overrides. Validation and defaults are the same as for `run`. Additional independent batches can start while earlier sessions are running, waiting for approval, or idle. Parallel limits apply per batch. The controller tracks each batch and its subscriptions, routes actions and approvals to its owner, and combines snapshots and sequenced events without clearing earlier transcripts. Completion history reads are serialized with starts and refreshes so overlapping batches cannot overwrite newer history or a switched workspace. Project and database switches stay blocked until all batches have ended; Stop all and every shutdown path stop all batches, including forced shutdown. Without a first prompt, each run goes straight to `idle` ("no prompt yet"), and the first prompt you send becomes turn 1 and the run's first prompt. Finishing a run that never got a prompt gives `finished` with the reason "no prompt was sent".
 - **Database workspace directory.** Whenever the desktop app successfully opens or reconnects to a Code60 SQLite database, it creates `.code60_workspace` in the database file’s parent directory if missing, using private directory permissions. Existing contents are preserved. This includes startup reconnection and databases selected after launch. A file conflict or filesystem error follows the existing database connection error path.
 - **Episodic Memory experiment.** Settings → Advanced → Experiments → Episodic Memory extracts important details from the open project's recorded events with the configured orchestration provider. A **Maximum events** field beside the centered extraction button accepts a whole number from 1 to 10,000, defaults to 10,000, and remembers the last valid value locally. The cap follows the existing session order and takes each session’s earliest recorded events until reached; a larger limit processes all available events. The button count reflects the capped selection. Invalid limits disable extraction, and the limit cannot change during a run. Clear retains both the prompt and the limit. The **Extract from N events** button captures the displayed per-session event counts, waits for complete transcript reads, and displays each returned natural-language statement as a separate cloud, with softly rounded edges, two subtle lobes, and a continuous contrasting outline around the filled shape. Clouds flow side by side and wrap onto new rows with a 35ch maximum width, 28px vertical/32px horizontal padding, and text at least 16px. Light mode uses a diagonal white-to-light-blue fill and dark text. Dark mode uses the gradient only in a thick 4px outline, with a transparent interior and the normal foreground text color. The silhouette keeps fixed-size lobes as text grows; forced-colors mode uses system colors and a plain outline. Completion reports the end-to-end elapsed time measured with a monotonic clock, including startup and cleanup; Clear and a new extraction reset the timing status. **Edit prompt** opens an inline editor; edits persist locally, **Reset prompt** restores the default instructions, and **Clear** removes results and status while retaining the prompt. Results remain in memory across page switches and reset on project/database changes or renderer reload. Extraction may be rerun with a revised prompt. Empty input, unavailable providers, incomplete reads, invalid responses, and errors are explicit; failed or cancelled runs do not publish partial results.
@@ -1247,7 +1175,7 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 
 - **Prompt Builder.** A permanent sidebar page lists the handoff templates, worker-update template and Operating Contract, with each effective source (Saved edit, config.json, or Built-in). The Operating Contract has 13 labelled clause editors in a fixed order, without add/remove/reorder controls. Its single Preview replaces all boxes with the assembled read-only body, including unsaved changes. Save commits all clauses together; Discard changes and confirmed Reset to default affect the whole contract. Other templates keep one monospace editor, a merge-field dropdown when fields exist, and inline validation; their Preview uses fixed sample values, never real run data. Edit template returns to the unsaved draft. The page does not list MCP tool descriptions or input contracts. Invalid templates cannot be saved. Unsaved drafts are kept per template through page switches; Discard changes restores the effective text. Save stores an edit in the connected database. Reset to default confirms before removing the saved edit and restores the config.json template, or the built-in template when no config override exists; its tooltip names that source. The page offers Connect to database when disconnected. Saved edits load on connection and with the run-configurations poll; invalid or unknown saved templates are skipped with a warning.
 - **Run configurations.** A permanent Configurations tab shows a table like the sessions table with Name, Preset Provider (every distinct agent in the configuration), # Agents (sessions the configuration creates), Uses, and Last Used (local time, or Never). Its New run configuration add row opens the run configuration editor; it is unavailable while another action is in progress. An Actions column after Name works like the sessions table's: clicking its cell, or pressing Enter on it, opens a menu with Edit and Delete for that configuration; deleting asks for confirmation and never affects sessions. A configuration holds the batch settings from the run form (agents, parallel count, base revision, turn timeout, and permission overrides), never a task prompt or project path. Names are unique within the database, ignoring case, and configurations are shared by every project in it. When saved, a missing parallel count or turn timeout is filled in from the current defaults; an empty base revision stays empty, so the configuration also works without Git. New agent session first lists the configurations and a Do not use a run configuration option. Choosing a configuration opens the run form prefilled with its settings and an empty prompt; changes apply only to that batch. Back returns to the list and keeps the draft. A batch counts as one use of its configuration once it has started; declined and invalid starts do not count. After a batch starts, a confirmation reports how many sessions started and has an unchecked Save Run Configuration checkbox. Checking it shows a name field, and saving stores the batch's settings as a new configuration with one use, without starting agents again. Each batch can be saved once; a failed save can be retried.
-- **Git readiness.** Desktop dispatch, manual launch and continuation require Git and an initial HEAD commit. Core preparation revalidates required isolation before creating records or workers. Existing non-isolated runs remain readable and stoppable, but cannot receive prompts or resume, even after Git setup. Their review says “No baseline was captured for this run” and offers project browsing and setup where needed; Refresh cannot reconstruct it. CLI defaults remain unchanged.
+- **Git readiness.** Desktop dispatch, manual launch and continuation require Git and an initial HEAD commit. Core preparation revalidates required isolation before creating records or workers. Existing non-isolated runs remain readable and stoppable, but cannot receive prompts or resume, even after Git setup. Their review says “No baseline was captured for this run” and offers project browsing and setup where needed; Refresh cannot reconstruct it.
 
 <a id="tables"></a>
 
@@ -1256,7 +1184,7 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 - **Consolidated Search.** Search starts with a 560px-wide form centered horizontally and set slightly below the vertical midpoint with an explicit Search button followed by square, accessible Type and Sort dropdowns. The dropdowns wrap beneath the query and button when space is tight. Enter or Search captures the query, type and sort together and moves the form above the results with a responsive top inset. A notification icon appears while draft edits are unapplied, with an Unapplied Search Changes tooltip on hover and keyboard focus. Clearing the query cancels generation and returns to the entry view with the filter selections preserved. While transcript reads or the overview are in progress, Search centers bundled artwork tinted with the current theme’s primary blue and a spotlight-animated Searching... label below the form. Skeleton paragraphs preview the AI overview, followed by skeleton result rows with timestamp, title and snippet placeholders. As the overview settles, placeholders fade and collapse while completed content fades in. Reduced-motion and forced-colors settings use a static icon, label and skeleton. Search covers the current project's documentation and source files as well as its identity, run metadata, prompts, messages and thoughts. The shared transcript cache settles pending reads before capturing an immutable submitted result set, preserving partial-read errors and retry. Literal session results require all terms case-insensitively; title and exact identifier matches rank ahead of content, with newest sorting available. If a natural-language question has no literal match, the overview uses relevant saved context ranked by meaningful query words, then recent context. Every submitted question starts an overview, including an empty-evidence question, for which the worker must report the missing evidence. Results form a single column below an AI overview, with highlighted excerpts and local metadata. Clicking a title or activating it by keyboard opens its source; transcript results retain the first event's address. Arrow keys, Home and End move between result actions. Search remains mounted across page switches.
 
   The overview uses one dedicated background ACP helper with the configured orchestration provider, independent of conversations and ordinary workers. A narrow validated bridge accepts a unique request ID, the current directory as a scope check, the query, and up to 20 saved-result excerpts of 4,000 characters each, including an empty list; source session IDs must belong to the open project. An optional includeFiles flag defaults on; All types and File searches enable it. The main process independently gathers project file evidence through the Files reader, visiting at most 32 directories (four levels deep), examining at most 24 text files and returning at most ten excerpts. It prioritizes documentation, manifests and query-relevant paths/content and skips hidden paths, generated/dependency folders, symlinks, binary/oversized files, lockfiles and known credential filenames. Up to ten saved excerpts plus ten file excerpts form the evidence when files are available; otherwise up to twenty saved excerpts are retained. No caller-selected file path is accepted by the summary endpoint. The result returns the exact numbered evidence; file result/citation actions open the existing read-only project preview. Source results remain visible beside the overview even when they were retrieved as context rather than literal matches. The main process generates a private temporary working directory, never uses a caller path as the helper's working directory, passes no Code60 MCP gateway, and denies permission requests. The contracts module owns the evidence-only prompt. This is a prompt/permission policy, not a filesystem sandbox. Only the completed plain-text answer is shown; validated in-range numeric citations open the captured local sources. Queries are bounded at 2,048 characters, replies at 16,000 characters and generation at five minutes including startup. Empty literal matches still start the helper; missing evidence is explicit in its response. Generation uses a search-only 12px striped loading-line animation, inset one pixel inside the search field's top edge and spanning only the field width. It preserves reduced-motion and forced-color behavior, with an accessible status announcement. Errors offer Retry while results remain usable. Stop cancels generation. Only one helper is active; replacement waits for cleanup. Project/database/provider or provider-command changes, renderer reload, Stop all and shutdown cancel it. Every exit stops the process and releases listeners, timers and the temporary directory. Helpers create no run records, worktrees, sidebar conversation or chat-dock entry; summaries are not persisted.
-- **Shared transcripts.** Search, Messages and Events share a renderer-owned cache for each database/project. Reads use the existing validated `events` action, run at most four concurrently, deduplicate in-flight/cached requests and invalidate changed run versions. Project switches dispose the old cache and stop queued reads; late results cannot publish into the new project. Loading, per-run partial failures, retry and empty states are visible. Live events supersede cached history. No CLI or IPC capability is added.
+- **Shared transcripts.** Search, Messages and Events share a renderer-owned cache for each database/project. Reads use the existing validated `events` action, run at most four concurrently, deduplicate in-flight/cached requests and invalidate changed run versions. Project switches dispose the old cache and stop queued reads; late results cannot publish into the new project. Loading, per-run partial failures, retry and empty states are visible. Live events supersede cached history. No IPC capability is added.
 
 - **Sessions table and chat.** A Glide Data Grid table fills the window. There is no app header. Stop leftover agent and Stop all runs (while a batch is active) join the shared table toolbar as stop icons; refresh is in the application footer polling widget. Rows are numbered on the left, with white backgrounds in Light and black backgrounds in Dark; clicking a row number opens that session's chat like any other cell. Sortable, resizable columns show Agent, Actions, Status (including discarded runs), Turns, Approvals (blank at zero), ID (last six characters), PID (the agent's process group, blank before the agent starts), Branch (`none` without a worktree), and Started (local time). Clicking a session's Actions cell, or pressing Enter on it, opens the actions menu described under Overlays instead of the chat. Sorted columns show a Carbon arrow in the heading. Newest sessions appear first by default. Status is text, not only color: the Status column draws each state's 16px Carbon icon and 12px label in a 128px slot, following the emphasis rules under Visual system. With Inline charts on (the default), three more columns draw on the canvas from the run's recorded events: Turn time (a line of the last six completed turns, prompt to turn end, with the latest duration), Events, 5 min (bars for ten 30-second buckets of non-status events, with the total), and Last 2 min (a strip of state spans, solid while working and hatched while awaiting approval). Each column shares one scale across rows (at least 0 to 20 seconds and 0 to 8 events); a run without samples shows Unavailable rather than zero, and the cells' text gives the same values in words. The charts redraw on the chart ticker, every five seconds by default (see [Polling](#polling)), and only while the Sessions tab and window are visible. Context usage, ratings, tags, and owners are not shown, since Code60 does not record them. The application footer polling widget shows an eye icon and scoped agent-message age above its Pause/Start and Refresh buttons. Search, column filters, and table settings work as described under Tables. Click a row, or press Enter on the focused cell, to select the session and open its chat.
 
@@ -1270,7 +1198,7 @@ One selected conversation fills the normal Chat workspace beside the shared file
 - **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Search and Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
 - **Messages.** A permanent Messages tab lists every prompt, agent message, and thought from every run in the open project. Adjacent streamed message and thought updates are combined into one row. The table shows time, agent, session ID, type, and message text; tool calls, status events, permissions, and stderr are not message rows.
 - **Page tabs.** After the splash, a borderless 220px left navigation container with square corners, full-width rows, wider in-row label indents and the main app surface wraps its project-opening action and page tabs. Its top and bottom align with the desktop right file panel, with a 12px bottom inset above the footer; the native-control drag strip remains separate from its fill. A labelled icon toggle fixed in the native-control row opens and closes the sidebar, vertically centered with the OS window controls and clear of their left inset (at least 80px). It remains non-draggable and clickable in transparent windows, without changing page placement or reserving a separate width track; closed-sidebar breadcrumbs center across the window. The sidebar slides and fades over the shared 175ms motion duration, animating registered numeric reveal progress rather than the saved width so pointer/keyboard resizing stays immediate. Closing navigation becomes inert immediately and stays painted only until its fade ends. Reversing mid-transition follows the latest requested state without timers or unmounting. Reduced motion and forced colors skip these transitions. No sidebar border or full-height divider is generated in either state. Open/closed state and expanded width persist locally. Closing sets its track to zero and makes its mounted contents inert and hidden, retaining selection, drafts, disclosures and scroll. The toggle and footer actions remain available when closed; there is no hover expansion. Its right edge is a keyboard-accessible resize handle (Left/Right arrows adjust by 20px). Width defaults to 220px, is bounded between 180px and 480px while reserving 360px for content, and persists locally as code60.sidebarWidth. Window resizing clamps the displayed width to available space. Resizing preserves page selection, conversations, drafts and disclosure state. The tab list scrolls within the remaining sidebar height. Its scrollbar is hidden so rows reach the right divider when the list overflows. Its Projects heading uses the Phosphor clipboard icon and an independent Carbon plus action labelled Open Project when connected. Without a database the plus is labelled Connect to database and opens the database dialog. There is no standalone Open Project header. When connected it opens the project-selection modal for recent projects or a folder picker. Successful opening adds or selects a retained project and shows a success toast; the action label remains unchanged. Cancelling preserves selection; errors stay in the modal. Other projects may remain active while opening or selecting a project. Home sits first, followed by Relay and Projects (with project accordions, per-project New chat actions and owned conversations), Apps (Command Builder, Data Viewer and Prompt Builder). Data Viewer contains Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees, all with the Phosphor grid-nine icon. Settings follows Apps as the last normal navigation item. Its Advanced disclosure contains Experiments → Episodic Memory and the sibling Contributor Tools placeholder. Project orchestrator rows have Phosphor chat-circle icons; worker rows have arrow-elbow-down-right icons. Relay retains its custom icon. Nested pages and groups have dedicated Phosphor duotone icons. A Carbon folder marks each project accordion. Project labels and row backgrounds open their project home and expand its direct children; clicking again on that home toggles disclosure. Sidebar parent labels follow this same rule, without chevrons or empty icon actions. Apps uses the Phosphor app-window icon; clicking its sidebar item opens a database-independent Apps home page with a card for every nested app. Cards open their corresponding pages and retain each page's database requirement. The database-independent Data Viewer card opens its own table-card home and expands both Apps and Data Viewer. Clicking Apps from another page opens Apps home and expands its children; clicking on that home toggles disclosure without leaving home. Left/Right collapses/expands the group without changing the active page, and external child navigation reveals it. Its expansion retains the existing code60.toolsExpanded storage key. Owned workers retain a separate agent-icon toggle so collapsing them does not change the open conversation. More uses the horizontal overflow icon. Independent icon actions retain accessible labels; New chat uses a separate icon-only Carbon plus button. Keyboard, selection, expansion and disabled semantics are preserved. The database icon remains in the separate application footer, with an independent Carbon back arrow immediately to its left. Its tooltip is “return to splash page”; it preserves every open project and active work. No tab has a close button. Sessions shows the start screen before a database is connected and the sessions table afterward. Page labels use a 40px minimum base left inset, growing to fit larger icons, and 24px hierarchy steps (conversation labels retain their 4px alignment offset), without narrowing full-row highlights. Full-width, left-aligned tab buttons stack vertically, wrap long labels, have square button corners with no gaps between sidebar items, 4px vertical padding and 40px minimum rows that grow with larger button text, and have no side rules. Resting labeled controls use the sidebar background. Enabled hover uses blue. The selected page has a contrasting fill at regular text weight, without an underline or bottom border, with selection also exposed to assistive technology. Preserve system selection outlines in forced colors. Up/Down wrap through the visible navigation order. Home and End move to the first and last visible destination. Switching tabs preserves table state, session selection, chat drafts, and Settings scroll position. A separate 28px draggable strip above the workspace reserves space for native window controls. The active page fills the remaining space to the right of the sidebar, separated by 12px; the workspace has matching 12px left and right insets and a 12px bottom inset. Each main page has no outer border; Chat has 5px corners and other page surfaces remain square. Page headers have a small bottom margin. Content uses consistent spacing: toolbars, the chat footer, and banners are inset 16px from the sides, the workspace sits above the application-wide footer with no footer reserved inside individual pages, Settings scrolls between 20px top and bottom margins, and conversations fill the Chat workspace. Toasts and actions menus render outside the page frame so they are never clipped. Every launch and renderer reload starts on Chat; saved preferences are unaffected. Chats use the normal Chat workspace; change reviews share its side panel with project files.
-- **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. On Windows, the native caption controls remain native, and their overlay background and symbols follow the effective app theme, including changes to System appearance. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
+- **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
 - **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. Each Settings page uses its specific name as its only main title, aligned at the standard upper-left page inset, without an additional Settings heading. Cards stay centered in a readable 640px maximum-width column; only the header drags the window so the page can scroll. The Settings overview retains its Settings title. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), a Transparent background switch (off by default), and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. The switch is saved in the main process's desktop.json alongside the database path, and applies only after restarting the app, not on renderer reload. When enabled, the window is created transparent without a native shadow; the area outside the content frame and opaque tabs is fully transparent instead of the solid theme surface. On macOS, mouse movement over these transparent areas enables click-through to the desktop, restoring interaction over content, overlays, tabs, and native controls. Linux keeps the window clickable. The splash stays opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, Card Titles, and Normal Text: font size (8 to 64px), weight (Light, Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, OCR-A, Roboto, Space Grotesk, Tahoma, or Verdana). All seven categories default to Light (300). Page Titles defaults to IBM Plex Serif at 16 CSS px. All other categories, including Card Titles and Table Headings, default to IBM Plex Sans: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Card Titles 22px, and Normal Text 13px. All roles default to sentence case. Home/Apps card names and settings card/field-group titles use Card Titles, independently of every Page Titles choice. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses D-DIN Regular; the regular 18px D-DIN splash subtitle remains unchanged. Both IBM Plex families include bundled Light (300) normal and italic faces; IBM Plex Sans also includes bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Navigation, headings, labels, status text and the wordmark have no fixed bold styling. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows, the default), Medium (32px), or Low (44px). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, OCR-A, Roboto, and Space Grotesk are bundled for offline use (OCR-A has only a regular weight, and bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
 - **Polling.** See [Polling](#polling). Settings has a Polling section after Text for intervals and reset controls, and a button that opens the Polling page.
 - **Quitting.** Closing the window or quitting while runs are active asks for confirmation, then cancels active turns, finishes every run, and waits for the agents to stop. SIGINT and SIGTERM do the same without asking; a second signal skips the grace periods. A crashed renderer also triggers this shutdown. Worktrees are never removed.
@@ -1359,9 +1287,9 @@ The desktop main process owns one scheduler (`src/desktop/poller.ts`) for every 
 
 ### Orchestrated workers
 
-Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each worker's session, prompts, cancellation and restoration. This is desktop-only, not a new CLI or an external ACP service.
+Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each worker's session, prompts, cancellation and restoration. This is desktop-only, not an external ACP service.
 
-Workers default to the selected desktop orchestration provider, as reported by `code60_get_context.defaultProvider`, not the CLI's `config.json` `defaultAgent`. An explicit dispatch provider overrides this default. An unavailable provider is an error, never a silent fallback.
+Workers default to the selected desktop orchestration provider, as reported by `code60_get_context.defaultProvider`, not `config.json` `defaultAgent`. An explicit dispatch provider overrides this default. An unavailable provider is an error, never a silent fallback.
 
 - `code60_get_context` returns the open project, current scope token, enabled providers, defaults and capacity. `code60_dispatch_agent` accepts a provider, self-contained prompt, request ID and optional base revision/turn timeout. It returns a run ID when accepted, not when the task finishes.
 - Dispatch creates one ordinary interactive run in the open project, with its own worktree and fixed once-only allow-all permissions. Git readiness is mandatory, including a second check during core preparation. Workers appear in Sessions and their chats say they allow all actions.
@@ -1376,7 +1304,7 @@ Workers default to the selected desktop orchestration provider, as reported by `
 
 Desktop diff requests use `readDiff({ requestId, id })` and `cancelDiff({ requestId })` through the validated preload bridge. The legacy diff action remains a compatibility adapter. Core prepares the run's worktree/base and reconciles interrupted status inside the controller's serialized action queue; Git execution runs outside that queue. The desktop read manager admits at most two requests, including preparation, and reports excess requests as busy with a retry instruction. Request IDs are UUIDs and run IDs retain their existing validation. No request accepts a filesystem path.
 
-Cancellation targets only the matching request. Workspace/database replacement, renderer reload, and shutdown cancel outstanding reads; discard settles reads for its run before removing the worktree. Cancelled queued preparations cannot later start Git, and results from an obsolete workspace/database are rejected. Git receives an optional abort signal through temporary-index preparation and diff execution. Cancellation waits for the subprocess completion callback before removing the temporary index; the worktree's real index remains unchanged. CLI patch output, default timeouts, and exit behavior are unchanged.
+Cancellation targets only the matching request. Workspace/database replacement, renderer reload, and shutdown cancel outstanding reads; discard settles reads for its run before removing the worktree. Cancelled queued preparations cannot later start Git, and results from an obsolete workspace/database are rejected. Git receives an optional abort signal through temporary-index preparation and diff execution. Cancellation waits for the subprocess completion callback before removing the temporary index; the worktree's real index remains unchanged. Default Git patch output and timeouts are unchanged.
 
 In retained-project mode every diff, review capture and review-file read captures
 its runtime before yielding, including the selected runtime. Navigation does not
@@ -1397,7 +1325,7 @@ snapshots carry only review summaries and versions.
 `ReviewStore` persists versioned JSON metadata and immutable file content below
 `.code60_workspace/reviews/<database-hash>/<project-hash>`. Writes use private files and atomic
 replacement. New immutable content uses `<revision-id>.rev` beside review metadata to stay
-within the same Windows path limit; reads retain compatibility with the older
+within the same bounded storage paths; reads retain compatibility with the older
 `<review-id>/<revision-id>.json` layout. Existing data is not migrated or rewritten.
 Limits are 200 reviews per project, 100 revisions per review, 1 MiB per text blob,
 8 MiB text per worker snapshot and combined review capture, 2,000 files per capture, and
@@ -1439,7 +1367,7 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - The preload script exposes a fixed set of methods (`windowAppearance`, `setWindowTheme`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `readDiff`, `cancelDiff`, `readReview`, `readReviewFile`, `captureReview`, `reviewAction`, `checkGit`, `beginGitSetup`, `previewGitSetupFile`, `initializeGit`, `commitGitSetup`, `cancelGitSetup`, `beginAgentSetup`, `attemptAgentSetup`, `cancelAgentSetup`, `finishAgentSetup`, `abandonAgentSetup`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `knowledgeRenderer`, `reportKnowledge`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
 - The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
 - The orchestration chat receives one built-in Code60 MCP stdio server, in addition to user-configured MCP servers. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive configured servers but no Code60 MCP server. User servers cannot replace the reserved `code60` entry or inherit its gateway credentials. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No built-in tool accepts SQL, arbitrary commands, environment settings or target directories.
-- **Desktop self-knowledge.** Relay and project chats (never workers or the CLI) receive five read-only tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization` and `code60_read_view`. A browser-safe catalog in `src/contracts/knowledge.ts` classifies every shipped capability, page, settings section and agent-visible tool; `docs/capabilities.md` is generated from it and `test/capabilities.test.ts` fails `npm run check` on drift. The desktop `DesktopKnowledge` read model derives availability (available/blocked/unsupported/unknown) and open-state metadata from existing owners on demand, with separate runtime, customization and UI revisions, revision-bound cursors, 8,000-character content pages and a 64 KiB response cap. The renderer reports presentation-only navigation and Files-panel tab metadata through the fixed `knowledgeRenderer`/`reportKnowledge` preload methods; main validates the renderer generation, per-view sequence and project/epoch or Relay conversation/generation owner, and discards reports on reload or owner close/replacement. Content reads return only the caller's own plans/reviews or an already loaded preview. Each delivered turn appends a separately labelled envelope of at most 8 KiB with counts, revisions and blockers, never inventories, transcripts, drafts, credentials, environments, MCP headers, diagnostic logs or memory records. `code60_get_context` keeps its fields and adds a compact `knowledge` hint. Awareness never selects projects, opens views, scans files, starts providers or grants authority; UI selection is never an execution target.
+- **Desktop self-knowledge.** Relay and project chats (never workers) receive five read-only tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization` and `code60_read_view`. A browser-safe catalog in `src/contracts/knowledge.ts` classifies every shipped capability, page, settings section and agent-visible tool; `docs/capabilities.md` is generated from it and `test/capabilities.test.ts` fails `npm run check` on drift. The desktop `DesktopKnowledge` read model derives availability (available/blocked/unsupported/unknown) and open-state metadata from existing owners on demand, with separate runtime, customization and UI revisions, revision-bound cursors, 8,000-character content pages and a 64 KiB response cap. The renderer reports presentation-only navigation and Files-panel tab metadata through the fixed `knowledgeRenderer`/`reportKnowledge` preload methods; main validates the renderer generation, per-view sequence and project/epoch or Relay conversation/generation owner, and discards reports on reload or owner close/replacement. Content reads return only the caller's own plans/reviews or an already loaded preview. Each delivered turn appends a separately labelled envelope of at most 8 KiB with counts, revisions and blockers, never inventories, transcripts, drafts, credentials, environments, MCP headers, diagnostic logs or memory records. `code60_get_context` keeps its fields and adds a compact `knowledge` hint. Awareness never selects projects, opens views, scans files, starts providers or grants authority; UI selection is never an execution target.
 - Updates are batched about every 40 ms. Each carries a revision number and the
   previous broadcast revision. The renderer subscribes before reading its initial
   snapshot and buffers at most 32 update frames during each read. A buffer
@@ -1459,7 +1387,7 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - ACP uses the protocol version exported by its SDK. MCP negotiates its supported dated protocol versions, preferring `2025-03-26`. Neither protocol version is a Code60 release number.
 - Settings About shows the product, database schema, run-record format, ACP and MCP protocol versions, plus the running Electron, Chromium and Node.js versions from `process.versions`. It also shows the configured embedding model identity, pinned revision, dimensions and precision shared with the offline sidecar, and the resolved `onnxruntime-node` package name/version and CPU execution information. Main reads package JSON once beside Transformers, without importing native inference, loading/downloading a model or claiming configured assets are loaded. Missing package metadata is nonfatal and displays Unavailable. Copy version info includes all these values and the copyright/license line. These read-only values arrive in `snapshot.versions`; they add no IPC capability.
 
-- TypeScript, ESM, Node.js 22.12 or later, on macOS, Linux and native Windows 11 x64.
+- TypeScript, ESM, Node.js 22.12 or later, on macOS and Linux.
 - Runtime validation uses Zod as a direct dependency for configuration, IPC requests (including polling), and persisted run records/events. Types for IPC requests and records/events are inferred from schemas.
 - Dependencies: `@agentclientprotocol/sdk` (only `agents` imports it), Electron for the desktop app (only `desktop` imports it), and React with React DOM plus `@glideapps/glide-data-grid` (pinned to its React 19 beta) for its interface (only `renderer` imports them). The grid draws on a canvas with the app's theme colors and bundles its CSS file, so it needs no runtime style injection; Monaco's generated styles use the nonce described above. Vite builds the renderer; TypeScript builds everything else. The project database uses the built-in `node:sqlite` (only `desktop` uses it). Processes use `node:child_process`, with argument arrays and explicit working directories. Add libraries only when Node.js cannot reasonably do the job.
 - Renderer fonts: `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-serif`, and `@fontsource/roboto`; vendored D-DIN from [datto-d-din](https://github.com/amcchord/datto-d-din) and CMU Serif from `computer-modern@0.1.3`, with their OFL licenses in `src/renderer/fonts`; Shantell Sans from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/shantellsans) with its OFL license; unmodified variable Lexend and Space Grotesk from their upstream projects, with pinned source references, SHA-256 hashes and OFL licenses in their font directories; and OCR-A from Matthew Skala's [OCR font package 0.3.1](https://tsukurimashou.org/files/ocr-0.3.1.zip) with its upstream notice in `src/renderer/fonts/ocr-a`. Vite emits font files rather than inline data URLs to preserve `font-src 'self'`.
@@ -1657,7 +1585,7 @@ After successfully archiving the currently displayed chat, the renderer shows a
 change the displayed page or conversation. Failed archives keep inline feedback.
 Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped
-chat history, never execution authority. No SQLite schema or CLI behavior changes.
+chat history, never execution authority. No SQLite schema changes.
 
 The Prompt Builder groups its four system templates beneath an initially expanded System disclosure. Collapsing the group preserves the selected editor and unsaved drafts. Saved overrides remain in System; individual items omit source labels and show unsaved changes when present. Prompt items have no border and share neutral gray selection and blue hover with navigation.
 
@@ -1665,9 +1593,9 @@ The Prompt Builder groups its four system templates beneath an initially expande
 ### Desktop distribution
 
 The release workflow packages the Electron desktop as an Apple Silicon macOS DMG,
-Linux x64 DEB/AppImage and signed per-user Windows x64 NSIS installer.
+Linux x64 DEB/AppImage.
 The bundle ID is `com.codemanufactory.code60`; the
-Linux GUI executable is `code60-desktop`, separate from the headless `code60` CLI.
+Linux GUI executable is `code60-desktop`.
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
 Settings → Updates offers explicit Check for updates, Download update, cancellation,
@@ -1677,13 +1605,13 @@ check completes, independently of workspace polling and its pause switch. Checks
 are single-flight, run only from idle update state, stop on shutdown, and never
 download automatically. Background failures stay quiet; manual failures are shown.
 The on-by-default automatic-check switch persists as `updateCheck` in desktop.json;
-fixed `auto-on`/`auto-off` update actions change it without affecting CLI configuration.
+fixed `auto-on`/`auto-off` update actions change it without affecting shared configuration.
 A footer button opens Settings → Updates and labels availability, download progress,
 or readiness to install. A popup offers Download now / Later once per version,
 remembered in renderer local storage, and waits for other dialogs to close.
 `electron-updater` reads the
 fixed public GitHub release feed and validates downloaded SHA-512 checksums;
-macOS and Windows also retain their native signature verification. Stable builds
+macOS also retains native signature verification. Stable builds
 stay on stable releases; prerelease builds can receive their channel and stable
 releases. Downgrades, background downloads and quit-time installation are disabled.
 No renderer request accepts a URL, path or command: `update` accepts only fixed
@@ -1691,7 +1619,7 @@ actions, and `onUpdate` pushes revisioned progress, including across renderer re
 Development builds report updates unavailable. Downloads cancel on quit and have
 a 30-minute deadline. Installation asks with a native dialog and shuts down all
 agents, gateways and polling before replacing the app. Config, records and databases
-are kept. macOS uses the signed ZIP update, Windows uses NSIS, Linux DEB uses an
+are kept. macOS uses the signed ZIP update, Linux DEB uses an
 asynchronous, five-minute-bounded `pkexec /usr/bin/dpkg -i` authorization, and AppImage
 stages a complete executable beside the original before atomic replacement.
 Linux authorization or installation failures are shown before closing the stopped app.
@@ -1716,22 +1644,14 @@ logged or imported. Shell PATH entries precede inherited entries, followed by
 standard system directories. Empty, relative, and duplicate entries are removed.
 Missing or failing shells use inherited PATH and the same fallbacks. This applies
 to Git, agent connection tests, orchestration chats, and workers; absolute agent
-commands remain authoritative. The CLI and configuration files are unchanged.
-Windows instead uses the bounded native discovery and owned-job contracts above;
-it never probes a shell profile. See [Windows setup and limitations](WINDOWS.md).
-Windows release promotion requires timestamped SHA-256 Authenticode signatures
-from Azure Artifact Signing (GitHub OIDC, no stored key), verified against the
-validated publisher name and Microsoft's identity-verification root, on the final installer, installed executable, helper and uninstaller, followed
-by reinstall/uninstall data-preservation checks. These run on the Windows Server
-2025 x64 CI runner; ARM64 development/emulation cannot satisfy them, and there is
-no separate manual Windows 11 hardware acceptance.
+commands remain authoritative. Configuration files are unchanged.
 
 macOS releases use Developer ID signing and notarization. Packaging preserves
 Electron's Node mode because orchestration providers launch the bundled MCP
 sidecar with the app executable and `ELECTRON_RUN_AS_NODE=1`. Packaged tests
 exercise that path through its authenticated gateway. The renderer remains
 sandboxed; the desktop refuses `--no-sandbox` launches, including AppImage
-fallbacks. Packaging adds no CLI configuration fields; the only update bridge
+fallbacks. Packaging adds no shared configuration fields; the only update bridge
 methods are the fixed-action `update` and `onUpdate` described above.
 
 
@@ -1838,7 +1758,7 @@ same-state purpose updates preserve the timer and do not fade. Approval, stoppin
 and non-idle terminal states interrupt immediately. Hidden views and reduced motion
 skip transitions. Final artwork is independent of MCP.
 Display failure never fails an agent task; operating instructions request meaningful
-phase reports, not heartbeats. CLI, persisted records and worker access are unchanged.
+phase reports, not heartbeats. Persisted records and worker access are unchanged.
 
 Settings → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a
@@ -1854,7 +1774,7 @@ height transition. CSS durations and activity timers share the same preferences.
 Reduced motion, hidden views and urgent activity still override ordinary transitions.
 Long dropdown reveals cancel on user input, collapse, hidden views, stale details or
 unmount, rather than fighting the reader for the configured duration. No new IPC,
-backend preference, transcript data or CLI behavior is introduced. Other interface
+backend preference, transcript data  is introduced. Other interface
 transitions also default to 175 ms. Unversioned saved chat timings are read at half
 their previous bounded duration, rounded to whole milliseconds; missing or invalid
 fields use the new defaults. Later saves include version 1 so subsequent edits and
@@ -1895,6 +1815,6 @@ permissions or change target authority.
 Editing requires stopped agent work, retires provider context and keeps history.
 Archive confirms natively and stops only that agent; Restore never resumes work.
 Both preserve histories, workspaces and review evidence. There is no permanent
-deletion, per-agent provider choice, management MCP tool or CLI change.
+deletion, per-agent provider choice, management MCP tool .
 These rules extend earlier Relay-only ownership and bridge rules to custom agents;
 the built-in Relay's identity, store and navigation entry remain unchanged.

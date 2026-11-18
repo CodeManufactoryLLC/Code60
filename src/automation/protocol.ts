@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { chmod, lstat, unlink } from "node:fs/promises";
 import { createConnection, createServer, type Socket } from "node:net";
 import { join } from "node:path";
@@ -17,10 +17,7 @@ import {
 } from "../platform/index.js";
 import { AutomationError } from "./errors.js";
 
-export const serviceAddress = (root: string) =>
-  process.platform === "win32"
-    ? `\\\\.\\pipe\\code60-scheduler-${createHash("sha256").update(root).digest("hex").slice(0, 32)}`
-    : join(root, "service.sock");
+export const serviceAddress = (root: string) => join(root, "service.sock");
 const endpointPath = (root: string) => join(root, "connection.json");
 async function connectionMetadata(root: string) {
   const raw = (await readPrivateJson(endpointPath(root), 4096).catch((error) => {
@@ -79,7 +76,7 @@ export async function listenService(
 ) {
   await verifyPrivatePath(root, true);
   const address = serviceAddress(root);
-  if (process.platform !== "win32") {
+  {
     if (Buffer.byteLength(address) > 100)
       throw new Error("Scheduler state path is too long for a local socket");
     const existing = await lstat(address).catch((error) => {
@@ -188,7 +185,7 @@ export async function listenService(
     for (const socket of sockets) socket.destroy();
   });
   try {
-    if (process.platform !== "win32") await chmod(address, 0o600);
+    await chmod(address, 0o600);
     const previous = await readPrivateJson(endpointPath(root), 4096).catch((error) => {
       if (fileCode(error) !== "ENOENT") throw error;
       return undefined;

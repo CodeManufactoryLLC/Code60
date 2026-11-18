@@ -26,18 +26,6 @@ describe("per-user service supervisors", () => {
     expect(JSON.stringify(definition)).not.toContain("linger");
     expect(definition.install[1]?.slice(0, 2)).toEqual(["systemctl", "--user"]);
   });
-  it("uses interactive non-elevated Windows tasks, no runtime limit and bounded restart attempts", () => {
-    const definition = userServiceDefinition("win32", "/home/test", "/state", runtime);
-    expect(definition.contents).toContain("InteractiveToken");
-    expect(definition.contents).toContain("LeastPrivilege");
-    expect(definition.contents).toContain("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>");
-    expect(definition.contents).toContain("<Count>3</Count>");
-    const encoded = /EncodedCommand ([A-Za-z0-9+/=]+)/.exec(definition.contents)?.[1] ?? "";
-    const command = Buffer.from(encoded, "base64").toString("utf16le");
-    expect(command).toContain("'/app/agent''s entry.js'");
-    expect(command).toContain("$env:ELECTRON_RUN_AS_NODE='1'");
-    expect(definition.uninstall.map((argv) => argv[1])).toEqual(["/End", "/Delete"]);
-  });
   it("starts an unloaded launchd job and tolerates bootstrap only when kickstart succeeds", async () => {
     const definition = userServiceDefinition("darwin", "/Users/test", "/state", runtime);
     const command = vi.fn(async (_argv: readonly string[]) => true);

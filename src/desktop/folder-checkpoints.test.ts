@@ -80,7 +80,7 @@ it("refuses links and raw-byte or storage overflow before reserving a snapshot",
   await symlink(
     process.platform === "win32" ? root : join(project, "file"),
     join(project, "symbolic"),
-    process.platform === "win32" ? "junction" : "file",
+    "file",
   );
   await expect(folders.capture(project, 1_048_576, 1024, reserve)).rejects.toThrow();
   await rm(join(project, "symbolic"));

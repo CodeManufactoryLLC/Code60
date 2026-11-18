@@ -179,7 +179,7 @@ This branch implements Relay and retained project runtimes as described in
   escalation and stops every execution owner. Presentation callback failures
   cannot turn an accepted dispatch into a retry or strand its process.
 
-CLI defaults, run-record format and SQLite schema 5 are unchanged.
+Scheduler defaults, run-record format and SQLite schema 5 are unchanged.
 
 ## Implemented plan and navigation details
 
@@ -245,7 +245,7 @@ Git's own cross-process locks and checkout-local application locks remain distin
 
 ## Validation still required
 
-- Native Windows/macOS desktop, packaged and installer validation has not run in
+- Native macOS desktop, packaged and installer validation has not run in
   this environment. Linux containers do not validate native ACLs, process jobs,
   native dialogs or packaged startup on those platforms.
 
@@ -315,7 +315,7 @@ The benchmark independently checked the oversized source SHA-256, bounded I/O,
 zero startup prompts, prompt-free paging and exactly-once first-Send history.
 `git diff --check` passed.
 
-Native Windows/macOS desktop, packaged and installer tests remain unrun.
+Native macOS desktop, packaged and installer tests remain unrun.
 All session test containers and images were removed, verified with both container
 and image listings. BuildKit cache and host artifacts are retained. Final desktop
 artifacts are under `test-results/container/2026-11-12T22-10-10.282Z-aPAMeL`.
@@ -363,7 +363,7 @@ All session-owned test containers and images were removed. Container, labeled
 image and tagged image listings were empty; BuildKit cache and host artifacts
 remain intentionally retained. `git diff --check` passed.
 
-Native Windows/macOS desktop, packaged and installer validation remain unrun.
+Native macOS desktop, packaged and installer validation remain unrun.
 The earlier Relay performance results above are baseline measurements, not a new
 performance run for this UI-only follow-up.
 The sidebar fixes remain uncommitted for review; no push, PR update or automatic

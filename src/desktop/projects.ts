@@ -150,7 +150,7 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
     db = new DatabaseSync(path);
     // DatabaseSync runs on the main thread. A contending writer must fail promptly,
     // not freeze cancellation and the window for the previous two-second timeout.
-    db.exec(`PRAGMA busy_timeout = ${process.platform === "win32" ? 0 : 2000}`);
+    db.exec("PRAGMA busy_timeout = 2000");
     prepare(db, path);
     if (!existed) chmodSync(path, 0o600);
     privateDirectorySync(join(dirname(path), ".code60_workspace"));

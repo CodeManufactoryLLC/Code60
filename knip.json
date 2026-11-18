@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "entry": [
-    "src/cli/main.ts",
     "src/desktop/main.ts",
     "src/desktop/preload.cts",
     "src/desktop/mcp-server.ts",

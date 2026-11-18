@@ -2,14 +2,11 @@
   "name": "code60",
   "version": "0.3.0-beta.1",
   "private": true,
-  "description": "Electron desktop app and headless CLI for orchestrating coding agents",
+  "description": "Electron desktop app for orchestrating coding agents on macOS and Linux",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
     "node": ">=22.12"
-  },
-  "bin": {
-    "code60": "dist/cli/main.js"
   },
   "files": [
     "dist",
@@ -18,13 +15,10 @@
   "scripts": {
     "prepare:models": "node scripts/prepare-models.mjs",
     "test:rag:model": "node scripts/prepare-models.mjs --verify && npm run build && node scripts/test-rag-model.mjs",
-    "build:helper": "node scripts/build-windows-helper.mjs",
-    "build": "node scripts/build-windows-helper.mjs && tsc -p tsconfig.build.json && vite build",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "pretest": "node scripts/build-windows-helper.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pretest:coverage": "node scripts/build-windows-helper.mjs",
     "test:coverage": "vitest run --coverage && node scripts/check-coverage.mjs",
     "test:logs:performance": "npm run build && node scripts/benchmark-logs.mjs",
     "test:relay:performance": "npm run build && node scripts/benchmark-relay.mjs",
@@ -40,8 +34,6 @@
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "format": "biome check --write .",
     "check": "npm run check:instructions && npm run typecheck && npm run lint && npm run check:unused && npm run test:coverage",
-    "install:global": "npm ci && npm run build && npm link",
-    "uninstall:global": "npm unlink -g code60",
     "dev": "node scripts/dev.mjs",
     "start": "electron .",
     "test:desktop": "npm run build && playwright test",
@@ -49,7 +41,6 @@
     "package:dir": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --dir --publish never",
     "package:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --linux --x64 --publish never",
     "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
-    "package:win": "node scripts/package-windows.mjs",
     "test:packaged": "playwright test --config playwright.packaged.config.ts",
     "test:installers": "node scripts/test-installers.mjs",
     "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs"
@@ -112,5 +103,9 @@
     "type": "git",
     "url": "https://github.com/CodeManufactoryLLC/code60.git"
   },
-  "desktopName": "code60-desktop.desktop"
+  "desktopName": "code60-desktop.desktop",
+  "os": [
+    "darwin",
+    "linux"
+  ]
 }

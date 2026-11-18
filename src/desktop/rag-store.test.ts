@@ -103,7 +103,7 @@ describe("private RAG generations", () => {
         "b".repeat(64),
       ).manifest(),
     ).toBeNull();
-    if (process.platform !== "win32") expect((await stat(store.path(id))).mode & 0o777).toBe(0o600);
+    expect((await stat(store.path(id))).mode & 0o777).toBe(0o600);
   });
   it("keeps the previous generation after aborted publication and write failure", async () => {
     const old = randomUUID(),
@@ -150,7 +150,7 @@ describe("private RAG generations", () => {
     const notGenerated = join(store.root, `${"a".repeat(36)}.json`);
     await writeFile(notGenerated, "not a UUID");
     await expect(readRagFile(foreign, 2)).rejects.toThrow();
-    if (process.platform !== "win32") {
+    {
       const link = join(store.root, "link");
       await symlink(foreign, link);
       await expect(readRagFile(link, 100)).rejects.toThrow();

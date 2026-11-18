@@ -9,25 +9,15 @@ export function observeColorScheme(
   theme: Theme,
   root: Pick<HTMLElement, "dataset">,
   system: Pick<MediaQueryList, "matches" | "addEventListener" | "removeEventListener">,
-  nativeTheme: (dark: boolean) => Promise<void>,
-  fail: (message: string) => void,
 ) {
-  let alive = true;
-  let revision = 0;
   root.dataset.theme = theme;
   const update = () => {
-    const request = ++revision;
     const dark = theme === "dark" || (theme === "system" && system.matches);
     root.dataset.colorScheme = dark ? "dark" : "light";
-    void nativeTheme(dark).catch((cause: unknown) => {
-      if (alive && revision === request)
-        fail(cause instanceof Error ? cause.message : String(cause));
-    });
   };
   update();
   if (theme === "system") system.addEventListener("change", update);
   return () => {
-    alive = false;
     if (theme === "system") system.removeEventListener("change", update);
   };
 }

@@ -209,8 +209,7 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.settings().enabled).toBe(false);
     expect(store.register("chat", "Chat", null).id).toBe(c.id);
     expect(store.browse({}).records).toHaveLength(4);
-    if (process.platform !== "win32")
-      expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
+    expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
   });
   it("shares only durable project identity and human-promoted global memories", async () => {
     const a = join(dir, "a"),
@@ -464,16 +463,13 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
       ),
     ).toThrow("changed");
   });
-  it.skipIf(process.platform === "win32")(
-    "rejects linked and unsafe storage instead of resetting it",
-    async () => {
-      const linked = join(dir, "linked");
-      await mkdir(linked, { mode: 0o700 });
-      await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
-      expect(() => new MemoryStore(linked)).toThrow();
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
-      expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
-    },
-  );
+  it("rejects linked and unsafe storage instead of resetting it", async () => {
+    const linked = join(dir, "linked");
+    await mkdir(linked, { mode: 0o700 });
+    await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
+    expect(() => new MemoryStore(linked)).toThrow();
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
+    expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
+  });
 });

@@ -46,8 +46,7 @@ export class MemoryStore {
     const info = lstatSync(file);
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
       throw new Error("Unsafe memory database");
-    if (process.platform !== "win32" && info.mode & 0o077)
-      throw new Error("Memory database permissions are unsafe");
+    if (info.mode & 0o077) throw new Error("Memory database permissions are unsafe");
     verifyPrivateSync(file);
     const sqlite = process.getBuiltinModule("node:sqlite") as
       | typeof import("node:sqlite")

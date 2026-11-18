@@ -53,7 +53,6 @@ export interface RunDeps {
   clock: Clock;
   processes: Processes;
   ownerPid?: number;
-  ownerIdentity?: NonNullable<RunRecord["ownerIdentity"]>;
   onEvent(event: RunEvent): void;
   /** Called when view-only state changes without an event, such as a run starting to stop. */
   onChange(): void;
@@ -737,10 +736,8 @@ export class Run {
     });
 
     this.record.agentPid = session.pid;
-    if (session.identity === undefined) delete this.record.agentIdentity;
-    else this.record.agentIdentity = session.identity;
-    if (this.deps.ownerIdentity) this.record.ownerIdentity = this.deps.ownerIdentity;
-    else delete this.record.ownerIdentity;
+    delete this.record.agentIdentity;
+    delete this.record.ownerIdentity;
     this.record.agentCommand = this.settings.command;
     this.record.acpSessionId = session.sessionId;
     const commandLine = await this.deps.processes.commandLine(session.pid).catch(() => undefined);

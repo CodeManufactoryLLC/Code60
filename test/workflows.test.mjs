@@ -61,11 +61,26 @@ describe("branch protection policy", () => {
 });
 
 describe("CI and release gates", () => {
+  it("passes only declared inputs to every reusable native test call", () => {
+    const inputs = nativeTests.on.workflow_call.inputs;
+    for (const workflow of [native, release]) {
+      for (const [name, job] of Object.entries(workflow.jobs)) {
+        if (job.uses !== "./.github/workflows/native-tests.yml") continue;
+        const supplied = job.with ?? {};
+        expect(
+          Object.keys(supplied).filter((key) => !(key in inputs)),
+          name,
+        ).toEqual([]);
+        for (const [key, definition] of Object.entries(inputs)) {
+          if (definition.required) expect(supplied, `${name}.${key}`).toHaveProperty(key);
+        }
+      }
+    }
+  });
   it("shares one secret-free native test workflow between validation and release", () => {
     expect(Object.keys(nativeTests.on)).toEqual(["workflow_call"]);
     expect(Object.keys(nativeTests.on.workflow_call.inputs).sort()).toEqual([
       "desktop_grep",
-      "os",
       "ref",
       "release",
       "shard",
@@ -77,23 +92,13 @@ describe("CI and release gates", () => {
     expect(Object.keys(nativeTests.jobs)).toEqual(["test"]);
     const job = nativeTests.jobs.test;
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
-    expect(job["runs-on"]).toBe("${{ inputs.os }}");
+    expect(job["runs-on"]).toBe("macos-15");
     expect(job.steps.find((step) => step.uses?.startsWith("actions/checkout@")).with).toEqual({
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
       ref: "${{ inputs.ref }}",
       "persist-credentials": false,
     });
-    const temp = job.steps.find((step) => step.name === "Use runner temp for Windows fixtures");
-    expect(temp.if).toBe("runner.os == 'Windows'");
-    expect(release.jobs.windows.steps.find((step) => step.name === temp.name)).toEqual({
-      name: temp.name,
-      shell: temp.shell,
-      run: temp.run,
-    });
-    const x64 = job.steps.find((step) => step.name === "Require native Windows x64");
-    expect(x64.run).toBe(release.jobs.windows.steps.find((step) => step.name === x64.name).run);
     const identity = job.steps.find((step) => step.name?.startsWith("Verify runner architecture"));
-    expect(identity.if).toBe("runner.os == 'macOS'");
     expect(identity.run).toBe(
       release.jobs.mac.steps.find((step) => step.name === identity.name).run,
     );
@@ -126,15 +131,12 @@ describe("CI and release gates", () => {
   it("separates superseding acceptance runs from independent diagnosis runs", () => {
     expect(Object.keys(native.on)).toEqual(["workflow_dispatch"]);
     const inputs = native.on.workflow_dispatch.inputs;
-    expect(inputs.platform).toMatchObject({
-      default: "both",
-      options: ["both", "windows", "macos"],
-    });
+    expect(inputs.platform).toBeUndefined();
     expect(inputs.suite).toMatchObject({ default: "full", options: ["full", "unit", "desktop"] });
     expect(inputs.unit_filter.default).toBe("");
     expect(inputs.desktop_grep.default).toBe("");
     const acceptance =
-      "inputs.platform == 'both' && inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == ''";
+      "inputs.suite == 'full' && inputs.unit_filter == '' && inputs.desktop_grep == ''";
     expect(native["run-name"]).toContain(`(${acceptance}) && 'acceptance' || 'diagnosis'`);
     expect(native.concurrency).toEqual({
       group: `native-validation-\${{ github.ref }}-\${{ (${acceptance}) && 'acceptance' || github.run_id }}`,
@@ -146,7 +148,7 @@ describe("CI and release gates", () => {
     for (const name of ["unit", "desktop"]) {
       const job = native.jobs[name];
       expect(job.uses).toBe("./.github/workflows/native-tests.yml");
-      expect(job.strategy["fail-fast"]).toBe(false);
+      if (name === "desktop") expect(job.strategy["fail-fast"]).toBe(false);
       expect(job.secrets).toBeUndefined();
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
       expect(job.with.ref).toBe("${{ github.sha }}");
@@ -191,40 +193,22 @@ describe("CI and release gates", () => {
     expect(release.jobs["linux-installers"].needs).toEqual(["preflight", "linux-check"]);
     expect(release.jobs.mac.needs).toEqual(["preflight", "linux-check", "mac-unit", "mac-desktop"]);
     expect(release.jobs.mac["runs-on"]).toBe("macos-15");
-    expect(release.jobs.windows.needs).toEqual([
-      "preflight",
-      "linux-check",
-      "win-unit",
-      "win-desktop",
-    ]);
-    expect(release.jobs.windows["runs-on"]).toBe("windows-2025");
     const tests = {
-      "mac-unit": ["macos-15", "unit"],
-      "mac-desktop": ["macos-15", "desktop"],
-      "win-unit": ["windows-2025", "unit"],
-      "win-desktop": ["windows-2025", "desktop"],
+      "mac-unit": "unit",
+      "mac-desktop": "desktop",
     };
-    for (const [name, [os, suite]] of Object.entries(tests)) {
+    for (const [name, suite] of Object.entries(tests)) {
       const job = release.jobs[name];
       expect(job.needs).toEqual(["preflight", "linux-check"]);
       expect(job.uses).toBe("./.github/workflows/native-tests.yml");
       expect(job.secrets).toBeUndefined();
       expect(job.environment).toBeUndefined();
-      expect(job.with).toMatchObject({ os, suite, release: true });
+      expect(job.with).toMatchObject({ suite, release: true });
       if (suite === "desktop") {
         expect(job.strategy).toEqual({ "fail-fast": false, matrix: { shard: [1, 2, 3] } });
         // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
         expect(job.with).toMatchObject({ shard: "${{ matrix.shard }}", shards: 3 });
       }
-    }
-    // Packaging jobs rely on the reusable test jobs and only build for CLI smoke checks.
-    for (const name of ["mac", "windows"]) {
-      const runs = release.jobs[name].steps.map((step) => step.run);
-      expect(runs).not.toContain("npm run check");
-      expect(runs).not.toContain("npm run test:desktop");
-      expect(runs.indexOf("npm run build")).toBeLessThan(
-        runs.findIndex((run) => run?.includes("node dist/cli/main.js --help")),
-      );
     }
     expect(release.concurrency["cancel-in-progress"]).toBe(false);
   });
@@ -237,9 +221,6 @@ describe("CI and release gates", () => {
       "mac-unit",
       "mac-desktop",
       "mac",
-      "win-unit",
-      "win-desktop",
-      "windows",
     ];
     expect(publish.needs).toEqual(required);
     expect(publish.if).toBe(
@@ -248,35 +229,16 @@ describe("CI and release gates", () => {
     expect(publish.permissions).toEqual({ contents: "write" });
     expect(publish.concurrency.group).toBe("code60-release-publication");
     for (const [name, job] of Object.entries(release.jobs)) {
-      if (name !== "publish" && name !== "windows")
+      if (name !== "publish")
         expect(job.permissions ?? release.permissions).toEqual({ contents: "read" });
     }
-    // Only Windows signing may request an OIDC token, and only inside its environment.
-    expect(release.jobs.windows.permissions).toEqual({ contents: "read", "id-token": "write" });
-    expect(release.jobs.windows.environment).toBe("windows-signing");
-    for (const [name, job] of Object.entries(release.jobs)) {
-      if (name !== "windows") expect(job.environment).toBeUndefined();
-    }
-    expect(JSON.stringify(release)).not.toContain("WIN_CSC");
-    const login = release.jobs.windows.steps.findIndex((step) =>
-      step.uses?.startsWith("azure/login@"),
-    );
-    const build = release.jobs.windows.steps.findIndex(
-      (step) => step.run === "npm run package:win",
-    );
-    expect(release.jobs.windows.steps[login].if).toBe(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
-      "${{ !inputs.unsigned_windows_beta }}",
-    );
-    // Sign in only after checks and tests, immediately before packaging.
-    expect(build).toBe(login + 1);
   });
   it("builds the validated SHA and downloads only this run's tested artifacts", () => {
-    for (const name of ["mac-unit", "mac-desktop", "win-unit", "win-desktop"]) {
+    for (const name of ["mac-unit", "mac-desktop"]) {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
       expect(release.jobs[name].with.ref).toBe("${{ needs.preflight.outputs.sha }}");
     }
-    for (const name of ["linux-check", "linux-installers", "mac", "windows"]) {
+    for (const name of ["linux-check", "linux-installers", "mac"]) {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
       expect(release.jobs[name].steps[0].with.ref).toBe("${{ needs.preflight.outputs.sha }}");
     }

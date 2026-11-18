@@ -145,11 +145,9 @@ describe("application palette", () => {
     });
   }
 
-  it("matches the dark native window and title-bar background to the renderer", () => {
+  it("matches the dark native window background to the renderer", () => {
     const main = readFileSync(new URL("../src/desktop/main.ts", import.meta.url), "utf8");
-    const native = main.match(/color: dark \? "(#[\da-f]+)" : "#ffffff"/i)?.[1];
     const window = main.match(/backgroundColor: transparent \? "#00000000" : "(#[\da-f]+)"/i)?.[1];
-    expect(native).toBe(palette("dark")("--bg"));
     expect(window).toBe(palette("dark")("--bg"));
   });
 });

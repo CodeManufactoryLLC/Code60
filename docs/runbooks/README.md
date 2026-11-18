@@ -1,10 +1,6 @@
 # Recovery runbooks
 
-Preserve evidence and identify ownership before changing anything. Commands here
-use the installed `code60` CLI, with the same user and HOME/XDG configuration as
-the affected app/service. In an already built source checkout, substitute
-`node dist/cli/main.js` for `code60`. Do not build during disk pressure just to
-diagnose a production installation.
+Preserve evidence and identify ownership before changing anything. Use Automations for schedules and execution history, and Apps → System Manager for service status and recovery. Use the affected user account and normal HOME/XDG settings. Do not build during disk pressure just to diagnose an installation.
 
 - [Scheduler installation and recovery](scheduler.md)
 - [Low disk space](low-disk.md)

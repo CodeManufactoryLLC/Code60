@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
-  cli: ["core", "automation"],
   desktop: ["core", "bridge", "platform", "automation"],
   automation: ["core", "contracts", "platform"],
   renderer: ["bridge", "core"],
@@ -143,10 +142,10 @@ describe("module boundaries", () => {
     const f = (module: string, text: string) => ({ path: join(SRC, module, "x.ts"), text });
     expect(
       findViolations([
-        f("cli", 'import { x } from "../agents/index.js";'),
+        f("automation", 'import { x } from "../agents/index.js";'),
         f("agents", 'import type { X } from "../core/index.js";'),
         f("git", 'export * from "../agents/index.js";'),
-        f("cli", 'import { y } from "../core/exit-code.js";'),
+        f("automation", 'import { y } from "../core/run.js";'),
         f("core", 'import { ClientSideConnection } from "@agentclientprotocol/sdk";'),
         f("core", 'const m = await import("../git/index.js");'),
         f("core", 'import { createRoot } from "react-dom";'),
@@ -156,10 +155,10 @@ describe("module boundaries", () => {
         f("renderer", 'import { defaultDeps } from "../core/index.js";'),
       ]),
     ).toEqual([
-      'cli/x.ts imports "../agents/index.js": cli may not depend on agents',
+      'automation/x.ts imports "../agents/index.js": automation may not depend on agents',
       'agents/x.ts imports "../core/index.js": agents may not depend on core',
       'git/x.ts imports "../agents/index.js": git may not depend on agents',
-      'cli/x.ts imports "../core/exit-code.js": import core through its index.js',
+      'automation/x.ts imports "../core/run.js": import core through its index.js',
       'core/x.ts imports "@agentclientprotocol/sdk": only agents may import @agentclientprotocol/sdk',
       'core/x.ts imports "react-dom": only renderer may import react-dom',
       'renderer/x.ts imports "electron": only desktop may import electron',

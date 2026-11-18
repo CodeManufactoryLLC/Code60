@@ -60,13 +60,10 @@ export async function manageHooks(directory, action, env = process.env) {
   })) {
     if (entry.name.endsWith(".sample")) continue;
     const info = await stat(join(defaultHooks, entry.name));
-    if (info.isFile() && (process.platform === "win32" || (info.mode & 0o111) !== 0))
+    if (info.isFile() && (info.mode & 0o111) !== 0)
       throw new Error("Existing active Git hooks would be hidden. Resolve them manually.");
   }
-  await access(
-    join(root, hooksPath, "pre-commit"),
-    process.platform === "win32" ? constants.F_OK : constants.X_OK,
-  );
+  await access(join(root, hooksPath, "pre-commit"), constants.X_OK);
   await git("config", "--local", "core.hooksPath", hooksPath);
   return { state: "installed" };
 }
