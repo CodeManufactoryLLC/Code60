@@ -9,7 +9,6 @@ import {
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
-  nativeTheme,
   shell,
 } from "electron";
 import updaterPackage from "electron-updater";
@@ -74,7 +73,11 @@ import {
   parseUpdateAction,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
-import { diagnosticMessage, setEnvironmentPath } from "../platform/index.js";
+import {
+  assertSupportedPlatform,
+  diagnosticMessage,
+  setEnvironmentPath,
+} from "../platform/index.js";
 import { installAppImage } from "./appimage-update.js";
 import { DesktopAutomations } from "./automations.js";
 import { DesktopController } from "./controller.js";
@@ -110,6 +113,8 @@ const webLinks = new WebLinks({
   open: (url) => shell.openExternal(url),
 });
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
+assertSupportedPlatform();
+
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const logs = new DesktopLogStore(join(stateHome(process.env), "code60", "logs"));
 const launchOperation = randomUUID();
@@ -117,10 +122,6 @@ logs.sink({ event: "app.start", operationId: launchOperation, outcome: "started"
 logs.subscribe(() => {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
     window.webContents.send("desktop:logs-changed");
-});
-const windowControlColors = (dark: boolean) => ({
-  color: dark ? "#252525" : "#ffffff",
-  symbolColor: dark ? "#ffffff" : "#000000",
 });
 const controller = new DesktopController(
   defaultDeps(logs.sink),
@@ -373,7 +374,7 @@ async function ready(): Promise<void> {
   Menu.setApplicationMenu(applicationMenu());
   const supported =
     (process.platform === "darwin" && process.arch === "arm64") ||
-    ((process.platform === "linux" || process.platform === "win32") && process.arch === "x64");
+    (process.platform === "linux" && process.arch === "x64");
   updates = new DesktopUpdates(
     app.isPackaged && supported ? updaterPackage.autoUpdater : null,
     (state) => {
@@ -454,11 +455,6 @@ async function ready(): Promise<void> {
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
     return { transparent, enabled, clickThrough };
-  });
-  handle("desktop:window-theme", (value) => {
-    const dark = parseBoolean(value);
-    if (process.platform === "win32" && window && !window.isDestroyed())
-      window.setTitleBarOverlay({ height: 28, ...windowControlColors(dark) });
   });
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
@@ -732,7 +728,6 @@ async function ready(): Promise<void> {
     titleBarStyle: "hidden",
     titleBarOverlay: {
       height: 28,
-      ...(process.platform === "win32" ? windowControlColors(nativeTheme.shouldUseDarkColors) : {}),
     },
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 18, y: 7 } } : {}),
     webPreferences: {
@@ -766,18 +761,6 @@ async function ready(): Promise<void> {
     event.preventDefault();
     void quit(true);
   });
-  if (process.platform === "win32") {
-    window.on("query-session-end", () => {
-      startup.abort();
-      // Do not veto sign-out. The owned jobs also close if Windows terminates us
-      // before these best-effort final record writes finish.
-      void shutdownDesktop(true).catch(() => {});
-    });
-    window.on("session-end", () => {
-      startup.abort();
-      void shutdownDesktop(true).catch(() => {});
-    });
-  }
   logs.sink({ event: "app.ready", operationId: launchOperation, outcome: "succeeded" });
   window.loadURL(page).catch(() => void quit(false));
 }

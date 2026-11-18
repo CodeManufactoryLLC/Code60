@@ -44,12 +44,7 @@ async function regular(path: string) {
 }
 async function read(path: string): Promise<unknown> {
   await regular(path);
-  const file = await open(
-    path,
-    constants.O_RDONLY |
-      constants.O_NONBLOCK |
-      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
-  );
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
   try {
     const info = await file.stat();
     const entry = await lstat(path);

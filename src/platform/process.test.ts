@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { nativeIdentity, type OwnedProcess, ownedJob, spawnOwnedProcess } from "./index.js";
+import { type OwnedProcess, spawnOwnedProcess } from "./index.js";
 
 const children: OwnedProcess[] = [];
 const directories: string[] = [];
@@ -32,14 +32,6 @@ describe("owned native processes", () => {
     await Promise.all([child.stop(1000), child.stop(0), child.stop(0)]);
     await child.stop(0);
     expect(Date.now() - started).toBeLessThan(7_000);
-  });
-
-  it.runIf(process.platform === "win32")("helper failure closes the job", async () => {
-    const child = await launch("setInterval(() => {}, 1000)");
-    process.kill(child.supervisorPid as number);
-    await child.exited;
-    await child.stop(0);
-    expect(await nativeIdentity(child.pid)).toBeNull();
   });
 
   it("reports the root exit code without waiting for stop", async () => {
@@ -75,20 +67,6 @@ describe("owned native processes", () => {
     await child.stop(0);
     expect(JSON.parse(output)).toEqual(args);
   });
-
-  it.runIf(process.platform === "win32")(
-    "refuses an identical-command PID with a different creation time",
-    async () => {
-      const child = await launch("setInterval(() => {}, 1000)");
-      expect(child.identity?.job).toBeTruthy();
-      const identity = child.identity as NonNullable<OwnedProcess["identity"]>;
-      await expect(ownedJob("stop", child.pid, { ...identity, createdAt: "1" })).rejects.toThrow(
-        /identity/,
-      );
-      expect(await nativeIdentity(child.pid)).toMatchObject({ createdAt: identity.createdAt });
-      expect(await ownedJob("status", child.pid, identity)).toBe("alive");
-    },
-  );
 
   it("kills descendants when the root exits, without touching an unrelated sentinel", async () => {
     const dir = await directory();

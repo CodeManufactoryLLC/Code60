@@ -365,7 +365,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Chat or worker composer → Model; Settings → Agents → Default models to clear",
     "provider",
     "human-only",
-    "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, CLI, automation or resumed sessions.",
+    "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.",
     "Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.",
   ),
   feature(
@@ -399,7 +399,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "system-manager",
     "System Manager",
-    "Install, repair, start, stop or uninstall the background automation service.",
+    "Install, repair, start, stop or uninstall the macOS/Linux background automation service through System Manager. No public Code60 CLI is available.",
     "Apps → System Manager",
     "none",
     "human-only",
@@ -427,7 +427,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "updates",
     "Updates",
-    "Check, download and install platform releases.",
+    "Check, download and install macOS arm64 and Linux x64 desktop releases.",
     "Settings → Updates",
     "runtime",
     "human-only",
@@ -502,7 +502,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Relay/project chat → read-only Code60 tools",
     "none",
     "read",
-    "No new action authority, workers, CLI, drafts, transcripts, diagnostic logs or credentials.",
+    "No new action authority, workers, drafts, transcripts, diagnostic logs or credentials.",
   ),
 ];
 export const PAGE_CAPABILITIES = {

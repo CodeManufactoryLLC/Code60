@@ -81,7 +81,7 @@
   direct/worktree mode. Resolve an opaque canonical target, recheck identity, reserve
   global conversation capacity before awaits and preserve accepted dispatch results
   despite later metadata errors. Never accept executable/environment overrides.
-  Use bigint filesystem identities internally; rounding a Windows file ID to a
+  Use bigint filesystem identities internally; rounding a native file ID to a
   number must not allow a replaced target or workspace to pass revalidation.
 - Keep project chats bound to their own target with mandatory isolation. Project
   navigation preserves owners and views; actual close and database replacement
@@ -128,7 +128,7 @@
   that is waiting for that same operation.
 
 - ChatStore owns bounded private orchestration metadata beneath `.code60_workspace/chats`,
-  not SQLite or CLI records. Persist tactic selection/explicit null without execution.
+  not SQLite or run records. Persist tactic selection/explicit null without execution.
   Freeze full versioned instructions per human request and associate worker turns,
   plans and feedback with that task. Batch automatic updates only within one task.
   Serialize delivery against pending context writes. Reload saved chats as stopped
@@ -186,7 +186,7 @@
 - Expose worker dispatch and control only through the chat's authenticated MCP gateway. Validate arguments, require the current project/chat scope for mutations, and act only on workers created by that chat in the open project. Never pass the gateway to workers. Keep ownership and request-ID deduplication in memory, enforce `maxParallel` including idle workers, and preserve normal worktree and leftover-process safeguards.
 - Deliver bounded worker turn-end/failure updates only between orchestration turns, with automatic prompt origin. Stop and Stop all pause automatic updates; user send or Resume updates unpauses them. Revoke the gateway on chat replacement and clear update timers on shutdown.
 
-- Include current-project worker IDs owned by each chat generation in every chat snapshot. Renderer aggregate activity must not derive ownership from the global list or process existence. Preserve Windows process/job support and sandbox boundaries.
+- Include current-project worker IDs owned by each chat generation in every chat snapshot. Renderer aggregate activity must not derive ownership from the global list or process existence. Preserve POSIX process ownership and sandbox boundaries.
 
 - Search overview helpers are the dedicated UI-requested exception to chat-gateway worker dispatch: validate current-project saved evidence, gather bounded project documentation/code through the Files reader when enabled, and use the configured provider in a generated temporary directory, with no gateway, run records, worktrees or chat entries. Deny permissions; bound input, output and total runtime. Serialize replacement, stop on scope/provider changes, renderer reload, Stop all and shutdown, and remove the temporary directory only after process cleanup. Return the exact evidence used for numbered citations; never accept arbitrary file paths through the summary endpoint.
 

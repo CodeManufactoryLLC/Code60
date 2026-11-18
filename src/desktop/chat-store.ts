@@ -26,12 +26,7 @@ async function regular(path: string) {
 /** Validate and read through the same handle, including files that grow while being read. */
 async function readText(path: string, limit = MAX_BYTES): Promise<string> {
   await regular(path);
-  const file = await open(
-    path,
-    constants.O_RDONLY |
-      constants.O_NONBLOCK |
-      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
-  );
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
   try {
     const info = await file.stat();
     const entry = await lstat(path);

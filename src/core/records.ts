@@ -159,7 +159,7 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       return enqueue(record.id, async () => {
         const target = runDir(record.id);
         await fs.mkdir(target, { recursive: true, mode: 0o700 });
-        // Keep the exclusive sibling short enough for nested Windows project chats.
+        // Keep the exclusive sibling short enough for nested project chats.
         const tmp = join(target, `${randomUUID()}.tmp`);
         try {
           await fs.writeFile(tmp, snapshot, { mode: 0o600, flag: "wx" });
@@ -177,7 +177,7 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       const key = await queueKey(event.runId);
       const pending = appends.get(key);
       // Join only a batch that is still the run's last queued write, so events never
-      // overtake an intervening run.json save. Windows private appends launch a native
+      // overtake an intervening run.json save. private appends may involve an asynchronous
       // helper per call; streamed fragments otherwise queue thousands of launches.
       if (
         pending &&

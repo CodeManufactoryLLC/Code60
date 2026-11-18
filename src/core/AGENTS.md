@@ -41,21 +41,21 @@
   context. Retain typed transcript text separately from delivered instructions.
   Reuse process safeguards; historical evidence never establishes completion.
 
-- Preserve prompt dispatch timestamps and record actual turn completion before persistence/cleanup. Optional turnEnd outcome/completedAt and terminal status turn/completedAt metadata distinguish timeout, cancellation and transport failure without changing CLI outcomes. Keep older events readable; never infer successful completion after a crash.
+- Preserve prompt dispatch timestamps and record actual turn completion before persistence/cleanup. Optional turnEnd outcome/completedAt and terminal status turn/completedAt metadata distinguish timeout, cancellation and transport failure without changing execution outcomes. Keep older events readable; never infer successful completion after a crash.
 
 - The search summary helper runs one evidence-only ACP turn through injected agents, with denied permission requests, bounded text and timeout, and unconditional process/listener/timer cleanup. It never creates run records or worktrees.
 
-- Run preparation/recovery may accept an already resolved configuration from desktop so it can enforce enabled-provider policy. Without that explicit argument, retain the existing headless config loading and defaults; core must not depend on desktop preferences or setup state.
+- Run preparation/recovery may accept an already resolved configuration from desktop so it can enforce enabled-provider policy. Without that explicit argument, retain the existing scheduler config loading and defaults; core must not depend on desktop preferences or setup state.
 
-- Diff preparation owns run validation and interrupted-run reconciliation; diff execution accepts a prepared worktree/base and optional abort signal without mutating run records. Keep `diffRun` as the CLI-compatible composition.
+- Diff preparation owns run validation and interrupted-run reconciliation; diff execution accepts a prepared worktree/base and optional abort signal without mutating run records.
 
-- The internal requireIsolation preparation option rejects direct-folder fallback before records or agents are created. CLI defaults stay unchanged. Optional desktop history composition retains both stores without migration or schema changes.
+- The internal requireIsolation preparation option rejects direct-folder fallback before records or agents are created. Scheduler defaults stay unchanged. Optional desktop history composition retains both stores without migration or schema changes.
 - Explicit internal workspaceMode selects direct or required worktree preparation
   for Relay. Direct always uses the supplied directory, including inside Git;
   worktree never falls back. Reject direct together with requireIsolation or base.
-  Omitting workspaceMode retains all existing CLI defaults.
+  Omitting workspaceMode retains all internal preparation defaults.
 - Interactive runs pass their startup cancellation signal into worktree creation.
   Shutdown before the agent starts is cancellation, not a failed task. Preserve
-  headless Git calls and wait for started subprocess cleanup before settling.
+  scheduler Git calls and wait for started subprocess cleanup before settling.
 - TaskLoop may bind an already captured baseline for a Relay task/target. Validate
   the commit identity, refuse rebinding, and never snapshot again for that binding.

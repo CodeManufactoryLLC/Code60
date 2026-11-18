@@ -19,7 +19,6 @@ export interface UserServiceDefinition {
   status: readonly string[];
 }
 const LABEL = "com.codemanufactory.code60.scheduler";
-const TASK = "\\Code60 Scheduler";
 const xml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -33,7 +32,6 @@ const unit = (value: string) =>
     .replaceAll('"', '\\"')
     .replaceAll("%", "%%")
     .replaceAll("$", "$$")}"`;
-const powershell = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 export function userServiceDefinition(
   platform: NodeJS.Platform,
@@ -98,36 +96,6 @@ Restart=on-failure\nRestartSec=30\nTimeoutStopSec=60\nKillMode=control-group
       stop: [["systemctl", "--user", "stop", "code60-scheduler.service"]],
       uninstall: [["systemctl", "--user", "disable", "--now", "code60-scheduler.service"]],
       status: ["systemctl", "--user", "is-active", "code60-scheduler.service"],
-    };
-  }
-  if (platform === "win32") {
-    const path = join(root, "scheduler-task.xml");
-    const command = `${Object.entries(runtime.env)
-      .map(([k, v]) => `$env:${k}=${powershell(v)};`)
-      .join(
-        "",
-      )}& ${[runtime.executable, ...runtime.args].map(powershell).join(" ")};exit $LASTEXITCODE`;
-    // PowerShell's encoded command is a transport for fixed, safely quoted arguments.
-    const args = `-NoLogo -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(command, "utf16le").toString("base64")}`;
-    return {
-      path,
-      contents: `<?xml version="1.0" encoding="UTF-8"?>
-<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-<Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
-<Principals><Principal id="User"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
-<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>
-<Actions Context="User"><Exec><Command>powershell.exe</Command><Arguments>${xml(args)}</Arguments></Exec></Actions></Task>\n`,
-      install: [
-        ["schtasks.exe", "/Create", "/TN", TASK, "/XML", path, "/F"],
-        ["schtasks.exe", "/Run", "/TN", TASK],
-      ],
-      start: [["schtasks.exe", "/Run", "/TN", TASK]],
-      stop: [["schtasks.exe", "/End", "/TN", TASK]],
-      uninstall: [
-        ["schtasks.exe", "/End", "/TN", TASK],
-        ["schtasks.exe", "/Delete", "/TN", TASK, "/F"],
-      ],
-      status: ["schtasks.exe", "/Query", "/TN", TASK, "/FO", "CSV", "/NH"],
     };
   }
   throw new Error("Background scheduling is unsupported on this platform");

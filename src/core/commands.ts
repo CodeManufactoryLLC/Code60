@@ -27,9 +27,7 @@ export async function markInterrupted(
   let changed = 0;
   for (const record of records) {
     if (!ACTIVE_STATUSES.has(record.status)) continue;
-    const ownerAlive = deps.processes.ownerAlive
-      ? await deps.processes.ownerAlive(record.ownerPid, record.ownerIdentity)
-      : deps.processes.isAlive(record.ownerPid);
+    const ownerAlive = deps.processes.isAlive(record.ownerPid);
     if (ownerAlive) continue;
     const reason = `the owning process (PID ${record.ownerPid}) is gone`;
     record.status = "interrupted";
@@ -95,10 +93,6 @@ export function executeDiff(git: Git, target: PreparedDiff, signal?: AbortSignal
   return git.diff(target.worktree, target.base, signal);
 }
 
-export async function diffRun(deps: CommandDeps, id: string): Promise<string> {
-  return executeDiff(deps.git, await prepareDiff(deps, id));
-}
-
 export interface DiscardResult {
   discarded: boolean;
   files: ChangedFile[];
@@ -125,7 +119,7 @@ export async function discardRun(
   }
   if (await recordedAgentAlive(deps.processes, record)) {
     throw new RefusedError(
-      `the agent for run ${id} may still be running (process group ${record.agentPid}); stop it first with 'code60 stop ${id}'`,
+      `the agent for run ${id} may still be running (process group ${record.agentPid}); stop it from its owning desktop session or System Manager first`,
     );
   }
   const files = await deps.git.changedFiles(record.worktree, base).catch(() => []);
@@ -153,19 +147,13 @@ export async function stopRun(deps: CommandDeps, id: string): Promise<StopResult
       `run ${id} is ${record.status} and owned by a live process (PID ${record.ownerPid}); stop it from there`,
     );
   }
+  if (record.agentIdentity || record.ownerIdentity)
+    throw new RefusedError(
+      "Historical native process identities cannot authorize process termination",
+    );
   const pid = record.agentPid;
   if (pid === undefined || !(await recordedAgentAlive(deps.processes, record))) {
     return { stopped: false, message: `no agent process is running for run ${id}` };
-  }
-  if (deps.processes.stopOwned) {
-    try {
-      await deps.processes.stopOwned(pid, record.agentIdentity);
-    } catch {
-      throw new RefusedError(
-        `cannot verify native process/job identity for process ${pid}; not stopping the agent for run ${id}`,
-      );
-    }
-    return { stopped: true, pid, message: `stopped the agent for run ${id} (owned Windows job)` };
   }
   const live = await deps.processes.commandLine(pid);
   if (

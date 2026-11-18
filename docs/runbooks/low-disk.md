@@ -5,7 +5,7 @@
 Automation history reports `low_disk`, new dispatch pauses, persistence fails,
 or desktop history/diagnostics cannot save. Scheduled automation launches reject
 less than 2 GiB available, but that threshold is not a capacity guarantee.
-Ordinary desktop and CLI launches do not have that automatic free-space guard.
+Ordinary desktop launches do not have that automatic free-space guard.
 
 ## Read-only diagnosis
 

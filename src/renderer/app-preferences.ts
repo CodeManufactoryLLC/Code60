@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useState } from "react";
-import type { DesktopApi } from "../bridge/index.js";
 import { observeColorScheme, parseTheme, type Theme } from "./appearance.js";
 import {
   parseFitColumns,
@@ -12,7 +11,7 @@ import { parseChartTick } from "./ticker.js";
 import { transitionTimeProperties, useTransitionTimes } from "./transition-times.js";
 import { parseTextStyles, type TextStyles, textStyleProperties } from "./typography.js";
 
-export function useAppPreferences(api: DesktopApi, setError: (message: string) => void) {
+export function useAppPreferences() {
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
   const transitionTimes = useTransitionTimes();
   useLayoutEffect(() => {
@@ -46,10 +45,8 @@ export function useAppPreferences(api: DesktopApi, setError: (message: string) =
       theme,
       document.documentElement,
       window.matchMedia("(prefers-color-scheme: dark)"),
-      api.setWindowTheme,
-      setError,
     );
-  }, [theme, api, setError]);
+  }, [theme]);
 
   useEffect(() => {
     for (const [key, value] of Object.entries(textStyleProperties(textStyles))) {

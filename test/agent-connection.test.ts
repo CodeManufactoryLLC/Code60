@@ -8,7 +8,7 @@ it("creates a private database-independent directory, sends no prompts and stops
   const start = agents.start.bind(agents);
   agents.start = async (spec, signal) => {
     expect(spec.cwd).toContain("code60-agent-probe-");
-    if (process.platform !== "win32") expect((await stat(spec.cwd)).mode & 0o777).toBe(0o700);
+    expect((await stat(spec.cwd)).mode & 0o777).toBe(0o700);
     const session = await start(spec, signal);
     const stop = session.stop.bind(session);
     session.stop = async (grace) => {

@@ -482,7 +482,7 @@ export class ChatCheckpoints {
             const restores: Reference[] = [];
             for (const [project, operations] of groups) {
               // Project chat storage is already deep; a full digest pushes inverse journals past
-              // the Windows helper's path limit. 64 bits still separate one chat's targets.
+              // bounded storage paths. 64 bits still separate one chat's targets.
               const root = join(
                 this.root,
                 createHash("sha256").update(project).digest("hex").slice(0, 16),

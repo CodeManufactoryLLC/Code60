@@ -1,10 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { resolveCommand } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture as rm } from "./electron-launcher.js";
 
 import { commitFixture } from "./fixtures/git-repository.js";
@@ -12,11 +10,8 @@ import { commitFixture } from "./fixtures/git-repository.js";
 const fixture = resolve(import.meta.dirname, "fixtures/packaged-agent.mjs");
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
-for (const location of process.platform === "win32"
-  ? ["fallback", "inherited"]
-  : ["fallback", "shell"]) {
-  const windowsFallback = process.platform === "win32" && location === "fallback";
-  test(`discovers default Droid and npx workers from ${location} PATH${windowsFallback ? " (npx inherited)" : ""}`, async () => {
+for (const location of ["fallback", "shell"]) {
+  test(`discovers default Droid and npx workers from ${location} PATH`, async () => {
     test.setTimeout(60_000);
     const directory = await mkdtemp(join(tmpdir(), "code60-discovery-"));
     const project = join(directory, "project");
@@ -27,39 +22,11 @@ for (const location of process.platform === "win32"
       location === "fallback" ? join(home, ".local/bin") : join(directory, "custom tools");
     // Registry PATH precedes fallback folders on Windows and may contain real npx.
     // Keep Droid in the fallback folder, but give only the fake npx inherited priority.
-    const npxBin = windowsFallback ? join(directory, "worker tools") : bin;
     await mkdir(bin, { recursive: true });
     const probe = join(directory, "mcp-ok");
     // The host Node path is explicit only inside the fake executable. Application
     // configuration is absent: Code60 must resolve its shipped Droid/npx commands.
     for (const name of ["droid", "npx"]) {
-      if (process.platform === "win32") {
-        const commandBin = name === "npx" ? npxBin : bin;
-        const entry =
-          name === "npx"
-            ? join(commandBin, "node_modules", "npm", "bin", "npx-cli.js")
-            : join(commandBin, "droid.cjs");
-        await mkdir(join(commandBin, "node_modules", "npm", "bin"), { recursive: true });
-        await copyFile(process.execPath, join(commandBin, "node.exe"));
-        const expected =
-          name === "droid"
-            ? ["exec", "--output-format", "acp"]
-            : ["-y", "@agentclientprotocol/codex-acp"];
-        await writeFile(
-          entry,
-          `
-          require("node:assert/strict").deepEqual(process.argv.slice(2), ${JSON.stringify(expected)});
-          process.env.CODE60_TEST_DISPATCH = "1";
-          process.argv = [process.execPath, __filename, ${JSON.stringify(probe)}];
-          import(${JSON.stringify(pathToFileURL(fixture).href)});
-        `,
-        );
-        await writeFile(
-          join(commandBin, `${name}.cmd`),
-          `@echo off\r\n"${join(commandBin, "node.exe")}" "${entry}" %*\r\n`,
-        );
-        continue;
-      }
       const check =
         name === "droid"
           ? '[ "$1" = exec ] && [ "$2" = --output-format ] && [ "$3" = acp ]'
@@ -71,7 +38,7 @@ for (const location of process.platform === "win32"
       );
     }
     // A provider prerequisite must exist; npx alone must not count as detection.
-    await writeFile(join(bin, process.platform === "win32" ? "codex.exe" : "codex"), "", {
+    await writeFile(join(bin, "codex"), "", {
       mode: 0o700,
     });
     const shell = join(directory, "login-shell");
@@ -85,24 +52,9 @@ for (const location of process.platform === "win32"
     const app = await launchDesktop(directory, project, join(directory, "db.sqlite"), true, {
       SHELL: shell, // Missing shell deliberately exercises the fallback branch.
       CODE60_TEST_AGENT_BIN: bin,
-      ...(process.platform === "win32"
-        ? { PATH: `${npxBin};${process.env.SystemRoot}\\System32` }
-        : {}),
     });
     try {
       const page = await app.firstWindow();
-      if (process.platform === "win32") {
-        // Fail before selecting a project/provider if host discovery shadows a fixture.
-        const env = await app.evaluate(() => ({ ...process.env }));
-        for (const [name, commandBin] of [
-          ["droid", bin],
-          ["npx", npxBin],
-        ] as const) {
-          expect(await resolveCommand([name], env)).toEqual(
-            await resolveCommand([join(commandBin, `${name}.cmd`)], env),
-          );
-        }
-      }
       await expect(page.locator(".splash-title")).toHaveText("Code60");
       await page.evaluate(() =>
         window.desktop

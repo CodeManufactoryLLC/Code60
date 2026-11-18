@@ -1,12 +1,11 @@
 import { chmod, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { CustomAgentStore } from "./custom-agent-store.js";
 
 // The 64-definition case performs durable private writes, with native owner/ACL
 // verification and atomic replacement for every definition and catalog update.
-if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let stores: CustomAgentStore[];
@@ -81,10 +80,8 @@ it("rejects unsafe permissions and outside edits without overwriting them", asyn
   await writeFile(path, '{"outside":true}');
   await expect(store.save({ name: "A", instructions: "x" })).rejects.toThrow("changed");
   expect(await readFile(path, "utf8")).toBe('{"outside":true}');
-  if (process.platform !== "win32") {
-    await chmod(path, 0o644);
-    await expect(store.save({ name: "A", instructions: "x" })).rejects.toThrow("permissions");
-  }
+  await chmod(path, 0o644);
+  await expect(store.save({ name: "A", instructions: "x" })).rejects.toThrow("permissions");
 });
 
 it("reads instruction bodies lazily and preserves a damaged definition without blocking siblings", async () => {

@@ -104,7 +104,6 @@ describe("sandboxed diagnostic preload", () => {
       extractMemory: "memory-extract",
       cancelMemoryExtraction: "memory-cancel",
       orchestrationChatAction: "orchestration-chat",
-      setWindowTheme: "window-theme",
       setTransparent: "transparent",
       setBackgroundHitTest: "background-hit-test",
       projectAction: "project-action",

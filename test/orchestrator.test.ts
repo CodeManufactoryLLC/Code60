@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { AgentStartError } from "../src/agents/index.js";
-import { diffRun, discardRun, listRuns, stopRun } from "../src/core/commands.js";
+import { discardRun, executeDiff, listRuns, prepareDiff, stopRun } from "../src/core/commands.js";
 import { DEFAULT_PERMISSIONS } from "../src/core/config.js";
 import {
   createOrchestrator,
@@ -25,7 +25,6 @@ async function setup(
   options: Partial<OrchestratorOptions> & {
     script?: TurnScript;
     count?: number;
-    identity?: () => Promise<NonNullable<RunRecord["ownerIdentity"]> | null>;
     memory?: OrchestratorDeps["memory"];
   } = {},
 ) {
@@ -33,10 +32,7 @@ async function setup(
   const agents = new FakeAgents(options.script);
   const git = new FakeGit();
   const store = new MemoryStore();
-  const processes = Object.assign(
-    new FakeProcesses(),
-    options.identity ? { identity: options.identity } : {},
-  );
+  const processes = new FakeProcesses();
   let n = 0;
   const count = options.count ?? 1;
   const orch = await createOrchestrator(
@@ -126,28 +122,6 @@ it("cancels interactive worktree preparation and awaits started cleanup before s
 });
 
 describe("a headless run", () => {
-  it("records native owner identity before launching and reuses it for the batch", async () => {
-    const owner = { createdAt: "12345", owner: "S-1-5-21-1" };
-    const identity = vi.fn(async () => owner);
-    const { orch, store } = await setup({ identity });
-    expect(store.records.get("r1")).toMatchObject({ status: "queued", ownerIdentity: owner });
-    orch.start();
-    await orch.done;
-    expect(identity).toHaveBeenCalledTimes(1);
-    expect(store.records.get("r1")).toMatchObject({ status: "finished", ownerIdentity: owner });
-  });
-
-  it("refuses to prepare a batch when the native owner cannot be verified", async () => {
-    await expect(setup({ identity: async () => null })).rejects.toThrow(/owner/);
-    await expect(
-      setup({
-        identity: async () => {
-          throw new Error("access denied");
-        },
-      }),
-    ).rejects.toThrow(/access denied/);
-  });
-
   it("creates the worktree, runs one turn, stops the agent, and finishes", async () => {
     const { orch, agents, git, store } = await setup();
     orch.start();
@@ -214,7 +188,7 @@ describe("a headless run", () => {
       changedFiles: null,
     });
     await expect(
-      diffRun({ git, store, clock: new FakeClock(), processes: new FakeProcesses() }, "r1"),
+      testDiffRun({ git, store, clock: new FakeClock(), processes: new FakeProcesses() }, "r1"),
     ).rejects.toThrow(/without a worktree/);
     await expect(
       discardRun(
@@ -779,7 +753,7 @@ describe("leftover commands", () => {
     expect(done.discarded).toBe(true);
     expect(d.git.removed).toEqual([{ path: "/w/r1", branch: "code60/r1" }]);
     expect(d.store.records.get("r1")?.discardedAt).toBeDefined();
-    await expect(diffRun(d, "r1")).rejects.toThrow(/discarded/);
+    await expect(testDiffRun(d, "r1")).rejects.toThrow(/discarded/);
   });
 
   it("stop refuses when the command line does not match", async () => {
@@ -802,6 +776,13 @@ describe("leftover commands", () => {
       { pgid: 900, signal: "SIGTERM" },
       { pgid: 900, signal: "SIGKILL" },
     ]);
+  });
+
+  it("reads historical native identity metadata without authorizing a stop", async () => {
+    const d = await deps(base({ agentIdentity: { createdAt: "42", owner: "S-1-5-21-1" } }));
+    expect((await listRuns(d))[0]?.record.agentIdentity?.createdAt).toBe("42");
+    await expect(stopRun(d, "r1")).rejects.toThrow("cannot authorize process termination");
+    expect(d.processes.signals).toEqual([]);
   });
 
   it("stop refuses a run owned by a live process and reports nothing to stop", async () => {
@@ -1099,3 +1080,7 @@ describe("harness session controls", () => {
     await expect(orch.setMode("r1", change)).rejects.toThrow(/idle/);
   });
 });
+
+async function testDiffRun(deps: Parameters<typeof prepareDiff>[0], id: string) {
+  return executeDiff(deps.git, await prepareDiff(deps, id));
+}

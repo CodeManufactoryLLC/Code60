@@ -7,7 +7,7 @@ body:
       value: |
         Search existing issues before submitting. Remove credentials, private prompts,
         repository content, and personal information from logs and screenshots.
-        Code60 targets macOS, Linux, and Windows 11 x64. Include your OS and architecture below.
+        Code60 targets macOS and Linux. Include your OS and architecture below.
   - type: textarea
     id: actual
     attributes:

@@ -72,10 +72,7 @@ const dead = (pid: number) => {
   }
 };
 
-const readFlags =
-  constants.O_RDONLY |
-  constants.O_NONBLOCK |
-  (process.platform === "win32" ? 0 : constants.O_NOFOLLOW);
+const readFlags = constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW;
 
 async function readExact(file: fs.FileHandle, size: number): Promise<Buffer> {
   const buffer = Buffer.alloc(size + 1);
@@ -148,11 +145,6 @@ export class TaskLoop {
       const info = await handle.stat({ bigint: true });
       if (!info.isFile() || info.size > 192n * 1024n * 1024n)
         throw new Error("Invalid task storage");
-      if (process.platform === "win32") {
-        const entry = await this.io.lstat(path, { bigint: true });
-        if (entry.isSymbolicLink() || entry.dev !== info.dev || entry.ino !== info.ino)
-          throw new Error("Task storage changed or is a symbolic link");
-      }
       const data = await readExact(handle, Number(info.size));
       return schema.parse(JSON.parse(data.toString("utf8")), { jitless: true });
     } finally {
@@ -322,7 +314,7 @@ export class TaskLoop {
       handle = await this.io.open(target, readFlags);
     } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
-      // Windows can return ENOENT when opening a dangling link. Check that
+      // Opening can return ENOENT when opening a dangling link. Check that
       // the entry itself is absent before treating this as a new file.
       try {
         await this.io.lstat(target);
@@ -338,7 +330,7 @@ export class TaskLoop {
         throw new Error("Only regular, non-linked files can be applied");
       if (info.size > 32n * 1024n * 1024n)
         throw new Error("Task file exceeds the 32 MiB application limit");
-      // Recheck containment and pathname identity after opening. Windows can
+      // Recheck containment and pathname identity after opening. The filesystem can
       // follow a final symlink on open, so check the directory entry too.
       await this.safePath(path);
       const entry = await this.io.lstat(target, { bigint: true });
@@ -346,7 +338,7 @@ export class TaskLoop {
         throw new Error("Project file changed while opening");
       return {
         data: (await readExact(handle, Number(info.size))).toString("base64"),
-        mode: process.platform !== "win32" && info.mode & 0o111n ? "100755" : "100644",
+        mode: info.mode & 0o111n ? "100755" : "100644",
         permissions: Number(info.mode & 0o777n),
       };
     } finally {
@@ -519,12 +511,6 @@ export class TaskLoop {
               throw new Error("Revise this conflicting worker file before applying");
             original = resolution.base;
           }
-          if (
-            process.platform === "win32" &&
-            proposed?.mode === "100755" &&
-            original?.mode !== "100755"
-          )
-            throw new Error("New executable file modes cannot be applied on Windows");
           const disk = paths.has(path) ? null : await this.disk(path);
           const current = paths.get(path) ?? { before: disk, after: disk };
           if (!resolution)

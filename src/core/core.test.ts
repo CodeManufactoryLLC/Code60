@@ -161,10 +161,8 @@ describe("record store", () => {
     ]);
     const runDir = join(dir, "code60", "runs", "r1");
     expect((await readdir(runDir)).sort()).toEqual(["events.jsonl", "run.json"]);
-    if (process.platform !== "win32") {
-      expect((await stat(join(runDir, "run.json"))).mode & 0o777).toBe(0o600);
-      expect((await stat(join(runDir, "events.jsonl"))).mode & 0o777).toBe(0o600);
-    }
+    expect((await stat(join(runDir, "run.json"))).mode & 0o777).toBe(0o600);
+    expect((await stat(join(runDir, "events.jsonl"))).mode & 0o777).toBe(0o600);
     expect((await store.read("r1")).status).toBe("running");
     const events = await store.readEvents("r1");
     expect(events.map((e) => (e.type === "message" ? e.text : ""))).toEqual(

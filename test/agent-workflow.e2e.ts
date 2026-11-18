@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, "..");
 // Automatic integration and message Undo each write several private checkpoint and
 // journal records; on Windows every write launches the native owner/ACL helper and
 // atomic replacement. Native ARM64 measured about 5 s for each step.
-const nativeJournalTimeout = process.platform === "win32" ? 15_000 : 5_000;
+const nativeJournalTimeout = 5_000;
 type NativeDialog = {
   kind: "save" | "open" | "message";
   title?: string;

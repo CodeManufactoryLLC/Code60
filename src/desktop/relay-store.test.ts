@@ -164,10 +164,8 @@ it("retains one identity and workspace across generations and excludes competing
   expect(second.workspace).toBe(first.workspace);
   expect((await second.history()).messages[0]?.text).toBe("Keep this source\n");
   expect(await stat(join(second.workspace, ".git")).catch(() => null)).toBeNull();
-  if (process.platform !== "win32") {
-    expect((await stat(second.workspace)).mode & 0o777).toBe(0o700);
-    expect((await stat(join(second.root, "state.json"))).mode & 0o777).toBe(0o600);
-  }
+  expect((await stat(second.workspace)).mode & 0o777).toBe(0o700);
+  expect((await stat(join(second.root, "state.json"))).mode & 0o777).toBe(0o600);
 });
 it("reads a bounded tail of a long-lived journal and preserves oversized Unicode source", async () => {
   const store = await open();
@@ -205,23 +203,20 @@ it("does not silently recreate missing workspaces or malformed metadata", async 
   await writeFile(join(store.root, "state.json"), "{}");
   await expect(open()).rejects.toThrow();
 });
-it.skipIf(process.platform === "win32")(
-  "refuses unsafe permissions and symbolic links",
-  async () => {
-    const store = await open();
-    await store.close();
-    await chmod(store.workspace, 0o755);
-    await expect(open()).rejects.toThrow("permissions");
-    await chmod(store.workspace, 0o700);
-    const state = join(store.root, "state.json");
-    const original = await readFile(state);
-    await rm(state);
-    const other = join(directory, "other");
-    await writeFile(other, original, { mode: 0o600 });
-    await symlink(other, state);
-    await expect(open()).rejects.toThrow("Unsafe");
-  },
-);
+it("refuses unsafe permissions and symbolic links", async () => {
+  const store = await open();
+  await store.close();
+  await chmod(store.workspace, 0o755);
+  await expect(open()).rejects.toThrow("permissions");
+  await chmod(store.workspace, 0o700);
+  const state = join(store.root, "state.json");
+  const original = await readFile(state);
+  await rm(state);
+  const other = join(directory, "other");
+  await writeFile(other, original, { mode: 0o600 });
+  await symlink(other, state);
+  await expect(open()).rejects.toThrow("Unsafe");
+});
 it("never displaces an unverifiable lock owner", async () => {
   const store = await open();
   await store.close();

@@ -27,7 +27,7 @@ async function fixturePid(file: string, settled: () => boolean): Promise<number>
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-const unixTest = test.skipIf(process.platform === "win32");
+const unixTest = test;
 function fallback(platform: NodeJS.Platform = "darwin") {
   return [
     "/inherited",
@@ -150,43 +150,6 @@ unixTest.each(["timeout", "abort", "success", "failure"])(
   20_000,
 );
 
-test("Windows PATH preserves drive separators and never probes a shell", async () => {
-  const env = {
-    Path: "C:\\Inherited Tools;C:\\Windows\\System32;relative;;C:\\Inherited Tools",
-    HOME: "C:\\Users\\Test",
-    SHELL: "must-not-run.exe",
-  };
-  let shellRead = false;
-  const path = await desktopPath({
-    platform: "win32",
-    env,
-    home: env.HOME,
-    accountShell: () => {
-      shellRead = true;
-      throw new Error("must not read shell");
-    },
-    windowsPaths: async () => ({ user: "D:\\User Tools", machine: "C:\\Machine Tools" }),
-  });
-  expect(path.split(";").slice(0, 4)).toEqual([
-    "C:\\Inherited Tools",
-    "C:\\Windows\\System32",
-    "D:\\User Tools",
-    "C:\\Machine Tools",
-  ]);
-  expect(path).not.toContain("relative");
-  expect(shellRead).toBe(false);
-  expect(env.Path).toContain("relative");
-});
-
-test("Windows discovery failure uses inherited PATH and documented directories", async () => {
-  expect(
-    await desktopPath({
-      platform: "win32",
-      env: { PATH: "C:\\Tools" },
-      home: "C:\\Users\\Test",
-      windowsPaths: async () => {
-        throw new Error("access denied");
-      },
-    }),
-  ).toBe("C:\\Tools;C:\\Users\\Test\\.local\\bin;C:\\Users\\Test\\bin");
+test("unsupported hosts never probe a login shell", async () => {
+  await expect(desktopPath({ platform: "win32" })).rejects.toThrow("macOS and Linux only");
 });

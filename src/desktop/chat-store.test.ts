@@ -52,7 +52,7 @@ it("roundtrips private legacy, selected and explicitly cleared records with froz
   expect(JSON.parse(await readFile(file, "utf8")).tasks[0].tactic.prompt).toContain(
     "fresh reviewer",
   );
-  if (process.platform !== "win32") expect((await lstat(file)).mode & 0o777).toBe(0o600);
+  expect((await lstat(file)).mode & 0o777).toBe(0o600);
   await mkdir(join(root, record.directoryId));
   expect(await store.directory(record.directoryId)).toBe(join(root, record.directoryId));
   await expect(store.directory("../other")).rejects.toThrow();
@@ -102,51 +102,45 @@ it("bounds history reads and only accepts derived run files", async () => {
   }
 });
 
-it.skipIf(process.platform === "win32")(
-  "rejects linked history files and every history ancestor",
-  async () => {
-    for (const components of [
-      [".code60"],
-      [".code60", "runs"],
-      [".code60", "runs", "chat-1"],
-      [".code60", "runs", "chat-1", "run.json"],
-    ]) {
-      const { root, record, store } = await setup();
-      const parent = join(root, record.directoryId, ...components.slice(0, -1));
-      await mkdir(parent, { recursive: true });
-      const target = join(root, "elsewhere");
-      if (components.length === 4) await writeFile(target, "{}");
-      else await mkdir(target);
-      await symlink(target, join(parent, components.at(-1) as string));
-      await expect(
-        store.readHistory(
-          record.directoryId,
-          record.runId,
-          join(root, record.directoryId, ".code60", "runs", record.runId, "run.json"),
-        ),
-      ).rejects.toThrow(/Unsafe/);
-    }
-  },
-);
-it.skipIf(process.platform === "win32")(
-  "rejects linked records, metadata directories and saved chat directories",
-  async () => {
-    const { root, record, store, file } = await setup();
-    await store.save(record);
-    const target = join(root, "target");
-    await writeFile(target, JSON.stringify(record));
-    await rm(file);
-    await symlink(target, file);
-    expect((await store.load()).errors).toHaveLength(1);
-    await expect(store.save(record)).rejects.toThrow("Unsafe");
-    await symlink(join(root, "chats"), join(root, record.directoryId));
-    await expect(store.directory(record.directoryId)).rejects.toThrow("unsafe");
-    await rm(join(root, "chats"), { recursive: true });
-    await mkdir(join(root, "elsewhere"));
-    await symlink(join(root, "elsewhere"), join(root, "chats"));
-    await expect(store.load()).rejects.toThrow();
-  },
-);
+it("rejects linked history files and every history ancestor", async () => {
+  for (const components of [
+    [".code60"],
+    [".code60", "runs"],
+    [".code60", "runs", "chat-1"],
+    [".code60", "runs", "chat-1", "run.json"],
+  ]) {
+    const { root, record, store } = await setup();
+    const parent = join(root, record.directoryId, ...components.slice(0, -1));
+    await mkdir(parent, { recursive: true });
+    const target = join(root, "elsewhere");
+    if (components.length === 4) await writeFile(target, "{}");
+    else await mkdir(target);
+    await symlink(target, join(parent, components.at(-1) as string));
+    await expect(
+      store.readHistory(
+        record.directoryId,
+        record.runId,
+        join(root, record.directoryId, ".code60", "runs", record.runId, "run.json"),
+      ),
+    ).rejects.toThrow(/Unsafe/);
+  }
+});
+it("rejects linked records, metadata directories and saved chat directories", async () => {
+  const { root, record, store, file } = await setup();
+  await store.save(record);
+  const target = join(root, "target");
+  await writeFile(target, JSON.stringify(record));
+  await rm(file);
+  await symlink(target, file);
+  expect((await store.load()).errors).toHaveLength(1);
+  await expect(store.save(record)).rejects.toThrow("Unsafe");
+  await symlink(join(root, "chats"), join(root, record.directoryId));
+  await expect(store.directory(record.directoryId)).rejects.toThrow("unsafe");
+  await rm(join(root, "chats"), { recursive: true });
+  await mkdir(join(root, "elsewhere"));
+  await symlink(join(root, "elsewhere"), join(root, "chats"));
+  await expect(store.load()).rejects.toThrow();
+});
 it("preserves valid records after rejected writes and serializes concurrent selection changes", async () => {
   const { record, store } = await setup();
   await store.save(record);

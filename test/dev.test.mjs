@@ -98,13 +98,13 @@ function session(platform, pendingCommand, failReplacement = false) {
   };
 }
 
-it("stops watchers when the replacement Windows app exits during restart", async () => {
-  const dev = session("win32", undefined, true);
+it("stops watchers when the replacement app exits during restart", async () => {
+  const dev = session("linux", undefined, true);
   await dev.done;
   dev.change();
   await vi.waitFor(() => expect(dev.process.exitCode).toBe(9));
   expect(dev.apps()).toHaveLength(2);
-  expect(dev.apps()[0].stop).toHaveBeenCalledWith(0);
+  expect(dev.apps()[0].stop).toHaveBeenCalledWith(25_000);
   for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
 });
 
@@ -122,7 +122,7 @@ it("preserves the POSIX app grace period on restart and shutdown", async () => {
 });
 
 it("stops every development process after a file-watcher error", async () => {
-  const dev = session("win32");
+  const dev = session("linux");
   await dev.done;
   dev.watcher.emit("error", new Error("watcher failed"));
   await vi.waitFor(() => expect(dev.process.exitCode).toBe(1));
@@ -133,7 +133,7 @@ it("stops every development process after a file-watcher error", async () => {
 it.each(["app", "watcher"])(
   "does not orphan a %s launched while shutdown starts",
   async (command) => {
-    const dev = session("win32", command);
+    const dev = session("linux", command);
     await vi.waitFor(() =>
       expect(
         dev.children.some((child) =>

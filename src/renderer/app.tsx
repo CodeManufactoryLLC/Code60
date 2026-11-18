@@ -73,7 +73,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     [],
   );
   const { busy, attempt, setBusy } = useAppActions(setError);
-  const preferences = useAppPreferences(transport, setError);
+  const preferences = useAppPreferences();
   const { theme, setTheme } = preferences;
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const { splash, splashReady, enterApp, returnSplash } = useSplashEntry(snapshot);

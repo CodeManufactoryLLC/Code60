@@ -46,10 +46,8 @@ export type {
   GitWorktree,
   ReviewSnapshotFile,
 } from "../git/index.js";
-export { diagnosticMessage, diagnosticText } from "../platform/index.js";
 export * from "./agent-memory.js";
 export {
-  diffRun,
   discardRun,
   executeDiff,
   type ListedRun,
@@ -58,7 +56,6 @@ export {
   stopRun,
 } from "./commands.js";
 export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
-export { ExitCode, exitCodeFor } from "./exit-code.js";
 export type { Orchestrator } from "./orchestrator.js";
 export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";
@@ -121,8 +118,6 @@ export async function prepareOrchestrationChat(
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
   if (!agent) throw new UsageError(`Unavailable orchestration provider: ${name}`);
   await deps.fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  if (process.platform === "win32")
-    await deps.fs.mkdir(join(directory, ".code60"), { recursive: true, mode: 0o700 });
   return createOrchestrator(
     { ...deps, store: createRecordStore(deps.fs, join(directory, ".code60", "runs")) },
     {
@@ -207,14 +202,7 @@ export async function openWorkspace(
   env: Env,
   includeDirectoryHistory = false,
 ): Promise<Workspace> {
-  let dir = resolve(cwd);
-  if (process.platform === "win32" && deps.fs.realpath) {
-    try {
-      dir = await deps.fs.realpath(dir);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-  }
+  const dir = resolve(cwd);
   const repo = await deps.git.repoInfo(dir).catch(() => null);
   const store = createRecordStore(
     deps.fs,
@@ -238,7 +226,7 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 }
 
 export interface RunRequest {
-  /** Explicit desktop execution policy. Omitted preserves CLI auto-detection. */
+  /** Explicit desktop execution policy. Omitted preserves internal workspace detection. */
   workspaceMode?: "direct" | "worktree";
   /** Desktop workers must never fall back to editing the shared directory. */
   requireIsolation?: boolean;
@@ -261,7 +249,7 @@ export interface RunRequest {
 }
 
 /** Why runs go directly into the workspace directory instead of worktrees. */
-export type NoWorktreeReason = "not_a_repository" | "no_commits";
+type NoWorktreeReason = "not_a_repository" | "no_commits";
 
 export interface PreparedRuns {
   orchestrator: Orchestrator;
@@ -282,18 +270,15 @@ function worktreeRoot(
   if (config.worktreeDir === null) {
     return join(dirname(mainRoot), `${basename(mainRoot)}.worktrees`);
   }
-  const dir = config.worktreeDir.replace(
-    process.platform === "win32" ? /^~(?=$|[\\/])/ : /^~(?=$|\/)/,
-    userHome(env),
-  );
+  const dir = config.worktreeDir.replace(/^~(?=$|\/)/, userHome(env));
   return isAbsolute(dir) ? dir : resolve(mainRoot, dir);
 }
 
-/** Upper bound on the runs `--parallel` starts for a single agent, to catch typos. */
+/** Upper bound on copies requested for a single agent, to catch typos. */
 const MAX_COPIES = 32;
 
 /**
- * Validates a `run` request, then creates the queued runs. Invalid input throws `UsageError`.
+ * Validates an execution request, then creates the queued runs. Invalid input throws `UsageError`.
  * With one agent, `parallel` is the number of runs of it to start; with several, the limit on
  * active runs.
  */
@@ -365,7 +350,6 @@ export async function prepareRuns(
   }
   if ((request.requireIsolation || request.workspaceMode === "worktree") && noWorktree)
     throw new RefusedError("Set up Git with an initial commit before starting desktop workers.");
-  await preparePrivateRecords(deps, workspace, request.env);
   const interrupted = await markInterrupted(
     commandDeps(deps, workspace),
     await workspace.store.list(),
@@ -437,7 +421,6 @@ export async function prepareRecovery(
   const mcpServers = configuredMcpServers(config);
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
-  await preparePrivateRecords(deps, workspace, env);
   const orchestrator = await createOrchestrator(
     { ...deps, store: workspace.store },
     {
@@ -472,16 +455,3 @@ export {
   topMatches,
 } from "./rag.js";
 export { summarizeSearch } from "./search-summary.js";
-
-async function preparePrivateRecords(
-  deps: CoreDeps,
-  workspace: Workspace,
-  env: Env,
-): Promise<void> {
-  if (process.platform !== "win32") return;
-  await deps.fs.mkdir(join(workspace.repo?.commonDir ?? stateHome(env), "code60"), {
-    recursive: true,
-    mode: 0o700,
-  });
-  await deps.fs.mkdir(workspace.store.dir, { recursive: true, mode: 0o700 });
-}

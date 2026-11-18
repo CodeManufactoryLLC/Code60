@@ -27,10 +27,6 @@ export const ARCHIVES = {
     "linux_x64.tar.gz",
     "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
   ],
-  "win32-x64": [
-    "windows_x64.zip",
-    "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
-  ],
 };
 
 export function verifyArchive(bytes, digest) {
@@ -83,10 +79,10 @@ export async function installScanner(directory) {
   const bytes = await downloadArchive(asset);
   const archive = join(directory, `scanner.${asset[0].endsWith(".zip") ? "zip" : "tar.gz"}`);
   await writeFile(archive, bytes, { mode: 0o600, flag: "wx" });
-  const name = process.platform === "win32" ? "gitleaks.exe" : "gitleaks";
+  const name = "gitleaks";
   await execute("tar", ["-xf", archive, "-C", directory, name], { timeout: 30_000 });
   const binary = join(directory, name);
-  if (process.platform !== "win32") await chmod(binary, 0o700);
+  await chmod(binary, 0o700);
   return binary;
 }
 

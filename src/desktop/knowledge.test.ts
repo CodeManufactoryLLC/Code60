@@ -113,6 +113,38 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("reports retained desktop update targets and scheduler controls without probes", async () => {
+    const { knowledge, reads } = setup();
+    const updates = result(
+      await knowledge.call("code60_get_capabilities", { query: "Updates" }, relay),
+    );
+    expect(updates.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "updates",
+          availability: expect.objectContaining({
+            status: "unknown",
+            reason: expect.stringContaining("macOS arm64 and Linux x64"),
+          }),
+        }),
+      ]),
+    );
+    const service = result(
+      await knowledge.call("code60_get_capabilities", { query: "System Manager" }, relay),
+    );
+    expect(service.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "system-manager",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("No public Code60 CLI"),
+          }),
+        }),
+      ]),
+    );
+    expect(reads).toEqual([]);
+  });
   it.each([false, true])(
     "does not infer model switching availability from provider verification: %s",
     async (verified) => {

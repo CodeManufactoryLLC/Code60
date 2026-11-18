@@ -14,7 +14,7 @@ The active policy:
 - Has no bypass actors, including administrators, apps, or deploy keys.
 
 The aggregate check covers Linux checks/builds, Linux desktop/installers, and
-Windows validation. Do not require release-only checks or enable a merge queue
+macOS validation. Do not require release-only checks or enable a merge queue
 without first adding its `merge_group` CI trigger.
 
 ## Apply or update

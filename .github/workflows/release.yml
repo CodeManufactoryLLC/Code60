@@ -1,5 +1,4 @@
 name: Release installers
-
 on:
   workflow_dispatch:
     inputs:
@@ -7,24 +6,14 @@ on:
         description: Existing version tag on main, for example v0.2.0-beta.1
         required: true
         type: string
-      unsigned_windows_beta:
-        description: "Publish an explicitly labeled unsigned Windows beta (beta tags only)"
-        required: false
-        default: false
-        type: boolean
-
 permissions:
   contents: read
-
 concurrency:
   group: release-${{ inputs.tag }}
   cancel-in-progress: false
-
 env:
   RELEASE_TAG: ${{ inputs.tag }}
-  CODE60_UNSIGNED_WINDOWS_BETA: ${{ inputs.unsigned_windows_beta && '1' || '0' }}
   RELEASE_MAINTAINER: ${{ vars.RELEASE_MAINTAINER }}
-
 jobs:
   preflight:
     if: github.ref == 'refs/heads/main'
@@ -49,15 +38,7 @@ jobs:
           HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_P8 != '' }}
           HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
           HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
-          HAS_AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID != '' }}
-          HAS_AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID != '' }}
-          HAS_AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID != '' }}
-          HAS_AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT != '' }}
-          HAS_AZURE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME != '' }}
-          HAS_AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME != '' }}
-          HAS_WIN_SIGNING_PUBLISHER: ${{ vars.WIN_SIGNING_PUBLISHER != '' }}
         run: node scripts/release/preflight.mjs
-
   linux-check:
     needs: preflight
     runs-on: ubuntu-24.04
@@ -65,7 +46,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        node: ["22.12", "24"]
+        node:
+          - "22.12"
+          - "24"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -81,29 +64,29 @@ jobs:
       - run: npm run build
       - run: npm run prepare:models
       - run: node scripts/test-rag-model.mjs
-      - run: |
-          node dist/cli/main.js --help
-          node dist/cli/main.js --version
-
-  # Native test jobs reuse native-validation's workflow: no secrets, no signing
-  # environment, and per-job or per-shard reruns.
   mac-unit:
     name: macOS unit
-    needs: [preflight, linux-check]
+    needs:
+      - preflight
+      - linux-check
     uses: ./.github/workflows/native-tests.yml
     with:
       os: macos-15
       ref: ${{ needs.preflight.outputs.sha }}
       suite: unit
       release: true
-
   mac-desktop:
     name: macOS desktop ${{ matrix.shard }}
-    needs: [preflight, linux-check]
+    needs:
+      - preflight
+      - linux-check
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard:
+          - 1
+          - 2
+          - 3
     uses: ./.github/workflows/native-tests.yml
     with:
       os: macos-15
@@ -112,35 +95,10 @@ jobs:
       shard: ${{ matrix.shard }}
       shards: 3
       release: true
-
-  win-unit:
-    name: Windows unit
-    needs: [preflight, linux-check]
-    uses: ./.github/workflows/native-tests.yml
-    with:
-      os: windows-2025
-      ref: ${{ needs.preflight.outputs.sha }}
-      suite: unit
-      release: true
-
-  win-desktop:
-    name: Windows desktop ${{ matrix.shard }}
-    needs: [preflight, linux-check]
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    uses: ./.github/workflows/native-tests.yml
-    with:
-      os: windows-2025
-      ref: ${{ needs.preflight.outputs.sha }}
-      suite: desktop
-      shard: ${{ matrix.shard }}
-      shards: 3
-      release: true
-
   linux-installers:
-    needs: [preflight, linux-check]
+    needs:
+      - preflight
+      - linux-check
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -177,9 +135,12 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
-
   mac:
-    needs: [preflight, linux-check, mac-unit, mac-desktop]
+    needs:
+      - preflight
+      - linux-check
+      - mac-unit
+      - mac-desktop
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -204,9 +165,6 @@ jobs:
       - run: npm run prepare:models
       - run: node scripts/install-electron.mjs
       - run: npm run build
-      - run: |
-          node dist/cli/main.js --help
-          node dist/cli/main.js --version
       - name: Prepare temporary Apple credentials
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -238,93 +196,18 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
-
-  windows:
-    needs: [preflight, linux-check, win-unit, win-desktop]
-    runs-on: windows-2025
-    timeout-minutes: 45
-    # The Azure federated credential trusts only this main-restricted environment.
-    environment: windows-signing
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      CODE60_RELEASE: "1"
-      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
-      WIN_SIGNING_PUBLISHER: ${{ vars.WIN_SIGNING_PUBLISHER }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.preflight.outputs.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          architecture: x64
-          cache: npm
-          package-manager-cache: false
-      - name: Require native Windows x64
-        run: node -e "if(process.platform !== 'win32' || process.arch !== 'x64') process.exit(1)"
-      - name: Use runner temp for Windows fixtures
-        shell: pwsh
-        run: |
-          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-      - run: npm ci
-      - run: npm run prepare:models
-      - run: node scripts/install-electron.mjs
-      - run: npm run build
-      - name: CLI smoke checks
-        run: |
-          node dist/cli/main.js --help
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node dist/cli/main.js --version
-      - name: Sign in to Azure Artifact Signing with GitHub OIDC
-        if: ${{ !inputs.unsigned_windows_beta }}
-        uses: azure/login@v3
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Build Windows installer in the selected signing mode
-        env:
-          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
-          AZURE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
-          AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME }}
-        run: npm run package:win
-      - run: npm run test:installers
-      - run: node scripts/release/artifacts.mjs win
-      - uses: actions/upload-artifact@v7.0.2
-        with:
-          name: installers-win
-          path: release/staged/win/
-          retention-days: 7
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v7.0.2
-        if: failure()
-        with:
-          name: release-windows-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
   publish:
     concurrency:
       group: code60-release-publication
       cancel-in-progress: false
     needs:
-      [
-        preflight,
-        linux-check,
-        linux-installers,
-        mac-unit,
-        mac-desktop,
-        mac,
-        win-unit,
-        win-desktop,
-        windows,
-      ]
-    if: ${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac-unit.result == 'success' && needs.mac-desktop.result == 'success' && needs.mac.result == 'success' && needs.win-unit.result == 'success' && needs.win-desktop.result == 'success' && needs.windows.result == 'success' }}
+      - preflight
+      - linux-check
+      - linux-installers
+      - mac-unit
+      - mac-desktop
+      - mac
+    if: ${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac-unit.result == 'success' && needs.mac-desktop.result == 'success' && needs.mac.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -333,7 +216,6 @@ jobs:
       RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      # Publication code comes from the dispatch commit on main, not a moving tag.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
@@ -348,7 +230,6 @@ jobs:
           merge-multiple: true
           path: release-assets/
       - name: Verify tested artifacts and publish
-        # The verifier parses the generated updater YAML using the locked dependency.
         run: |
           npm ci --ignore-scripts
           node scripts/release/publish.mjs

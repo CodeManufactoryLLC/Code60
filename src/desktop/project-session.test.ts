@@ -90,31 +90,28 @@ describe("open-project sessions", () => {
     expect(await store.load()).toEqual([directory]);
   });
 
-  it.skipIf(process.platform === "win32")(
-    "rejects symlinks, directories and public files",
-    async () => {
-      await store.save([directory]);
-      const outside = join(directory, "outside.json");
-      await writeFile(outside, "do not change", { mode: 0o600 });
-      await rm(file);
-      await symlink(outside, file);
-      await expect(store.load()).rejects.toThrow();
-      await expect(store.save([])).rejects.toThrow();
-      expect(await readFile(outside, "utf8")).toBe("do not change");
-      await rm(file);
-      await mkdir(file);
-      await expect(store.load()).rejects.toThrow();
-      await expect(store.save([])).rejects.toThrow();
-      await rm(file, { recursive: true });
-      await store.save([]);
-      await chmod(file, 0o644);
-      await expect(store.load()).rejects.toThrow();
-      await expect(store.save([])).rejects.toThrow();
-      await chmod(file, 0o600);
-      await rm(root, { recursive: true });
-      await symlink(directory, root);
-      await expect(store.load()).rejects.toThrow();
-      await expect(store.save([])).rejects.toThrow();
-    },
-  );
+  it("rejects symlinks, directories and public files", async () => {
+    await store.save([directory]);
+    const outside = join(directory, "outside.json");
+    await writeFile(outside, "do not change", { mode: 0o600 });
+    await rm(file);
+    await symlink(outside, file);
+    await expect(store.load()).rejects.toThrow();
+    await expect(store.save([])).rejects.toThrow();
+    expect(await readFile(outside, "utf8")).toBe("do not change");
+    await rm(file);
+    await mkdir(file);
+    await expect(store.load()).rejects.toThrow();
+    await expect(store.save([])).rejects.toThrow();
+    await rm(file, { recursive: true });
+    await store.save([]);
+    await chmod(file, 0o644);
+    await expect(store.load()).rejects.toThrow();
+    await expect(store.save([])).rejects.toThrow();
+    await chmod(file, 0o600);
+    await rm(root, { recursive: true });
+    await symlink(directory, root);
+    await expect(store.load()).rejects.toThrow();
+    await expect(store.save([])).rejects.toThrow();
+  });
 });

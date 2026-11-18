@@ -133,8 +133,6 @@ export async function createOrchestrator(
   deps: OrchestratorDeps,
   options: OrchestratorOptions,
 ): Promise<Orchestrator> {
-  const ownerIdentity = await deps.processes.identity?.(deps.ownerPid);
-  if (ownerIdentity === null) throw new Error("Cannot verify the run owner");
   const eventListeners = new Set<(event: RunEvent) => void>();
   const changeListeners = new Set<() => void>();
   const warningListeners = new Set<(message: string) => void>();
@@ -151,7 +149,6 @@ export async function createOrchestrator(
     clock: deps.clock,
     processes: deps.processes,
     ownerPid: deps.ownerPid,
-    ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
     onEvent(event: RunEvent) {
       for (const listener of eventListeners) listener(event);
       notifyChange();
@@ -223,7 +220,6 @@ export async function createOrchestrator(
               }
             : { base: null, branch: null, worktree: options.directory }),
           ownerPid: deps.ownerPid,
-          ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
           ...(options.owner === undefined ? {} : { owner: options.owner }),
           startedAt,
         };

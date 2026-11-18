@@ -1,13 +1,6 @@
-export { batchCommand, resolveCommand } from "./command.js";
+export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
-export {
-  helperOutput,
-  type NativeProcessIdentity,
-  nativeIdentity,
-  ownedJob,
-  windowsHelper,
-} from "./helper.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,
@@ -28,4 +21,5 @@ export {
   verifyPrivateSync,
   writePrivateFile,
 } from "./storage.js";
+export { assertSupportedPlatform } from "./support.js";
 export { controlUserService, type ServiceRuntime, userServiceDefinition } from "./user-service.js";

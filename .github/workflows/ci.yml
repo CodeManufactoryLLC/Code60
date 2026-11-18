@@ -1,17 +1,14 @@
 name: CI
-
 on:
   push:
-    branches: [main]
-  pull_request:
-
+    branches:
+      - main
+  pull_request: null
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   check:
     name: Linux / Node ${{ matrix.node }}
@@ -20,7 +17,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        node: ["22.12", "24"]
+        node:
+          - "22.12"
+          - "24"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,11 +42,6 @@ jobs:
       - run: npm run build
       - run: npm run prepare:models
       - run: node scripts/test-rag-model.mjs
-      - name: CLI smoke checks
-        run: |
-          node dist/cli/main.js --help
-          node dist/cli/main.js --version
-
   desktop:
     name: Linux desktop and installers
     needs: check
@@ -76,10 +70,11 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
-
   passed:
     name: CI passed
-    needs: [check, desktop]
+    needs:
+      - check
+      - desktop
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1

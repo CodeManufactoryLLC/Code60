@@ -364,7 +364,7 @@ it("revalidates turn authority after awaited file preparation before any checkou
 });
 
 it("preserves private file modes, renames, deletions and binary contents through Undo", async () => {
-  if (process.platform !== "win32") await fs.chmod(join(project, "file.txt"), 0o600);
+  await fs.chmod(join(project, "file.txt"), 0o600);
   const w = await worker("files");
   await fs.rename(join(w.path, "file.txt"), join(w.path, "renamed.txt"));
   await fs.writeFile(join(w.path, "image.bin"), Buffer.from([0, 128, 255]));
@@ -372,11 +372,9 @@ it("preserves private file modes, renames, deletions and binary contents through
   await loop.execute(task, proposal.id, "apply");
   await expect(fs.access(join(project, "file.txt"))).rejects.toThrow();
   expect(await fs.readFile(join(project, "image.bin"))).toEqual(Buffer.from([0, 128, 255]));
-  if (process.platform !== "win32")
-    expect((await fs.stat(join(project, "renamed.txt"))).mode & 0o777).toBe(0o600);
+  expect((await fs.stat(join(project, "renamed.txt"))).mode & 0o777).toBe(0o600);
   await loop.execute(task, proposal.id, "undo");
-  if (process.platform !== "win32")
-    expect((await fs.stat(join(project, "file.txt"))).mode & 0o777).toBe(0o600);
+  expect((await fs.stat(join(project, "file.txt"))).mode & 0o777).toBe(0o600);
   await expect(fs.access(join(project, "renamed.txt"))).rejects.toThrow();
 });
 
@@ -424,7 +422,6 @@ it("retains newer files on incomplete recovery and prevents another application"
 });
 
 it("rejects changed symlinks and symlinked project targets", async () => {
-  if (process.platform === "win32") return;
   const w = await worker("links");
   await fs.symlink("file.txt", join(w.path, "link.txt"));
   expect((await capture([w])).conflicts[0]?.reason).toContain("symlinks");

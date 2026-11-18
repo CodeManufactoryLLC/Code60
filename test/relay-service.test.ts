@@ -26,7 +26,6 @@ import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
 
 // Native helper launches make real private writes/stream-draining slower than
 // POSIX. The Windows log already has passing lifecycle cases taking 4–5 s.
-if (process.platform === "win32") vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 let root: string;
 let agents: FakeAgents;
@@ -244,7 +243,6 @@ it("rewinds worker memory only for the request's Relay generation", async () => 
 it.each(["removed", "replaced", "symlink"])(
   "refuses a %s workspace on in-process Retry",
   async (kind) => {
-    if (kind === "symlink" && process.platform === "win32") return;
     await connect();
     const workspace = required(relay.snapshot().directory);
     await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -995,26 +993,23 @@ it("evicts only above one million serialized characters and resets the budget on
   ).toBe(true);
 });
 
-it.skipIf(process.platform === "win32")(
-  "checkpoints live requests when history permissions change without weakening journal reads",
-  async () => {
-    await connect();
-    const id = required(relay.snapshot().run).id;
-    const journal = join(root, "state", "code60", "relay", "history.frames");
-    await chmod(journal, 0o400);
-    try {
-      await relay.action({ type: "send", id, text: "Continue with unavailable history" });
-      await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
-      await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-      await relay.action({ type: "send", id, text: "Another checkpointed request" });
-      await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
-      expect(relay.snapshot().checkpoint).toBeDefined();
-      expect(relay.snapshot().error).toBeNull();
-    } finally {
-      await chmod(journal, 0o600);
-    }
-  },
-);
+it("checkpoints live requests when history permissions change without weakening journal reads", async () => {
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  const journal = join(root, "state", "code60", "relay", "history.frames");
+  await chmod(journal, 0o400);
+  try {
+    await relay.action({ type: "send", id, text: "Continue with unavailable history" });
+    await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await relay.action({ type: "send", id, text: "Another checkpointed request" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
+    expect(relay.snapshot().checkpoint).toBeDefined();
+    expect(relay.snapshot().error).toBeNull();
+  } finally {
+    await chmod(journal, 0o600);
+  }
+});
 
 it.each(["write", "sync"] as const)(
   "keeps Send and worker delivery operational after a %s failure and saves again after Retry",
