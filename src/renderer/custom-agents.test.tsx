@@ -17,6 +17,11 @@ it("keeps agent creation available without a database and renders user names as 
   expect(html).toContain("&lt;script&gt;name&lt;/script&gt;");
   expect(html).not.toContain("<script>");
   expect(html).toContain("Archived");
+  expect(html).toContain('aria-haspopup="menu" aria-expanded="false"');
+  expect(html).toContain('class="icon-button home-card-actions"');
+  expect(html).not.toContain('class="custom-agent-actions"');
+  expect(html).not.toContain('aria-label="Edit ');
+  expect(html).not.toContain('aria-label="Archive ');
   expect(html).not.toContain("disabled");
 });
 

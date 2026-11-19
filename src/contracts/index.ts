@@ -25,6 +25,7 @@ export * from "./automation.js";
 export * from "./commands.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
+export * from "./project-search.js";
 export * from "./prompts.js";
 export * from "./search-summary.js";
 export * from "./session-state.js";

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ProjectSearchOpened } from "../bridge/index.js";
 import type { AppPagesProps } from "./app-page-props.js";
 import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
@@ -19,6 +20,7 @@ import { MessagesPage } from "./messages.js";
 import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
+import { Card } from "./neobrutalism/card.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
@@ -81,6 +83,7 @@ export function AppPages(props: AppPagesProps) {
     () => ({
       open: navigation.open,
       pending: navigation.pending,
+      selectionPending: navigation.projectPending || navigation.conversationPending,
       header: !splash,
       projects: snapshot?.openProjects ?? [],
       chats: snapshot?.chats ?? [],
@@ -89,6 +92,8 @@ export function AppPages(props: AppPagesProps) {
     [
       navigation.open,
       navigation.pending,
+      navigation.projectPending,
+      navigation.conversationPending,
       splash,
       snapshot?.openProjects,
       snapshot?.chats,
@@ -149,7 +154,54 @@ export function AppPages(props: AppPagesProps) {
       onOpen={({ target }) => void navigation.open(target)}
     />
   );
+  const [searchTarget, setSearchTarget] = useState<ProjectSearchOpened | null>(null);
+  useEffect(() => {
+    if (!searchTarget) return;
+    if (snapshot?.databaseEpoch !== searchTarget.databaseEpoch) {
+      setSearchTarget(null);
+      return;
+    }
+    if (
+      snapshot.projectInstanceId !== searchTarget.projectId ||
+      directory !== searchTarget.source.project.path
+    )
+      return;
+    setSearchTarget(null);
+    const source = searchTarget.source;
+    if (source.kind === "file" && source.path) {
+      fileAction({ type: "file", path: source.path });
+      fileBrowser.selectFile(source.path);
+      setExplorerOpen(true);
+      setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    } else if (source.kind === "project")
+      void navigation.open({ kind: "project", id: searchTarget.projectId });
+    else if (source.runId) {
+      setSelected(source.runId);
+      openChat(source.runId, false, source.eventIndex);
+    }
+  }, [
+    searchTarget,
+    snapshot?.databaseEpoch,
+    snapshot?.projectInstanceId,
+    directory,
+    fileAction,
+    fileBrowser,
+    setExplorerOpen,
+    setTabs,
+    navigation,
+    setSelected,
+    openChat,
+  ]);
   const views = {
+    assistants: (
+      <HomePage
+        page="assistants"
+        database={database}
+        relayAvailable={Boolean(builtinRelayId(snapshot?.chats ?? []))}
+        onOpenRelay={props.openRelay}
+        onOpenPage={(id) => void navigation.open({ kind: "page", id })}
+      />
+    ),
     "custom-agents": (
       <CustomAgentsPage
         storageError={snapshot?.customAgentError}
@@ -181,7 +233,11 @@ export function AppPages(props: AppPagesProps) {
     advanced: parentHome("advanced"),
     experiments: parentHome("experiments"),
     "system-manager": (
-      <SystemManagerPage api={api} active={!splash && tabs.active === "system-manager"} />
+      <SystemManagerPage
+        api={api}
+        active={!splash && tabs.active === "system-manager"}
+        pollingPaused={snapshot?.polling.paused ?? false}
+      />
     ),
     automations: (
       <AutomationsPage
@@ -508,26 +564,12 @@ export function AppPages(props: AppPagesProps) {
     search: (
       <>
         <SearchPage
-          key={scope.viewKey}
+          key={databaseKey}
           api={api}
           provider={snapshot?.orchestration.provider ?? null}
-          directory={directory ?? null}
-          runs={projectRuns}
-          data={transcripts}
-          onOpen={(result) => {
-            if (result.kind === "file" && result.path) {
-              fileAction({ type: "file", path: result.path });
-              fileBrowser.selectFile(result.path);
-              setExplorerOpen(true);
-              setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
-              return;
-            }
-            setTabs((current) => updateTabs(current, { type: "select", id: "sessions" }));
-            if (result.runId) {
-              setSelected(result.runId);
-              openChat(result.runId, false, result.eventIndex);
-            }
-          }}
+          database={database}
+          databaseEpoch={snapshot?.databaseEpoch ?? 0}
+          onOpen={setSearchTarget}
         />
       </>
     ),
@@ -626,22 +668,25 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      {renderedPages.map(({ id }) => (
-        <div
-          key={id}
-          className="page-panel"
-          role="tabpanel"
-          id={`panel-${id}`}
-          aria-labelledby={
-            id === "chat" && snapshot
-              ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-              : sidebarPageElementId(id, tabs.projectId)
-          }
-          hidden={tabs.active !== id}
-        >
-          {views[id]}
-        </div>
-      ))}
+      {renderedPages.map(({ id }) => {
+        const Shell = id === "chat" ? "div" : Card;
+        return (
+          <Shell
+            key={id}
+            className="page-panel"
+            role="tabpanel"
+            id={`panel-${id}`}
+            aria-labelledby={
+              id === "chat" && snapshot
+                ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                : sidebarPageElementId(id, tabs.projectId)
+            }
+            hidden={tabs.active !== id}
+          >
+            {views[id]}
+          </Shell>
+        );
+      })}
     </PageTitleNavigationContext.Provider>
   );
 }

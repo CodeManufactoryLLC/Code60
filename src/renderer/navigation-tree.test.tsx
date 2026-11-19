@@ -121,6 +121,7 @@ describe("navigation tree", () => {
     expect(inNavigationBranch("logs", "settings")).toBe(false);
     expect(navigationParent("home")).toBeUndefined();
     for (const id of [
+      "assistants",
       "projects",
       "project",
       "tables",

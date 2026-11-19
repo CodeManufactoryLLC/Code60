@@ -29,6 +29,15 @@ type DialogState = {
   allowQuit: boolean;
 };
 type ProcessEvidence = { pid: number; parent: number; cwd: string };
+type BreadcrumbFrameSample = {
+  opacity: number;
+  current: number;
+  exits: number;
+  height: number;
+  trail: string;
+  visibleChats: number;
+  safePending: boolean;
+};
 
 function alive(pid: number) {
   try {
@@ -63,7 +72,7 @@ async function checkHeaderBreadcrumbs(page: Page) {
   await expect(header.getByRole("navigation", { name: "Breadcrumb", exact: true })).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
-  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "500");
+  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "700");
   const slot = page.locator(".page-title-placeholder");
   await expect(slot).toHaveCount(1);
   await expect(slot).toHaveAttribute("aria-hidden", "true");
@@ -108,14 +117,14 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
-    const gray = theme === "light" ? "rgb(243, 243, 243)" : "rgb(48, 48, 48)";
+    const gray = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
     await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px");
     await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".sidebar-navigation-card").first()).toHaveCSS(
       "background-color",
-      theme === "light" ? "rgb(255, 255, 255)" : "rgb(37, 37, 37)",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
     );
-    await expect(page.locator("body")).toHaveCSS("font-weight", "300");
+    await expect(page.locator("body")).toHaveCSS("font-weight", "400");
     await page.locator("#tab-home").scrollIntoViewIfNeeded();
     await page.mouse.move(1000, 500);
     const geometry = await page.evaluate(() => {
@@ -198,6 +207,91 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       }
       await expect(composer).toHaveValue("Second sidebar draft");
       await checkHeaderBreadcrumbs(page);
+      // Different chat IDs have identical visible trails. Watch the real async
+      // selection window, rather than checking only its fully settled frame.
+      for (const [entry, draft] of [
+        [entries.first(), "First sidebar draft"],
+        [entries.last(), "Second sidebar draft"],
+      ] as const) {
+        await page.evaluate(() => {
+          const card = document.querySelector<HTMLElement>(".workspace-breadcrumbs");
+          if (!card) throw new Error("Missing breadcrumb card");
+          for (const animation of card.getAnimations({ subtree: true })) animation.finish();
+          const samples: BreadcrumbFrameSample[] = [];
+          const scope = window as typeof window & {
+            breadcrumbSamples?: { stop(): typeof samples };
+          };
+          let frame = 0;
+          const sample = () => {
+            const items = [...card.querySelectorAll<HTMLElement>("[data-breadcrumb-key]")];
+            const visible = [
+              ...document.querySelectorAll<HTMLElement>(
+                "#panel-chat .chat-conversations > .orchestration-chat-page:not([hidden])",
+              ),
+            ];
+            samples.push({
+              opacity: Math.min(...items.map((item) => Number(getComputedStyle(item).opacity))),
+              current: card.querySelectorAll('[aria-current="page"]').length,
+              exits: card.querySelectorAll(".breadcrumb-exit").length,
+              height: card.getBoundingClientRect().height,
+              trail: items
+                .map(
+                  (item) =>
+                    `${item.dataset.breadcrumbKey}:${item.textContent}:${getComputedStyle(item).opacity}`,
+                )
+                .join("|"),
+              visibleChats: visible.length,
+              safePending: visible.every(
+                (chat) =>
+                  !chat.hasAttribute("data-navigation-pending") ||
+                  (chat.inert && card.querySelector<HTMLElement>("nav")?.inert === true),
+              ),
+            });
+            frame = requestAnimationFrame(sample);
+          };
+          sample();
+          scope.breadcrumbSamples = {
+            stop: () => {
+              cancelAnimationFrame(frame);
+              delete scope.breadcrumbSamples;
+              return samples;
+            },
+          };
+        });
+        await entry.click();
+        await expect(entry).toHaveAttribute("aria-current", "true");
+        await expect(composer).toHaveValue(draft);
+        await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveAccessibleName(
+          `Rename chat: ${await entry.locator(".chat-sidebar-label").textContent()}`,
+        );
+        await page.waitForFunction(() =>
+          document
+            .querySelector(".workspace-breadcrumbs")
+            ?.getAnimations({ subtree: true })
+            .every((animation) => animation.playState !== "running"),
+        );
+        const samples = await page.evaluate(() => {
+          const scope = window as typeof window & {
+            breadcrumbSamples?: {
+              stop(): BreadcrumbFrameSample[];
+            };
+          };
+          return scope.breadcrumbSamples?.stop() ?? [];
+        });
+        expect(samples.length).toBeGreaterThan(0);
+        expect(
+          samples.every((sample) => sample.opacity === 1),
+          JSON.stringify(samples),
+        ).toBe(true);
+        expect(samples.every((sample) => sample.current === 1 && sample.exits === 0)).toBe(true);
+        expect(samples.every((sample) => sample.visibleChats === 1 && sample.safePending)).toBe(
+          true,
+        );
+        expect(
+          Math.max(...samples.map((s) => s.height)) - Math.min(...samples.map((s) => s.height)),
+        ).toBeLessThan(1);
+      }
+      await page.screenshot({ path: test.info().outputPath(`chat-breadcrumbs-${theme}.png`) });
       await expect(page.locator(".workspace-breadcrumbs .chat-title")).toBeVisible();
       await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveCSS(
         "text-decoration-line",
@@ -207,17 +301,20 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
       const box = composer.locator("..");
       await page.locator(".sidebar-toggle").focus();
-      await expect(box).toHaveCSS("border-width", "0px");
+      await expect(box).toHaveCSS("border-width", "2px");
       await expect(box).toHaveCSS("background-color", gray);
       const bounds = await box.boundingBox();
       await composer.focus();
       await expect(box).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(233, 233, 233)" : "rgb(56, 56, 56)",
+        theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
       );
       expect(await box.boundingBox()).toEqual(bounds);
-      await project.locator(".project-chat-name").press("ArrowLeft");
-      await expect(project.locator(".project-chat-name")).toHaveAttribute("aria-expanded", "false");
+      await project.locator(".project-chat-toggle").press("ArrowLeft");
+      await expect(project.locator(".project-chat-toggle")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
       await page.locator("#tab-chat").press("ArrowLeft");
       await page.getByRole("button", { name: "Relay", exact: true }).click();
       await expect(page.locator(".relay-sidebar .chat-sidebar-entry")).toHaveAttribute(
@@ -226,7 +323,10 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       );
       await expect(page.locator("#projects-card-toggle")).toHaveAttribute("aria-expanded", "false");
       await page.locator("#tab-chat").press("ArrowRight");
-      await expect(project.locator(".project-chat-name")).toHaveAttribute("aria-expanded", "false");
+      await expect(project.locator(".project-chat-toggle")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
     } finally {
       const observed = await page.evaluate(() => {
         const scope = window as typeof window & {
@@ -263,7 +363,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await page.locator("#tab-apps").press("ArrowRight");
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
-    await project.locator(".project-chat-name").press("ArrowRight");
+    await project.locator(".project-chat-toggle").press("ArrowRight");
   }
   await page.locator(".sidebar-toggle").click();
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("inert", "");
@@ -446,9 +546,9 @@ for (const custom of [false, true]) {
         await page.getByRole("tab", { name: "Projects", exact: true }).click();
         const projectsHome = page.locator("#panel-projects");
         await expect(projectsHome.locator(".table-controls > button")).toHaveCount(0);
-        await expect(projectsHome.locator(".home-cards > button").first()).toHaveAccessibleName(
-          "New Project",
-        );
+        await expect(
+          projectsHome.locator(".home-cards > .navigation-card > button").first(),
+        ).toHaveAccessibleName("New Project");
         await projectsHome.getByRole("button", { name: "New Project", exact: true }).click();
         const openProject = page.getByRole("dialog", { name: "Open Project", exact: true });
         await openProject.getByRole("button", { name: "Open Folder", exact: true }).click();
@@ -544,8 +644,8 @@ for (const custom of [false, true]) {
           .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic) pre")
           .last();
         await expect(bubble).toHaveCSS("border-radius", "5px");
-        await expect(bubble).toHaveCSS("background-color", "rgb(27, 58, 92)");
-        await expect(bubble).toHaveCSS("color", "rgb(255, 255, 255)");
+        await expect(bubble).toHaveCSS("background-color", "rgb(53, 38, 62)");
+        await expect(bubble).toHaveCSS("color", "rgb(247, 247, 242)");
         await expect(plan).toContainText(repo);
         await expect(composer).toBeEditable();
         expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
@@ -878,7 +978,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
         const quit = message === "Quit Code60?";
         const open = message === "Open this project?";
         if (
-          (!quit && !open && message !== "Close project?") ||
+          (!quit && !open && message !== "Stop folder?") ||
           options.type !== (open ? "question" : "warning") ||
           options.defaultId !== 0 ||
           options.cancelId !== 0 ||
@@ -954,7 +1054,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       );
       await expect(projectHome).toBeVisible();
       await expect(projectHome.locator(".table-controls > button")).toHaveCount(0);
-      const newChat = projectHome.locator(".home-cards > button").first();
+      const newChat = projectHome.locator(".home-cards > .navigation-card > button").first();
       await expect(newChat).toContainText("New Session");
       await newChat.focus();
       await newChat.press("Enter");
@@ -1020,18 +1120,17 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     await expect(
       firstGroup.getByRole("button", { name: "Hidden saved chat", exact: true }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: `More for ${projects[2]}`, exact: true }).click();
-    await page.getByRole("menuitem", { name: "Close project", exact: true }).click();
+    await page.getByRole("button", { name: `Close Project: ${projects[2]}`, exact: true }).click();
     await expect(
       page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     const before = await page.evaluate(() => window.desktop.snapshot());
     native.push(...((await nativeMessages()) ?? []));
     expect(native.map((entry) => entry.message)).toEqual([
       "Open this project?",
       "Open this project?",
       "Open this project?",
-      "Close project?",
+      "Stop folder?",
     ]);
     expect(native.slice(0, 3).map((entry) => entry.detail)).toEqual(projects);
     expect(native[3]?.detail).toContain(projects[2]);
@@ -1059,9 +1158,9 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     ).toBeVisible();
     await expect(
       page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     const restored = await page.evaluate(() => window.desktop.snapshot());
-    expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects.slice(0, 2));
+    expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects);
     expect(
       restored.openProjects?.some((entry) =>
         before.openProjects?.some((old) => old.id === entry.id),
@@ -1179,6 +1278,71 @@ test("workflow: custom assistants without a database, instruction edits, archive
         page.locator("#custom-agent-pages").getByRole("button", { name, exact: true }),
       );
     }
+    const cardMenu = async (name: string, keyboard = false) => {
+      const trigger = page.getByRole("button", { name: `More actions for ${name}`, exact: true });
+      if (keyboard) {
+        await trigger.focus();
+        await trigger.press("Enter");
+      } else await trigger.click();
+      const menu = page.getByRole("menu", { name: `Actions for ${name}`, exact: true });
+      await expect(menu).toBeVisible();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      return menu;
+    };
+    await expect(page.locator(".custom-agent-actions")).toHaveCount(0);
+    for (const theme of ["light", "dark"]) {
+      await page.locator("#tab-settings").click();
+      if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
+        await page.locator("#settings-card-toggle").click();
+      await page.locator("#tab-settings-appearance").click();
+      await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+      await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
+      const menu = await cardMenu("Reviewer", true);
+      await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Archive"]);
+      await expect(menu.getByRole("menuitem", { name: "Edit", exact: true })).toBeFocused();
+      await page.keyboard.press("ArrowDown");
+      await expect(menu.getByRole("menuitem", { name: "Archive", exact: true })).toBeFocused();
+      await page.screenshot({ path: test.info().outputPath(`custom-card-menu-${theme}.png`) });
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "More actions for Reviewer", exact: true }),
+      ).toBeFocused();
+    }
+    await cardMenu("Writer");
+    await page.locator("#tab-home").click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await page.locator("#tab-settings-text").click();
+    await page
+      .getByRole("group", { name: "Card Titles", exact: true })
+      .getByLabel("Font size")
+      .fill("32");
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window?.setMinimumSize(640, 480);
+      window?.setSize(640, 800);
+    });
+    await page.locator(".sidebar-toggle").click();
+    for (const forcedColors of ["none", "active"] as const) {
+      await page.emulateMedia({ reducedMotion: "reduce", forcedColors });
+      const menu = await cardMenu("Reviewer");
+      const box = await menu.boundingBox();
+      if (!box) throw new Error("Missing custom assistant menu bounds");
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(640);
+      await page.screenshot({
+        path: test.info().outputPath(`custom-card-menu-narrow-${forcedColors}.png`),
+      });
+      await page.keyboard.press("Escape");
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1280, 860),
+    );
+    await page.locator(".sidebar-toggle").click();
     const beforeOpen = await page.evaluate(() => window.desktop.snapshot());
     expect(beforeOpen.database).toBeNull();
     expect(beforeOpen.chats.filter((chat) => chat.customAgentId)).toHaveLength(0);
@@ -1231,7 +1395,9 @@ test("workflow: custom assistants without a database, instruction edits, archive
     const statePath = join(directory, "state/code60/custom-agents", reviewerId, "state.json");
     const saved = await readFile(statePath);
     await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
-    await page.getByRole("button", { name: "Edit Reviewer", exact: true }).click();
+    await (await cardMenu("Reviewer", true))
+      .getByRole("menuitem", { name: "Edit", exact: true })
+      .click();
     const edit = page.getByRole("dialog", { name: "Edit Assistant", exact: true });
     await expect(edit.getByLabel("Special instructions", { exact: true })).toHaveValue(
       "Act as Reviewer.",
@@ -1247,20 +1413,28 @@ test("workflow: custom assistants without a database, instruction edits, archive
         checkboxChecked: false,
       });
     });
-    await page.getByRole("button", { name: "Archive Reviewer", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Archive Reviewer", exact: true })).toBeEnabled();
+    await (await cardMenu("Reviewer"))
+      .getByRole("menuitem", { name: "Archive", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "More actions for Reviewer", exact: true }),
+    ).toBeEnabled();
     expect(
       (await page.evaluate(() => window.desktop.snapshot())).customAgents?.find(
         (a) => a.id === reviewerId,
       )?.archived,
     ).toBe(false);
-    await page.getByRole("button", { name: "Archive Reviewer", exact: true }).click();
+    await (await cardMenu("Reviewer"))
+      .getByRole("menuitem", { name: "Archive", exact: true })
+      .click();
     await expect(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toHaveCount(0);
     expect(await readFile(statePath)).toEqual(saved);
     await page.getByRole("button", { name: "Archived", exact: true }).click();
-    await page.getByRole("button", { name: "Restore", exact: true }).click();
+    await (await cardMenu("Reviewer"))
+      .getByRole("menuitem", { name: "Restore", exact: true })
+      .click();
     await page.getByRole("button", { name: "Active assistants", exact: true }).click();
     await expect(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),

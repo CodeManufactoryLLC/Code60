@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRequest } from "../contracts/index.js";
 import { readPrivateJson, writePrivateJson } from "../platform/index.js";
-import { prepareSchedulerUpdate, restoreSchedulerUpdate } from "./registration.js";
+import {
+  prepareSchedulerUpdate,
+  restoreSchedulerUpdate,
+  schedulerControl,
+} from "./registration.js";
 import { automationRoot } from "./service.js";
 
 const fake = vi.hoisted(() => ({
@@ -12,10 +16,12 @@ const fake = vi.hoisted(() => ({
   pausedAll: false,
   request: vi.fn(),
   control: vi.fn(),
+  inspect: vi.fn(),
 }));
 vi.mock("../platform/index.js", async (original) => ({
   ...(await original<object>()),
   controlUserService: fake.control,
+  inspectUserService: fake.inspect,
 }));
 vi.mock("./service.js", async (original) => ({
   ...(await original<object>()),
@@ -23,6 +29,7 @@ vi.mock("./service.js", async (original) => ({
 }));
 const roots: string[] = [];
 beforeEach(() => {
+  fake.inspect.mockReset().mockResolvedValue({ definitionPresent: true, state: "stopped" });
   fake.running = true;
   fake.pausedAll = false;
   fake.request.mockReset().mockImplementation(async (request: AutomationRequest) => {
@@ -35,6 +42,73 @@ beforeEach(() => {
     fake.running = action !== "stop";
     return { available: fake.running };
   });
+});
+
+describe("read-only scheduler registration status", () => {
+  it.each([true, false])("honors installed=%s instead of marker existence", async (installed) => {
+    const s = await setup(installed);
+    fake.running = false;
+    fake.inspect.mockResolvedValue({ definitionPresent: installed, state: "stopped" });
+    const before = await readPrivateJson(join(automationRoot(s.env), "registration.json"), 16_384);
+    expect(await schedulerControl(s.env, "status")).toEqual({
+      installed,
+      nativeState: "stopped",
+      service: null,
+    });
+    expect(fake.control).not.toHaveBeenCalled();
+    expect(await readPrivateJson(join(automationRoot(s.env), "registration.json"), 16_384)).toEqual(
+      before,
+    );
+  });
+  it("distinguishes missing registration from a stopped installed service and standalone runtime", async () => {
+    const root = await mkdtemp(join(tmpdir(), "c60-service-absent-"));
+    roots.push(root);
+    const env = { ...process.env, XDG_STATE_HOME: root };
+    fake.running = false;
+    fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped" });
+    expect(await schedulerControl(env, "status")).toMatchObject({
+      installed: false,
+      service: null,
+    });
+    fake.running = true;
+    expect(await schedulerControl(env, "status")).toMatchObject({
+      installed: false,
+      service: { pausedAll: false },
+    });
+    await expect(
+      readPrivateJson(join(automationRoot(env), "registration.json"), 16_384),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+  it("reports unavailable supervision without fabricating running or stopped health", async () => {
+    const s = await setup();
+    fake.running = false;
+    fake.inspect.mockResolvedValue({ definitionPresent: true, state: "unavailable" });
+    expect(await schedulerControl(s.env, "status")).toEqual({
+      installed: true,
+      nativeState: "unavailable",
+      service: null,
+    });
+  });
+  it.each(["invalid", "missing-definition", "orphan-definition"])(
+    "rejects %s registration without repairing it",
+    async (kind) => {
+      const s = await setup(kind !== "orphan-definition");
+      const marker = join(automationRoot(s.env), "registration.json");
+      if (kind === "invalid")
+        await writePrivateJson(
+          marker,
+          { installed: "yes" },
+          await readPrivateJson(marker, 16_384),
+          16_384,
+        );
+      fake.inspect.mockResolvedValue({
+        definitionPresent: kind !== "missing-definition",
+        state: "stopped",
+      });
+      await expect(schedulerControl(s.env, "status")).rejects.toThrow(/registration/);
+      expect(fake.control).not.toHaveBeenCalled();
+    },
+  );
 });
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });

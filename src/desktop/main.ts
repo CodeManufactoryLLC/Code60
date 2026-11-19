@@ -1,3 +1,4 @@
+import "./console-output.js";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -663,6 +664,25 @@ async function ready(): Promise<void> {
   handle("desktop:rag-retrieve", (value) => controller.retrieveRag(parseRagQuery(value)));
   handle("desktop:rag-cancel", (value) => controller.cancelRag(parseRagCancel(value)));
   handle("desktop:rag-clear", (value) => controller.clearRag(parseRagIdentity(value)));
+  handle("desktop:project-search", (value) => controller.searchProjects(value));
+  handle("desktop:project-search-page", (value) => controller.searchProjectsPage(value));
+  handle("desktop:project-search-cancel", (value) => controller.cancelProjectSearch(value));
+  handle("desktop:project-search-open", (value) =>
+    controller.openSearchSource(value, async (path) => {
+      if (!window || window.isDestroyed()) return false;
+      const result = await dialog.showMessageBox(window, {
+        type: "question",
+        title: "Open project?",
+        message: "Open this project?",
+        detail: path,
+        buttons: ["Cancel", "Open project"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      return result.response === 1;
+    }),
+  );
   handle("desktop:search-summary", (value) =>
     controller.summarizeSearch(parseSearchSummary(value)),
   );
@@ -783,7 +803,7 @@ async function ready(): Promise<void> {
     void controller.cancelDiffReads().catch(() => {});
     void controller.cancelGitSetup().catch(() => {});
     void controller.cancelAgentSetup().catch(() => {});
-    void controller.cancelSearchSummary().catch(() => {});
+    void controller.clearSearch().catch(() => {});
     window?.setIgnoreMouseEvents(false);
     controller.setVisibility({ visible: false, worktrees: false });
   });

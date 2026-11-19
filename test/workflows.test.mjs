@@ -16,6 +16,12 @@ const nativeTests = parse(
   await readFile(new URL("../.github/workflows/native-tests.yml", import.meta.url), "utf8"),
 );
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const linuxDesktop = parse(
+  await readFile(
+    new URL("../.github/actions/setup-linux-desktop/action.yml", import.meta.url),
+    "utf8",
+  ),
+);
 
 describe("branch protection policy", () => {
   it("actively protects the default, main, and dev branches without bypasses or exclusions", () => {
@@ -61,6 +67,31 @@ describe("branch protection policy", () => {
 });
 
 describe("CI and release gates", () => {
+  it("bounds Linux desktop package downloads and uses the primary signed Ubuntu mirror", () => {
+    const setup = linuxDesktop.runs.steps[0].run;
+    expect(setup).toContain('"$(dpkg --print-architecture)" == amd64');
+    expect(setup).toContain("-f /etc/apt/apt-mirrors.txt");
+    expect(setup).toContain("https://archive.ubuntu.com/ubuntu");
+    expect(setup).toContain("Acquire::Retries=2");
+    expect(setup).toContain("Acquire::http::Timeout=30");
+    expect(setup).toContain("Acquire::https::Timeout=30");
+    expect(setup).toContain('apt-get "${apt_options[@]}" update');
+    expect(setup).toContain('apt-get "${apt_options[@]}" install');
+    expect(setup).not.toContain("--allow-unauthenticated");
+    expect(
+      ci.jobs.desktop.steps.some((step) => step.uses === "./.github/actions/setup-linux-desktop"),
+    ).toBe(true);
+  });
+
+  it("enables SQLite for Node 22.12 so database tests participate in coverage", () => {
+    expect(ci.jobs.check.strategy.matrix.node).toContain("22.12");
+    expect(ci.jobs.check.env.NODE_OPTIONS).toBe(
+      "${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}",
+    );
+    expect(ci.jobs.check.steps.some((step) => step.run === "npm run check")).toBe(true);
+    expect(ci.jobs.passed.needs).toContain("check");
+  });
+
   it("passes only declared inputs to every reusable native test call", () => {
     const inputs = nativeTests.on.workflow_call.inputs;
     for (const workflow of [native, release]) {

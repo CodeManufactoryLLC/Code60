@@ -1,5 +1,9 @@
 # Bridge
 
+- Scheduling Service status reuses automation scheduler/status with a browser-safe
+  typed installation/native/live result. It grants no process/path capability or
+  automatic installation authority; the live scheduler protocol remains unchanged.
+
 - `snapshot.versions` may include read-only configured embedding metadata and
   installed ONNX Runtime identity/version/execution details. These are main-owned
   display values, not accepted model/path/command inputs or inference authority.
@@ -89,7 +93,7 @@
   Keep lifecycle timing metadata optional for older events; add no clipboard or generic
   filesystem capability for renderer presentation.
 
-- Search summary requests carry only request/project identity, a bounded query, an optional project-file inclusion flag and bounded saved-source excerpts with local addresses. Empty source lists are valid; file sources are supplied only by main-process retrieval and returned with the completed overview. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.
+- Project Search accepts strict captured database epochs and request UUIDs with bounded query/Type/Sort values. Paging uses opaque cursors; cancellation uses the query identity; source opening uses an opaque captured source ID. Main resolves the complete registered project set, never caller roots. Overview requests reference captured search evidence plus their own UUID, never raw renderer excerpts, paths or provider commands. Return project-qualified provenance and exact numbered evidence. Reject stale database/member/source actions; native closed-project confirmation is revalidated before navigation.
 
 - Setup actions accept only a strict mode, session UUID and provider ID. Never accept commands, environment values or directories. Snapshots carry the main-process setup transaction and enabled membership; persisted command identities are hashes, not credentials or live connection assertions.
 

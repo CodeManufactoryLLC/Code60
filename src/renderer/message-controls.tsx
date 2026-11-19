@@ -121,11 +121,11 @@ export function TurnTimer({
           aria-controls={disclosure.controls}
           onClick={disclosure.toggle}
         >
-          {timingText(timing, now)}
+          <span className="turn-timer-text">{timingText(timing, now)}</span>
         </button>
       ) : (
         <p className="turn-timer" aria-live="off">
-          {timingText(timing, now)}
+          <span className="turn-timer-text">{timingText(timing, now)}</span>
         </p>
       )}
       {!timing.active && <hr className="turn-separator" />}

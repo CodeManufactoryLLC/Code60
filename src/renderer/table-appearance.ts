@@ -70,7 +70,7 @@ export function useTableAppearance(textStyles: TextStyles, lines: TableLines) {
       textLight: color("--muted"),
       textHeader: color("--text"),
       textHeaderSelected: color("--text"),
-      bgCell: color("--bg"),
+      bgCell: color("--surface"),
       bgCellMedium: color("--surface-hover"),
       bgHeader: color("--surface-band"),
       bgHeaderHasFocus: color("--accent-bg"),

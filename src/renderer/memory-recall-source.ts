@@ -1,3 +1,4 @@
+import { chatEventKey } from "./chats.js";
 import type { RecallSource } from "./memory-recall.js";
 import type { DesktopState } from "./snapshot-state.js";
 import type { Transcripts } from "./transcripts.js";
@@ -62,6 +63,6 @@ export function selectedRecallSource(
           ],
     ),
     runId,
-    events: state.chatEventsByRun[runId] ?? [],
+    events: state.chatEventsByRun[chatEventKey(chat)] ?? [],
   };
 }

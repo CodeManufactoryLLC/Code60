@@ -100,7 +100,7 @@ export function AutomationsPage({
     } catch {
       if (owner === generation.current) {
         setError(
-          "Scheduler unavailable. Open Apps → System Manager to install or start the background service, then refresh. Existing schedules and evidence are kept.",
+          "Scheduler unavailable. Open Apps → System Manager to check the Scheduling Service, then refresh. Existing schedules and evidence are kept.",
         );
       }
     } finally {

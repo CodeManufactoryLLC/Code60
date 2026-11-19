@@ -96,7 +96,7 @@
 
 .table-card-title {
   min-width: 0;
-  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   --letter-spacing: var(--card-spacing, normal);
 }
@@ -184,7 +184,7 @@
 
 .icon-select > select option {
   color: var(--text);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .icon-select:hover,
@@ -217,7 +217,7 @@
 .icon-select > select,
 .table-scope > select {
   font-family: var(--button-font, var(--font));
-  font-weight: var(--button-weight, 300);
+  font-weight: var(--button-weight, 600);
   text-transform: var(--button-case, none);
   --letter-spacing: var(--button-spacing, normal);
 }
@@ -370,7 +370,7 @@
   margin: 0;
   padding: 14px 24px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .table-settings-body {
@@ -466,7 +466,7 @@
   overflow: auto;
   scrollbar-gutter: stable;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   box-shadow: var(--overlay-shadow);
 }
 
@@ -521,7 +521,7 @@
   flex-shrink: 0;
   padding: 16px 24px;
   border-top: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .table-settings-actions {

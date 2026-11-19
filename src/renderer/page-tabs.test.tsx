@@ -50,9 +50,10 @@ function navigation(
 }
 
 describe("database connection navigation", () => {
-  it("groups Relay and Custom Assistants beneath an Assistants disclosure without adding a page", () => {
+  it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
     const html = navigation(null);
-    expect(html).toContain('class="sidebar-navigation-card"');
+    expect(html).toMatch(/class="[^"]*sidebar-navigation-card"/);
+    expect(html.match(/data-slot="card"/g)).toHaveLength(6);
     expect(html).toContain('id="assistants-toggle"');
     expect(html).toContain('aria-controls="assistants-pages"');
     expect(html).toContain('data-icon="app-assistants"');
@@ -60,7 +61,8 @@ describe("database connection navigation", () => {
       html.indexOf('id="tab-custom-agents"'),
     );
     expect(html.indexOf('id="tab-custom-agents"')).toBeLessThan(html.indexOf('id="tab-chat"'));
-    expect(html).not.toContain('id="panel-assistants"');
+    expect(html).toContain('id="tab-assistants"');
+    expect(html).toContain('aria-controls="panel-assistants"');
   });
   it.each([true, false])(
     "marks the sidebar busy only while navigation is in flight (%s)",
@@ -138,7 +140,9 @@ describe("database connection navigation", () => {
 
   it("replaces project identity with database connection and disables workspace destinations", () => {
     const html = navigation(null, "/old-project");
-    const card = html.match(/<button[^>]*class="project-sidebar-open"[\s\S]*?<\/button>/)?.[0];
+    const card = html.match(
+      /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
+    )?.[0];
     expect(card).toContain("Connect to database to add a project");
     expect(card).toContain("Add Project");
     expect(card).not.toContain("old-project");
@@ -174,7 +178,10 @@ describe("database connection navigation", () => {
       expect(html).toContain('aria-label="Add Project"');
       expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Add Project"');
-      expect(html).toMatch(/id="chat-pages"[^>]*><button[^>]*class="project-sidebar-open"/);
+      const action = html.indexOf('class="icon-button project-sidebar-open"');
+      expect(action).toBeLessThan(html.indexOf('id="projects-card-toggle"'));
+      expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
+      expect(html).not.toContain('class="page-tab-label">Add Project</span>');
       expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
       expect(html.match(/<button[^>]*id="tab-prompts"[^>]*>/)?.[0]).not.toContain("disabled");
@@ -339,13 +346,15 @@ describe("sidebar labels and disclosure icons", () => {
     for (const database of [null, "/database.sqlite"]) {
       const html = navigation(database, undefined, "agents", initialTabs.active, expanded);
       const promptTab = html.match(/<button[^>]*id="tab-prompts"[\s\S]*?<\/button>/)?.[0];
-      const project = html.match(/<button[^>]*class="project-sidebar-open"[\s\S]*?<\/button>/)?.[0];
+      const project = html.match(
+        /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
+      )?.[0];
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
       expect(html.match(/<img/g)).toHaveLength(31);
       expect(html.match(/class="carbon-icon"/g)).toHaveLength(7);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(34);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(33);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],
@@ -384,7 +393,7 @@ describe("sidebar labels and disclosure icons", () => {
           expect(tab).toContain('opacity="0.2"');
         }
       }
-      expect(project).toContain('class="project-sidebar-open"');
+      expect(project).toContain('class="icon-button project-sidebar-open"');
       expect(project?.match(/<svg/g)).toHaveLength(1);
       expect(project).toContain('aria-haspopup="dialog"');
       expect(html).not.toContain('aria-label="New chat"');

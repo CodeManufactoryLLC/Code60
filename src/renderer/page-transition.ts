@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** Animate only the newly selected panel; never mount, delay or replay navigation. */
+/** Move destination content over its opaque shell; never fade the card/background. */
 export function animatePageTransition(panel: HTMLElement): (() => void) | undefined {
   const media = [
     window.matchMedia("(prefers-reduced-motion: reduce)"),
@@ -13,15 +13,29 @@ export function animatePageTransition(panel: HTMLElement): (() => void) | undefi
   const time = style.getPropertyValue("--motion").trim();
   const duration = Number.parseFloat(time) * (time.endsWith("ms") ? 1 : 1000);
   if (!Number.isFinite(duration) || duration <= 0) return;
-  const animation = panel.animate([{ opacity: 0.4 }, { opacity: 1 }], {
+  const specific = panel.querySelectorAll<HTMLElement>(
+    '.chat-conversations > .orchestration-chat-page .transcript, :scope > .settings-page > [role="tabpanel"]',
+  );
+  const candidates = panel.id === "panel-chat" ? [...specific] : [...specific, ...panel.children];
+  const content = candidates.find(
+    (node): node is HTMLElement =>
+      node instanceof HTMLElement &&
+      !node.closest("[hidden], [inert]") &&
+      !node.matches(".error-banner, .warning-banner") &&
+      node.getClientRects().length > 0,
+  );
+  if (!content) return;
+  const animation = content.animate([{ translate: "0px 6px" }, { translate: "0px 0px" }], {
     duration,
     easing: style.getPropertyValue("--ease").trim() || "ease-out",
   });
+  content.setAttribute("data-page-entering", "true");
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     animation.cancel();
+    content.removeAttribute("data-page-entering");
     for (const query of media) query.removeEventListener("change", settle);
     document.removeEventListener("visibilitychange", settle);
     animation.removeEventListener("finish", dispose);
@@ -46,7 +60,17 @@ export function usePageTransition(
     const prior = previous.current;
     previous.current = key;
     if (prior === null || prior === key || !enabled) return;
+    // Hydration can fill a chat/project identity after its page is already visible.
+    // That detail arrival must not restart a second entrance.
+    const [priorPage, priorIdentity] = JSON.parse(prior) as [string, string | null];
+    if (
+      (page === "chat" || page === "project") &&
+      priorPage === page &&
+      priorIdentity === null &&
+      identity != null
+    )
+      return;
     const panel = document.getElementById(`panel-${page}`);
     if (panel) return animatePageTransition(panel);
-  }, [page, key, enabled]);
+  }, [page, key, enabled, identity]);
 }

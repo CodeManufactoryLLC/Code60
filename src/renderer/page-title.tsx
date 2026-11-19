@@ -12,6 +12,7 @@ import { Icon } from "./icons.js";
 import { isSettingsSection, pageDefinitions, settingsIcons, settingsLabels } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import type { NavigationTarget } from "./navigation-tree.js";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from "./neobrutalism/breadcrumb.js";
 import {
   type BreadcrumbSource,
   breadcrumbAncestors,
@@ -25,6 +26,7 @@ export const PageTitleNavigationContext = createContext<
   | (BreadcrumbSource & {
       open(target: NavigationTarget): Promise<boolean>;
       pending: boolean;
+      selectionPending?: boolean;
       header?: boolean;
     })
   | null
@@ -93,11 +95,14 @@ export function PageTitle({
     target,
   );
   const trail = (leaf: ReactNode, interactive: boolean) => (
-    <ol>
+    <BreadcrumbList>
       {ancestors.map(({ label, icon, target }, index) => {
         const home = target.kind === "page" && target.id === "home";
         return (
-          <li key={`${target.kind}:${target.id}`}>
+          <BreadcrumbItem
+            key={`${target.kind}:${target.id}`}
+            data-breadcrumb-key={`${target.kind}:${target.id}`}
+          >
             {index > 0 && (
               <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
             )}
@@ -120,16 +125,23 @@ export function PageTitle({
                 <span className={home ? "sr-only" : "breadcrumb-text"}>{label}</span>
               </span>
             )}
-          </li>
+          </BreadcrumbItem>
         );
       })}
-      <li aria-current="page">
+      <BreadcrumbItem
+        aria-current="page"
+        data-breadcrumb-key={
+          target
+            ? `${target.kind}:${target.id}`
+            : `${isSettingsSection(page) ? "settings" : "page"}:${page}`
+        }
+      >
         {ancestors.length > 0 && (
           <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
         )}
         {leaf}
-      </li>
-    </ol>
+      </BreadcrumbItem>
+    </BreadcrumbList>
   );
   const chat = target
     ? navigation?.chats.find((chat) => conversationId(chat) === target.id)
@@ -151,7 +163,7 @@ export function PageTitle({
   );
   return (
     <>
-      <nav
+      <Breadcrumb
         ref={slot}
         className={header ? "page-breadcrumbs page-title-placeholder" : "page-breadcrumbs"}
         aria-label={header ? undefined : "Breadcrumb"}
@@ -159,12 +171,17 @@ export function PageTitle({
         inert={header ? true : undefined}
       >
         {header ? trail(placeholder, false) : trail(heading, true)}
-      </nav>
+      </Breadcrumb>
       {header &&
         createPortal(
-          <nav className="page-breadcrumbs" aria-label="Breadcrumb">
+          <Breadcrumb
+            className="page-breadcrumbs"
+            aria-label="Breadcrumb"
+            inert={navigation?.selectionPending}
+            aria-busy={navigation?.selectionPending || undefined}
+          >
             {trail(heading, true)}
-          </nav>,
+          </Breadcrumb>,
           header,
         )}
     </>

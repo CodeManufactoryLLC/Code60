@@ -8,6 +8,7 @@ class Control {
   copy = false;
   iconOnly = false;
   sidebar = false;
+  raised = false;
   isConnected = true;
   icon: Control | null = null;
   input: Control | null = null;
@@ -29,6 +30,7 @@ class Control {
   }
   matches(selector: string) {
     if (selector.includes(":disabled")) return this.disabled;
+    if (selector.includes(".home-card")) return this.raised;
     if (selector.includes(".icon-button")) return this.iconOnly;
     return selector === this.kind;
   }
@@ -246,4 +248,16 @@ it("skips motion and cancels on repeated presses, detached targets and disposal"
 
 it("does not require a live window for detached documents", () => {
   expect(installPressFeedback({ defaultView: null } as Document)).toBeTypeOf("function");
+});
+
+it("leaves raised controls to CSS shadow displacement without intercepting clicks or keys", () => {
+  const { control, emit } = fixture();
+  control.raised = true;
+  expect(emit("pointerdown").defaultPrevented).toBe(false);
+  emit("pointerup");
+  emit("click");
+  expect(emit("keydown", control, { key: "Enter" }).defaultPrevented).toBe(false);
+  emit("keyup", control, { key: "Enter" });
+  vi.runAllTimers();
+  expect(control.animate).not.toHaveBeenCalled();
 });

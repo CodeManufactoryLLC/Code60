@@ -21,7 +21,8 @@
 .app .sidebar :is(button, [role="tab"]):is(:disabled, [aria-disabled="true"]) {
   border-color: transparent;
   background: transparent;
-  opacity: 0.45;
+  opacity: 1;
+  color: var(--muted);
 }
 
 .app input[type="checkbox"]:disabled:checked:not(.plan-task input)::before {

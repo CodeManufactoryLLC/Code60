@@ -238,6 +238,13 @@ export interface ServiceStatus {
   activeExecutionId: string | null;
 }
 
+/** Read-only native registration and live scheduler health; not persisted state. */
+export interface SchedulerStatus {
+  installed: boolean;
+  nativeState: "running" | "stopped" | "unavailable";
+  service: ServiceStatus | null;
+}
+
 const id = z.uuid({ error: "Invalid automation ID" });
 const revision = z.number().int().positive();
 const automationRequestSchema = z.discriminatedUnion("action", [

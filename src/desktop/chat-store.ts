@@ -9,8 +9,8 @@ const MAX_BYTES = 16 * 1_048_576;
 const MAX_CHATS = 500;
 const filename = /^[a-f0-9-]{36}\.json$/;
 
-async function safeDirectory(path: string) {
-  await privateDirectory(path);
+async function safeDirectory(path: string, readOnly = false) {
+  if (!readOnly) await privateDirectory(path);
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Unsafe chat directory");
 }
@@ -60,20 +60,20 @@ export class ChatStore {
     this.records = join(root, "chats");
   }
 
-  private async directories() {
-    await safeDirectory(this.root);
-    await safeDirectory(this.records);
+  private async directories(readOnly = false) {
+    await safeDirectory(this.root, readOnly);
+    await safeDirectory(this.records, readOnly);
   }
 
   /** Reserve a read-only metadata snapshot between this store's atomic writes. */
-  snapshot(): Promise<{ chats: SavedChat[]; errors: string[] }> {
-    const result = this.writes.then(() => this.load());
+  snapshot(readOnly = false): Promise<{ chats: SavedChat[]; errors: string[] }> {
+    const result = this.writes.then(() => this.load(readOnly));
     this.writes = result.catch(() => {});
     return result;
   }
 
-  async load(): Promise<{ chats: SavedChat[]; errors: string[] }> {
-    await this.directories();
+  async load(readOnly = false): Promise<{ chats: SavedChat[]; errors: string[] }> {
+    await this.directories(readOnly);
     const names = (await readdir(this.records)).filter((name) => filename.test(name));
     if (names.length > MAX_CHATS) throw new Error("Saved chat limit reached");
     const chats: SavedChat[] = [];
@@ -100,10 +100,10 @@ export class ChatStore {
     return { chats, errors };
   }
 
-  async directory(id: string) {
+  async directory(id: string, readOnly = false) {
     // Validate the generated component before deriving any path.
     const directoryId = savedChatSchema.shape.directoryId.parse(id);
-    await safeDirectory(this.root);
+    await safeDirectory(this.root, readOnly);
     const path = join(this.root, directoryId);
     const info = await lstat(path);
     if (!info.isDirectory() || info.isSymbolicLink())
@@ -139,9 +139,14 @@ export class ChatStore {
   }
 
   /** Only core-derived names in one validated saved run; never exposed through IPC. */
-  async readHistory(directoryId: string, runId: string, path: string): Promise<string> {
+  async readHistory(
+    directoryId: string,
+    runId: string,
+    path: string,
+    readOnly = false,
+  ): Promise<string> {
     savedChatSchema.shape.runId.parse(runId);
-    const directory = await this.directory(directoryId);
+    const directory = await this.directory(directoryId, readOnly);
     let parent = directory;
     for (const component of [".code60", "runs", runId]) {
       parent = join(parent, component);

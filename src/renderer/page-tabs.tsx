@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { observeBreadcrumbMotion } from "./breadcrumb-motion.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
 import { Icon } from "./icons.js";
@@ -22,6 +23,7 @@ import {
   sidebarPageElementId,
   staticChildren,
 } from "./navigation-tree.js";
+import { Card } from "./neobrutalism/card.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout.js";
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
@@ -64,6 +66,10 @@ export function PageTabBar({
   selectedProjectId?: string | null | undefined;
 }) {
   const sidebar = useRef<HTMLElement>(null);
+  const breadcrumbCard = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (breadcrumbCard.current) return observeBreadcrumbMotion(breadcrumbCard.current);
+  }, []);
   const toggle = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(() => localStorage.getItem("code60.sidebarOpen") !== "false");
   const [width, setWidth] = useState(() => {
@@ -172,7 +178,7 @@ export function PageTabBar({
         >
           <Icon name={open ? "side-panel--close" : "side-panel--open"} />
         </button>
-        <div className="workspace-breadcrumbs" />
+        <Card className="workspace-breadcrumbs" ref={breadcrumbCard} />
       </header>
     </>
   );
@@ -443,7 +449,8 @@ function PageTabList({
   };
   function moveTo(target: (typeof visible)[number] | undefined, activate = true) {
     if (target === "assistants") {
-      document.getElementById("assistants-toggle")?.focus();
+      if (activate) onSelect("assistants");
+      document.getElementById("tab-assistants")?.focus();
     } else if (target === "relay") {
       relayButtons()[0]?.focus();
     } else if (target === "tables" || target === "advanced" || target === "experiments") {
@@ -621,6 +628,7 @@ function PageTabList({
           (tabs.active === id &&
             (id !== "settings" || (settingsSection === null && settingsExpanded))) ||
           (id === "apps" && appActive && !appsExpanded) ||
+          (id === "assistants" && assistantActive && !assistantsExpanded) ||
           (id === "home" && tabs.active === "search" && !homeExpanded)
         }
       >
@@ -765,7 +773,7 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
-      <div className="sidebar-navigation-card">
+      <Card size="sm" className="sidebar-navigation-card">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -794,16 +802,15 @@ function PageTabList({
         >
           {page("search", false)}
         </div>
-      </div>
-      <div className="sidebar-navigation-card">
+      </Card>
+      <Card size="sm" className="sidebar-navigation-card">
         <div
-          className="page-tab sidebar-card-header"
-          data-nav-active={assistantActive && !assistantsExpanded}
+          className="sidebar-card-header"
+          role="tablist"
+          aria-label="Assistants page"
+          aria-orientation="vertical"
         >
-          <div className="page-group-label">
-            <NavigationIcon name="app-assistants" />
-            <span className="page-tab-label">Assistants</span>
-          </div>
+          {page("assistants", true)}
         </div>
         {cardToggle(
           "assistants-toggle",
@@ -928,8 +935,8 @@ function PageTabList({
               })}
           </div>
         </div>
-      </div>
-      <div className="sidebar-navigation-card">
+      </Card>
+      <Card size="sm" className="sidebar-navigation-card">
         <div
           className="chat-page-heading sidebar-card-header"
           data-nav-active={
@@ -963,6 +970,19 @@ function PageTabList({
             </button>
           </div>
         </div>
+        <button
+          type="button"
+          className="icon-button project-sidebar-open"
+          aria-label="Add Project"
+          title={database ? "Add Project" : "Connect to database to add a project"}
+          aria-haspopup="dialog"
+          disabled={projectDisabled}
+          onClick={onOpenProject}
+        >
+          <span className="sidebar-card-add" aria-hidden="true">
+            <Icon name="add" />
+          </span>
+        </button>
         {cardToggle(
           "projects-card-toggle",
           "Projects",
@@ -1016,24 +1036,9 @@ function PageTabList({
             }
           }}
         >
-          <button
-            type="button"
-            className="project-sidebar-open"
-            aria-label="Add Project"
-            title={database ? "Add Project" : "Connect to database to add a project"}
-            aria-haspopup="dialog"
-            disabled={projectDisabled}
-            onClick={onOpenProject}
-          >
-            <span className="navigation-icon" aria-hidden="true">
-              <Icon name="add" />
-            </span>
-            <span className="page-tab-label">Add Project</span>
-          </button>
           {openProjects ? (
             <ProjectChatSidebar
               ancestorsExpanded={chatExpanded}
-              destination={navigation.destination}
               projects={openProjects}
               selectedProjectId={selectedProjectId}
               onProjectAction={projectAction}
@@ -1068,8 +1073,8 @@ function PageTabList({
             />
           )}
         </div>
-      </div>
-      <div className="sidebar-navigation-card">
+      </Card>
+      <Card size="sm" className="sidebar-navigation-card">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -1087,8 +1092,8 @@ function PageTabList({
           "apps",
         )}
         {staticChildrenPanel("apps")}
-      </div>
-      <div className="page-tab-list sidebar-settings sidebar-navigation-card">
+      </Card>
+      <Card size="sm" className="page-tab-list sidebar-settings sidebar-navigation-card">
         <div
           className="sidebar-settings-heading sidebar-card-header"
           data-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
@@ -1112,7 +1117,7 @@ function PageTabList({
           "settings",
         )}
         {staticChildrenPanel("settings")}
-      </div>
+      </Card>
     </div>
   );
 }

@@ -16,6 +16,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes all registered project Search with captured provenance and closed-source consent", () => {
+    const search = DESKTOP_CAPABILITIES.find((capability) => capability.id === "search");
+    expect(search).toMatchObject({ prerequisite: "database", agentAccess: "human-only" });
+    expect(search?.purpose).toContain("open or closed");
+    expect(search?.limitations).toContain("no selected project");
+    expect(search?.limitations).toContain("pages of 100");
+    expect(search?.confirmation).toContain("Open Project");
+  });
   it("describes Low density and line-free table defaults without replacing saved choices", () => {
     expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings")).toMatchObject({
       prerequisite: "none",
@@ -57,6 +65,11 @@ describe("desktop capability catalog", () => {
       agentAccess: "human-only",
     });
   });
+  it("describes per-card custom assistant management", () => {
+    const access = DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
+    expect(access).toContain("assistant card → More actions → Edit or Archive");
+    expect(access).toContain("Archived → card → More actions → Restore");
+  });
   it("describes human-only sidebar appearance controls and their transparency limits", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
@@ -80,6 +93,14 @@ describe("desktop capability catalog", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "system-manager")?.purpose).toContain(
       "No public Code60 CLI",
     );
+    const service = DESKTOP_CAPABILITIES.find((c) => c.id === "system-manager");
+    expect(service?.purpose).toContain("Scheduling Service");
+    expect(service?.purpose).toContain("Not installed, Stopped and Running");
+    expect(service?.purpose).toContain("Jobs paused is separate");
+    expect(service?.purpose).toContain("automatically every two seconds");
+    expect(service?.limitations).toContain("global Pause polling");
+    expect(service?.limitations).toContain("sixty seconds");
+    expect(service?.limitations).toContain("no native Stop action");
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
@@ -91,6 +112,13 @@ describe("desktop capability catalog", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "providers")?.purpose).toContain(
       "clear saved",
     );
+  });
+  it("describes the database-independent Assistants navigation home", () => {
+    const assistants = DESKTOP_CAPABILITIES.find((c) => c.id === "assistants");
+    expect(assistants?.purpose).toContain("Relay or Custom Assistants");
+    expect(assistants?.prerequisite).toBe("none");
+    expect(assistants?.limitations).toContain("does not connect a provider or start work");
+    expect(PAGE_CAPABILITIES.assistants).toBe("assistants");
   });
   it("has unique, fully classified descriptors", () => {
     expect(ids.size).toBe(DESKTOP_CAPABILITIES.length);
@@ -138,11 +166,16 @@ describe("desktop capability catalog", () => {
     const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({
       prerequisite: "database",
-      access: expect.stringContaining("each project list → New Session"),
+      access: expect.stringContaining("project row → + (New Session)"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
       limitations: expect.stringContaining("never initializes Git"),
     });
     expect(projects?.access).toContain("project home → New Session");
+    expect(projects?.access).toContain("red × (Close Project)");
+    expect(projects?.limitations).toContain("invokes Stop Folder");
+    expect(projects?.limitations).toContain("keeps the project open");
+    expect(projects?.confirmation).toContain("Stop folder confirmation");
+    expect(projects?.limitations).toContain("only the project chevron");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",

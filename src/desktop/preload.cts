@@ -66,6 +66,13 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("desktop:app-update-state", handler);
     return () => ipcRenderer.removeListener("desktop:app-update-state", handler);
   },
+  searchProjects: (request: unknown) => ipcRenderer.invoke("desktop:project-search", request),
+  searchProjectsPage: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-page", request),
+  cancelProjectSearch: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-cancel", request),
+  openSearchSource: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-open", request),
   summarizeSearch: (request: unknown) => ipcRenderer.invoke("desktop:search-summary", request),
   cancelSearchSummary: (requestId: unknown) =>
     ipcRenderer.invoke("desktop:search-summary-cancel", requestId),

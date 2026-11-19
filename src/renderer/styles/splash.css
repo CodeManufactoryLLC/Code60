@@ -102,9 +102,16 @@
   min-width: 120px;
   margin-top: 24px;
   padding: 10px 32px;
-  background: transparent;
-  color: var(--text);
+  background: var(--primary);
+  color: var(--primary-text);
+  border: var(--rule) solid var(--border);
+  box-shadow: var(--button-shadow);
   -webkit-app-region: no-drag;
+}
+
+.splash-enter:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--primary-text);
 }
 
 .wordmark {

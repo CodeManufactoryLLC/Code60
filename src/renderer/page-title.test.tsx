@@ -90,7 +90,9 @@ it.each([
       <PageTitle page={page} id="current" />
     </PageTitleNavigationContext.Provider>,
   );
-  expect(html).toContain('<nav class="page-breadcrumbs" aria-label="Breadcrumb"><ol>');
+  expect(html).toContain(
+    '<nav data-slot="breadcrumb" class="page-breadcrumbs" aria-label="Breadcrumb"><ol data-slot="breadcrumb-list"',
+  );
   expect(html.match(/class="breadcrumb-link(?: breadcrumb-home)?"/g)).toHaveLength(
     parents.length + 1,
   );

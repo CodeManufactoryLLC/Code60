@@ -21,6 +21,7 @@ export interface PageDefinition {
   internal?: boolean;
 }
 export const parentPageIds = [
+  "assistants",
   "projects",
   "apps",
   "tables",
@@ -31,7 +32,17 @@ export const parentPageIds = [
 export type ParentPageId = (typeof parentPageIds)[number];
 export const pages = [
   {
+    id: "assistants",
+    label: "Assistants",
+    group: "primary",
+    order: 0,
+    initialOrder: 24,
+    database: false,
+    icon: "app-assistants",
+  },
+  {
     id: "custom-agents",
+    parent: "assistants",
     label: "Custom Assistants",
     group: "primary",
     order: 0,

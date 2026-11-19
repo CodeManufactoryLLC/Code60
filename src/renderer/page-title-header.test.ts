@@ -127,12 +127,17 @@ it.each(["workspace", "conversations"])(
 function fixture() {
   let hidden = false;
   let inert = false;
+  let selectionPending = false;
   const header = {} as HTMLElement;
   const workspace = { querySelector: vi.fn((): HTMLElement | null => header) };
   const outer = { parentElement: null };
   const parent = {
     parentElement: outer,
-    closest: vi.fn(() => (hidden || inert ? parent : null)),
+    closest: vi.fn((selector: string) =>
+      hidden || (inert && !(selectionPending && selector.includes("data-navigation-pending")))
+        ? parent
+        : null,
+    ),
   };
   const element = {
     parentElement: parent,
@@ -149,6 +154,9 @@ function fixture() {
     },
     makeInert: (value: boolean) => {
       inert = value;
+    },
+    selectPending: (value: boolean) => {
+      selectionPending = value;
     },
   };
 }
@@ -181,6 +189,18 @@ it("keeps already-hidden and inert retained project/settings/worker views out of
     observeBreadcrumbHeader(view.element, publish);
     expect(publish).toHaveBeenCalledExactlyOnceWith(null);
   }
+});
+
+it("retains a pending selection's visible title while its chat controls are inert", () => {
+  const view = fixture();
+  view.makeInert(true);
+  view.selectPending(true);
+  const publish = vi.fn();
+  observeBreadcrumbHeader(view.element, publish);
+  expect(publish).toHaveBeenLastCalledWith(view.header);
+  view.hide(true);
+  observers[0]?.update();
+  expect(publish).toHaveBeenLastCalledWith(null);
 });
 
 it("switches active owners without a hidden view claiming the shared header", () => {
@@ -242,4 +262,17 @@ it("connects the mounted slot and releases its observer when header mode changes
   expect(hooks.publish).toHaveBeenLastCalledWith(view.header);
   dispose?.();
   expect(observers[0]?.disconnect).toHaveBeenCalledOnce();
+});
+
+it("hands off retained portals in the layout phase before observer delivery", () => {
+  const view = fixture();
+  useBreadcrumbHeader({ current: view.element }, true);
+  hooks.effects[0]?.();
+  hooks.publish.mockClear();
+  view.hide(true);
+  hooks.effects[1]?.();
+  expect(hooks.publish).toHaveBeenLastCalledWith(null);
+  view.hide(false);
+  hooks.effects[1]?.();
+  expect(hooks.publish).toHaveBeenLastCalledWith(view.header);
 });

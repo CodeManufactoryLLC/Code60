@@ -2,11 +2,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
 import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
-import { conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
+import { chatEventKey, conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
 import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
+import { Card } from "./neobrutalism/card.js";
 import { observeBreadcrumbRightInset } from "./page-title-header.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
@@ -53,8 +54,8 @@ export function ChatWorkspace({
     if (visible && body.current) return observeBreadcrumbRightInset(body.current);
   }, [visible]);
   const snapshot = state?.snapshot;
-  const conversationActive =
-    tabs.active === "chat" && !navigation.projectPending && !navigation.conversationPending;
+  const selectionPending = navigation.projectPending || navigation.conversationPending;
+  const conversationActive = tabs.active === "chat" && !selectionPending;
   const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
   const panelKey =
     snapshot?.runs.find((run) => run.record.id === workerId)?.relay?.conversationId ??
@@ -74,25 +75,30 @@ export function ChatWorkspace({
   const database = scope.database;
   const directory = scope.project;
   const workerViews = [
-    ...project.retainedScopes.flatMap((owner) =>
-      owner.snapshot().visitedWorkers.ids.map((id) => ({
+    ...project.retainedScopes.flatMap((owner) => {
+      const projectId = snapshot?.openProjects?.find((entry) => entry.path === owner.project)?.id;
+      const current = owner.viewKey === scope.viewKey;
+      const runs = current
+        ? snapshot?.runs
+        : projectId
+          ? state?.projectViews?.[projectId]?.runs
+          : [];
+      return owner.snapshot().visitedWorkers.ids.map((id) => ({
         id,
         key: `${owner.viewKey}:${id}`,
         events: owner.transcripts(api).snapshot().events[id],
-      })),
-    ),
+        run: runs?.find((run) => !run.relay && run.record.id === id),
+        current,
+      }));
+    }),
     ...(project.visitedRelayWorkers ?? []).map((id) => ({
       id,
       key: `relay:${id}`,
       events: undefined,
+      run: snapshot?.runs.find((run) => run.relay && run.record.id === id),
+      current: true,
     })),
   ];
-  const runsById = new Map(
-    [
-      ...Object.values(state?.projectViews ?? {}).flatMap((view) => view.runs),
-      ...(snapshot?.runs ?? []),
-    ].map((run) => [run.record.id, run]),
-  );
   const plans =
     snapshot?.chats.filter((chat) => chat.kind !== "relay").flatMap((chat) => chat.plans ?? []) ??
     [];
@@ -139,7 +145,7 @@ export function ChatWorkspace({
         projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined
       }
     >
-      <div className="chat-conversations">
+      <Card className="chat-conversations">
         {gitSetupProject === directory && gitSetupProject && (
           <GitSetupDialog
             key={`${snapshot?.projectInstanceId}:${snapshot?.databaseEpoch}`}
@@ -156,7 +162,7 @@ export function ChatWorkspace({
             key={
               chat?.kind === "relay"
                 ? chatDraftKey(chat)
-                : `${database}:${chat?.run?.id ?? chat?.directory ?? "disconnected"}`
+                : `${database}:${chat?.projectId}:${chat?.directory ?? chat?.run?.id ?? "disconnected"}`
             }
             api={api}
             notice={chat?.kind === "relay" ? null : projectNotice}
@@ -164,9 +170,11 @@ export function ChatWorkspace({
               chat ? { ...chat, title: conversationTitle(snapshot?.chats ?? [], chat) } : undefined
             }
             hidden={
-              !conversationActive || !!workerId || !isSelectedConversation(chat, snapshot?.chat)
+              tabs.active !== "chat" || !!workerId || !isSelectedConversation(chat, snapshot?.chat)
             }
-            events={state?.chatEventsByRun[chat?.run?.id ?? ""] ?? []}
+            selectionPending={selectionPending}
+            events={chat ? (state?.chatEventsByRun[chatEventKey(chat)] ?? []) : []}
+            request={chat?.projectId === snapshot?.projectInstanceId ? chatRequest : undefined}
             database={chat?.kind === "relay" ? null : database}
             commands={chat?.kind === "relay" ? [] : (snapshot?.commands ?? [])}
             project={
@@ -211,8 +219,7 @@ export function ChatWorkspace({
             onCopied={() => notify("Copied.")}
           />
         ))}
-        {workerViews.map(({ id, key, events }) => {
-          const run = runsById.get(id);
+        {workerViews.map(({ id, key, events, run, current }) => {
           if (!run) return null;
           return (
             <WorkerChat
@@ -223,11 +230,13 @@ export function ChatWorkspace({
               label={workerLabel(snapshot?.chats ?? [], run)}
               orchestrated={snapshot?.workers.includes(id) ?? false}
               events={
-                snapshot?.liveIds.includes(id) || workerId === id
+                current && (snapshot?.liveIds.includes(id) || workerId === id)
                   ? (transcripts.events[id] ?? events ?? [])
                   : (events ?? transcripts.events[id] ?? [])
               }
-              active={!splash && conversationActive && workerId === id}
+              active={current && !splash && conversationActive && workerId === id}
+              hidden={!current || splash || tabs.active !== "chat" || workerId !== id}
+              selectionPending={selectionPending}
               request={chatRequest}
               loading={
                 !snapshot?.liveIds.includes(id) &&
@@ -240,7 +249,7 @@ export function ChatWorkspace({
             />
           );
         })}
-      </div>
+      </Card>
       <section className="project-file-panel-scope" hidden={!projectFiles}>
         <RetainedProjectPanels
           id={scope.viewKey}

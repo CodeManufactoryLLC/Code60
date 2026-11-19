@@ -1,5 +1,10 @@
 # Desktop
 
+- Install the optional stdout/stderr broken-pipe guards before desktop imports
+  can log. A closed launching terminal must not raise an uncaught EPIPE dialog
+  or stop desktop work. Handle only EPIPE on these optional GUI streams; keep
+  unrelated errors, MCP stdout, agent pipes and persisted diagnostics unchanged.
+
 ## Conversation checkpoints
 
 - Project chats and Relay persist a host-owned checkpoint before editable human
@@ -188,7 +193,8 @@
 
 - Include current-project worker IDs owned by each chat generation in every chat snapshot. Renderer aggregate activity must not derive ownership from the global list or process existence. Preserve POSIX process ownership and sandbox boundaries.
 
-- Search overview helpers are the dedicated UI-requested exception to chat-gateway worker dispatch: validate current-project saved evidence, gather bounded project documentation/code through the Files reader when enabled, and use the configured provider in a generated temporary directory, with no gateway, run records, worktrees or chat entries. Deny permissions; bound input, output and total runtime. Serialize replacement, stop on scope/provider changes, renderer reload, Stop all and shutdown, and remove the temporary directory only after process cleanup. Return the exact evidence used for numbered citations; never accept arbitrary file paths through the summary endpoint.
+- Database-wide Search reads the complete connected registry, including closed projects, through four bounded read-only project readers. Never use `listRuns`, reconcile interrupted history, initialize storage, open runtimes or resume agents during retrieval. Legacy database-wide, Relay and Custom Assistant histories remain excluded. Keep project-qualified excerpts in a private temporary SQLite store, with immutable global ranking and 100-result pages. Resolve only captured opaque source IDs, checking database epoch, retained membership and directory identity; closed-project navigation uses the native Open Project confirmation. Preserve archived history as read-only.
+- Search overview helpers consume only main-captured search evidence, with the configured provider in a generated temporary directory, denied permissions and no gateway, run records, worktrees or chat entries. Bound excerpts, response and runtime; serialize replacement and stop processes before deleting their directories. Project/page selection preserves Search. Replacement/clear, database changes, renderer reload, Stop all and shutdown dispose owned reads, helpers and results; provider changes cancel only the overview. New registry entries join the next search; removal invalidates captured searches. Return exact project-attributed numbered evidence, never accept renderer excerpts or filesystem roots.
 
 - Enforce enabled membership and unchanged verified command identities in snapshots, desktop launch/recovery, saved configurations and MCP worker tools. Headless CLI behavior stays unchanged. Settings add transactions preserve primary and live chats; primary changes require active work to finish or stop. Keep existing settings until commit.
 

@@ -1,6 +1,10 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { AutomationUiRequest, ServiceStatus } from "../../src/bridge/index.js";
+import type {
+  AutomationUiRequest,
+  SchedulerStatus,
+  ServiceStatus,
+} from "../../src/bridge/index.js";
 import { SystemManagerPage } from "../../src/renderer/system-manager.js";
 
 const installed: ServiceStatus = {
@@ -13,7 +17,7 @@ const installed: ServiceStatus = {
   block: null,
   activeExecutionId: null,
 };
-let status: ServiceStatus | undefined;
+let status: SchedulerStatus = { installed: false, nativeState: "stopped", service: null };
 const listeners = new Set<() => void>();
 const reads: (() => void)[] = [];
 const actions: (() => void)[] = [];
@@ -22,9 +26,16 @@ const fixture = {
   holdReads: false,
   holdActions: false,
   failAction: false,
-  publish(next: Partial<ServiceStatus> | null = {}) {
-    status = next === null ? undefined : { ...installed, ...next };
-    for (const listener of listeners) listener();
+  publish(next: Partial<ServiceStatus> | null = {}, notify = true) {
+    status =
+      next === null
+        ? { installed: false, nativeState: "stopped", service: null }
+        : { installed: true, nativeState: "running", service: { ...installed, ...next } };
+    if (notify) for (const listener of listeners) listener();
+  },
+  setStatus(next: SchedulerStatus, notify = true) {
+    status = next;
+    if (notify) for (const listener of listeners) listener();
   },
   releaseRead() {
     reads.shift()?.();
@@ -43,20 +54,22 @@ window.systemManagerFixture = fixture;
 const api = {
   async automation(request: AutomationUiRequest): Promise<unknown> {
     fixture.requests.push(request);
-    if (request.action === "status") {
+    if (request.action === "scheduler" && request.control === "status") {
       const captured = status && structuredClone(status);
       if (fixture.holdReads) await new Promise<void>((resolve) => reads.push(resolve));
-      if (!captured) throw new Error("Service unavailable");
       return captured;
     }
     if (fixture.holdActions) await new Promise<void>((resolve) => actions.push(resolve));
     if (fixture.failAction) throw new Error("Service action refused");
     if (request.action === "scheduler")
-      status = ["stop", "uninstall"].includes(request.control) ? undefined : { ...installed };
-    else if (request.action === "pauseAll")
-      status = { ...installed, pausedAll: true, activeExecutionId: null };
+      status =
+        request.control === "uninstall"
+          ? { installed: false, nativeState: "stopped", service: null }
+          : request.control === "stop"
+            ? { installed: true, nativeState: "stopped", service: null }
+            : { installed: true, nativeState: "running", service: { ...installed } };
     else if (request.action === "resumeAll" || request.action === "resolveBlock")
-      status = { ...installed };
+      status = { installed: true, nativeState: "running", service: { ...installed } };
     else throw new Error("Unexpected service request");
     return null;
   },

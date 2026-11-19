@@ -130,30 +130,22 @@ body:has(.app .sidebar) {
   scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
   /* Header margin and inner padding retain the 12px first-row inset. */
-  padding: 6px calc(var(--page-padding) + 1px);
-  border: 0;
-  border-radius: 10px;
-  background: var(--card-header-fill);
+  padding: 4px calc(var(--page-padding) - 1px);
+  gap: 0;
+  --nb-card-fill: var(--card-header-fill);
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
-  box-shadow: var(--card-shadow);
 }
 
 .workspace-breadcrumbs .page-breadcrumbs li {
   min-height: var(--nav-row-height);
 }
 
-.app-workspace:has(> .sidebar[data-open="false"]) .workspace-header {
-  grid-column: 1 / -1;
-}
-
 .app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
-  grid-column: 1 / -1;
+  /* Keep the card on the content track throughout the shared reveal transition. */
   display: flex;
   justify-content: safe center;
-  /* Balance the workspace's wider left inset around the window center. */
-  margin-left: calc(var(--page-margin) - var(--sidebar-left-inset));
 }
 
 .app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs ol {
@@ -162,6 +154,7 @@ body:has(.app .sidebar) {
 
 /* Primary content is a surface card beside the navigation. */
 .page-panel {
+  box-sizing: border-box;
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -170,11 +163,10 @@ body:has(.app .sidebar) {
   min-height: 0;
   min-width: 0;
   position: relative;
-  border: 0;
-  border-radius: 10px;
-  background: var(--surface);
+  /* Retain the former 3px combined edge without duplicating Card chrome. */
+  padding: 1px;
+  gap: 0;
   overflow: hidden;
-  box-shadow: var(--card-shadow);
 }
 
 .page-panel > :is(.error-banner, .warning-banner) {
@@ -251,4 +243,16 @@ dialog::backdrop {
 .window-controls > .window-close:hover {
   background: var(--destructive-hover);
   color: var(--on-destructive);
+}
+
+/* Dark plum bands separate compact headers from near-black reading surfaces. */
+:root[data-color-scheme="dark"] .workspace-breadcrumbs {
+  --text: var(--card-header-text);
+  --muted: var(--card-header-muted);
+  --focus-line: var(--card-header-text);
+  --focus-outline: var(--card-header-text);
+  --accent: var(--card-header-text);
+  --hover-bg: var(--card-header-hover);
+  --accent-bg: var(--card-header-hover);
+  --control-hover: var(--card-header-hover);
 }

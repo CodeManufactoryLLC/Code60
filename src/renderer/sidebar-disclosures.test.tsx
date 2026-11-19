@@ -248,6 +248,18 @@ it("honors a saved closed Assistants section even when an assistant view is sele
   expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
 });
 
+it("opens Assistants from its heading without expanding the collapsed section", () => {
+  const onSelect = vi.fn();
+  const view = tabList({ tabs: { ...initialTabs, active: "home" }, onSelect });
+  click(view.tree(), "assistants-toggle");
+  view.render();
+  click(view.tree(), "tab-assistants");
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("assistants");
+  view.render({ tabs: { ...initialTabs, active: "assistants" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "tab-assistants").props["aria-selected"]).toBe(true);
+});
+
 it("keeps an unidentified failed custom assistant reachable through its definition entry", () => {
   const view = tabList({
     customAgents: [{ id: "unavailable", name: "Recovery Agent", revision: 1, archived: false }],
@@ -448,32 +460,46 @@ it("keeps the row selected without marking hidden streaming replies read during 
   expect(sessionStorage.setItem).toHaveBeenLastCalledWith(expect.any(String), "2");
 });
 
-it("closes all project accordions on ancestor collapse and does not reopen them for Relay", () => {
+it("changes project disclosure only through its chevron, preserving it through selection and creation", () => {
+  const onProjectOpen = vi.fn();
+  const onAction = vi.fn(async () => true);
   const view = mount(ProjectChatSidebar, {
     ...chatProps,
     selectedId: "worker",
     projects: [project],
     selectedProjectId: "a",
     homeProjectId: "a" as string | undefined,
-    onProjectOpen: vi.fn(),
+    onProjectOpen,
     onProjectAction: vi.fn(async () => true),
+    onAction,
     ancestorsExpanded: true,
-    destination: undefined as ComponentProps<typeof ProjectChatSidebar>["destination"],
   });
+  click(view.tree(), "project-a");
+  view.render();
+  expect(onProjectOpen).toHaveBeenCalledWith("a");
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
+  click(view.tree(), "project-toggle-a");
+  view.render();
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  click(view.tree(), "project-a");
+  view.render({ homeProjectId: undefined, selectedId: "chat", navigationSerial: 1 });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  const add = find(
+    view.tree(),
+    (element) => element.props.className === "icon-button project-session-add",
+  );
+  (add.props.onClick as () => void)();
+  view.render({ selectedId: "new-chat", navigationSerial: 2 });
+  expect(onAction).toHaveBeenCalledWith({ type: "new", projectId: "a" });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
   view.render({ ancestorsExpanded: false });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ homeProjectId: undefined, open: false });
-  view.render({
-    selectedId: "chat",
-    open: true,
-    destination: { kind: "conversation", id: "relay" },
-    ancestorsExpanded: true,
-  });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ selectedId: "relay", ancestorsExpanded: true });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ destination: { kind: "conversation", id: "chat" } });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(true);
+  view.render({ ancestorsExpanded: true, homeProjectId: "a" });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  click(view.tree(), "project-toggle-a");
+  view.render();
+  view.render({ ancestorsExpanded: false });
+  view.render({ ancestorsExpanded: true });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
 });
 
 it("closes owned workers with their ancestor and preserves that collapse when the ancestor reopens", () => {
@@ -487,7 +513,7 @@ it("closes owned workers with their ancestor and preserves that collapse when th
   expect(byId(view.tree(), "workers-chat").props.hidden).toBe(false);
 });
 
-it("propagates a project-label collapse to its retained worker disclosures", () => {
+it("propagates an explicit project-chevron collapse to its retained worker disclosures", () => {
   const view = mount(ProjectChatSidebar, {
     ...chatProps,
     projects: [project],
@@ -502,13 +528,13 @@ it("propagates a project-label collapse to its retained worker disclosures", () 
     >;
   const child = mount(ChatSidebar, childProps());
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(false);
-  click(view.tree(), "project-a");
+  click(view.tree(), "project-toggle-a");
   view.render();
   child.render(childProps());
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
-  click(view.tree(), "project-a");
+  click(view.tree(), "project-toggle-a");
   view.render();
   child.render(childProps());
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(true);
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
 });

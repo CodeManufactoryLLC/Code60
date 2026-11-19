@@ -11,6 +11,21 @@ import {
 import { MemoryStore } from "./memory-store.js";
 import { sqliteAvailable } from "./projects.js";
 
+// Node 22.12 has SQLite but lacks the FTS5 tables required by these memory fixtures.
+function sqliteFtsAvailable(): boolean {
+  if (!sqliteAvailable()) return false;
+  const sqlite = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+  const database = new sqlite.DatabaseSync(":memory:");
+  try {
+    return (
+      database.prepare("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled").get()
+        ?.enabled === 1
+    );
+  } finally {
+    database.close();
+  }
+}
+
 function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Expected test fixture value");
   return value;
@@ -67,7 +82,7 @@ function publish(cid: string, s: MemorySource, value = generation(s)) {
   store.publish(cid, range.cursor, range.boundary, value, "fixture");
   return must(store.browse({ conversationId: cid }).records[0]);
 }
-describe.skipIf(!sqliteAvailable())("private application memory", () => {
+describe.skipIf(!sqliteFtsAvailable())("private application memory", () => {
   it.each([false, true])(
     "restores a surviving fact after rewinding a correction=%s",
     (correction) => {

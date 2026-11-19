@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+import { nativeSupervisorFixture } from "./fixtures/native-supervisor.js";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -14,6 +15,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
   const repo = join(directory, "project");
   const gate = join(directory, "release-worker");
   const stateFile = join(directory, "state/code60/automations/state.json");
+  const supervisor = await nativeSupervisorFixture(directory);
   await mkdir(repo);
   await mkdir(join(directory, "config/code60"), { recursive: true });
   await mkdir(join(directory, "home"));
@@ -54,7 +56,13 @@ test("workflow: desktop automation survives app quit, retains history and cancel
   let application: ElectronApplication | undefined;
   const saved = async () => JSON.parse(await readFile(stateFile, "utf8"));
   const launch = async () => {
-    application = await launchDesktop(directory, repo, join(directory, "projects.sqlite"));
+    application = await launchDesktop(
+      directory,
+      repo,
+      join(directory, "projects.sqlite"),
+      false,
+      supervisor.environment,
+    );
     const page = await application.firstWindow();
     return page;
   };
@@ -125,10 +133,22 @@ test("workflow: desktop automation survives app quit, retains history and cancel
             .length,
       )
       .toBe(1);
-    await page.locator("#tab-system-manager").click();
-    await page
-      .getByRole("button", { name: "Pause all and cancel active work", exact: true })
-      .click();
+    // "running" is published before checkout preparation and provider launch finish.
+    // Exercise cancellation of a real process, not cancellation before it exists.
+    await expect
+      .poll(async () => {
+        const execution = (await saved()).executions.find(
+          (entry: { status: string }) => entry.status === "running",
+        );
+        if (!execution?.runId) return 0;
+        const record = JSON.parse(
+          await readFile(join(repo, ".git/code60/runs", execution.runId, "run.json"), "utf8"),
+        );
+        return record.agentPid ?? 0;
+      })
+      .toBeGreaterThan(0);
+    await page.locator("#panel-automations .automation-more-actions > summary").click();
+    await page.getByRole("button", { name: "Cancel active run", exact: true }).click();
     await expect
       .poll(
         async () =>
@@ -138,7 +158,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       )
       .toBe(0);
     const final = await saved();
-    expect(final.pausedAll).toBe(true);
+    expect(final.pausedAll).toBe(false);
     expect(final.executions).toHaveLength(2);
     for (const execution of final.executions) {
       const record = JSON.parse(

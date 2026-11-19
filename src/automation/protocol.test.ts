@@ -58,7 +58,7 @@ describe("private scheduler protocol", () => {
         (operation) =>
           expect(operation).rejects.toMatchObject({
             code: "unavailable",
-            message: "Scheduler is not running. Install or start the background service.",
+            message: "Scheduler is not running. Check the Scheduling Service in System Manager.",
           }),
       ),
     );

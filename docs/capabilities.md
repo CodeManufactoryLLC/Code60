@@ -32,12 +32,26 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Assistants
+
+- ID: `assistants`
+- Status: shipped
+- Purpose: Open Relay or Custom Assistants from two navigation cards on the Assistants page.
+- Access: Sidebar → Assistants heading (or command palette → Assistants)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Existing permissions apply.
+- Limits: Available without a database. Opening this page does not connect a provider or start work. The heading navigates independently of the disclosure chevron; Relay availability follows the existing application conversation.
+- Pages: `assistants`
+- Settings sections: none
+- Tools: none
+
 ## Custom Assistants
 
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; Edit; Archive; Archived → Restore
+- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; Archived → card → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving confirms natively, stops only the assistant and preserves history.
@@ -51,11 +65,11 @@ Schema version: 1
 - ID: `projects`
 - Status: shipped
 - Purpose: Retain independent project workspaces and conversations. New Session starts a project-bound chat.
-- Access: Projects → Add Project (first sidebar item); each project list → New Session; Projects page → New Project; project home → New Session
+- Access: Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)
 - Prerequisite: database
 - Agent access: read
-- Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.
-- Limits: Opening or selecting a project is a human action; opening never initializes Git.
+- Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none
@@ -260,12 +274,12 @@ Schema version: 1
 
 - ID: `system-manager`
 - Status: shipped
-- Purpose: Install, repair, start, stop or uninstall the macOS/Linux background automation service through System Manager. No public Code60 CLI is available.
+- Purpose: Manage the macOS/Linux Scheduling Service through System Manager. Status checks run automatically every two seconds after a completed read while the page and window are visible. Verified status distinguishes Not installed, Stopped and Running, with Install, Start or Stop as the main action. Stop pauses jobs and cancels active scheduled work before stopping the service; there is no separate pause-and-cancel button. Jobs paused is separate from runtime status; Resume jobs remains available for existing paused jobs, and Repair and Uninstall remain in Service options. No public Code60 CLI is available.
 - Access: Apps → System Manager
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human service consent; native confirmation for service controls.
-- Limits: Awareness never installs, probes or controls the service.
+- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh remains available. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
 - Pages: `system-manager`
 - Settings sections: none
 - Tools: none
@@ -293,7 +307,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants is a noninteractive heading. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
+- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
@@ -358,12 +372,12 @@ Schema version: 1
 
 - ID: `search`
 - Status: shipped
-- Purpose: Search saved project evidence, with an optional cited overview.
+- Purpose: Search all projects saved in the connected database, open or closed, with an optional cited overview.
 - Access: Sidebar → Search
 - Prerequisite: database
 - Agent access: human-only
-- Confirmation: Existing permissions apply.
-- Limits: Overview helpers run with denied permissions and no gateway; agents cannot request them.
+- Confirmation: Opening a closed project source asks the native Open Project confirmation. Archived conversations remain read-only.
+- Limits: Search needs no selected project. Includes project identity, saved project sessions/transcripts and bounded documentation/source evidence; excludes other databases, Relay and Custom Assistant histories. Results have project provenance and Load more pages of 100. Submitted results stay stable across project/page selection; new projects enter the next search. Missing/corrupt sources show partial results. Overview helpers use captured evidence, denied permissions and no gateway; failures preserve literal results. Agents cannot request Search.
 - Pages: `search`
 - Settings sections: none
 - Tools: none
