@@ -79,13 +79,17 @@ export function App({ api: transport }: { api: DesktopApi }) {
   const { theme, setTheme } = preferences;
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const { splash, splashReady, enterApp, returnSplash } = useSplashEntry(snapshot);
-  useSidebarBackdrop(
+  const sidebarBlurError = useSidebarBackdrop(
     transport,
     preferences.sidebarAppearance,
     appearance.sidebarBlurSupported,
     splash,
-    setError,
   );
+  const controlWindow = (action: import("../bridge/index.js").WindowControl) => {
+    void transport
+      .controlWindow(action)
+      .catch(() => setError("The window action could not be completed."));
+  };
   const returnToSplash = () => {
     returnSplash();
     setPicker(undefined);
@@ -305,6 +309,9 @@ export function App({ api: transport }: { api: DesktopApi }) {
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
       {splash && (
         <Splash
+          windowControls={
+            appearance.customWindowControls ? <WindowControls onAction={controlWindow} /> : null
+          }
           ready={splashReady && (snapshot !== undefined || error !== "")}
           snapshot={snapshot}
           api={api}
@@ -319,15 +326,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
           }}
         />
       )}
-      {appearance.customWindowControls && (
-        <WindowControls
-          onAction={(action) => {
-            void transport
-              .controlWindow(action)
-              .catch(() => setError("The window action could not be completed."));
-          }}
-        />
-      )}
+      {!splash && appearance.customWindowControls && <WindowControls onAction={controlWindow} />}
       {!splash && <div className="window-drag-strip" aria-hidden="true" />}
       {!splash && snapshot && !database && (
         <DatabaseNotice
@@ -366,6 +365,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
           state={state}
           project={project}
           preferences={preferences}
+          sidebarBlurError={sidebarBlurError}
           appearance={appearance}
           tabs={tabs}
           settingsSection={settingsSection}

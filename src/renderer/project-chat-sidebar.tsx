@@ -167,15 +167,14 @@ export function ProjectChatSidebar({
                 disabled={props.pending}
                 onClick={() => void props.onAction?.({ type: "new", projectId: project.id })}
                 onKeyDown={(event) => {
-                  if (event.key !== "ArrowUp" && event.key !== "ArrowLeft") return;
+                  if (event.key !== "ArrowLeft") return;
                   event.preventDefault();
                   event.stopPropagation();
-                  if (event.key === "ArrowLeft")
-                    setExpanded((current) => {
-                      const next = new Set(current);
-                      next.delete(project.id);
-                      return next;
-                    });
+                  setExpanded((current) => {
+                    const next = new Set(current);
+                    next.delete(project.id);
+                    return next;
+                  });
                   document.getElementById(`project-${project.id}`)?.focus();
                 }}
               >

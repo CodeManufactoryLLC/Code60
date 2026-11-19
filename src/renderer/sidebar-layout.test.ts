@@ -3,7 +3,7 @@ import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout
 
 afterEach(() => vi.unstubAllGlobals());
 
-it("moves card edges through nested disclosure changes and disconnects on disposal", () => {
+it("tracks only the first row through nested disclosure changes and disconnects on disposal", () => {
   let changed = () => {};
   const observe = vi.fn();
   const disconnect = vi.fn();
@@ -47,23 +47,22 @@ it("moves card edges through nested disclosure changes and disconnects on dispos
   expect(heading.attributes).toEqual(new Set(["data-card-first"]));
   expect(headingTab.attributes.size).toBe(0);
   expect(project.attributes.size).toBe(0);
-  expect(worker.attributes).toEqual(new Set(["data-card-last"]));
+  expect(worker.attributes).toEqual(new Set());
   worker.hidden = true;
   changed();
   expect(worker.attributes.size).toBe(0);
-  expect(project.attributes).toEqual(new Set(["data-card-last"]));
+  expect(project.attributes).toEqual(new Set());
   project.hidden = true;
   changed();
-  expect(heading.attributes).toEqual(new Set(["data-card-first", "data-card-last"]));
+  expect(heading.attributes).toEqual(new Set(["data-card-first"]));
   const replacement = row();
   rows = [heading, headingTab, replacement];
   changed();
   expect(heading.attributes).toEqual(new Set(["data-card-first"]));
-  expect(replacement.attributes).toEqual(new Set(["data-card-last"]));
+  expect(replacement.attributes).toEqual(new Set());
   expect(observe).toHaveBeenCalledWith(sidebar, {
     childList: true,
     subtree: true,
-    attributes: true,
     attributeFilter: ["hidden"],
   });
   stop();

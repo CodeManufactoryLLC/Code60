@@ -93,6 +93,8 @@ import { WebLinks } from "./web-links.js";
 import { controlWindow } from "./window-controls.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const sidebarBlurSupported = process.platform === "darwin";
+const customWindowControls = process.platform === "linux";
 const page = pathToFileURL(join(here, "../renderer/index.html")).href;
 let window: BrowserWindow | undefined;
 let exiting = false;
@@ -463,13 +465,13 @@ async function ready(): Promise<void> {
       transparent,
       enabled,
       clickThrough,
-      sidebarBlurSupported: process.platform === "darwin",
-      customWindowControls: process.platform === "linux",
+      sidebarBlurSupported,
+      customWindowControls,
     };
   });
   handle("desktop:window-control", (value) => {
     const action = parseWindowControl(value);
-    if (process.platform !== "linux") throw new Error("Custom window controls are unavailable.");
+    if (!customWindowControls) throw new Error("Custom window controls are unavailable.");
     if (window && !window.isDestroyed()) controlWindow(window, action);
   });
   handle("desktop:sidebar-backdrop", (value) => {
@@ -760,9 +762,12 @@ async function ready(): Promise<void> {
     },
   });
   // Keep the versioned title instead of the page's <title>.
-  if (process.platform === "darwin") {
+  if (sidebarBlurSupported) {
     const { SidebarBackdrop } = await import("./sidebar-backdrop.js");
-    sidebarBackdrop = new SidebarBackdrop(window);
+    sidebarBackdrop = new SidebarBackdrop(window, () => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send("desktop:sidebar-backdrop-error");
+    });
   }
   window.on("page-title-updated", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));

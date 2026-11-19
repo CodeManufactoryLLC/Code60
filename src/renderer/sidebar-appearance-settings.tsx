@@ -1,15 +1,21 @@
 import { useId } from "react";
-import { defaultSidebarAppearance, type SidebarAppearance } from "./appearance.js";
+import {
+  defaultSidebarAppearance,
+  type SidebarAppearance,
+  sidebarPercentageLimit,
+} from "./appearance.js";
 import { InfoTip } from "./overlays.js";
 
 export function SidebarAppearanceSettings({
   appearance,
   saved,
   blurSupported,
+  nativeError,
   onChange,
 }: {
   appearance: SidebarAppearance;
   saved: boolean;
+  nativeError: string;
   blurSupported: boolean | undefined;
   onChange(appearance: SidebarAppearance): void;
 }) {
@@ -18,15 +24,11 @@ export function SidebarAppearanceSettings({
     {
       key: "opacity",
       label: "Background opacity",
-      max: 100,
-      unit: "%",
       tip: "Changes the entire background to the left of the sidebar divider immediately. Text and icons stay sharp. Zero is transparent; 100% is opaque. This works independently of the Transparent background setting for the rest of the window.",
     },
     {
       key: "blur",
       label: "Background blur",
-      max: 100,
-      unit: "%",
       tip:
         blurSupported === false
           ? "Native desktop background blur is available on macOS. Sidebar opacity remains available on Linux."
@@ -39,7 +41,7 @@ export function SidebarAppearanceSettings({
       <button
         type="button"
         className="settings-group-reset"
-        onClick={() => onChange(defaultSidebarAppearance)}
+        onClick={() => onChange({ ...defaultSidebarAppearance })}
       >
         Reset sidebar
       </button>
@@ -56,18 +58,18 @@ export function SidebarAppearanceSettings({
                   {field.tip}
                 </InfoTip>
               </span>
-              <output htmlFor={slider}>{`${value}${field.unit}`}</output>
+              <output htmlFor={slider}>{`${value}%`}</output>
             </div>
             <div className="transition-range">
               <input
                 id={slider}
                 type="range"
                 min={0}
-                max={field.max}
+                max={sidebarPercentageLimit}
                 step={1}
                 value={value}
                 disabled={field.key === "blur" && blurSupported !== true}
-                aria-valuetext={`${value}${field.unit}`}
+                aria-valuetext={`${value}%`}
                 aria-describedby={tip}
                 onChange={(event) =>
                   onChange({ ...appearance, [field.key]: event.target.valueAsNumber })
@@ -77,6 +79,7 @@ export function SidebarAppearanceSettings({
           </div>
         );
       })}
+      {nativeError && <div role="alert">{nativeError}</div>}
       {!saved && (
         <div role="alert">
           Sidebar changes apply for this session but could not be saved. Adjust a slider or use

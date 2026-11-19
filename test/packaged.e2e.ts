@@ -255,7 +255,7 @@ test("installed app persists projects and runs agents, MCP and cancellation", as
       .toBe(database);
     await expect(page.locator(".splash-projects")).toHaveCount(0);
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.getByRole("button", { name: "Open Project", exact: true }).click();
+    await page.getByRole("button", { name: "Add Project", exact: true }).click();
     const projects = page.getByRole("dialog", { name: "Open Project", exact: true });
     await expect(projects).toBeVisible();
     const recent = projects.locator(".project-item").filter({ hasText: repo });

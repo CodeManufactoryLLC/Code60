@@ -282,6 +282,7 @@ export function AppPages(props: AppPagesProps) {
           sidebarAppearance={sidebarAppearance}
           sidebarAppearanceSaved={sidebarAppearanceSaved}
           sidebarBlurSupported={sidebarBlurSupported}
+          sidebarBlurError={props.sidebarBlurError}
           onSidebarAppearance={setSidebarAppearance}
           textStyles={textStyles}
           onTextStyles={setTextStyles}

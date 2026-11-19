@@ -1758,7 +1758,9 @@ test("desktop: sidebar card chevrons own expansion independently of header navig
         await expect(page.locator(`#panel-${destination}`)).toBeVisible();
         await page.locator(`#${headerId}`).click();
       } else {
-        await page.locator('[data-navigation-card="assistants"] .page-group-label').click();
+        await page
+          .locator(".sidebar-navigation-card:has(#assistants-toggle) .page-group-label")
+          .click();
       }
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
       await toggle.click();
@@ -1822,7 +1824,7 @@ test("desktop: transparent Linux windows retain functional caption controls", as
     }
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.locator("dialog.splash")).toBeVisible();
     const controls = page.getByRole("group", { name: "Window controls", exact: true });
     const custom = (await page.evaluate(() => window.desktop.windowAppearance()))
       .customWindowControls;
@@ -1831,6 +1833,9 @@ test("desktop: transparent Linux windows retain functional caption controls", as
       return;
     }
     await expect(controls.getByRole("button")).toHaveCount(3);
+    await expect(
+      page.locator("dialog.splash").getByRole("group", { name: "Window controls" }),
+    ).toBeVisible();
     const maximize = controls.getByRole("button", {
       name: "Maximize or restore window",
       exact: true,
@@ -1853,6 +1858,22 @@ test("desktop: transparent Linux windows retain functional caption controls", as
       BrowserWindow.getAllWindows()[0]?.restore();
     });
     await expect(controls).toBeVisible();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.locator("dialog.splash")).toHaveCount(0);
+    await expect(controls).toBeVisible();
+    await selectSettingsPage(page, "Appearance");
+    await page.getByLabel("Theme", { exact: true }).selectOption("dark");
+    const closeButton = controls.getByRole("button", { name: "Close window", exact: true });
+    await closeButton.hover();
+    const contrast = await closeButton.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    });
+    expect(contrast.color).not.toBe(contrast.background);
+    await page.getByRole("button", { name: "return to splash page", exact: true }).click();
+    await expect(
+      page.locator("dialog.splash").getByRole("group", { name: "Window controls" }),
+    ).toBeVisible();
     const appProcess = application.process();
     const closed = application.waitForEvent("close");
     await controls.getByRole("button", { name: "Close window", exact: true }).click();
@@ -1860,7 +1881,7 @@ test("desktop: transparent Linux windows retain functional caption controls", as
     await expect.poll(() => appProcess.exitCode).not.toBeNull();
   } finally {
     await application?.close().catch(() => {});
-    if (manager && manager.exitCode === null) {
+    if (manager && manager.exitCode === null && manager.signalCode === null) {
       const closed = new Promise<void>((resolve) => manager?.once("close", () => resolve()));
       manager.kill("SIGTERM");
       const timeout = setTimeout(() => manager?.kill("SIGKILL"), 2_000);
@@ -1878,6 +1899,13 @@ test("desktop: animated navigation respects sidebar clicks, card hover and reduc
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.emulateMedia({ reducedMotion: "no-preference" });
+    const assistantsIcon = page.locator(
+      ".sidebar-navigation-card:has(#assistants-toggle) [data-icon='app-assistants']",
+    );
+    await expect(assistantsIcon).toHaveAttribute("src", /speech-bubble.*\.png/);
+    await page.locator("#assistants-toggle").click();
+    await expect(assistantsIcon).toHaveAttribute("src", /speech-bubble.*\.gif.*play=/);
+    await page.locator("#assistants-toggle").click();
     await expect(page.locator("#tab-home")).toHaveCSS("font-weight", "500");
     await expect(page.locator("#tab-search")).toHaveCSS("font-weight", "300");
     await page.locator("#settings-card-toggle").click();
@@ -3504,23 +3532,21 @@ test("desktop: Relay connects without a database and retains identity, draft and
     await expect(relay).toBeEnabled();
     const sidebarRows = page.locator(".page-tabs");
     const homeSearch = sidebarRows.locator(":scope > :first-child");
-    await expect(homeSearch).toHaveAttribute("data-navigation-card", "home-search");
+    await expect(homeSearch.locator("#home-card-toggle")).toHaveCount(1);
     await expect(homeSearch.locator(":scope > :first-child")).toHaveText("Home");
     await expect(homeSearch.locator("#home-pages")).toHaveText("Search");
-    await expect(sidebarRows.locator(":scope > :nth-child(2)")).toHaveAttribute(
-      "data-navigation-card",
-      "assistants",
-    );
+    await expect(
+      sidebarRows.locator(":scope > :nth-child(2)").locator("#assistants-toggle"),
+    ).toHaveCount(1);
     await expect(
       page.locator("#assistants-pages").getByRole("button", { name: "Relay", exact: true }),
     ).toBeVisible();
     await expect(page.locator("#assistants-pages #tab-custom-agents")).toHaveText(
       "Custom Assistants",
     );
-    await expect(sidebarRows.locator(":scope > :nth-child(3)")).toHaveAttribute(
-      "data-navigation-card",
-      "projects",
-    );
+    await expect(
+      sidebarRows.locator(":scope > :nth-child(3)").locator("#projects-card-toggle"),
+    ).toHaveCount(1);
     await expect(page.locator(".sidebar .wordmark")).toHaveCount(0);
     const home = page.getByRole("tab", { name: "Home", exact: true });
     await expect(home.locator('[data-icon="app-home2"]')).toHaveCount(1);
@@ -4139,7 +4165,7 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
     const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
     while (await dismiss.count()) await dismiss.first().click();
     await page.screenshot({ path: join(root, "test-results", "multi-project-sidebar.png") });
-    const expectHierarchy = async () => {
+    const expectHierarchy = async (compressed = false) => {
       const positions = await page.locator("#chat-pages").evaluate((element) => {
         const x = (node: Element | null) => node?.getBoundingClientRect().x ?? -1;
         return {
@@ -4175,15 +4201,47 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
       const projectInset = positions.projects[0] ?? 0;
       expect(projectInset).toBeGreaterThan(positions.chat);
       expect.soft(positions.projects).toEqual(Array(3).fill(projectInset));
-      expect.soft(positions.chats).toEqual(Array(6).fill(projectInset + 24));
-      expect.soft(positions.workers).toEqual(Array(2).fill(projectInset + 48));
+      if (!compressed) {
+        expect.soft(positions.chats).toEqual(Array(6).fill(projectInset + 24));
+        expect.soft(positions.workers).toEqual(Array(2).fill(projectInset + 48));
+      }
+      const readable = await page
+        .locator("#chat-pages .chat-sidebar-entry:visible")
+        .evaluateAll((entries) =>
+          entries.map((entry) => {
+            const label = entry.querySelector(".chat-sidebar-label");
+            const icon = entry.querySelector(".navigation-icon");
+            const bounds = label?.getBoundingClientRect();
+            return {
+              width: bounds?.width ?? 0,
+              left: bounds?.left ?? 0,
+              iconRight: icon?.getBoundingClientRect().right ?? 0,
+            };
+          }),
+        );
+      expect(readable.length).toBeGreaterThan(0);
+      for (const label of readable) {
+        expect(label.width).toBeGreaterThanOrEqual(20);
+        expect(label.left).toBeGreaterThanOrEqual(label.iconRight + 7.9);
+      }
       expect.soft(positions.clipped).toBe(false);
       for (const row of positions.toggles) {
         expect.soft(row.more).toBeGreaterThan(row.label);
         expect.soft(row.right).toBe(row.edge);
       }
     };
-    await expectHierarchy();
+    await expectHierarchy(true);
+    const firstProject = page.getByRole("region", { name: `Project ${folders[0]}`, exact: true });
+    const newSession = firstProject.getByRole("button", {
+      name: "New Session in project-a",
+      exact: true,
+    });
+    await newSession.press("ArrowUp");
+    await expect(
+      firstProject.getByRole("button", { name: `More for ${folders[0]}`, exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(newSession).toBeFocused();
     await expect
       .soft(page.locator(".project-sidebar-open"))
       .toHaveAttribute("aria-label", "Add Project");
@@ -4346,6 +4404,7 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
       for (const [width, size] of [
         [180, 15],
         [220, 15],
+        [180, 32],
         [480, 24],
       ] as const) {
         const resizer = page.getByRole("button", {
@@ -4358,7 +4417,8 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
         for (let remaining = Math.abs(width - current); remaining > 0; remaining -= 20)
           await resizer.press(width > current ? "ArrowRight" : "ArrowLeft");
         await page.evaluate((size) => {
-          const style = document.documentElement.style;
+          const style = document.querySelector<HTMLElement>(".app-workspace")?.style;
+          if (!style) throw new Error("Workspace missing");
           style.setProperty("--nav-font-size", `${size}px`);
           if (size === 15) style.removeProperty("--button-size");
           else style.setProperty("--button-size", `${size}px`);
@@ -4368,7 +4428,7 @@ test("desktop: multi-project sidebar has aligned hierarchy and anchored menus", 
           theme,
         );
         await page.emulateMedia({ reducedMotion: "reduce" });
-        await expectHierarchy();
+        await expectHierarchy(width < 300);
         await expect(page.locator(".project-sidebar-open")).toHaveAttribute(
           "aria-label",
           "Add Project",
@@ -6360,6 +6420,8 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
               return {
                 control: control.id,
                 project: control.classList.contains("project-chat-name"),
+                conversation: control.classList.contains("chat-sidebar-entry"),
+                labelWidth: text.width,
                 scale:
                   icon.closest("#app-pages") && icon.getAttribute("data-animated") === "true"
                     ? 2.5
@@ -6400,10 +6462,18 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
         );
         for (const icon of geometry) {
           expect(icon.textSize).toBe(size);
-          expect(icon.size).toBeCloseTo(size * icon.scale, 1);
-          expect(icon.height).toBe(icon.size);
+          if (icon.conversation) {
+            // Narrow rows trade indentation/artwork size for readable names.
+            expect(icon.size).toBeGreaterThan(0);
+            expect(icon.size).toBeLessThanOrEqual(size * icon.scale + 0.1);
+            expect(icon.labelWidth).toBeGreaterThanOrEqual(20);
+            expect(icon.leading).toBeGreaterThanOrEqual(0);
+          } else {
+            expect(icon.size).toBeCloseTo(size * icon.scale, 1);
+            expect(icon.leading).toBeGreaterThanOrEqual(12);
+          }
+          expect(icon.height).toBeCloseTo(icon.size, 1);
           expect(icon.labelHeight).toBeLessThan(size);
-          expect(icon.leading).toBeGreaterThanOrEqual(12);
           expect(icon.gap, `Icon gap for ${icon.control} at ${size}px`).toBeGreaterThanOrEqual(8);
           expect(icon.centerOffset, `Icon alignment for ${icon.control} at ${size}px`).toBeLessThan(
             1,
@@ -6700,7 +6770,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(chat.locator(".turn-timer")).toHaveText(frozen ?? "");
     await page.locator("#tab-chat").press("ArrowRight");
     await page.locator("#tab-chat").press("ArrowDown");
-    await expect(page.locator("#add-project")).toBeFocused();
+    await expect(page.getByRole("button", { name: "Add Project", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.locator(".project-chat-name").first()).toBeFocused();
     await page.keyboard.press("Home");
@@ -6927,8 +6997,10 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         searchBounds: rect("#tab-search"),
         projectsBounds: rect("#tab-chat"),
         navBounds: rect(".sidebar"),
-        assistantsBounds: rect('[data-navigation-card="assistants"]'),
-        assistantsHeaderBounds: rect('[data-navigation-card="assistants"] .sidebar-card-header'),
+        assistantsBounds: rect(".sidebar-navigation-card:has(#assistants-toggle)"),
+        assistantsHeaderBounds: rect(
+          ".sidebar-navigation-card:has(#assistants-toggle) .sidebar-card-header",
+        ),
       };
     });
     if (
@@ -7220,7 +7292,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(
       splash.getByRole("button", { name: "Connect to database", exact: true }),
     ).toBeFocused();
-    await expect(splash.getByRole("button")).toHaveCount(4);
+    await expect(splash.getByRole("button")).toHaveCount(process.platform === "linux" ? 7 : 4);
     await expectSplashLayout(page);
     await expectIndustrialSurfaces(page);
     // Light keeps a solid surface; Dark/System dark add the bundled artwork.
@@ -7242,7 +7314,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       expect(await page.evaluate(() => localStorage.getItem("code60.splashBackground"))).toBe(
         "circuit-blue",
       );
-      await expect(splash.getByRole("button")).toHaveCount(4);
+      await expect(splash.getByRole("button")).toHaveCount(process.platform === "linux" ? 7 : 4);
       await expect(splash.locator(".database-notice")).toHaveCSS(
         "background-color",
         scheme === "dark" ? "rgb(37, 37, 37)" : "rgb(255, 255, 255)",
@@ -7295,7 +7367,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     expect(
       await splash.evaluate((element) => getComputedStyle(element, "::before").backgroundImage),
     ).toBe("none");
-    await expect(splash.getByRole("button")).toHaveCount(4);
+    await expect(splash.getByRole("button")).toHaveCount(process.platform === "linux" ? 7 : 4);
     await expect(splash.locator(".splash-enter")).toHaveCSS("opacity", "1");
     await page.emulateMedia({ forcedColors: "none" });
     await expectSplashLayout(page);
@@ -9677,7 +9749,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
     await expectNavigationHighlight(
       page,
-      page.locator('[data-navigation-card="settings"] [data-nav-active="true"]'),
+      page.locator('.sidebar-navigation-card:has(#settings-card-toggle) [data-nav-active="true"]'),
     );
     await row(a).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
@@ -10850,7 +10922,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(page.locator("#settings-home-title")).toBeVisible();
     await expectNavigationHighlight(
       page,
-      page.locator('[data-navigation-card="settings"] [data-nav-active="true"]'),
+      page.locator('.sidebar-navigation-card:has(#settings-card-toggle) [data-nav-active="true"]'),
     );
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
     await resetPointer();
@@ -13794,7 +13866,7 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
     await expect(card).toHaveCSS("background-color", sidebarFill);
     await expect(card.locator("svg")).toHaveCount(1);
     await expect(page.locator(".chat-page-heading .project-sidebar-open")).toHaveCount(0);
-    await expect(page.locator("#chat-pages > :first-child")).toHaveAttribute("id", "add-project");
+    await expect(page.locator("#chat-pages > :first-child")).toHaveAccessibleName("Add Project");
     await expect(page.locator("#tab-chat [data-icon='app-backlog']")).toHaveCount(1);
     await expect(page.locator(".sidebar-header")).toHaveCount(0);
     await page.screenshot({ path: "test-results/project-card-empty.png" });

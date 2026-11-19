@@ -8,6 +8,7 @@ export interface SidebarAppearance {
   opacity: number;
   blur: number;
 }
+export const sidebarPercentageLimit = 100;
 export const defaultSidebarAppearance: Readonly<SidebarAppearance> = Object.freeze({
   opacity: 100,
   blur: 0,
@@ -19,13 +20,13 @@ export function parseSidebarAppearance(raw: string | null): SidebarAppearance {
     if (!value || typeof value !== "object" || Array.isArray(value))
       return defaultSidebarAppearance;
     const record = value as Record<string, unknown>;
-    const bounded = (key: keyof SidebarAppearance, max: number) => {
+    const bounded = (key: keyof SidebarAppearance) => {
       const number = record[key];
       return typeof number === "number" && Number.isFinite(number)
-        ? Math.round(Math.max(0, Math.min(max, number)))
+        ? Math.round(Math.max(0, Math.min(sidebarPercentageLimit, number)))
         : defaultSidebarAppearance[key];
     };
-    return { opacity: bounded("opacity", 100), blur: bounded("blur", 100) };
+    return { opacity: bounded("opacity"), blur: bounded("blur") };
   } catch {
     return defaultSidebarAppearance;
   }

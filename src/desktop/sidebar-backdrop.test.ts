@@ -37,13 +37,14 @@ function setup() {
   const owner = Object.assign(new EventEmitter(), {
     webContents: Object.assign(new EventEmitter(), { getZoomFactor: () => 2 }),
     isDestroyed: () => false,
-    isVisible: () => true,
+    isVisible: () => false, // Electron 45 macOS reports false for visible windows.
     isMinimized: () => false,
     getContentBounds: () => ({ x: 40, y: 60, width: 640, height: 480 }),
     moveAbove: vi.fn(),
   });
-  const control = new SidebarBackdrop(owner as unknown as BrowserWindow);
-  return { control, owner, backdrop };
+  const onError = vi.fn();
+  const control = new SidebarBackdrop(owner as unknown as BrowserWindow, onError);
+  return { control, owner, backdrop, onError };
 }
 
 it("creates no native window for disabled blur and bounds active blur to its owner", () => {
@@ -55,6 +56,7 @@ it("creates no native window for disabled blur and bounds active blur to its own
     expect.objectContaining({
       focusable: false,
       skipTaskbar: true,
+      hiddenInMissionControl: true,
       vibrancy: "sidebar",
       show: false,
     }),
@@ -94,4 +96,25 @@ it("closes a failed native backdrop and surfaces a fixed error", () => {
   );
   expect(backdrop.close).toHaveBeenCalledOnce();
   control.dispose();
+});
+
+it("tracks owner hide/show independently of macOS isVisible and reports event failures", () => {
+  const { control, owner, backdrop, onError } = setup();
+  control.update({ width: 244, strength: 80, visible: true });
+  expect(backdrop.isVisible()).toBe(true);
+  owner.emit("hide");
+  expect(backdrop.isVisible()).toBe(false);
+  owner.emit("move");
+  expect(backdrop.isVisible()).toBe(false);
+  owner.emit("show");
+  expect(backdrop.isVisible()).toBe(true);
+  backdrop.setBounds.mockImplementation(() => {
+    throw new Error("private native cause");
+  });
+  owner.emit("resize");
+  expect(onError).toHaveBeenCalledExactlyOnceWith();
+  expect(backdrop.close).toHaveBeenCalledOnce();
+  control.dispose();
+  expect(owner.listenerCount("show")).toBe(0);
+  expect(owner.listenerCount("hide")).toBe(0);
 });

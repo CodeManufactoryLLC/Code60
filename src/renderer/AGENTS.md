@@ -644,3 +644,20 @@ gutter, keeping its card aligned with the conversation at narrow widths.
 
 Keep breadcrumb and conversation right edges aligned in stacked layouts too,
 accounting for the transcript scrollport gutter without raising the inspector.
+
+Native sidebar blur reports fixed application failures beside the Appearance
+sliders independently of persistence status, including failures during owner events.
+Send hidden visibility immediately; animation frames may stop in hidden documents.
+Track macOS owner show/hide events and renderer visibility rather than Electron
+45's inverted isVisible predicate. Keep the decorative backdrop out of Mission Control.
+Linux caption controls remain accessible inside the splash and first-use setup modals.
+At narrow sidebar widths and large text sizes, bound conversation indentation and
+artwork to preserve readable labels and independent action targets.
+
+Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
+decorative window from Mission Control. A payload-free failure notice reports native
+event failures beside Appearance controls, separately from preference save errors; a
+successful adjustment clears the native error. Keep caption controls inside the active
+splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
+Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.

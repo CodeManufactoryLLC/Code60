@@ -22,6 +22,7 @@ export interface AppPagesProps {
     explicitProjectFiles?: boolean;
   };
   preferences: ReturnType<typeof useAppPreferences>;
+  sidebarBlurError: string;
   appearance: ReturnType<typeof useWindowAppearance>;
   updates: ReturnType<typeof useUpdates>;
   tabs: PageTabs;

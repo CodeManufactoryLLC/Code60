@@ -23,6 +23,7 @@ const props: ComponentProps<typeof SettingsPage> = {
   sidebarAppearance: { opacity: 100, blur: 0 },
   sidebarAppearanceSaved: true,
   sidebarBlurSupported: true,
+  sidebarBlurError: "",
   onSidebarAppearance: unchanged,
   textStyles: defaultTextStyles,
   onTextStyles: unchanged,
@@ -48,6 +49,7 @@ describe("Settings page titles", () => {
         section="appearance"
         sidebarAppearance={{ opacity: 35, blur: 12 }}
         sidebarAppearanceSaved={false}
+        sidebarBlurError="Native sidebar blur could not be applied."
       />,
     );
     expect(html).toContain("Background opacity</label>");
@@ -57,6 +59,8 @@ describe("Settings page titles", () => {
     expect(html).toContain('type="range" min="0" max="100" step="1"');
     expect(html).toContain('role="alert"');
     expect(html).toContain("could not be saved");
+    expect(html).toContain("Native sidebar blur could not be applied.");
+    expect(html).toContain("Native sidebar blur could not be applied.");
     expect(html).toContain("Reset sidebar");
   });
   it.each(settingsSectionIds)(

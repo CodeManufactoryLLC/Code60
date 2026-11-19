@@ -1,58 +1,80 @@
-import { useEffect } from "react";
-import type { DesktopApi } from "../bridge/index.js";
+import { useEffect, useState } from "react";
+import {
+  type DesktopApi,
+  inactiveSidebarBackdrop,
+  sidebarBackdropWidthLimit,
+} from "../bridge/index.js";
 import type { SidebarAppearance } from "./appearance.js";
+
+const blurError = "Native sidebar blur could not be applied. Try changing the blur strength again.";
+
+/** Own subscriptions, batched visible geometry, and immediate hidden-state reporting. */
+export function observeSidebarBackdrop(
+  api: Pick<DesktopApi, "setSidebarBackdrop" | "onSidebarBackdropError">,
+  appearance: SidebarAppearance,
+  splash: boolean,
+  setError: (message: string) => void,
+) {
+  const element = document.querySelector<HTMLElement>(".sidebar-background");
+  const forced = window.matchMedia("(forced-colors: active)");
+  let frame = 0;
+  let disposed = false;
+  let revision = 0;
+  const report = () => {
+    frame = 0;
+    const current = ++revision;
+    const width = element?.getBoundingClientRect().width ?? 0;
+    const active = !splash && !document.hidden && !forced.matches && appearance.opacity < 100;
+    void api
+      .setSidebarBackdrop({
+        width: Math.min(sidebarBackdropWidthLimit, Math.max(0, width)),
+        strength: active ? appearance.blur : 0,
+        visible: active && width > 0,
+      })
+      .then(() => {
+        if (!disposed && current === revision) setError("");
+      })
+      .catch(() => {
+        if (!disposed && current === revision) setError(blurError);
+      });
+  };
+  const update = () => {
+    // Hidden documents may never receive another animation frame.
+    if (document.hidden || forced.matches) {
+      cancelAnimationFrame(frame);
+      report();
+    } else if (!frame) frame = requestAnimationFrame(report);
+  };
+  const resize = new ResizeObserver(update);
+  if (element) resize.observe(element);
+  const offError = api.onSidebarBackdropError(() => {
+    ++revision;
+    if (!disposed) setError(blurError);
+  });
+  forced.addEventListener("change", update);
+  document.addEventListener("visibilitychange", update);
+  report();
+  return () => {
+    disposed = true;
+    cancelAnimationFrame(frame);
+    resize.disconnect();
+    offError();
+    forced.removeEventListener("change", update);
+    document.removeEventListener("visibilitychange", update);
+    void api.setSidebarBackdrop(inactiveSidebarBackdrop).catch(() => {});
+  };
+}
 
 export function useSidebarBackdrop(
   api: DesktopApi,
   appearance: SidebarAppearance,
   supported: boolean | undefined,
   splash: boolean,
-  setError: (message: string) => void,
 ) {
+  const [error, setError] = useState("");
   useEffect(() => {
     if (!supported) return;
-    const element = document.querySelector(".sidebar-background");
-    const forced = window.matchMedia("(forced-colors: active)");
-    let disposed = false;
-    let frame = 0;
-    const report = () => {
-      frame = 0;
-      const width = element?.getBoundingClientRect().width ?? 0;
-      void api
-        .setSidebarBackdrop({
-          width: Math.max(0, Math.min(16384, width)),
-          strength: appearance.blur,
-          visible:
-            !splash && !document.hidden && !forced.matches && appearance.opacity < 100 && width > 0,
-        })
-        .catch(() => {
-          if (!disposed)
-            setError(
-              "Native sidebar blur could not be applied. Try changing the blur strength again.",
-            );
-        });
-    };
-    const update = () => {
-      if (!frame) frame = requestAnimationFrame(report);
-    };
-    const resize = new ResizeObserver(update);
-    if (element) resize.observe(element);
-    forced.addEventListener("change", update);
-    document.addEventListener("visibilitychange", update);
-    report();
-    return () => {
-      disposed = true;
-      resize.disconnect();
-      if (frame) cancelAnimationFrame(frame);
-      forced.removeEventListener("change", update);
-      document.removeEventListener("visibilitychange", update);
-    };
-  }, [api, appearance.blur, appearance.opacity, supported, splash, setError]);
-  useEffect(
-    () => () => {
-      if (supported)
-        void api.setSidebarBackdrop({ width: 0, strength: 0, visible: false }).catch(() => {});
-    },
-    [api, supported],
-  );
+    return observeSidebarBackdrop(api, appearance, splash, setError);
+  }, [api, appearance, supported, splash]);
+  return error;
 }

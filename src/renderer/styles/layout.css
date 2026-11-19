@@ -249,6 +249,6 @@ dialog::backdrop {
   --icon-size: 14px;
 }
 .window-controls > .window-close:hover {
-  background: var(--danger);
-  color: white;
+  background: var(--destructive-hover);
+  color: var(--on-destructive);
 }

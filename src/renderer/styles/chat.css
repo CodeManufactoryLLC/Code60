@@ -1039,19 +1039,6 @@
   height: 16px;
 }
 
-.activity-visual img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-
-:root[data-color-scheme="dark"] .activity-visual img {
-  filter: invert(1) hue-rotate(180deg);
-  mix-blend-mode: screen;
-}
-
 .activity-name {
   flex: 1;
   min-width: 0;

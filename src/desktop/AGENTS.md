@@ -238,3 +238,16 @@ strip because Electron hides its native caption controls for translucent windows
 A strict minimize/maximize/close enum targets only the owned main window. Close
 must call the normal guarded close path, never destroy the window or kill work.
 macOS retains native window controls. No arbitrary window IDs cross the bridge.
+
+Native blur visibility follows owner show/hide events and renderer visibility;
+do not use Electron 45 macOS isVisible for visibility authority. Keep its backdrop
+hidden in Mission Control. Event-driven native failures notify only the owner
+renderer through a payload-free event after closing the decorative backdrop.
+
+Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
+decorative window from Mission Control. A payload-free failure notice reports native
+event failures beside Appearance controls, separately from preference save errors; a
+successful adjustment clears the native error. Keep caption controls inside the active
+splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
+Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.

@@ -453,6 +453,7 @@ export interface DesktopApi {
   setSidebarBackdrop(
     request: import("./sidebar-backdrop.js").SidebarBackdropRequest,
   ): Promise<void>;
+  onSidebarBackdropError(listener: () => void): () => void;
   controlWindow(action: import("./window-controls.js").WindowControl): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;

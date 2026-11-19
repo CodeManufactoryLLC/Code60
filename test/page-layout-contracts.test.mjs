@@ -224,12 +224,12 @@ it("animates sidebar reveal separately from resizing and respects accessible mot
   ).toContain("transition: none");
 });
 
-it("rounds sidebar items with larger first and last card corners while keeping the sidebar borderless", () => {
+it("rounds sidebar items uniformly and marks only the header weight while keeping the sidebar borderless", () => {
   expect(rule("navigation", ".sidebar button")).toContain(
     "border-radius: var(--nav-row-top-radius, 5px)",
   );
   expect(rule("navigation", ".sidebar [data-card-first]")).toContain("--nav-row-top-radius: 5px");
-  expect(rule("navigation", ".sidebar [data-card-last]")).toContain("--nav-row-bottom-radius: 5px");
+  expect(sheet("navigation")).not.toContain("data-card-last");
   expect(rule("navigation", '.sidebar [data-nav-active="true"]')).toContain(
     "border-radius: var(--nav-row-top-radius, 5px)",
   );

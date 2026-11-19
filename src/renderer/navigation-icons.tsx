@@ -1,48 +1,31 @@
 import { useEffect, useId, useRef, useState } from "react";
-import aiIcon from "./icons/apps/ai.svg?no-inline";
-import analyzeIcon from "./icons/apps/analyze.svg?no-inline";
-import appsIcon from "./icons/apps/apps.svg?no-inline";
-import backlogIcon from "./icons/apps/backlog.svg?no-inline";
 import booksAnimation from "./icons/apps/books.gif?no-inline";
 import booksStill from "./icons/apps/books.png?no-inline";
-import bookshelfIcon from "./icons/apps/bookshelf.svg?no-inline";
 import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
-import cloudIcon from "./icons/apps/cloud-computing.svg?no-inline";
-import cogwheelIcon from "./icons/apps/cogwheel.svg?no-inline";
-import paletteIcon from "./icons/apps/color-palette.svg?no-inline";
-import communicationIcon from "./icons/apps/communication.svg?no-inline";
-import databaseIcon from "./icons/apps/database.svg?no-inline";
 import databaseTableAnimation from "./icons/apps/database-table.gif?no-inline";
 import databaseTableStill from "./icons/apps/database-table.png?no-inline";
-import downRightIcon from "./icons/apps/down-right.svg?no-inline";
 import downloadAnimation from "./icons/apps/download.gif?no-inline";
 import downloadStill from "./icons/apps/download.png?no-inline";
 import droneAnimation from "./icons/apps/drone.gif?no-inline";
 import droneStill from "./icons/apps/drone.png?no-inline";
 import folderAnimation from "./icons/apps/folder.gif?no-inline";
 import folderStill from "./icons/apps/folder.png?no-inline";
-import folderIcon from "./icons/apps/folder.svg?no-inline";
 import fontSizeAnimation from "./icons/apps/font-size.gif?no-inline";
 import fontSizeStill from "./icons/apps/font-size.png?no-inline";
 import gearWheelAnimation from "./icons/apps/gear-wheel.gif?no-inline";
 import gearWheelStill from "./icons/apps/gear-wheel.png?no-inline";
-import heartRateIcon from "./icons/apps/heart-rate.svg?no-inline";
 import heartbeatAnimation from "./icons/apps/heartbeat.gif?no-inline";
 import heartbeatStill from "./icons/apps/heartbeat.png?no-inline";
-import helmetIcon from "./icons/apps/helmet.svg?no-inline";
 import homeAnimation from "./icons/apps/home.gif?no-inline";
 import homeStill from "./icons/apps/home.png?no-inline";
-import homeIcon from "./icons/apps/home2.svg?no-inline";
 import infoAnimation from "./icons/apps/info.gif?no-inline";
 import infoStill from "./icons/apps/info.png?no-inline";
-import infoIcon from "./icons/apps/info.svg?no-inline";
 import labourDayAnimation from "./icons/apps/labour-day.gif?no-inline";
 import labourDayStill from "./icons/apps/labour-day.png?no-inline";
 import laptopAnimation from "./icons/apps/laptop.gif?no-inline";
 import laptopStill from "./icons/apps/laptop.png?no-inline";
 import marketingAutomationAnimation from "./icons/apps/marketing-automation.gif?no-inline";
 import marketingAutomationStill from "./icons/apps/marketing-automation.png?no-inline";
-import megaphoneIcon from "./icons/apps/megaphone.svg?no-inline";
 import menuAnimation from "./icons/apps/menu.gif?no-inline";
 import menuStill from "./icons/apps/menu.png?no-inline";
 import optionsAnimation from "./icons/apps/options.gif?no-inline";
@@ -55,50 +38,23 @@ import projectInitiationAnimation from "./icons/apps/project-initiation.gif?no-i
 import projectInitiationStill from "./icons/apps/project-initiation.png?no-inline";
 import robotAnimation from "./icons/apps/robot.gif?no-inline";
 import robotStill from "./icons/apps/robot.png?no-inline";
-import roboticArmIcon from "./icons/apps/robotic-arm.svg?no-inline";
 import searchAnimation from "./icons/apps/search.gif?no-inline";
 import searchStill from "./icons/apps/search.png?no-inline";
-import searchIcon from "./icons/apps/search.svg?no-inline";
 import settingAnimation from "./icons/apps/setting.gif?no-inline";
 import settingStill from "./icons/apps/setting.png?no-inline";
 import speechBubbleAnimation from "./icons/apps/speech-bubble.gif?no-inline";
 import speechBubbleStill from "./icons/apps/speech-bubble.png?no-inline";
 import spellBookAnimation from "./icons/apps/spell-book.gif?no-inline";
 import spellBookStill from "./icons/apps/spell-book.png?no-inline";
-import steeringWheelIcon from "./icons/apps/steering-wheel.svg?no-inline";
 import tableAnimation from "./icons/apps/table.gif?no-inline";
 import tableStill from "./icons/apps/table.png?no-inline";
-import tableIcon from "./icons/apps/table.svg?no-inline";
-import textSizeIcon from "./icons/apps/text-size.svg?no-inline";
 import timeManagementAnimation from "./icons/apps/time-management.gif?no-inline";
 import timeManagementStill from "./icons/apps/time-management.png?no-inline";
 import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
 import viewBoxes from "./navigation-icon-viewboxes.json" with { type: "json" };
 
 const artwork = {
-  "app-ai": aiIcon,
-  "app-analyze": analyzeIcon,
-  "app-apps": appsIcon,
-  "app-backlog": backlogIcon,
-  "app-bookshelf": bookshelfIcon,
   "app-chemical": chemicalIcon,
-  "app-cloud-computing": cloudIcon,
-  "app-cogwheel": cogwheelIcon,
-  "app-color-palette": paletteIcon,
-  "app-communication": communicationIcon,
-  "app-database": databaseIcon,
-  "app-down-right": downRightIcon,
-  "app-folder": folderIcon,
-  "app-heart-rate": heartRateIcon,
-  "app-helmet": helmetIcon,
-  "app-home2": homeIcon,
-  "app-info": infoIcon,
-  "app-megaphone": megaphoneIcon,
-  "app-robotic-arm": roboticArmIcon,
-  "app-search": searchIcon,
-  "app-steering-wheel": steeringWheelIcon,
-  "app-table": tableIcon,
-  "app-text-size": textSizeIcon,
   "app-under-construction": underConstructionIcon,
 } as const;
 
@@ -265,7 +221,9 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
   useEffect(() => {
     const element = image.current;
     if (!element) return;
-    const target = element.closest("button, a, [role='tab'], [role='button']");
+    const target =
+      element.closest("button, a, [role='tab'], [role='button']") ??
+      element.closest(".sidebar-navigation-card")?.querySelector(".sidebar-card-toggle");
     if (!target) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
     const reset = () => setPlayback(0);

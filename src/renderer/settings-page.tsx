@@ -25,6 +25,7 @@ export function SettingsPage({
   sidebarAppearance,
   sidebarAppearanceSaved,
   sidebarBlurSupported,
+  sidebarBlurError,
   onSidebarAppearance,
   textStyles,
   onTextStyles,
@@ -61,6 +62,7 @@ export function SettingsPage({
   sidebarAppearance: SidebarAppearance;
   sidebarAppearanceSaved: boolean;
   sidebarBlurSupported: boolean | undefined;
+  sidebarBlurError: string;
   onSidebarAppearance(appearance: SidebarAppearance): void;
   textStyles: TextStyles;
   onTextStyles(styles: TextStyles): void;
@@ -98,6 +100,7 @@ export function SettingsPage({
             appearance={sidebarAppearance}
             saved={sidebarAppearanceSaved}
             blurSupported={sidebarBlurSupported}
+            nativeError={sidebarBlurError}
             onChange={onSidebarAppearance}
           />
           <TransitionSettings />
@@ -170,10 +173,7 @@ export function SettingsPage({
       )}
       {settingsPanel(
         "table-defaults",
-        <section
-          className="settings-section table-defaults-settings"
-          aria-labelledby={`${id}-table`}
-        >
+        <section className="settings-section" aria-labelledby={`${id}-table`}>
           <SettingsHeader
             page="table-defaults"
             id={`${id}-table`}

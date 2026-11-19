@@ -557,7 +557,7 @@ function PageTabList({
     }
     if (id === "chat" && event.key === "ArrowRight") {
       event.preventDefault();
-      if (chatExpanded) document.querySelector<HTMLButtonElement>("#chat-pages button")?.focus();
+      if (chatExpanded) chatButtons()[0]?.focus();
       else setChatExpanded(true);
       return;
     }
@@ -765,7 +765,7 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
-      <div className="sidebar-navigation-card" data-navigation-card="home-search">
+      <div className="sidebar-navigation-card">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -795,7 +795,7 @@ function PageTabList({
           {page("search", false)}
         </div>
       </div>
-      <div className="sidebar-navigation-card" data-navigation-card="assistants">
+      <div className="sidebar-navigation-card">
         <div
           className="page-tab sidebar-card-header"
           data-nav-active={assistantActive && !assistantsExpanded}
@@ -927,7 +927,7 @@ function PageTabList({
           </div>
         </div>
       </div>
-      <div className="sidebar-navigation-card" data-navigation-card="projects">
+      <div className="sidebar-navigation-card">
         <div
           className="chat-page-heading sidebar-card-header"
           data-nav-active={
@@ -1016,7 +1016,6 @@ function PageTabList({
         >
           <button
             type="button"
-            id="add-project"
             className="project-sidebar-open"
             aria-label="Add Project"
             title={database ? "Add Project" : "Connect to database to add a project"}
@@ -1068,7 +1067,7 @@ function PageTabList({
           )}
         </div>
       </div>
-      <div className="sidebar-navigation-card" data-navigation-card="apps">
+      <div className="sidebar-navigation-card">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -1087,10 +1086,7 @@ function PageTabList({
         )}
         {staticChildrenPanel("apps")}
       </div>
-      <div
-        className="page-tab-list sidebar-settings sidebar-navigation-card"
-        data-navigation-card="settings"
-      >
+      <div className="page-tab-list sidebar-settings sidebar-navigation-card">
         <div
           className="sidebar-settings-heading sidebar-card-header"
           data-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}

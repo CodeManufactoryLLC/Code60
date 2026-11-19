@@ -52,7 +52,7 @@ function navigation(
 describe("database connection navigation", () => {
   it("groups Relay and Custom Assistants beneath an Assistants disclosure without adding a page", () => {
     const html = navigation(null);
-    expect(html).toContain('data-navigation-card="assistants"');
+    expect(html).toContain('class="sidebar-navigation-card"');
     expect(html).toContain('id="assistants-toggle"');
     expect(html).toContain('aria-controls="assistants-pages"');
     expect(html).toContain('data-icon="app-assistants"');
@@ -174,7 +174,7 @@ describe("database connection navigation", () => {
       expect(html).toContain('aria-label="Add Project"');
       expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Add Project"');
-      expect(html).toMatch(/id="chat-pages"[^>]*><button[^>]*id="add-project"/);
+      expect(html).toMatch(/id="chat-pages"[^>]*><button[^>]*class="project-sidebar-open"/);
       expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
       expect(html.match(/<button[^>]*id="tab-prompts"[^>]*>/)?.[0]).not.toContain("disabled");

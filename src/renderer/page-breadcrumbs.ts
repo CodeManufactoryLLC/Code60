@@ -86,7 +86,11 @@ function pageAncestors(
     if (chat && id)
       ancestors.push({
         label: chat.kind === "relay" && !chat.customAgentId ? "Relay" : "Agent",
-        icon: chat.kind === "relay" ? "app-steering-wheel" : "app-communication",
+        icon: chat.customAgentId
+          ? "app-custom-agents"
+          : chat.kind === "relay"
+            ? "app-steering-wheel"
+            : "app-communication",
         target: { kind: "conversation", id },
       });
   }

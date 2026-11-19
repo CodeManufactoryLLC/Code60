@@ -77,6 +77,11 @@ contextBridge.exposeInMainWorld("desktop", {
   windowAppearance: () => ipcRenderer.invoke("desktop:window-appearance"),
   controlWindow: (action: unknown) => ipcRenderer.invoke("desktop:window-control", action),
   setSidebarBackdrop: (request: unknown) => ipcRenderer.invoke("desktop:sidebar-backdrop", request),
+  onSidebarBackdropError: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("desktop:sidebar-backdrop-error", handler);
+    return () => ipcRenderer.removeListener("desktop:sidebar-backdrop-error", handler);
+  },
   setTransparent: (enabled: unknown) => ipcRenderer.invoke("desktop:transparent", enabled),
   setBackgroundHitTest: (ignore: unknown) =>
     ipcRenderer.invoke("desktop:background-hit-test", ignore),

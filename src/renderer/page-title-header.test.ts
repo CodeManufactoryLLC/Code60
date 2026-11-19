@@ -39,7 +39,6 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("tracks the right panel divider, restores stacked/closed width and releases queued resize work", () => {
   let resized = () => {};
-  let mediaChanged = () => {};
   const disconnect = vi.fn();
   const observe = vi.fn();
   vi.stubGlobal(
@@ -52,14 +51,6 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
       disconnect = disconnect;
     },
   );
-  const stacked = {
-    matches: false,
-    addEventListener: vi.fn((_event: string, callback: () => void) => {
-      mediaChanged = callback;
-    }),
-    removeEventListener: vi.fn(),
-  };
-  vi.stubGlobal("window", { matchMedia: () => stacked });
   let conversationRight = 800;
   let headerPresent = true;
   const values = new Map<string, string>();
@@ -100,14 +91,12 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   conversationRight = 650;
   resized();
   expect(values.get("--breadcrumb-right-inset")).toBe("350px");
-  stacked.matches = true;
   conversationRight = 984; // The stacked transcript retains its vertical scrollbar gutter.
-  mediaChanged();
-  expect(values.get("--right-panel-rise")).toBe("0px");
+  resized();
+  expect(values.get("--right-panel-rise")).toBe("150px");
   expect(values.get("--breadcrumb-right-inset")).toBe("16px");
-  stacked.matches = false;
   conversationRight = 650;
-  mediaChanged();
+  resized();
   expect(values.get("--breadcrumb-right-inset")).toBe("350px");
   conversationRight = 1000;
   resized();
@@ -118,7 +107,6 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   expect(values.get("--breadcrumb-right-inset")).toBe("0px");
   stop();
   expect(disconnect).toHaveBeenCalledOnce();
-  expect(stacked.removeEventListener).toHaveBeenCalledWith("change", mediaChanged);
   headerPresent = true;
   resized();
   expect(values.has("--breadcrumb-right-inset")).toBe(false);

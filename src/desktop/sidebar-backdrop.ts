@@ -1,18 +1,18 @@
 import type { EventEmitter } from "node:events";
 import { BaseWindow, type BrowserWindow } from "electron";
-import type { SidebarBackdropRequest } from "../bridge/index.js";
+import { inactiveSidebarBackdrop, type SidebarBackdropRequest } from "../bridge/index.js";
 
 /** A native, mouse-transparent backdrop behind the owned foreground window only. */
 export class SidebarBackdrop {
   private backdrop: BaseWindow | undefined;
-  private request: SidebarBackdropRequest = { width: 0, strength: 0, visible: false };
+  private request: SidebarBackdropRequest = inactiveSidebarBackdrop;
+  private ownerHidden = false;
+  private backdropShown = false;
   private disposed = false;
   private syncing = false;
   private readonly events = [
     "move",
     "resize",
-    "show",
-    "hide",
     "minimize",
     "restore",
     "focus",
@@ -20,8 +20,13 @@ export class SidebarBackdrop {
     "leave-full-screen",
   ] as const;
 
-  constructor(private readonly owner: BrowserWindow) {
-    for (const event of this.events) (owner as EventEmitter).on(event, this.sync);
+  constructor(
+    private readonly owner: BrowserWindow,
+    private readonly onFailure: () => void,
+  ) {
+    for (const event of this.events) (owner as EventEmitter).on(event, this.syncEvent);
+    owner.on("show", this.show);
+    owner.on("hide", this.hide);
     owner.on("closed", this.dispose);
     owner.webContents.on("did-start-navigation", this.reset);
     owner.webContents.on("render-process-gone", this.reset);
@@ -34,24 +39,42 @@ export class SidebarBackdrop {
   }
 
   private readonly reset = () => {
-    this.request = { width: 0, strength: 0, visible: false };
-    this.backdrop?.hide();
+    this.request = inactiveSidebarBackdrop;
+    this.syncEvent();
+  };
+
+  private readonly show = () => {
+    this.ownerHidden = false;
+    this.syncEvent();
+  };
+
+  private readonly hide = () => {
+    this.ownerHidden = true;
+    this.syncEvent();
+  };
+
+  private readonly syncEvent = () => {
+    if (this.sync() === false) this.onFailure();
   };
 
   private readonly sync = () => {
     if (this.disposed || this.syncing || this.owner.isDestroyed()) return;
     const { width, strength, visible } = this.request;
-    if (!visible || !strength || !width || !this.owner.isVisible() || this.owner.isMinimized()) {
-      this.backdrop?.hide();
-      return;
-    }
     try {
       this.syncing = true;
+      // Electron 45's macOS isVisible() reverses the occlusion predicate. Owner
+      // events plus the renderer visibility report own this decorative window.
+      if (!visible || !strength || !width || this.ownerHidden || this.owner.isMinimized()) {
+        this.backdrop?.hide();
+        this.backdropShown = false;
+        return;
+      }
       const bounds = this.owner.getContentBounds();
       const zoom = this.owner.webContents.getZoomFactor();
       const pixels = Math.max(0, Math.min(bounds.width, Math.round(width * zoom)));
       if (!pixels) {
         this.backdrop?.hide();
+        this.backdropShown = false;
         return;
       }
       if (!this.backdrop || this.backdrop.isDestroyed()) {
@@ -63,6 +86,7 @@ export class SidebarBackdrop {
           hasShadow: false,
           focusable: false,
           skipTaskbar: true,
+          hiddenInMissionControl: true,
           resizable: false,
           minimizable: false,
           maximizable: false,
@@ -75,7 +99,10 @@ export class SidebarBackdrop {
       }
       this.backdrop.setBounds({ ...bounds, width: pixels });
       this.backdrop.setOpacity(strength / 100);
-      if (!this.backdrop.isVisible()) this.backdrop.showInactive();
+      if (!this.backdropShown) {
+        this.backdrop.showInactive();
+        this.backdropShown = true;
+      }
       this.owner.moveAbove(this.backdrop.getMediaSourceId());
     } catch {
       this.closeBackdrop();
@@ -88,13 +115,17 @@ export class SidebarBackdrop {
   private closeBackdrop() {
     const backdrop = this.backdrop;
     this.backdrop = undefined;
+    this.backdropShown = false;
     if (backdrop && !backdrop.isDestroyed()) backdrop.close();
   }
 
   readonly dispose = () => {
     if (this.disposed) return;
     this.disposed = true;
-    for (const event of this.events) (this.owner as EventEmitter).removeListener(event, this.sync);
+    for (const event of this.events)
+      (this.owner as EventEmitter).removeListener(event, this.syncEvent);
+    this.owner.removeListener("show", this.show);
+    this.owner.removeListener("hide", this.hide);
     this.owner.removeListener("closed", this.dispose);
     this.owner.webContents.removeListener("did-start-navigation", this.reset);
     this.owner.webContents.removeListener("render-process-gone", this.reset);

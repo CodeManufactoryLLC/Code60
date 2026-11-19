@@ -50,7 +50,7 @@ export function CustomAgentsPage({
   return (
     <section className="custom-agents-page">
       <header className="table-controls">
-        <PageTitle page="custom-agents">Custom Assistants</PageTitle>
+        <PageTitle page="custom-agents" />
         <button type="button" aria-pressed={archived} onClick={() => setArchived((v) => !v)}>
           {archived ? "Active assistants" : "Archived"}
         </button>
@@ -64,7 +64,7 @@ export function CustomAgentsPage({
         cards={visible.map((a) => ({
           ...a,
           label: a.name,
-          icon: "app-helmet" as const,
+          icon: "app-custom-agents" as const,
           available: true,
         }))}
         create={!archived ? { label: "New Assistant", onClick: () => setEditor("new") } : undefined}
