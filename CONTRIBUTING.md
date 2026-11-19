@@ -63,6 +63,8 @@ Node 24 exposes SQLite without the flag. Coverage floors remain the same.
 Memory tests additionally probe FTS5 in a private in-memory database; Node 22.12
 does not bundle FTS5, so those suites run on Node 24 and Electron instead.
 Project-database and controller coverage still runs on both CI versions.
+Disposable x64 CI desktop runners use Ubuntu's primary package mirror and
+bounded download timeouts to avoid stalled regional graphics-package downloads.
 
 ```sh
 npm ci

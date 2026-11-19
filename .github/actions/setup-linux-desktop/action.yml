@@ -5,8 +5,14 @@ runs:
   steps:
     - shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb openbox libnss3 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1 libasound2t64 libfuse2t64 libxss1 libx11-xcb1
+        # Regional package mirrors have stalled graphics downloads on hosted runners.
+        # Keep normal signed Ubuntu metadata and use its primary mirror on x64 images.
+        if [[ "$(dpkg --print-architecture)" == amd64 && -f /etc/apt/apt-mirrors.txt ]]; then
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+        fi
+        apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+        sudo apt-get "${apt_options[@]}" update
+        sudo apt-get "${apt_options[@]}" install -y xvfb openbox libnss3 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1 libasound2t64 libfuse2t64 libxss1 libx11-xcb1
         # Ubuntu 24.04 restricts user namespaces for unpacked Chromium binaries.
         # Enable their sandbox on this disposable runner; never pass --no-sandbox.
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
