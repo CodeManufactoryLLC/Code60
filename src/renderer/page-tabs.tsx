@@ -918,7 +918,9 @@ function PageTabList({
                       disabled={chatPending}
                       onClick={() => void navigation.open({ kind: "custom-agent", id: agent.id })}
                     >
-                      <NavigationIcon name="app-custom-agents" />
+                      <span className="chat-sidebar-artwork" aria-hidden="true">
+                        <NavigationIcon name="app-custom-agents" />
+                      </span>
                       <span className="chat-sidebar-label">{agent.name}</span>
                     </button>
                   </div>

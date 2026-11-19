@@ -267,7 +267,10 @@ it("keeps an unidentified failed custom assistant reachable through its definiti
     (element) => element.type === "button" && element.props.className === "chat-sidebar-entry",
   );
   expect(
-    find(entry.props.children as ReactNode, (element) => element.type === "span").props.children,
+    find(
+      entry.props.children as ReactNode,
+      (element) => element.props.className === "chat-sidebar-label",
+    ).props.children,
   ).toBe("Recovery Agent");
   expect(entry.props.disabled).toBe(false);
   expect(entry.props.onClick).toBeTypeOf("function");
