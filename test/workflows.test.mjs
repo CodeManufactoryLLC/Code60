@@ -61,6 +61,15 @@ describe("branch protection policy", () => {
 });
 
 describe("CI and release gates", () => {
+  it("enables SQLite for Node 22.12 so database tests participate in coverage", () => {
+    expect(ci.jobs.check.strategy.matrix.node).toContain("22.12");
+    expect(ci.jobs.check.env.NODE_OPTIONS).toBe(
+      "${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}",
+    );
+    expect(ci.jobs.check.steps.some((step) => step.run === "npm run check")).toBe(true);
+    expect(ci.jobs.passed.needs).toContain("check");
+  });
+
   it("passes only declared inputs to every reusable native test call", () => {
     const inputs = nativeTests.on.workflow_call.inputs;
     for (const workflow of [native, release]) {

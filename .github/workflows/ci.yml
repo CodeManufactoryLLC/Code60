@@ -20,6 +20,9 @@ jobs:
         node:
           - "22.12"
           - "24"
+    env:
+      # Node 22.12 gates SQLite behind this flag; run database tests instead of skipping them.
+      NODE_OPTIONS: ${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:

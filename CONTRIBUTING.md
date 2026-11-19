@@ -57,6 +57,10 @@ support requires updating the architecture and adding validation.
 
 Use macOS or Linux with Node.js 22.12 or later and npm.
 
+Node.js 22.12 needs `NODE_OPTIONS=--experimental-sqlite` when running checks so
+database tests participate in coverage. CI enables this for its Node 22.12 job;
+Node 24 exposes SQLite without the flag. Coverage floors remain the same.
+
 ```sh
 npm ci
 npm run check
