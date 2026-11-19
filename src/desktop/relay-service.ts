@@ -160,10 +160,12 @@ export class RelayService {
     private readonly memory?: MemoryService,
     private readonly identity?: { id: string; name: string; instructions: string; root: string },
     private readonly modelDefaults?: ModelDefaults,
+    private readonly orchestrationAutoApproval: () => boolean = () => true,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
     this.execution = new ExecutionHost(memory?.attach(deps, "worker") ?? deps, env, {
+      orchestrationAutoApproval,
       authorize: (owner) => this.authorize(owner),
       authorizeTarget: (owner, request, target) => {
         this.plans?.validate(owner, request, target);
@@ -719,6 +721,7 @@ export class RelayService {
           prompts: DEFAULT_PROMPT_TEMPLATES,
         },
         {
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults?.selections(provider, "orchestrator") ?? [],
           mcpServers: [
             {
@@ -953,6 +956,11 @@ export class RelayService {
         request.id !== run.id
       )
         throw new Error("This session is no longer current");
+      if (request.type === "permission") {
+        if (request.id !== run.id || !chat.answerPermission(request.permissionId, request.answer))
+          throw new Error("This approval request is no longer pending");
+        return;
+      }
       if (request.type === "set-mode") return chat.setMode(run.id, request.change);
       if (request.type === "save-model-default") {
         if (!this.modelDefaults) throw new Error("Model defaults are unavailable");

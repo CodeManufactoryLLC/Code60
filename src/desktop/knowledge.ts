@@ -213,7 +213,11 @@ export class DesktopKnowledge {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.id === "custom-agents") {
+    if (cap.id === "orchestration-permissions") {
+      reason =
+        "The application-wide switch is available independently of database and provider setup.";
+      action = "Open Providers → Permissions.";
+    } else if (cap.id === "custom-agents") {
       reason =
         "Assistant management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";
       action =

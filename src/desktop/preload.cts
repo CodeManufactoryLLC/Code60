@@ -128,6 +128,8 @@ contextBridge.exposeInMainWorld("desktop", {
   setPollSettings: (settings: unknown) => ipcRenderer.invoke("desktop:poll-settings", settings),
   setPollingPaused: (paused: unknown) => ipcRenderer.invoke("desktop:poll-paused", paused),
   setVisibility: (visibility: unknown) => ipcRenderer.invoke("desktop:visibility", visibility),
+  setOrchestrationAutoApproval: (enabled: unknown) =>
+    ipcRenderer.invoke("desktop:orchestration-auto-approval", enabled),
   setOrchestrationProvider: (provider: unknown) =>
     ipcRenderer.invoke("desktop:orchestration-provider", provider),
   testOrchestrationProvider: () => ipcRenderer.invoke("desktop:orchestration-test"),

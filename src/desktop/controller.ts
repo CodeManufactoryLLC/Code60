@@ -462,6 +462,7 @@ export class DesktopController {
     connection: "idle",
     error: null,
   };
+  private readonly orchestrationAutoApproval = () => this.orchestration.allowAll;
   private get memoryExtraction():
     | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
     | undefined {
@@ -1911,6 +1912,7 @@ export class DesktopController {
           dialogs,
           this.memory,
           this.modelDefaults,
+          this.orchestrationAutoApproval,
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -2222,8 +2224,8 @@ export class DesktopController {
           await this.cancelSearchSummary();
           this.chatKey = "";
           this.orchestration = {
+            ...this.orchestration,
             provider: record.primary,
-            allowAll: true,
             connection: "idle",
             error: null,
           };
@@ -2269,12 +2271,22 @@ export class DesktopController {
         this.chatKey = "";
       }
       this.orchestration = {
+        ...this.orchestration,
         provider: record.primary,
-        allowAll: true,
         connection: "idle",
         error: null,
       };
       await this.syncOrchestrationChat();
+      this.changed();
+    });
+  }
+
+  setOrchestrationAutoApproval(enabled: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      if (!this.storage.preferences.setOrchestrationAutoApproval)
+        throw new Error("Orchestration settings cannot be saved");
+      await this.storage.preferences.setOrchestrationAutoApproval(enabled);
+      this.orchestration = { ...this.orchestration, allowAll: enabled };
       this.changed();
     });
   }
@@ -2293,7 +2305,7 @@ export class DesktopController {
       if (!this.storage.preferences.setOrchestrationProvider)
         throw new Error("Orchestration settings cannot be saved");
       await this.storage.preferences.setOrchestrationProvider(provider);
-      this.orchestration = { provider, allowAll: true, connection: "idle", error: null };
+      this.orchestration = { ...this.orchestration, provider, connection: "idle", error: null };
       await this.syncOrchestrationChat();
       this.changed();
     });
@@ -3129,6 +3141,7 @@ export class DesktopController {
         config,
         {
           mcpServers,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(
@@ -3296,6 +3309,7 @@ export class DesktopController {
         this.config,
         {
           recovery: record,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
@@ -3525,6 +3539,11 @@ export class DesktopController {
       const run = session?.run;
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
+      if (request.type === "permission") {
+        if (!session.chat?.answerPermission(request.permissionId, request.answer))
+          throw new Error("This approval request is no longer pending");
+        return;
+      }
       if (request.type === "undo-request") return this.undoChatRequest(session, request);
       if (request.type === "set-tactic") {
         if (
@@ -4494,10 +4513,19 @@ export class DesktopController {
         );
       }
       try {
+        this.orchestration.allowAll =
+          (await this.storage.preferences.orchestrationAutoApproval?.()) ?? true;
+      } catch {
+        this.orchestration.allowAll = false;
+        this.warnings.push(
+          "Could not read Code60 auto-approval. Permission requests will require review.",
+        );
+      }
+      try {
         this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
           provider: this.agentSetup.record?.primary ?? null,
-          allowAll: true,
+          allowAll: this.orchestration.allowAll,
           connection: "idle",
           error: null,
         };
@@ -5414,10 +5442,10 @@ export class DesktopController {
     });
   }
 
-  /** `register` sees the new run IDs before any of them starts. */
+  /** `registerWorkers` sees the new run IDs before any of them starts. */
   private async startBatch(
     request: StartRequest,
-    register?: (ids: string[], workspace: Workspace) => void,
+    registerWorkers?: (ids: string[], workspace: Workspace) => void,
   ): Promise<string[]> {
     const launchEpoch = this.projectState.launchEpoch;
     await this.requireGitRun();
@@ -5445,6 +5473,7 @@ export class DesktopController {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
         initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
       enabledConfig,
@@ -5469,7 +5498,7 @@ export class DesktopController {
 
     this.history = history;
     this.activateBatch(orchestrator, workspace);
-    register?.(
+    registerWorkers?.(
       orchestrator.runs().map((run) => run.id),
       workspace,
     );
@@ -5725,9 +5754,11 @@ export class DesktopController {
     });
   }
 
-  /** Orchestrated workers keep their fixed allow-all policy through restore and handoff. */
+  /** Orchestrated workers keep their live orchestration approval policy through restore and handoff. */
   private workerOverrides(id: string) {
-    return this.conversations.workers.has(id) ? { allow: [], allowAll: true } : undefined;
+    return this.conversations.workers.has(id)
+      ? { orchestrationAutoApproval: this.orchestrationAutoApproval }
+      : undefined;
   }
 
   private liveBatch(id: string): Orchestrator | undefined {
@@ -6029,7 +6060,7 @@ export class DesktopController {
           {
             agents: [provider],
             allow: [],
-            allowAll: true,
+            allowAll: this.orchestration.allowAll,
             prompt: request.prompt,
             ...(base === undefined ? {} : { base }),
             ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),

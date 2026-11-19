@@ -109,6 +109,7 @@ export async function prepareOrchestrationChat(
   config: Config,
   options: {
     mcpServers?: readonly AgentMcpServer[];
+    orchestrationAutoApproval?: () => boolean;
     promptContext?: () => string;
     recovery?: RunRecord;
     /** Saved session-option defaults applied to each newly created session. */
@@ -131,7 +132,7 @@ export async function prepareOrchestrationChat(
       turnTimeoutMs: parseDuration(config.turnTimeout),
       maxParallel: 1,
       policy: config.permissions,
-      overrides: { allow: [], allowAll: true },
+      overrides: { orchestrationAutoApproval: options.orchestrationAutoApproval ?? (() => true) },
       prompts: config.prompts,
       mcpServers: [...configuredMcpServers(config), ...(options.mcpServers ?? [])],
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
@@ -242,6 +243,7 @@ export interface RunRequest {
   parallel?: string;
   allow?: readonly string[];
   allowAll?: boolean;
+  orchestrationAutoApproval?: () => boolean;
   /** Internal desktop marker for Relay-owned workers. */
   owner?: "relay";
   /** Internal desktop-only saved session-option defaults per provider. */
@@ -370,7 +372,9 @@ export async function prepareRuns(
       turnTimeoutMs,
       maxParallel,
       policy: config.permissions,
-      overrides: { allow, allowAll: request.allowAll === true },
+      overrides: request.orchestrationAutoApproval
+        ? { orchestrationAutoApproval: request.orchestrationAutoApproval }
+        : { allow, allowAll: request.allowAll === true },
       prompts: config.prompts,
       ...(mcpServers.length ? { mcpServers } : {}),
       ...(request.owner === undefined ? {} : { owner: request.owner }),
@@ -401,7 +405,7 @@ export async function prepareRecovery(
   env: Env,
   /** Template overrides applied over the config file's templates, such as desktop edits. */
   prompts: Partial<PromptTemplates> = {},
-  /** Permission overrides, such as the fixed allow-all policy of orchestrated workers. */
+  /** Permission overrides, such as the live approval policy of orchestrated workers. */
   overrides?: PolicyOverrides,
   configuration?: Config,
   /** Desktop-only saved session-option defaults for a fresh handoff session. */

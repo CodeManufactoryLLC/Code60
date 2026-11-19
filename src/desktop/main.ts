@@ -626,6 +626,9 @@ async function ready(): Promise<void> {
   handle("desktop:setup-abandon", (value) =>
     controller.abandonAgentSetup(parseSetupSession(value)),
   );
+  handle("desktop:orchestration-auto-approval", (value) =>
+    controller.setOrchestrationAutoApproval(parseBoolean(value)),
+  );
   handle("desktop:orchestration-provider", (value) =>
     controller.setOrchestrationProvider(parseOrchestrationProvider(value)),
   );

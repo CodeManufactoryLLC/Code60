@@ -350,7 +350,7 @@ export interface Snapshot {
   files: FileSnapshot | null;
   polling: Polling;
   prompts: PromptTemplateState[];
-  /** Runs dispatched by the orchestration chat this launch; they always allow all actions once. */
+  /** Runs dispatched by the orchestration chat this launch. */
   workers: string[];
 }
 
@@ -501,6 +501,7 @@ export interface DesktopApi {
   setPollSettings(settings: PollSettingsPatch): Promise<void>;
   setPollingPaused(paused: boolean): Promise<void>;
   setVisibility(visibility: PollVisibility): Promise<void>;
+  setOrchestrationAutoApproval(enabled: boolean): Promise<void>;
   setOrchestrationProvider(provider: string | null): Promise<void>;
   testOrchestrationProvider(): Promise<void>;
   cancelOrchestrationTest(): Promise<void>;
@@ -555,7 +556,7 @@ export interface UpdateState {
 
 export interface OrchestrationProvider {
   provider: string | null;
-  allowAll: true;
+  allowAll: boolean;
   connection: "idle" | "testing" | "connected" | "failed";
   error: string | null;
 }
@@ -615,6 +616,10 @@ const objectError = (issue: { code: string }) =>
   issue.code === "unrecognized_keys" ? "Unknown field" : "Expected an object";
 const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
+const permissionIdSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,63}#\d+$/, "Invalid permission ID")
+  .max(80, "Invalid run ID");
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("undo-request"),
@@ -635,6 +640,12 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("continue-task"), id: runIdSchema, taskId: z.string().uuid() }),
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
+  z.strictObject({
+    type: z.literal("permission"),
+    id: runIdSchema,
+    permissionId: permissionIdSchema,
+    answer: z.enum(["allow", "deny"]),
+  }),
   z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
   z.strictObject({ type: z.literal("new"), projectId: z.string().uuid().optional() }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
@@ -823,10 +834,7 @@ const actionSchema = z.discriminatedUnion(
     z.strictObject(
       {
         type: z.literal("permission"),
-        id: z
-          .string()
-          .regex(/^[a-z0-9][a-z0-9-]{0,63}#\d+$/, "Invalid permission ID")
-          .max(80, "Invalid run ID"),
+        id: permissionIdSchema,
         answer: z.enum(["allow", "deny"], { error: "Invalid answer" }),
       },
       { error: objectError },

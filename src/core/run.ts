@@ -122,6 +122,9 @@ function message(error: unknown): string {
   return diagnosticMessage(error);
 }
 
+// A restored run keeps its run ID. Keep pending request IDs unique across its live instances.
+let permissionSequence = 0;
+
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
 export class Run {
   private readonly memory: RunMemory | undefined;
@@ -143,8 +146,8 @@ export class Run {
   private graceTimer: unknown;
   private cancelCause: CancelCause | undefined;
   private lastOutcome: Outcome | undefined;
+  private waitingFromIdle = false;
   private readonly pending = new Map<string, Pending>();
-  private permissionCount = 0;
   private shutdownRequested = false;
   private forced = false;
   private ending = false;
@@ -501,7 +504,7 @@ export class Run {
     if (entry === undefined) return false;
     this.pending.delete(id);
     this.emitPermission(entry.view, answer, "user");
-    if (this.pending.size === 0 && this.status === "waiting") void this.setStatus("running");
+    this.permissionSettled();
     entry.resolve(answer);
     return true;
   }
@@ -526,7 +529,9 @@ export class Run {
         break;
       case "running":
       case "waiting":
-        if (!this.cancelTurn("shutdown")) this.startAbort.abort();
+        if (this.status === "waiting" && this.waitingFromIdle)
+          void this.end(this.lastOutcome ?? { status: "finished" });
+        else if (!this.cancelTurn("shutdown")) this.startAbort.abort();
         break;
       default:
         break;
@@ -730,7 +735,10 @@ export class Run {
     void session.exited.then(() => {
       if (this.session !== session) return;
       this.sessionExited = true;
-      if (this.status === "idle" && !this.ending) {
+      if (
+        (this.status === "idle" || (this.status === "waiting" && this.waitingFromIdle)) &&
+        !this.ending
+      ) {
         void this.end({ status: "failed", reason: "the agent exited while idle" });
       }
     });
@@ -1014,23 +1022,27 @@ export class Run {
     if (signal.aborted || this.cancelCause !== undefined || this.ending) {
       return Promise.resolve("deny");
     }
-    this.permissionCount += 1;
-    const id = `${this.id}#${this.permissionCount}`;
+    const id = `${this.id}#${++permissionSequence}`;
     return new Promise((resolve) => {
+      if (!this.pending.size) this.waitingFromIdle = this.status === "idle";
       this.pending.set(id, { view: { id, runId: this.id, ...request }, resolve });
       signal.addEventListener(
         "abort",
         () => {
           if (!this.pending.delete(id)) return;
           resolve("deny");
-          if (this.pending.size === 0 && this.status === "waiting" && !this.ending) {
-            void this.setStatus("running");
-          }
+          this.permissionSettled();
         },
         { once: true },
       );
       void this.setStatus("waiting");
     });
+  }
+
+  private permissionSettled(): void {
+    if (!this.pending.size && this.status === "waiting" && !this.ending)
+      void this.setStatus(this.waitingFromIdle ? "idle" : "running");
+    else this.deps.onChange();
   }
 
   private withdrawPending(): void {

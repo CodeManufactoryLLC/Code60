@@ -166,6 +166,7 @@ export function ChatWorkspace({
             }
             api={api}
             notice={chat?.kind === "relay" ? null : projectNotice}
+            autoApproval={snapshot?.orchestration.allowAll ?? true}
             chat={
               chat ? { ...chat, title: conversationTitle(snapshot?.chats ?? [], chat) } : undefined
             }
@@ -228,6 +229,7 @@ export function ChatWorkspace({
               api={api}
               run={run}
               label={workerLabel(snapshot?.chats ?? [], run)}
+              autoApproval={snapshot?.orchestration.allowAll ?? true}
               orchestrated={snapshot?.workers.includes(id) ?? false}
               events={
                 current && (snapshot?.liveIds.includes(id) || workerId === id)

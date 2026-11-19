@@ -579,10 +579,18 @@ describe("permissions", () => {
     expect(status("r2")).toBe("idle");
     const pending = orch.runs()[0]?.pending ?? [];
     expect(pending).toEqual([
-      { id: "r1#1", runId: "r1", toolCallId: "x", title: "rm -rf build", kind: "execute" },
+      {
+        id: expect.stringMatching(/^r1#\d+$/),
+        runId: "r1",
+        toolCallId: "x",
+        title: "rm -rf build",
+        kind: "execute",
+      },
     ]);
-    expect(orch.answerPermission("r1#1", "allow")).toBe(true);
-    expect(orch.answerPermission("r1#1", "allow")).toBe(false);
+    const request = pending[0];
+    if (!request) throw new Error("Missing pending request");
+    expect(orch.answerPermission(request.id, "allow")).toBe(true);
+    expect(orch.answerPermission(request.id, "allow")).toBe(false);
     await flush();
     expect(answers).toEqual(["allow"]);
     expect(status("r1")).toBe("idle");
@@ -591,6 +599,50 @@ describe("permissions", () => {
     ]);
     expect(store.statuses("r1")).toContain("waiting");
     await orch.shutdown();
+  });
+
+  it("returns to idle after an out-of-turn permission and withdraws it on shutdown", async () => {
+    const { orch, agents } = await setup({ mode: "interactive", prompt: "" });
+    orch.start();
+    await flush();
+    const agent = agents.sessions[0];
+    if (!agent) throw new Error("Missing session");
+    const request = { toolCallId: "inspect", kind: "execute" as const, title: "Inspect" };
+    const decision = agent.requestPermission(request);
+    const pending = orch.runs()[0]?.pending[0];
+    if (!pending) throw new Error("Missing request");
+    expect(orch.answerPermission(pending.id, "allow")).toBe(true);
+    expect(await decision).toBe("allow");
+    expect(orch.runs()[0]?.status).toBe("idle");
+    const next = agent.requestPermission(request);
+    await orch.shutdown();
+    expect(await next).toBe("deny");
+  });
+
+  it("rejects a delayed permission answer when a replacement run reuses the same run ID", async () => {
+    const options = { mode: "interactive" as const, script: () => "hang" as const };
+    let previous: string | undefined;
+    for (const answer of ["deny", "allow"] as const) {
+      const { orch, agents } = await setup(options);
+      orch.start();
+      await flush();
+      const session = agents.sessions[0];
+      if (!session) throw new Error("Missing session");
+      const decision = session.requestPermission({
+        toolCallId: "tool",
+        title: "Run command",
+        kind: "execute",
+      });
+      const request = orch.runs()[0]?.pending[0];
+      if (!request) throw new Error("Missing request");
+      if (previous) expect(orch.answerPermission(previous, "allow")).toBe(false);
+      expect(orch.answerPermission(request.id, answer)).toBe(true);
+      expect(await decision).toBe(answer);
+      previous = request.id;
+      session.endTurn("end_turn");
+      await flush();
+      await orch.shutdown();
+    }
   });
 
   it("cancelling a waiting turn withdraws its permission request", async () => {

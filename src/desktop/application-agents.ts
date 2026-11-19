@@ -40,8 +40,18 @@ export class ApplicationAgents {
     private readonly dialogs: NonNullable<Args[3]>,
     private readonly memory: Args[4],
     private readonly modelDefaults?: ModelDefaults,
+    private readonly orchestrationAutoApproval: () => boolean = () => true,
   ) {
-    this.relay = new RelayService(deps, env, notify, dialogs, memory, undefined, modelDefaults);
+    this.relay = new RelayService(
+      deps,
+      env,
+      notify,
+      dialogs,
+      memory,
+      undefined,
+      modelDefaults,
+      orchestrationAutoApproval,
+    );
     this.selected = this.relay;
   }
   owner(id: string | null): RelayService | undefined {
@@ -187,6 +197,7 @@ export class ApplicationAgents {
               root: join(store.root, definition.id),
             },
             this.modelDefaults,
+            this.orchestrationAutoApproval,
           );
           if (this.knowledge) runtime.attachKnowledge(this.knowledge);
           this.agents.set(request.id, runtime);

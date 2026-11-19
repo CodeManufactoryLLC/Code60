@@ -1722,3 +1722,95 @@ test("workflow: custom assistants without a database, instruction edits, archive
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });
+
+test("workflow: review live Relay and worker permissions with auto-approval off", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-permissions-")));
+  const config = join(directory, "config/code60");
+  const target = join(directory, "worker-target");
+  await mkdir(config, { recursive: true });
+  await mkdir(target);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--relay"],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  try {
+    application = await launchDesktop(directory, target, join(directory, "unused.sqlite"));
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup" }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const providers = page.locator("#tab-providers");
+    await providers.click();
+    const toggle = page.getByRole("switch", { name: "Code60 auto-approval", exact: true });
+    await expect(toggle).toBeChecked();
+    await toggle.uncheck();
+    await expect
+      .poll(
+        async () =>
+          JSON.parse(await readFile(join(directory, "state/code60/desktop.json"), "utf8"))
+            .orchestrationAutoApproval,
+      )
+      .toBe(false);
+    const relay = page.getByRole("button", { name: "Relay", exact: true });
+    await relay.click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const send = async (text: string) => {
+      const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+      await composer.fill(text);
+      await chat.getByRole("button", { name: "Send", exact: true }).click();
+    };
+    const permission = (id: string) => ({ permission: { id, title: id, kind: "read" } });
+    await send(JSON.stringify([permission("relay-read")]));
+    const review = chat.getByRole("region", { name: "Pending approvals" });
+    await expect(review).toContainText("relay-read");
+    await review.getByRole("button", { name: "Deny" }).click();
+    await expect(chat.locator(".event.message").last()).toContainText("opt-reject_once");
+    await send(
+      `Relay target: ${JSON.stringify({
+        cwd: target,
+        workspaceMode: "direct",
+        label: "Approval worker",
+        prompt: JSON.stringify([
+          permission("worker-read"),
+          permission("next-read"),
+          { write: { path: "done.txt", content: "done" } },
+        ]),
+      })}`,
+    );
+    const workerTab = page.locator(".sidebar").getByRole("button", { name: /^Approval worker/ });
+    await workerTab.click();
+    const worker = page.locator(".worker-chat-page:visible");
+    await expect(worker.getByRole("region", { name: "Pending approvals" })).toContainText(
+      "worker-read",
+    );
+    await providers.click();
+    await toggle.check();
+    await expect
+      .poll(
+        async () =>
+          JSON.parse(await readFile(join(directory, "state/code60/desktop.json"), "utf8"))
+            .orchestrationAutoApproval,
+      )
+      .toBe(true);
+    await workerTab.click();
+    await expect(readFile(join(target, "done.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    await worker.getByRole("button", { name: "Allow once" }).click();
+    await expect
+      .poll(() => readFile(join(target, "done.txt"), "utf8").catch(() => ""))
+      .toBe("done");
+    await expect(worker).toContainText("permission next-read: opt-allow_once");
+  } finally {
+    await application?.close();
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});

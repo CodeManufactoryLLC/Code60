@@ -48,6 +48,29 @@ async function fixture(relay = false) {
   const attempt = (provider: string) => controller.attemptAgentSetup({ ...identity(), provider });
   return { dir, controller, agents, preferences, detect, openDatabase, create, identity, attempt };
 }
+it("persists orchestration approval independently of provider setup and enables review on read failure", async () => {
+  const { controller, create, dir, identity, attempt, preferences } = await fixture();
+  expect(controller.snapshot().orchestration.allowAll).toBe(true);
+  await controller.setOrchestrationAutoApproval(false);
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await controller.finishAgentSetup(identity());
+  expect(controller.snapshot().orchestration.allowAll).toBe(false);
+  const restarted = create();
+  await restarted.restore();
+  expect(restarted.snapshot().orchestration.allowAll).toBe(false);
+  vi.spyOn(preferences, "setOrchestrationAutoApproval").mockRejectedValueOnce(
+    new Error("read-only"),
+  );
+  await expect(restarted.setOrchestrationAutoApproval(true)).rejects.toThrow("read-only");
+  expect(restarted.snapshot().orchestration.allowAll).toBe(false);
+  await fs.writeFile(join(dir, "state", "desktop.json"), '{"orchestrationAutoApproval":"invalid"}');
+  await restarted.restore();
+  expect(restarted.snapshot().orchestration.allowAll).toBe(false);
+  expect(restarted.snapshot().warnings).toContainEqual(
+    expect.stringContaining("will require review"),
+  );
+});
 it("requires setup for legacy installations and cannot bypass the gate through old IPC", async () => {
   const { controller, preferences, openDatabase, agents } = await fixture();
   await preferences.setOrchestrationProvider("claude");
@@ -233,8 +256,9 @@ it("publishes management eligibility, saves membership changes and preserves it 
   };
   await preferences.setModelDefaults?.(defaults);
   const probeCount = agents.specs.length;
+  await controller.setOrchestrationAutoApproval(false);
   await controller.providerAction({ type: "set-primary", provider: "codex" });
-  expect(controller.snapshot().orchestration.provider).toBe("codex");
+  expect(controller.snapshot().orchestration).toMatchObject({ provider: "codex", allowAll: false });
   expect(controller.snapshot().agents).toEqual(["claude", "codex"]);
   expect(agents.specs).toHaveLength(probeCount);
   await controller.providerAction({ type: "disconnect", provider: "claude" });

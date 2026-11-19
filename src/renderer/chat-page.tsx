@@ -37,6 +37,7 @@ import { Card } from "./neobrutalism/card.js";
 import { ScrollArea } from "./neobrutalism/scroll-area.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
+import { PendingApprovals } from "./pending-approvals.js";
 import type { ReviewPreview } from "./review-actions.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
@@ -75,6 +76,7 @@ export function ChatPage({
   onReview,
   onRevisionPreview,
   onCopied,
+  autoApproval = true,
   notice,
   request,
   selectionPending = false,
@@ -94,6 +96,7 @@ export function ChatPage({
   onReview?(id: string): void;
   onRevisionPreview?(preview: ReviewPreview): void;
   onCopied?: (() => void) | undefined;
+  autoApproval?: boolean;
   notice?: ReactNode;
   request?: OpenChat | undefined;
 }) {
@@ -683,6 +686,15 @@ export function ChatPage({
             </div>
           </ScrollArea>
         </div>
+        {run && (
+          <PendingApprovals
+            requests={run.pending}
+            busy={busy}
+            onAnswer={(permissionId, answer) =>
+              void action({ type: "permission", id: run.id, permissionId, answer })
+            }
+          />
+        )}
         <Card as="section" className="composer" aria-label="Chat composer">
           {chat?.checkpoint?.phase === "undoing" && (
             <p role="alert">
@@ -748,7 +760,7 @@ export function ChatPage({
             ended={!!ended}
             editable={ready && !busy}
             changing={!!run?.modeChanging || pending === "set-mode"}
-            autoApproval
+            autoApproval={autoApproval}
             sessionRole="orchestrator"
             onSaveDefault={() => {
               if (run) void action({ type: "save-model-default", id: run.id });

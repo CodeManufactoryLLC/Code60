@@ -270,6 +270,10 @@
 .provider-sidebar-row > .icon-button {
   flex-shrink: 0;
 }
+.providers-page .home-content > .settings-card {
+  width: min(100%, 640px);
+  margin: 24px auto;
+}
 .provider-detail-content {
   padding: 24px var(--page-padding);
   overflow: auto;

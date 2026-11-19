@@ -840,7 +840,7 @@
   flex-shrink: 0;
 }
 
-.worker-chat-page .approvals {
+.orchestration-chat-body .approvals {
   padding-inline: 0;
 }
 
@@ -1311,7 +1311,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   display: contents;
 }
 
-.worker-chat-page .approvals {
+.orchestration-chat-body .approvals {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 45%;

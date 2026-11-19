@@ -12,6 +12,7 @@ import { Card } from "./neobrutalism/card.js";
 import { ScrollArea } from "./neobrutalism/scroll-area.js";
 import { Textarea } from "./neobrutalism/textarea.js";
 import { PageTitle } from "./page-title.js";
+import { PendingApprovals } from "./pending-approvals.js";
 import { continueBlocker } from "./recovery.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
@@ -34,6 +35,7 @@ export function WorkerChat({
   historyError,
   onRetry,
   onCopied,
+  autoApproval = true,
   notice,
 }: {
   api: DesktopApi;
@@ -50,6 +52,7 @@ export function WorkerChat({
   historyError: string | undefined;
   onRetry(): void;
   onCopied?: (() => void) | undefined;
+  autoApproval?: boolean;
   notice?: ReactNode;
 }) {
   const id = run.record.id;
@@ -185,10 +188,7 @@ export function WorkerChat({
           </span>
         </div>
         {orchestrated && (
-          <span
-            className="status-label chat-worker-label"
-            title="Dispatched by an orchestrator. Each tool call is allowed once without asking."
-          >
+          <span className="status-label chat-worker-label" title="Dispatched by an orchestrator.">
             Orchestrator worker
           </span>
         )}
@@ -312,38 +312,11 @@ export function WorkerChat({
             )}
           </div>
         </ScrollArea>
-        {runPending.length > 0 && (
-          <section className="approvals" aria-label="Pending approvals">
-            {runPending.map((permission) => (
-              <Card className="approval" key={permission.id}>
-                <div>
-                  <strong>Approval needed / {permission.kind}</strong>
-                  <pre>{permission.title}</pre>
-                </div>
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void act({ type: "permission", id: permission.id, answer: "deny" })
-                  }
-                >
-                  Deny
-                </Button>
-                <Button
-                  variant="primary"
-                  type="button"
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    void act({ type: "permission", id: permission.id, answer: "allow" })
-                  }
-                >
-                  Allow once
-                </Button>
-              </Card>
-            ))}
-          </section>
-        )}
+        <PendingApprovals
+          requests={runPending}
+          busy={busy}
+          onAnswer={(id, answer) => void act({ type: "permission", id, answer })}
+        />
         {inactive ? (
           <Card className="composer composer-inactive" role="status">
             <p>Agent is inactive. Its worktree was deleted.</p>
@@ -355,7 +328,7 @@ export function WorkerChat({
               active={active}
               editable={false}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated}
+              autoApproval={orchestrated && autoApproval}
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}
@@ -399,7 +372,7 @@ export function WorkerChat({
                 void act({ type: "save-model-default", id });
               }}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated}
+              autoApproval={orchestrated && autoApproval}
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}
