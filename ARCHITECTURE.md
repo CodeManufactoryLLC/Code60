@@ -1680,6 +1680,10 @@ Breadcrumb additions and removals use the existing motion duration. Stable item
 identities slide between their measured positions; incoming items fade in and
 outgoing items fade out as inert, aria-hidden, ID-free snapshots without duplicate
 headings. Only the destination trail is interactive and current immediately.
+Snapshot raster artwork into canvases instead of cloning image elements: detached
+file-image clones can initiate requests blocked by the renderer's unchanged CSP.
+Live artwork playback remains unchanged. This presentation fix adds no capability
+and needs no self-knowledge catalog change.
 Publish React portal ownership in the layout phase and initialize breadcrumb
 motion during mutation delivery, before paint. Do not defer setup to the next
 animation frame and flash the new trail at its final opacity or height before

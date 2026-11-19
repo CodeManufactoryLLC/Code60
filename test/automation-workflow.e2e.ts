@@ -133,6 +133,20 @@ test("workflow: desktop automation survives app quit, retains history and cancel
             .length,
       )
       .toBe(1);
+    // "running" is published before checkout preparation and provider launch finish.
+    // Exercise cancellation of a real process, not cancellation before it exists.
+    await expect
+      .poll(async () => {
+        const execution = (await saved()).executions.find(
+          (entry: { status: string }) => entry.status === "running",
+        );
+        if (!execution?.runId) return 0;
+        const record = JSON.parse(
+          await readFile(join(repo, ".git/code60/runs", execution.runId, "run.json"), "utf8"),
+        );
+        return record.agentPid ?? 0;
+      })
+      .toBeGreaterThan(0);
     await page.locator("#panel-automations .automation-more-actions > summary").click();
     await page.getByRole("button", { name: "Cancel active run", exact: true }).click();
     await expect

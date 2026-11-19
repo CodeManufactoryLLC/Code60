@@ -9,6 +9,25 @@ interface Item {
   entering?: boolean;
 }
 
+/** Copy painted artwork without creating detached image loads under the file CSP. */
+function copyBreadcrumb(node: Node): Node {
+  if (node instanceof HTMLImageElement) {
+    const copy = document.createElement("canvas");
+    copy.className = node.className;
+    for (const attribute of node.attributes) {
+      if (attribute.name.startsWith("data-") || attribute.name.startsWith("aria-"))
+        copy.setAttribute(attribute.name, attribute.value);
+    }
+    copy.width = node.naturalWidth || node.width;
+    copy.height = node.naturalHeight || node.height;
+    if (node.complete && node.naturalWidth) copy.getContext("2d")?.drawImage(node, 0, 0);
+    return copy;
+  }
+  const copy = node.cloneNode(false);
+  for (const child of node.childNodes) copy.appendChild(copyBreadcrumb(child));
+  return copy;
+}
+
 /** Retain appearance across authority changes, without retaining any old controls. */
 export function matchBreadcrumbItems(
   previous: ReadonlyMap<string, { appearance: string }>,
@@ -64,7 +83,7 @@ export function observeBreadcrumbMotion(card: HTMLElement): () => void {
             node.getAttribute("aria-current"),
           ]),
           node,
-          copy: node.cloneNode(true) as HTMLElement,
+          copy: copyBreadcrumb(node) as HTMLElement,
           rect: node.getBoundingClientRect(),
           dx: 0,
           dy: 0,

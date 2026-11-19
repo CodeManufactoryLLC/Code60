@@ -756,7 +756,8 @@ so the self-knowledge catalog and generated capabilities do not change.
 Breadcrumb changes use stable item identities for short entrance/exit fades and position
 transitions in the shared header, including centered and wrapped trails. Only the new
 trail is semantic/interactive; exiting snapshots are inert, aria-hidden and ID-free,
-with no duplicate headings. Hand off portal ownership in React's layout phase and
+with no duplicate headings. Copy raster artwork into canvases rather than cloning
+image elements, preserving the strict file CSP and live icon playback. Hand off portal ownership in React's layout phase and
 initialize effects during mutation delivery before paint; never show the final trail
 for a frame before rewinding its opacity/height. Preserve geometry through portal
 handoffs and opacity through interrupted entrances.

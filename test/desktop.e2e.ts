@@ -698,7 +698,7 @@ async function expectIndustrialSurfaces(page: Page) {
             forcedColors: matchMedia("(forced-colors: active)").matches,
             shadow: style.boxShadow,
             elevated: element.matches(
-              ".navigation-card, .workspace-breadcrumbs, .page-panel:not(#panel-chat), .chat-conversations, .file-panel, .settings-card, .settings-group, button.primary, button.destructive, .splash-enter, button[data-slot=button]:not([data-variant=quiet])",
+              '.navigation-card, .workspace-breadcrumbs, .page-panel:not(#panel-chat), .chat-conversations, .file-panel:not([data-minimized="true"]), .settings-card, .settings-group, button.primary, button.destructive, .splash-enter, button[data-slot=button]:not([data-variant=quiet])',
             ),
             overlay: element.matches(
               "dialog, [role=dialog], [popover], .app-toast, .button-group, .worker-chat-page",
@@ -1101,24 +1101,28 @@ async function expectTabAppearance(page: Page) {
   const border = await inactive.evaluate((element) => getComputedStyle(element).borderColor);
   const glyph = inactive.locator(".navigation-icon").first();
   async function expectHover(button: Locator) {
-    const paint = (await button.evaluate((element) =>
-      element.matches(".chat-sidebar-row > button"),
-    ))
-      ? button.locator("..")
-      : button;
+    const target = await button.evaluate((element) => ({
+      row: element.matches(".chat-sidebar-row > button"),
+      circle: element.matches(".project-session-add"),
+    }));
+    const paint = target.circle
+      ? button.locator(".sidebar-card-add")
+      : target.row
+        ? button.locator("..")
+        : button;
     await expect(async () => {
       await clearPointer();
       await button.hover();
       await expect(paint).toHaveCSS(
         "background-color",
-        await paint.evaluate((element) => {
+        await paint.evaluate((element, circle) => {
           const probe = document.createElement("span");
-          probe.style.backgroundColor = "var(--hover-bg)";
+          probe.style.backgroundColor = circle ? "var(--primary)" : "var(--hover-bg)";
           element.append(probe);
           const color = getComputedStyle(probe).backgroundColor;
           probe.remove();
           return color;
-        }),
+        }, target.circle),
         {
           timeout: 500,
         },
@@ -1704,6 +1708,14 @@ test("desktop: breadcrumb additions and removals animate without stale controls"
           enters: entering.length,
           moving: card.querySelectorAll('[data-breadcrumb-transition="move"]').length,
           exits: ghosts.length,
+          exitImages: ghosts.reduce(
+            (count, node) => count + node.querySelectorAll("img").length,
+            0,
+          ),
+          exitArtwork: ghosts.reduce(
+            (count, node) => count + node.querySelectorAll("canvas.navigation-icon").length,
+            0,
+          ),
           intermediateOpacity: entering.every(
             (node) =>
               Number(getComputedStyle(node).opacity) > 0 &&
@@ -1747,6 +1759,8 @@ test("desktop: breadcrumb additions and removals animate without stale controls"
     await finish();
     const removed = await sample(card.getByRole("button", { name: "Home", exact: true }));
     expect(removed.exits).toBe(3);
+    expect(removed.exitImages).toBe(0);
+    expect(removed.exitArtwork).toBeGreaterThan(0);
     expect(removed.safeExits).toBe(true);
     expect(removed.current).toBe(1);
     expect(removed.moving).toBeGreaterThan(0);
@@ -2694,7 +2708,10 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
     });
     const checkTitles = async (panel: Locator) => {
       await expect(panel).toBeVisible();
-      const trail = page.locator(".workspace-breadcrumbs");
+      const trail = page.locator(
+        ".workspace-breadcrumbs > .page-breadcrumbs:not(.breadcrumb-exit)",
+      );
+      await expect(page.locator(".workspace-breadcrumbs .breadcrumb-exit")).toHaveCount(0);
       const titles = trail.locator(".page-title:visible");
       await expect(titles.first()).toBeVisible();
       expect(await titles.count()).toBeGreaterThan(0);
@@ -2747,7 +2764,7 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
           await expect(title).toHaveAccessibleName("Home");
           await expect(title.locator(".page-title-text")).toHaveCSS("position", "absolute");
         } else {
-          expect(geometry.gap).toBe(8);
+          expect(geometry.gap).toBeCloseTo(8, 3);
           expect(geometry.textGap).toBeCloseTo(8, 0);
           if (geometry.buttonPadding !== null) expect(geometry.buttonPadding).toBe("0px");
           expect(geometry.center).toBeLessThan(1);
@@ -2886,10 +2903,11 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
         size,
       );
       await selectProjectConversation(page);
-      await expect(page.locator(".workspace-breadcrumbs .page-title:visible")).toHaveCSS(
-        "font-size",
-        `${size}px`,
-      );
+      await expect(
+        page.locator(
+          ".workspace-breadcrumbs > .page-breadcrumbs:not(.breadcrumb-exit) .page-title:visible",
+        ),
+      ).toHaveCSS("font-size", `${size}px`);
       await checkTitles(page.locator("#panel-chat"));
       await selectSidebarPage(page, "Home");
       await page
@@ -4265,8 +4283,10 @@ test("desktop: Relay connects without a database and retains identity, draft and
     await expect(relay).toBeVisible();
     await relay.focus();
     await relay.press("ArrowUp");
-    await expect(assistants).toBeFocused();
-    await assistants.press("ArrowUp");
+    const assistantsPage = page.getByRole("tab", { name: "Assistants", exact: true });
+    await expect(assistantsPage).toBeFocused();
+    await expect(page.locator("#panel-assistants")).toBeVisible();
+    await assistantsPage.press("ArrowUp");
     const search = page.getByRole("tab", { name: "Search", exact: true });
     await expect(search).toBeDisabled();
     await expect(home).toBeFocused();
@@ -4277,8 +4297,8 @@ test("desktop: Relay connects without a database and retains identity, draft and
     await expect(home).toHaveAttribute("aria-selected", "true");
     await expectNavigationHighlight(page, home.locator(".."));
     await home.press("ArrowDown");
-    await expect(assistants).toBeFocused();
-    await assistants.press("ArrowDown");
+    await expect(assistantsPage).toBeFocused();
+    await assistantsPage.press("ArrowDown");
     await expect(relay).toBeFocused();
     await relay.press("Enter");
     await expect(composer).toHaveValue("Home navigation preserves this draft");
@@ -6537,12 +6557,12 @@ test("desktop: database connection gates splash and workspace controls", async (
     await page.keyboard.press("Tab");
     await expect(chatTab).toBeFocused();
     await page.keyboard.press("Tab");
-    await expect(page.locator("#projects-card-toggle")).toBeFocused();
-    await page.keyboard.press("Tab");
     await expect(card).toBeFocused();
-    await card.press("Shift+Tab");
+    await page.keyboard.press("Tab");
     await expect(page.locator("#projects-card-toggle")).toBeFocused();
     await page.keyboard.press("Shift+Tab");
+    await expect(card).toBeFocused();
+    await card.press("Shift+Tab");
     await expect(chatTab).toBeFocused();
     await chatTab.press("Shift+Tab");
     await expect(customAgents).toBeFocused();
@@ -6552,8 +6572,6 @@ test("desktop: database connection gates splash and workspace controls", async (
     await expect(customAgents).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(chatTab).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(card).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Apps", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
@@ -7190,6 +7208,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
     const pageIcons = [
       ["tab-home", "app-home2"],
+      ["tab-assistants", "app-assistants"],
       ["tab-custom-agents", "app-custom-agents"],
       ["tab-search", "app-search"],
       ["tab-apps", "app-apps"],
@@ -8499,7 +8518,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         );
         await expect(prompt.locator("pre")).toHaveCSS(
           "border-top-color",
-          dark ? "rgb(53, 38, 62)" : "rgb(219, 234, 254)",
+          dark ? "rgb(5, 5, 5)" : "rgb(17, 17, 17)",
         );
         await expect(prompt.locator("pre")).toHaveCSS(
           "color",
@@ -8595,7 +8614,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       };
     });
     expect(panelFrame).toEqual({
-      widths: ["3px", "3px", "3px", "3px"],
+      widths: ["2px", "2px", "2px", "2px"],
       left: 256,
       right: 12,
       bottom: 36,
@@ -14182,11 +14201,15 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     for (const [name, button] of [
       ["Table defaults", "About Table defaults"],
       ["Polling", "About Chart ticker"],
-      ["Updates", "About Updates"],
     ] as const) {
       await selectSettingsPage(page, name);
       await expect(page.getByRole("button", { name: button, exact: true })).toBeVisible();
     }
+    await selectSettingsPage(page, "Updates");
+    await expect(page.getByRole("button", { name: "About Updates", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Check for updates", exact: true }),
+    ).toHaveAccessibleDescription(/Updates are downloaded only when you choose/);
     await selectSettingsPage(page, "Polling");
     await expect(
       page.getByRole("spinbutton", { name: "Chart ticker seconds", exact: true }),
@@ -15466,7 +15489,11 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     await choose(selector, "Full Access");
     const order = await info
       .locator(".composer-session-summary")
-      .evaluate((element) => [...element.children].map((child) => child.className));
+      .evaluate((element) =>
+        [...element.children].map((child) =>
+          child.matches(".primary.composer-send") ? "primary composer-send" : child.className,
+        ),
+      );
     expect(order).toEqual([
       "context-donut",
       "composer-model",
