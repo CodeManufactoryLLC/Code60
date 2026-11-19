@@ -113,6 +113,23 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it.each(["sidebar background opacity", "Scientifica"])(
+    "keeps %s settings discoverable and human-only without a database",
+    async (query) => {
+      const { knowledge } = setup({ database: null });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "settings",
+          agentAccess: "human-only",
+          access: expect.stringContaining("Appearance → Left sidebar"),
+          availability: expect.objectContaining({ status: "available" }),
+        }),
+      ]);
+    },
+  );
   it("reports retained desktop update targets and scheduler controls without probes", async () => {
     const { knowledge, reads } = setup();
     const updates = result(
@@ -161,10 +178,10 @@ describe("DesktopKnowledge", () => {
       ]);
     },
   );
-  it("discovers bounded human-only custom agents without a database or verified provider", async () => {
+  it("discovers bounded human-only custom assistants without a database or verified provider", async () => {
     const { knowledge } = setup({ database: null, providers: [] });
     const capabilities = result(
-      await knowledge.call("code60_get_capabilities", { query: "Custom Agents" }, relay),
+      await knowledge.call("code60_get_capabilities", { query: "Custom Assistants" }, relay),
     );
     expect(capabilities.entries).toEqual(
       expect.arrayContaining([
@@ -173,7 +190,7 @@ describe("DesktopKnowledge", () => {
           availability: expect.objectContaining({
             status: "available",
             reason: expect.stringContaining("human-only"),
-            action: expect.stringContaining("Home → Custom Agents"),
+            action: expect.stringContaining("Sidebar → Assistants → Custom Assistants"),
           }),
         }),
       ]),

@@ -333,9 +333,10 @@ Relay, project chats add 24px and their owned workers add another 24px.
 It also checks label-based disclosures without chevrons, separate actions, anchored and viewport-clamped
 menus, outside/Escape/scroll/resize dismissal, focus restoration, project
 collapse/reopen, project close/reopen, retained drafts and unchanged idle workers.
-The Projects heading uses the Phosphor clipboard icon and a separate plus action
-labelled Open Project. That action opens the existing project modal; there is no
-standalone opener above the heading. Archiving the currently displayed project
+The Projects heading uses its supplied icon; the expanded list starts with a labelled “+ Add Project” action
+above all project entries. That action opens the existing project modal when
+connected or the database connection flow otherwise; the heading has no plus button. Each individual project list similarly
+starts with “+ New Session” above its conversations; More remains in its heading. Archiving the currently displayed project
 chat shows a “Chat archived.” toast and selects Relay. Archiving other chats
 leaves the displayed conversation unchanged.
 

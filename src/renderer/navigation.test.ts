@@ -58,7 +58,7 @@ describe("navigation registry", () => {
     expect(pagesInGroup("apps")).toEqual(["automations", "commands", "prompts", "system-manager"]);
     expect(pagesInGroup("primary")).toEqual(["home", "custom-agents", "apps", "search"]);
     expect(pageGroup("automations")).toBe("apps");
-    expect(pageDefinitions.automations.label).toBe("Automation Studio");
+    expect(pageDefinitions.automations.label).toBe("Scheduled Jobs");
     expect(pageGroup("system-manager")).toBe("apps");
     expect(pageDefinitions["system-manager"].label).toBe("System Manager");
   });
@@ -67,7 +67,7 @@ describe("navigation registry", () => {
       const navigate = vi.fn();
       const commands = pageCommands("chat", database, navigate, "Ctrl+,");
       expect(commands.find((command) => command.id === "automations")?.label).toBe(
-        "Automation Studio",
+        "Scheduled Jobs",
       );
       for (const command of commands) {
         const id = command.id as keyof typeof pageDefinitions;

@@ -16,11 +16,63 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .app:has(.sidebar[data-open="false"]) {
   --sidebar-reveal: 0;
+}
+
+/* Paint the workspace behind cards while preserving native sidebar transparency. */
+.app:has(.sidebar)::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--workspace-background);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app:has(.sidebar[data-open="true"])::before {
+  clip-path: inset(0 0 0 calc(var(--sidebar-left-inset) + var(--sidebar-track-width)));
+}
+
+:root[data-transparent="true"] .app::before {
+  display: none;
+}
+
+/* One background spans the full left area; all controls paint sharply above it. */
+.sidebar-background {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: calc(var(--sidebar-left-inset) + var(--sidebar-track-width));
+  z-index: 0;
+  background: var(--workspace-background);
+  background-size: 100vw 100dvh;
+  opacity: var(--sidebar-background-opacity);
+  pointer-events: none;
+}
+
+.app:has(.sidebar[data-open="false"]) .sidebar-background {
+  display: none;
+}
+
+.app:has(.sidebar) > :is(.window-drag-strip, .database-notice, .app-workspace) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Do not paint another solid surface behind the sidebar's adjustable tint. */
+body:has(.app .sidebar) {
+  background: transparent;
+}
+
+.app:has(.sidebar[data-open="true"]) {
+  background: linear-gradient(
+    to right,
+    transparent calc(var(--sidebar-left-inset) + var(--sidebar-track-width)),
+    var(--bg) calc(var(--sidebar-left-inset) + var(--sidebar-track-width))
+  );
 }
 
 :root[data-transparent="true"],
@@ -38,6 +90,7 @@
 
 .app-workspace {
   position: relative;
+  --nav-row-height: max(40px, calc(2.5 * var(--nav-font-size, 15px) + 2px));
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -50,28 +103,49 @@
 }
 
 .app-workspace:has(> .sidebar) {
-  grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr);
+  grid-template-rows:
+    minmax(var(--workspace-top-inset, var(--app-titlebar-height)), max-content)
+    minmax(0, 1fr);
 }
 
 .workspace-header {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   column-gap: var(--page-margin);
   align-items: flex-start;
   min-width: 0;
   min-height: 0;
-  padding: 0;
+  padding: 6px 0;
 }
 
 .workspace-breadcrumbs {
-  grid-column: 2;
+  grid-column: 1;
   min-width: 0;
-  padding-inline: var(--page-padding);
+  margin-right: var(--breadcrumb-right-inset, 0px);
+  /* Large title preferences may wrap; keep the content area usable. */
+  max-height: 40vh;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  box-sizing: border-box;
+  /* Header margin and inner padding retain the 12px first-row inset. */
+  padding: 6px calc(var(--page-padding) + 1px);
+  border: 0;
+  border-radius: 10px;
+  background: var(--card-header-fill);
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
+  box-shadow: var(--card-shadow);
+}
+
+.workspace-breadcrumbs .page-breadcrumbs li {
+  min-height: var(--nav-row-height);
+}
+
+.app-workspace:has(> .sidebar[data-open="false"]) .workspace-header {
+  grid-column: 1 / -1;
 }
 
 .app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
@@ -86,7 +160,7 @@
   justify-content: safe center;
 }
 
-/* Unframed main content alongside the navigation. */
+/* Primary content is a surface card beside the navigation. */
 .page-panel {
   grid-column: 2;
   grid-row: 2;
@@ -97,9 +171,10 @@
   min-width: 0;
   position: relative;
   border: 0;
-  border-radius: 0;
-  background: var(--bg);
+  border-radius: 10px;
+  background: var(--surface);
   overflow: hidden;
+  box-shadow: var(--card-shadow);
 }
 
 .page-panel > :is(.error-banner, .warning-banner) {
@@ -111,6 +186,7 @@
 }
 
 .app-workspace > .page-panel {
+  margin-top: 5px;
   margin-bottom: var(--page-margin);
 }
 
@@ -153,4 +229,26 @@ dialog::backdrop {
   min-height: var(--titlebar-height);
   padding-left: max(30px, var(--titlebar-left));
   padding-right: max(30px, calc(var(--titlebar-right) + 12px));
+}
+
+/* Transparent Linux windows need caption controls in the existing drag strip. */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 8px;
+  height: 28px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+.window-controls > .icon-button {
+  width: 36px;
+  height: 28px;
+  min-height: 28px;
+  --icon-size: 14px;
+}
+.window-controls > .window-close:hover {
+  background: var(--destructive-hover);
+  color: var(--on-destructive);
 }

@@ -79,8 +79,8 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
-    await page.getByRole("button", { name: "New automation", exact: true }).click();
-    const editor = page.getByRole("dialog", { name: "New automation", exact: true });
+    await page.getByRole("button", { name: "New scheduled job", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New scheduled job", exact: true });
     await editor.getByLabel("Name", { exact: true }).fill("Retained scheduler");
     await editor.getByLabel("Local base branch", { exact: true }).fill("main");
     await editor

@@ -324,7 +324,7 @@
   background: var(--user-bubble);
   color: var(--on-user-bubble);
 
-  border-radius: var(--chat-radius);
+  border-radius: var(--user-bubble-radius);
 }
 
 .event.toolCall {
@@ -377,7 +377,7 @@
   flex-shrink: 0;
   overflow: hidden;
 
-  border-radius: var(--chat-radius);
+  border-radius: var(--composer-radius);
 }
 
 .composer textarea {
@@ -1039,19 +1039,6 @@
   height: 16px;
 }
 
-.activity-visual img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-
-:root[data-color-scheme="dark"] .activity-visual img {
-  filter: invert(1) hue-rotate(180deg);
-  mix-blend-mode: screen;
-}
-
 .activity-name {
   flex: 1;
   min-width: 0;
@@ -1176,7 +1163,9 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 
 .chat-conversations {
   flex: 1;
-  border-radius: var(--chat-radius);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
   min-width: 300px;
   min-height: 0;
   overflow: hidden;
@@ -1286,6 +1275,14 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   width: auto;
   flex-basis: auto;
   padding-inline: 8px;
+}
+
+.event.message > .message-copy {
+  gap: 0;
+}
+
+.event.message > .message-copy > .icon-button {
+  padding-inline: 0 8px;
 }
 
 .event:is(:hover, :focus-within) > .message-copy {

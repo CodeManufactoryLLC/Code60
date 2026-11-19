@@ -1,5 +1,12 @@
 import { useEffect, useLayoutEffect, useState } from "react";
-import { observeColorScheme, parseTheme, type Theme } from "./appearance.js";
+import {
+  defaultSidebarAppearance,
+  observeColorScheme,
+  parseSidebarAppearance,
+  parseTheme,
+  sidebarAppearanceProperties,
+  type Theme,
+} from "./appearance.js";
 import {
   parseFitColumns,
   parseRowDensity,
@@ -13,6 +20,24 @@ import { parseTextStyles, type TextStyles, textStyleProperties } from "./typogra
 
 export function useAppPreferences() {
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
+  const [sidebarAppearance, setSidebarAppearance] = useState(() => {
+    try {
+      return parseSidebarAppearance(localStorage.getItem("code60.sidebarAppearance"));
+    } catch {
+      return defaultSidebarAppearance;
+    }
+  });
+  const [sidebarAppearanceSaved, setSidebarAppearanceSaved] = useState(true);
+  useLayoutEffect(() => {
+    for (const [property, value] of Object.entries(sidebarAppearanceProperties(sidebarAppearance)))
+      document.documentElement.style.setProperty(property, value);
+    try {
+      localStorage.setItem("code60.sidebarAppearance", JSON.stringify(sidebarAppearance));
+      setSidebarAppearanceSaved(true);
+    } catch {
+      setSidebarAppearanceSaved(false);
+    }
+  }, [sidebarAppearance]);
   const transitionTimes = useTransitionTimes();
   useLayoutEffect(() => {
     for (const [property, value] of Object.entries(transitionTimeProperties(transitionTimes)))
@@ -83,6 +108,9 @@ export function useAppPreferences() {
   }, [fit]);
 
   return {
+    sidebarAppearance,
+    setSidebarAppearance,
+    sidebarAppearanceSaved,
     theme,
     setTheme,
     textStyles,

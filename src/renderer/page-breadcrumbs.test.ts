@@ -77,8 +77,8 @@ describe("page breadcrumb hierarchy", () => {
 
   it.each([
     ["orchestrator", "chat-a", ["Projects", "Alpha"], ["projects", "a"]],
-    ["worker", "worker-a", ["Projects", "Alpha", "Plan A"], ["projects", "a", "chat-a"]],
-    ["worker", "worker-b", ["Projects", "Beta", "Plan B"], ["projects", "b", "chat-b"]],
+    ["worker", "worker-a", ["Projects", "Alpha", "Agent"], ["projects", "a", "chat-a"]],
+    ["worker", "worker-b", ["Projects", "Beta", "Agent"], ["projects", "b", "chat-b"]],
     ["worker", "manual-a", ["Projects", "Alpha"], ["projects", "a"]],
     ["worker", "relay-worker", ["Relay"], ["relay"]],
   ] as const)("keeps %s %s bound to its own project and conversation", (page, id, labels, ids) => {
@@ -136,7 +136,7 @@ describe("page breadcrumb hierarchy", () => {
         kind: "conversation",
         id: "worker-a",
       }).map(({ label }) => label),
-    ).toEqual(["Home", "Projects", "Alpha", "Plan A"]);
+    ).toEqual(["Home", "Projects", "Alpha", "Agent"]);
     const unidentified = {
       ...source,
       chats: [{ kind: "project", projectId: "b" }] as unknown as OrchestrationChat[],

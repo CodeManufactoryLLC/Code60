@@ -41,7 +41,7 @@ export function CustomAgentsPage({
       const result = await api.customAgent(request);
       if (alive.current && request.type === "read" && result.agent) setEditor(result.agent);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Custom agent action failed.");
+      setError(cause instanceof Error ? cause.message : "Custom assistant action failed.");
     } finally {
       setBusy(false);
     }
@@ -50,9 +50,9 @@ export function CustomAgentsPage({
   return (
     <section className="custom-agents-page">
       <header className="table-controls">
-        <PageTitle page="custom-agents">Custom Agents</PageTitle>
+        <PageTitle page="custom-agents" />
         <button type="button" aria-pressed={archived} onClick={() => setArchived((v) => !v)}>
-          {archived ? "Active agents" : "Archived"}
+          {archived ? "Active assistants" : "Archived"}
         </button>
       </header>
       {(error || storageError) && (
@@ -64,10 +64,10 @@ export function CustomAgentsPage({
         cards={visible.map((a) => ({
           ...a,
           label: a.name,
-          icon: "app-helmet" as const,
+          icon: "app-custom-agents" as const,
           available: true,
         }))}
-        create={!archived ? { label: "New Agent", onClick: () => setEditor("new") } : undefined}
+        create={!archived ? { label: "New Assistant", onClick: () => setEditor("new") } : undefined}
         pending={busy}
         onOpen={(a) => {
           if (archived) void act({ type: "restore", id: a.id, revision: a.revision });
@@ -142,7 +142,7 @@ export function AgentEditor({
   return (
     <Modal
       className="custom-agent-editor"
-      title={agent === "new" ? "New Agent" : "Edit Agent"}
+      title={agent === "new" ? "New Assistant" : "Edit Assistant"}
       busy={busy}
       onClose={onClose}
     >
@@ -159,7 +159,7 @@ export function AgentEditor({
                 : { type: "edit", id: agent.id, revision: agent.revision, name, instructions },
             )
             .then(onClose, (cause: unknown) => {
-              setError(cause instanceof Error ? cause.message : "Could not save agent.");
+              setError(cause instanceof Error ? cause.message : "Could not save assistant.");
               setBusy(false);
             });
         }}

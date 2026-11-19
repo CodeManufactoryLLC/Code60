@@ -128,14 +128,17 @@ describe("conversation hierarchy", () => {
       const project = projects[index];
       expect(section).toContain(`id="conversation-${project?.id}"`);
       expect(section).not.toContain('id="conversation-relay"');
-      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
-      expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("More for")).toBeLessThan(section.indexOf("project-chat-pages"));
+      expect(section.indexOf("project-chat-pages")).toBeLessThan(section.indexOf("New Session in"));
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("chat-sidebar"));
       expect(section).not.toContain("Toggle chats");
       expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');
       const folder = section.match(/<span class="project-chat-label">([\s\S]*?)<\/span>/)?.[0];
       expect(folder).toContain('data-icon="app-folder"');
-      expect(folder).toContain("folder.svg");
+      expect(folder).toContain("folder.png");
+      expect(folder).toContain('data-animated="true"');
       expect(folder).toContain('alt="" aria-hidden="true" draggable="false"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
@@ -469,9 +472,9 @@ describe("embedded worker chat", () => {
     expect(html).not.toContain('class="turn-separator"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
-  it("titles the worker by its role name, falling back to provider and run ID", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/span><\/h2>/);
-    expect(render(run("one"))).toMatch(/fake \/ one<\/span><\/h2>/);
+  it("uses the generic Subagent breadcrumb independently of its saved role label", () => {
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span><\/h2>/);
+    expect(render(run("one"))).toMatch(/Subagent<\/span><\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

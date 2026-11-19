@@ -68,9 +68,11 @@ import {
   parseSetupAttempt,
   parseSetupBegin,
   parseSetupSession,
+  parseSidebarBackdrop,
   parseStart,
   parseTaskAction,
   parseUpdateAction,
+  parseWindowControl,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
 import {
@@ -88,8 +90,11 @@ import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
 import { WebLinks } from "./web-links.js";
+import { controlWindow } from "./window-controls.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const sidebarBlurSupported = process.platform === "darwin";
+const customWindowControls = process.platform === "linux";
 const page = pathToFileURL(join(here, "../renderer/index.html")).href;
 let window: BrowserWindow | undefined;
 let exiting = false;
@@ -115,6 +120,7 @@ const webLinks = new WebLinks({
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
 assertSupportedPlatform();
 
+let sidebarBackdrop: import("./sidebar-backdrop.js").SidebarBackdrop | undefined;
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const logs = new DesktopLogStore(join(stateHome(process.env), "code60", "logs"));
 const launchOperation = randomUUID();
@@ -192,6 +198,7 @@ const automations = new DesktopAutomations(
 );
 let shutdownTask: Promise<void> | undefined;
 function shutdownDesktop(force = false): Promise<void> {
+  sidebarBackdrop?.dispose();
   automations.reset();
   if (shutdownTask) {
     if (force) void controller.shutdown(true).catch(() => {});
@@ -454,7 +461,22 @@ async function ready(): Promise<void> {
   );
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
-    return { transparent, enabled, clickThrough };
+    return {
+      transparent,
+      enabled,
+      clickThrough,
+      sidebarBlurSupported,
+      customWindowControls,
+    };
+  });
+  handle("desktop:window-control", (value) => {
+    const action = parseWindowControl(value);
+    if (!customWindowControls) throw new Error("Custom window controls are unavailable.");
+    if (window && !window.isDestroyed()) controlWindow(window, action);
+  });
+  handle("desktop:sidebar-backdrop", (value) => {
+    const request = parseSidebarBackdrop(value);
+    sidebarBackdrop?.update(request);
   });
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
@@ -721,8 +743,10 @@ async function ready(): Promise<void> {
     minWidth: 820,
     minHeight: 600,
     title: `Code60 - ${app.getVersion()}`,
-    transparent,
-    backgroundColor: transparent ? "#00000000" : "#252525",
+    // Keep native alpha available for the live sidebar opacity control. The
+    // renderer separately paints opaque content and optional transparent margins.
+    transparent: true,
+    backgroundColor: "#00000000",
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",
@@ -738,6 +762,13 @@ async function ready(): Promise<void> {
     },
   });
   // Keep the versioned title instead of the page's <title>.
+  if (sidebarBlurSupported) {
+    const { SidebarBackdrop } = await import("./sidebar-backdrop.js");
+    sidebarBackdrop = new SidebarBackdrop(window, () => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send("desktop:sidebar-backdrop-error");
+    });
+  }
   window.on("page-title-updated", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => {

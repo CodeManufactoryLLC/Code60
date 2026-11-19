@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { settingsLabels, settingsSectionIds } from "./navigation.js";
 import { SettingsHeader } from "./settings-layout.js";
 import { SettingsPage } from "./settings-page.js";
-import { parseTableLines } from "./table-preferences.js";
+import { parseRowDensity, parseTableLines } from "./table-preferences.js";
 import { defaultTextStyles } from "./typography.js";
 
 const unchanged = () => {};
@@ -20,11 +20,16 @@ const props: ComponentProps<typeof SettingsPage> = {
   onTransparent: unchanged,
   theme: "dark",
   onTheme: unchanged,
+  sidebarAppearance: { opacity: 100, blur: 0 },
+  sidebarAppearanceSaved: true,
+  sidebarBlurSupported: true,
+  sidebarBlurError: "",
+  onSidebarAppearance: unchanged,
   textStyles: defaultTextStyles,
   onTextStyles: unchanged,
   lines: parseTableLines(null),
   onLines: unchanged,
-  density: "high",
+  density: parseRowDensity(null),
   onDensity: unchanged,
   fit: false,
   onFit: unchanged,
@@ -37,6 +42,27 @@ const props: ComponentProps<typeof SettingsPage> = {
 };
 
 describe("Settings page titles", () => {
+  it("labels sidebar ranges, shows live units and reports unsaved appearance values", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        {...props}
+        section="appearance"
+        sidebarAppearance={{ opacity: 35, blur: 12 }}
+        sidebarAppearanceSaved={false}
+        sidebarBlurError="Native sidebar blur could not be applied."
+      />,
+    );
+    expect(html).toContain("Background opacity</label>");
+    expect(html).toContain("Background blur</label>");
+    expect(html).toContain('aria-valuetext="35%"');
+    expect(html).toContain('aria-valuetext="12%"');
+    expect(html).toContain('type="range" min="0" max="100" step="1"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("could not be saved");
+    expect(html).toContain("Native sidebar blur could not be applied.");
+    expect(html).toContain("Native sidebar blur could not be applied.");
+    expect(html).toContain("Reset sidebar");
+  });
   it.each(settingsSectionIds)(
     "uses the specific %s page name instead of a Settings heading",
     (section) => {

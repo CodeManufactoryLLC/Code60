@@ -1,6 +1,6 @@
 # Recovery runbooks
 
-Preserve evidence and identify ownership before changing anything. Use Automations for schedules and execution history, and Apps → System Manager for service status and recovery. Use the affected user account and normal HOME/XDG settings. Do not build during disk pressure just to diagnose an installation.
+Preserve evidence and identify ownership before changing anything. Use Scheduled Jobs for schedules and execution history, and Apps → System Manager for service status and recovery. Use the affected user account and normal HOME/XDG settings. Do not build during disk pressure just to diagnose an installation.
 
 - [Scheduler installation and recovery](scheduler.md)
 - [Low disk space](low-disk.md)

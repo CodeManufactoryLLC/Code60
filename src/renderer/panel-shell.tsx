@@ -85,7 +85,10 @@ export function PanelShell({
     while (container && container.getClientRects().length === 0)
       container = container.parentElement;
     const available = container?.getBoundingClientRect().width ?? 600;
-    setWidth(Math.max(120, Math.min(available - 300, value)));
+    const gap = panel.current
+      ? Number.parseFloat(getComputedStyle(panel.current).marginInlineStart) || 0
+      : 0;
+    setWidth(Math.max(120, Math.min(available - 300 - gap, value)));
   };
   const toggle = (
     <button

@@ -23,7 +23,7 @@ Schema version: 1
 - ID: `relay`
 - Status: shipped
 - Purpose: Application-wide orchestration across explicit targets.
-- Access: Sidebar → Relay
+- Access: Sidebar → Assistants → Relay (also available from Home)
 - Prerequisite: provider
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -32,16 +32,16 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Custom Agents
+## Custom Assistants
 
 - ID: `custom-agents`
 - Status: shipped
-- Purpose: Create application-wide agents with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Agents (also in the sidebar) → New Agent; Edit; Archive; Archived → Restore
+- Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
+- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; Edit; Archive; Archived → Restore
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Archiving confirms natively, stops only the agent and preserves history.
-- Limits: Up to 64 agents, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop agent and workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.
+- Confirmation: Archiving confirms natively, stops only the assistant and preserves history.
+- Limits: Up to 64 assistants, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop the assistant and its workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.
 - Pages: `custom-agents`
 - Settings sections: none
 - Tools: none
@@ -50,8 +50,8 @@ Schema version: 1
 
 - ID: `projects`
 - Status: shipped
-- Purpose: Retain independent project workspaces and conversations.
-- Access: Projects → New Project; project home → New Chat; sidebar add controls remain available
+- Purpose: Retain independent project workspaces and conversations. New Session starts a project-bound chat.
+- Access: Projects → Add Project (first sidebar item); each project list → New Session; Projects page → New Project; project home → New Session
 - Prerequisite: database
 - Agent access: read
 - Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.
@@ -209,7 +209,7 @@ Schema version: 1
 - Prerequisite: provider
 - Agent access: human-only
 - Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.
-- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Agents. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.
+- Limits: Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Assistants. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -242,12 +242,12 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Automations
+## Scheduled Jobs
 
 - ID: `automations`
 - Status: shipped
 - Purpose: Run consented local schedules in an independent service.
-- Access: Apps → Automation Studio
+- Access: Apps → Scheduled Jobs
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
@@ -288,12 +288,12 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Change appearance, text, polling and application options.
-- Access: Sidebar → Settings
+- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include left sidebar background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
+- Access: Sidebar → Settings; Appearance → Left sidebar
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness.
+- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants is a noninteractive heading. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none

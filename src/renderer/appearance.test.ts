@@ -1,5 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { observeColorScheme, parseTheme } from "./appearance.js";
+import {
+  defaultSidebarAppearance,
+  observeColorScheme,
+  parseSidebarAppearance,
+  parseTheme,
+  sidebarAppearanceProperties,
+} from "./appearance.js";
+
+describe("saved sidebar appearance", () => {
+  it.each([null, "broken", "null", "[]", "42", '"opacity"'])(
+    "uses readable defaults for invalid stored data: %s",
+    (raw) => expect(parseSidebarAppearance(raw)).toEqual(defaultSidebarAppearance),
+  );
+  it("restores valid values, bounds both limits and rejects nonnumeric fields", () => {
+    expect(parseSidebarAppearance('{"opacity":35,"blur":12}')).toEqual({ opacity: 35, blur: 12 });
+    expect(parseSidebarAppearance('{"opacity":-20,"blur":180}')).toEqual({ opacity: 0, blur: 100 });
+    expect(parseSidebarAppearance('{"opacity":200,"blur":-1}')).toEqual({ opacity: 100, blur: 0 });
+    expect(parseSidebarAppearance('{"opacity":"0","blur":null}')).toEqual(defaultSidebarAppearance);
+    expect(parseSidebarAppearance('{"opacity":51.5,"blur":1e999}')).toEqual({
+      opacity: 52,
+      blur: 0,
+    });
+    expect(sidebarAppearanceProperties({ opacity: 35, blur: 12 })).toEqual({
+      "--sidebar-background-opacity": "35%",
+    });
+  });
+});
 
 function media(matches: boolean) {
   const events = new EventTarget();

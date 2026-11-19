@@ -282,7 +282,7 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults all roles to Light, 16px serif page titles and sans card/table headings", () => {
+  it("defaults page titles to 16px Sans Medium and other text roles to Sans Light", () => {
     for (const role of [
       "tableHeadings",
       "buttons",
@@ -301,16 +301,16 @@ describe("desktop stream state", () => {
       case: undefined,
     });
     expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({
-      family: fontFamily("ibm-plex-serif"),
+      family: fontFamily("ibm-plex-sans"),
       size: 16,
-      weight: 300,
+      weight: 500,
       case: undefined,
     });
     expect(resolveText(defaultTextStyles, "cardTitles").size).toBe(22);
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
-      "--title-font": fontFamily("ibm-plex-serif"),
+      "--title-font": fontFamily("ibm-plex-sans"),
       "--title-size": "16px",
-      "--title-weight": "300",
+      "--title-weight": "500",
       "--card-font": fontFamily("ibm-plex-sans"),
       "--card-size": "22px",
       "--card-weight": "300",
@@ -342,8 +342,8 @@ describe("desktop stream state", () => {
     const styles = parseTextStyles(storage.getItem("code60.textStyles"));
     for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
       expect(resolveText(styles, role)).toMatchObject({
-        family: fontFamily(role === "pageTitles" ? "ibm-plex-serif" : "ibm-plex-sans"),
-        weight: 300,
+        family: fontFamily("ibm-plex-sans"),
+        weight: role === "pageTitles" ? 500 : 300,
       });
     expect(styles.normalText).toEqual({ size: 22, case: "lower" });
     expect(storage.getItem("code60.theme")).toBe("dark");
@@ -668,9 +668,9 @@ describe("fit columns to width", () => {
 });
 
 describe("row density setting", () => {
-  it("defaults to high and keeps known densities", () => {
-    expect(parseRowDensity(null)).toBe("high");
-    expect(parseRowDensity("dense")).toBe("high");
+  it("defaults to low and keeps known densities", () => {
+    expect(parseRowDensity(null)).toBe("low");
+    expect(parseRowDensity("dense")).toBe("low");
     expect(parseRowDensity("high")).toBe("high");
     expect(parseRowDensity("low")).toBe("low");
   });
@@ -684,6 +684,7 @@ describe("typeface setting", () => {
   it.each([
     ["lexend", "Lexend"],
     ["space-grotesk", "Space Grotesk"],
+    ["scientifica", "Scientifica"],
   ] as const)("offers and restores %s independently for every text role", (typeface, label) => {
     expect(typefaces).toContainEqual({ id: typeface, label, family: fontFamily(typeface) });
     expect(parseTypeface(typeface)).toBe(typeface);
@@ -717,7 +718,12 @@ describe("typeface setting", () => {
   });
 
   it("falls back to the system font for removed typefaces", () => {
-    for (const removed of ["fractal-monolith-grotesk", "kryon-null-grotesk", "quantum-grotesk"]) {
+    for (const removed of [
+      "fractal-monolith-grotesk",
+      "kryon-null-grotesk",
+      "quantum-grotesk",
+      "ocr-a",
+    ]) {
       expect(parseTypeface(removed)).toBe("system");
       expect(
         parseTextStyles(JSON.stringify({ normalText: { typeface: removed } })).normalText,
@@ -732,6 +738,6 @@ describe("typeface setting", () => {
 
   it("uses normal letter spacing for the bundled typefaces", () => {
     expect(letterSpacing("d-din")).toBe("normal");
-    expect(letterSpacing("ocr-a")).toBe("normal");
+    expect(letterSpacing("scientifica")).toBe("normal");
   });
 });

@@ -1,22 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActivitySnapshot, ActivityState } from "../bridge/index.js";
-import analyzing from "./activity-animations/analyzing.gif";
-import communicating from "./activity-animations/communicating.gif";
-import comparing from "./activity-animations/comparing.gif";
-import delegating from "./activity-animations/delegating.gif";
-import downloading from "./activity-animations/downloading.gif";
-import editing from "./activity-animations/editing.gif";
-import executing from "./activity-animations/executing.gif";
-import planning from "./activity-animations/planning.gif";
-import reading from "./activity-animations/reading.gif";
-import searching from "./activity-animations/searching.gif";
-import summarizing from "./activity-animations/summarizing.gif";
-import testing from "./activity-animations/testing.gif";
-import uploading from "./activity-animations/uploading.gif";
-import verifying from "./activity-animations/verifying.gif";
-import waiting_for_workers from "./activity-animations/waiting_for_workers.gif";
-import working from "./activity-animations/working.gif";
-import writing from "./activity-animations/writing.gif";
 import { durationText } from "./chat-presentation.js";
 import { Icon, type IconName } from "./icons.js";
 import { useTicker } from "./ticker.js";
@@ -62,52 +45,16 @@ export function activityIcon(state: ActivityState): IconName {
   return visuals[state] ?? "information";
 }
 
-/** Only specific semantic matches share artwork; retrieving does not imply downloading. */
-const animations: Partial<Record<ActivityState, string>> = {
-  planning,
-  searching,
-  reading,
-  analyzing,
-  comparing,
-  writing,
-  editing,
-  summarizing,
-  delegating,
-  communicating,
-  connecting: communicating,
-  waiting_for_workers,
-  executing,
-  testing,
-  verifying,
-  uploading,
-  downloading,
-  working,
-  responding: writing,
-  dispatching: delegating,
-  sending: communicating,
-  receiving: communicating,
-};
-
-export function activityAnimation(state: ActivityState): string | undefined {
-  return animations[state];
-}
-
 function activityLabel(state: ActivityState): string {
   if (state === "waiting_for_workers") return "Monitoring subagents";
   const words = state.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function ActivityArtwork({ state, animate }: { state: ActivityState; animate: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const src = activityAnimation(state);
+function ActivityArtwork({ state }: { state: ActivityState }) {
   return (
     <span className="activity-visual" aria-hidden="true">
-      {animate && src && !failed ? (
-        <img src={src} alt="" width={48} height={48} onError={() => setFailed(true)} />
-      ) : (
-        <Icon name={activityIcon(state)} />
-      )}
+      <Icon name={activityIcon(state)} />
     </span>
   );
 }
@@ -265,7 +212,7 @@ export function ActivityDisplay({
         data-exiting={!immediate && exiting}
         data-immediate={immediate}
       >
-        <ActivityArtwork key={state} state={state} animate={animate} />
+        <ActivityArtwork key={state} state={state} />
         <span className="activity-name">{label}</span>
       </div>
     );
@@ -293,7 +240,7 @@ export function ActivityDisplay({
       aria-live="off"
       data-immediate={immediate}
     >
-      <ActivityArtwork key={state} state={state} animate={animate} />
+      <ActivityArtwork key={state} state={state} />
       <span className="activity-name">
         <span role="status" aria-live="polite" aria-atomic="true">
           {label}

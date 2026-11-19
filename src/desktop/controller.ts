@@ -3240,7 +3240,7 @@ export class DesktopController {
     }
   }
   async customAgent(value: unknown) {
-    if (!this.relay) throw new Error("Custom agents are unavailable");
+    if (!this.relay) throw new Error("Custom assistants are unavailable");
     const response = await this.relay.manage(value);
     if (response.conversationId) this.relaySelected = true;
     this.changed();

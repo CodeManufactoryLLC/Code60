@@ -23,5 +23,5 @@
     "*config*.ts"
   ],
   "ignoreDependencies": ["@wyw-in-js/shared", "app-builder-lib"],
-  "ignoreBinaries": ["mkfifo"]
+  "ignoreBinaries": ["mkfifo", "openbox"]
 }

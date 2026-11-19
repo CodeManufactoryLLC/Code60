@@ -79,9 +79,19 @@
   --letter-spacing: var(--title-spacing, normal);
 }
 
-.table-controls:has(> .page-breadcrumbs):not(.home-page > .table-controls) {
+.table-controls:has(> .page-breadcrumbs:not(.page-title-placeholder)):not(
+  .home-page > .table-controls
+) {
   padding-bottom: var(--page-header-gap);
   margin-bottom: 0;
+}
+
+.table-controls:has(> .page-title-placeholder) {
+  padding-bottom: 12px;
+}
+
+.table-controls:has(> .page-title-placeholder:only-child) {
+  display: none;
 }
 
 .table-card-title {

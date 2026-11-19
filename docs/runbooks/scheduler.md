@@ -2,7 +2,7 @@
 
 ## Symptoms
 
-Automations reports unavailable, the service does not restart after an update,
+Scheduled Jobs reports unavailable, the service does not restart after an update,
 future runs are paused, or unfinished work blocks launches. Desktop quit and
 Stop all do not stop service-owned automations.
 
@@ -10,7 +10,7 @@ Stop all do not stop service-owned automations.
 
 Open Apps → System Manager and refresh service status. Inspect installation,
 connectivity, pause state, active execution and block independently. Open
-Automations to review saved schedules and execution history. An unreachable
+Scheduled Jobs to review saved schedules and execution history. An unreachable
 service is not proof that it has stopped; preserve that failure.
 
 Check that the installed runtime exists and that the user is logged in and awake.
@@ -20,7 +20,7 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 ## Supported recovery, only after consent
 
 1. In System Manager, pause future work and cancel active work only after explaining
-   the interruption. Wait for cleanup to settle and review Automations history.
+   the interruption. Wait for cleanup to settle and review Scheduled Jobs history.
 2. Use Install for a missing registration or Repair for a stale runtime, accepting
    the native background-execution confirmation only with explicit approval.
    Repair can refuse blocked ownership or cleanup; do not bypass the refusal.
@@ -33,7 +33,7 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Verify
 
-Refresh System Manager and Automations. Confirm connectivity, expected pause state,
+Refresh System Manager and Scheduled Jobs. Confirm connectivity, expected pause state,
 no block, future run times, and no duplicate/uncertain executions. Preserve worktrees
 and history. Installation checks do not prove a real provider run succeeded.
 

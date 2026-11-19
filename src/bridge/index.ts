@@ -47,6 +47,8 @@ import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from
 
 export * from "./agent-setup.js";
 export * from "./git-setup.js";
+export * from "./sidebar-backdrop.js";
+export * from "./window-controls.js";
 
 import { z } from "zod";
 import {
@@ -441,7 +443,18 @@ export interface DesktopApi {
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
   orchestrationChatAction(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined>;
-  windowAppearance(): Promise<{ transparent: boolean; enabled: boolean; clickThrough: boolean }>;
+  windowAppearance(): Promise<{
+    transparent: boolean;
+    enabled: boolean;
+    clickThrough: boolean;
+    sidebarBlurSupported: boolean;
+    customWindowControls: boolean;
+  }>;
+  setSidebarBackdrop(
+    request: import("./sidebar-backdrop.js").SidebarBackdropRequest,
+  ): Promise<void>;
+  onSidebarBackdropError(listener: () => void): () => void;
+  controlWindow(action: import("./window-controls.js").WindowControl): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;

@@ -107,7 +107,7 @@ export function SystemManagerPage({
               />
               {status
                 ? status.pausedAll
-                  ? "Installed, all automations paused"
+                  ? "Installed, all scheduled jobs paused"
                   : "Installed and running"
                 : "Service unavailable"}
               {status?.activeExecutionId && !status.pausedAll ? " · A run is active" : ""}

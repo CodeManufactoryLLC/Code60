@@ -55,7 +55,7 @@ function contrast(a, b) {
 describe("application palette", () => {
   it("uses dark grays for resting surfaces, groups, selection and neutral details", () => {
     const color = palette("dark");
-    expect(color("--bg")).toBe("#252525");
+    expect(color("--bg")).toBe("#202020");
     expect(color("--group-fill")).toBe("#303030");
     expect(color("--accent-bg")).toBe("#3c3c3c");
     for (const token of [
@@ -92,9 +92,10 @@ describe("application palette", () => {
   it("preserves the Light palette and uses one resolved dark palette for Dark and System", () => {
     const color = palette("light");
     for (const token of backgrounds.filter(
-      (token) => !["--accent-bg", "--hover-bg"].includes(token),
+      (token) => !["--bg", "--accent-bg", "--hover-bg"].includes(token),
     ))
       expect(color(token), token).toBe("#ffffff");
+    expect(color("--bg")).toBe("#f3f3f3");
     expect(color("--accent-bg")).toBe("#ededed");
     expect(color("--hover-bg")).toBe("#e5f0fc");
     expect(color("--primary")).toBe("#5b9fe6");
@@ -145,9 +146,9 @@ describe("application palette", () => {
     });
   }
 
-  it("matches the dark native window background to the renderer", () => {
+  it("keeps native alpha available for live sidebar transparency", () => {
     const main = readFileSync(new URL("../src/desktop/main.ts", import.meta.url), "utf8");
-    const window = main.match(/backgroundColor: transparent \? "#00000000" : "(#[\da-f]+)"/i)?.[1];
-    expect(window).toBe(palette("dark")("--bg"));
+    expect(main).toContain("transparent: true");
+    expect(main).toContain('backgroundColor: "#00000000"');
   });
 });

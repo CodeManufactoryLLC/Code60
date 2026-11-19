@@ -63,31 +63,33 @@ async function checkHeaderBreadcrumbs(page: Page) {
   await expect(header.getByRole("navigation", { name: "Breadcrumb", exact: true })).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
-  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "300");
+  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "500");
   const slot = page.locator(".page-title-placeholder");
   await expect(slot).toHaveCount(1);
   await expect(slot).toHaveAttribute("aria-hidden", "true");
   await expect(slot).toHaveAttribute("inert", "");
-  await expect(slot).toHaveCSS("visibility", "hidden");
-  await expect(slot).toHaveCSS("font-size", "64px");
+  await expect(slot).toHaveCSS("display", "none");
   await expect(slot.locator("button, h1, h2, [id]")).toHaveCount(0);
   const geometry = await slot.evaluate((element) => {
     const header = document.querySelector(".workspace-header");
     const heading = header?.querySelector("h1, h2");
-    if (!header || !heading) throw new Error("Missing header heading");
+    const panel = element.closest(".page-panel");
+    if (!header || !heading || !panel) throw new Error("Missing header heading or page panel");
     return {
-      slot: element.getBoundingClientRect().top,
+      panel: panel.getBoundingClientRect().top,
+      slotHeight: element.getBoundingClientRect().height,
       header: header.getBoundingClientRect().bottom,
       ids: heading.id ? document.querySelectorAll(`#${CSS.escape(heading.id)}`).length : null,
     };
   });
-  expect(geometry.slot).toBeGreaterThanOrEqual(geometry.header);
+  expect(geometry.panel).toBeGreaterThanOrEqual(geometry.header);
+  expect(geometry.slotHeight).toBe(0);
   if (geometry.ids !== null) expect(geometry.ids).toBe(1);
 }
 
 async function checkSidebarNavigation(page: Page, repo: string) {
   const project = page.getByRole("region", { name: `Project ${repo}`, exact: true });
-  const newChat = project.getByRole("button", { name: /^New chat in / });
+  const newChat = project.getByRole("button", { name: /^New Session in / });
   const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
   const entries = project.locator(".chat-sidebar-entry");
   let count = await entries.count();
@@ -101,12 +103,15 @@ async function checkSidebarNavigation(page: Page, repo: string) {
 
   for (const theme of ["light", "dark"]) {
     await page.locator("#tab-settings").click();
+    if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
+      await page.locator("#settings-card-toggle").click();
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
     const gray = theme === "light" ? "rgb(243, 243, 243)" : "rgb(48, 48, 48)";
     await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px");
-    await expect(page.locator(".sidebar")).toHaveCSS(
+    await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(page.locator(".sidebar-navigation-card").first()).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(37, 37, 37)",
     );
@@ -219,7 +224,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         "aria-current",
         "true",
       );
-      await expect(page.locator("#tab-chat")).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator("#projects-card-toggle")).toHaveAttribute("aria-expanded", "false");
       await page.locator("#tab-chat").press("ArrowRight");
       await expect(project.locator(".project-chat-name")).toHaveAttribute("aria-expanded", "false");
     } finally {
@@ -269,7 +274,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
 for (const custom of [false, true]) {
   test(
     custom
-      ? "workflow: custom agent through plan, automatic edits, code references and message Undo"
+      ? "workflow: custom assistant through plan, automatic edits, code references and message Undo"
       : "workflow: first use through plan, automatic edits, code references and message Undo",
     async () => {
       const info = test.info();
@@ -461,9 +466,9 @@ for (const custom of [false, true]) {
 
         // Exercise the same production execution path for Relay and a custom owner.
         if (custom) {
-          await page.getByRole("tab", { name: "Custom Agents", exact: true }).click();
-          await page.getByRole("button", { name: "New Agent", exact: true }).click();
-          const editor = page.getByRole("dialog", { name: "New Agent", exact: true });
+          await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
+          await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+          const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
           await editor.getByLabel("Name", { exact: true }).fill("Workflow Agent");
           await editor
             .getByLabel("Special instructions", { exact: true })
@@ -472,7 +477,7 @@ for (const custom of [false, true]) {
           await page.getByRole("button", { name: "Open Workflow Agent", exact: true }).click();
         } else await page.getByRole("button", { name: "Relay", exact: true }).click();
         await expect(
-          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         const composer = page
           .locator(".orchestration-chat-page:visible")
@@ -602,7 +607,7 @@ for (const custom of [false, true]) {
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         // Worker pages share this class and model text, so prove the parent chat is shown.
         await expect(
-          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
         checks.push(
@@ -950,7 +955,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await expect(projectHome).toBeVisible();
       await expect(projectHome.locator(".table-controls > button")).toHaveCount(0);
       const newChat = projectHome.locator(".home-cards > button").first();
-      await expect(newChat).toContainText("New Chat");
+      await expect(newChat).toContainText("New Session");
       await newChat.focus();
       await newChat.press("Enter");
       await expect(group.getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
@@ -989,7 +994,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await composer.fill("Unsent draft must not survive quitting");
     }
     const firstGroup = page.getByRole("region", { name: `Project ${projects[0]}`, exact: true });
-    await firstGroup.getByRole("button", { name: "New chat in project-a", exact: true }).click();
+    await firstGroup.getByRole("button", { name: "New Session in project-a", exact: true }).click();
     await expect(firstGroup.getByRole("button", { name: "Chat 2", exact: true })).toHaveAttribute(
       "aria-current",
       "true",
@@ -1121,7 +1126,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
   }
 });
 
-test("workflow: custom agents without a database, instruction edits, archive, restore and restart", async () => {
+test("workflow: custom assistants without a database, instruction edits, archive, restore and restart", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-custom-ui-")));
   const config = join(directory, "config/code60");
@@ -1146,11 +1151,14 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     for (const name of ["Reviewer", "Writer"]) {
       await page.getByRole("tab", { name: "Home", exact: true }).click();
       const home = page.locator("#panel-home");
-      const customAgents = home.getByRole("button", { name: "Open Custom Agents", exact: true });
+      const customAgents = home.getByRole("button", {
+        name: "Open Custom Assistants",
+        exact: true,
+      });
       await expect(customAgents).toBeEnabled();
       await expect(home.locator(".home-card")).toHaveText([
         "Relay",
-        "Custom Agents",
+        "Custom Assistants",
         "Search",
         "Projects",
         "Apps",
@@ -1158,8 +1166,8 @@ test("workflow: custom agents without a database, instruction edits, archive, re
       ]);
       await customAgents.click();
       await expect(page.locator("#panel-custom-agents")).toBeVisible();
-      await page.getByRole("button", { name: "New Agent", exact: true }).click();
-      const editor = page.getByRole("dialog", { name: "New Agent", exact: true });
+      await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
       await editor.getByLabel("Name", { exact: true }).fill(name);
       await editor.getByLabel("Special instructions", { exact: true }).fill(`Act as ${name}.`);
       await editor.getByRole("button", { name: "Save", exact: true }).click();
@@ -1175,7 +1183,7 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     expect(beforeOpen.database).toBeNull();
     expect(beforeOpen.chats.filter((chat) => chat.customAgentId)).toHaveLength(0);
     await page.getByRole("button", { name: "Open Reviewer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
@@ -1184,9 +1192,9 @@ test("workflow: custom agents without a database, instruction edits, archive, re
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     );
     await composer.fill("Reviewer unsent draft");
-    await page.getByRole("tab", { name: "Custom Agents", exact: true }).click();
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "Open Writer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Writer", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
     await expect(composer).toHaveValue("");
     await checkSidebarIconSpacing(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Writer", exact: true }),
@@ -1222,9 +1230,9 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     if (!reviewerId) throw new Error("Missing custom owner");
     const statePath = join(directory, "state/code60/custom-agents", reviewerId, "state.json");
     const saved = await readFile(statePath);
-    await page.getByRole("tab", { name: "Custom Agents", exact: true }).click();
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "Edit Reviewer", exact: true }).click();
-    const edit = page.getByRole("dialog", { name: "Edit Agent", exact: true });
+    const edit = page.getByRole("dialog", { name: "Edit Assistant", exact: true });
     await expect(edit.getByLabel("Special instructions", { exact: true })).toHaveValue(
       "Act as Reviewer.",
     );
@@ -1253,7 +1261,7 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     expect(await readFile(statePath)).toEqual(saved);
     await page.getByRole("button", { name: "Archived", exact: true }).click();
     await page.getByRole("button", { name: "Restore", exact: true }).click();
-    await page.getByRole("button", { name: "Active agents", exact: true }).click();
+    await page.getByRole("button", { name: "Active assistants", exact: true }).click();
     await expect(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toBeVisible();
@@ -1264,7 +1272,7 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
     page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.getByRole("tab", { name: "Custom Agents", exact: true }).click();
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     const restarted = await page.evaluate(() => window.desktop.snapshot());
     expect(restarted.customAgents).toHaveLength(2);
     expect(restarted.chats.filter((c) => c.customAgentId)).toHaveLength(0);
@@ -1287,7 +1295,7 @@ test("workflow: custom agents without a database, instruction edits, archive, re
     // Restore only synthetic evidence, then retry using the same visible entry.
     await writeFile(statePath, saved);
     await recoveryEntry.click();
-    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
     await expect(
       page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
     ).toBeEditable();

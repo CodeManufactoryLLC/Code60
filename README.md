@@ -1,6 +1,6 @@
 # Code60
 
-Code60 is an Electron desktop application for running coding agents in parallel on macOS and Linux. Desktop Automations uses an independent background scheduler.
+Code60 is an Electron desktop application for running coding agents in parallel on macOS and Linux. Desktop Scheduled Jobs uses an independent background scheduler.
 
 Desktop project chats and Relay checkpoint requests and automatically integrate
 isolated worker changes, without Apply. A quiet **files changed** link opens a
@@ -66,7 +66,7 @@ and platform-validation status.
 In any connected chat, use the **Model** picker between turns to choose the
 connector's advertised model and reasoning settings. **Save as default** applies
 to new sessions for that connector and role, orchestrator (Relay, project chats
-and Custom Agents) or worker. Clear saved choices in **Settings → Agents →
+and Custom Assistants) or worker. Clear saved choices in **Settings → Agents →
 Default models**. Existing sessions and automation defaults do not change.
 Unavailable defaults produce a note; Code60 never substitutes a model.
 
@@ -100,14 +100,14 @@ without creating long-term memories. See [memory behavior and validation](docs/m
 
 ## Scheduled automations
 
-Open **Apps → Automation Studio** to save one agent, prompt, isolated Git repository
+Open **Apps → Scheduled Jobs** to save one agent, prompt, isolated Git repository
 and explicit tool permissions on an interval, daily or weekly schedule.
 Open **Apps → System Manager** to install and manage the background service,
 with native confirmation, to keep scheduling after Code60 quits.
 The computer must stay awake and the user logged in. Missed occurrences are skipped,
 not replayed, and an agent finishing a turn is not proof the task succeeded.
 
-Manage schedules in Automations and service installation/recovery in Apps → System Manager.
+Manage schedules in Scheduled Jobs and service installation/recovery in Apps → System Manager.
 For source development, build with `npm run build` and run
 `node dist/automation/main.js` in a separate terminal before saving automations.
 That standalone process is not installed for future logins.
@@ -253,10 +253,10 @@ command with the same name takes precedence.
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE)
 
-### Custom Agents
+### Custom Assistants
 
-Open **Custom Agents** from Home or beneath Relay in the sidebar and choose
-**New Agent**. Set a name and special instructions, then open its persistent chat.
+Open **Custom Assistants** from Home or under Assistants in the sidebar and choose
+**New Assistant**. Set a name and special instructions, then open its persistent chat.
 Each agent uses the shared
 verified provider and Relay's plans, workers, Files, Changes and message Undo.
 No database is required. Stop the agent and its workers before editing its

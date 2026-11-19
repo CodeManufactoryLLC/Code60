@@ -61,8 +61,20 @@
   src: url("./fonts/space-grotesk/SpaceGrotesk.ttf") format("truetype");
 }
 @font-face {
-  font-family: "OCR-A";
+  font-family: "Scientifica";
   font-style: normal;
-  font-weight: 400;
-  src: url("./fonts/ocr-a/OCRA.otf") format("opentype");
+  font-weight: 300 500;
+  src: url("./fonts/scientifica/scientifica.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Scientifica";
+  font-style: normal;
+  font-weight: 600 700;
+  src: url("./fonts/scientifica/scientificaBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Scientifica";
+  font-style: italic;
+  font-weight: 300 700;
+  src: url("./fonts/scientifica/scientificaItalic.ttf") format("truetype");
 }

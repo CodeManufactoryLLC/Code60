@@ -52,6 +52,14 @@ describe("sandboxed diagnostic preload", () => {
     expect(memoryListener).toHaveBeenCalledOnce();
     offMemory();
     expect(removeListener).toHaveBeenLastCalledWith("desktop:memory-changed", memoryHandler);
+    const blurListener = vi.fn();
+    const offBlur = api.onSidebarBackdropError?.(blurListener) as () => void;
+    const blurHandler = on.mock.lastCall?.[1] as () => void;
+    expect(on).toHaveBeenLastCalledWith("desktop:sidebar-backdrop-error", blurHandler);
+    blurHandler();
+    expect(blurListener).toHaveBeenCalledOnce();
+    offBlur();
+    expect(removeListener).toHaveBeenLastCalledWith("desktop:sidebar-backdrop-error", blurHandler);
     expect(api).not.toHaveProperty("ipcRenderer");
     expect(api).not.toHaveProperty("readFile");
     expect(await api.appSummary?.()).toBe("result");
@@ -106,6 +114,8 @@ describe("sandboxed diagnostic preload", () => {
       orchestrationChatAction: "orchestration-chat",
       setTransparent: "transparent",
       setBackgroundHitTest: "background-hit-test",
+      setSidebarBackdrop: "sidebar-backdrop",
+      controlWindow: "window-control",
       projectAction: "project-action",
       setFileContext: "files",
       setPollSettings: "poll-settings",

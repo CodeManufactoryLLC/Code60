@@ -52,7 +52,7 @@ describe("Home destinations", () => {
       );
       expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
         "Relay",
-        "Custom Agents",
+        "Custom Assistants",
         "Search",
         "Projects",
         "Apps",
@@ -66,7 +66,7 @@ describe("Home destinations", () => {
       expect(html).not.toContain("home-card-description");
       for (const [id, icon, available] of [
         ["relay", "app-steering-wheel", relayAvailable],
-        ["custom-agents", "app-helmet", true],
+        ["custom-agents", "app-custom-agents", true],
         ["search", "app-search", Boolean(database)],
         ["projects", "app-backlog", true],
         ["apps", "app-apps", true],
@@ -86,7 +86,7 @@ describe("Home destinations", () => {
     },
   );
 
-  it("opens Custom Agents without a database or Relay connection, without selecting a chat", () => {
+  it("opens Custom Assistants without a database or Relay connection, without selecting a chat", () => {
     const onOpenRelay = vi.fn(async () => {});
     const onOpenPage = vi.fn();
     renderToStaticMarkup(
@@ -99,7 +99,7 @@ describe("Home destinations", () => {
     );
     const view = forwarded.view;
     const card = view?.cards.find((card) => card.id === "custom-agents");
-    if (!view || !card) throw new Error("Custom Agents card is missing");
+    if (!view || !card) throw new Error("Custom Assistants card is missing");
     expect(card.available).toBe(true);
     view.onOpen(card);
     expect(onOpenPage).toHaveBeenCalledExactlyOnceWith("custom-agents");

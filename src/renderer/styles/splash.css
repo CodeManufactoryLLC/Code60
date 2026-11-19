@@ -15,7 +15,7 @@
   overflow: hidden;
   scrollbar-gutter: auto;
   isolation: isolate;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   -webkit-app-region: no-drag;
 }
@@ -27,7 +27,7 @@
 }
 
 .splash::backdrop {
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .splash > .window-drag-strip {
@@ -48,18 +48,7 @@
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   padding: calc(var(--app-titlebar-height) + 48px) 24px 80px;
-  background: var(--bg);
-}
-
-/* Dark-only artwork: Light keeps its solid white surface and black lettering. */
-:root[data-color-scheme="dark"] .splash-brand {
-  background: var(--bg) url("../splash-backgrounds/stripes.jpeg") center / cover no-repeat;
-}
-
-@media (forced-colors: active) {
-  :root[data-color-scheme="dark"] .splash-brand {
-    background-image: none;
-  }
+  background: var(--surface);
 }
 
 .splash-theme-toggle {

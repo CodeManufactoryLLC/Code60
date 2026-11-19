@@ -40,7 +40,7 @@ it("offers only Relay workspace and unique current-generation owned targets, ind
   expect(relayFileScope(disconnected, "workspace")).toBeUndefined();
 });
 
-it("binds custom agent file roots to its own conversation instead of the first Relay", () => {
+it("binds custom assistant file roots to its own conversation instead of the first Relay", () => {
   const custom = {
     kind: "relay",
     customAgentId: "agent-a",

@@ -47,8 +47,8 @@ it("keeps creation keyboard-native, context-labelled and disabled while pending"
     <NavigationCards
       cards={[]}
       create={{
-        label: "New Chat",
-        ariaLabel: "New chat in A",
+        label: "New Session",
+        ariaLabel: "New Session in A",
         title: "Create a chat",
         onClick: () => {},
       }}
@@ -57,9 +57,9 @@ it("keeps creation keyboard-native, context-labelled and disabled while pending"
     />,
   );
   expect(html).toContain('<button type="button" class="home-card home-card-create"');
-  expect(html).toContain('aria-label="New chat in A" disabled=""');
+  expect(html).toContain('aria-label="New Session in A" disabled=""');
   expect(html).toContain('title="Wait for the current action to finish"');
-  expect(html).toContain("New Chat");
+  expect(html).toContain("New Session");
   expect(html).not.toContain('tabindex="-1"');
 });
 

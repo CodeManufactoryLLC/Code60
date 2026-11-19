@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, SetupBegin, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
@@ -6,11 +6,13 @@ import { Icon } from "./icons.js";
 export { AgentLogo } from "./agent-logo.js";
 
 export function AgentSetupWizard({
+  windowControls,
   snapshot,
   api,
   mode,
   onClose,
 }: {
+  windowControls?: ReactNode;
   snapshot: Snapshot;
   api: DesktopApi;
   mode: SetupBegin["mode"];
@@ -137,6 +139,7 @@ export function AgentSetupWizard({
         void close();
       }}
     >
+      {windowControls}
       <div className="modal-heading">
         <h2 id={id} ref={title} tabIndex={-1}>
           {heading}

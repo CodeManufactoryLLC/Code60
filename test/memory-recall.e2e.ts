@@ -119,6 +119,9 @@ async function send(page: Page, text: string) {
 }
 async function memoryOff(page: Page) {
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  const settingsToggle = page.locator("#settings-card-toggle");
+  if ((await settingsToggle.getAttribute("aria-expanded")) === "false")
+    await settingsToggle.click();
   await page.getByRole("tab", { name: "Memory", exact: true }).click();
   const toggle = page
     .locator("#panel-settings-memory")
@@ -198,7 +201,7 @@ for (const kind of ["Relay", "project"] as const) {
           .click();
         const group = page.getByRole("region", { name: `Project ${target}`, exact: true });
         await group
-          .getByRole("button", { name: `New chat in ${basename(target)}`, exact: true })
+          .getByRole("button", { name: `New Session in ${basename(target)}`, exact: true })
           .click();
         await expect(group.locator(".chat-sidebar-entry").last()).toHaveAttribute(
           "aria-current",

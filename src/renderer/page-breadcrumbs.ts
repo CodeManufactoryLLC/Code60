@@ -1,5 +1,5 @@
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
-import { conversationId, conversations, conversationTitle } from "./chats.js";
+import { conversationId, conversations } from "./chats.js";
 import {
   isSettingsSection,
   type PageId,
@@ -85,8 +85,12 @@ function pageAncestors(
     const id = chat && !chat.archived ? conversationId(chat) : undefined;
     if (chat && id)
       ancestors.push({
-        label: conversationTitle(source.chats, chat),
-        icon: chat.kind === "relay" ? "app-steering-wheel" : "app-communication",
+        label: chat.kind === "relay" && !chat.customAgentId ? "Relay" : "Agent",
+        icon: chat.customAgentId
+          ? "app-custom-agents"
+          : chat.kind === "relay"
+            ? "app-steering-wheel"
+            : "app-communication",
         target: { kind: "conversation", id },
       });
   }

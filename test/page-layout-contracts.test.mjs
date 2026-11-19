@@ -77,8 +77,8 @@ it("uses smaller constant-width navigation cards, smaller contents and wider gap
   expect(cards).toContain("max-width: 736px");
   expect(rule("home", ".home-card-art")).toContain("min-height: 72px");
   const art = rule("home", ".home-card-art .navigation-icon");
-  expect(art).toContain("width: 36px");
-  expect(art).toContain("height: 36px");
+  expect(art).toContain("width: calc(36px * var(--nav-icon-scale))");
+  expect(art).toContain("height: calc(36px * var(--nav-icon-scale))");
   expect(rule("home", ".home-card-name")).toContain(
     "max(8px, calc(var(--card-size, 22px) * 9 / 11))",
   );
@@ -87,6 +87,8 @@ it("uses smaller constant-width navigation cards, smaller contents and wider gap
 it("rounds buttons, chat and dialogs without rounding unrelated controls", () => {
   expect(sheet("tokens")).toContain("--button-radius: 5px");
   expect(sheet("tokens")).toContain("--chat-radius: 5px");
+  expect(sheet("tokens")).toContain("--composer-radius: 10px");
+  expect(sheet("tokens")).toContain("--user-bubble-radius: 5px");
   expect(sheet("tokens")).toContain("--dialog-radius: 5px");
   expect(sheet("tokens")).toContain("--ui-radius: 0");
   for (const [file, selector] of [
@@ -97,12 +99,25 @@ it("rounds buttons, chat and dialogs without rounding unrelated controls", () =>
     ["chat", ".activity-display"],
   ])
     expect(rule(file, selector)).toContain("border-radius: var(--button-radius)");
-  for (const [file, selector] of [
-    ["chat", ".composer"],
-    ["files", "#panel-chat"],
-  ])
-    expect(rule(file, selector)).toContain("border-radius: var(--chat-radius)");
+  expect(rule("chat", ".composer")).toContain("border-radius: var(--composer-radius)");
+  expect(rule("files", "#panel-chat")).toContain("border-radius: 0");
+  expect(rule("layout", ".page-panel")).toContain("border-radius: 10px");
   expect(sheet("base")).toContain('input[type="radio"] { border-radius: 50%; }');
+  expect(rule("base", 'input[type="checkbox"][role="switch"]')).toContain("border-radius: 999px");
+  expect(
+    rule(
+      "base",
+      'input[type="checkbox"][role="switch"]::before, input[type="checkbox"][role="switch"]:checked::before',
+    ),
+  ).toContain("border-radius: 50%");
+  expect(sheet("tokens")).toContain("--settings-card-radius: 10px");
+  expect(rule("settings", ".settings-card")).toContain(
+    "border-radius: var(--settings-card-radius)",
+  );
+  expect(rule("settings", ".settings-group")).toContain(
+    "border-radius: var(--settings-card-radius)",
+  );
+  expect(rule("settings", ".table-density-selector")).toContain("border-radius: 5px");
   for (const selector of ["dialog:not(.splash)", '[role="dialog"]', ".setup-dialog"])
     expect(rule("overlays", selector)).toContain("border-radius: var(--dialog-radius)");
   for (const selector of ["[popover]", ".mode-menu"])
@@ -112,7 +127,7 @@ it("rounds buttons, chat and dialogs without rounding unrelated controls", () =>
 it("uses solid rounded human bubbles without rounding automatic prompts or code", () => {
   const bubble = rule("chat", ".event.prompt:where(:not(.automatic)) pre");
   expect(bubble).toContain("background: var(--user-bubble)");
-  expect(bubble).toContain("border-radius: var(--chat-radius)");
+  expect(bubble).toContain("border-radius: var(--user-bubble-radius)");
   expect(bubble).toContain("color: var(--on-user-bubble)");
   expect(rule("accessibility", ".event.prompt:not(.automatic) pre")).toContain(
     "background: Canvas",
@@ -125,9 +140,9 @@ it("compacts response-to-timing spacing while retaining separation before the ne
   expect(rule("chat", ".turn-separator")).toContain("margin: 4px 0 12px");
 });
 
-it("preserves the doubled clearance with the persistent toggle in the native-control row", () => {
+it("preserves the content header clearance with the persistent toggle in the native-control row", () => {
   expect(rule("layout", ".app-workspace:has(> .sidebar)")).toContain(
-    "grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr)",
+    "minmax(var(--workspace-top-inset, var(--app-titlebar-height)), max-content) minmax(0, 1fr)",
   );
   expect(rule("layout", ".app-workspace")).toContain(
     "grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr)",
@@ -135,11 +150,25 @@ it("preserves the doubled clearance with the persistent toggle in the native-con
   expect(rule("layout", ".app-workspace")).toContain("row-gap: 0");
   expect(rule("layout", ".page-panel")).toContain("grid-column: 2");
   expect(rule("layout", ".page-panel")).toContain("grid-row: 2");
-  expect(rule("layout", ".workspace-header")).toContain("grid-column: 1 / -1");
+  expect(rule("layout", ".workspace-header")).toContain("grid-column: 2");
   expect(rule("layout", ".workspace-header")).toContain("grid-row: 1");
   expect(rule("layout", ".workspace-header")).toContain("align-items: flex-start");
-  expect(rule("layout", ".workspace-header")).toContain("padding: 0");
-  expect(rule("navigation", ".sidebar")).toContain("grid-row: 2");
+  expect(rule("layout", ".workspace-header")).toContain("padding: 6px 0");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain(
+    "padding: 6px calc(var(--page-padding) + 1px)",
+  );
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("border-radius: 10px");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("background: var(--card-header-fill)");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain(
+    "margin-right: var(--breadcrumb-right-inset, 0px)",
+  );
+  expect(rule("layout", ".workspace-breadcrumbs .page-breadcrumbs li")).toContain(
+    "min-height: var(--nav-row-height)",
+  );
+  expect(rule("navigation", ".sidebar")).toContain("grid-row: 1 / -1");
+  expect(rule("navigation", ".sidebar")).toContain(
+    "padding: 0 0 0 calc(4px * var(--sidebar-reveal))",
+  );
   expect(rule("layout", '.app:has(.sidebar[data-open="false"])')).toContain("--sidebar-reveal: 0");
   expect(rule("navigation", '.sidebar[data-open="false"]')).toContain("visibility: hidden");
   expect(rule("footer", '.app:has(.sidebar[data-open="false"]) .footer-sidebar')).toContain(
@@ -195,27 +224,26 @@ it("animates sidebar reveal separately from resizing and respects accessible mot
   ).toContain("transition: none");
 });
 
-it("keeps sidebar navigation square and borderless, without a full-height divider", () => {
-  expect(rule("navigation", ".sidebar button")).toContain("border-radius: 0");
-  expect(rule("navigation", '.sidebar [data-nav-active="true"]')).toContain("border-radius: 0");
-  expect(rule("navigation", '.sidebar [data-nav-active="true"]::after')).toContain(
-    "border-radius: inherit",
+it("rounds sidebar items uniformly and marks only the header weight while keeping the sidebar borderless", () => {
+  expect(rule("navigation", ".sidebar button")).toContain(
+    "border-radius: var(--nav-row-top-radius, 5px)",
   );
+  expect(rule("navigation", ".sidebar [data-card-first]")).toContain("--nav-row-top-radius: 5px");
+  expect(sheet("navigation")).not.toContain("data-card-last");
+  expect(rule("navigation", '.sidebar [data-nav-active="true"]')).toContain(
+    "border-radius: var(--nav-row-top-radius, 5px)",
+  );
+  expect(sheet("navigation")).not.toContain('.sidebar [data-nav-active="true"]::after');
+  expect(rule("navigation", ".sidebar-content")).toContain("padding: 0 12px 0 0");
   expect(rule("navigation", ".sidebar")).toContain("border: 0");
   expect(sheet("layout")).not.toMatch(/\.app-workspace:has\([^}]+::before/);
 });
 
-it("moves the visible trail into the header without removing its original layout slot", () => {
-  expect(rule("layout", ".workspace-header")).toContain(
-    "grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr)",
-  );
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 2");
+it("moves the visible trail into the header without reserving the original title space", () => {
+  expect(rule("layout", ".workspace-header")).toContain("grid-template-columns: minmax(0, 1fr)");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 1");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("-webkit-app-region: no-drag");
-  expect(rule("navigation", ".page-title-placeholder")).toContain(
-    "--title-size: var(--page-title-space-size, 64px)",
-  );
-  expect(rule("navigation", ".page-title-placeholder")).toContain("visibility: hidden");
-  expect(rule("navigation", ".page-title-placeholder")).not.toContain("display: none");
+  expect(rule("navigation", ".page-title-placeholder")).toContain("display: none");
   expect(rule("chat", ".worker-chat-identity .worker-chat-subtitle")).toContain(
     "calc(var(--page-title-space-size, 64px) + 8px)",
   );
@@ -230,14 +258,14 @@ it("centers the header trail across the window only while the sidebar is closed"
   expect(centered).toContain("margin-left: calc(var(--page-margin) - var(--sidebar-left-inset))");
   expect(rule("layout", `${selector} ol`)).toContain("justify-content: safe center");
   expect(rule("navigation", ".page-breadcrumbs ol")).toContain("flex-wrap: wrap");
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 2");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 1");
   expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("justify-content: center");
 });
 
-it("shares normal card geometry with thick dashed creation cards and a centered label", () => {
+it("shares borderless card geometry with creation cards and a centered label", () => {
   const create = rule("home", ".home-card-create");
-  expect(create).toContain("border: 3px dashed var(--control-border)");
-  expect(create).toContain("background: transparent");
+  expect(create).toContain("border: 0");
+  expect(create).toContain("background: var(--surface)");
   expect(create).toContain("align-items: center");
   expect(create).toContain("justify-content: center");
   expect(create).toContain("min-height: 160px");
@@ -247,9 +275,9 @@ it("shares normal card geometry with thick dashed creation cards and a centered 
   expect(rule("home", ".home-card-create .carbon-icon")).toContain("width: 1em");
 });
 
-it("keeps the sidebar on the app surface and gray composers independent in both palettes", () => {
-  expect(rule("navigation", ".sidebar")).toContain("background: var(--surface)");
-  expect(rule("navigation", ".sidebar")).toContain("--control-fill: var(--surface)");
+it("keeps sidebar backgrounds separate from sharp controls and gray composers", () => {
+  expect(rule("navigation", ".sidebar")).toContain("background: transparent");
+  expect(rule("navigation", ".sidebar")).toContain("--control-fill: transparent");
   expect(rule("chat", ".composer")).toContain("background: var(--composer-bg)");
   expect(rule("chat", ".composer")).toContain("border: 0");
   expect(rule("chat", ".composer")).toContain("padding: 1px");
@@ -328,7 +356,10 @@ it("adds the shared header gap to content pages but excludes navigation-card and
   for (const [file, selector] of [
     ["automations", ".automation-page-heading"],
     ["settings", ".settings-section-header:has(.page-breadcrumbs)"],
-    ["tables", ".table-controls:has(> .page-breadcrumbs):not(.home-page > .table-controls)"],
+    [
+      "tables",
+      ".table-controls:has(> .page-breadcrumbs:not(.page-title-placeholder)):not( .home-page > .table-controls )",
+    ],
     ["search", ".search-page > .page-breadcrumbs"],
     ["search", ".memory-heading"],
     ["navigation", ".contributor-tools"],

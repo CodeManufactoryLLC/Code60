@@ -232,13 +232,17 @@ export function ChatSidebar({
               }
             }}
           >
-            {relayHeading && (
-              <NavigationIcon name={chat?.customAgentId ? "app-helmet" : "app-steering-wheel"} />
-            )}
-            {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-              <NavigationIcon name="app-communication" />
-            )}
-            {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
+            <span className="chat-sidebar-artwork" aria-hidden="true">
+              {relayHeading && (
+                <NavigationIcon
+                  name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
+                />
+              )}
+              {entry.role === "orchestrator" && chat?.kind !== "relay" && (
+                <NavigationIcon name="app-communication" />
+              )}
+              {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
+            </span>
             <span className="chat-sidebar-label">{entry.label}</span>
             {(unread > 0 || approvals > 0) && (
               <span className="chat-sidebar-indicators">

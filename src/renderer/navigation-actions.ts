@@ -127,7 +127,7 @@ export function createNavigationActions(
       case "custom-agent":
         return run(
           async () => {
-            if (!context.api.customAgent) throw new Error("Custom agents are unavailable");
+            if (!context.api.customAgent) throw new Error("Custom assistants are unavailable");
             await context.api.customAgent({ type: "open", id: target.id });
           },
           () => {
