@@ -430,7 +430,7 @@ describe("embedded worker chat", () => {
       expect(html).toContain("<h1>Result</h1>");
       expect(html).toContain("<strong>Bold</strong>");
       expect(html).toContain("<code>code</code>");
-      expect(html).toContain("<pre>**literal user**</pre>");
+      expect(html).toMatch(/<pre[^>]*>\*\*literal user\*\*<\/pre>/);
       expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
       expect(html.toLowerCase().match(/datetime="2026-01-01t00:00:00.000z"/g)).toHaveLength(2);
       expect(html.toLowerCase()).not.toContain('datetime="2026-01-01t00:00:30.000z"');

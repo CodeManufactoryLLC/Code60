@@ -15,6 +15,7 @@ const backgrounds = [
   "--surface-band",
   "--accent-bg",
   "--hover-bg",
+  "--agent-bubble",
 ];
 
 function palette(scheme) {
@@ -96,6 +97,11 @@ describe("application palette", () => {
   it("keeps human messages distinct and primary labels legible in both schemes", () => {
     expect(palette("light")("--user-bubble")).toBe("#dbeafe");
     expect(palette("dark")("--user-bubble")).toBe("#35263e");
+    for (const scheme of ["light", "dark"]) {
+      const color = palette(scheme);
+      expect(color("--agent-bubble")).not.toBe(color("--user-bubble"));
+      expect(color("--agent-bubble")).not.toBe(color("--chat-neutral"));
+    }
     expect(palette("light")("--primary-text")).toBe("#ffffff");
     expect(palette("dark")("--primary-text")).toBe("#ffffff");
   });
@@ -120,6 +126,7 @@ describe("application palette", () => {
         ["--primary-text", "--primary"],
         ["--human-text", "--chat-bg"],
         ["--on-user-bubble", "--user-bubble"],
+        ["--on-agent-bubble", "--agent-bubble"],
         ["--primary-text", "--primary-hover"],
         ["--on-destructive", "--destructive"],
         ["--on-destructive", "--destructive-hover"],

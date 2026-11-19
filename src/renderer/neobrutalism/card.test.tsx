@@ -39,3 +39,16 @@ it("retains the upstream div defaults for non-button composition", () => {
   expect(html).toContain('<div data-slot="card-title"');
   expect(html).not.toContain('role="button"');
 });
+
+it("retains landmark semantics and closed-panel attributes without an extra wrapper", () => {
+  const html = renderToStaticMarkup(
+    <Card as="aside" aria-label="Files panel" inert aria-hidden="true" id="inspector">
+      Retained content
+    </Card>,
+  );
+  expect(html).toMatch(/^<aside data-slot="card"/);
+  expect(html).toContain('aria-label="Files panel"');
+  expect(html).toContain('inert="" aria-hidden="true" id="inspector"');
+  expect(html).toMatch(/Retained content<\/aside>$/);
+  expect(html).not.toContain("<div");
+});

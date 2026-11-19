@@ -643,7 +643,7 @@ for (const custom of [false, true]) {
         const bubble = page
           .locator(".orchestration-chat-page:visible .event.prompt:not(.automatic) pre")
           .last();
-        await expect(bubble).toHaveCSS("border-radius", "0px");
+        await expect(bubble).toHaveCSS("border-radius", "5px");
         await expect(bubble).toHaveCSS("background-color", "rgb(53, 38, 62)");
         await expect(bubble).toHaveCSS("color", "rgb(247, 247, 242)");
         await expect(plan).toContainText(repo);

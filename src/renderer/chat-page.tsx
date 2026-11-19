@@ -32,6 +32,9 @@ import { CommandComposer, CommandMessage, invokedCommand } from "./command-compo
 import { revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
+import { Button } from "./neobrutalism/button.js";
+import { Card } from "./neobrutalism/card.js";
+import { ScrollArea } from "./neobrutalism/scroll-area.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
 import type { ReviewPreview } from "./review-actions.js";
@@ -419,7 +422,8 @@ export function ChatPage({
           {relay ? (
             (chat?.title ?? "Relay")
           ) : (
-            <button
+            <Button
+              variant="quiet"
               type="button"
               className="chat-title"
               aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
@@ -427,7 +431,7 @@ export function ChatPage({
               onClick={() => setRenaming(true)}
             >
               {chat?.title ?? "Chat"}
-            </button>
+            </Button>
           )}
         </PageTitle>
         {renaming && run && (
@@ -439,21 +443,21 @@ export function ChatPage({
         )}
         <div className="orchestration-chat-status">
           {!available ? (
-            <button type="button" onClick={onDatabase}>
+            <Button type="button" onClick={onDatabase}>
               Connect to database
-            </button>
+            </Button>
           ) : connecting && !chat?.restored ? (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={() => void action({ type: "stop", id: run?.id ?? null })}
             >
               Cancel
-            </button>
+            </Button>
           ) : (
             relay &&
             (!run || ended) && (
-              <button
+              <Button
                 type="button"
                 disabled={busy}
                 onClick={() =>
@@ -461,7 +465,7 @@ export function ChatPage({
                 }
               >
                 Retry connection
-              </button>
+              </Button>
             )
           )}
         </div>
@@ -495,7 +499,7 @@ export function ChatPage({
               progress === "Stopping"
             }
           />
-          <div
+          <ScrollArea
             className="transcript"
             ref={scroll}
             role="log"
@@ -509,7 +513,8 @@ export function ChatPage({
                 </div>
               )}
               {blocks.length > visible && (
-                <button
+                <Button
+                  variant="quiet"
                   type="button"
                   onClick={() => {
                     pause();
@@ -517,7 +522,7 @@ export function ChatPage({
                   }}
                 >
                   Show earlier activity
-                </button>
+                </Button>
               )}
               {items.map((item, index) => (
                 <div className="chat-turn-content" key={item.key}>
@@ -547,7 +552,8 @@ export function ChatPage({
                         >
                           <div className="chat-message-speaker">You</div>
                           <p>Feedback on {feedback.title}</p>
-                          <button
+                          <Button
+                            variant="quiet"
                             type="button"
                             onClick={() => {
                               const batch = feedback.submissions.find(
@@ -562,7 +568,7 @@ export function ChatPage({
                             }}
                           >
                             View submitted feedback
-                          </button>
+                          </Button>
                         </article>
                       ) : (
                         <ChatMessage
@@ -586,14 +592,15 @@ export function ChatPage({
                           actions={
                             block === latestRequest &&
                             chat?.checkpoint && (
-                              <button
+                              <Button
+                                variant="quiet"
                                 className="message-undo"
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void undoRequest()}
                               >
                                 Undo
-                              </button>
+                              </Button>
                             )
                           }
                         />
@@ -659,7 +666,8 @@ export function ChatPage({
                 activityTurns.current === "session" &&
                 activityTurns.groups.has("session") && (
                   <>
-                    <button
+                    <Button
+                      variant="quiet"
                       type="button"
                       className="activity-history-toggle"
                       id={historyId("session")}
@@ -668,20 +676,20 @@ export function ChatPage({
                       onClick={() => toggleActivity("session")}
                     >
                       Session details
-                    </button>
+                    </Button>
                     {activityDetails("session")}
                   </>
                 )}
             </div>
-          </div>
+          </ScrollArea>
         </div>
-        <section className="composer" aria-label="Chat composer">
+        <Card as="section" className="composer" aria-label="Chat composer">
           {chat?.checkpoint?.phase === "undoing" && (
             <p role="alert">
               Undo needs recovery before another request can start.
-              <button type="button" disabled={busy} onClick={() => void undoRequest()}>
+              <Button type="button" disabled={busy} onClick={() => void undoRequest()}>
                 Resume Undo
-              </button>
+              </Button>
             </p>
           )}
           {!!draftState.attachments.length && (
@@ -689,14 +697,15 @@ export function ChatPage({
               {draftState.attachments.map((attachment, index) => (
                 <li key={JSON.stringify(attachment.reference)}>
                   {attachment.label}
-                  <button
+                  <Button
+                    variant="quiet"
                     type="button"
                     disabled={busy}
                     aria-label={`Remove ${attachment.label}`}
                     onClick={() => draftState.remove(index)}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -749,7 +758,7 @@ export function ChatPage({
             }}
           >
             {working ? (
-              <button
+              <Button
                 type="button"
                 className="composer-send"
                 disabled={!available || busy || !!run?.stopping}
@@ -757,19 +766,20 @@ export function ChatPage({
               >
                 <Icon name="stop" />
                 Stop
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="primary"
                 type="button"
                 className="primary composer-send"
                 disabled={busy || !ready || !draft.trim()}
                 onClick={() => void send()}
               >
                 Send <Icon name="arrow--up" />
-              </button>
+              </Button>
             )}
           </SessionInfo>
-        </section>
+        </Card>
       </div>
     </main>
   );

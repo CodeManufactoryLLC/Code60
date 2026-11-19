@@ -84,11 +84,9 @@ it("uses smaller constant-width navigation cards, smaller contents and wider gap
   );
 });
 
-it("uses square controls and panels while retaining circular radio buttons", () => {
+it("keeps unrelated controls square while Card primitives own migrated surfaces", () => {
   expect(sheet("tokens")).toContain("--button-radius: 0px");
   expect(sheet("tokens")).toContain("--chat-radius: 0px");
-  expect(sheet("tokens")).toContain("--composer-radius: 0px");
-  expect(sheet("tokens")).toContain("--user-bubble-radius: 0px");
   expect(sheet("tokens")).toContain("--dialog-radius: 0px");
   expect(sheet("tokens")).toContain("--ui-radius: 0");
   for (const [file, selector] of [
@@ -99,10 +97,11 @@ it("uses square controls and panels while retaining circular radio buttons", () 
     ["chat", ".activity-display"],
   ])
     expect(rule(file, selector)).toContain("border-radius: var(--button-radius)");
-  expect(rule("chat", ".composer")).toContain("border-radius: var(--composer-radius)");
+  expect(rule("chat", ".composer")).not.toContain("border-radius:");
   expect(rule("files", "#panel-chat")).toContain("border-radius: 0");
   expect(rule("files", "#panel-chat")).toContain("border: 0");
-  expect(rule("layout", ".page-panel")).toContain("border-radius: var(--ui-radius)");
+  expect(rule("layout", ".page-panel")).not.toContain("border-radius:");
+  expect(rule("layout", ".page-panel")).toContain("padding: 1px");
   expect(sheet("base")).toContain('input[type="radio"] { border-radius: 50%; }');
   expect(rule("base", 'input[type="checkbox"][role="switch"]')).toContain(
     "border-radius: var(--ui-radius)",
@@ -127,11 +126,11 @@ it("uses square controls and panels while retaining circular radio buttons", () 
     expect(rule("overlays", selector)).toContain("border-radius: var(--ui-radius)");
 });
 
-it("uses solid square human bubbles without rounding automatic prompts or code", () => {
-  const bubble = rule("chat", ".event.prompt:where(:not(.automatic)) pre");
-  expect(bubble).toContain("background: var(--user-bubble)");
-  expect(bubble).toContain("border-radius: var(--user-bubble-radius)");
-  expect(bubble).toContain("color: var(--on-user-bubble)");
+it("lets the Bubble primitive own human chrome without rounding automatic prompts or code", () => {
+  const bubble = rule("chat", ".event.prompt:where(:not(.automatic)) pre, .agent-message-bubble");
+  expect(bubble).toContain("padding: 12px 18px");
+  expect(bubble).not.toMatch(/background:|border-radius:|color:/);
+  expect(rule("chat", ".event.prompt pre")).not.toContain("color:");
   expect(rule("accessibility", ".event.prompt:not(.automatic) pre")).toContain(
     "background: Canvas",
   );
@@ -139,8 +138,9 @@ it("uses solid square human bubbles without rounding automatic prompts or code",
 
 it("compacts response-to-timing spacing while retaining separation before the next turn", () => {
   expect(rule("chat", ".orchestration-chat-body .event.message")).toContain("margin-bottom: 8px");
-  expect(rule("chat", ".turn-timer")).toContain("margin: 4px 0");
-  expect(rule("chat", ".turn-separator")).toContain("margin: 4px 0 12px");
+  expect(rule("chat", ".orchestration-chat-body .event.message")).toContain("padding: 0 0 16px");
+  expect(rule("chat", ".turn-timer")).toContain("margin: 4px 0 0");
+  expect(rule("chat", ".turn-separator")).toContain("margin: calc(8px - 0.15em) 0 8px");
 });
 
 it("preserves the content header clearance with the persistent toggle in the native-control row", () => {
@@ -158,10 +158,12 @@ it("preserves the content header clearance with the persistent toggle in the nat
   expect(rule("layout", ".workspace-header")).toContain("align-items: flex-start");
   expect(rule("layout", ".workspace-header")).toContain("padding: 6px 0");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
-    "padding: 3px calc(var(--page-padding) - 2px)",
+    "padding: 4px calc(var(--page-padding) - 1px)",
   );
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("border-radius: var(--ui-radius)");
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("background: var(--card-header-fill)");
+  expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("border-radius:");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain(
+    "--nb-card-fill: var(--card-header-fill)",
+  );
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
     "margin-right: var(--breadcrumb-right-inset, 0px)",
   );
@@ -282,10 +284,12 @@ it("shares outlined card geometry with creation cards and a centered label", () 
 it("keeps sidebar backgrounds separate from sharp controls and outlined composers", () => {
   expect(rule("navigation", ".sidebar")).toContain("background: transparent");
   expect(rule("navigation", ".sidebar")).toContain("--control-fill: transparent");
-  expect(rule("chat", ".composer")).toContain("background: var(--composer-bg)");
-  expect(rule("chat", ".composer")).toContain("border: var(--rule) solid var(--control-border)");
+  expect(rule("chat", ".composer")).toContain("--nb-card-fill: var(--composer-bg)");
+  expect(rule("chat", ".composer")).toContain("--nb-card-border: var(--control-border)");
   expect(rule("chat", ".composer")).toContain("padding: 1px");
-  expect(rule("chat", ".composer:focus-within")).toContain("background: var(--composer-focus-bg)");
+  expect(rule("chat", ".composer:focus-within")).toContain(
+    "--nb-card-fill: var(--composer-focus-bg)",
+  );
   expect(rule("chat", ".composer:focus-within")).not.toContain("border-color:");
   expect(rule("chat", ".orchestration-chat-body .composer")).not.toContain("border:");
   for (const token of ["--composer-bg", "--composer-focus-bg"])

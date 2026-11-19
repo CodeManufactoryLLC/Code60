@@ -1328,15 +1328,20 @@ enabled, keyboard reachable and visibly focused; retain disabled cues.
 New or revised draft plans still open their existing side-panel tabs, without
 adding duplicate Plan buttons above the conversation.
 
-Human prompt bubbles have square corners and solid pale-blue (#d8e8fa) fills in Light
-with black text, or dark-blue (#1b3a5c) fills in Dark/System dark with white text.
+Human prompt bubbles use the local Neobrutalism Bubble content with 5px corners,
+2px theme-aware outlines, pale-blue Light and dark-plum Dark/System-dark fills
+and contrasting text.
 Automatic worker prompts and agent code blocks remain square. Agent responses
-use 8px bottom margins; timing notices use 4px margins, with 4px above and 12px
-below their separator. Completed-turn timing notices have
+use 8px bottom margins. Human and agent bubbles share 12px vertical and 18px
+horizontal padding. Timing notices leave visually equal 8px gaps above and below their separator;
+the following agent bubble starts 8px below the line. Its content starts 22px
+below the line after border and padding, matching human bubble insets.
+Markdown boundary margin resets follow general block spacing to enforce that gap
+for paragraphs, code and tables. Completed-turn timing notices have
 a theme-aware 1px horizontal separator below the timing text or disclosure button,
 not inside that button; active timers have no separator. Both message composers
-are defined by their 1px border without an outer shadow. Focus replaces only the
-border color, without adding a glow or changing the box geometry. Forced colors
+use the local Card with a 2px control outline and no outer shadow. Focus adds an
+independent outline and subtle theme fill without changing the box geometry. Forced colors
 retain the existing system-colored borders and Canvas/CanvasText message fills.
 
 Page selection fades the incoming content from 40% to full opacity over the shared
@@ -1498,11 +1503,11 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 
 ### Shared chat timing and Copy
 
-Orchestrator and worker chats use 10px composer corners, borderless agent text and solid user bubbles with square corners: pale blue in Light and dark blue in Dark/System dark, with contrasting black/white text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies, separate from their decorative role icons. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
+Orchestrator and worker chats use 5px composer and message-bubble corners. Human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies, separate from their decorative role icons. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
 
 Both chat interfaces group response/activity by prompt turns. The orchestrator uses its live animation, status and activity timer instead of a separate Working for line. Worker chats retain the local Working for timer after the prompt, above the agent turn. Completed turns freeze as Worked for with their recorded outcome, not a success claim. Prompt dispatch and completion timestamps exclude queue, startup and idle time but include permission waits. Optional turnEnd outcome/completedAt metadata distinguishes cancellation from timeout; terminal status events may carry turn/completedAt for transport failures before process cleanup. Older records remain readable. Missing crash/history boundaries and clock anomalies show timing unavailable/incomplete, never invented duration. Small display components use the existing visibility-aware local ticker, with no backend polling, per-tick live announcements, focus changes or transcript scroll resets.
 
-Nonempty user and agent text messages, including historical and streamed source, have one shared icon-only Carbon Copy control with an accessible label, a 16px icon, a 24px hit target and no separate fill or border. For user messages it sits outside the colored bubble. A compact relative age immediately before Copy uses the original prompt or first response-chunk timestamp, not replay time; missing/invalid timestamps remain explicitly unavailable. The row retains its layout space while hidden and fades in/out on message or controls hover, with keyboard focus also revealing it. Clock-only updates stay inside the small time display and stop in hidden chats/documents, without per-tick announcements. Every Copy activation briefly depresses only the glyph; reserved time width and always-overlaid failure feedback keep the button position stable through pending, success, failure and toast dismissal/expiry. Reduced motion disables the fade and depression. Copy retains only the exact source captured at invocation, including whitespace and code, never adjacent activity, timers or attachments. After clipboard completion, the existing application toast stack shows “Copied.” as a success notification, with its shared six-second lifetime, pause/dismiss controls and polite announcement, never a local success tooltip. Failure keeps actionable inline feedback and Retry Copy without changing drafts, selection, scroll or agent state.
+Nonempty user and agent text messages, including historical and streamed source, have one shared icon-only Carbon Copy control with an accessible label, a 16px icon, a 24px hit target and no separate fill or border. For both human and agent messages it sits outside the colored bubble. A compact relative age immediately before Copy uses the original prompt or first response-chunk timestamp, not replay time; missing/invalid timestamps remain explicitly unavailable. Agent ages align at the message text's left edge with natural content width. Both message types share the same 8px timestamp-to-button gap and 4px glyph padding, giving 12px of visible text-to-Copy spacing. Human-message ages keep their reserved width and right alignment. The row retains its layout space while hidden and fades in/out on message or controls hover, with keyboard focus also revealing it. Clock-only updates stay inside the small time display and stop in hidden chats/documents, without per-tick announcements. Every Copy activation briefly depresses only the glyph; always-overlaid failure feedback keeps the button position stable through pending, success, failure and toast dismissal/expiry. Reduced motion disables the fade and depression. Copy retains only the exact source captured at invocation, including whitespace and code, never adjacent activity, timers or attachments. After clipboard completion, the existing application toast stack shows “Copied.” as a success notification, with its shared six-second lifetime, pause/dismiss controls and polite announcement, never a local success tooltip. Failure keeps actionable inline feedback and Retry Copy without changing drafts, selection, scroll or agent state.
 
 Agent replies in orchestrator and worker chats render Markdown through the shared,
 memoized renderer-only `ChatMarkdown` component using `react-markdown` and
@@ -1650,8 +1655,8 @@ current. Its text is underlined, including rename controls; the icon-only Home
 heading has an underline too. Breadcrumb items align on a shared horizontal line.
 The first breadcrumb row uses the sidebar's shared row height and 12px first-row
 inset so its icon centers align with the sidebar Home icon. An opaque theme-surface
-card with no border and square corners spans the content column around the
-trail. Its background matches the sidebar cards' surface through
+card with a 2px outline, 5px corners and a hard shadow spans the content column
+around the trail. Its background matches the sidebar cards' surface through
 `--card-header-fill`, without a tinted header band. Header outer spacing is 6px
 vertically; the card has 6px inner vertical padding, preserving alignment and
 responsive wrapping. Forced
@@ -2016,13 +2021,15 @@ The left navigation has no border or divider overlay, including across the
 native-control drag strip and application footer. Sidebar content bounds, resizing
 and footer placement remain unchanged.
 
-## Neobrutalism navigation cards
+## Neobrutalism surfaces and chat
 
-Main-content navigation/creation cards and the five sidebar navigation groups
+Main-content navigation/creation cards, the five sidebar navigation groups,
+primary content, breadcrumb, conversation, composer and right-side inspector shells
 use locally adapted Neobrutalism Card primitives, with upstream source/license
-recorded beside them. Tailwind 4 is a
-build-only Vite integration: `nb:` utilities are generated from explicit Card and
-navigation-adapter sources only, without Preflight or automatic discovery. Its
+recorded beside them. Chat also uses native Button, Textarea and human Bubble
+adapters; breadcrumb trails use the local Breadcrumb primitives. Tailwind 4 is a
+build-only Vite integration: `nb:` utilities are generated from explicit local
+primitive and navigation-adapter sources only, without Preflight or automatic discovery. Its
 neobrutalism layer precedes application layout/components; accessibility stays last.
 Tokens alias live Code60 colors, hard shadows and saved typography; the upstream
 layout inset is `--nb-card-spacing`, never the saved text `--card-spacing`.
@@ -2036,10 +2043,47 @@ reduced motion and forced colors suppress decorative movement/shadows. Legacy
 card chrome is removed. Sidebar adapters keep direct-child hierarchy, fixed row
 geometry, independent disclosure/actions and opaque header bands without clipping
 focus. Saved width/expansion, opacity and native blur remain unchanged; only the
-sidebar background layer responds to opacity/blur. Other controls keep their CSS;
+sidebar background layer responds to opacity/blur. Unrelated controls keep their CSS;
 CSP, mounted state and appearance persistence stay unchanged. No capability,
 API, setting, schema or migration is added, so no self-knowledge catalog update
 or capabilities generation is needed for this presentation change.
+
+
+Primary/content and inspector adapters retain their former combined 3px edge
+with a 2px Card outline plus 1px inner padding; breadcrumb padding similarly
+compensates the thinner border. Keep the breadcrumb portal, motion ownership and
+right-edge/upward-extension observers unchanged. The outer Chat tabpanel stays
+transparent and unframed: only its conversation and inspector are surface Cards.
+All retained tabpanels, landmarks, refs, inert/hidden state and native controls
+keep their existing DOM identity and behavior. Composer Cards use the existing
+quiet inset fill, control edge and no decorative shadow; their embedded Textarea
+is borderless and independently retains command/IME/Enter/Shift+Enter behavior.
+Human Bubble content remains preformatted, safely escaped and theme-aware.
+Agent Bubble content uses a div containing semantic safe Markdown, including code
+and tables. Light agent fill is warm neutral (#f1f0e8); Dark is olive-charcoal
+(#282b25), distinct from human pale-blue/plum fills, with >=4.5:1 text contrast.
+Both use 5px corners/2px edges without shadows. Timestamp/Copy/Undo remain outside
+bubbles; agent metadata aligns with the text inset. Automatic updates and tool
+activity are not message bubbles. Forced colors uses Canvas/CanvasText.
+Native chat buttons use saved control typography, stationary hover, 1px pressed
+offset and independent focus. Quiet transcript/inline actions remain shadowless;
+reduced motion removes movement and forced colors uses system fills/edges with
+no decorative shadows. No Base UI, CVA or remote runtime dependency is introduced.
+This expansion changes presentation only: no capability/catalog generation,
+bridge contract, setting, schema, migration or appearance reset is required.
+
+
+Chat uses the local Neobrutalism Scroll Area native adapter: a compact solid,
+rounded, theme-contrasting thumb at the conversation Card's inner right edge,
+not beside the centered reading column. Retain native viewport identity, refs,
+wheel/keyboard/drag input, stable gutter, streaming follow and saved scroll state.
+Constrain inner messages, approvals and composer to the existing reading widths;
+keep the composer fixed with its 16px bottom inset. Worker chats use the same
+viewport and inner reading-column layout. Keep inspector scrolling independent,
+including stacked layouts. Do not restyle code, tables or other app scrollbars.
+Forced colors retains native system scrollbars and independent keyboard focus.
+This presentation change adds no capability, API, setting, schema or migration,
+so the self-knowledge catalog and generated capabilities need no change.
 
 ## Custom Assistants
 
@@ -2137,12 +2181,15 @@ Control outlines remain distinct from decorative panel borders. Hover and
 selection retain separate neutral fills. Text maintains 4.5:1 contrast; controls and
 focus edges maintain 3:1. Semantic change colors and optional signal colors remain.
 
-Controls use 2px outlines and square corners. Radio buttons retain circular
-markers; switches retain their On/Off labels with square tracks and thumbs.
-Existing sidebar, navigation, breadcrumb, primary-content, inspector and Settings
-surfaces use 3px outlines and `--card-shadow`: a solid 4px right/down offset with
-no blur (near-black in Light, ink black in Dark). Menus/dialogs share hard outlined
-edges and offset shadows. Primary/destructive actions use a 2px hard shadow and
+Controls use 2px outlines; unrelated controls retain square corners while migrated
+chat action buttons use 5px corners. Radio buttons retain circular markers;
+switches retain their On/Off labels with square tracks and thumbs. Neobrutalism
+Card shells (sidebar, navigation, breadcrumb, primary content, conversation and
+inspector) use 2px outlines, 5px corners and `--card-shadow`: a solid 4px right/down
+offset with no blur (near-black in Light, ink black in Dark). Nested Settings
+surfaces retain 3px square frames. Composer and approval Cards are quiet,
+without shadows. Menus/dialogs retain their existing hard outlined edges and
+offset shadows. Primary/destructive actions use a 2px hard shadow and
 move 1px when pressed, reducing the shadow to 1px. Navigation cards move 1px with
 a 3px shadow on press; sidebar rows and icon actions stay stationary. Transcript
 text, nested rows and icon actions have no decorative shadows. No new cards,
@@ -2239,3 +2286,13 @@ disabled states, feedback and tooltips. Memory and Updates omit their header hel
 icons; retain the explanations as accessible descriptions of the Memory switch
 and Check for updates action. No capability or availability change is introduced,
 so the self-knowledge catalog and generated capabilities do not change.
+
+Completed-turn dividers and agent bubbles share the reading column’s full outer
+width. Keep visually equal 8px gaps between the visible timing text and divider and
+between divider and following bubble border. The row-to-divider margin is
+`calc(8px - 0.15em)` to account for the font descent remaining after leading trim. Timing disclosures have no extra vertical padding,
+retain a 24px minimum target and grow with saved text size. Their inner label
+trims trailing font leading with text-box trim-end (cap/text) and aligns to the
+bottom of that target. The optical descent correction scales with saved body size. This spacing update
+is presentation-only and adds no capability, bridge contract, setting or schema;
+no self-knowledge catalog change is needed.

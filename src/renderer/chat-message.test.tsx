@@ -15,6 +15,9 @@ describe("shared chat presentation", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain('aria-label="Copy message"');
     expect(html).not.toContain("chat-message-speaker");
+    expect(html).toMatch(/<div data-slot="bubble-content" data-variant="agent"/);
+    expect(html).toContain('agent-message-bubble"><div class="chat-markdown">');
+    expect(html).toMatch(/<\/div><\/div><div class="message-copy">/);
   });
   it("keeps prompt highlighting and worker handoff details in separate slots", () => {
     const html = renderToStaticMarkup(
@@ -57,5 +60,6 @@ describe("shared chat presentation", () => {
     expect(html).toContain('aria-label="Automatic worker update"');
     expect(html).toContain("**automatic** &lt;unsafe&gt;");
     expect(html).not.toContain('aria-label="Copy message"');
+    expect(html).not.toContain('data-slot="bubble-content"');
   });
 });

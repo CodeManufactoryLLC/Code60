@@ -19,5 +19,5 @@ Geometry animated icons created by Magnific - Flaticon
 https://www.flaticon.com/free-animated-icons/geometry
 Bundled activity animations: src/renderer/activity-animations.
 
-Navigation Card primitives: Neobrutalism components, Samuel Breznjak, MIT licensed.
+Card, chat, scrollbar and breadcrumb primitives: Neobrutalism components, Samuel Breznjak, MIT licensed.
 See src/renderer/neobrutalism/LICENSE and README.md for source and adaptations.

@@ -7,6 +7,7 @@ import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
+import { Card } from "./neobrutalism/card.js";
 import { observeBreadcrumbRightInset } from "./page-title-header.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
@@ -144,7 +145,7 @@ export function ChatWorkspace({
         projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined
       }
     >
-      <div className="chat-conversations">
+      <Card className="chat-conversations">
         {gitSetupProject === directory && gitSetupProject && (
           <GitSetupDialog
             key={`${snapshot?.projectInstanceId}:${snapshot?.databaseEpoch}`}
@@ -248,7 +249,7 @@ export function ChatWorkspace({
             />
           );
         })}
-      </div>
+      </Card>
       <section className="project-file-panel-scope" hidden={!projectFiles}>
         <RetainedProjectPanels
           id={scope.viewKey}

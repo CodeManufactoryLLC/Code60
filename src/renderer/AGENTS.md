@@ -178,7 +178,7 @@
   move navigation. Align the first breadcrumb row's icon centers with the sidebar
   Home icon using its shared row height and 12px card-heading inset. Enclose the
   breadcrumbs in an opaque theme-surface card spanning the content column, with a
-  a 3px outline, square corners and the shared hard shadow. Use the same solid
+  a 2px outline, 5px corners and the shared hard shadow. Use the same solid
   theme surface as sidebar cards through `--card-header-fill`. Keep the header above the content in normal
   flow on all pages, including Chat; content must never scroll beneath the card.
   Use 6px outer vertical spacing and 6px inner vertical padding
@@ -351,7 +351,7 @@
   saved-chat-stopped warning from Chat. Preserve database connection, Cancel,
   Relay Retry connection, connection errors and current history-saving warnings.
 
-- Orchestrator and worker chats use borderless agent text and solid user bubbles: pale blue in Light, dark blue in Dark/System dark, with contrasting black/white text. Activity/tool disclosures remain distinct. Copy uses a 16px Carbon icon without a fill or border, outside user bubbles, with glyph highlighting on keyboard focus and a 24px hit target. Keep a single resizable file panel after the conversation, opening at 20% of Chat width with a 120px panel minimum and 300px conversation minimum, stacking below Chat at 1200px and below. In the stacked layout, size the conversation for its visible notices, approvals and complete composer, with a 300px conversation minimum and a 120px independently scrolling transcript minimum. Enclose it in an opaque card with a 3px outline, the shared hard shadow, square corners and a 12px gap from the conversation/breadcrumb column. The gap moves above the panel when stacked and collapses to zero when closed. Include the gap in both CSS and pointer/keyboard resize bounds to preserve the 300px conversation minimum. Give the tab-header row the same solid `--card-header-fill` as sidebar cards, using Canvas in forced colors. Keep the resize grip transparent so it does not mask that row. Keep content and Monaco on the main app surface, and a Carbon drawer toggle inside the tab header. Close to zero width with no divider or rail, and zero height on narrow layouts. Show the reopening icon at the chat area's top right when closed, reserving header space so actions do not overlap it. Keep hidden contents inert; preserve toggle focus, tabs, preview state and expanded width. Animate expansion/closing with reduced-motion support. Keep the resize grip borderless at rest, with visible keyboard focus.
+- Orchestrator and worker chats use distinct message bubbles: human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity/tool disclosures remain distinct. Copy uses a 16px Carbon icon without a fill or border, outside message bubbles, with glyph highlighting on keyboard focus and a 24px hit target. Keep a single resizable file panel after the conversation, opening at 20% of Chat width with a 120px panel minimum and 300px conversation minimum, stacking below Chat at 1200px and below. In the stacked layout, size the conversation for its visible notices, approvals and complete composer, with a 300px conversation minimum and a 120px independently scrolling transcript minimum. Enclose it in an opaque card with a 2px outline, the shared hard shadow, 5px corners and a 12px gap from the conversation/breadcrumb column. The gap moves above the panel when stacked and collapses to zero when closed. Include the gap in both CSS and pointer/keyboard resize bounds to preserve the 300px conversation minimum. Give the tab-header row the same solid `--card-header-fill` as sidebar cards, using Canvas in forced colors. Keep the resize grip transparent so it does not mask that row. Keep content and Monaco on the main app surface, and a Carbon drawer toggle inside the tab header. Close to zero width with no divider or rail, and zero height on narrow layouts. Show the reopening icon at the chat area's top right when closed, reserving header space so actions do not overlap it. Keep hidden contents inert; preserve toggle focus, tabs, preview state and expanded width. Animate expansion/closing with reduced-motion support. Keep the resize grip borderless at rest, with visible keyboard focus.
 - Conversation rows show numeric unread and approval counts, not visible activity, completion or error labels. Keep status in accessible descriptions and tooltips. Keep counts in a separate reserved column; ellipsize names before they overlap those indicators. Count each turn once at its first nonempty agent text. Opening Chat marks all present replies read regardless of scroll; open-chat streams stay read. Persist only database/run-scoped read markers in session storage, never message content; use pushed events without polling or new IPC.
 
 `src/renderer` is the React interface, built by Vite into `dist/renderer`.
@@ -448,7 +448,7 @@
 - Show current-project worker sessions, including history, in the normal Chat hierarchy. Nest only known owned workers beneath their controlling orchestrator; unknown/manual sessions stay directly beneath Chat, except finished ones, which are hidden unless a current orchestrator owns them or the user opened them. Name workers, in rows and their chat heading, by the role label the orchestrator assigned at dispatch, falling back to provider / short run ID. Keep sidebar names as text beside their decorative icons, with role and status in accessible descriptions and tooltips, plus independent unread/approval counts. Separate worker disclosures expand on new children without changing selection; otherwise retain manual collapse. External navigation reveals ancestors. Preserve visible-row keyboard navigation, drafts, scroll, permissions, recovery, Copy, timing and shared file panel. No popup, dock, fullscreen, close/minimize or reorder controls. Worker selection must not change backend orchestrator selection. Load history on demand through the shared cache, never merely to populate rows.
 - Use per-conversation current-project owned worker IDs for aggregate activity, not the global worker list or process existence. Keep sendability and Stop tied to the orchestrator alone.
 - Both chat interfaces use shared turn timing and icon-only Carbon Copy controls with accessible labels. Show dispatch-to-completion timing with outcomes; persisted history gaps stay recorded in the snapshot without a Chat warning; current history-saving failures keep their warning. During an active orchestrator turn, use the activity animation/status/timer instead of a duplicate Working for line; retain completed Worked for summaries. Use the local ticker only in small displays, without per-tick announcements or scroll/focus changes. Copy exact message source at invocation, await clipboard success, then show “Copied.” through the shared application success toast, never a local success tooltip. Keep actionable inline failure feedback with Retry Copy. Keep the full runtime Code60 version at the bottom right of the application footer.
-- Put a compact relative message age immediately before Copy, using the original prompt or first response-chunk timestamp, never replay time. Agent message rows have no gap or left button padding between the age and Copy glyph; retain the 24px hit target. Keep its width reserved and failure feedback out of flow so the icon never shifts on click, success, failure or toast dismissal/expiry. Fade the entire row in/out on message or controls hover, with keyboard focus also revealing it. Keep its layout space while hidden, stop local clocks in hidden chats/documents, and do not announce clock ticks. Give every mouse/keyboard Copy activation a brief glyph-only depression without moving the hit target. Respect reduced motion.
+- Put a compact relative message age immediately before Copy, using the original prompt or first response-chunk timestamp, never replay time. Agent message ages align left with their message text and use their natural content width, without blank reserved width before Copy. Both message types share an 8px timestamp-to-button gap and 4px Copy glyph padding (12px visible text-to-icon spacing), retaining the 24px hit target. Human-message ages keep their existing reserved width and right alignment. Keep failure feedback out of flow so Copy actions, success, failure or toast dismissal/expiry do not move the icon. Fade the entire row in/out on message or controls hover, with keyboard focus also revealing it. Keep its layout space while hidden, stop local clocks in hidden chats/documents, and do not announce clock ticks. Give every mouse/keyboard Copy activation a brief glyph-only depression without moving the hit target. Respect reduced motion.
 
 - Search shows square Type and Sort dropdowns with accessible names after the Search button, wrapping at narrow widths. Submit only on Enter or Search. Center the bundled Search GIF tinted with the current theme’s primary blue and a spotlight-animated Searching... label below the form while reads or overview generation are pending. Show AI overview paragraph placeholders followed by skeleton result rows with timestamp, title and snippet placeholders. Fade and collapse the loading content as the completed overview and results fade in. Use a static search icon, label and skeleton for reduced motion and forced colors. The overview heading appears after loading. Keep submitted criteria internal. Show an Unapplied Search Changes notification icon beside the dropdowns with a hover and keyboard-focus tooltip while draft edits are pending. Preserve filter choices when clearing the query. Capture results after database-wide reads settle, keep them stable until resubmission, and keep AI overview failures separate from usable results. Use single-column title actions and local numeric citations; never render generated markup or links. Start an overview even without literal matches, use relevant saved context for natural-language questions, and map citations to the exact returned evidence. File sources open the read-only file tab in the Chat panel. Cancel stale requests and preserve page-switch state.
 
@@ -466,6 +466,17 @@
 - Sidebar navigation rows and the project header have square button and highlight corners and fill the navigation area inside a shared 12px right gutter. Keep the tab list scrollable with the scrollbar hidden so the gutter stays consistent when content overflows. Apply hierarchy indentation inside labeled buttons instead, so nested page and conversation highlights remain full width. Use a 40px minimum base page inset that grows to fit larger icons, with 24px hierarchy steps; conversation labels retain their 4px alignment offset. Selected rows use the neutral selection fill without an underline or bottom border. When Chat is open, highlight the selected conversation rather than the parent Chat disclosure; clear conversation current state on other pages. Keep every navigation row, project header and adjacent row action at one shared fixed height: 40px at the default text size, growing together only for larger saved text. Selection, press, disclosure and animation must never resize a row; keep actions on one line and ellipsize long labels. Settings and orchestrator action controls share their row's highlight. Keep a labelled Carbon database icon action in the application footer, on the same line as the Last Message indicator and aligned to the sidebar's right edge as it resizes. Immediately to its left, put a separate Carbon back-arrow icon action with the tooltip and label “return to splash page”. Returning preserves the database, open project, chats, drafts and active work. Keep that explicit return visible even with an open project and across renderer reload; Start/Escape re-enters the app. Do not block return merely because project runs are active. Use the compact footer height, outside the scrolling tab list; reuse the database modal and project selector's busy/active-project-run restrictions. The right file panel has no top, bottom or left container padding.
 
 - Chat bodies reserve 16px of bottom padding beneath the composer in both wide and narrow layouts, including worker conversations.
+- Chat uses the local Neobrutalism Scroll Area native adapter: a compact solid,
+  rounded, theme-contrasting thumb at the conversation Card's inner right edge,
+  not beside the centered reading column. Retain native viewport identity, refs,
+  wheel/keyboard/drag input, stable gutter, streaming follow and saved scroll state.
+  Constrain inner messages, approvals and composer to the existing reading widths;
+  keep the composer fixed with its 16px bottom inset. Worker chats use the same
+  viewport and inner reading-column layout. Keep inspector scrolling independent,
+  including stacked layouts. Do not restyle code, tables or other app scrollbars.
+  Forced colors retains native system scrollbars and independent keyboard focus.
+  This presentation change adds no capability, API, setting, schema or migration,
+  so the self-knowledge catalog and generated capabilities need no change.
 - Main Chat follows streamed growth with one retargetable scroll animation, cancelled
   by upward input or reading activity details. Restore history/reading positions
   without animation. Fade/translate new visible assistant messages only once, never
@@ -517,13 +528,19 @@
   forced colors make them instant. Keep keyboard focus immediate. Paint each
   right-panel tab's selected/hovered background underneath its label and Close
   action; both controls stay separate and transparent, with glyph-only icon focus.
-- Give human prompt bubbles in both chats square corners and solid pale-blue Light
-  (#d8e8fa, black text) or dark-blue Dark/System-dark (#1b3a5c, white text) fills,
-  outlined by their matching 1px border without a shadow. Keep automatic prompts
-  and agent code blocks square. Use 8px response bottom margins, 4px timing margins
-  and 4px above / 12px below the theme-aware 1px separator after completed
+- Give human prompt bubbles in both chats 5px corners, 2px theme-aware outlines
+  and solid pale-blue Light or dark-plum Dark/System-dark fills with contrasting
+  text, through the local Bubble primitive, without a shadow. Keep automatic prompts
+  and agent code blocks square. Use 8px response bottom margins, 4px timing top margins
+  and visually equal 8px text / bubble gaps around the 1px separator after completed
   turn timing notices, outside activity disclosure buttons and absent for active
-  timers. Both composers use 2px outlines at rest and a distinct focus outline, with theme-surface fills,
+  timers. Human and agent bubbles share one 12px vertical / 18px horizontal
+  padding rule. Keep the 8px external gap after a turn separator. Agent content
+  starts 22px below that line after border and padding; align external timestamps
+  with its 20px inset from the bubble edge (2px border + 18px padding).
+  Apply Markdown first/last-child margin resets after general block spacing so
+  paragraph/code/table margins cannot reopen that gap.
+  Both composers use 2px outlines at rest and a distinct focus outline, with theme-surface fills,
   a subtle focus fill, no outer shadow and no geometry changes. Forced colors
   retain system-colored outlines.
 
@@ -624,12 +641,15 @@ Control outlines remain distinct from decorative panel borders. Hover and
 selection retain separate neutral fills. Text maintains 4.5:1 contrast; controls and
 focus edges maintain 3:1. Semantic change colors and optional signal colors remain.
 
-Controls use 2px outlines and square corners. Radio buttons retain circular
-markers; switches retain their On/Off labels with square tracks and thumbs.
-Existing sidebar, navigation, breadcrumb, primary-content, inspector and Settings
-surfaces use 3px outlines and `--card-shadow`: a solid 4px right/down offset with
-no blur (near-black in Light, ink black in Dark). Menus/dialogs share hard outlined
-edges and offset shadows. Primary/destructive actions use a 2px hard shadow and
+Controls use 2px outlines; unrelated controls retain square corners while migrated
+chat action buttons use 5px corners. Radio buttons retain circular markers;
+switches retain their On/Off labels with square tracks and thumbs. Neobrutalism
+Card shells (sidebar, navigation, breadcrumb, primary content, conversation and
+inspector) use 2px outlines, 5px corners and `--card-shadow`: a solid 4px right/down
+offset with no blur (near-black in Light, ink black in Dark). Nested Settings
+surfaces retain 3px square frames. Composer and approval Cards are quiet,
+without shadows. Menus/dialogs retain their existing hard outlined edges and
+offset shadows. Primary/destructive actions use a 2px hard shadow and
 move 1px when pressed, reducing the shadow to 1px. Navigation cards move 1px with
 a 3px shadow on press; sidebar rows and icon actions stay stationary. Transcript
 text, nested rows and icon actions have no decorative shadows. No new cards,
@@ -763,12 +783,14 @@ replacement, visibility/preference changes and disposal; skip initial hydration,
 reduced motion and forced colors. No new preference or capability is introduced.
 
 
-## Neobrutalism navigation cards
+## Neobrutalism surfaces and chat
 
 Use the local licensed Card primitives for shared main-content navigation,
-creation cards and all five sidebar navigation containers. Tailwind v4 is
-build-only, `nb:`-prefixed, without Preflight or
-automatic discovery; explicit sources are the Card primitives and navigation
+creation cards, all five sidebar navigation containers, primary content,
+breadcrumbs, conversation, composer and inspector shells. Chat uses the local
+native Button, Textarea and human Bubble adapters; trails use Breadcrumb parts.
+Tailwind v4 is build-only, `nb:`-prefixed, without Preflight or
+automatic discovery; explicit sources are these primitives and the navigation
 adapter. Keep its layer before app layout/components and accessibility last.
 Map tokens to live Code60 themes/text settings, using `--nb-card-spacing` only
 for layout to avoid the existing saved text-spacing variable. Shells own 5px corners,
@@ -781,3 +803,37 @@ focus, disabled/pending state and 1px press feedback; honor reduced motion and
 forced colors. Do not import upstream global palettes/fonts/resets or introduce
 runtime fetching, Base UI, app-wide button changes or appearance migrations.
 This presentation-only migration adds no capability and needs no catalog change.
+
+
+Primary/content and inspector adapters retain their former combined 3px edge
+with a 2px Card outline plus 1px inner padding; breadcrumb padding similarly
+compensates the thinner border. Keep the breadcrumb portal, motion ownership and
+right-edge/upward-extension observers unchanged. The outer Chat tabpanel stays
+transparent and unframed: only its conversation and inspector are surface Cards.
+All retained tabpanels, landmarks, refs, inert/hidden state and native controls
+keep their existing DOM identity and behavior. Composer Cards use the existing
+quiet inset fill, control edge and no decorative shadow; their embedded Textarea
+is borderless and independently retains command/IME/Enter/Shift+Enter behavior.
+Human Bubble content remains preformatted, safely escaped and theme-aware.
+Agent Bubble content uses a div containing semantic safe Markdown, including code
+and tables. Light agent fill is warm neutral (#f1f0e8); Dark is olive-charcoal
+(#282b25), distinct from human pale-blue/plum fills, with >=4.5:1 text contrast.
+Both use 5px corners/2px edges without shadows. Timestamp/Copy/Undo remain outside
+bubbles; agent metadata aligns with the text inset. Automatic updates and tool
+activity are not message bubbles. Forced colors uses Canvas/CanvasText.
+Native chat buttons use saved control typography, stationary hover, 1px pressed
+offset and independent focus. Quiet transcript/inline actions remain shadowless;
+reduced motion removes movement and forced colors uses system fills/edges with
+no decorative shadows. No Base UI, CVA or remote runtime dependency is introduced.
+This expansion changes presentation only: no capability/catalog generation,
+bridge contract, setting, schema, migration or appearance reset is required.
+
+- Agent bubbles fill the existing reading column. Completed-turn dividers share
+  their outer left/right edges and use visually equal 8px gaps from the
+  visible timing text and following bubble border. Use a row-to-divider margin
+  of `calc(8px - 0.15em)` for the remaining font descent after leading trim. Timing disclosure buttons
+  retain a 24px minimum target without extra vertical padding; saved larger
+  text grows the line height. Bottom-align their inner label and trim trailing
+  font leading with text-box trim-end (cap/text), so the visible letters have
+  the same 8px divider gap as the following bubble border. Keep source Copy, disclosure state, streaming and
+  scroll behavior unchanged. Presentation only; no capability/catalog change.

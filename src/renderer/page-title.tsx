@@ -12,6 +12,7 @@ import { Icon } from "./icons.js";
 import { isSettingsSection, pageDefinitions, settingsIcons, settingsLabels } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import type { NavigationTarget } from "./navigation-tree.js";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from "./neobrutalism/breadcrumb.js";
 import {
   type BreadcrumbSource,
   breadcrumbAncestors,
@@ -94,11 +95,11 @@ export function PageTitle({
     target,
   );
   const trail = (leaf: ReactNode, interactive: boolean) => (
-    <ol>
+    <BreadcrumbList>
       {ancestors.map(({ label, icon, target }, index) => {
         const home = target.kind === "page" && target.id === "home";
         return (
-          <li
+          <BreadcrumbItem
             key={`${target.kind}:${target.id}`}
             data-breadcrumb-key={`${target.kind}:${target.id}`}
           >
@@ -124,10 +125,10 @@ export function PageTitle({
                 <span className={home ? "sr-only" : "breadcrumb-text"}>{label}</span>
               </span>
             )}
-          </li>
+          </BreadcrumbItem>
         );
       })}
-      <li
+      <BreadcrumbItem
         aria-current="page"
         data-breadcrumb-key={
           target
@@ -139,8 +140,8 @@ export function PageTitle({
           <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
         )}
         {leaf}
-      </li>
-    </ol>
+      </BreadcrumbItem>
+    </BreadcrumbList>
   );
   const chat = target
     ? navigation?.chats.find((chat) => conversationId(chat) === target.id)
@@ -162,7 +163,7 @@ export function PageTitle({
   );
   return (
     <>
-      <nav
+      <Breadcrumb
         ref={slot}
         className={header ? "page-breadcrumbs page-title-placeholder" : "page-breadcrumbs"}
         aria-label={header ? undefined : "Breadcrumb"}
@@ -170,17 +171,17 @@ export function PageTitle({
         inert={header ? true : undefined}
       >
         {header ? trail(placeholder, false) : trail(heading, true)}
-      </nav>
+      </Breadcrumb>
       {header &&
         createPortal(
-          <nav
+          <Breadcrumb
             className="page-breadcrumbs"
             aria-label="Breadcrumb"
             inert={navigation?.selectionPending}
             aria-busy={navigation?.selectionPending || undefined}
           >
             {trail(heading, true)}
-          </nav>,
+          </Breadcrumb>,
           header,
         )}
     </>

@@ -178,7 +178,7 @@ export function PageTabBar({
         >
           <Icon name={open ? "side-panel--close" : "side-panel--open"} />
         </button>
-        <div className="workspace-breadcrumbs" ref={breadcrumbCard} />
+        <Card className="workspace-breadcrumbs" ref={breadcrumbCard} />
       </header>
     </>
   );

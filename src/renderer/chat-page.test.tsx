@@ -82,7 +82,7 @@ describe("orchestration activity presentation", () => {
     expect(main).toContain('aria-busy="true"');
     expect(main).not.toContain("hidden=");
     expect(html).toContain('class="transcript"');
-    expect(html).toContain('class="composer"');
+    expect(html).toMatch(/class="[^"]*composer"/);
   });
   it("omits the stale PID warning in restored chats but preserves actual failures", () => {
     const reason = "the owning process (PID 12345) is gone";
@@ -103,7 +103,7 @@ describe("orchestration activity presentation", () => {
       );
       expect(html).not.toContain(reason);
       expect(html).not.toContain('class="error-banner"');
-      expect(html).toContain('class="composer"');
+      expect(html).toMatch(/class="[^"]*composer"/);
     }
     expect(
       render(
@@ -145,7 +145,7 @@ describe("orchestration activity presentation", () => {
         expect(html).not.toContain("Saved chat is stopped");
         expect(html).not.toContain("Previous workers are history only");
         expect(html.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
-        expect(html).toContain('class="primary composer-send"');
+        expect(html).toMatch(/class="[^"]*primary composer-send"/);
         expect(html).toContain(">Send ");
       }
     },
@@ -297,7 +297,7 @@ describe("orchestration activity presentation", () => {
     expect(html).toContain("<h2>Result</h2>");
     expect(html).toContain("<strong>Bold</strong>");
     expect(html).toContain("<code>code</code>");
-    expect(html).toContain("<pre>**literal user**</pre>");
+    expect(html).toMatch(/<pre[^>]*>\*\*literal user\*\*<\/pre>/);
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
     expect(events[1]).toMatchObject({ text: "## Result\n\n**Bo" });
   });
@@ -305,7 +305,7 @@ describe("orchestration activity presentation", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
       expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
-      expect(html.match(/<button[^>]*class="chat-title"[^>]*>/)?.[0]).toContain("disabled");
+      expect(html.match(/<button[^>]*class="[^"]*chat-title"[^>]*>/)?.[0]).toContain("disabled");
       const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
       expect(action).toContain("disabled");
       expect(html).toContain("Connect to database");
@@ -410,7 +410,9 @@ describe("orchestration activity presentation", () => {
       ],
     );
     expect(completed).toContain('class="turn-timer activity-history-toggle"');
-    expect(completed).toMatch(/Worked for 12s \(finished\)<\/button><hr class="turn-separator"/);
+    expect(completed).toMatch(
+      /Worked for 12s \(finished\)<\/span><\/button><hr class="turn-separator"/,
+    );
     expect(completed).toContain("Checking evidence");
     expect(completed).not.toContain('class="chat-progress activity-display"');
   });
@@ -446,7 +448,7 @@ describe("orchestration activity presentation", () => {
       },
     ];
     const html = render("idle", [], [], events, [review]);
-    expect(html).toContain("<pre>Unrelated new request</pre>");
+    expect(html).toMatch(/<pre[^>]*>Unrelated new request<\/pre>/);
     expect(html).not.toContain('aria-label="Your review feedback"');
     const batch = review.submissions[0];
     if (!batch) throw new Error("Missing batch");
@@ -534,9 +536,9 @@ describe("orchestration activity presentation", () => {
         event({ type: "prompt", turn: 2, text: "worker update", origin: "automatic" }),
       ],
     );
-    expect(html).toMatch(/<pre>user source<\/pre><div class="message-copy">/);
+    expect(html).toMatch(/<pre[^>]*>user source<\/pre><div class="message-copy">/);
     expect(html).toMatch(
-      /<div class="chat-markdown"><p>assistant source<\/p><\/div><div class="message-copy">/,
+      /<div class="chat-markdown"><p>assistant source<\/p><\/div><\/div><div class="message-copy">/,
     );
     expect(html).toContain('class="event prompt automatic"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);

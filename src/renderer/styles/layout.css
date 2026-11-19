@@ -130,14 +130,12 @@ body:has(.app .sidebar) {
   scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
   /* Header margin and inner padding retain the 12px first-row inset. */
-  padding: 3px calc(var(--page-padding) - 2px);
-  border: var(--rule-strong) solid var(--panel-border);
-  border-radius: var(--ui-radius);
-  background: var(--card-header-fill);
+  padding: 4px calc(var(--page-padding) - 1px);
+  gap: 0;
+  --nb-card-fill: var(--card-header-fill);
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
-  box-shadow: var(--card-shadow);
 }
 
 .workspace-breadcrumbs .page-breadcrumbs li {
@@ -165,11 +163,10 @@ body:has(.app .sidebar) {
   min-height: 0;
   min-width: 0;
   position: relative;
-  border: var(--rule-strong) solid var(--panel-border);
-  border-radius: var(--ui-radius);
-  background: var(--surface);
+  /* Retain the former 3px combined edge without duplicating Card chrome. */
+  padding: 1px;
+  gap: 0;
   overflow: hidden;
-  box-shadow: var(--card-shadow);
 }
 
 .page-panel > :is(.error-banner, .warning-banner) {

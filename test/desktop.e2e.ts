@@ -412,6 +412,40 @@ async function expectMessageCopy(control: Locator) {
   expect(timeBox).not.toBeNull();
   expect(copyBox).not.toBeNull();
   expect((timeBox?.x ?? 0) + (timeBox?.width ?? 0)).toBeLessThanOrEqual(copyBox?.x ?? 0);
+  const textToIcon = await control.evaluate((element) => {
+    const time = element.parentElement?.querySelector(".message-sent-time");
+    const icon = element.querySelector(".message-copy-glyph");
+    if (!time || !icon) throw new Error("Missing timestamp/Copy glyph");
+    const text = document.createRange();
+    text.selectNodeContents(time);
+    return icon.getBoundingClientRect().left - text.getBoundingClientRect().right;
+  });
+  expect(textToIcon).toBeCloseTo(12, 0);
+  const agentAlignment = await control.evaluate((element) => {
+    const message = element.closest(".event.message");
+    if (!message) return null;
+    const time = message.querySelector(".message-sent-time");
+    const text = message.querySelector(".chat-markdown");
+    const bubble = message.querySelector(".agent-message-bubble");
+    if (!time || !text || !bubble) throw new Error("Missing agent message bubble/metadata");
+    if (bubble.contains(time) || bubble.contains(element))
+      throw new Error("Copy metadata belongs outside the bubble");
+    const range = document.createRange();
+    range.selectNodeContents(time);
+    return {
+      textLeft: text.getBoundingClientRect().left,
+      timeLeft: range.getBoundingClientRect().left,
+      copyGap: element.getBoundingClientRect().left - time.getBoundingClientRect().right,
+      glyphGap:
+        (element.querySelector(".message-copy-glyph")?.getBoundingClientRect().left ?? Infinity) -
+        range.getBoundingClientRect().right,
+    };
+  });
+  if (agentAlignment) {
+    expect(agentAlignment.timeLeft).toBeCloseTo(agentAlignment.textLeft, 0);
+    expect(agentAlignment.copyGap).toBeCloseTo(8, 0);
+    expect(agentAlignment.glyphGap).toBeCloseTo(12, 0);
+  }
   await control.hover();
   await expect(control).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(control).toHaveCSS("border-top-width", "0px");
@@ -502,8 +536,7 @@ async function expectComposerShadow(composer: Locator) {
 async function expectTurnSeparator(line: Locator) {
   await expect(line).toHaveCSS("border-top-width", "1px");
   await expect(line).toHaveCSS("border-top-style", "solid");
-  await expect(line).toHaveCSS("margin-top", "4px");
-  await expect(line).toHaveCSS("margin-bottom", "12px");
+  await expect(line).toHaveCSS("margin-bottom", "8px");
   const geometry = await line.evaluate((element) => {
     const previous = element.previousElementSibling;
     const parent = element.parentElement;
@@ -511,7 +544,37 @@ async function expectTurnSeparator(line: Locator) {
     const style = getComputedStyle(element);
     const parentStyle = getComputedStyle(parent);
     const bounds = element.getBoundingClientRect();
+    const flow = [
+      ...(element
+        .closest(".orchestration-chat-body")
+        ?.querySelectorAll(".event, .turn-separator") ?? []),
+    ].filter((node) => node.getClientRects().length > 0 && !node.closest("[hidden], [inert]"));
+    const next = flow[flow.indexOf(element) + 1];
+    const response = next?.matches(".event.message") ? next.querySelector(".chat-markdown") : null;
+    const bubble = response?.closest(".agent-message-bubble");
+    const label = previous.querySelector<HTMLElement>(".turn-timer-text");
+    if (!label) throw new Error("Missing turn timer text");
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const labelStyle = getComputedStyle(label);
+    const canvas = document.createElement("canvas").getContext("2d");
+    if (!canvas) throw new Error("Missing font measurement context");
+    canvas.font = `${labelStyle.fontStyle} ${labelStyle.fontWeight} ${labelStyle.fontSize} ${labelStyle.fontFamily}`;
+    const metrics = canvas.measureText(label.textContent ?? "");
+    const inkBottom =
+      range.getBoundingClientRect().bottom -
+      metrics.fontBoundingBoxDescent +
+      metrics.actualBoundingBoxDescent;
     return {
+      inkGap: bounds.top - inkBottom,
+      labelGap: 8 - 0.15 * Number.parseFloat(style.fontSize),
+      timingGap: bounds.top - previous.getBoundingClientRect().bottom,
+      bubbleGap: bubble ? bubble.getBoundingClientRect().top - bounds.bottom : null,
+      bubbleLeft: bubble?.getBoundingClientRect().left,
+      bubbleRight: bubble?.getBoundingClientRect().right,
+      lineLeft: bounds.left,
+      lineRight: bounds.right,
+      responseGap: response ? response.getBoundingClientRect().top - bounds.bottom : null,
       timing: previous.matches(".turn-timer"),
       below: bounds.top >= previous.getBoundingClientRect().bottom,
       width: bounds.width,
@@ -523,6 +586,16 @@ async function expectTurnSeparator(line: Locator) {
         Number.parseFloat(style.marginRight),
     };
   });
+  expect(geometry.timingGap).toBeCloseTo(geometry.labelGap, 0);
+  // Compare visible glyph bounds too: equal block margins alone missed extra font leading.
+  expect(Math.abs(geometry.inkGap - 8)).toBeLessThanOrEqual(1.5);
+  if (geometry.bubbleGap !== null) {
+    expect(geometry.bubbleGap).toBeCloseTo(8, 0);
+    expect(Math.abs(geometry.bubbleGap - geometry.inkGap)).toBeLessThanOrEqual(1.5);
+    expect(geometry.lineLeft).toBeCloseTo(geometry.bubbleLeft ?? Infinity, 0);
+    expect(geometry.lineRight).toBeCloseTo(geometry.bubbleRight ?? Infinity, 0);
+  }
+  if (geometry.responseGap !== null) expect(geometry.responseGap).toBeCloseTo(22, 0);
   expect(geometry.timing).toBe(true);
   expect(geometry.below).toBe(true);
   expect(geometry.width).toBeCloseTo(geometry.available, 1);
@@ -543,7 +616,7 @@ async function expectComposerFocus(composer: Locator, forcedColor?: "Highlight")
   }, forcedColor);
   await expect(composer).toHaveCSS("border-width", "2px");
   await expect(composer).toHaveCSS("background-color", expected.fill);
-  await expect(composer).toHaveCSS("border-radius", "0px");
+  await expect(composer).toHaveCSS("border-radius", "5px");
   await expect(composer).toHaveCSS("outline-width", "2px");
   if (forcedColor) await expect(composer).toHaveCSS("outline-color", expected.outline);
   await expectComposerShadow(composer);
@@ -581,7 +654,7 @@ async function expectStackedComposer(chat: Locator) {
 async function expectIndustrialSurfaces(page: Page) {
   const surfaces = await page
     .locator(
-      ".navigation-card, button, input, select, textarea, dialog:not(.splash), .button-group, .chat-sidebar-row, .segmented, .segmented-option, .settings-card, .settings-group, .composer, .event.prompt:not(.automatic) > pre, .event.toolCall, .approval, .worker-chat-page, .actions-menu",
+      ".agent-message-bubble, .workspace-breadcrumbs, .page-panel:not(#panel-chat), .chat-conversations, .file-panel, .navigation-card, button, input, select, textarea, dialog:not(.splash), .button-group, .chat-sidebar-row, .segmented, .segmented-option, .settings-card, .settings-group, .composer, .event.prompt:not(.automatic) > pre, .event.toolCall, .approval, .worker-chat-page, .actions-menu",
     )
     .evaluateAll((elements) =>
       elements
@@ -597,7 +670,9 @@ async function expectIndustrialSurfaces(page: Page) {
             expectedRadii: Array(4).fill(
               circle
                 ? 50
-                : element.matches(".navigation-card, .home-card, .sidebar-navigation-card")
+                : element.matches(
+                      "[data-slot=card], .home-card, [data-slot=bubble-content], button[data-slot=button]:not([data-variant=quiet])",
+                    )
                   ? 5
                   : 0,
             ),
@@ -623,7 +698,7 @@ async function expectIndustrialSurfaces(page: Page) {
             forcedColors: matchMedia("(forced-colors: active)").matches,
             shadow: style.boxShadow,
             elevated: element.matches(
-              ".navigation-card, .settings-card, .settings-group, button.primary, button.destructive, .splash-enter",
+              ".navigation-card, .workspace-breadcrumbs, .page-panel:not(#panel-chat), .chat-conversations, .file-panel, .settings-card, .settings-group, button.primary, button.destructive, .splash-enter, button[data-slot=button]:not([data-variant=quiet])",
             ),
             overlay: element.matches(
               "dialog, [role=dialog], [popover], .app-toast, .button-group, .worker-chat-page",
@@ -3046,7 +3121,7 @@ test("desktop: square controls, compact cards and collapsible navigation", async
     const homeIcon = await page.locator("#tab-home .navigation-icon").boundingBox();
     if (!homeIcon) throw new Error("Missing Home icon");
     const breadcrumbCard = page.locator(".workspace-breadcrumbs");
-    await expect(breadcrumbCard).toHaveCSS("border-radius", "0px");
+    await expect(breadcrumbCard).toHaveCSS("border-radius", "5px");
     await expect(breadcrumbCard).toHaveCSS("backdrop-filter", "none");
     await expect(breadcrumbCard).not.toHaveCSS("box-shadow", "none");
     await expect(breadcrumbCard).toHaveCSS("background-color", /^rgb\(/);
@@ -3069,13 +3144,17 @@ test("desktop: square controls, compact cards and collapsible navigation", async
     expect(toggleBounds.y + toggleBounds.height).toBeLessThanOrEqual(strip.y + strip.height);
     expect(toggleBounds.y + toggleBounds.height).toBeLessThanOrEqual(homeBounds.y);
     await expect(page.locator(".workspace-header .sidebar-toggle")).toHaveCount(1);
-    await expect(page.locator(".chat-conversations")).toHaveCSS("border-radius", "0px");
-    await expect(page.locator(".composer:visible")).toHaveCSS("border-radius", "0px");
+    await expect(page.locator(".chat-conversations")).toHaveCSS("border-radius", "5px");
+    await expect(page.locator(".composer:visible")).toHaveCSS("border-radius", "5px");
     const unexpectedCorners = await page
       .locator("button:visible")
       .evaluateAll((buttons) =>
         buttons
-          .filter((button) => getComputedStyle(button).borderRadius !== "0px")
+          .filter(
+            (button) =>
+              getComputedStyle(button).borderRadius !==
+              (button.matches('[data-slot="button"]:not([data-variant="quiet"])') ? "5px" : "0px"),
+          )
           .map((button) => button.getAttribute("aria-label") ?? button.textContent),
       );
     expect(unexpectedCorners).toEqual([]);
@@ -3837,7 +3916,7 @@ test("desktop: navigation cards use 5px corners while text inputs stay square", 
     await expect(relay).toHaveCSS("overflow", "visible");
     await expect(relay.locator(".home-card-art")).toHaveCSS("border-top-left-radius", "3px");
     await relay.press("Enter");
-    await expect(page.locator(".composer:visible")).toHaveCSS("border-radius", "0px");
+    await expect(page.locator(".composer:visible")).toHaveCSS("border-radius", "5px");
     await expect(page.locator(".composer:visible textarea")).toHaveCSS("border-radius", "0px");
 
     await selectSettingsPage(page, "Text");
@@ -7497,6 +7576,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(retry).toBeVisible();
     await expectMessageCopy(retry);
     await expect(chat.getByRole("status").filter({ hasText: "Copy failed." })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("agent-message-time-spacing.png") });
     await expect(copyToast).toHaveCount(0);
     await retry.focus();
     await page.keyboard.press("Enter");
@@ -7655,15 +7735,16 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
     await expect(popup.locator(".turn-timer")).toHaveText(worked ?? "");
     const historical = popup.locator(".event.message");
     await expectMessageCopy(historical.getByRole("button", { name: "Copy message" }));
+    await page.screenshot({ path: test.info().outputPath("agent-response-divider-spacing.png") });
     await expect(historical).toHaveCSS("border-top-width", "0px");
-    await expect(popup.locator(".event.prompt pre")).toHaveCSS("border-radius", "0px");
+    await expect(popup.locator(".event.prompt pre")).toHaveCSS("border-radius", "5px");
     await expect(popup.locator(".event.prompt pre")).toHaveCSS(
       "background-color",
       "rgb(219, 234, 254)",
     );
     await expect(popup.locator(".event.prompt pre")).toHaveCSS(
       "border-top-color",
-      "rgb(219, 234, 254)",
+      "rgb(17, 17, 17)",
     );
     await expect(popup.locator(".event.prompt pre")).toHaveCSS("color", "rgb(17, 17, 17)");
     await expect(historical.getByRole("button", { name: "Copy message" })).toHaveText("");
@@ -8411,7 +8492,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       for (const message of await chatPopup.locator(".event.message").all())
         await expect(message).toHaveCSS("border-top-width", "0px");
       for (const prompt of await chatPopup.locator(".event.prompt:not(.automatic)").all()) {
-        await expect(prompt.locator("pre")).toHaveCSS("border-radius", "0px");
+        await expect(prompt.locator("pre")).toHaveCSS("border-radius", "5px");
         await expect(prompt.locator("pre")).toHaveCSS(
           "background-color",
           dark ? "rgb(53, 38, 62)" : "rgb(219, 234, 254)",
@@ -8988,14 +9069,14 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         /^"?IBM Plex Sans"?/,
       );
       // Solid human bubbles retain contrasting text and rounded corners.
-      await expect(page.locator(".event.prompt pre").first()).toHaveCSS("border-radius", "0px");
+      await expect(page.locator(".event.prompt pre").first()).toHaveCSS("border-radius", "5px");
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "background-color",
         darkTheme ? "rgb(53, 38, 62)" : "rgb(219, 234, 254)",
       );
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "border-top-color",
-        darkTheme ? "rgb(53, 38, 62)" : "rgb(219, 234, 254)",
+        darkTheme ? "rgb(5, 5, 5)" : "rgb(17, 17, 17)",
       );
       await expect(page.locator(".event.prompt pre").first()).toHaveCSS(
         "color",
@@ -12350,7 +12431,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(chat.getByRole("status")).toHaveText("Responding...");
     const composer = chat.getByRole("region", { name: "Chat composer" });
-    await expect(composer).toHaveCSS("border-radius", "0px");
+    await expect(composer).toHaveCSS("border-radius", "5px");
     await idleCard.click();
     await expect(idleCard).toHaveAttribute("aria-current", "true");
     await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
@@ -12381,9 +12462,33 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       );
       await expectComposerShadow(composer);
       await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("background-color", bubble);
-      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("border-radius", "0px");
-      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("border-top-color", bubble);
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("border-radius", "5px");
+      await expect(chat.locator(".event.prompt pre").first()).toHaveCSS(
+        "border-top-color",
+        neutral === "rgb(255, 255, 255)" ? "rgb(17, 17, 17)" : "rgb(5, 5, 5)",
+      );
       await expect(chat.locator(".event.prompt pre").first()).toHaveCSS("color", text);
+      const replyBubble = chat.locator(".agent-message-bubble").first();
+      await expect(replyBubble).toHaveAttribute("data-variant", "agent");
+      await expect(replyBubble).toHaveCSS("border-radius", "5px");
+      await expect(replyBubble).toHaveCSS("border-width", "2px");
+      const humanPadding = await chat
+        .locator(".event.prompt pre")
+        .first()
+        .evaluate((element) => getComputedStyle(element).padding);
+      await expect(replyBubble).toHaveCSS("padding", humanPadding);
+      await expect(replyBubble).toHaveCSS("padding-top", "12px");
+      await expect(replyBubble).toHaveCSS("padding-right", "18px");
+      await expect(replyBubble).toHaveCSS("padding-bottom", "12px");
+      await expect(replyBubble).toHaveCSS("padding-left", "18px");
+      await expect(replyBubble).toHaveCSS("box-shadow", "none");
+      await expect(replyBubble).toHaveCSS(
+        "background-color",
+        neutral === "rgb(255, 255, 255)" ? "rgb(241, 240, 232)" : "rgb(40, 43, 37)",
+      );
+      await expect(replyBubble).toHaveCSS("color", text);
+      await expect(replyBubble.locator(".chat-markdown")).toBeVisible();
+      await expect(replyBubble.locator(".message-copy")).toHaveCount(0);
       await expect(chat.locator(".event.message").first()).toHaveCSS("border-top-width", "0px");
       const beforeFocus = await composer.boundingBox();
       await input().focus();
@@ -12391,6 +12496,13 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       expect(await composer.boundingBox()).toEqual(beforeFocus);
       await expect(input()).toHaveCSS("outline-width", "0px");
       await expect(chat.locator(".chat-loader")).toHaveCount(0);
+      await page.screenshot({
+        path: test
+          .info()
+          .outputPath(
+            `agent-bubbles-${theme}-${neutral === "rgb(255, 255, 255)" ? "light" : "dark"}.png`,
+          ),
+      });
       await page.screenshot({ path: `test-results/chat-activity-${theme}.png` });
       await chat.getByRole("button", { name: "Stop", exact: true }).focus();
       await expectComposerFocus(composer);
@@ -12401,6 +12513,8 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await input().focus();
     await expectComposerFocus(composer, "Highlight");
     await expect(chat.locator(".event.message").first()).toHaveCSS("border-top-width", "0px");
+    await expect(chat.locator(".agent-message-bubble").first()).toHaveCSS("box-shadow", "none");
+    await page.screenshot({ path: test.info().outputPath("agent-bubbles-forced-colors.png") });
     await page.emulateMedia({ forcedColors: "none" });
 
     await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
@@ -12437,6 +12551,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
           .evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
       )
       .toBeLessThan(2);
+    await page.screenshot({ path: test.info().outputPath("agent-bubbles-dark-narrow.png") });
     await page.screenshot({ path: "test-results/orchestration-chat-dark-narrow.png" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -13938,7 +14053,7 @@ test("desktop: keyboard focus is visible and enhanced focus is persistent", asyn
     await expectWrappedFocus(true);
     await expect(
       page.locator(".sidebar").getByRole("button", { name: /^New Session in / }),
-    ).toHaveText("New Session");
+    ).toHaveAttribute("data-tooltip", "New Session");
     await page.locator(".prompt-editor-clause textarea").first().focus();
     await page.screenshot({ path: "test-results/focus-highlight-enabled.png" });
   } finally {
@@ -14198,6 +14313,36 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     );
     const toggle = page.getByRole("button", { name: "Toggle files panel" });
     const panel = page.locator("#chat-file-panel");
+    const expectCardShells = async () => {
+      const shells = page.locator(
+        ".workspace-breadcrumbs:visible, .chat-conversations:visible, .file-panel:visible:not([data-minimized=true])",
+      );
+      for (const shell of await shells.all()) {
+        await expect(shell).toHaveAttribute("data-slot", "card");
+        await expect(shell).toHaveCSS("border-width", "2px");
+        await expect(shell).toHaveCSS("border-radius", "5px");
+        await expect(shell).toHaveCSS("box-shadow", /4px 4px 0px/);
+      }
+      const composer = page.locator(".orchestration-chat-page:visible .composer");
+      await expect(composer).toHaveAttribute("data-slot", "card");
+      await expect(composer).toHaveCSS("border-radius", "5px");
+      await expect(composer).toHaveCSS("box-shadow", "none");
+      await expect(composer.locator("textarea")).toHaveAttribute("data-slot", "textarea");
+      const viewport = page.locator(".orchestration-chat-page:visible .transcript");
+      await expect(viewport).toHaveAttribute("data-slot", "scroll-area-viewport");
+      const edgeInset = await viewport.evaluate((element) => {
+        const frame = element.closest(".chat-conversations")?.getBoundingClientRect();
+        return frame ? frame.right - element.getBoundingClientRect().right : Infinity;
+      });
+      expect(edgeInset).toBeCloseTo(3, 0);
+      await expect(composer.getByRole("button", { name: "Send", exact: true })).toHaveAttribute(
+        "data-slot",
+        "button",
+      );
+      await expect(
+        page.getByRole("navigation", { name: "Breadcrumb", exact: true }),
+      ).toHaveAttribute("data-slot", "breadcrumb");
+    };
     const expectBreadcrumbEdge = async (column = ".chat-conversations") => {
       const header = await page.locator(".workspace-header").boundingBox();
       const content = await page.locator(".page-panel:visible").boundingBox();
@@ -14234,6 +14379,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("margin-inline-start", "0px");
     await expect(panel).toHaveAttribute("inert", "");
     await expectBreadcrumbEdge();
+    await expectCardShells();
     await expect(toggle).toBeVisible();
     expect(await toggle.evaluate((element) => element.closest(".file-panel") === null)).toBe(true);
     for (const edge of ["top", "right", "bottom", "left"]) {
@@ -14242,8 +14388,8 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     }
     await toggle.click();
     await expect(open).toBeVisible();
-    await expect(panel).toHaveCSS("border-radius", "0px");
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-radius", "5px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await expect(panel).toHaveCSS("margin-inline-start", "12px");
     await expect(panel.locator(".file-panel-toolbar")).toHaveCSS("background-image", "none");
     await expect(panel.locator(".file-panel-toolbar")).toHaveCSS(
@@ -14257,7 +14403,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expectIconAction(add);
     await expect(
       page.locator(".sidebar").getByRole("button", { name: /^New Session in / }),
-    ).toHaveText("New Session");
+    ).toHaveAttribute("data-tooltip", "New Session");
     await expect(tabs.getByRole("tab")).toHaveCount(0);
     expect(await fileContext()).toBeNull();
     const empty = await panel.locator(".file-panel-empty").boundingBox();
@@ -14557,6 +14703,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(panel).toHaveCSS("width", "0px");
     await expect(panel).toHaveAttribute("inert", "");
     await expectBreadcrumbEdge();
+    await expectCardShells();
     await expect(toggle).toBeVisible();
     expect(await toggle.evaluate((element) => element.closest(".file-panel") === null)).toBe(true);
     await expect.poll(fileContext).toBeNull();
@@ -14574,7 +14721,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
     await selectSidebarPage(page, "Chat");
     await expect(panel).toHaveCSS("background-color", "rgb(32, 32, 32)");
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await expectIconAction(toggle);
     await expectIconAction(add);
     await expect(inspector.locator(".monaco-editor")).toHaveClass(/vs-dark/);
@@ -14582,22 +14729,26 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       "background-color",
       "rgb(32, 32, 32)",
     );
+    await expectCardShells();
+    await page.screenshot({ path: test.info().outputPath("content-chat-dark.png") });
     await page.screenshot({ path: "test-results/file-panel-dark.png" });
     await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
     await selectSidebarPage(page, "Chat");
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await expect(inspector.locator(".monaco-editor-background")).toHaveCSS(
       "background-color",
       "rgb(32, 32, 32)",
     );
     await expectIconAction(toggle);
     await page.emulateMedia({ colorScheme: "light" });
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await expectIconAction(toggle);
+    await expectCardShells();
+    await page.screenshot({ path: test.info().outputPath("content-chat-light.png") });
     await page.screenshot({ path: "test-results/file-panel-light.png" });
     // Explicit file switches update the existing reader even while automatic polling is paused.
     await writeFile(join(folder, "test", "main.ts"), "export const updated = 100;\n");
@@ -14685,11 +14836,12 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     }));
     expect(layout.chat).toBeLessThanOrEqual(layout.panel ?? 0);
     expect(layout.overflow).toBe(false);
-    await expect(panel).toHaveCSS("border-width", "3px");
+    await expect(panel).toHaveCSS("border-width", "2px");
     await expect(panel).toHaveCSS("margin-inline-start", "0px");
     await expect(panel).toHaveCSS("margin-block-start", "12px");
     await expect(divider).toBeHidden();
     await expect(add).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("content-chat-narrow-text.png") });
     await page.screenshot({ path: "test-results/file-panel-narrow.png" });
     await page.evaluate(() => {
       for (const role of ["button", "human", "agent", "text"])
@@ -16850,6 +17002,46 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
     await chat.getByRole("button", { name: "Send", exact: true }).click();
     const scroller = chat.locator(".transcript");
     await expect(chat.locator(".chat-markdown h1").last()).toHaveText("Long reply");
+    const expectEdgeScrollbar = async (view: Locator) => {
+      const viewport = view.locator('.transcript[data-slot="scroll-area-viewport"]');
+      await expect(viewport).toHaveAttribute("tabindex", "0");
+      const geometry = await viewport.evaluate((element) => {
+        const card = element.closest(".chat-conversations");
+        const composer = card?.querySelector<HTMLElement>(
+          ".orchestration-chat-page:not([hidden]) .composer",
+        );
+        if (!card || !composer) throw new Error("Missing conversation frame/composer");
+        const bounds = element.getBoundingClientRect();
+        const frame = card.getBoundingClientRect();
+        const input = composer.getBoundingClientRect();
+        const thumb = getComputedStyle(element, "::-webkit-scrollbar-thumb");
+        const forced = matchMedia("(forced-colors: active)").matches;
+        return {
+          leftInset: bounds.left - frame.left,
+          rightInset: frame.right - bounds.right,
+          composerWidth: input.width,
+          composerClearance: bounds.right - input.right,
+          overflow: element.scrollWidth - element.clientWidth,
+          forced,
+          thumb: thumb.backgroundColor,
+          radius: thumb.borderTopLeftRadius,
+        };
+      });
+      expect(geometry.leftInset).toBeCloseTo(3, 0);
+      expect(geometry.rightInset).toBeCloseTo(3, 0);
+      expect(geometry.composerWidth).toBeLessThanOrEqual(774);
+      expect(geometry.composerClearance).toBeGreaterThanOrEqual(12);
+      expect(geometry.overflow).toBeLessThanOrEqual(1);
+      if (!geometry.forced) {
+        expect(geometry.radius).toBe("999px");
+        expect(geometry.thumb).toBe(
+          (await page.locator("html").getAttribute("data-color-scheme")) === "dark"
+            ? "rgb(170, 170, 170)"
+            : "rgb(17, 17, 17)",
+        );
+      }
+    };
+    await expectEdgeScrollbar(chat);
     await expect
       .poll(() =>
         scroller.evaluate(
@@ -16867,11 +17059,51 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
     }).toPass({ timeout: 5_000 });
     await expect(chat.locator(".chat-markdown h2").last()).toHaveText("Finished");
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
+    // The native scrollbar remains interactive at the outside edge, away from the text.
+    const rail = await scroller.boundingBox();
+    if (!rail) throw new Error("Missing native scrollbar");
+    await page.mouse.click(rail.x + rail.width - 7, rail.y + rail.height - 20);
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await scroller.focus();
+    await page.keyboard.press("Control+Home");
+    await expect(scroller).toBeFocused();
+    // Native key scrolling can round a fractional layout origin to one CSS pixel.
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop))
+      .toBeLessThanOrEqual(1);
     expect(
       await scroller.evaluate((element) => element.scrollWidth - element.clientWidth),
     ).toBeLessThanOrEqual(1);
     const originalViewport = page.viewportSize();
+    await composer.fill("Unsent scrollbar draft");
+    for (const theme of ["light", "dark", "system"] as const) {
+      await selectSettingsPage(page, "Appearance");
+      await page.getByLabel("Theme", { exact: true }).selectOption(theme);
+      await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+      await selectSidebarPage(page, "Chat");
+      await expect(composer).toHaveValue("Unsent scrollbar draft");
+      await expectEdgeScrollbar(chat);
+      await expectTurnSeparator(chat.locator(".turn-separator").first());
+      await page.screenshot({ path: `test-results/chat-scrollbar-${theme}.png` });
+    }
+    await selectSettingsPage(page, "Text");
+    await page
+      .getByRole("group", { name: "Normal Text", exact: true })
+      .getByRole("spinbutton", { name: "Font size", exact: true })
+      .fill("26");
+    await selectSidebarPage(page, "Chat");
+    await expectTurnSeparator(chat.locator(".turn-separator").first());
+    await page.screenshot({ path: "test-results/visual-divider-enlarged-text.png" });
+    await selectSettingsPage(page, "Text");
+    await page.getByRole("button", { name: "Reset Normal Text", exact: true }).click();
+    await selectSidebarPage(page, "Chat");
+    await page.emulateMedia({ forcedColors: "active" });
+    await expectEdgeScrollbar(chat);
+    await page.screenshot({ path: "test-results/chat-scrollbar-forced-colors.png" });
+    await page.emulateMedia({ forcedColors: "none" });
     await page.setViewportSize({ width: 820, height: 640 });
+    await expectEdgeScrollbar(chat);
+    await page.screenshot({ path: "test-results/chat-scrollbar-narrow.png" });
     expect(
       await scroller.evaluate((element) => element.scrollWidth - element.clientWidth),
     ).toBeLessThanOrEqual(1);
@@ -16890,6 +17122,7 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
     const worker = page.locator(`#chat-${workerId}`);
     await expect(worker.locator(".chat-markdown h1")).toHaveText("Worker result");
     await expect(worker.locator(".chat-markdown strong")).toHaveText("Saved");
+    await expectEdgeScrollbar(worker);
     await page.reload();
     await page.locator(`#conversation-${workerId}`).click();
     await expect(worker.locator(".chat-markdown h1")).toHaveText("Worker result");

@@ -24,8 +24,6 @@
   --ui-radius: 0;
   --button-radius: 0px;
   --chat-radius: 0px;
-  --composer-radius: 0px;
-  --user-bubble-radius: 0px;
   --dialog-radius: 0px;
   --card-radius: 0px;
   --navigation-card-radius: 5px;
@@ -117,6 +115,8 @@
   --composer-focus-bg: #ffffff;
   --user-bubble: #dbeafe;
   --on-user-bubble: #111111;
+  --agent-bubble: #f1f0e8;
+  --on-agent-bubble: #111111;
   --human-text: #1d4ed8;
   --project-stop-color: #b91c1c;
   --destructive: #a03d31;
@@ -175,6 +175,8 @@
   --composer-focus-bg: #202020;
   --user-bubble: #35263e;
   --on-user-bubble: #f7f7f2;
+  --agent-bubble: #282b25;
+  --on-agent-bubble: #f7f7f2;
   --human-text: var(--accent);
   --project-stop-color: #f87171;
   --destructive: #df9d8f;

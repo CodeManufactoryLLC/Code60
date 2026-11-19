@@ -20,6 +20,7 @@ import { MessagesPage } from "./messages.js";
 import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
+import { Card } from "./neobrutalism/card.js";
 import { OrchestrationSettings } from "./orchestration-settings.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
@@ -667,22 +668,25 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      {renderedPages.map(({ id }) => (
-        <div
-          key={id}
-          className="page-panel"
-          role="tabpanel"
-          id={`panel-${id}`}
-          aria-labelledby={
-            id === "chat" && snapshot
-              ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-              : sidebarPageElementId(id, tabs.projectId)
-          }
-          hidden={tabs.active !== id}
-        >
-          {views[id]}
-        </div>
-      ))}
+      {renderedPages.map(({ id }) => {
+        const Shell = id === "chat" ? "div" : Card;
+        return (
+          <Shell
+            key={id}
+            className="page-panel"
+            role="tabpanel"
+            id={`panel-${id}`}
+            aria-labelledby={
+              id === "chat" && snapshot
+                ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                : sidebarPageElementId(id, tabs.projectId)
+            }
+            hidden={tabs.active !== id}
+          >
+            {views[id]}
+          </Shell>
+        );
+      })}
     </PageTitleNavigationContext.Provider>
   );
 }

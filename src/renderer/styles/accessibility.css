@@ -188,6 +188,23 @@
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--scrollbar-thumb-hover);
   }
+
+  /* Native adaptation of Neobrutalism Scroll Area: compact solid rounded thumb.
+     Scope to chat viewports; system high-contrast scrollbars remain native. */
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+    width: var(--chat-scrollbar-size);
+    height: var(--chat-scrollbar-size);
+  }
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb {
+    background: var(--control-border);
+    border: 3px solid var(--surface);
+    border-radius: 999px;
+    background-clip: padding-box;
+    min-height: 32px;
+  }
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text);
+  }
 }
 
 @media (forced-colors: active) {
@@ -278,6 +295,15 @@
     border: 1px solid CanvasText;
     background: Canvas;
     color: CanvasText;
+  }
+  .event.message.search-match > .agent-message-bubble {
+    outline-color: Highlight;
+  }
+  .agent-message-bubble {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
   }
   .composer:focus-within {
     background: Canvas;
@@ -456,6 +482,26 @@
 
 @media (forced-colors: active) {
   .home-card:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .neo-button:not([data-variant="quiet"]):active:enabled {
+    translate: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .neo-button,
+  .neo-button:not([data-variant="quiet"]):active:enabled {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+
+  .neo-button:focus-visible {
     outline: 2px solid Highlight;
   }
 }

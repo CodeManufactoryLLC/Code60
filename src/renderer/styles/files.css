@@ -29,6 +29,7 @@
 /* Chat frames the conversation separately from its adjacent inspector card. */
 #panel-chat {
   flex-direction: column;
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -73,15 +74,14 @@
     width var(--motion) ease,
     margin-inline-start var(--motion) ease;
   min-height: 0;
-  padding: 0;
-  border: var(--rule-strong) solid var(--panel-border);
-  border-radius: var(--ui-radius);
-  background: var(--chat-neutral);
-  box-shadow: var(--card-shadow);
+  padding: 1px;
+  gap: 0;
+  --nb-card-fill: var(--chat-neutral);
 }
 
 .file-panel[data-minimized="true"] {
   width: 0;
+  padding: 0;
   margin-inline-start: 0;
   border: 0;
   box-shadow: none;
@@ -124,6 +124,7 @@
 .file-panel-toolbar {
   align-items: center;
   background: var(--card-header-fill);
+  border-radius: 2px 2px 0 0;
 }
 
 .file-tab {
@@ -236,11 +237,11 @@ button.file-open-link {
 }
 
 .orchestration-chat-body .chat-turn-history > .turn-timer {
-  margin-left: 18px;
+  margin-left: 20px;
 }
 
 .orchestration-chat-body .chat-turn-history > .turn-separator {
-  margin-inline: 18px;
+  margin-inline: 0;
 }
 
 @media (max-width: 1200px) {
@@ -290,7 +291,6 @@ button.file-open-link {
     max-width: 100%;
     margin-inline-start: 0;
     margin-block-start: var(--file-panel-gap);
-    padding-left: 0;
   }
 }
 
