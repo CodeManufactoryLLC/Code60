@@ -1,6 +1,32 @@
 /* Accessibility styles. Imported into its declared layer by style.css. */
 
 @media (forced-colors: active) {
+  :root {
+    --shadow-color: CanvasText;
+    --border: CanvasText;
+    --panel-border: CanvasText;
+    --card-header-fill: Canvas;
+    --card-header-text: CanvasText;
+    --card-header-muted: CanvasText;
+    --card-header-hover: Highlight;
+    --control-border: ButtonText;
+    --card-shadow: none;
+    --overlay-shadow: none;
+    --button-shadow: none;
+    --focus-shadow: 0 0 transparent;
+    --focus-inset-shadow: inset 0 0 0 2px Highlight;
+    --workspace-background: Canvas;
+  }
+
+  .home-card:active:not(:disabled),
+  .navigation-card:has(> .home-card:active:not(:disabled)),
+  button.primary:active:not(:disabled),
+  button.destructive:active:not(:disabled),
+  button.splash-enter:active:not(:disabled) {
+    translate: none;
+    box-shadow: none;
+  }
+
   .sidebar-navigation-card,
   .sidebar-navigation-card::before,
   .file-panel-toolbar {
@@ -12,7 +38,21 @@
     border-color: CanvasText;
   }
 
-  .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+  .sidebar-card-chevron,
+  .sidebar-card-add,
+  .sidebar-card-stop {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: Canvas;
+    box-shadow: none;
+    translate: none;
+  }
+
+  .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+  .project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+  .project-folder-stop:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-stop,
+  .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+  .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
     background: Highlight;
     color: HighlightText;
   }
@@ -44,6 +84,9 @@
   .sidebar,
   .sidebar-card-toggle,
   .sidebar-card-chevron,
+  .sidebar-card-chevron > .carbon-icon,
+  .sidebar-card-add,
+  .sidebar-card-stop,
   .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
     transition: none;
   }
@@ -389,7 +432,7 @@
   .workspace-breadcrumbs,
   .page-panel:not(#panel-chat),
   .chat-conversations,
-  .home-card,
+  .navigation-card,
   .file-panel,
   .settings-card,
   .settings-group {

@@ -145,7 +145,7 @@
   font-family: var(--agent-font, var(--font));
   --letter-spacing: var(--agent-spacing, normal);
   font-size: var(--agent-size, 14px);
-  font-weight: var(--agent-weight, 300);
+  font-weight: var(--agent-weight, 400);
   text-transform: var(--agent-case, none);
   line-height: 1.65;
 }
@@ -304,7 +304,7 @@
   font-family: var(--human-font, var(--font));
   --letter-spacing: var(--human-spacing, normal);
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-weight, 300);
+  font-weight: var(--human-weight, 400);
   text-transform: var(--human-case, none);
   line-height: 1.65;
   color: var(--human-text);
@@ -370,7 +370,7 @@
 /* Composer */
 .composer {
   margin: 12px;
-  border: 0;
+  border: var(--rule) solid var(--control-border);
   padding: 1px;
   box-shadow: var(--composer-shadow);
   background: var(--composer-bg);
@@ -398,7 +398,8 @@
 
 .composer:focus-within {
   background: var(--composer-focus-bg);
-  outline: 0;
+  outline: 2px solid var(--focus-line);
+  outline-offset: 2px;
   box-shadow: var(--composer-shadow);
 }
 
@@ -537,7 +538,7 @@
   min-height: 0;
   width: min(100%, 800px);
   align-self: center;
-  padding: 0 24px;
+  padding: 0 24px var(--space-4);
 }
 
 .orchestration-chat-body .transcript {
@@ -632,7 +633,7 @@
 }
 
 .orchestration-chat-body .event.prompt pre {
-  font-weight: var(--human-weight, 300);
+  font-weight: var(--human-weight, 400);
 }
 
 .chat-message-speaker {
@@ -746,7 +747,7 @@
 
 @media (max-width: 900px) {
   .orchestration-chat-body {
-    padding: 0 12px;
+    padding: 0 12px var(--space-4);
   }
 }
 
@@ -1043,7 +1044,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--text-size, 13px);
-  font-weight: var(--text-weight, 300);
+  font-weight: var(--text-weight, 400);
   font-variant-numeric: tabular-nums;
   text-align: left;
   overflow-wrap: anywhere;
@@ -1162,13 +1163,15 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 
 .chat-conversations {
+  box-sizing: border-box;
   flex: 1;
-  border-radius: 10px;
+  border-radius: var(--ui-radius);
   background: var(--surface);
   box-shadow: var(--card-shadow);
   min-width: 300px;
   min-height: 0;
   overflow: hidden;
+  border: var(--rule-strong) solid var(--panel-border);
 }
 
 .message-copy {

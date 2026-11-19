@@ -43,7 +43,7 @@ function pageAncestors(
 ): Breadcrumb[] {
   if (isSettingsSection(page)) return [pageCrumb("settings")];
   if (page === "project") return [pageCrumb("projects")];
-  if (page === "relay") return [];
+  if (page === "relay") return [pageCrumb("assistants")];
   if (page !== "orchestrator" && page !== "worker") {
     const parent = navigationParent(page);
     return parent ? [...pageAncestors(parent, source), pageCrumb(parent)] : [];
@@ -64,7 +64,7 @@ function pageAncestors(
           owner?.projectId ? project.id === owner.projectId : project.workerIds.includes(target.id),
         );
   const ancestors: Breadcrumb[] = owner?.customAgentId
-    ? [pageCrumb("custom-agents")]
+    ? [pageCrumb("assistants"), pageCrumb("custom-agents")]
     : project
       ? [
           pageCrumb("projects"),
@@ -74,7 +74,9 @@ function pageAncestors(
             target: { kind: "project", id: project.id },
           },
         ]
-      : [];
+      : run?.relay || owner?.kind === "relay"
+        ? [pageCrumb("assistants")]
+        : [];
   if (page === "worker") {
     const chat =
       owner ??

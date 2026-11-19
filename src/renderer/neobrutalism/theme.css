@@ -1,0 +1,16 @@
+/* Deliberately omit Preflight. Only these two local sources generate nb: utilities. */
+@import "tailwindcss/theme.css" layer(tokens) prefix(nb);
+@import "tailwindcss/utilities.css" layer(neobrutalism) prefix(nb) source(none);
+@source "./card.tsx";
+@source "../navigation-cards.tsx";
+
+/* Inline aliases resolve against each card's live application theme/preferences. */
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--text);
+  --color-border: var(--panel-border);
+  --radius-base: var(--navigation-card-radius);
+  --shadow-shadow: var(--card-shadow);
+  --font-weight-base: var(--text-weight, 400);
+  --font-weight-heading: var(--card-weight, 700);
+}

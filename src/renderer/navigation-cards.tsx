@@ -1,5 +1,12 @@
 import { Icon } from "./icons.js";
 import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
+import {
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Card as NeoCard,
+} from "./neobrutalism/card.js";
 
 interface NavigationCard {
   id: string;
@@ -21,6 +28,7 @@ export function NavigationCards<Card extends NavigationCard>({
   cards,
   create,
   onOpen,
+  renderActions,
   intro,
   children,
   pending = false,
@@ -28,6 +36,7 @@ export function NavigationCards<Card extends NavigationCard>({
   cards: readonly Card[];
   create?: NavigationCardAction | undefined;
   onOpen(card: Card): void;
+  renderActions?(card: Card): import("react").ReactNode;
   intro?: import("react").ReactNode;
   children?: import("react").ReactNode;
   pending?: boolean;
@@ -37,46 +46,56 @@ export function NavigationCards<Card extends NavigationCard>({
       {intro}
       <div className="home-cards">
         {create && (
-          <button
-            type="button"
-            className="home-card home-card-create"
-            aria-label={create.ariaLabel ?? create.label}
-            disabled={pending}
-            title={pending ? "Wait for the current action to finish" : create.title}
-            onClick={create.onClick}
-          >
-            <span className="home-card-name">
-              <Icon name="add" />
-              {create.label}
-            </span>
-          </button>
+          <NeoCard size="sm" className="navigation-card">
+            <button
+              type="button"
+              className="home-card home-card-create"
+              aria-label={create.ariaLabel ?? create.label}
+              disabled={pending}
+              title={pending ? "Wait for the current action to finish" : create.title}
+              onClick={create.onClick}
+            >
+              <CardTitle as="span" className="home-card-name">
+                <Icon name="add" />
+                {create.label}
+              </CardTitle>
+            </button>
+          </NeoCard>
         )}
-        {cards.map((card) => (
-          <button
-            key={card.id}
-            type="button"
-            className="home-card"
-            data-feature={card.id}
-            aria-label={`Open ${card.label}`}
-            disabled={!card.available || pending}
-            title={
-              pending
-                ? "Wait for the current action to finish"
-                : !card.available
-                  ? (card.reason ?? "Connect to a database first")
-                  : card.title
-            }
-            onClick={() => onOpen(card)}
-          >
-            <span className="home-card-art" aria-hidden="true">
-              {card.icon && <NavigationIcon name={card.icon} />}
-            </span>
-            <span className="home-card-copy">
-              <span className="home-card-name">{card.label}</span>
-            </span>
-            <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
-          </button>
-        ))}
+        {cards.map((card) => {
+          return (
+            <NeoCard key={card.id} size="sm" className="navigation-card">
+              <button
+                type="button"
+                className="home-card"
+                data-feature={card.id}
+                aria-label={`Open ${card.label}`}
+                disabled={!card.available || pending}
+                title={
+                  pending
+                    ? "Wait for the current action to finish"
+                    : !card.available
+                      ? (card.reason ?? "Connect to a database first")
+                      : card.title
+                }
+                onClick={() => onOpen(card)}
+              >
+                <CardHeader as="span" className="home-card-art" aria-hidden="true">
+                  {card.icon && <NavigationIcon name={card.icon} />}
+                </CardHeader>
+                <CardContent as="span" className="home-card-copy">
+                  <CardTitle as="span" className="home-card-name">
+                    {card.label}
+                  </CardTitle>
+                </CardContent>
+                <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
+              </button>
+              {renderActions && (
+                <CardAction className="home-card-action">{renderActions(card)}</CardAction>
+              )}
+            </NeoCard>
+          );
+        })}
       </div>
       {children}
     </div>

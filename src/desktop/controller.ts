@@ -93,6 +93,10 @@ import {
   parsePollSettings,
   parsePollVisibility,
   parseProjectAction,
+  parseProjectSearchIdentity,
+  parseProjectSearchOpen,
+  parseProjectSearchPage,
+  parseProjectSearchQuery,
   parsePromptTemplateId,
   parseRagCancel,
   parseRagIdentity,
@@ -204,6 +208,12 @@ import { ModelDefaults } from "./model-defaults.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
+import { ProjectSearch } from "./project-search.js";
+import {
+  projectChatRoot,
+  projectEvidenceReader,
+  type SearchLiveHistory,
+} from "./project-search-reader.js";
 import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
@@ -216,7 +226,6 @@ import { RelayFiles } from "./relay-files.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
-import { projectSearchEvidence } from "./search-evidence.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
@@ -305,17 +314,6 @@ interface Batch {
   disposers: (() => void)[];
 }
 
-function projectChatRoot(database: string, project: string): string {
-  return join(
-    dirname(database),
-    ".code60_workspace",
-    "projects",
-    createHash("sha256")
-      .update(JSON.stringify([database, project]))
-      .digest("hex"),
-  );
-}
-
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class DesktopController {
   private readonly projectHost = new ProjectHost(() => this.makeProjectState());
@@ -334,9 +332,6 @@ export class DesktopController {
       files: null as FileSnapshot | null,
       memoryExtraction: undefined as
         | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
-        | undefined,
-      searchSummary: undefined as
-        | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
         | undefined,
       chatKey: "" as string,
       chatStore: undefined as ChatStore | undefined,
@@ -473,16 +468,18 @@ export class DesktopController {
     | undefined) {
     this.projectState.memoryExtraction = value;
   }
-  private get searchSummary():
-    | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
-    | undefined {
-    return this.projectState.searchSummary;
-  }
-  private set searchSummary(value:
-    | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
-    | undefined) {
-    this.projectState.searchSummary = value;
-  }
+  private readonly projectSearch = new ProjectSearch();
+  private searchSubmission = 0;
+  private searchRequestId: string | undefined;
+  private searchSummaryQueue: Promise<void> = Promise.resolve();
+  private searchSummary:
+    | {
+        requestId: string;
+        searchId: string;
+        abort: AbortController;
+        done: Promise<SearchSummaryResult>;
+      }
+    | undefined;
   private connectionTest: { abort: AbortController; done: Promise<void> } | undefined;
   private get chatKey(): string {
     return this.projectState.chatKey;
@@ -2065,7 +2062,7 @@ export class DesktopController {
           ) {
             await this.cancelOrchestrationTest();
             await this.stopMemoryExtraction();
-            await this.stopSearchSummary();
+            await this.cancelSearchSummary();
             this.orchestration = { ...this.orchestration, connection: "idle", error: null };
           }
           await this.setConfig(config);
@@ -2231,7 +2228,7 @@ export class DesktopController {
       const record = await this.agentSetup.finish(request);
       if (mode === "primary") {
         await this.stopMemoryExtraction();
-        await this.stopSearchSummary();
+        await this.cancelSearchSummary();
         this.chatKey = "";
       }
       this.orchestration = {
@@ -2255,7 +2252,7 @@ export class DesktopController {
         throw new Error(`Unavailable provider: ${provider}`);
       await this.cancelOrchestrationTest();
       await this.stopMemoryExtraction();
-      await this.stopSearchSummary();
+      await this.cancelSearchSummary();
       if (!this.storage.preferences.setOrchestrationProvider)
         throw new Error("Orchestration settings cannot be saved");
       await this.storage.preferences.setOrchestrationProvider(provider);
@@ -2313,38 +2310,160 @@ export class DesktopController {
     await test?.done;
   }
 
+  async searchProjects(value: unknown) {
+    const request = parseProjectSearchQuery(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    const database = this.requireDatabase();
+    const submission = ++this.searchSubmission;
+    this.searchRequestId = request.requestId;
+    const cancelled = this.projectSearch.cancel();
+    void cancelled.catch(() => {});
+    const projects = database.all();
+    const membership = new Set(projects.map((project) => project.path));
+    const live = new Map<string, SearchLiveHistory[]>();
+    for (const owner of this.projectHost.all()) {
+      const directory = owner.state.workspace?.dir;
+      if (!directory || !membership.has(directory)) continue;
+      const histories: SearchLiveHistory[] = owner.state.history.map(({ record }) => ({
+        runId: record.id,
+        events: owner.state.events
+          .filter((entry) => entry.event.runId === record.id)
+          .map((entry) => ({ ...entry.event })),
+      }));
+      for (const session of owner.state.conversations.sessions) {
+        if (session.run)
+          histories.push({
+            runId: session.run.id,
+            title: session.title,
+            events: session.chatEvents.map((entry) => ({ ...entry.event })),
+          });
+      }
+      live.set(directory, histories);
+    }
+    await this.cancelSearchSummary();
+    await cancelled;
+    this.assertDatabaseRequest(request.databaseEpoch);
+    if (this.searchSubmission !== submission) throw new Error("Search cancelled");
+    return this.projectSearch.search(
+      request,
+      projects,
+      projectEvidenceReader(this.deps, this.env, database.path, live),
+      () => {
+        if (
+          this.closing ||
+          this.searchSubmission !== submission ||
+          this.database !== database ||
+          this.projectHost.databaseEpoch !== request.databaseEpoch
+        )
+          return false;
+        const current = new Set(database.all().map((project) => project.path));
+        // Additions participate in the next submitted search; removals retire captured sources.
+        return [...membership].every((path) => current.has(path));
+      },
+    );
+  }
+
+  searchProjectsPage(value: unknown) {
+    const request = parseProjectSearchPage(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    return this.projectSearch.page(request, request.cursor);
+  }
+
+  async cancelProjectSearch(value: unknown) {
+    const request = parseProjectSearchIdentity(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    if (this.searchRequestId === request.requestId) {
+      this.searchRequestId = undefined;
+      this.searchSubmission++;
+    }
+    const cancelled = this.projectSearch.cancel(request);
+    void cancelled.catch(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary(undefined, request.requestId);
+    await cancelled;
+  }
+
+  async clearSearch(): Promise<void> {
+    this.searchSubmission++;
+    this.searchRequestId = undefined;
+    const cancelled = this.projectSearch.cancel();
+    void cancelled.catch(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary();
+    await cancelled;
+  }
+
+  async openSearchSource(
+    value: unknown,
+    confirm?: (path: string) => Promise<boolean>,
+  ): Promise<import("../bridge/index.js").ProjectSearchOpened | null> {
+    const request = parseProjectSearchOpen(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    const source = await this.projectSearch.source(request, request.sourceId);
+    if (!this.projectHost.find(source.project.path)) {
+      const accepted = await (confirm
+        ? confirm(source.project.path)
+        : this.dialogs.confirm("Open this project?", source.project.path));
+      this.assertDatabaseRequest(request.databaseEpoch);
+      await this.projectSearch.source(request, request.sourceId);
+      if (!accepted) return null;
+    }
+    return this.databaseWrite(request.databaseEpoch, async () => {
+      await this.projectSearch.source(request, request.sourceId);
+      if (!this.projectHost.find(source.project.path))
+        await this.openDirectory(source.project.path);
+      const owner = this.projectHost.find(source.project.path);
+      if (!owner) throw new Error("The project could not be opened");
+      await this.selectProject(owner.id);
+      const session = owner.state.conversations.sessions.find(
+        (entry) => entry.run?.id === source.runId,
+      );
+      if (session && !session.archived) {
+        await this.projectHost.run(owner, async () => {
+          this.conversations.current = session;
+          this.relaySelected = false;
+          await this.loadChatHistory(session);
+          this.changed();
+        });
+      }
+      return {
+        projectId: owner.id,
+        databaseEpoch: request.databaseEpoch,
+        source,
+        conversation: !!session,
+        archived: session?.archived ?? false,
+      };
+    });
+  }
+
   async summarizeSearch(value: SearchSummaryRequest): Promise<SearchSummaryResult> {
     const request = parseSearchSummary(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
     this.requireEnabled(this.orchestration.provider ?? "");
-    const { done } = await this.exclusive(async () => {
-      if (this.closing) throw new Error("The app is stopping");
-      const workspace = this.requireWorkspace();
-      if (workspace.dir !== request.directory)
-        throw new Error("The project changed. Search again.");
-      const provider = this.orchestration.provider;
-      const agent =
-        provider && this.config && Object.hasOwn(this.config.agents, provider)
-          ? this.config.agents[provider]
-          : undefined;
-      if (!provider || !agent)
-        throw new Error("Select an available orchestration provider in Settings");
-      const known = new Set(this.history.map((run) => run.record.id));
-      for (const source of request.sources) {
-        const valid =
-          source.kind === "project"
-            ? source.id === workspace.dir &&
-              source.runId === undefined &&
-              source.eventIndex === undefined
-            : source.runId !== undefined &&
-              known.has(source.runId) &&
-              (source.kind === "run"
-                ? source.id === source.runId && source.eventIndex === undefined
-                : source.eventIndex !== undefined &&
-                  source.id === `${source.runId}:${source.eventIndex}`);
-        if (!valid) throw new Error("A search source is no longer in the open project");
-      }
+    const database = this.requireDatabase();
+    const provider = this.orchestration.provider;
+    const agent =
+      provider && this.config && Object.hasOwn(this.config.agents, provider)
+        ? this.config.agents[provider]
+        : undefined;
+    if (!provider || !agent)
+      throw new Error("Select an available orchestration provider in Settings");
+    const evidence = this.projectSearch.evidence({
+      requestId: request.searchId,
+      databaseEpoch: request.databaseEpoch,
+    });
+    const prepared = this.searchSummaryQueue.then(async () => {
       await this.stopSearchSummary();
-      if (this.closing) throw new Error("The app is stopping");
+      this.assertDatabaseRequest(request.databaseEpoch);
+      if (
+        this.orchestration.provider !== provider ||
+        JSON.stringify(this.config?.agents[provider]?.command) !== JSON.stringify(agent.command)
+      )
+        throw new Error("Overview cancelled");
+      this.projectSearch.evidence({
+        requestId: request.searchId,
+        databaseEpoch: request.databaseEpoch,
+      });
       const abort = new AbortController();
       const operation = async (): Promise<SearchSummaryResult> => {
         const temporary = await mkdtemp(join(tmpdir(), "code60-search-"));
@@ -2352,24 +2471,29 @@ export class DesktopController {
           const cwd = join(temporary, "private");
           await privateDirectory(cwd);
           abort.signal.throwIfAborted();
-          const files =
-            request.includeFiles === false
-              ? []
-              : await projectSearchEvidence(workspace.dir, request.query, abort.signal);
-          const sources = [...request.sources.slice(0, files.length ? 10 : 20), ...files];
           const text = await summarizeSearch(
             this.deps.agents,
             { name: provider, command: agent.command, cwd },
-            request.query,
-            sources,
+            evidence.query,
+            evidence.sources,
             abort.signal,
           );
           abort.signal.throwIfAborted();
-          if (this.workspace !== workspace) throw new Error("The project changed. Search again.");
-          return { requestId: request.requestId, text, sources };
+          if (this.database !== database) throw new Error("The database changed. Search again.");
+          this.projectSearch.evidence({
+            requestId: request.searchId,
+            databaseEpoch: request.databaseEpoch,
+          });
+          return { requestId: request.requestId, text, sources: evidence.sources };
         } finally {
           await rm(temporary, { recursive: true, force: true });
         }
+      };
+      const task = {
+        requestId: request.requestId,
+        searchId: request.searchId,
+        abort,
+        done: Promise.resolve({} as SearchSummaryResult),
       };
       const done = operation()
         .catch((error: unknown) => {
@@ -2377,34 +2501,34 @@ export class DesktopController {
           throw error;
         })
         .finally(() => {
-          this.searchSummary = undefined;
+          if (this.searchSummary === task) this.searchSummary = undefined;
         });
+      task.done = done;
+      this.searchSummary = task;
       void done.catch(() => {});
-      this.searchSummary = { requestId: request.requestId, abort, done };
       return { done };
     });
-    return done;
+    this.searchSummaryQueue = prepared.then(
+      () => {},
+      () => {},
+    );
+    return (await prepared).done;
   }
 
-  cancelSearchSummary(requestId?: string): Promise<void> {
+  async cancelSearchSummary(requestId?: string): Promise<void> {
     const id = requestId === undefined ? undefined : parseSearchSummaryRequestId(requestId);
-    const owners = this.projectHost
-      .all()
-      .filter(
-        (owner) =>
-          owner.state.searchSummary &&
-          (id === undefined || owner.state.searchSummary.requestId === id),
-      );
-    return Promise.all(
-      owners.map((owner) =>
-        this.projectHost.run(owner, () => this.exclusive(() => this.stopSearchSummary(id))),
-      ),
-    ).then(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary(id);
   }
 
-  private async stopSearchSummary(requestId?: string): Promise<void> {
+  private async stopSearchSummary(requestId?: string, searchId?: string): Promise<void> {
     const task = this.searchSummary;
-    if (!task || (requestId !== undefined && task.requestId !== requestId)) return;
+    if (
+      !task ||
+      (requestId !== undefined && task.requestId !== requestId) ||
+      (searchId !== undefined && task.searchId !== searchId)
+    )
+      return;
     task.abort.abort();
     await task.done.catch(() => {});
   }
@@ -3249,8 +3373,17 @@ export class DesktopController {
 
   orchestrationChatAction(value: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const request = parseOrchestrationChatAction(value);
+    const local =
+      "id" in request &&
+      request.id &&
+      !this.relaySelected &&
+      this.projectHost.current.state.conversations.sessions.some(
+        (session) => session.run?.id === request.id,
+      );
+
     if (
       this.relay &&
+      !local &&
       request.type !== "new" &&
       (this.relay.owns(request.id) || (request.id === null && this.relaySelected))
     ) {
@@ -3265,15 +3398,17 @@ export class DesktopController {
     const owner =
       request.type === "new" && request.projectId
         ? this.projectHost.byId(request.projectId)
-        : "id" in request && request.id
-          ? this.projectHost
-              .all()
-              .find((owner) =>
-                owner.state.conversations.sessions.some(
-                  (session) => session.run?.id === request.id,
-                ),
-              )
-          : this.projectHost.current;
+        : local
+          ? this.projectHost.current
+          : "id" in request && request.id
+            ? this.projectHost
+                .all()
+                .find((owner) =>
+                  owner.state.conversations.sessions.some(
+                    (session) => session.run?.id === request.id,
+                  ),
+                )
+            : this.projectHost.current;
     if (this.relay && !owner)
       return Promise.reject(new Error("This orchestration chat is no longer current"));
     if (owner && (request.type === "select" || request.type === "new"))
@@ -4321,6 +4456,7 @@ export class DesktopController {
     return this.exclusive(async () => {
       this.assertDatabaseRequest(databaseEpoch);
       await this.cancelRag();
+      await this.clearSearch();
       if (this.relay) return this.connectRetainedDatabase(path, create);
       if (this.taskOperation) throw new Error("Wait for the task operation to finish");
       if (this.active) throw new Error("Finish or stop all runs before switching databases");
@@ -4443,6 +4579,7 @@ export class DesktopController {
       const database = this.requireDatabase();
       if (!this.projects.some((project) => project.path === path))
         throw new Error("This project is not in the database's history");
+      await this.clearSearch();
       database.remove(path);
       this.projects = database.list();
       this.changed();
@@ -4459,6 +4596,7 @@ export class DesktopController {
         `This removes all ${this.projects.length} projects from ${database.path}. Project folders and their runs are not affected.`,
       );
       if (!confirmed) return false;
+      await this.clearSearch();
       database.clear();
       this.projects = database.list();
       this.changed();
@@ -4474,7 +4612,6 @@ export class DesktopController {
   private async openDirectory(directory: string): Promise<void> {
     if (this.relay) return this.openRetainedProject(directory);
     await this.stopMemoryExtraction();
-    await this.stopSearchSummary();
     const database = this.requireDatabase();
     if (this.active) throw new Error("Finish or stop all runs before switching folders");
     let dir: string;
@@ -4675,7 +4812,6 @@ export class DesktopController {
     const results = await Promise.allSettled([
       operation?.done,
       this.stopMemoryExtraction(),
-      this.stopSearchSummary(),
       this.cancelGitSetup(),
       this.cancelProjectDiffReads(),
       this.shutdownBatches(force),
@@ -5374,16 +5510,26 @@ export class DesktopController {
   }
 
   action(action: Action): Promise<ActionResult> {
-    if (this.relay?.handlesWorkerAction(action)) return this.relay.workerAction(action);
-    const owner = this.projectHost
-      .all()
-      .find((owner) =>
-        action.type === "permission"
-          ? [...owner.state.batches.keys()].some((batch) =>
-              batch.runs().some((run) => run.pending.some((pending) => pending.id === action.id)),
-            )
-          : owner.state.history.some((run) => run.record.id === action.id),
-      );
+    // Historical IDs can repeat across projects. An explicitly selected project owns
+    // its read; Relay and background-owner routing remain the fallback.
+    const localRead =
+      action.type === "events" &&
+      this.projectHost.current.state.history.some((run) => run.record.id === action.id);
+    if (!localRead && this.relay?.handlesWorkerAction(action))
+      return this.relay.workerAction(action);
+    const owner = localRead
+      ? this.projectHost.current
+      : this.projectHost
+          .all()
+          .find((owner) =>
+            action.type === "permission"
+              ? [...owner.state.batches.keys()].some((batch) =>
+                  batch
+                    .runs()
+                    .some((run) => run.pending.some((pending) => pending.id === action.id)),
+                )
+              : owner.state.history.some((run) => run.record.id === action.id),
+          );
     if (owner && owner !== this.projectHost.current)
       return this.projectHost.run(owner, () => this.action(action));
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
@@ -5917,6 +6063,7 @@ export class DesktopController {
   async stopAll(): Promise<void> {
     const results = await Promise.allSettled([
       this.memory.stop(),
+      this.clearSearch(),
       this.cancelRag(),
       this.stopAllAgents(),
     ]);
@@ -5973,6 +6120,7 @@ export class DesktopController {
     this.closing = true;
     const results = await Promise.allSettled([
       this.memory.close(),
+      this.clearSearch(),
       this.cancelRag(),
       this.shutdownAgents(force),
     ]);

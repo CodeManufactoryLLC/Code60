@@ -13,3 +13,7 @@ through their public indexes. Never import desktop or expose a TCP listener.
   fixed and free of paths, prompts, tokens and provider output.
 - Service installation requires explicit consent. Desktop shutdown must not
   terminate service-owned work. Tests use fake agents and injected clocks.
+- Scheduler registration status is read-only: validate installed flags and native
+  definition presence; installed:false markers never imply installation. Return
+  typed native runtime state and optional live status. Unverifiable registration
+  fails visibly without repairing/deleting metadata or starting a service.

@@ -63,14 +63,13 @@
 }
 
 .sidebar button {
-  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
-    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+  border-radius: var(--nav-row-top-radius, 0px) var(--nav-row-top-radius, 0px)
+    var(--nav-row-bottom-radius, 0px) var(--nav-row-bottom-radius, 0px);
 }
 
 .sidebar [data-card-first] {
-  --nav-row-top-radius: 5px;
-  --button-weight: 500;
-  font-weight: 500;
+  --nav-row-top-radius: 0px;
+  font-weight: var(--button-weight, 600);
 }
 
 /* Space rows themselves so nesting does not multiply container gaps. */
@@ -81,25 +80,21 @@
     .project-chat-heading,
     .chat-page-heading,
     .sidebar-settings-heading,
-    .project-sidebar-open,
     .project-session-new
   ) {
   margin-bottom: 2.5px;
 }
 
+/* The shared Neobrutalism Card owns its fill, 2px outline, 5px radius and shadow.
+   Four pixels of inset preserve the former 3px border + 3px padding row positions. */
 .sidebar-navigation-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
   margin-block: 3px;
-  padding: 6px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--surface);
+  padding: 4px;
+  gap: 0;
   isolation: isolate;
-  box-shadow: var(--card-shadow);
 }
 
 /* Keep the solid header band behind controls without clipping focus outlines. */
@@ -107,8 +102,9 @@
   content: "";
   position: absolute;
   inset: 0 0 auto;
-  height: calc(var(--nav-row-height) + 9px);
-  border-radius: 10px 10px 0 0;
+  height: calc(var(--nav-row-height) + 10px);
+  max-height: 100%;
+  border-radius: calc(var(--navigation-card-radius) - var(--rule));
   background: var(--card-header-fill);
   pointer-events: none;
   z-index: -1;
@@ -128,11 +124,12 @@
   padding-right: 48px;
 }
 
-.sidebar .sidebar-card-toggle {
+.sidebar .sidebar-card-toggle,
+.sidebar .project-sidebar-open {
   position: absolute;
   z-index: 1;
-  top: calc(6px + (var(--nav-row-height) - 28px) / 2);
-  right: 10px;
+  top: calc(4px + (var(--nav-row-height) - 28px) / 2);
+  right: 8px;
   width: 28px;
   height: 28px;
   min-height: 28px;
@@ -141,28 +138,96 @@
   transition: color var(--motion) var(--ease);
 }
 
-.sidebar-card-chevron {
+.sidebar .project-sidebar-open {
+  right: 40px;
+}
+
+.sidebar .sidebar-card-header #tab-chat {
+  padding-right: 72px;
+}
+
+/* Reserve action space, revealing only the row under the pointer or keyboard focus. */
+.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+  opacity: 0;
+}
+
+.sidebar-navigation-card:has(
+    > .sidebar-card-header:hover,
+    > .sidebar-card-toggle:hover,
+    > .project-sidebar-open:hover,
+    > .sidebar-card-header :focus-visible,
+    > .sidebar-card-toggle:focus-visible,
+    > .project-sidebar-open:focus-visible
+  )
+  > :is(.sidebar-card-toggle, .project-sidebar-open)
+  > :is(.sidebar-card-chevron, .sidebar-card-add),
+.project-chat-heading:is(:hover, :has(:focus-visible))
+  > .icon-button
+  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+  opacity: 1;
+}
+
+.sidebar-card-chevron,
+.sidebar-card-add,
+.sidebar-card-stop {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 5px;
-  background: transparent;
-  rotate: -90deg;
+  border: 1px solid #000000;
+  border-radius: 50%;
+  background: var(--surface-band);
+  box-shadow: 2px 2px 0 #000000;
   transition:
-    rotate var(--motion) var(--ease),
     background-color var(--motion) var(--ease),
     color var(--motion) var(--ease);
 }
 
-.sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+.sidebar-card-stop {
+  color: var(--project-stop-color);
+  --icon-size: 16px;
+}
+
+.project-folder-stop:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-stop {
+  background: var(--project-stop-color);
+  color: var(--on-destructive);
+}
+
+.sidebar-card-chevron > .carbon-icon {
+  rotate: -90deg;
+  transition: rotate var(--motion) var(--ease);
+}
+
+.sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+.project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+.project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
   background: var(--primary);
   color: var(--primary-text);
 }
 
-.sidebar-card-toggle[aria-expanded="true"] .sidebar-card-chevron {
+.sidebar-card-toggle[aria-expanded="true"] .sidebar-card-chevron > .carbon-icon,
+.project-chat-toggle[aria-expanded="true"] .sidebar-card-chevron > .carbon-icon {
   rotate: 0deg;
+}
+
+.sidebar-card-toggle:active .sidebar-card-chevron,
+.project-sidebar-open:active:not(:disabled) .sidebar-card-add,
+.project-folder-stop:active:not(:disabled) .sidebar-card-stop,
+.project-session-add:active:not(:disabled) .sidebar-card-add,
+.project-chat-toggle:active .sidebar-card-chevron {
+  translate: 1px 1px;
+  box-shadow: 1px 1px 0 #000000;
+}
+
+.sidebar-card-toggle:focus-visible .sidebar-card-chevron,
+.project-sidebar-open:focus-visible .sidebar-card-add,
+.project-folder-stop:focus-visible .sidebar-card-stop,
+.project-session-add:focus-visible .sidebar-card-add,
+.project-chat-toggle:focus-visible .sidebar-card-chevron {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
 }
 
 .sidebar .sidebar-home-pages {
@@ -174,6 +239,11 @@
   margin-top: 3px;
 }
 
+/* An empty project list contributes no second-row gap below its heading. */
+#chat-pages:not(:has(.chat-sidebar-row, .project-chat-heading, .project-session-new)) {
+  margin-top: 0;
+}
+
 /* Trim the final row's spacing even when it lives inside a disclosure. */
 .sidebar-navigation-card::after {
   content: "";
@@ -183,8 +253,8 @@
 }
 
 .sidebar :is(.chat-sidebar-row, .project-chat-heading, .sidebar-settings-heading) {
-  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
-    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+  border-radius: var(--nav-row-top-radius, 0px) var(--nav-row-top-radius, 0px)
+    var(--nav-row-bottom-radius, 0px) var(--nav-row-bottom-radius, 0px);
 }
 
 .sidebar[data-open="false"] {
@@ -244,7 +314,6 @@
 .page-tab [role="tab"],
 .page-tab .page-group-toggle,
 .page-tab .page-group-label,
-.project-sidebar-open,
 .project-session-new {
   --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent));
   width: 100%;
@@ -255,7 +324,7 @@
   border: 1px solid transparent;
   background: var(--control-fill);
   color: var(--muted);
-  font-weight: var(--button-weight, 300);
+  font-weight: var(--button-weight, 600);
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -272,8 +341,8 @@
   font-size: var(--button-size);
   text-transform: var(--button-case, none);
   --letter-spacing: var(--button-spacing, normal);
-  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
-    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+  border-radius: var(--nav-row-top-radius, 0px) var(--nav-row-top-radius, 0px)
+    var(--nav-row-bottom-radius, 0px) var(--nav-row-bottom-radius, 0px);
 }
 
 .page-tab
@@ -325,21 +394,8 @@
   pointer-events: none;
 }
 
-/* Fade only leading artwork on non-header rows; row labels/actions stay sharp. */
-.sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
-  opacity: 0.75;
-  transition: opacity var(--motion) var(--ease);
-}
-
-.sidebar
-  :is(
-    .page-tab,
-    .chat-sidebar-row,
-    .project-chat-heading,
-    .project-sidebar-open,
-    .project-session-new
-  ):hover
-  .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+/* Visible navigation artwork stays fully opaque in every interaction state. */
+.sidebar .navigation-icon {
   opacity: 1;
 }
 
@@ -407,6 +463,21 @@
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+}
+
+.workspace-breadcrumbs[data-breadcrumb-height-motion] {
+  overflow: hidden;
+}
+
+.breadcrumb-exit {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+.breadcrumb-exit .page-title-text {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .page-breadcrumbs .page-title {
@@ -483,7 +554,7 @@
   --control-fill: var(--accent-bg);
   background: var(--accent-bg);
   color: var(--text);
-  font-weight: var(--button-weight, 300);
+  font-weight: var(--button-weight, 600);
 }
 
 .chat-title {
@@ -588,8 +659,8 @@
   position: relative;
   --control-fill: var(--accent-bg);
   background: var(--accent-bg);
-  border-radius: var(--nav-row-top-radius, 5px) var(--nav-row-top-radius, 5px)
-    var(--nav-row-bottom-radius, 5px) var(--nav-row-bottom-radius, 5px);
+  border-radius: var(--nav-row-top-radius, 0px) var(--nav-row-top-radius, 0px)
+    var(--nav-row-bottom-radius, 0px) var(--nav-row-bottom-radius, 0px);
   color: var(--text);
 }
 
@@ -674,6 +745,7 @@
 }
 
 .project-chat-heading {
+  container-type: inline-size;
   --project-label-inset: calc(
     var(--nav-item-padding) +
     max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
@@ -700,12 +772,10 @@
   background: var(--hover-bg);
 }
 
-.project-chat-heading:has(.project-chat-name:enabled) {
-  cursor: pointer;
-}
-
 .project-chat-name {
-  --nav-label-inset: var(--project-label-inset);
+  /* Compact the leading gutter before sacrificing the project name to three actions. */
+  --nav-label-inset: min(var(--project-label-inset), max(40px, calc(100cqw - 176px)));
+  --project-icon-size: min(calc(2 * var(--button-size)), 24px, calc(var(--nav-label-inset) - 8px));
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -716,7 +786,7 @@
   height: var(--nav-row-height);
   min-height: var(--nav-row-height);
   max-height: var(--nav-row-height);
-  padding: 2px 4px 2px var(--project-label-inset);
+  padding: 2px 4px 2px var(--nav-label-inset);
   border: 0;
   background: transparent;
   text-align: left;
@@ -730,6 +800,12 @@
   min-width: 0;
 }
 
+.project-chat-label > .navigation-icon {
+  width: var(--project-icon-size);
+  height: var(--project-icon-size);
+  left: calc(var(--nav-label-inset) - var(--project-icon-size) - 8px);
+}
+
 .project-chat-activity {
   overflow: hidden;
   padding-left: 0;
@@ -739,11 +815,12 @@
 }
 
 .project-chat-heading > .icon-button {
-  flex: 0 0 var(--nav-action-width);
-  padding-inline: 0;
-  height: var(--nav-row-height);
-  min-height: var(--nav-row-height);
-  max-height: var(--nav-row-height);
+  flex: 0 0 28px;
+  padding: 0;
+  align-self: center;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
 }
 
 .chat-worker-children[hidden] {
@@ -783,13 +860,11 @@
   color: var(--text);
 }
 
-.project-sidebar-open,
 .project-session-new,
 .chat-sidebar-entry {
   --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
 }
 
-.project-sidebar-open,
 .project-session-new {
   position: relative;
   flex-shrink: 0;
@@ -797,15 +872,14 @@
   border: 0;
 }
 
-.project-sidebar-open > .navigation-icon,
 .project-session-new > .navigation-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.sidebar :is(.project-sidebar-open, .project-session-new) .carbon-icon {
-  --icon-size: 1em;
+.sidebar-card-add > .carbon-icon {
+  --icon-size: 16px;
 }
 
 .chat-sidebar-list {
@@ -837,7 +911,7 @@
 .chat-sidebar-entry[aria-current="true"] {
   background: var(--control-fill);
   color: var(--text);
-  font-weight: var(--button-weight, 300);
+  font-weight: var(--button-weight, 600);
 }
 
 .chat-unread {
@@ -944,4 +1018,16 @@
     flex-basis: 20px;
     min-width: 20px;
   }
+}
+
+/* Dark plum bands separate compact headers from near-black reading surfaces. */
+:root[data-color-scheme="dark"] .sidebar-card-header {
+  --text: var(--card-header-text);
+  --muted: var(--card-header-muted);
+  --focus-line: var(--card-header-text);
+  --focus-outline: var(--card-header-text);
+  --accent: var(--card-header-text);
+  --hover-bg: var(--card-header-hover);
+  --accent-bg: var(--card-header-hover);
+  --control-hover: var(--card-header-hover);
 }

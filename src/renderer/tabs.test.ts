@@ -31,6 +31,7 @@ describe("page tabs", () => {
         "advanced",
         "experiments",
         "custom-agents",
+        "assistants",
       ],
       active: "chat",
     });

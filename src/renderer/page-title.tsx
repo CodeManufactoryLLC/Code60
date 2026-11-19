@@ -25,6 +25,7 @@ export const PageTitleNavigationContext = createContext<
   | (BreadcrumbSource & {
       open(target: NavigationTarget): Promise<boolean>;
       pending: boolean;
+      selectionPending?: boolean;
       header?: boolean;
     })
   | null
@@ -97,7 +98,10 @@ export function PageTitle({
       {ancestors.map(({ label, icon, target }, index) => {
         const home = target.kind === "page" && target.id === "home";
         return (
-          <li key={`${target.kind}:${target.id}`}>
+          <li
+            key={`${target.kind}:${target.id}`}
+            data-breadcrumb-key={`${target.kind}:${target.id}`}
+          >
             {index > 0 && (
               <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
             )}
@@ -123,7 +127,14 @@ export function PageTitle({
           </li>
         );
       })}
-      <li aria-current="page">
+      <li
+        aria-current="page"
+        data-breadcrumb-key={
+          target
+            ? `${target.kind}:${target.id}`
+            : `${isSettingsSection(page) ? "settings" : "page"}:${page}`
+        }
+      >
         {ancestors.length > 0 && (
           <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
         )}
@@ -162,7 +173,12 @@ export function PageTitle({
       </nav>
       {header &&
         createPortal(
-          <nav className="page-breadcrumbs" aria-label="Breadcrumb">
+          <nav
+            className="page-breadcrumbs"
+            aria-label="Breadcrumb"
+            inert={navigation?.selectionPending}
+            aria-busy={navigation?.selectionPending || undefined}
+          >
             {trail(heading, true)}
           </nav>,
           header,

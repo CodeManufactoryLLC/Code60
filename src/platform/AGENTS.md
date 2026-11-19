@@ -9,4 +9,7 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
 - Enforce finite startup/cleanup deadlines.
 - Preserve POSIX process groups and grace periods.
 - Fail closed when native identity, privacy or file containment cannot be verified.
+- Native service inspection uses bounded fixed launchd/systemd commands and reports
+  running/stopped/unavailable separately. Never treat supervisor failure as stopped,
+  follow service-definition symlinks or mutate registration during status reads.
 - Use the diagnostic utility for best-effort credential redaction before clipping errors and bounded stderr. It is not a transcript scrubber or a PII anonymizer.

@@ -53,68 +53,51 @@ function contrast(a, b) {
 }
 
 describe("application palette", () => {
-  it("uses dark grays for resting surfaces, groups, selection and neutral details", () => {
-    const color = palette("dark");
-    expect(color("--bg")).toBe("#202020");
-    expect(color("--group-fill")).toBe("#303030");
-    expect(color("--accent-bg")).toBe("#3c3c3c");
-    for (const token of [
-      ...backgrounds.filter((token) => !["--surface-band", "--hover-bg"].includes(token)),
-      "--chat-neutral",
-      "--control-fill",
-      "--disabled-fill",
-      "--warning-bg",
-      "--muted",
-      "--border",
-      "--control-border",
+  it("uses flat pale-blue and charcoal canvases with separate ink panel edges", () => {
+    for (const [scheme, bg, surface, text, edge, primary] of [
+      ["light", "#e8eefb", "#ffffff", "#111111", "#111111", "#2563eb"],
+      ["dark", "#111111", "#202020", "#f7f7f2", "#727272", "#2563eb"],
     ]) {
-      const [r, g, b] = channels(color(token));
-      expect(r, token).toBe(g);
-      expect(g, token).toBe(b);
+      const color = palette(scheme);
+      expect(color("--bg")).toBe(bg);
+      expect(color("--workspace-background")).toBe(bg);
+      expect(color("--surface")).toBe(surface);
+      expect(color("--text")).toBe(text);
+      expect(color("--border")).toBe(edge);
+      expect(color("--control-border")).toBe(scheme === "dark" ? "#aaaaaa" : edge);
+      expect(color("--primary")).toBe(primary);
+      for (const token of ["--chat-neutral", "--row-alt"])
+        expect(color(token), token).toBe(surface);
     }
-    expect(luminance(color("--bg"))).toBeLessThan(0.03);
-    expect(luminance(color("--group-fill"))).toBeGreaterThan(luminance(color("--surface")));
-    expect(luminance(color("--accent-bg"))).toBeGreaterThan(luminance(color("--surface")));
-  });
-
-  it("retains restrained blue headers, hover fills, actions and focus", () => {
-    const color = palette("dark");
-    for (const token of ["--surface-band", "--hover-bg", "--primary", "--accent", "--focus-line"]) {
-      const [r, g, b] = channels(color(token));
-      expect(b, token).toBeGreaterThan(g);
-      expect(g, token).toBeGreaterThan(r);
-    }
-    expect(luminance(color("--surface-band"))).toBeLessThan(0.08);
-    expect(luminance(color("--hover-bg"))).toBeLessThan(0.08);
-    expect(color("--primary")).toBe("#77b7f5");
-  });
-
-  it("preserves the Light palette and uses one resolved dark palette for Dark and System", () => {
-    const color = palette("light");
-    for (const token of backgrounds.filter(
-      (token) => !["--bg", "--accent-bg", "--hover-bg"].includes(token),
-    ))
-      expect(color(token), token).toBe("#ffffff");
-    expect(color("--bg")).toBe("#f3f3f3");
-    expect(color("--accent-bg")).toBe("#ededed");
-    expect(color("--hover-bg")).toBe("#e5f0fc");
-    expect(color("--primary")).toBe("#5b9fe6");
-    expect(color("--accent")).toBe("#245f9e");
-    expect(color("--text")).toBe("#000000");
-    expect(color("--muted")).toBe("#555555");
-    expect(color("--border")).toBe("#d0d0d0");
-    expect(color("--control-border")).toBe("#777777");
     expect(
       rules.filter(([, selector]) => selector.trim() === '[data-color-scheme="dark"]'),
     ).toHaveLength(1);
     expect(css).not.toContain('[data-theme="dark"]');
+    expect(css).not.toContain("gradient(");
   });
 
-  it("uses solid light-blue and dark-blue chat bubbles with contrasting text", () => {
-    expect(palette("light")("--user-bubble")).toBe("#d8e8fa");
-    expect(palette("dark")("--user-bubble")).toBe("#1b3a5c");
-    expect(luminance(palette("light")("--user-bubble"))).toBeGreaterThan(0.7);
-    expect(luminance(palette("dark")("--user-bubble"))).toBeLessThan(0.08);
+  it("gives dark mode deep plum header bands, ink frames and near-black reading planes", () => {
+    const color = palette("dark");
+    expect(color("--card-header-fill")).toBe("#2f1d37");
+    expect(color("--card-header-text")).toBe("#f0e9f2");
+    expect(color("--panel-border")).toBe("#050505");
+    expect(color("--shadow-color")).toBe("#050505");
+    expect(color("--field-fill")).toBe("#161616");
+    expect(color("--hover-bg")).not.toBe(color("--accent-bg"));
+    for (const token of ["--bg", "--surface", "--group-fill", "--code", "--field-fill"]) {
+      const [r, g, b] = channels(color(token));
+      expect(r, token).toBe(g);
+      expect(g, token).toBe(b);
+    }
+    expect(css).toContain("--danger: #9b3a35");
+    expect(css).toContain("--danger: #dfa69b");
+  });
+
+  it("keeps human messages distinct and primary labels legible in both schemes", () => {
+    expect(palette("light")("--user-bubble")).toBe("#dbeafe");
+    expect(palette("dark")("--user-bubble")).toBe("#35263e");
+    expect(palette("light")("--primary-text")).toBe("#ffffff");
+    expect(palette("dark")("--primary-text")).toBe("#ffffff");
   });
 
   for (const scheme of ["light", "dark"]) {
@@ -123,23 +106,35 @@ describe("application palette", () => {
       const textRatios = [];
       const edgeRatios = [];
       for (const background of backgrounds) {
-        for (const foreground of ["--text", "--muted", "--control-border"]) {
+        for (const foreground of ["--text", "--muted", "--control-border", "--group-border"]) {
           const ratio = contrast(color(foreground), color(background));
           expect(ratio, `${foreground} on ${background}`).toBeGreaterThanOrEqual(
-            foreground === "--control-border" ? 3 : 4.5,
+            foreground.endsWith("border") ? 3 : 4.5,
           );
-          (foreground === "--control-border" ? edgeRatios : textRatios).push(ratio);
+          (foreground.endsWith("border") ? edgeRatios : textRatios).push(ratio);
         }
       }
       for (const [foreground, background] of [
+        ["--card-header-text", "--card-header-fill"],
+        ["--card-header-muted", "--card-header-fill"],
         ["--primary-text", "--primary"],
         ["--human-text", "--chat-bg"],
         ["--on-user-bubble", "--user-bubble"],
+        ["--primary-text", "--primary-hover"],
+        ["--on-destructive", "--destructive"],
+        ["--on-destructive", "--destructive-hover"],
+        ["--project-stop-color", "--surface-band"],
+        ["--on-destructive", "--project-stop-color"],
       ]) {
         const ratio = contrast(color(foreground), color(background));
         expect(ratio, `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
         textRatios.push(ratio);
       }
+      for (const background of backgrounds)
+        expect(
+          contrast(color("--focus-line"), color(background)),
+          `focus on ${background}`,
+        ).toBeGreaterThanOrEqual(3);
       console.info(
         `${scheme}: minimum text ${Math.min(...textRatios).toFixed(2)}:1, control edge ${Math.min(...edgeRatios).toFixed(2)}:1`,
       );

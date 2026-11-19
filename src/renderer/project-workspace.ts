@@ -96,7 +96,9 @@ export function useProjectWorkspace({
       return;
     }
     const owner = id
-      ? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id))
+      ? (snapshot?.openProjects?.find(
+          (owner) => owner.id === snapshot.projectInstanceId && owner.workerIds.includes(id),
+        ) ?? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id)))
       : undefined;
     if (owner && owner.id !== snapshot?.projectInstanceId) {
       const current = scope.capture();
@@ -197,7 +199,7 @@ export function useProjectWorkspace({
   const projectTranscripts = useTranscripts(
     api,
     scope.viewKey,
-    !!directory && readsActive,
+    !!directory && readsActive && tabs.active !== "search",
     tabs.active === "chat"
       ? snapshot?.runs.filter((run) => !run.relay && run.record.id === workerId)
       : snapshot?.runs.filter((run) => !run.relay),
@@ -208,7 +210,7 @@ export function useProjectWorkspace({
   const relayTranscripts = useTranscripts(
     api,
     "relay-workers",
-    readsActive,
+    readsActive && tabs.active !== "search",
     snapshot?.runs.filter(
       (run) => run.relay && (tabs.active !== "chat" || run.record.id === workerId),
     ),

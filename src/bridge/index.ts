@@ -51,6 +51,14 @@ export * from "./sidebar-backdrop.js";
 export * from "./window-controls.js";
 
 import { z } from "zod";
+import type {
+  ProjectSearchIdentity,
+  ProjectSearchOpened,
+  ProjectSearchOpenRequest,
+  ProjectSearchPage,
+  ProjectSearchPageRequest,
+  ProjectSearchQuery,
+} from "../contracts/index.js";
 import {
   type ActivitySnapshot,
   boundedString,
@@ -67,15 +75,25 @@ import {
   parseValue,
   runIdSchema,
   type SaveCommand,
-  SEARCH_EXCERPT_LIMIT,
-  SEARCH_QUERY_LIMIT,
-  SEARCH_SOURCE_LIMIT,
-  type SearchSummarySource,
   saveCommandSchema,
   tacticIdSchema,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
+
+export {
+  type ProjectSearchIdentity,
+  type ProjectSearchOpened,
+  type ProjectSearchPage,
+  type ProjectSearchQuery,
+  type ProjectSearchSource,
+  parseProjectSearchIdentity,
+  parseProjectSearchOpen,
+  parseProjectSearchPage,
+  parseProjectSearchQuery,
+  type SearchProject,
+} from "../contracts/index.js";
+
 import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js";
 import { projectRequestFields } from "./project-identity.js";
 import type { WebLink } from "./web-links.js";
@@ -437,6 +455,10 @@ export interface DesktopApi {
   abandonAgentSetup(request: SetupIdentity): Promise<void>;
   update(action: UpdateAction): Promise<UpdateState>;
   onUpdate(listener: (state: UpdateState) => void): () => void;
+  searchProjects(request: ProjectSearchQuery): Promise<ProjectSearchPage>;
+  searchProjectsPage(request: ProjectSearchPageRequest): Promise<ProjectSearchPage>;
+  cancelProjectSearch(request: ProjectSearchIdentity): Promise<void>;
+  openSearchSource(request: ProjectSearchOpenRequest): Promise<ProjectSearchOpened | null>;
   summarizeSearch(request: SearchSummaryRequest): Promise<SearchSummaryResult>;
   cancelSearchSummary(requestId: string): Promise<void>;
   extractMemory(request: MemoryExtractionRequest): Promise<MemoryExtractionResult>;
@@ -992,38 +1014,16 @@ export const parseMemoryExtraction = (value: unknown): MemoryExtractionRequest =
 export const parseMemoryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
-const searchSummarySchema = z
-  .strictObject({
-    requestId: memoryRequestIdSchema,
-    directory: boundedString("project path", 4096).min(1),
-    query: boundedString("search query", SEARCH_QUERY_LIMIT).refine(
-      (value) => value.trim().length > 0,
-      "Enter a search query",
-    ),
-    includeFiles: z.boolean().optional(),
-    sources: z
-      .array(
-        z.strictObject({
-          id: boundedString("source ID", 4096).min(1),
-          kind: z.enum(["project", "run", "prompt", "message", "thought"]),
-          title: boundedString("source title", 512),
-          text: boundedString("source excerpt", SEARCH_EXCERPT_LIMIT),
-          runId: runIdSchema.optional(),
-          eventIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-        }),
-      )
-      .max(SEARCH_SOURCE_LIMIT),
-  })
-  .refine(
-    (request) =>
-      new Set(request.sources.map((source) => source.id)).size === request.sources.length,
-    "Duplicate search sources",
-  );
+const searchSummarySchema = z.strictObject({
+  requestId: memoryRequestIdSchema,
+  searchId: memoryRequestIdSchema,
+  databaseEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+});
 export type SearchSummaryRequest = z.infer<typeof searchSummarySchema>;
 export interface SearchSummaryResult {
   requestId: string;
   text: string;
-  sources: SearchSummarySource[];
+  sources: import("../contracts/index.js").ProjectSearchSource[];
 }
 export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
   parseValue(searchSummarySchema, value);

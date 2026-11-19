@@ -108,6 +108,16 @@
   margin-bottom: 4px;
 }
 
+.search-result-meta > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.search-warnings {
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
 /* Text actions keep native button activation and visible keyboard focus. */
 .search-results .search-result-title,
 .search-overview .search-citation {

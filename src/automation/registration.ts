@@ -1,9 +1,11 @@
 import { access, realpath, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SchedulerStatus, ServiceStatus } from "../contracts/index.js";
 import {
   controlUserService,
   fileCode,
+  inspectUserService,
   privateDirectory,
   readPrivateJson,
   type ServiceRuntime,
@@ -31,7 +33,7 @@ export async function prepareSchedulerUpdate(env: Readonly<NodeJS.ProcessEnv>): 
   if (registration?.installed !== true)
     throw new AutomationError(
       "refused",
-      "Stop the standalone scheduler before updating, or install the background service first.",
+      "Stop the standalone scheduler before updating, or install the Scheduling Service first.",
     );
   const previous = await readPrivateJson(updatePath(env), 4096).catch((error) => {
     if (fileCode(error) !== "ENOENT") throw error;
@@ -102,14 +104,30 @@ export async function schedulerControl(
   if ((action === "install" || action === "repair") && !consent)
     throw new AutomationError(
       "refused",
-      "Explicit consent is required to install or repair background execution.",
+      "Explicit consent is required to install or repair the Scheduling Service.",
     );
   const runtime = await schedulerRuntime(env);
   const definition = userServiceDefinition(process.platform, userHome(env), root, runtime);
   if (action === "status") {
-    const native = await controlUserService(definition, "status");
-    const service = await automationClient(env)({ action: "status" }).catch(() => null);
-    return { installed: registered !== null, nativeAvailable: native.available, service };
+    if (
+      registered !== null &&
+      (typeof registered !== "object" ||
+        Array.isArray(registered) ||
+        typeof (registered as { installed?: unknown }).installed !== "boolean")
+    )
+      throw new AutomationError("unavailable", "Scheduling Service registration is invalid.");
+    const installed = (registered as { installed: boolean } | null)?.installed === true;
+    const [native, service] = await Promise.all([
+      inspectUserService(definition),
+      automationClient(env)({ action: "status" }).catch(() => null),
+    ]);
+    if (installed !== native.definitionPresent || (!installed && native.state === "running"))
+      throw new AutomationError("unavailable", "Scheduling Service registration needs repair.");
+    return {
+      installed,
+      nativeState: native.state,
+      service: service as ServiceStatus | null,
+    } satisfies SchedulerStatus;
   }
   if (action === "stop" || action === "uninstall" || action === "repair")
     await suspendScheduler(env);

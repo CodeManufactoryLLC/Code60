@@ -3,11 +3,13 @@ import { pageAvailable, pageDefinitions } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 
 export function HomePage({
+  page = "home",
   database,
   relayAvailable,
   onOpenRelay,
   onOpenPage,
 }: {
+  page?: "home" | "assistants";
   database: string | null;
   relayAvailable: boolean;
   onOpenRelay(): Promise<void>;
@@ -39,7 +41,10 @@ export function HomePage({
       reason: pending ? "Opening Relay" : "Relay is unavailable",
       action: () => void openRelay(),
     },
-    ...(["custom-agents", "search", "projects", "apps", "sessions"] as const).map((id) => {
+    ...(page === "assistants"
+      ? (["custom-agents"] as const)
+      : (["custom-agents", "search", "projects", "apps", "sessions"] as const)
+    ).map((id) => {
       const page = pageDefinitions[id];
       return {
         id,
@@ -55,8 +60,8 @@ export function HomePage({
   ];
   return (
     <NavigationHomePage
-      page="home"
-      intro={<p className="home-welcome">Welcome to Code60</p>}
+      page={page}
+      intro={page === "home" && <p className="home-welcome">Welcome to Code60</p>}
       cards={cards}
       error={error}
       onOpen={(card) => card.action()}

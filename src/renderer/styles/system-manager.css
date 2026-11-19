@@ -17,11 +17,12 @@
 }
 
 .automation-service {
-  margin-bottom: 16px;
+  margin: 0 4px 20px 0;
   padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
+  border: var(--rule-strong) solid var(--panel-border);
+  border-radius: var(--ui-radius);
   background: var(--surface);
+  box-shadow: var(--card-shadow);
 }
 
 .automation-service-summary {
@@ -38,8 +39,7 @@
 
 .automation-service-copy h2 {
   margin: 0;
-  font-size: 13px;
-  font-weight: inherit;
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
 }
 
 .automation-service-state {
@@ -49,19 +49,38 @@
   gap: 7px;
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 12px;
 }
 
-.automation-health-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: var(--muted);
+.automation-service-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: var(--rule) solid var(--control-border);
+  border-radius: var(--ui-radius);
+  background: var(--surface);
+  color: var(--text);
+  font: var(--button-weight, 600) var(--button-size, 13px) / 1.4 var(--button-font, var(--font));
 }
 
-.automation-health-dot.is-connected {
+.automation-service-badge[data-state="not-installed"] {
+  border-style: dashed;
+}
+
+.automation-service-badge[data-state="running"] {
   background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--primary);
+}
+
+.automation-service-badge > .carbon-icon {
+  --icon-size: 1em;
+  flex-shrink: 0;
+}
+
+.automation-service-note {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .automation-service-actions,
@@ -85,23 +104,39 @@
   gap: 8px 16px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--border);
+  border-top: var(--rule) solid var(--border);
   color: var(--destructive);
-  font-size: 12px;
 }
 
 .automation-service-options {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: var(--rule) solid var(--border);
 }
 
 .automation-service-options summary {
   width: fit-content;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
   user-select: none;
+}
+
+@media (forced-colors: active) {
+  .automation-service {
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+  .automation-service-badge {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .automation-service-badge[data-state="running"] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
 }
 
 .automation-service-options[open] summary {

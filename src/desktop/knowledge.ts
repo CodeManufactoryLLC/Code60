@@ -275,7 +275,7 @@ export class DesktopKnowledge {
       action = "Set up Git from Chat, then continue explicitly.";
     } else if (cap.id === "system-manager") {
       reason =
-        "Desktop controls manage the independent macOS/Linux service. No public Code60 CLI; awareness never probes or controls the service.";
+        "Desktop controls manage the independent macOS/Linux Scheduling Service and show verified installation/runtime status. No public Code60 CLI; awareness never probes or controls the service.";
       action = "Apps → System Manager.";
     } else if (cap.id === "updates") {
       status = "unknown";

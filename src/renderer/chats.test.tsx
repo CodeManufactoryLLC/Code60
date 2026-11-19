@@ -128,10 +128,28 @@ describe("conversation hierarchy", () => {
       const project = projects[index];
       expect(section).toContain(`id="conversation-${project?.id}"`);
       expect(section).not.toContain('id="conversation-relay"');
-      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("More for"));
-      expect(section.indexOf("More for")).toBeLessThan(section.indexOf("project-chat-pages"));
-      expect(section.indexOf("project-chat-pages")).toBeLessThan(section.indexOf("New Session in"));
+      expect(section.indexOf("project-chat-name")).toBeLessThan(
+        section.indexOf("project-session-add"),
+      );
+      expect(section.indexOf("project-session-add")).toBeLessThan(
+        section.indexOf("project-folder-stop"),
+      );
+      expect(section.indexOf("project-folder-stop")).toBeLessThan(
+        section.indexOf("project-chat-toggle"),
+      );
+      expect(section.indexOf("project-chat-toggle")).toBeLessThan(
+        section.indexOf("project-chat-pages"),
+      );
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("project-chat-pages"));
       expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("chat-sidebar"));
+      expect(section).toContain(`aria-label="Close Project: ${project?.path}"`);
+      expect(section).toContain('title="Close Project"');
+      expect(section).toContain('data-tooltip="Close Project"');
+      expect(section).toContain('class="sidebar-card-stop"');
+      const stopButton = section.match(
+        /<button[^>]*class="icon-button project-folder-stop"[^>]*>/,
+      )?.[0];
+      expect(stopButton).not.toContain('aria-haspopup="menu"');
       expect(section).not.toContain("Toggle chats");
       expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');

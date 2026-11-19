@@ -29,6 +29,7 @@
 /* Chat frames the conversation separately from its adjacent inspector card. */
 #panel-chat {
   flex-direction: column;
+  border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -58,6 +59,7 @@
 }
 
 .file-panel {
+  box-sizing: border-box;
   --control-fill: var(--chat-neutral);
   position: relative;
   display: flex;
@@ -72,8 +74,8 @@
     margin-inline-start var(--motion) ease;
   min-height: 0;
   padding: 0;
-  border: 0;
-  border-radius: 10px;
+  border: var(--rule-strong) solid var(--panel-border);
+  border-radius: var(--ui-radius);
   background: var(--chat-neutral);
   box-shadow: var(--card-shadow);
 }
@@ -81,7 +83,8 @@
 .file-panel[data-minimized="true"] {
   width: 0;
   margin-inline-start: 0;
-  border-width: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .file-panel[data-resizing="true"] {
@@ -1126,4 +1129,20 @@ button.file-open-link {
 
 .file-tab-actions > .icon-button {
   flex-shrink: 0;
+}
+
+/* Dark plum bands separate compact headers from near-black reading surfaces. */
+:root[data-color-scheme="dark"] .file-panel-toolbar {
+  --text: var(--card-header-text);
+  --muted: var(--card-header-muted);
+  --focus-line: var(--card-header-text);
+  --focus-outline: var(--card-header-text);
+  --accent: var(--card-header-text);
+  --hover-bg: var(--card-header-hover);
+  --accent-bg: var(--card-header-hover);
+  --control-hover: var(--card-header-hover);
+}
+
+:root[data-color-scheme="dark"] .file-panel-toolbar .icon-button {
+  color: var(--muted);
 }

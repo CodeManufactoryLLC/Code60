@@ -1,6 +1,7 @@
 export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
+export { guardOptionalOutput } from "./optional-output.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,
@@ -22,4 +23,9 @@ export {
   writePrivateFile,
 } from "./storage.js";
 export { assertSupportedPlatform } from "./support.js";
-export { controlUserService, type ServiceRuntime, userServiceDefinition } from "./user-service.js";
+export {
+  controlUserService,
+  inspectUserService,
+  type ServiceRuntime,
+  userServiceDefinition,
+} from "./user-service.js";

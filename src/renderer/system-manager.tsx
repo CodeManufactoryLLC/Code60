@@ -1,86 +1,181 @@
 import { useEffect, useRef, useState } from "react";
-import type { AutomationUiRequest, DesktopApi, ServiceStatus } from "../bridge/index.js";
+import type { AutomationUiRequest, DesktopApi, SchedulerStatus } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
+import { schedulingServiceLabels, schedulingServiceState } from "./scheduling-service.js";
+import { observeServiceStatusPolling } from "./service-status-polling.js";
 
 type ServiceAction = Extract<
   AutomationUiRequest,
-  { action: "scheduler" | "pauseAll" | "resumeAll" | "resolveBlock" }
+  { action: "scheduler" | "resumeAll" | "resolveBlock" }
 >;
 
 export function SystemManagerPage({
   api,
   active,
+  pollingPaused = false,
 }: {
   api: Pick<DesktopApi, "automation" | "onAutomationChanged">;
   active: boolean;
+  pollingPaused?: boolean;
 }) {
-  const [status, setStatus] = useState<ServiceStatus>();
+  const [status, setStatus] = useState<SchedulerStatus>();
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [reading, setReading] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const busy = progress !== "";
   const generation = useRef(0);
   const pending = useRef(false);
-  const refresh = useRef<() => Promise<void>>(async () => {});
+  const mutation = useRef(0);
+  const pollDelay = useRef(2000);
+  const refresh = useRef<(background?: boolean, changed?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     const owner = ++generation.current;
     if (!active) return;
     let disposed = false;
-    let running = false;
+    let flight: Promise<void> | undefined;
     let dirty = false;
-    const read = async () => {
-      if (disposed) return;
-      if (running) {
+    let visibility = 0;
+    let failures = 0;
+    const visibilityChanged = () => {
+      visibility++;
+    };
+    const retry = (failed: boolean) => {
+      failures = failed ? Math.min(failures + 1, 5) : 0;
+      pollDelay.current = Math.min(60_000, 2000 * 2 ** Math.min(failures, 5));
+    };
+    const read = (background = false, changed = true): Promise<void> => {
+      if (disposed || document.hidden) return Promise.resolve();
+      if (pending.current) {
         dirty = true;
-        return;
+        return Promise.resolve();
       }
-      running = true;
-      try {
-        do {
-          dirty = false;
-          const next = await api.automation({ action: "status" });
-          if (disposed) return;
-          setStatus(next as ServiceStatus);
-          setError("");
-        } while (dirty && !disposed);
-      } catch {
-        if (!disposed) {
-          setStatus(undefined);
-          setError(
-            "Scheduler unavailable. Install or start the background service, then refresh. Existing schedules and evidence are kept.",
-          );
+      if (!background) {
+        setReading(true);
+        setActionError("");
+      }
+      if (flight) {
+        if (changed) dirty = true;
+        return flight;
+      }
+      flight = Promise.resolve().then(async () => {
+        try {
+          do {
+            dirty = false;
+            const ticket = mutation.current;
+            const visibleTicket = visibility;
+            try {
+              const next = await api.automation({ action: "scheduler", control: "status" });
+              if (disposed || pending.current || document.hidden) return;
+              if (ticket !== mutation.current || visibleTicket !== visibility) {
+                dirty = true;
+                continue;
+              }
+              const value = next as SchedulerStatus;
+              retry(value.nativeState === "unavailable");
+              setStatus(value);
+              setError("");
+            } catch {
+              if (disposed || pending.current || document.hidden) return;
+              if (ticket !== mutation.current || visibleTicket !== visibility) {
+                dirty = true;
+                continue;
+              }
+              retry(true);
+              setStatus(undefined);
+              setError(
+                "Scheduling Service status is unavailable. Existing schedules and evidence are kept.",
+              );
+            }
+          } while (dirty && !disposed && !pending.current);
+        } finally {
+          flight = undefined;
+          if (!disposed) setReading(false);
         }
-      } finally {
-        running = false;
-        if (dirty && !disposed) void read();
-      }
+      });
+      return flight;
     };
     refresh.current = read;
-    const off = api.onAutomationChanged(() => void read());
+    document.addEventListener("visibilitychange", visibilityChanged);
+    const off = api.onAutomationChanged(() => void read(true));
     void read();
     return () => {
       disposed = true;
       if (generation.current === owner) generation.current++;
       refresh.current = async () => {};
+      document.removeEventListener("visibilitychange", visibilityChanged);
       off();
     };
   }, [active, api]);
+  useEffect(() => {
+    if (active && !pollingPaused)
+      return observeServiceStatusPolling(
+        () => refresh.current(true, false),
+        () => pollDelay.current,
+      );
+  }, [active, pollingPaused]);
   const act = async (request: ServiceAction) => {
     if (pending.current) return;
     pending.current = true;
+    mutation.current++;
     const owner = generation.current;
-    setBusy(true);
-    setError("");
+    setProgress(
+      request.action === "scheduler"
+        ? {
+            install: "Installing…",
+            start: "Starting…",
+            stop: "Stopping…",
+            repair: "Repairing…",
+            uninstall: "Uninstalling…",
+            status: "Checking…",
+          }[request.control]
+        : request.action === "resumeAll"
+          ? "Resuming jobs…"
+          : "Rechecking…",
+    );
+    setActionError("");
     try {
       await api.automation(request);
+      pending.current = false;
       await refresh.current();
     } catch (cause) {
+      pending.current = false;
+      await refresh.current();
       if (owner === generation.current)
-        setError(cause instanceof Error ? cause.message : "Background service action failed.");
+        setActionError(
+          cause instanceof Error ? cause.message : "Scheduling Service action failed.",
+        );
     } finally {
       pending.current = false;
-      setBusy(false);
+      setProgress("");
     }
   };
+  const state = schedulingServiceState(status, !!error);
+  const live = status?.service;
+  const statusHint = pollingPaused
+    ? "Status polling is paused. Resume polling or refresh to check again."
+    : "Automatic checks will retry.";
+  const mainAction =
+    state === "not-installed" || (state === "running" && !status?.installed)
+      ? "install"
+      : state === "stopped"
+        ? "start"
+        : state === "running"
+          ? "stop"
+          : undefined;
+  const stateIcon =
+    state === "running"
+      ? "play--filled"
+      : state === "stopped"
+        ? "stop"
+        : state === "not-installed"
+          ? "subtract"
+          : state === "checking"
+            ? "renew"
+            : "warning--alt";
   return (
     <section className="system-manager-page">
       <header className="table-controls">
@@ -88,98 +183,105 @@ export function SystemManagerPage({
         <button
           type="button"
           className="icon-button"
-          aria-label="Refresh background service"
-          title="Refresh background service"
-          disabled={busy}
+          aria-label="Refresh Scheduling Service"
+          title="Refresh Scheduling Service"
+          disabled={busy || reading}
           onClick={() => void refresh.current()}
         >
           <Icon name="renew" />
         </button>
       </header>
-      <section className="automation-service" aria-labelledby="automation-service-title">
+      <section
+        className="automation-service"
+        data-state={state}
+        aria-labelledby="automation-service-title"
+        aria-busy={busy || reading}
+      >
         <div className="automation-service-summary">
           <div className="automation-service-copy">
-            <h2 id="automation-service-title">Background service</h2>
+            <h2 id="automation-service-title">Scheduling Service</h2>
             <p className="automation-service-state" role="status">
-              <span
-                className={`automation-health-dot${status ? " is-connected" : ""}`}
-                aria-hidden="true"
-              />
-              {status
-                ? status.pausedAll
-                  ? "Installed, all scheduled jobs paused"
-                  : "Installed and running"
-                : "Service unavailable"}
-              {status?.activeExecutionId && !status.pausedAll ? " · A run is active" : ""}
+              <span className="automation-service-badge" data-state={state}>
+                <Icon name={stateIcon} />
+                {schedulingServiceLabels[state]}
+              </span>
+              {state === "running" && !status?.installed && <span>· Not installed</span>}
+              {live?.pausedAll && <span>· Jobs paused</span>}
+              {live?.activeExecutionId && <span>· A run is active</span>}
+              {progress && <span>· {progress}</span>}
             </p>
           </div>
           <div className="automation-service-actions">
-            {status ? (
-              status.pausedAll ? (
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy}
-                  onClick={() => void act({ action: "resumeAll" })}
-                >
-                  Resume all
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void act({ action: "pauseAll", cancelActive: true })}
-                >
-                  Pause all and cancel active work
-                </button>
-              )
-            ) : (
+            {mainAction && (
               <button
                 type="button"
                 className="primary"
-                disabled={busy}
-                onClick={() => void act({ action: "scheduler", control: "install" })}
+                disabled={busy || reading}
+                onClick={() => void act({ action: "scheduler", control: mainAction })}
               >
-                Install service
+                {mainAction.charAt(0).toUpperCase() + mainAction.slice(1)}
+              </button>
+            )}
+            {live?.pausedAll && (
+              <button
+                type="button"
+                disabled={busy || reading}
+                onClick={() => void act({ action: "resumeAll" })}
+              >
+                Resume jobs
               </button>
             )}
           </div>
         </div>
-        {status?.block && (
+        {state === "unavailable" && !error && (
+          <p className="automation-service-note">
+            The Scheduling Service could not be verified. {statusHint}
+          </p>
+        )}
+        {live?.block && (
           <div className="automation-block" role="alert">
             <span>
-              {status.block.reason === "leftover_agent"
+              {live.block.reason === "leftover_agent"
                 ? "An unfinished agent process needs recovery."
                 : "The service could not save its private state."}
             </span>
             <button
               type="button"
               className="small"
-              disabled={busy}
+              disabled={busy || reading}
               onClick={() => void act({ action: "resolveBlock" })}
             >
               Recheck
             </button>
           </div>
         )}
-        <details className="automation-service-options">
-          <summary>Service options</summary>
-          <div className="automation-service-tools">
-            {(["install", "repair", "start", "stop", "uninstall"] as const).map((control) => (
-              <button
-                type="button"
-                className={`small${control === "uninstall" ? " danger-text" : ""}`}
-                key={control}
-                disabled={busy}
-                onClick={() => void act({ action: "scheduler", control })}
-              >
-                {control.charAt(0).toUpperCase() + control.slice(1)}
-              </button>
-            ))}
-          </div>
-        </details>
+        {(status?.installed || state === "unavailable") && (
+          <details className="automation-service-options">
+            <summary>Service options</summary>
+            <div className="automation-service-tools">
+              {(["repair", ...(status?.installed ? ["uninstall" as const] : [])] as const).map(
+                (control) => (
+                  <button
+                    type="button"
+                    className={`small${control === "uninstall" ? " danger-text" : ""}`}
+                    key={control}
+                    disabled={busy || reading}
+                    onClick={() => void act({ action: "scheduler", control })}
+                  >
+                    {control.charAt(0).toUpperCase() + control.slice(1)}
+                  </button>
+                ),
+              )}
+            </div>
+          </details>
+        )}
       </section>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {error} {statusHint}
+        </p>
+      )}
+      {actionError && <p role="alert">{actionError}</p>}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type {
   DesktopApi,
   MemoryAction,
@@ -6,6 +6,7 @@ import type {
   MemorySettings,
   MemorySnapshot,
 } from "../bridge/index.js";
+import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
@@ -20,6 +21,7 @@ export function MemoryPage({
   active?: boolean;
   onManage(): void;
 }) {
+  const helpId = useId();
   const [snapshot, setSnapshot] = useState<MemorySnapshot>();
   const [optimistic, setOptimistic] = useState<MemorySettings>();
   const [error, setError] = useState("");
@@ -96,19 +98,27 @@ export function MemoryPage({
   };
   return (
     <section className="settings-section memory-page" aria-label="Memory">
-      <SettingsHeader
-        page="memory"
-        tip="When on, Code60 learns useful information from conversations and uses relevant saved memories across Relay, project chats and workers. Memories, embeddings and search stay local. Creating memories sends conversation excerpts to your verified provider and may incur usage. Secret filtering is best effort, not a privacy guarantee. Memory never grants permissions or task authority. Automatic conversation handoffs are separate and may summarize the current conversation even when Memory is off."
-      >
+      <SettingsHeader page="memory">
+        <span className="sr-only" id={helpId}>
+          When on, Code60 learns useful information from conversations and uses relevant saved
+          memories across Relay, project chats and workers. Memories, embeddings and search stay
+          local. Creating memories sends conversation excerpts to your verified provider and may
+          incur usage. Secret filtering is best effort, not a privacy guarantee. Memory never grants
+          permissions or task authority. Automatic conversation handoffs are separate and may
+          summarize the current conversation even when Memory is off.
+        </span>
         <button
           type="button"
+          className="icon-button"
+          aria-label="Refresh"
+          title="Refresh"
           disabled={busy}
           onClick={() => {
             setError("");
             refresh.current();
           }}
         >
-          Refresh
+          <Icon name="renew" />
         </button>
       </SettingsHeader>
       {error && (
@@ -127,6 +137,7 @@ export function MemoryPage({
               <input
                 type="checkbox"
                 role="switch"
+                aria-describedby={helpId}
                 checked={settings.enabled}
                 aria-checked={settings.enabled}
                 disabled={busy}

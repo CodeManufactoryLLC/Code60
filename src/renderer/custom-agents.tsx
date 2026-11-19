@@ -5,6 +5,8 @@ import type {
   CustomAgentSummary,
   DesktopApi,
 } from "../bridge/index.js";
+import { AnchoredMenu } from "./anchored-menu.js";
+import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import { NavigationCards } from "./navigation-cards.js";
 import { PageTitle } from "./page-title.js";
@@ -26,9 +28,11 @@ export function CustomAgentsPage({
   const [editor, setEditor] = useState<CustomAgent | "new">();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [menu, setMenu] = useState<{ agent: CustomAgentSummary; x: number; y: number }>();
   const alive = useRef(active);
   useEffect(() => {
     alive.current = active;
+    if (!active) setMenu(undefined);
     return () => {
       alive.current = false;
     };
@@ -47,11 +51,23 @@ export function CustomAgentsPage({
     }
   };
   const visible = agents.filter((a) => a.archived === archived);
+  const menuVisible =
+    active &&
+    !busy &&
+    menu &&
+    visible.some((a) => a.id === menu.agent.id && a.revision === menu.agent.revision);
   return (
     <section className="custom-agents-page">
       <header className="table-controls">
         <PageTitle page="custom-agents" />
-        <button type="button" aria-pressed={archived} onClick={() => setArchived((v) => !v)}>
+        <button
+          type="button"
+          aria-pressed={archived}
+          onClick={() => {
+            setMenu(undefined);
+            setArchived((v) => !v);
+          }}
+        >
           {archived ? "Active assistants" : "Archived"}
         </button>
       </header>
@@ -73,45 +89,57 @@ export function CustomAgentsPage({
           if (archived) void act({ type: "restore", id: a.id, revision: a.revision });
           else void onOpen(a.id);
         }}
-      >
-        <div className="custom-agent-actions">
-          {visible.map((a) => (
-            <div key={a.id}>
-              <span>{a.name}</span>
-              {archived ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void act({ type: "restore", id: a.id, revision: a.revision })}
-                >
-                  Restore
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="button"
-                    aria-label={`Edit ${a.name}`}
-                    disabled={busy}
-                    onClick={() => void act({ type: "read", id: a.id })}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="button"
-                    aria-label={`Archive ${a.name}`}
-                    disabled={busy}
-                    onClick={() => void act({ type: "archive", id: a.id, revision: a.revision })}
-                  >
-                    Archive
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </NavigationCards>
+        renderActions={(a) => (
+          <button
+            type="button"
+            className="icon-button home-card-actions"
+            aria-label={`More actions for ${a.name}`}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(menuVisible && menu?.agent.id === a.id)}
+            disabled={busy}
+            onClick={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect();
+              setMenu({ agent: a, x: bounds.left, y: bounds.bottom });
+            }}
+          >
+            <Icon name="overflow-menu--horizontal" />
+          </button>
+        )}
+      />
+      {menuVisible && menu && (
+        <AnchoredMenu
+          x={menu.x}
+          y={menu.y}
+          label={`Actions for ${menu.agent.name}`}
+          onClose={() => setMenu(undefined)}
+          items={
+            archived
+              ? [
+                  {
+                    label: "Restore",
+                    run: () =>
+                      void act({
+                        type: "restore",
+                        id: menu.agent.id,
+                        revision: menu.agent.revision,
+                      }),
+                  },
+                ]
+              : [
+                  { label: "Edit", run: () => void act({ type: "read", id: menu.agent.id }) },
+                  {
+                    label: "Archive",
+                    run: () =>
+                      void act({
+                        type: "archive",
+                        id: menu.agent.id,
+                        revision: menu.agent.revision,
+                      }),
+                  },
+                ]
+          }
+        />
+      )}
       {editor && (
         <AgentEditor
           key={editor === "new" ? "new" : editor.id}

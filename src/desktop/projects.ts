@@ -31,6 +31,8 @@ interface SavedPromptTemplates {
 export interface ProjectDatabase {
   readonly path: string;
   list(): ProjectEntry[];
+  /** Complete registry for database-wide reads; independent of the recent-history UI limit. */
+  all(): ProjectEntry[];
   record(path: string, openedAt: string): void;
   remove(path: string): void;
   clear(): void;
@@ -227,6 +229,11 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
     deleteCommand: (id) => {
       database.prepare("DELETE FROM code60_commands WHERE id = ?").run(id);
     },
+    all: () =>
+      database
+        .prepare("SELECT path, opened_at FROM code60_projects ORDER BY path")
+        .all()
+        .map((row) => ({ path: String(row.path), openedAt: String(row.opened_at) })),
     list: () =>
       list
         .all(HISTORY_LIMIT)

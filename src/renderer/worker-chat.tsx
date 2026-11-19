@@ -23,6 +23,8 @@ export function WorkerChat({
   orchestrated,
   events,
   active,
+  hidden = !active,
+  selectionPending = false,
   request,
   loading,
   historyError,
@@ -37,6 +39,8 @@ export function WorkerChat({
   orchestrated: boolean;
   events: readonly RunEvent[];
   active: boolean;
+  hidden?: boolean;
+  selectionPending?: boolean;
   request: OpenChat | undefined;
   loading: boolean;
   historyError: string | undefined;
@@ -152,7 +156,10 @@ export function WorkerChat({
       className="orchestration-chat-page worker-chat-page"
       id={`chat-${id}`}
       aria-labelledby={titleId}
-      hidden={!active}
+      hidden={hidden}
+      inert={selectionPending}
+      data-navigation-pending={selectionPending || undefined}
+      aria-busy={selectionPending || undefined}
     >
       <header className="orchestration-chat-heading worker-chat-heading">
         <div className="worker-chat-identity">

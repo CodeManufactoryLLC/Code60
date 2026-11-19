@@ -25,6 +25,14 @@ afterEach(async () => {
 
 // Node.js 22.12 needs a flag for node:sqlite; the desktop app runs on Electron's newer Node.js.
 describe.skipIf(!sqliteAvailable())("project database", () => {
+  it("enumerates the complete search registry without changing the recent-history limit", () => {
+    const db = openProjectDatabase(join(directory, "all.sqlite"), true);
+    for (let i = 0; i < 205; i++) db.record(`/repo-${i}`, String(i));
+    expect(db.list()).toHaveLength(200);
+    expect(db.all()).toHaveLength(205);
+    db.close();
+  });
+
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
 
   it("upgrades schema 4 without resetting clause edits, then persists sorted commands", () => {

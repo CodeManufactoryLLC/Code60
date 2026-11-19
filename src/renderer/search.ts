@@ -1,7 +1,6 @@
 import {
   type DesktopRun,
   SEARCH_SOURCE_LIMIT,
-  type SearchSummaryRequest,
   type SearchSummarySource,
   searchEvidenceExcerpt,
   searchKeywords,
@@ -149,7 +148,7 @@ export function searchExcerpt(text: string, query: string, limit = 220): string 
 export function summarySources(
   results: readonly SearchResult[],
   query: string,
-): SearchSummaryRequest["sources"] {
+): SearchSummarySource[] {
   return results
     .filter((result) => result.kind !== "file")
     .slice(0, SEARCH_SOURCE_LIMIT)

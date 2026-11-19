@@ -1,5 +1,11 @@
 import type { DesktopRun, OrchestrationChat } from "../bridge/index.js";
 
+/** Renderer event ownership; historical run IDs alone need not be globally unique. */
+export const chatEventKey = (chat: OrchestrationChat): string =>
+  chat.kind !== "relay" && chat.projectId
+    ? `${chat.projectId}:${chat.run?.id ?? ""}`
+    : (chat.run?.id ?? "");
+
 export interface Conversation {
   id: string;
   label: string;

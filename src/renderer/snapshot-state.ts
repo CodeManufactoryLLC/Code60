@@ -1,5 +1,6 @@
 import type { DesktopRun, Snapshot } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { chatEventKey } from "./chats.js";
 export interface DesktopState {
   /** Renderer-only epochs retain replacement boundaries even when React batches renders. */
   databaseGeneration: number;
@@ -56,13 +57,14 @@ export function applyUpdate(state: DesktopState | undefined, update: Snapshot): 
   for (const chat of update.chats.length ? update.chats : [update.chat]) {
     const id = chat.run?.id;
     if (!id) continue;
+    const eventKey = chatEventKey(chat);
     const previousChat =
-      state?.snapshot.chats.find((item) => item.run?.id === id) ??
-      (state?.snapshot.chat.run?.id === id ? state.snapshot.chat : undefined);
+      state?.snapshot.chats.find((item) => chatEventKey(item) === eventKey) ??
+      (state && chatEventKey(state.snapshot.chat) === eventKey ? state.snapshot.chat : undefined);
     const rewound = (previousChat?.rewindRevision ?? 0) !== (chat.rewindRevision ?? 0);
     chatEventRevisions[id] = chat.events.reduce(
       (revision, entry) => Math.max(revision, entry.revision),
-      (sameDatabase && !rewound ? state?.chatEventRevisions?.[id] : undefined) ?? -1,
+      (sameDatabase && !rewound ? state?.chatEventRevisions?.[eventKey] : undefined) ?? -1,
     );
     if (chat.kind === "relay") {
       // Relay snapshots carry one bounded replacement window, never an append-only UI lifetime.
@@ -73,15 +75,19 @@ export function applyUpdate(state: DesktopState | undefined, update: Snapshot): 
           : chat.events.map((entry) => entry.event);
       continue;
     }
-    const previous = rewound ? undefined : previousChats?.[id];
+    const previous = rewound ? undefined : previousChats?.[eventKey];
     const merged = [...(previous ?? [])];
-    const after = previous ? (state?.chatEventRevisions?.[id] ?? -1) : -1;
+    const after = previous ? (state?.chatEventRevisions?.[eventKey] ?? -1) : -1;
     for (const entry of chat.events) {
       if (entry.revision > after && entry.event.runId === id) merged.push(entry.event);
     }
     chatEventsByRun[id] = merged;
+    if (eventKey !== id) {
+      chatEventsByRun[eventKey] = merged;
+      chatEventRevisions[eventKey] = chatEventRevisions[id] ?? -1;
+    }
   }
-  const chatEvents = chatEventsByRun[update.chat.run?.id ?? ""] ?? [];
+  const chatEvents = chatEventsByRun[chatEventKey(update.chat)] ?? [];
   if (update.projectInstanceId)
     projectViews[update.projectInstanceId] = {
       runs: update.runs.filter((run) => !run.relay),

@@ -8,7 +8,11 @@ Stop all do not stop service-owned automations.
 
 ## Read-only diagnosis
 
-Open Apps → System Manager and refresh service status. Inspect installation,
+Open Apps → System Manager; service status updates automatically while visible.
+Checks normally run two seconds after the preceding read and back off to at most
+sixty seconds when unavailable. The footer's Pause polling also pauses these checks;
+Resume polling or use the optional Refresh Scheduling Service icon to check again.
+Inspect installation,
 connectivity, pause state, active execution and block independently. Open
 Scheduled Jobs to review saved schedules and execution history. An unreachable
 service is not proof that it has stopped; preserve that failure.
@@ -19,10 +23,17 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Supported recovery, only after consent
 
-1. In System Manager, pause future work and cancel active work only after explaining
-   the interruption. Wait for cleanup to settle and review Scheduled Jobs history.
-2. Use Install for a missing registration or Repair for a stale runtime, accepting
-   the native background-execution confirmation only with explicit approval.
+1. For an installed Scheduling Service, use System Manager → Stop to pause future
+   work, cancel active work and stop the service, only after explaining the
+   interruption. There is no separate pause-and-cancel button. Wait for cleanup
+   to settle and review Scheduled Jobs history. To cancel just one job (including
+   on a standalone scheduler), use Scheduled Jobs → More actions → Cancel active run.
+2. Check Scheduling Service status in System Manager: Not installed offers Install,
+   Stopped offers Start, and Running offers Stop. Jobs paused still means the
+   service is running. Checking or Status unavailable is not proof of installation
+   or stoppage; allow automatic checks to retry or use Refresh Scheduling Service.
+   Use Service options → Repair for a stale runtime,
+   accepting the native Scheduling Service confirmation only with explicit approval.
    Repair can refuse blocked ownership or cleanup; do not bypass the refusal.
 3. For an unfinished-agent block, establish that recorded owned processes are gone,
    then use Recheck. Live or unverifiable ownership must remain blocked.
@@ -33,7 +44,8 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Verify
 
-Refresh System Manager and Scheduled Jobs. Confirm connectivity, expected pause state,
+Observe updated System Manager status and refresh Scheduled Jobs if needed.
+Confirm connectivity, expected pause state,
 no block, future run times, and no duplicate/uncertain executions. Preserve worktrees
 and history. Installation checks do not prove a real provider run succeeded.
 

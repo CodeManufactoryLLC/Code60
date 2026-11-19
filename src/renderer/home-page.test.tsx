@@ -5,7 +5,7 @@ import { NavigationHomePage } from "./navigation-home-page.js";
 
 type Card = { id: string; label: string; available: boolean; action(): void };
 type HomeView = {
-  page: "home";
+  page: "home" | "assistants";
   cards: Card[];
   error?: string;
   onOpen(card: Card): void;
@@ -23,6 +23,37 @@ vi.mock("./navigation-home-page.js", async (importOriginal) => {
 });
 
 describe("Home destinations", () => {
+  it.each([false, true])(
+    "shows two Assistants cards without a database (Relay %s)",
+    (available) => {
+      const onOpenPage = vi.fn();
+      const onOpenRelay = vi.fn(async () => {});
+      const html = renderToStaticMarkup(
+        <HomePage
+          page="assistants"
+          database={null}
+          relayAvailable={available}
+          onOpenRelay={onOpenRelay}
+          onOpenPage={onOpenPage}
+        />,
+      );
+      expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
+        "Relay",
+        "Custom Assistants",
+      ]);
+      expect(html).not.toContain("Welcome to Code60");
+      expect(onOpenRelay).not.toHaveBeenCalled();
+      expect(onOpenPage).not.toHaveBeenCalled();
+      const view = forwarded.view;
+      const relay = view?.cards[0];
+      const custom = view?.cards[1];
+      if (!view || !relay || !custom) throw new Error("Missing Assistants cards");
+      expect(relay.available).toBe(available);
+      expect(custom.available).toBe(true);
+      view.onOpen(custom);
+      expect(onOpenPage).toHaveBeenCalledExactlyOnceWith("custom-agents");
+    },
+  );
   it.each(["apps", "settings", "projects"] as const)(
     "does not add Home's welcome to the %s navigation home",
     (page) => {

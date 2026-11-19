@@ -27,6 +27,7 @@ function render(
   turns = 1,
   runChanges: Partial<RunView> = {},
   chatChanges: Partial<OrchestrationChat> = {},
+  selectionPending = false,
 ) {
   return renderToStaticMarkup(
     <ChatPage
@@ -62,7 +63,8 @@ function render(
       }
       events={events}
       database={database}
-      active
+      active={!selectionPending}
+      selectionPending={selectionPending}
       onDatabase={() => {}}
       runs={runs}
       reviews={reviews}
@@ -72,6 +74,16 @@ function render(
 }
 
 describe("orchestration activity presentation", () => {
+  it("keeps a pending selection visible and inert with its existing transcript and composer", () => {
+    const html = render("idle", [], [], [], [], "/db", 1, {}, {}, true);
+    const main = html.match(/<main[^>]*>/)?.[0];
+    expect(main).toContain('inert=""');
+    expect(main).toContain('data-navigation-pending="true"');
+    expect(main).toContain('aria-busy="true"');
+    expect(main).not.toContain("hidden=");
+    expect(html).toContain('class="transcript"');
+    expect(html).toContain('class="composer"');
+  });
   it("omits the stale PID warning in restored chats but preserves actual failures", () => {
     const reason = "the owning process (PID 12345) is gone";
     for (const error of [null, reason]) {
