@@ -2577,12 +2577,26 @@ test("desktop: rounded controls, compact cards and collapsible navigation", asyn
     expect(unexpectedCorners).toEqual([]);
     await page.locator(".sidebar-resize").press("ArrowRight");
     await expect(sidebar()).toHaveCSS("width", "244px");
+    // Exercise a real retained scroll position, independently of runner fonts
+    // and screen height. Finish disclosure motion before capturing that position.
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1280, 640),
+    );
+    await expect.poll(() => page.evaluate(() => innerHeight)).toBeLessThan(650);
     await page.locator("#tab-apps").press("ArrowLeft");
     await page.locator("#tab-settings").press("ArrowRight");
+    await page.locator(".page-tabs").evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished.catch(() => {})),
+      );
+    });
     const scrollTop = await page.locator(".page-tabs").evaluate((element) => {
       element.scrollTop = element.scrollHeight;
       return element.scrollTop;
     });
+    expect(scrollTop).toBeGreaterThan(0);
     await toggle().focus();
     await toggle().press("Enter");
     await expect(toggle()).toHaveAttribute("aria-expanded", "false");
