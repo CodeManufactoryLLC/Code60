@@ -1982,7 +1982,9 @@ The row expands from zero height when opened and shrinks to zero height while fa
 to idle before removal. A content resize observer follows the changing transcript
 height only if the user is already following its bottom; reading older messages
 does not get pulled to the activity row. Preserve follow across resize-generated scroll
-events between measurement and the next controller write; upward input still cancels immediately.
+events until the controller write settles in a later rendering step, including anchors
+delivered after the first write; upward input still cancels immediately. Cancel the
+settlement check on pause, hide, disposal and replacement.
 This existing-behavior fix adds no capability or self-knowledge catalog change.
 Main Chat uses one frame-driven, retargetable
 scroll animation for incoming content, not repeated bottom jumps or restarted native

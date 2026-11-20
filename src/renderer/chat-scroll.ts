@@ -16,6 +16,7 @@ export function createChatScroll(
 ) {
   let frame: number | undefined;
   let revealFrame: number | undefined;
+  let layoutFrame: number | undefined;
   let previous = 0;
   let remainder = 0;
   let written = element.scrollTop;
@@ -23,15 +24,34 @@ export function createChatScroll(
   const geometry = () => `${element.clientWidth}:${element.clientHeight}:${element.scrollHeight}`;
   let measured = geometry();
   const bottom = () => Math.max(0, element.scrollHeight - element.clientHeight);
+  const settleLayout = (): void => {
+    if (!layoutPending || layoutFrame !== undefined) return;
+    const scheduled = requestAnimationFrame(() => {
+      if (layoutFrame !== scheduled) return;
+      layoutFrame = undefined;
+      if (!position.following) return;
+      if (measured === geometry() && Math.abs(element.scrollTop - written) < 1) {
+        layoutPending = false;
+      } else {
+        update();
+        settleLayout();
+      }
+    });
+    layoutFrame = scheduled;
+  };
   const write = (top: number) => {
     element.scrollTop = top;
     written = element.scrollTop;
     position.top = written;
-    layoutPending = false;
+    // The browser can apply a layout anchor after this write. Verify settlement
+    // in the next rendering step, after its queued scroll events are delivered.
+    settleLayout();
   };
   const cancelFollow = () => {
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
+    if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
+    layoutFrame = undefined;
     remainder = 0;
     layoutPending = false;
   };
@@ -68,13 +88,15 @@ export function createChatScroll(
         write(position.top);
       }
     } else if (immediate || !animate() || response() <= 0 || layoutMoving()) {
+      const pending = layoutPending;
       cancel();
+      layoutPending = pending;
       write(bottom());
     } else if (frame === undefined && Math.abs(bottom() - element.scrollTop) > 1) {
       previous = performance.now();
       remainder = 0;
       frame = requestAnimationFrame(tick);
-    } else if (frame === undefined) layoutPending = false;
+    } else if (frame === undefined) settleLayout();
   };
   return {
     update,
@@ -105,7 +127,7 @@ export function createChatScroll(
     onScroll() {
       // Layout changes and our own frames are not user requests to stop following.
       // ResizeObserver can measure before the browser delivers its layout scroll.
-      // Preserve follow until our next write; explicit input calls pause() first.
+      // Preserve follow until the write settles; explicit input calls pause() first.
       if (position.following && (layoutPending || measured !== geometry())) {
         update();
         return;
