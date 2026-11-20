@@ -1109,6 +1109,14 @@ already match those captured at hover/focus. Actual movement still dismisses the
 Escape and pending-reveal cleanup remain independent. This reliability correction
 adds no capability, bridge method, setting, persisted schema or self-knowledge entry.
 
+Worker session-option changes and automatic review capture coordinate per target.
+An active capture completes before options change; pending capture remains queued
+until that metadata action settles, including a provider rejection. Other targets
+continue independently. Folder stop and renderer loss cancel queued metadata work;
+main rechecks its captured owner before invoking the provider. This orders existing
+operations without replaying prompts or uncertain checkout writes, and adds no
+capability, bridge method, setting, schema or self-knowledge entry.
+
 ### Renderer ownership and composition
 
 `main.tsx` only loads assets, runs existing preference migrations and mounts the

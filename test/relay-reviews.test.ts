@@ -175,6 +175,123 @@ it("lets an explicit action preempt automatic capture without saving a failure o
   expect(review.error).toBeUndefined();
   expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
 });
+
+it("finishes automatic integration before an idle worker's session options start changing", async () => {
+  agents.script = (text) => (text === "Worker settings race" ? "hang" : "end_turn");
+  service = new RelayService(deps, { XDG_STATE_HOME: join(root, "relay-state") }, () => {}, {
+    confirm,
+  });
+  await service.sync("claude", DEFAULT_CONFIG);
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  await service.action({ type: "send", id: required(service.snapshot().run?.id), text: "Task" });
+  await vi.waitFor(() => expect(service?.snapshot().run?.status).toBe("idle"));
+  const context = await relayTool("code60_get_context");
+  const accepted = await relayTool("code60_dispatch_agent", {
+    scope: context.scope,
+    requestId: "settings-race",
+    cwd: join(root, "a"),
+    workspaceMode: "worktree",
+    prompt: "Worker settings race",
+  });
+  const worker = required(service.execution.list().find((item) => item.id === accepted.runId));
+  await vi.waitFor(() => expect(worker.orchestrator.runs()[0]?.status).toBe("running"));
+  await vi.waitFor(() =>
+    expect(
+      agents.sessions.some((session) => session.prompts.includes("Worker settings race")),
+    ).toBe(true),
+  );
+  const worktree = required(worker.orchestrator.runs()[0]?.worktree);
+  await writeFile(join(worktree, "file.txt"), "Integrated before settings\n");
+  let releaseCapture = () => {};
+  const captureGate = new Promise<void>((resolve) => {
+    releaseCapture = resolve;
+  });
+  let captureStarted = () => {};
+  const capturing = new Promise<void>((resolve) => {
+    captureStarted = resolve;
+  });
+  const snapshot = required(deps.git.tasks).snapshot.bind(required(deps.git.tasks));
+  let held = false;
+  vi.spyOn(required(deps.git.tasks), "snapshot").mockImplementation(async (...args) => {
+    if (args[0] === worktree && !held) {
+      held = true;
+      captureStarted();
+      await captureGate;
+    }
+    return snapshot(...args);
+  });
+  let releaseSettings = () => {};
+  const settingsGate = new Promise<void>((resolve) => {
+    releaseSettings = resolve;
+  });
+  let settingsStarted = () => {};
+  const changingSettings = new Promise<void>((resolve) => {
+    settingsStarted = resolve;
+  });
+  let modeChanging = false;
+  const runs = worker.orchestrator.runs.bind(worker.orchestrator);
+  vi.spyOn(worker.orchestrator, "runs").mockImplementation(() =>
+    runs().map((view) => ({ ...view, modeChanging })),
+  );
+  const change = vi.spyOn(worker.orchestrator, "setMode").mockImplementation(async () => {
+    modeChanging = true;
+    settingsStarted();
+    try {
+      await settingsGate;
+    } finally {
+      modeChanging = false;
+    }
+  });
+  let controlStarted = () => {};
+  const controlling = new Promise<void>((resolve) => {
+    controlStarted = resolve;
+  });
+  const control = service.execution.control.bind(service.execution);
+  vi.spyOn(service.execution, "control").mockImplementation(
+    <T>(owner: ExecutionOwner, id: string, work: (worker: ExecutionWorker) => Promise<T>) =>
+      control(owner, id, async (worker) => {
+        controlStarted();
+        return work(worker);
+      }),
+  );
+  let changing: Promise<unknown> | undefined;
+  try {
+    required(
+      agents.sessions.find((session) => session.prompts.includes("Worker settings race")),
+    ).endTurn("end_turn");
+    await capturing;
+    changing = service.workerAction({
+      type: "set-mode",
+      id: worker.id,
+      change: { source: "config", configId: "model", value: "fixture-two" },
+    });
+    await controlling;
+    expect(change).not.toHaveBeenCalled();
+    releaseCapture();
+    await changingSettings;
+    expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe(
+      "Integrated before settings\n",
+    );
+    releaseSettings();
+    await changing;
+    expect(change).toHaveBeenCalledTimes(1);
+    const review = await service.reviewRequest({
+      type: "read",
+      conversationId: required(service.snapshot().conversationId),
+      generation: required(service.snapshot().generation),
+      targetId: String(accepted.targetId),
+      reviewId: String(accepted.reviewId),
+      requestId: randomUUID(),
+    });
+    if (review.type !== "review") throw new Error("Missing review");
+    expect(review.review.error).toBeUndefined();
+    expect(review.review.revisions).toHaveLength(1);
+  } finally {
+    releaseCapture();
+    releaseSettings();
+    await changing?.catch(() => {});
+  }
+});
 it("keeps partial automatic capture failures visible and allows explicit refresh", async () => {
   const source = await ready();
   const read = vi
@@ -193,6 +310,99 @@ it("keeps partial automatic capture failures visible and allows explicit refresh
   const review = await capture(source);
   expect(review.revisions.at(-1)?.errors).toEqual([]);
 });
+
+it.each([false, true])(
+  "retains pending capture during settings changes without blocking other targets (failure: %s)",
+  async (rejectChange) => {
+    const a = await ready();
+    const b = await ready(join(root, "b"), "other-settings-target");
+    await writeFile(join(required(a.accepted.record.worktree), "file.txt"), "A result\n");
+    await writeFile(join(required(b.accepted.record.worktree), "file.txt"), "B result\n");
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let modeChanging = false;
+    const runs = a.accepted.orchestrator.runs.bind(a.accepted.orchestrator);
+    vi.spyOn(a.accepted.orchestrator, "runs").mockImplementation(() =>
+      runs().map((view) => ({ ...view, modeChanging })),
+    );
+    const changing = required(manager)
+      .changeWorkerSettings(a.accepted.target.id, async () => {
+        modeChanging = true;
+        try {
+          await held;
+          if (rejectChange) throw new Error("Synthetic settings failure");
+        } finally {
+          modeChanging = false;
+        }
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    try {
+      required(manager).scheduleCapture(a.address);
+      required(manager).scheduleCapture(b.address);
+      await vi.waitFor(
+        async () => expect((await reviews.read(b.id)).get(b.id).revisions).toHaveLength(1),
+        { timeout: 5000 },
+      );
+      const waiting = (await reviews.read(a.id)).get(a.id);
+      expect(waiting.error).toBeUndefined();
+      expect(waiting.revisions).toHaveLength(0);
+      expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
+      release();
+      const failure = await changing;
+      if (rejectChange) expect(failure).toMatchObject({ message: "Synthetic settings failure" });
+      else expect(failure).toBeUndefined();
+      await vi.waitFor(
+        async () => expect((await reviews.read(a.id)).get(a.id).revisions).toHaveLength(1),
+        { timeout: 5000 },
+      );
+      expect((await reviews.read(a.id)).get(a.id).error).toBeUndefined();
+    } finally {
+      release();
+      await changing;
+    }
+  },
+);
+
+it.each(["folder", "renderer"] as const)(
+  "cancels a settings change waiting for capture on %s stop",
+  async (stop) => {
+    const source = await ready();
+    let started = () => {};
+    const capturing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const snapshot = required(deps.git.tasks).snapshot.bind(required(deps.git.tasks));
+    vi.spyOn(required(deps.git.tasks), "snapshot").mockImplementation(async (...args) => {
+      if (args[0] !== source.accepted.record.worktree) return snapshot(...args);
+      started();
+      const signal = args[2];
+      await new Promise<void>((resolve) => {
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+        if (signal?.aborted) resolve();
+      });
+      signal?.throwIfAborted();
+      throw new Error("Expected capture cancellation");
+    });
+    required(manager).scheduleCapture(source.address);
+    await capturing;
+    const change = vi.fn(async () => {});
+    const changing = required(manager)
+      .changeWorkerSettings(source.accepted.target.id, change)
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    if (stop === "folder") await required(manager).stopFolder(source.accepted.target.cwd);
+    else await required(manager).rendererGone();
+    expect(await changing).toMatchObject({ message: "Worker settings change was stopped" });
+    expect(change).not.toHaveBeenCalled();
+  },
+);
 it("finishes an owned metadata read before starting an owned review write", async () => {
   const source = await ready();
   const original = await reviews.read(source.id);
