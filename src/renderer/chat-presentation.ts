@@ -2,6 +2,13 @@ import type { DesktopRun } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { statusSpec } from "./session-presentation.js";
 
+/** An exited owner is normal for saved history, not an actionable chat failure. */
+export function chatFailureReason(status: RunStatus | undefined, reason: string | undefined) {
+  return status === "interrupted" && /^the owning process \(PID \d+\) is gone$/.test(reason ?? "")
+    ? undefined
+    : reason;
+}
+
 export function sessionStatus(run: Pick<RunView, "status" | "turns" | "stopping" | "pending">) {
   if (run.stopping) return { ...statusSpec.cancelled, label: "Stopping" };
   if (run.pending.length > 0 || run.status === "waiting")
@@ -49,6 +56,11 @@ export function messageAgeText(at: number, now: number): string {
   if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds >= 60) return `${Math.floor(seconds / 60)}m ago`;
   return `${seconds}s ago`;
+}
+
+/** A resumed detail read can contain replies that arrived while the view was hidden. */
+export function isLiveMessage(at: string | undefined, visibleSince: number) {
+  return at !== undefined && Date.parse(at) >= visibleSince;
 }
 
 export function newestMessage(events: readonly RunEvent[]): number | null | undefined {

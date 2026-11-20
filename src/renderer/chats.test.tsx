@@ -33,6 +33,27 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
+    const worker = run("old-worker", "interrupted");
+    worker.record.reason = "the owning process (PID 12345) is gone";
+    const html = renderToStaticMarkup(
+      <WorkerChat
+        api={{} as DesktopApi}
+        run={worker}
+        orchestrated
+        events={[]}
+        active
+        request={undefined}
+        loading={false}
+        historyError={undefined}
+        onRetry={() => {}}
+      />,
+    );
+    expect(html).not.toContain("PID 12345");
+    expect(html).toContain("Interrupted");
+    expect(worker.record.reason).toBe("the owning process (PID 12345) is gone");
+  });
+
   it("keeps a failed Relay connection navigable by its stable identity", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const failed = {
@@ -59,9 +80,9 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('id="conversation-relay-id"');
-    expect(html).toContain("relay-navigation-icon");
-    expect(html).not.toContain('data-icon="chat-circle"');
-    expect(html).not.toContain('data-icon="arrow-elbow-down-right"');
+    expect(html).toContain('data-icon="app-steering-wheel"');
+    expect(html).not.toContain('data-icon="app-communication"');
+    expect(html).not.toContain('data-icon="app-down-right"');
     expect(html).not.toContain("disabled");
   });
   it("renders only project-bound conversations inside project groups", () => {
@@ -77,6 +98,8 @@ describe("conversation hierarchy", () => {
       <ProjectChatSidebar
         projects={projects}
         selectedProjectId="b"
+        homeProjectId={undefined}
+        onProjectOpen={() => {}}
         onProjectAction={async () => true}
         chats={[
           { ...chat("relay"), kind: "relay" },
@@ -105,11 +128,36 @@ describe("conversation hierarchy", () => {
       const project = projects[index];
       expect(section).toContain(`id="conversation-${project?.id}"`);
       expect(section).not.toContain('id="conversation-relay"');
-      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
-      expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("project-chat-name")).toBeLessThan(
+        section.indexOf("project-session-add"),
+      );
+      expect(section.indexOf("project-session-add")).toBeLessThan(
+        section.indexOf("project-folder-stop"),
+      );
+      expect(section.indexOf("project-folder-stop")).toBeLessThan(
+        section.indexOf("project-chat-toggle"),
+      );
+      expect(section.indexOf("project-chat-toggle")).toBeLessThan(
+        section.indexOf("project-chat-pages"),
+      );
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("project-chat-pages"));
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("chat-sidebar"));
+      expect(section).toContain(`aria-label="Close Project: ${project?.path}"`);
+      expect(section).toContain('title="Close Project"');
+      expect(section).toContain('data-tooltip="Close Project"');
+      expect(section).toContain('class="sidebar-card-stop"');
+      const stopButton = section.match(
+        /<button[^>]*class="icon-button project-folder-stop"[^>]*>/,
+      )?.[0];
+      expect(stopButton).not.toContain('aria-haspopup="menu"');
       expect(section).not.toContain("Toggle chats");
       expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');
+      const folder = section.match(/<span class="project-chat-label">([\s\S]*?)<\/span>/)?.[0];
+      expect(folder).toContain('data-icon="app-folder"');
+      expect(folder).toContain("folder.png");
+      expect(folder).toContain('data-animated="true"');
+      expect(folder).toContain('alt="" aria-hidden="true" draggable="false"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
     expect(sections[1]).not.toContain('id="conversation-one"');
@@ -230,7 +278,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("marks conversation roles with icons while retaining text status and separate actions", () => {
+  it("marks conversation roles with icons, accessible status, unread counts and separate actions", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -256,7 +304,8 @@ describe("conversation hierarchy", () => {
     expect(html).toContain('aria-label="Chat 1 workers"');
     expect(html).toContain('aria-label="1 unread reply"');
     expect(html).toContain("Worker. Failed");
-    expect(html).toContain('<span class="chat-sidebar-status">Failed</span>');
+    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
     for (const action of ["Actions", "Workers"]) {
       const button = html.match(
         new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
@@ -269,15 +318,15 @@ describe("conversation hierarchy", () => {
     for (const entry of entries) {
       expect(entry).toContain(
         entry.includes('data-role="orchestrator"')
-          ? 'data-icon="chat-circle"'
-          : 'data-icon="arrow-elbow-down-right"',
+          ? 'data-icon="app-communication"'
+          : 'data-icon="app-down-right"',
       );
-      expect(entry).toContain('aria-hidden="true" focusable="false"');
+      expect(entry).toContain('alt="" aria-hidden="true" draggable="false"');
     }
-    expect(html).not.toContain("<img");
+    expect(html.match(/<img/g)).toHaveLength(3);
     expect(html).not.toContain('role="dialog"');
   });
-  it("keeps errors and approval counts visible as text", () => {
+  it("keeps errors accessible and approval counts visible without a status label", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const owner = chat("a");
     owner.error = "Connection failed";
@@ -298,14 +347,18 @@ describe("conversation hierarchy", () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).toContain('<span class="chat-sidebar-status">Error</span>');
+    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).toContain(
+      'aria-description="Orchestrator. Connection failed. 1 approvals waiting"',
+    );
     expect(html).toContain('<span class="chat-approval-count">(1)</span>');
     expect(html).toContain("Connection failed. 1 approvals waiting");
     expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
       "disabled",
     );
-    expect(html.match(/<svg/g)).toHaveLength(2);
-    expect(html).not.toContain("<img");
+    expect(html.match(/<svg/g)).toHaveLength(1);
+    expect(html.match(/<img/g)).toHaveLength(1);
+    expect(html).toContain('data-icon="app-communication"');
   });
   it("clears unread for the selected worker without clearing its siblings", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -352,9 +405,17 @@ describe("embedded worker chat", () => {
         loading={false}
         historyError={undefined}
         onRetry={() => {}}
+        notice={<p role="status">Worker project readiness</p>}
       />,
     );
   };
+  it("keeps project notices below worker headings", () => {
+    const html = render(run("one"));
+    expect(html.indexOf("Worker project readiness")).toBeGreaterThan(html.indexOf("</header>"));
+    expect(html.indexOf("Worker project readiness")).toBeLessThan(
+      html.indexOf('class="orchestration-chat-body"'),
+    );
+  });
   it.each([true, false])(
     "renders Markdown replies for live and historical workers (%s)",
     (historical) => {
@@ -369,7 +430,7 @@ describe("embedded worker chat", () => {
       expect(html).toContain("<h1>Result</h1>");
       expect(html).toContain("<strong>Bold</strong>");
       expect(html).toContain("<code>code</code>");
-      expect(html).toContain("<pre>**literal user**</pre>");
+      expect(html).toMatch(/<pre[^>]*>\*\*literal user\*\*<\/pre>/);
       expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
       expect(html.toLowerCase().match(/datetime="2026-01-01t00:00:00.000z"/g)).toHaveLength(2);
       expect(html.toLowerCase()).not.toContain('datetime="2026-01-01t00:00:30.000z"');
@@ -401,10 +462,8 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain(
-      '<span class="chat-role-icon" aria-hidden="true"><svg class="carbon-icon"',
-    );
-    expect(html).toContain('d="M16,31c-1.6543');
+    expect(html).toContain('class="page-title worker-chat-title"');
+    expect(html).toContain('data-icon="app-down-right"');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain("Code60 auto-approval: On");
     expect(html).toContain('aria-label="Worker composer"');
@@ -431,9 +490,9 @@ describe("embedded worker chat", () => {
     expect(html).not.toContain('class="turn-separator"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
-  it("titles the worker by its role name, falling back to provider and run ID", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/h2>/);
-    expect(render(run("one"))).toMatch(/fake \/ one<\/h2>/);
+  it("uses the generic Subagent breadcrumb independently of its saved role label", () => {
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span><\/h2>/);
+    expect(render(run("one"))).toMatch(/Subagent<\/span><\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

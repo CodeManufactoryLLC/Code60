@@ -41,16 +41,13 @@ describe("project search evidence", () => {
     expect(sources.map((source) => source.path)).toEqual(["README.md"]);
   });
 
-  it.skipIf(process.platform === "win32")(
-    "does not follow file or directory symlinks",
-    async () => {
-      await writeFile(join(root, "README.md"), "read me");
-      await symlink(join(root, "README.md"), join(root, "link.md"));
-      await symlink(root, join(root, "linked"));
-      const sources = await projectSearchEvidence(root, "project", signal());
-      expect(sources.map((source) => source.path)).toEqual(["README.md"]);
-    },
-  );
+  it("does not follow file or directory symlinks", async () => {
+    await writeFile(join(root, "README.md"), "read me");
+    await symlink(join(root, "README.md"), join(root, "link.md"));
+    await symlink(root, join(root, "linked"));
+    const sources = await projectSearchEvidence(root, "project", signal());
+    expect(sources.map((source) => source.path)).toEqual(["README.md"]);
+  });
 
   it("bounds files read, sources and excerpt size", async () => {
     for (let index = 0; index < 40; index++)

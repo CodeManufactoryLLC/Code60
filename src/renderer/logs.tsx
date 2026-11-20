@@ -5,6 +5,7 @@ import { DataTable, type RetainedTableQuery, type TableOptions } from "./data-ta
 import { Icon } from "./icons.js";
 import { LogViewer } from "./log-model.js";
 import { Modal } from "./modal.js";
+import { TablePager } from "./table-controls.js";
 
 const columns = [
   { key: "timestamp", title: "Time", width: 190, filter: "date" },
@@ -129,38 +130,6 @@ export function LogsPage({
           viewer.setFollowing(target.scrollTop === 0);
       }}
     >
-      <p className="muted">
-        Private desktop diagnostics, retained for up to 7 days and 20 MiB across all app launches.
-        Events contains agent transcripts, not these logs. Transcripts have no new retention limit.
-        Fixed metadata avoids content capture; credential redaction is not a guarantee of
-        anonymization.
-      </p>
-      <div className="table-filter-bar">
-        <label>
-          Project scope{" "}
-          <select
-            aria-label="Log project scope"
-            value={scope}
-            onChange={(event) => setScope(event.target.value as typeof scope)}
-          >
-            <option value="current">Current project plus app events</option>
-            <option value="all">All projects</option>
-          </select>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={launchOnly}
-            disabled={!page}
-            onChange={(event) => setLaunchOnly(event.target.checked)}
-          />
-          Current app launch only
-        </label>
-        <span className="muted">
-          Use Columns or saved Filters for severity, component, provider, run, outcome and time.
-          Search covers retained history. Sorting applies to this page.
-        </span>
-      </div>
       {page &&
       (page.status.unavailable ||
         page.status.dropped ||
@@ -182,7 +151,6 @@ export function LogsPage({
       )}
       {clearError && <p role="alert">{clearError}</p>}
       {filterError && <p role="alert">{filterError}</p>}
-      {state.pending && <p role="status">Loading diagnostic logs…</p>}
       {page?.state === "expired-cursor" && (
         <p role="status">
           This page expired after retention, clearing or an app restart.{" "}
@@ -203,49 +171,87 @@ export function LogsPage({
         selected={state.selected?.id}
         onSelect={(id) => void select(id)}
         onRetainedQuery={queryChanged}
+        scope={
+          <>
+            <select
+              aria-label="Log project scope"
+              value={scope}
+              onChange={(event) => setScope(event.target.value as typeof scope)}
+            >
+              <option value="current">Current project</option>
+              <option value="all">All projects</option>
+            </select>
+            <label className="table-scope-check">
+              <input
+                type="checkbox"
+                checked={launchOnly}
+                disabled={!page}
+                onChange={(event) => setLaunchOnly(event.target.checked)}
+              />
+              Current launch only
+            </label>
+          </>
+        }
         actions={
           <>
             <button
               type="button"
+              className="icon-button"
               aria-pressed={state.paused}
+              aria-label={state.paused ? "Resume viewing" : "Pause viewing"}
+              data-active={state.paused ? "true" : undefined}
               onClick={() => viewer.pause(!state.paused)}
             >
-              {state.paused ? "Resume viewing" : "Pause viewing"}
+              <Icon name={state.paused ? "play--filled" : "pause"} />
             </button>
             <button
               type="button"
+              className="icon-button"
+              aria-label={state.newRecords ? "New records available, show latest" : "Refresh logs"}
+              data-attention={state.newRecords ? "true" : undefined}
               onClick={() => void navigate(() => viewer.refresh())}
               disabled={state.pending}
             >
-              {state.newRecords ? "New records available, show latest" : "Refresh logs"}
+              <Icon name="renew" />
             </button>
-            <button type="button" disabled={clearing} onClick={() => void clear()}>
-              Clear logs
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Clear logs"
+              disabled={clearing}
+              onClick={() => void clear()}
+            >
+              <Icon name="trash-can" />
             </button>
           </>
         }
       />
       {!state.pending && page?.state === "ready" && !page.records.length && (
-        <p role="status">No diagnostic logs match these filters.</p>
+        <p className="table-empty" role="status">
+          No diagnostic logs match these filters.
+        </p>
       )}
-      {state.paused && <p role="status">Viewing paused. Diagnostic capture continues.</p>}
-      <fieldset className="button-group" aria-label="Log pages">
-        <button
-          type="button"
-          disabled={state.pending || !state.hasPrevious}
-          onClick={() => void navigate(() => viewer.previous())}
-        >
-          Newer page
-        </button>
-        <span>Page {state.pageNumber}</span>
-        <button
-          type="button"
-          disabled={state.pending || !page?.cursor}
-          onClick={() => void navigate(() => viewer.next())}
-        >
-          Older page
-        </button>
-      </fieldset>
+      <TablePager
+        label="Log pages"
+        page={state.pageNumber}
+        summary={
+          state.paused ? (
+            <span role="status">Viewing paused. Diagnostic capture continues.</span>
+          ) : state.pending ? (
+            <span role="status">Loading…</span>
+          ) : undefined
+        }
+        previous={{
+          label: "Newer page",
+          disabled: state.pending || !state.hasPrevious,
+          onClick: () => void navigate(() => viewer.previous()),
+        }}
+        next={{
+          label: "Older page",
+          disabled: state.pending || !page?.cursor,
+          onClick: () => void navigate(() => viewer.next()),
+        }}
+      />
       {state.selected && (
         <Modal
           title="Log record"

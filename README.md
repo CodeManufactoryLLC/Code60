@@ -1,14 +1,19 @@
 # Code60
 
-Code60 is an Electron desktop app and headless CLI for running coding agents
-in parallel. The CLI uses isolated worktrees in Git repositories with a commit
-and runs directly in the current directory otherwise. Desktop project workers
-require Git isolation; Relay workers explicitly choose isolated or direct work.
+Code60 is an Electron desktop application for running coding agents in parallel on macOS and Linux. Desktop Scheduled Jobs uses an independent background scheduler.
 
-In desktop Chat, open **Review changes** to inspect a task revision. **Use these changes…**
-opens a preview before applying the worker's result to your project. **Ask workers to revise**
-sends application conflicts back through Chat. **Undo application** restores the previous
-contents if the applied files still match. Applying and undoing preserve Git staging.
+Desktop project chats and Relay checkpoint requests and automatically integrate
+isolated worker changes, without Apply. A quiet **files changed** link opens a
+read-only diff; **Changes** keeps older snapshots. Select code and **Add to chat**
+to attach its exact saved version and lines without replacing or sending a draft.
+Request corrections in ordinary chat. Plan and permission approvals stay explicit.
+
+**Undo**, beside the latest user message, confirms the request and targets, stops
+owned work, restores covered files and rewinds conversation context. It returns
+the original request to the composer without resending. Conflicting newer edits
+block isolated restoration; staging and HEAD stay untouched. Direct-folder Undo
+also rewinds manual edits made since its snapshot, with an explicit warning.
+Undo does not reverse deployments, database changes or other external effects.
 
 ## Relay and projects
 
@@ -22,25 +27,117 @@ Relay state lives under `$XDG_STATE_HOME/code60/relay` (by default
 
 Give Relay each intended target directory explicitly. It can dispatch to unopened
 Git repositories and, in **direct** mode, non-Git folders the harness permits.
-Direct changes are not isolated or automatically reversible. Relay never silently
+Direct changes are not isolated. Before execution, bounded private snapshots
+cover regular files, including additions, deletions and renames on restoration.
+Direct snapshots exclude Git and Code60 state; links and unsupported coverage
+block editable launch. They allow 32 MiB total preimage contents per request,
+10,000 entries per folder and 64 directory levels. Relay never silently
 switches modes or redirects a refused launch to another folder.
+Nested direct targets share existing parent coverage. Adding a parent after its
+child has started requires a new request. Current direct contents must also fit
+the combined 32 MiB limit for Undo.
 
-Open Relay's Files panel and choose **Open Changes** to review isolated results
-grouped by target. Capture a revision, inspect its diff, send feedback or preview
-checkout-local application. Apply and undo require confirmation and recheck newer
-edits. Saved reviews remain historical evidence after restart, without reconnecting
-workers or replaying feedback. Human **Accept** authorizes the displayed plan
+Relay captures and integrates isolated changes after worker turns settle; partial
+work and failures remain explicit. Files → **Open Changes** is a secondary
+target-grouped history browser. Request checkpoints retain at most 100 prior
+requests and 256 MiB of recorded rollback data; interrupted Undo requires explicit
+recovery. Saved, unapplied reviews remain read-only historical evidence after
+restart, never work to integrate automatically. Human **Accept** authorizes the displayed plan
 revision and target assignments, not later target changes.
 
 Project accordions retain independent chats, drafts and file views. Project chats
-remain database-backed and bound to their project. Navigation and database changes
-do not retarget Relay. Closing a project stops its own work, not Relay workers in
+remain database-backed and bound to their project. Reopening Code60 restores the
+open projects and saved chats for the connected database, starting on Relay.
+Chat titles, archive state and history survive; unsent drafts do not. Restored
+project chats stay stopped until you explicitly send or continue. **Close project**
+removes a project from the next restore; quitting the app preserves the open set.
+Unavailable folders produce a warning without deleting their saved chats.
+Navigation and database changes do not retarget Relay. Closing a project stops
+its own work, not Relay workers in
 that folder. **Stop workers in folder** includes those Relay workers; **Stop all**
 stops every owner. Database-wide legacy chat files are not loaded or migrated;
 existing files remain untouched.
 
 See [implementation and validation notes](docs/relay-implementation.md) for limits
 and platform-validation status.
+
+## Models
+
+In any connected chat, use the **Model** picker between turns to choose the
+connector's advertised model and reasoning settings. **Save as default** applies
+to new sessions for that connector and role, orchestrator (Relay, project chats
+and Custom Assistants) or worker. Clear saved choices in **Providers → provider details →
+Default models**. Existing sessions and automation defaults do not change.
+Unavailable defaults produce a note; Code60 never substitutes a model.
+
+## Memory
+
+**Settings → Memory** has one application-wide On/Off switch. On learns useful
+information from Relay, project chats and workers, and recalls relevant saved
+memories. Off stops learning and recall without deleting saved memories or
+ordinary transcripts; turning it back on does not backfill the intervening chats.
+Previously supplied information can remain in an active provider session.
+
+**Manage memories** opens Apps → Data Viewer → Memories to inspect evidence, edit,
+pin, delete or explicitly share a memory across projects. Retention can delete
+unpinned memories after 30 days, 90 days or one year; the default is Never.
+Shortening retention requires confirmation.
+
+In Relay, project chats and worker chats, open the right sidebar and choose
+**New tab → Open Memory Recall** (also available in an empty sidebar). The
+closable, reorderable tab shows recorded recalls by turn, newest first, and
+marks the latest dispatched turn, including when it recalled nothing.
+Older recorded turns are paged without rerunning retrieval. Relay and its workers
+need no database. Retrieval never opens or focuses the tab automatically.
+Records show their current saved text, conditions and expandable evidence quotes,
+not historical snapshots. Changed records and unavailable memories are labelled.
+Editing and forgetting stay in Memories.
+
+Storage, embeddings and search are local. Learning sends conversation excerpts
+to the configured provider and may incur usage; there is no daily learning limit.
+Automatic handoff can still summarize a long conversation while Memory is Off,
+without creating long-term memories. See [memory behavior and validation](docs/memory-validation.md).
+
+## Scheduled automations
+
+Open **Apps → Scheduled Jobs** to save one agent, prompt, isolated Git repository
+and explicit tool permissions on an interval, daily or weekly schedule.
+Each job has an expandable details card. Use its **play** button to run once;
+while it runs, the button shows a pulsating **pause** icon; its **Stop** action cancels
+that run. The ordered circular controls are play/stop, delete and expand/collapse.
+Disabled schedules show **(Paused)** beside their name.
+Both run/stop and **×** (delete) remain available when details are closed.
+Deletion requires confirmation and active work must stop first; run evidence stays.
+Expand a job to inspect its prompt and settings, enable/pause its schedule, or edit
+it inline. **Actions → New scheduled job** opens an inline editor; **Actions → Refresh**
+reloads the saved jobs and history. Execution history stays
+below the job list. Reduced motion keeps the stop icon static.
+
+Open **Apps → System Manager** to install and manage the Scheduling Service,
+with native confirmation, to keep scheduling after Code60 quits.
+The computer must stay awake and the user logged in. Missed occurrences are skipped,
+not replayed, and an agent finishing a turn is not proof the task succeeded.
+
+Manage schedules in Scheduled Jobs and service installation/recovery in Apps → System Manager.
+For source development, build with `npm run build` and run
+`node dist/automation/main.js` in a separate terminal before saving automations.
+That standalone process is not installed for future logins.
+
+App updates cancel active automation work, restart the installed service with the
+new runtime, and preserve its previous global pause state. Stop a standalone
+development scheduler before installing an app update. If restart fails, Code60
+shows a recovery message; repair the service from Apps → System Manager.
+Schedules, evidence and worktrees are preserved.
+
+## Browser automation
+
+For browser tasks, tell Relay, a Custom Assistant or a project chat to use
+**Headless**, **Visible**, or **Existing Browser**. Headless is the default;
+Visible opens a separate window and Existing Browser uses the Playwright
+Chrome extension with its connection approval. Install Chrome and Node.js/npm;
+the pinned Playwright MCP package starts on demand. Preferences last for that live
+conversation, and switching modes loses isolated browser state. Website changes
+are not reversed by message Undo. See [browser modes](MCP.md#browser-modes-in-chat).
 
 ## Security and privacy
 
@@ -54,7 +151,7 @@ execute commands beyond their worktree.
   and scoped worker controls.
 - **Agent permissions:** orchestration chats and their workers automatically
   approve supported once-only permission requests. Choosing an Ask mode in
-  the provider's harness does not disable Code60 auto-approval. CLI and manual
+  the provider's harness does not disable Code60 auto-approval. Automation and manual
   desktop runs use a separate permission policy.
 - **Local history, external providers:** Code60 stores run records locally,
   with restrictive permissions for newly created record files. Configured
@@ -83,8 +180,7 @@ npm run dev
 
 Install and authenticate your chosen agent through its own CLI. See
 [contributing](CONTRIBUTING.md#setup-and-checks) for development and validation,
-[architecture](ARCHITECTURE.md#cli) for CLI usage and configuration, and
-[Windows setup](WINDOWS.md) for Windows-specific requirements.
+[architecture](ARCHITECTURE.md#files) for configuration.
 
 ## Agent memory and long conversations
 
@@ -100,15 +196,15 @@ targets. Only a confirmed **Promote to global** shares a memory across projects.
 The Memories browser shows attribution, exact evidence, conflicts, revisions and
 last use, and supports edits, pinning and forgetting.
 
-Before context reaches its configured threshold (initially 70%), Code60 prepares
+Before context reaches its automatic threshold (70%), Code60 prepares
 a checkpoint and continues between turns in a fresh agent session. The logical
 conversation and transcript stay intact. An oversized request or unavailable
 required checkpoint pauses the send, never silently truncates or replays it.
-Context capacity falls back to a configurable 128,000-token estimate when the
+Context capacity falls back to an internal 128,000-token estimate when the
 provider does not report one.
 
-Capture, automatic generation and recall have separate switches. Per-conversation
-**Do not remember** stops new capture and recall for that conversation. Forgetting
+One application-wide Memory switch controls capture, generation and recall.
+Automatic conversation continuity remains available with Memory Off. Forgetting
 suppresses future recall and recreation from the same source ranges, but does not
 erase original transcripts or context already sent to a provider. See
 [memory behavior and validation](docs/memory-validation.md).
@@ -142,31 +238,38 @@ before opening your browser; HTML and images are not loaded.
 
 ## Reusable commands
 
-Open **Commands** after connecting a database to save a reusable prompt. In a
-project orchestrator chat, type `/` at the start of your message. Use Up/Down to choose
+Open **Command Builder** (under Apps) after connecting a database to save a reusable prompt. In a
+project orchestrator chat, type `$` at the start of your message. Use Up/Down to choose
 and Enter or Tab to insert the command, then add optional instructions and send.
-Escape closes the list. Unknown commands and paths such as `/tmp` are sent as
+Escape closes the list. Unknown commands and slash-prefixed text such as `/tmp` are sent as
 plain text. Commands are shared across projects in the same database; worker
 chats and Relay do not expand them.
 
-Use the built-in `/create-command` to have the orchestrator create one for you:
+Use the built-in `$create-command` to have the orchestrator create one for you:
 
 ```text
-/create-command Make a command called review that checks changes for bugs and missing tests.
+$create-command Make a command called review that checks changes for bugs and missing tests.
 ```
 
 It asks for clarification when needed and saves the new command without running it.
 
 Two more built-ins guide work through Code60's plan review:
 
-- `/plan <request>` asks the orchestrator to create a plan, then wait for **Accept**.
-- `/business-evaluation <idea>` proposes an evaluation plan before doing research,
+- `$plan <request>` asks the orchestrator to create a plan, then wait for **Accept**.
+- `$business-evaluation <idea>` proposes an evaluation plan before doing research,
   analysis or delegation. After **Accept**, its prompt guides an evidence-based
   evaluation with five deliverables: decision brief, feasibility analysis, market
   and economics model, risks and assumptions, and a validation plan. Proposed
   experiments do not authorize outreach, spending or business operations.
 
-Built-ins appear in the slash picker and do not use a saved-command slot. A saved
+Four built-ins help steer the conversation; each also accepts optional instructions:
+
+- `$catch-me-up` explains the broader context, relevant background and things you may have missed.
+- `$big-picture` steps back from a rabbit hole to reassess the goal, value and approach before continuing.
+- `$pushback` challenges the agent's conclusion and asks it to recheck evidence and correct errors.
+- `$simplify` explains the current topic in simple, plain language.
+
+Built-ins appear in the dollar-command picker and do not use a saved-command slot. A saved
 command with the same name takes precedence.
 
 ## More information
@@ -177,3 +280,34 @@ command with the same name takes precedence.
 - [Release process](RELEASING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE)
+
+### Custom Assistants
+
+Open **Custom Assistants** from Home or under Assistants in the sidebar and choose
+**New Assistant**. Set a name and special instructions, then open its persistent chat.
+Each agent uses the shared
+verified provider and Relay's plans, workers, Files, Changes and message Undo.
+No database is required. Stop the agent and its workers before editing its
+instructions. Editing keeps history and uses fresh provider context on the next
+Send. **Archive** stops only that agent and preserves its data; use **Archived**
+then **Restore** to bring it back. Restart and Restore never resume work.
+
+## Removed interfaces
+
+The public Code60 CLI and Windows support have been removed. There is no replacement
+terminal command or compatibility shim. Existing configuration, databases, run records,
+histories and worktrees are preserved. Provider CLIs remain desktop prerequisites.
+This is a breaking removal for the next release; release preparation sets the version.
+
+### Providers
+
+Open **Providers** after Projects in the sidebar to manage verified coding-agent
+providers without a database. **+ Add Provider** uses the existing connection
+wizard; provider cards and sidebar entries open the same details and saved model
+defaults. Their More menus offer **Disconnect** and **Set as Primary**.
+
+The checked circle marks the primary provider. Set another provider as primary
+before disconnecting it. Primary changes preserve other memberships. Both menu
+actions require stopped desktop agent work and no setup transaction. Disconnect
+removes Code60 membership only; histories, model defaults and external logins remain.
+Verified membership does not indicate a live connection.

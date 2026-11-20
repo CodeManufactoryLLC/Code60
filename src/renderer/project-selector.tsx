@@ -57,13 +57,13 @@ export function ProjectSelector({
               </button>
               <button
                 type="button"
-                className="project-remove"
+                className="icon-button project-remove"
                 aria-label={`Remove ${pathLabel(project.path)} from history`}
                 title={`Remove ${project.path} from history`}
                 disabled={busy}
                 onClick={() => onRemove(project.path)}
               >
-                Remove
+                <Icon name="close" />
               </button>
             </li>
           ))}

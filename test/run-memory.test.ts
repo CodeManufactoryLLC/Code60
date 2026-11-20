@@ -81,6 +81,41 @@ describe("interactive run memory hooks", () => {
     expect(await next).toBe(true);
     await orch.shutdown();
   });
+  it("rejects changed memory after replacement installation and preserves the unsent request", async () => {
+    let valid = true;
+    const { orch, agents, records, processes } = await start({
+      event: () => {},
+      prepare: async () => ({
+        context: "Saved recall that must not be supplied after switching Off",
+        rollover: true,
+        used: ["m1"],
+        validate: () => {
+          if (!valid) throw new Error("Settings changed");
+        },
+      }),
+      dispose: () => {},
+    });
+    let release: (value: string | undefined) => void = () => {};
+    const installed = vi.spyOn(processes, "commandLine").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const sent = orch.reply("r1", "Keep this settings-race request");
+    await vi.waitFor(() => expect(installed).toHaveBeenCalled());
+    valid = false;
+    release(undefined);
+    expect(await sent).toBe(false);
+    await vi.waitFor(() =>
+      expect(
+        notes(records.events).some((n) => n.detail === "Keep this settings-race request"),
+      ).toBe(true),
+    );
+    expect(agents.sessions.flatMap((s) => s.prompts)).toEqual([]);
+    expect(records.events.some((e) => e.type === "prompt")).toBe(false);
+    await orch.shutdown();
+  });
   it.each(["cancel", "shutdown"])(
     "fences dispatch when %s arrives during replacement installation",
     async (action) => {

@@ -123,17 +123,21 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
   const { state, error, act } = updates;
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
-      <SettingsHeader
-        id={id}
-        title="Updates"
-        tip="Updates are downloaded only when you choose. Your settings, databases and worktrees are preserved."
-      >
+      <SettingsHeader page="updates" id={id}>
+        <span className="sr-only" id={`${id}-help`}>
+          Updates are downloaded only when you choose. Your settings, databases and worktrees are
+          preserved.
+        </span>
         <button
           type="button"
+          className="icon-button"
+          aria-label="Check for updates"
+          title="Check for updates"
+          aria-describedby={`${id}-help`}
           disabled={!state || !["idle", "available", "error"].includes(state.status)}
           onClick={() => void act("check")}
         >
-          Check for updates
+          <Icon name="renew" />
         </button>
         {state?.status === "available" && (
           <button type="button" className="primary" onClick={() => void act("download")}>

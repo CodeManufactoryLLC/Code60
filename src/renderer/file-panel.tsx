@@ -1,13 +1,16 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
+import type { DesktopApi, KnowledgeOwner, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
+import { useKnowledgePanel } from "./knowledge-report.js";
+import { MemoryRecall, type RecallSource } from "./memory-recall.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 import { PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
+import { ReviewPreviewPanel } from "./review-preview.js";
 
 function revisionTime(at: string, now = new Date()): string {
   const date = new Date(at);
@@ -92,6 +95,8 @@ export function FilePanel({
   targetLabel,
   emptyContent,
   changesContent,
+  knowledgeOwner,
+  recallSource,
 }: {
   tabs: FileTabs;
   onAction(action: FileTabAction): void;
@@ -110,7 +115,18 @@ export function FilePanel({
   targetLabel?: string | undefined;
   emptyContent?: ReactNode;
   changesContent?: ReactNode;
+  knowledgeOwner?: KnowledgeOwner | undefined;
+  recallSource?: RecallSource | undefined;
 }) {
+  useKnowledgePanel(api, knowledgeOwner, { tabs, open, active });
+  const [visible, setVisible] = useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
+  useEffect(() => {
+    const changed = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
   const selected = tabs.entries.find((tab) => tab.id === tabs.active);
@@ -176,7 +192,7 @@ export function FilePanel({
               {changesContent}
             </div>
           )}
-          {targetLabel && (
+          {targetLabel && (selected?.kind === "explorer" || selected?.kind === "file") && (
             <p className="file-target-label" role="note" aria-label="File target">
               Project files: {targetLabel}
             </p>
@@ -185,18 +201,38 @@ export function FilePanel({
             <p className="file-panel-empty">Connect a database to use files.</p>
           ) : !selected || selected.kind === "blank" ? (
             <div className="file-panel-empty">
-              {emptyContent}
-              <button
-                type="button"
-                className="file-open-link"
-                onClick={() => {
-                  focusActiveTab();
-                  act({ type: "explorer" });
-                }}
-              >
-                Open Files
-              </button>
+              <div className="file-panel-empty-actions">
+                {emptyContent}
+                <button
+                  type="button"
+                  className="file-open-link"
+                  onClick={() => {
+                    focusActiveTab();
+                    act({ type: "explorer" });
+                  }}
+                >
+                  Open Files
+                </button>
+                <button
+                  type="button"
+                  className="file-open-link"
+                  onClick={() => {
+                    focusActiveTab();
+                    act({ type: "recall" });
+                  }}
+                >
+                  Open Memory Recall
+                </button>
+              </div>
             </div>
+          ) : selected.kind === "recall" ? (
+            active && open && visible && api ? (
+              recallSource ? (
+                <MemoryRecall key={recallSource.owner} api={api} source={recallSource} />
+              ) : (
+                <p role="status">Recall source history is unavailable.</p>
+              )
+            ) : null
           ) : selected.kind === "plan" ? (
             api && active && open && plans.some((plan) => plan.id === selected.planId) ? (
               <PlanPanelLoader
@@ -220,8 +256,24 @@ export function FilePanel({
                 }}
               />
             )
+          ) : selected.kind === "application" ? (
+            api && active && open && visible ? (
+              <ReviewPreviewPanel api={api} preview={selected.preview} />
+            ) : null
           ) : selected.kind === "revision" ? (
-            api && active && open && selectedReview ? (
+            selected.scope ? (
+              api && active && open && visible ? (
+                <ReviewPreviewPanel
+                  api={api}
+                  preview={{
+                    scope: selected.scope,
+                    revisionId: selected.revisionId,
+                    title: selected.title,
+                    ...(selected.related ? { related: selected.related } : {}),
+                  }}
+                />
+              ) : null
+            ) : api && active && open && selectedReview ? (
               <ReviewPanelLoader
                 key={`${selected.reviewId}:${selected.revisionId}`}
                 api={api}

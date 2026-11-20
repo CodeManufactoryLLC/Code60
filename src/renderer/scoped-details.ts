@@ -7,6 +7,7 @@ import {
   detailScopeKey,
   type OrchestrationChat,
 } from "../bridge/index.js";
+import { chatEventKey } from "./chats.js";
 import { startDetailStream } from "./detail-stream.js";
 import type { DesktopState } from "./snapshot-state.js";
 
@@ -32,7 +33,7 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
   if (!state) return [];
   const { snapshot } = state;
   const epoch = snapshot.databaseEpoch;
-  const relay = snapshot.chats.find((chat) => chat.kind === "relay");
+  const relays = snapshot.chats.filter((chat) => chat.kind === "relay");
   const targets = new Set<string>();
   return [
     ...(epoch === undefined
@@ -45,7 +46,7 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
           }),
         )),
     ...[
-      ...snapshot.chats.filter((chat) => chat.run?.id !== snapshot.chat.run?.id),
+      ...snapshot.chats.filter((chat) => chatEventKey(chat) !== chatEventKey(snapshot.chat)),
       snapshot.chat,
     ].flatMap((chat) => {
       const scope = conversationScope(chat, epoch);
@@ -56,8 +57,11 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
       if (
         !target ||
         targets.has(target.targetId) ||
-        target.conversationId !== relay?.conversationId ||
-        target.generation !== relay?.generation
+        !relays.some(
+          (relay) =>
+            target.conversationId === relay.conversationId &&
+            target.generation === relay.generation,
+        )
       )
         return [];
       targets.add(target.targetId);
@@ -76,9 +80,10 @@ function liveDetails(state: DesktopState | undefined): DetailScope[] {
 export function requestedDetails(
   state: DesktopState | undefined,
   workerId?: string,
+  active = true,
 ): DetailScope[] {
   const snapshot = state?.snapshot;
-  if (!snapshot) return [];
+  if (!snapshot || !active) return [];
   const scopes: DetailScope[] = [];
   if (snapshot.projectInstanceId && snapshot.databaseEpoch !== undefined)
     scopes.push({
@@ -105,7 +110,11 @@ function withRunDetails(summaries: DesktopRun[], details: DesktopRun[]): Desktop
   return summaries.map((run) => {
     const detail = byId.get(run.record.id);
     return detail
-      ? { ...run, record: { ...run.record, firstPrompt: detail.record.firstPrompt } }
+      ? {
+          ...run,
+          historyIncomplete: detail.historyIncomplete === true,
+          record: { ...run.record, firstPrompt: detail.record.firstPrompt },
+        }
       : run;
   });
 }
@@ -127,7 +136,9 @@ export function applyDetails(
         chat.generation === generation &&
         (relay
           ? chat.kind === "relay" && chat.conversationId === scope.conversationId
-          : chat.run?.id === scope.conversationId);
+          : chat.run?.id === scope.conversationId && chat.projectId === scope.projectId);
+      const owner = [state.snapshot.chat, ...state.snapshot.chats].find(matches);
+      if ((payload.chat.rewindRevision ?? 0) < (owner?.rewindRevision ?? 0)) continue;
       const overlay = (chat: OrchestrationChat) =>
         matches(chat) &&
         payload.chat.history &&
@@ -144,14 +155,15 @@ export function applyDetails(
       };
       const id = payload.chat.run?.id;
       if (!id) continue;
+      const eventKey = chatEventKey(payload.chat);
       const events =
-        frame.revision >= (state.chatEventRevisions?.[id] ?? -1)
+        frame.revision >= (state.chatEventRevisions?.[eventKey] ?? -1)
           ? payload.chat.events.map((entry) => entry.event)
-          : (state.chatEventsByRun[id] ?? []);
+          : (state.chatEventsByRun[eventKey] ?? []);
       next = {
         ...next,
-        chatEventsByRun: { ...next.chatEventsByRun, [id]: events },
-        chatEvents: next.snapshot.chat.run?.id === id ? events : next.chatEvents,
+        chatEventsByRun: { ...next.chatEventsByRun, [id]: events, [eventKey]: events },
+        chatEvents: chatEventKey(next.snapshot.chat) === eventKey ? events : next.chatEvents,
       };
     } else if (
       payload.kind === "project" &&
@@ -234,9 +246,10 @@ export function useScopedDetails(
   state: DesktopState | undefined,
   fail: (message: string) => void,
   workerId?: string,
+  active = true,
 ) {
   const [frames, setFrames] = useState<Record<string, DetailFrame>>({});
-  const scopes = JSON.stringify(requestedDetails(state, workerId));
+  const scopes = JSON.stringify(requestedDetails(state, workerId, active));
   const live = JSON.stringify(liveDetails(state).map(detailScopeKey));
   // biome-ignore lint/correctness/useExhaustiveDependencies: Replacing the transport/error sink must dispose its registrations.
   const subscriptions = useMemo(() => new Map<string, () => void>(), [api, fail]);

@@ -20,8 +20,15 @@ describe("narrow application memory bridge", () => {
       { type: "edit", id, revision: 0, text: "text", pinned: true },
       { type: "edit", id, revision: 1, text: "x".repeat(2001), pinned: true },
       { type: "generate", conversationId: "/path" },
+      { type: "generate", conversationId: id },
+      { type: "remember", conversationId: id, enabled: false },
       { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, capacity: "32000" } },
       { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, rolloverPercent: 99 } },
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, dailyCalls: 50 } },
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, capture: false } },
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, retentionDays: 31 } },
+      { type: "configure", settings: { ...DEFAULT_MEMORY_SETTINGS, retentionDays: "30" } },
+      { type: "configure", settings: { enabled: true, retentionDays: 0 } },
       { type: "execute", command: "rm" },
     ])
       expect(() => parseMemoryAction(value)).toThrow();

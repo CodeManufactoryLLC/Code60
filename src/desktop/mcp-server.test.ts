@@ -19,6 +19,8 @@ describe("MCP initialization", () => {
       inputSchema: { properties: Record<string, unknown> };
     }>;
     expect(relay.some((tool) => tool.name === "code60_create_command")).toBe(false);
+    for (const name of ["code60_get_capabilities", "code60_get_app_state", "code60_read_view"])
+      expect(relay.some((tool) => tool.name === name)).toBe(true);
     const plan = relay.find((tool) => tool.name === "code60_create_plan");
     expect(plan?.inputSchema.properties.tasks).toMatchObject({
       items: {
@@ -33,6 +35,7 @@ describe("MCP initialization", () => {
     vi.stubEnv("CODE60_MCP_ROLE", "");
     await handleMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const project = JSON.parse(String(write.mock.calls[0]?.[0])).result.tools as typeof relay;
+    expect(project.some((tool) => tool.name === "code60_list_customizations")).toBe(true);
     expect(
       project.find((tool) => tool.name === "code60_create_plan")?.inputSchema.properties.tasks,
     ).toMatchObject({ items: { required: ["text"] } });
@@ -118,6 +121,46 @@ describe("MCP tool errors", () => {
     const fetch = gateway();
     expectToolError(await call({ name: "not_a_code60_tool" }), "Unknown Code60 tool");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("preserves browser image content and upstream tool-error status", async () => {
+    const fetch = gateway();
+    const result = {
+      content: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
+      isError: true,
+    };
+    fetch.mockResolvedValue(new Response(JSON.stringify({ result: { mode: "visible", result } })));
+    expect(
+      await call({
+        name: "code60_browser",
+        arguments: { action: "call", name: "browser_take_screenshot", arguments: {} },
+      }),
+    ).toMatchObject({ result });
+  });
+  it("propagates MCP request cancellation to its browser gateway fetch", async () => {
+    const fetch = gateway();
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    let signal: AbortSignal | undefined;
+    fetch.mockImplementation(async (_url, init) => {
+      signal = init.signal;
+      return new Promise((_resolve, reject) =>
+        signal?.addEventListener("abort", () => reject(new Error("Cancelled")), { once: true }),
+      );
+    });
+    const call = handleMcpRequest({
+      jsonrpc: "2.0",
+      id: 23,
+      method: "tools/call",
+      params: { name: "code60_browser", arguments: { action: "list-tools" } },
+    });
+    await handleMcpRequest({
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: 23 },
+    });
+    await call;
+    expect(signal?.aborted).toBe(true);
+    expect(JSON.parse(String(write.mock.calls[0]?.[0])).result.isError).toBe(true);
   });
 
   it.each([undefined, null, [], {}, { name: 42 }])(

@@ -52,12 +52,25 @@ describe("sandboxed diagnostic preload", () => {
     expect(memoryListener).toHaveBeenCalledOnce();
     offMemory();
     expect(removeListener).toHaveBeenLastCalledWith("desktop:memory-changed", memoryHandler);
+    const blurListener = vi.fn();
+    const offBlur = api.onSidebarBackdropError?.(blurListener) as () => void;
+    const blurHandler = on.mock.lastCall?.[1] as () => void;
+    expect(on).toHaveBeenLastCalledWith("desktop:sidebar-backdrop-error", blurHandler);
+    blurHandler();
+    expect(blurListener).toHaveBeenCalledOnce();
+    offBlur();
+    expect(removeListener).toHaveBeenLastCalledWith("desktop:sidebar-backdrop-error", blurHandler);
     expect(api).not.toHaveProperty("ipcRenderer");
     expect(api).not.toHaveProperty("readFile");
     expect(await api.appSummary?.()).toBe("result");
     expect(invoke).toHaveBeenLastCalledWith("desktop:snapshot-summary");
+    expect(await api.knowledgeRenderer?.()).toBe("result");
+    expect(invoke).toHaveBeenLastCalledWith("desktop:knowledge-renderer");
     // Verify the existing fixed forwarding surface, not just newly added methods.
     const requests = {
+      modelDefault: "model-default",
+      customAgent: "custom-agent",
+      automation: "automation",
       browseMemories: "memory-browse",
       memoryDetail: "memory-detail",
       memoryAction: "memory-action",
@@ -76,6 +89,7 @@ describe("sandboxed diagnostic preload", () => {
       subscribeDetails: "detail-subscribe",
       readDetails: "detail-read",
       setRelayFileContext: "relay-files",
+      reportKnowledge: "knowledge-report",
       unsubscribeDetails: "detail-unsubscribe",
       readRelayMessage: "relay-message",
       relayReview: "relay-review",
@@ -87,20 +101,26 @@ describe("sandboxed diagnostic preload", () => {
       readReviewFile: "review-file",
       readDiff: "diff-read",
       cancelDiff: "diff-cancel",
+      providerAction: "provider-action",
       beginAgentSetup: "setup-begin",
       attemptAgentSetup: "setup-attempt",
       cancelAgentSetup: "setup-cancel",
       finishAgentSetup: "setup-finish",
       abandonAgentSetup: "setup-abandon",
       update: "app-update",
+      searchProjects: "project-search",
+      searchProjectsPage: "project-search-page",
+      cancelProjectSearch: "project-search-cancel",
+      openSearchSource: "project-search-open",
       summarizeSearch: "search-summary",
       cancelSearchSummary: "search-summary-cancel",
       extractMemory: "memory-extract",
       cancelMemoryExtraction: "memory-cancel",
       orchestrationChatAction: "orchestration-chat",
-      setWindowTheme: "window-theme",
       setTransparent: "transparent",
       setBackgroundHitTest: "background-hit-test",
+      setSidebarBackdrop: "sidebar-backdrop",
+      controlWindow: "window-control",
       projectAction: "project-action",
       setFileContext: "files",
       setPollSettings: "poll-settings",
@@ -111,6 +131,17 @@ describe("sandboxed diagnostic preload", () => {
       action: "action",
     };
     const request = { opaque: "request" };
+    const automationListener = vi.fn();
+    const offAutomation = api.onAutomationChanged?.(automationListener) as () => void;
+    const automationHandler = on.mock.lastCall?.[1] as () => void;
+    expect(on).toHaveBeenLastCalledWith("desktop:automation-changed", automationHandler);
+    automationHandler();
+    expect(automationListener).toHaveBeenCalledOnce();
+    offAutomation();
+    expect(removeListener).toHaveBeenLastCalledWith(
+      "desktop:automation-changed",
+      automationHandler,
+    );
     const detailListener = vi.fn();
     const offDetails = api.onDetails?.(detailListener) as () => void;
     const [detailChannel, detailHandler] = on.mock.calls.at(-1) as [

@@ -1,6 +1,3 @@
-import windowsPolicy from "./windows-policy.cjs";
-export const unsignedWindowsBeta = windowsPolicy.unsignedWindowsBeta;
-
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -66,16 +63,6 @@ export function validateCandidate({ tag, sha, expectedSha, manifest, lock, onMai
     throw new Error("Existing draft belongs to a different commit");
   return version;
 }
-// Non-secret Azure Artifact Signing settings; GitHub OIDC replaces stored credentials.
-export const windowsSigningSettings = [
-  "AZURE_CLIENT_ID",
-  "AZURE_TENANT_ID",
-  "AZURE_SUBSCRIPTION_ID",
-  "AZURE_SIGNING_ENDPOINT",
-  "AZURE_SIGNING_ACCOUNT_NAME",
-  "AZURE_SIGNING_CERTIFICATE_PROFILE_NAME",
-  "WIN_SIGNING_PUBLISHER",
-];
 export function signingReady(env) {
   const required = [
     "HAS_CSC_LINK",
@@ -83,9 +70,6 @@ export function signingReady(env) {
     "HAS_APPLE_API_KEY",
     "HAS_APPLE_API_KEY_ID",
     "HAS_APPLE_API_ISSUER",
-    ...(unsignedWindowsBeta((env.RELEASE_TAG || "").replace(/^v/, ""), env)
-      ? []
-      : windowsSigningSettings.map((name) => `HAS_${name}`)),
   ];
   if (required.some((key) => env[key] !== "true"))
     throw new Error("Missing signing configuration; see RELEASING.md");
@@ -108,7 +92,6 @@ export function assetNames(version, platform) {
       `Code60-${version}-mac-arm64.zip`,
       `${channel}-mac.yml`,
     ];
-  if (platform === "win") return [`Code60-${version}-win-x64.exe`, `${channel}.yml`];
   throw new Error("Unknown installer platform");
 }
 export async function github(path, options = {}) {

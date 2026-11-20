@@ -10,13 +10,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for issue triage and labels.
 ## Installers and supported targets
 
 The pipeline builds a signed, notarized Apple Silicon macOS DMG and Linux x64
-DEB/AppImage installers, plus a signed per-user NSIS installer for Windows 11 x64.
-The explicitly opted-in [unsigned beta mode](#explicit-unsigned-windows-betas) is
-the Windows-only exception.
-CI uses macOS 15, Ubuntu 24.04 and Windows Server 2025 x64. The Windows Server
-2025 x64 runner is the Windows release validation; there is no separate manual
-Windows 11 hardware acceptance. ARM64 development and x64 emulation do not replace
-that runner. Older Windows, Windows ARM64 and Intel macOS are not supported targets. See [Windows setup](WINDOWS.md).
+DEB/AppImage installers.
+CI uses macOS 15 and Ubuntu 24.04. Windows and Intel macOS are unsupported.
 
 The desktop bundles Electron and its Node.js runtime. Users do not need Node or
 npm to launch it. Git and agent CLIs remain external prerequisites: install and
@@ -32,18 +27,13 @@ ordinary installations. An absolute executable path in the existing
 `~/.config/code60/config.json` (or `$XDG_CONFIG_HOME/code60/config.json`) remains an
 optional override for unusual installations. Agents launched through `npx` still
 need their own Node/npm setup; the bundled desktop runtime does not supply `npx`.
-The installer does not install the headless `code60` command; its existing
-source-based `npm run install:global` workflow is unchanged. The Linux desktop
-launcher is `code60-desktop`.
+Code60 has no public command-line interface. The Linux desktop launcher is
+`code60-desktop`; scheduled execution uses an internal service.
 
 Install or upgrade while Code60 is closed:
 
 - macOS: open the DMG and copy Code60 to Applications, replacing the previous app.
-- Windows: run `Code60-X.Y.Z-win-x64.exe`. It installs for the current user
-  without elevation, under the user's Programs directory. It does not change
-  PATH or install Node, Git, providers or the headless CLI. Close Code60 before
-  upgrading. Uninstall from Windows Settings; config, records, databases and
-  worktrees are retained.
+
 - Ubuntu: run `sudo apt install ./Code60-X.Y.Z-linux-x64.deb` with the downloaded
   filename. DEB package identity is `code60`; it installs the GUI launcher.
 - AppImage: install the FUSE 2 compatibility runtime (`libfuse2t64` on Ubuntu
@@ -86,7 +76,7 @@ compare the relevant line for the installer you downloaded).
 ## One-time GitHub setup
 
 The repository uses only standard GitHub-hosted Linux runners for PRs and pushes
-to main. Windows x64 and Apple Silicon `macos-15` runners run only for explicitly
+to main. Apple Silicon `macos-15` runners run only for explicitly
 requested releases or manual native validation. Require **CI passed** rather than individual platform checks
 in branch protection.
 The aggregate fails on failed, cancelled, or skipped validation jobs. If merge
@@ -95,19 +85,40 @@ Apply and verify the [versioned branch ruleset](.github/rulesets/README.md).
 It requires reviewed PRs, up-to-date CI, and resolved discussions, and prevents
 direct pushes, force pushes, and deletion without administrator bypasses.
 
-Before tagging a candidate, run **Native release validation** on its branch with
-`gh workflow run native-validation.yml --ref <branch>`. This runs the unit and
-Electron suites on both native platforms without signing secrets or publication
-rights. It does not replace the release workflow's installer, signing, notarization,
-and installed-app checks. A failed candidate tag stays immutable; validate fixes
-before creating the next version.
-Desktop jobs install Electron explicitly before tests. An official GitHub asset
+Before tagging a candidate, run an **acceptance** run of **Native release
+validation** on its branch with `gh workflow run native-validation.yml --ref <branch>`.
+Acceptance means every input at its default: macOS, the full unit suite
+with coverage gates, and the desktop suite in three shards. Only an acceptance run
+counts as release evidence; a newer acceptance run for the same branch cancels an
+older one. It runs without signing secrets or publication rights and does not
+replace the release workflow's installer, signing, notarization, and installed-app
+checks. A failed candidate tag stays immutable; validate fixes before creating
+the next version.
+
+Each platform runs one unit job and three desktop shard jobs in parallel. Desktop
+shards do not wait for the unit job, so one run reports failures in both layers.
+Shards split individual tests (`--fully-parallel --shard=N/3`), not files; local
+and container desktop runs are unchanged.
+
+Use a **diagnosis** run to check a targeted fix quickly. Any non-default input
+makes a run diagnosis: `suite` (`full`,
+`unit`, `desktop`), `unit_filter` (a Vitest file filter that skips coverage gates)
+and `desktop_grep` (a Playwright `--grep` pattern run as one shard). For example:
+
+```sh
+gh workflow run native-validation.yml --ref <branch> \
+  -f suite=desktop -f desktop_grep="saved project history"
+gh workflow run native-validation.yml --ref <branch> \
+  -f suite=unit -f unit_filter=src/desktop/custom-agent-store.test.ts
+```
+
+Diagnosis runs never cancel other runs and are never cancelled by them. Their
+**Native validation passed** summary is labeled "not release evidence"; rerun an
+acceptance run before tagging. To retry only failed jobs or shards of a run, use
+`gh run rerun <run-id> --failed`; reruns test the run's original commit.Desktop jobs install Electron explicitly before tests. An official GitHub asset
 server error gets one retry with a cache-busting query; the locked package’s
 bundled checksums still apply. Checksum, access, and repeated download failures
 stop validation.
-Windows runs place temporary fixtures in `RUNNER_TEMP`; the default profile temp
-path plus nested review IDs can exceed the helper's supported 247-character path
-limit. This does not change application storage paths or enable Windows long paths.
 
 Set the following repository secrets in **Settings → Secrets and variables →
 Actions**. Never commit their values or put them in release inputs/logs.
@@ -120,49 +131,6 @@ Actions**. Never commit their values or put them in release inputs/logs.
 | `APPLE_API_KEY_ID` | That API key's key ID. |
 | `APPLE_API_ISSUER` | That API key's issuer ID. |
 
-Windows releases are signed by [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart).
-No Windows certificate, private key or client secret is stored in GitHub. The Windows
-release job runs in the `windows-signing` environment, which only `main` may deploy to,
-and signs in to Azure with GitHub OIDC immediately before packaging. Set these
-non-secret repository **variables**:
-
-| Variable | Value |
-| --- | --- |
-| `AZURE_CLIENT_ID` | Application (client) ID of the signing app registration. |
-| `AZURE_TENANT_ID` | Microsoft Entra tenant ID. |
-| `AZURE_SUBSCRIPTION_ID` | Subscription containing the signing account. |
-| `AZURE_SIGNING_ENDPOINT` | The signing account's regional endpoint, for example `https://eus.codesigning.azure.net/`. |
-| `AZURE_SIGNING_ACCOUNT_NAME` | Artifact Signing account name. |
-| `AZURE_SIGNING_CERTIFICATE_PROFILE_NAME` | Public Trust certificate profile name. |
-| `WIN_SIGNING_PUBLISHER` | The certificate subject common name, exactly the validated legal publisher name. |
-
-One-time Azure setup with the Azure CLI (identity validation is portal-only):
-
-1. Use a paid subscription; Artifact Signing rejects free, trial and sponsored ones.
-2. `az provider register --namespace Microsoft.CodeSigning`, then create the account
-   (Basic SKU) in a supported region.
-3. In the portal, complete a **Public Trust** identity validation for the legal
-   publisher. Approval takes 1–20 business days. Then create a Public Trust
-   certificate profile using that validation.
-4. Create a single-tenant app registration and service principal. Add a federated
-   credential with issuer `https://token.actions.githubusercontent.com`, audience
-   `api://AzureADTokenExchange` and the repository's environment subject. This
-   repository uses immutable OIDC subjects, so read the prefix with
-   `gh api repos/CodeManufactoryLLC/code60/actions/oidc/customization/sub` and append
-   `:environment:windows-signing`.
-5. Assign the service principal **Artifact Signing Certificate Profile Signer** on the
-   signing account or profile. Never grant broader roles.
-
-Each signing session receives a new short-lived Microsoft certificate, and Microsoft
-rotates its intermediate CAs, so verification pins the validated publisher name and
-the `Microsoft Identity Verification Root Certificate Authority 2020` root rather than
-a certificate thumbprint. The same publisher name is embedded for in-app update
-signature verification; changing it requires a release that existing installs trust.
-
-Create the team API key through App Store Connect's Users and Access / Integrations
-settings with access suitable for notarization. The API key authorizes Apple's
-notary service; the Developer ID certificate signs the app. App Store distribution
-is not required. Export the certificate and private key from Keychain Access.
 Do not use an Apple Development or Mac App Store signing certificate.
 
 These examples read local files without printing their contents:
@@ -178,7 +146,7 @@ gh secret set APPLE_API_ISSUER --repo CodeManufactoryLLC/code60
 The commands without redirected files prompt for their value. Also set repository
 variable `RELEASE_MAINTAINER` to a public package contact in `Name <email>` form.
 Configuration is a maintainer action, not an
-automatic part of implementing Windows support.
+automatic part of changing packaging.
 This address is included in the DEB metadata. PR packages use
 `Code60 CI <ci@example.invalid>` and are not published.
 
@@ -187,10 +155,6 @@ are supplied only to their platform's signing steps. On macOS the API key and ce
 keychain are temporary and removed even after failure. Apple authorization and
 certificate validity are checked by signing/notarization. Missing credentials or
 maintainer metadata stop the workflow before platform packaging.
-Windows release signing uses SHA-256 and RFC 3161 timestamps. Installer tests
-require valid Authenticode signatures, timestamps, the expected publisher and root
-on the final installer, installed application, native helper and uninstaller,
-including after reinstall. A missing or invalid signature blocks staging.
 
 ## CI and release validation
 
@@ -199,31 +163,43 @@ pinned model asset and fails if any are absent or changed. Model weights,
 tokenizer, provenance and license notices ship outside ASAR; target-specific
 ONNX CPU and sharp binaries are unpacked. Linux CI runs the fresh-process offline
 model smoke; installed-app tests exercise the actual bundled sidecar and inference
-runtime on Linux x64, macOS arm64 and Windows x64. No runtime model download or
+runtime on Linux x64 and macOS arm64. No runtime model download or
 external inference service is permitted. Installer-size measurements require
 actual release builds; do not build full local installers on a disk-constrained host.
 
-PRs and pushes to main run checks, builds, and CLI smoke tests on Linux with
-Node 22.12 and 24. Node 24 additionally runs the Electron suite under Xvfb,
-builds both Linux installers, installs the DEB, and launches both the installed
-DEB application and the actual AppImage. An ephemeral runner-only user-namespace
+PRs and pushes to main run checks and builds on Linux with
+Node 22.12 and 24. In parallel, Node 24 runs the full Electron suite under Xvfb
+across three independent runners with one worker each, using
+`--fully-parallel --workers=1 --shard=N/3` to split individual tests. A separate
+Node 24 job builds both Linux installers, installs the DEB, and launches both the
+installed DEB application and the actual AppImage. Checks, desktop shards and
+installer validation do not wait for one another. An ephemeral runner-only user-namespace
 setting allows Electron to retain its Chromium sandbox on Ubuntu 24.04.
-These Linux jobs are required by **CI passed**; PRs receive no signing secrets.
-Windows and macOS checks are release-only, so platform-specific regressions on
+Both Node checks, all three desktop shards, and the installer job must succeed
+for **CI passed**; failures, cancellations and skips block the aggregate.
+PRs receive no signing secrets. Local test defaults and release job ordering
+remain unchanged.
+macOS checks are release-only, so macOS-specific regressions on
 those systems are detected during release validation rather than on every PR.
 
 A release is a manual `Release installers` workflow dispatch from `main`, with
 one existing version tag. The workflow validates the exact tagged commit and
 both package versions; tags outside main, missing tags, published releases, and
 conflicting drafts fail. It runs Linux checks first.
-After Linux checks pass, the macOS, Windows and Linux installer jobs run in parallel. macOS runs
-checks, desktop tests, packaging,
-Developer ID signing, app and DMG notarization/stapling, and verification of the
+After Linux checks pass, the Linux installer job and the native test jobs run in
+parallel. Each native platform runs a unit job and three desktop shards through the
+same secret-free `native-tests.yml` workflow that native validation uses, with no
+signing environment. Its packaging job starts only after all of them pass:
+
+```text
+preflight → linux-check → linux-installers ───────────────────────────→ publish
+                        → mac-unit + mac-desktop (3 shards) → mac ─────→ publish
+```
+
+The macOS packaging job builds, packages, performs
+Developer ID signing and app and DMG notarization/stapling, and verifies the
 application copied from the final mounted DMG.
-Windows repeats checks and desktop tests, then builds and verifies the signed
-installer (or the explicitly selected unsigned beta). Installer tests retain real application profiles, configuration,
-SQLite databases, records and worktrees and compare their hashes after reinstall
-and uninstall. Staging requires a verification report bound to the installer hash.
+
 
 Packaged tests launch outside the repository, with isolated test data and fake
 agents. They cover a PATH without Node/npm, version/assets/preload/sandbox,
@@ -244,41 +220,22 @@ older stable releases do not replace newer releases as latest. Publication jobs
 are serialized across tags to keep that latest-version decision consistent.
 
 Normal checks have a 15-minute limit, Linux desktop/package validation 30 minutes,
-macOS and Windows 45 minutes, and publication 10 minutes. Playwright stops earlier so failure
+macOS 45 minutes, and publication 10 minutes. Playwright stops earlier so failure
 traces can upload. Artifacts and failure diagnostics expire after seven days.
 New PR commits cancel superseded runs; release runs do not cancel an active run
 for the same tag. GitHub can replace a pending concurrency-group run with a newer
 pending run; rerun a release that was cancelled while waiting.
-
-## Explicit unsigned Windows betas
-
-A maintainer may dispatch a `-beta.N` release with `unsigned_windows_beta=true`
-when Windows signing credentials are unavailable. This is an explicit choice, never
-a fallback. Stable and other prerelease channels reject the option. macOS signing
-and notarization remain mandatory; all platform build and installer tests still run.
-
-The Windows installer, application, helper and uninstaller have no verified Code60
-Authenticode signature in this mode. Windows may show unknown-publisher/SmartScreen
-warnings. Release notes label the Windows download **UNSIGNED**, and its manifest
-records `signing: "unsigned-beta"` and `signaturesVerified: false`. Native Windows x64
-installer execution, reinstall/uninstall data preservation and artifact hashes remain
-required. The manifest records the exact test OS (Windows Server 2025 x64 in CI).
-
-Use `gh workflow run release.yml --ref main -f tag=vX.Y.Z-beta.N -f unsigned_windows_beta=true`
-only for an intentional unsigned Windows beta. Omit the option for signed releases.
-Do not describe an unsigned artifact as signed or replace published assets later.
 
 ## Local packaging and checks
 
 ```sh
 npm ci
 npm run check
-npm run test:desktop
+npm run test:desktop:container
 npm run package:dir
 # On the appropriate target host:
 npm run package:mac
 npm run package:linux
-npm run package:win
 npm run test:installers
 ```
 
@@ -287,11 +244,6 @@ available. Installer tests install the DEB with `sudo apt-get` and require a
 usable FUSE runtime for AppImage. Run them on a disposable test machine. The
 Mac installer test mounts the DMG read-only and copies the app to a temporary
 installation directory; it does not overwrite Applications.
-Windows source builds require MSVC C++ Build Tools and a Windows 11 SDK.
-`package:win` cross-builds the first-party helper and Electron package for x64.
-Windows installer tests create and remove a temporary per-user installation;
-run them only on a disposable development/test account with no existing Code60
-installation. Release verification refuses to run under x64 emulation.
 
 Output is under `release/build/`. Local Mac builds use an ad-hoc signature and
 skip notarization; they are test artifacts, not public releases. Release CI sets
@@ -333,7 +285,7 @@ Link the issues essential to the outcome.
 - [ ] Required scope is complete.
 - [ ] No unresolved release-blocker issues remain in this milestone.
 - [ ] Install/build, launch, primary workflow, and data persistence are verified.
-- [ ] CLI and non-interactive behavior are verified.
+- [ ] Desktop and scheduled execution behavior are verified.
 - [ ] Upgrade and data compatibility are verified, where applicable.
 - [ ] Release preparation issue is complete and the release is published.
 
@@ -353,7 +305,7 @@ untrue.
 `package.json` is the source of the product version. npm maintains the matching
 version in `package-lock.json`; do not hard-code a second product version.
 
-- Major: breaking changes to CLI flags, output, exit codes, config, or run records.
+- Major: breaking changes to supported interfaces, platforms, config, or run records.
 - Minor: new features.
 - Patch: fixes.
 
@@ -380,11 +332,10 @@ the same checks, sign-off, and reviewed PR procedure.
 - Version commit is signed off and merged through a reviewed PR; package and
   lockfile versions match the tag created on main after merge.
 - Signing secrets, Apple access, and maintainer metadata are configured.
-- The manually requested workflow passes all Linux, Mac and Windows validations.
+- The manually requested workflow passes all Linux and macOS validations.
 - Steps that run only in `release.yml`, such as the publication job's
   `actions/download-artifact`, are first exercised by a release run. After an
   update to such an action, confirm that step succeeded before publishing.
-- The signed Windows installer checks pass, or an explicit unsigned beta records
   its signing limitation.
 - All four tested installers and checksums are published for the exact tag.
 - Public release links work; the first installer prerelease has been installed
@@ -405,11 +356,10 @@ git switch -c release/prepare-version
 npm ci
 npm run check
 npm run build
-npm run test:desktop
+npm run test:desktop:container
 npm version patch --no-git-tag-version
 npm run check
 npm run build
-node dist/cli/main.js --version
 version=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
 git add package.json package-lock.json
 git diff --cached

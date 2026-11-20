@@ -53,6 +53,45 @@ const detail = (): DetailFrame => ({
     },
   },
 });
+it("keeps repeated saved conversation IDs and their detail overlays qualified by project", () => {
+  const second = { ...chat, projectId: "b7cdf9b2-cf49-4de9-a45e-36c6c3c31296", directory: "/b" };
+  const state = applyUpdate(undefined, { ...snapshot, summaryOnly: true, chats: [chat, second] });
+  const a = detail();
+  const b: DetailFrame = {
+    ...a,
+    closed: false,
+    scope: { ...a.scope, projectId: second.projectId } as DetailFrame["scope"],
+    payload: {
+      kind: "conversation",
+      chat: {
+        ...second,
+        events: [
+          { revision: 5, event: { type: "message", runId: "chat", at: "", text: "B reply" } },
+        ],
+      },
+    },
+  };
+  const merged = applyDetails(state, {
+    [detailScopeKey(a.scope)]: a,
+    [detailScopeKey(b.scope)]: b,
+  });
+  expect(merged?.chatEventsByRun[`${projectId}:chat`]).toMatchObject([{ text: "A reply" }]);
+  expect(merged?.chatEventsByRun[`${second.projectId}:chat`]).toMatchObject([{ text: "B reply" }]);
+  expect(merged?.chatEvents).toMatchObject([{ text: "A reply" }]);
+});
+it("does not overlay a pre-Undo detail cache after the same project conversation rewinds", () => {
+  const rewound = { ...chat, rewindRevision: 1 };
+  const state = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    chat: rewound,
+    chats: [rewound],
+  });
+  const old = detail();
+  const result = applyDetails(state, { [detailScopeKey(old.scope)]: old });
+  expect(result?.chatEvents).toEqual([]);
+  expect(result?.chatEventsByRun.chat).toEqual([]);
+});
 const relay = {
   ...chat,
   kind: "relay",
@@ -72,6 +111,21 @@ const worker = (id = "worker-a", targetId = "target-a"): DesktopRun =>
       workspaceMode: "direct",
     },
   }) as DesktopRun;
+it("does not request conversation, worker or project payloads for navigation homes", () => {
+  const state = applyUpdate(undefined, {
+    ...snapshot,
+    summaryOnly: true,
+    runs: [worker()],
+    chat: relay,
+    chats: [relay],
+  });
+  expect(requestedDetails(state, "worker-a", false)).toEqual([]);
+  expect(requestedDetails(state, undefined, false)).toEqual([]);
+  expect(requestedDetails(state, "worker-a", true).map((scope) => scope.kind)).toEqual([
+    "project",
+    "target",
+  ]);
+});
 it("hydrates Relay history when provider startup failed without a run", () => {
   const failed = { ...relay, run: null, error: "Provider failed" };
   const state = applyUpdate(undefined, {
@@ -196,6 +250,7 @@ it("hydrates target events independently of app revisions without regressing pus
       runs: [
         {
           ...worker(),
+          historyIncomplete: true,
           record: { ...worker().record, status: "idle", firstPrompt: "Original prompt" },
         },
       ],
@@ -216,6 +271,7 @@ it("hydrates target events independently of app revisions without regressing pus
     status: "running",
     firstPrompt: "Original prompt",
   });
+  expect(next?.snapshot.runs[0]?.historyIncomplete).toBe(true);
   const replaced = { ...relay, generation: 4 };
   expect(
     applyDetails(

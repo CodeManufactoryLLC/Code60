@@ -1,0 +1,37 @@
+/* Deliberately omit Preflight. Only these local sources generate nb: utilities. */
+@import "tailwindcss/theme.css" layer(tokens) prefix(nb);
+@import "tailwindcss/utilities.css" layer(neobrutalism) prefix(nb) source(none);
+@source "./card.tsx";
+@source "./accordion.tsx";
+@source "./dialog.tsx";
+@source "./button.tsx";
+@source "./textarea.tsx";
+@source "./breadcrumb.tsx";
+@source "./bubble.tsx";
+@source "../navigation-cards.tsx";
+
+/* Inline aliases resolve against each card's live application theme/preferences. */
+@theme inline {
+  --color-dialog: var(--surface);
+  --color-dialog-edge: var(--panel-border);
+  --radius-dialog: var(--dialog-radius);
+  --shadow-dialog: var(--card-shadow);
+  --color-background: var(--nb-card-fill, var(--surface));
+  --color-foreground: var(--text);
+  --color-border: var(--nb-card-border, var(--panel-border));
+  --color-control-edge: var(--control-border);
+  --color-control: var(--control-fill);
+  --color-field: var(--field-fill);
+  --color-main: var(--primary);
+  --color-main-foreground: var(--primary-text);
+  --color-human: var(--user-bubble);
+  --color-on-human: var(--on-user-bubble);
+  --color-agent: var(--agent-bubble);
+  --color-on-agent: var(--on-agent-bubble);
+  --radius-base: var(--navigation-card-radius);
+  --shadow-shadow: var(--nb-card-shadow, var(--card-shadow));
+  --shadow-action: var(--button-shadow);
+  --font-weight-base: var(--text-weight, 400);
+  --font-weight-heading: var(--card-weight, 700);
+  --font-weight-control: var(--button-weight, 600);
+}

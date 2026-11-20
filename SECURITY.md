@@ -41,10 +41,10 @@ Code60 answers permission requests reported by the agent through ACP. This
 policy is not an operating-system sandbox and cannot constrain actions an
 agent does not submit for approval.
 
-- **CLI and manual desktop runs:** the default policy allows `read`, `search`,
-  `think`, and `edit`, and asks for other kinds. In the headless CLI, `ask`
-  means deny, never an interactive prompt. Configuration and the CLI's
-  `--allow` and `--allow-all` flags can change these decisions.
+- **Manual desktop runs:** the default policy allows `read`, `search`,
+  `think`, and `edit`, and asks for other kinds. Configuration and explicit desktop permission choices can change these decisions.
+- **Scheduled automations:** use the saved explicit allowlist and deny other
+  requests. The internal headless executor never prompts.
 - **Orchestration chats and their workers:** Code60 automatically allows
   permission requests using the agent's supported `allow_once` option. These
   sessions do not use the manual-run policy to ask you for each action.
@@ -57,6 +57,11 @@ The provider's **Harness mode** is separate from Code60's approval policy.
 Choosing an Ask mode does not turn off Code60 auto-approval in orchestration
 chats or workers. Any provider sandbox or other restrictions depend on that
 provider and its configuration.
+
+Model and reasoning changes accept only current connector-advertised values
+between turns. Saving a role default derives confirmed selections in main, not
+from renderer-supplied values. Defaults do not change approval policy or grant
+new worker authority.
 
 See [permissions](ARCHITECTURE.md#permissions) and
 [harness modes](ARCHITECTURE.md#session-information-and-harness-modes).

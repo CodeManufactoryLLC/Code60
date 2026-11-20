@@ -1,6 +1,41 @@
+import { type ChatUndoResult, chatReferenceSchema } from "./chat-context.js";
+
+export {
+  type BrowserMode,
+  type Capability,
+  capabilityReference,
+  capabilityReferences,
+  DESKTOP_CAPABILITIES,
+  defaultableSelections,
+  type Group,
+  isAllowedBrowserTool,
+  isKnowledgeRelativePath,
+  isKnowledgeTool,
+  KNOWLEDGE_LIMITS,
+  KNOWLEDGE_SCHEMA_VERSION,
+  type KnowledgeNavigation,
+  type KnowledgeOwner,
+  type KnowledgePanel,
+  type KnowledgeReport,
+  type KnowledgeTool,
+  knowledgeReportSchema,
+  mcpToolsForRole,
+  type PageDefinition,
+  type ParentPageId,
+  pages,
+  parentPageIds,
+  parseBrowserRequest,
+  parseKnowledge,
+  settingsSections,
+} from "../contracts/index.js";
+export * from "./automation.js";
+export type { ChatReference, ChatUndoResult } from "./chat-context.js";
+export { chatReferenceSchema } from "./chat-context.js";
+export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
 export * from "./logs.js";
+export * from "./model-defaults.js";
 export * from "./plans.js";
 export type { ProjectRequestIdentity } from "./project-identity.js";
 export * from "./projects.js";
@@ -15,8 +50,18 @@ import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from
 
 export * from "./agent-setup.js";
 export * from "./git-setup.js";
+export * from "./sidebar-backdrop.js";
+export * from "./window-controls.js";
 
 import { z } from "zod";
+import type {
+  ProjectSearchIdentity,
+  ProjectSearchOpened,
+  ProjectSearchOpenRequest,
+  ProjectSearchPage,
+  ProjectSearchPageRequest,
+  ProjectSearchQuery,
+} from "../contracts/index.js";
 import {
   type ActivitySnapshot,
   boundedString,
@@ -33,15 +78,25 @@ import {
   parseValue,
   runIdSchema,
   type SaveCommand,
-  SEARCH_EXCERPT_LIMIT,
-  SEARCH_QUERY_LIMIT,
-  SEARCH_SOURCE_LIMIT,
-  type SearchSummarySource,
   saveCommandSchema,
   tacticIdSchema,
   toolKindSchema,
   validatePromptTemplate,
 } from "../contracts/index.js";
+
+export {
+  type ProjectSearchIdentity,
+  type ProjectSearchOpened,
+  type ProjectSearchPage,
+  type ProjectSearchQuery,
+  type ProjectSearchSource,
+  parseProjectSearchIdentity,
+  parseProjectSearchOpen,
+  parseProjectSearchPage,
+  parseProjectSearchQuery,
+  type SearchProject,
+} from "../contracts/index.js";
+
 import type { GitWorktree, ListedRun, RunEvent, RunView } from "../core/index.js";
 import { projectRequestFields } from "./project-identity.js";
 import type { WebLink } from "./web-links.js";
@@ -250,9 +305,14 @@ export interface Versions {
   electron: string | null;
   chromium: string | null;
   node: string;
+  /** Configured offline model, not a claim that its assets have been loaded. */
+  embeddingModel?: { id: string; revision: string; dimensions: number; dtype: string };
+  onnxRuntime?: { name: string; version: string | null; execution: string };
 }
 
 export interface Snapshot {
+  customAgentError?: string | undefined;
+  customAgents?: import("./custom-agents.js").CustomAgentSummary[];
   /** App metadata only. Detail revisions and caches are independent. */
   summaryOnly?: true;
   /** At most 128 active subscription UUIDs, with their last publication revisions. */
@@ -263,6 +323,7 @@ export interface Snapshot {
   gitReadiness?: import("./git-setup.js").GitReadiness;
   reviews?: import("./reviews.js").ReviewSummary[];
   agentSetup?: AgentSetupSnapshot;
+  modelDefaults?: import("./model-defaults.js").ModelDefaultsRecord;
   versions: Versions;
   chat: OrchestrationChat;
   chats: OrchestrationChat[];
@@ -320,6 +381,12 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
+  customAgent?(
+    request: import("./custom-agents.js").CustomAgentRequest,
+  ): Promise<import("./custom-agents.js").CustomAgentResponse>;
+  automation(request: import("./automation.js").AutomationUiRequest): Promise<unknown>;
+  onAutomationChanged(listener: () => void): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
   browseMemories(
     request: import("../contracts/index.js").MemoryBrowse,
@@ -333,6 +400,10 @@ export interface DesktopApi {
   ): Promise<import("./details.js").DetailFrame>;
   unsubscribeDetails(request: import("./details.js").DetailIdentity): Promise<void>;
   setRelayFileContext(context: import("./relay-files.js").RelayFileContext): Promise<void>;
+  /** Current renderer generation for presentation-only awareness reports. */
+  knowledgeRenderer?(): Promise<string>;
+  /** Presentation metadata only; main validates owners and grants no authority. */
+  reportKnowledge?(report: import("../contracts/index.js").KnowledgeReport): Promise<void>;
   onDetails(listener: (frame: import("./details.js").DetailFrame) => void): () => void;
   readRelayMessage(
     request: import("./relay.js").RelayMessageRead,
@@ -380,6 +451,7 @@ export interface DesktopApi {
   ): Promise<import("./reviews.js").ReviewContent>;
   readDiff(request: DiffRequest): Promise<string>;
   cancelDiff(request: DiffIdentity): Promise<void>;
+  providerAction(request: import("./agent-setup.js").ProviderAction): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
   cancelAgentSetup(request: SetupIdentity): Promise<void>;
@@ -387,14 +459,28 @@ export interface DesktopApi {
   abandonAgentSetup(request: SetupIdentity): Promise<void>;
   update(action: UpdateAction): Promise<UpdateState>;
   onUpdate(listener: (state: UpdateState) => void): () => void;
+  searchProjects(request: ProjectSearchQuery): Promise<ProjectSearchPage>;
+  searchProjectsPage(request: ProjectSearchPageRequest): Promise<ProjectSearchPage>;
+  cancelProjectSearch(request: ProjectSearchIdentity): Promise<void>;
+  openSearchSource(request: ProjectSearchOpenRequest): Promise<ProjectSearchOpened | null>;
   summarizeSearch(request: SearchSummaryRequest): Promise<SearchSummaryResult>;
   cancelSearchSummary(requestId: string): Promise<void>;
   extractMemory(request: MemoryExtractionRequest): Promise<MemoryExtractionResult>;
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
-  orchestrationChatAction(request: OrchestrationChatAction): Promise<void>;
-  windowAppearance(): Promise<{ transparent: boolean; enabled: boolean; clickThrough: boolean }>;
-  setWindowTheme(dark: boolean): Promise<void>;
+  orchestrationChatAction(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined>;
+  windowAppearance(): Promise<{
+    transparent: boolean;
+    enabled: boolean;
+    clickThrough: boolean;
+    sidebarBlurSupported: boolean;
+    customWindowControls: boolean;
+  }>;
+  setSidebarBackdrop(
+    request: import("./sidebar-backdrop.js").SidebarBackdropRequest,
+  ): Promise<void>;
+  onSidebarBackdropError(listener: () => void): () => void;
+  controlWindow(action: import("./window-controls.js").WindowControl): Promise<void>;
   setTransparent(enabled: boolean): Promise<void>;
   setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;
@@ -475,6 +561,9 @@ export interface OrchestrationProvider {
 }
 
 export interface OrchestrationChat {
+  customAgentId?: string;
+  rewindRevision?: number;
+  checkpoint?: { id: string; turn: number; phase: "active" | "undoing" };
   historySaving?: "available" | "unavailable";
   projectId?: string;
   kind?: "relay" | "project";
@@ -528,6 +617,12 @@ const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
 const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   z.strictObject({
+    type: z.literal("undo-request"),
+    id: runIdSchema,
+    checkpointId: z.string().uuid(),
+    replacesDraft: z.boolean(),
+  }),
+  z.strictObject({
     type: z.literal("history"),
     id: runIdSchema,
     before: z.string().uuid().nullable(),
@@ -540,6 +635,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("continue-task"), id: runIdSchema, taskId: z.string().uuid() }),
   z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
+  z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
   z.strictObject({ type: z.literal("new"), projectId: z.string().uuid().optional() }),
   z.strictObject({ type: z.literal("select"), id: configurationIdSchema }),
   z.strictObject({ type: z.literal("archive"), id: configurationIdSchema }),
@@ -559,6 +655,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
     type: z.literal("send"),
     id: configurationIdSchema,
     command: commandNameSchema.optional(),
+    references: z.array(chatReferenceSchema).max(8).optional(),
     text: boundedString("message", 1_000_000).refine(
       (text) => text.trim().length > 0,
       "The message is empty",
@@ -707,6 +804,7 @@ const actionSchema = z.discriminatedUnion(
   "type",
   [
     z.strictObject({ type: z.literal("set-mode"), id: runIdSchema, change: modeChangeSchema }),
+    z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
     z.strictObject(
       {
         type: z.enum(["reply", "continue"]),
@@ -787,10 +885,7 @@ const visibilitySchema = z.strictObject(
 );
 const databaseModeSchema = z.enum(["open", "create"], { error: "Invalid database mode" });
 const projectPathSchema = boundedString("project path", 4096).refine(
-  (value) =>
-    !value.includes("\0") &&
-    (value.startsWith("/") ||
-      (/^[a-z]:[\\/]/i.test(value) && !/[\r\n]/.test(value) && !value.slice(2).includes(":"))),
+  (value) => !value.includes("\0") && value.startsWith("/"),
   "Invalid project path",
 );
 
@@ -825,24 +920,6 @@ const fileContextSchema = z
   .refine(
     (context) => (context.projectId === undefined) === (context.databaseEpoch === undefined),
     "Project identity and database epoch are required together",
-  )
-  .refine(
-    (context) =>
-      !/^[a-z]:[\\/]/i.test(context.root) ||
-      [...context.directories, context.preview ?? ""].every(
-        (path) =>
-          path === "" ||
-          (!/[:<>"|?*]/.test(path) &&
-            [...path].every((character) => character.charCodeAt(0) >= 32) &&
-            path
-              .split("/")
-              .every(
-                (part) =>
-                  !/[. ]$/.test(part) &&
-                  !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
-              )),
-      ),
-    "Invalid Windows file path",
   );
 export const parseFileContext = (value: unknown) => parseValue(fileContextSchema.nullable(), value);
 
@@ -941,38 +1018,16 @@ export const parseMemoryExtraction = (value: unknown): MemoryExtractionRequest =
 export const parseMemoryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
-const searchSummarySchema = z
-  .strictObject({
-    requestId: memoryRequestIdSchema,
-    directory: boundedString("project path", 4096).min(1),
-    query: boundedString("search query", SEARCH_QUERY_LIMIT).refine(
-      (value) => value.trim().length > 0,
-      "Enter a search query",
-    ),
-    includeFiles: z.boolean().optional(),
-    sources: z
-      .array(
-        z.strictObject({
-          id: boundedString("source ID", 4096).min(1),
-          kind: z.enum(["project", "run", "prompt", "message", "thought"]),
-          title: boundedString("source title", 512),
-          text: boundedString("source excerpt", SEARCH_EXCERPT_LIMIT),
-          runId: runIdSchema.optional(),
-          eventIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-        }),
-      )
-      .max(SEARCH_SOURCE_LIMIT),
-  })
-  .refine(
-    (request) =>
-      new Set(request.sources.map((source) => source.id)).size === request.sources.length,
-    "Duplicate search sources",
-  );
+const searchSummarySchema = z.strictObject({
+  requestId: memoryRequestIdSchema,
+  searchId: memoryRequestIdSchema,
+  databaseEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+});
 export type SearchSummaryRequest = z.infer<typeof searchSummarySchema>;
 export interface SearchSummaryResult {
   requestId: string;
   text: string;
-  sources: SearchSummarySource[];
+  sources: import("../contracts/index.js").ProjectSearchSource[];
 }
 export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
   parseValue(searchSummarySchema, value);

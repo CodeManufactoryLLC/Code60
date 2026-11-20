@@ -7,6 +7,7 @@ import type {
   Orchestrator,
   RunEvent,
   RunRecord,
+  SessionSelection,
   Workspace,
 } from "../core/index.js";
 import { ACTIVE_STATUSES, prepareRuns } from "../core/index.js";
@@ -80,7 +81,13 @@ export class ExecutionHost {
       event(worker: ExecutionWorker, event: RunEvent): void;
       changed(targetId?: string): void;
       warning(message: string): void;
+      initialSettings?(provider: string): readonly SessionSelection[];
       checkout?(worker: ExecutionWorker): Promise<void>;
+      checkpoint?(
+        owner: ExecutionOwner,
+        target: ExecutionTarget,
+        mode: WorkspaceMode,
+      ): Promise<void>;
       authorizeTarget?(
         owner: ExecutionOwner,
         request: TargetDispatch,
@@ -223,6 +230,9 @@ export class ExecutionHost {
         ? await this.baselines.capture(owner, target, request.base, signal)
         : request.base;
     authorize();
+    await this.hooks.checkpoint?.(owner, target, request.workspaceMode);
+    await this.revalidate(request.cwd, target);
+    authorize();
     let accepted: ExecutionWorker | undefined;
     const pinCheckout = async (cwd: string) => {
       if (request.workspaceMode !== "worktree" || !this.hooks.checkout) return;
@@ -284,6 +294,7 @@ export class ExecutionHost {
         prompt: request.prompt,
         allowAll: true,
         owner: "relay",
+        initialSettings: (provider) => this.hooks.initialSettings?.(provider),
         ...(base === undefined ? {} : { base }),
         ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
       },

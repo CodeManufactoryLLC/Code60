@@ -1,4 +1,88 @@
 import type { ActivityTool } from "./activity.js";
+import { BROWSER_TOOL } from "./browser.js";
+import { MCP_KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
+
+export function mcpToolsForRole(role: "relay" | "project") {
+  if (role !== "relay") return MCP_TOOL_DEFINITIONS;
+  const allowed = new Set([
+    ...MCP_KNOWLEDGE_TOOL_DEFINITIONS.map((tool) => tool.name),
+    "code60_get_context",
+    "code60_dispatch_agent",
+    "code60_list_agents",
+    "code60_read_agent",
+    "code60_send_agent",
+    "code60_finish_agent",
+    "code60_cancel_agent",
+    "code60_stop_agent",
+    "code60_create_plan",
+    "code60_read_plan",
+    "code60_update_plan",
+    "code60_get_activity_context",
+    "code60_report_activity",
+    "code60_browser",
+  ]);
+  return MCP_TOOL_DEFINITIONS.filter((tool) => allowed.has(tool.name)).map((tool) => {
+    if (tool.name === "code60_create_plan" || tool.name === "code60_update_plan") {
+      const inputSchema = structuredClone(tool.inputSchema);
+      const properties =
+        tool.name === "code60_create_plan"
+          ? inputSchema.properties
+          : (inputSchema.properties.draft?.properties as Record<string, Record<string, unknown>>);
+      const items = properties.tasks?.items as {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
+      items.properties.target = {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          cwd: { type: "string", minLength: 1, maxLength: 32_768 },
+          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
+        },
+        required: ["cwd", "workspaceMode"],
+      };
+      items.required = [...items.required, "target"];
+      return {
+        ...tool,
+        inputSchema,
+        description: `${tool.description} Every Relay task requires an explicit target with absolute cwd and direct/worktree workspaceMode. Human acceptance binds this revision and every target/mode assignment.`,
+      };
+    }
+    if (tool.name !== "code60_dispatch_agent")
+      return {
+        ...tool,
+        description: tool.description.replaceAll(
+          "in the open project",
+          "across Relay's execution targets",
+        ),
+      };
+    const { reviewId: _review, ...properties } = tool.inputSchema.properties;
+    return {
+      ...tool,
+      description:
+        "Dispatch one Relay-owned worker to an explicit absolute cwd. No open project or database is required. Direct edits affect that exact directory; bounded folder snapshots cover message Undo, including concurrent manual edits. Unsupported coverage blocks launch. Worktree requires Git with a valid base and integrates automatically. No fallback or permission bypass.",
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: {
+          ...properties,
+          base: {
+            ...properties.base,
+            description:
+              "Optional explicit Git base, resolved to a frozen commit. Otherwise worktree mode captures saved files once per human task/target, without changing HEAD or staging. Direct mode rejects a base.",
+          },
+          cwd: {
+            type: "string",
+            minLength: 1,
+            maxLength: 32_768,
+            description: "Required absolute target directory. Never infer from sidebar state.",
+          },
+          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
+        },
+        required: [...(tool.inputSchema.required ?? []), "cwd", "workspaceMode"],
+      },
+    };
+  });
+}
 
 /** MCP protocol versions the Code60 MCP server accepts; the last one is preferred. */
 export const MCP_PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26"] as const;
@@ -80,6 +164,8 @@ export interface McpActivityToolDefinition extends McpToolBase {
   name: ActivityTool;
 }
 export type McpToolDefinition =
+  | typeof BROWSER_TOOL
+  | (typeof MCP_KNOWLEDGE_TOOL_DEFINITIONS)[number]
   | McpTableToolDefinition
   | McpControlToolDefinition
   | McpActivityToolDefinition;
@@ -186,7 +272,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
   control(
     "code60_create_command",
     "Create a command",
-    "Save a reusable slash command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Commands and the orchestrator slash picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
+    "Save a reusable $ command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Command Builder and the orchestrator $ command picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
     object(
       {
         name: {
@@ -194,7 +280,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
           minLength: 1,
           maxLength: 64,
           pattern: "^[a-z0-9][a-z0-9-]{0,63}$",
-          description: "Lowercase slash name without the leading slash.",
+          description: "Lowercase command name without the leading $.",
         },
         title: { type: "string", minLength: 1, maxLength: 120, description: "Single-line title." },
         description: { type: "string", maxLength: 500 },
@@ -541,6 +627,8 @@ export const MCP_ACTIVITY_TOOL_DEFINITIONS: readonly McpActivityToolDefinition[]
 ];
 
 export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
+  BROWSER_TOOL,
+  ...MCP_KNOWLEDGE_TOOL_DEFINITIONS,
   ...MCP_ACTIVITY_TOOL_DEFINITIONS,
   ...MCP_TABLE_TOOL_DEFINITIONS,
   ...MCP_CONTROL_TOOL_DEFINITIONS,

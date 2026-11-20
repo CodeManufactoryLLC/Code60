@@ -1,19 +1,19 @@
 const systemFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-export const defaultTypeface = {
-  id: "d-din",
-  label: "D-DIN",
-  family: `"D-DIN", ${systemFont}`,
+const defaultTypeface = {
+  id: "ibm-plex-sans",
+  label: "IBM Plex Sans",
+  family: `"IBM Plex Sans", ${systemFont}`,
 } as const;
 export const typefaces = [
   { id: "system", label: "System", family: systemFont },
   { id: "computer-modern", label: "Computer Modern", family: '"CMU Serif", Georgia, serif' },
-  defaultTypeface,
+  { id: "d-din", label: "D-DIN", family: `"D-DIN", ${systemFont}` },
   { id: "georgia", label: "Georgia", family: "Georgia, serif" },
-  { id: "ibm-plex-sans", label: "IBM Plex Sans", family: `"IBM Plex Sans", ${systemFont}` },
+  defaultTypeface,
   { id: "ibm-plex-serif", label: "IBM Plex Serif", family: '"IBM Plex Serif", Georgia, serif' },
   { id: "lexend", label: "Lexend", family: `"Lexend", ${systemFont}` },
   { id: "shantell-sans", label: "Shantell Sans", family: '"Shantell Sans", sans-serif' },
-  { id: "ocr-a", label: "OCR-A", family: '"OCR-A", ui-monospace, monospace' },
+  { id: "scientifica", label: "Scientifica", family: `"Scientifica", ${systemFont}` },
   { id: "roboto", label: "Roboto", family: `Roboto, ${systemFont}` },
   { id: "space-grotesk", label: "Space Grotesk", family: `"Space Grotesk", ${systemFont}` },
   { id: "tahoma", label: "Tahoma", family: `Tahoma, Verdana, ${systemFont}` },
@@ -33,24 +33,75 @@ export function letterSpacing(typeface: Typeface): string {
   return entry?.letterSpacing ?? "normal";
 }
 export const monospaceFont = "ui-monospace, SFMono-Regular, Menlo, monospace";
-/** Text that can be styled on its own. `size` and `weight` are the built-in defaults. */
+/** Text that can be styled on its own, with independent built-in defaults. */
 export const textRoles = [
-  { id: "tableHeadings", label: "Table Headings", css: "heading", size: 12, weight: 400 },
-  { id: "buttons", label: "Button Text", css: "button", size: 13, weight: 400 },
-  { id: "agentMessages", label: "Agent Chat Messages", css: "agent", size: 14, weight: 400 },
-  { id: "humanMessages", label: "Human Chat Messages", css: "human", size: 14, weight: 400 },
-  { id: "pageTitles", label: "Page Titles", css: "title", size: 18, weight: 400 },
-  { id: "normalText", label: "Normal Text", css: "text", size: 13, weight: 400 },
+  {
+    id: "tableHeadings",
+    label: "Table Headings",
+    css: "heading",
+    typeface: defaultTypeface.id,
+    size: 12,
+    weight: 600,
+  },
+  {
+    id: "buttons",
+    label: "Button Text",
+    css: "button",
+    typeface: defaultTypeface.id,
+    size: 13,
+    weight: 600,
+  },
+  {
+    id: "agentMessages",
+    label: "Agent Chat Messages",
+    css: "agent",
+    typeface: defaultTypeface.id,
+    size: 14,
+    weight: 400,
+  },
+  {
+    id: "humanMessages",
+    label: "Human Chat Messages",
+    css: "human",
+    typeface: defaultTypeface.id,
+    size: 14,
+    weight: 400,
+  },
+  {
+    id: "pageTitles",
+    label: "Page Titles",
+    css: "title",
+    typeface: "space-grotesk",
+    size: 16,
+    weight: 700,
+  },
+  {
+    id: "cardTitles",
+    label: "Card Titles",
+    css: "card",
+    typeface: "space-grotesk",
+    size: 22,
+    weight: 700,
+  },
+  {
+    id: "normalText",
+    label: "Normal Text",
+    css: "text",
+    typeface: defaultTypeface.id,
+    size: 13,
+    weight: 400,
+  },
 ] as const;
 export type TextRole = (typeof textRoles)[number]["id"];
 export const fontWeights = [
+  { value: 300, label: "Light" },
   { value: 400, label: "Regular" },
   { value: 500, label: "Medium" },
   { value: 600, label: "Semibold" },
   { value: 700, label: "Bold" },
 ] as const;
 type FontWeight = (typeof fontWeights)[number]["value"];
-export const fontSizes = { min: 8, max: 48 } as const;
+export const fontSizes = { min: 8, max: 64 } as const;
 /** A role's choices; anything left out keeps the built-in default. */
 export type TextStyle = {
   typeface?: Typeface | undefined;
@@ -65,6 +116,7 @@ export const defaultTextStyles: TextStyles = {
   agentMessages: {},
   humanMessages: {},
   pageTitles: {},
+  cardTitles: {},
   normalText: {},
 };
 /** Reads stored text styles, dropping anything invalid. */
@@ -116,8 +168,8 @@ export type ResolvedText = {
 };
 export function resolveText(styles: TextStyles, role: TextRole): ResolvedText {
   const style = styles[role];
-  const defaults = textRoles.find((entry) => entry.id === role) ?? textRoles[5];
-  const typeface = style.typeface ?? defaultTypeface.id;
+  const defaults = textRoles.find((entry) => entry.id === role) ?? textRoles[6];
+  const typeface = style.typeface ?? defaults.typeface;
   return {
     family: fontFamily(typeface),
     spacing: letterSpacing(typeface),
@@ -133,7 +185,7 @@ export function applyCase(text: string, textCase: ResolvedText["case"]): string 
 }
 /**
  * CSS custom properties for the text styles. Family, spacing, size, and weight are always set;
- * case only when chosen. Sent prompts use regular weight unless a weight is chosen.
+ * case only when chosen. The former title size remains reserved in the page layout.
  */
 export function textStyleProperties(styles: TextStyles): Record<string, string | undefined> {
   const properties: Record<string, string | undefined> = {};
@@ -154,8 +206,7 @@ export function textStyleProperties(styles: TextStyles): Record<string, string |
             ? "none"
             : undefined;
   }
-  const human = styles.humanMessages.weight;
-  properties["--human-prompt-weight"] = human ? String(human) : undefined;
+  properties["--page-title-space-size"] = `${styles.pageTitles.size ?? 64}px`;
   // Navigation has its own default size, but still honors an explicit Button Text size.
   properties["--nav-font-size"] = `${styles.buttons.size ?? 15}px`;
   return properties;

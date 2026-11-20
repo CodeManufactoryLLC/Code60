@@ -60,7 +60,7 @@ describe("minimatch override compatibility", () => {
     const file = statSync(import.meta.filename);
     const directory = statSync(import.meta.dirname);
     expect(filter(join(source, "dist"), directory)).toBe(true);
-    for (const path of ["dist/cli/main.js", "dist/renderer/.asset", "package.json"])
+    for (const path of ["dist/desktop/main.js", "dist/renderer/.asset", "package.json"])
       expect(filter(join(source, path), file), path).toBe(true);
     for (const path of ["dist/main.js.map", "dist/test/fixture.js", "src/main.ts"])
       expect(filter(join(source, path), file), path).toBe(false);

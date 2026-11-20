@@ -1,94 +1,14 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  MCP_PROTOCOL_VERSION,
-  MCP_PROTOCOL_VERSIONS,
-  MCP_TOOL_DEFINITIONS,
-} from "../bridge/index.js";
+import { MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSIONS, mcpToolsForRole } from "../bridge/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import { diagnosticText } from "../platform/index.js";
 
 const MAX_LINE_LENGTH = 1_048_576;
+const cancellations = new Map<unknown, { abort: AbortController; browser: boolean }>();
 
-function toolDefinitions() {
-  if (process.env.CODE60_MCP_ROLE !== "relay") return MCP_TOOL_DEFINITIONS;
-  const allowed = new Set([
-    "code60_get_context",
-    "code60_dispatch_agent",
-    "code60_list_agents",
-    "code60_read_agent",
-    "code60_send_agent",
-    "code60_finish_agent",
-    "code60_cancel_agent",
-    "code60_stop_agent",
-    "code60_create_plan",
-    "code60_read_plan",
-    "code60_update_plan",
-    "code60_get_activity_context",
-    "code60_report_activity",
-  ]);
-  return MCP_TOOL_DEFINITIONS.filter((tool) => allowed.has(tool.name)).map((tool) => {
-    if (tool.name === "code60_create_plan" || tool.name === "code60_update_plan") {
-      const inputSchema = structuredClone(tool.inputSchema);
-      const properties =
-        tool.name === "code60_create_plan"
-          ? inputSchema.properties
-          : (inputSchema.properties.draft?.properties as Record<string, Record<string, unknown>>);
-      const items = properties.tasks?.items as {
-        properties: Record<string, unknown>;
-        required: string[];
-      };
-      items.properties.target = {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          cwd: { type: "string", minLength: 1, maxLength: 32_768 },
-          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
-        },
-        required: ["cwd", "workspaceMode"],
-      };
-      items.required = [...items.required, "target"];
-      return {
-        ...tool,
-        inputSchema,
-        description: `${tool.description} Every Relay task requires an explicit target with absolute cwd and direct/worktree workspaceMode. Human acceptance binds this revision and every target/mode assignment.`,
-      };
-    }
-    if (tool.name !== "code60_dispatch_agent")
-      return {
-        ...tool,
-        description: tool.description.replaceAll(
-          "in the open project",
-          "across Relay's execution targets",
-        ),
-      };
-    const { reviewId: _review, ...properties } = tool.inputSchema.properties;
-    return {
-      ...tool,
-      description:
-        "Dispatch one Relay-owned worker to an explicit absolute cwd. No open project or database is required. Direct edits affect that exact directory and have no isolated apply/undo/discard. Worktree requires Git with a valid base. No fallback or permission bypass.",
-      inputSchema: {
-        ...tool.inputSchema,
-        properties: {
-          ...properties,
-          base: {
-            ...properties.base,
-            description:
-              "Optional explicit Git base, resolved to a frozen commit. Otherwise worktree mode captures saved files once per human task/target, without changing HEAD or staging. Direct mode rejects a base.",
-          },
-          cwd: {
-            type: "string",
-            minLength: 1,
-            maxLength: 32_768,
-            description: "Required absolute target directory. Never infer from sidebar state.",
-          },
-          workspaceMode: { type: "string", enum: ["direct", "worktree"] },
-        },
-        required: [...(tool.inputSchema.required ?? []), "cwd", "workspaceMode"],
-      },
-    };
-  });
-}
+const toolDefinitions = () =>
+  mcpToolsForRole(process.env.CODE60_MCP_ROLE === "relay" ? "relay" : "project");
 
 interface RpcRequest {
   jsonrpc?: unknown;
@@ -133,7 +53,7 @@ function gatewayConfiguration(): { url: string; token: string } {
   return { url, token };
 }
 
-async function callGateway(name: string, args: unknown): Promise<unknown> {
+async function callGateway(name: string, args: unknown, signal: AbortSignal): Promise<unknown> {
   if (!toolDefinitions().some((tool) => tool.name === name)) throw new Error("Unknown Code60 tool");
   const gateway = gatewayConfiguration();
   const response = await fetch(gateway.url, {
@@ -143,7 +63,7 @@ async function callGateway(name: string, args: unknown): Promise<unknown> {
       "content-type": "application/json",
     },
     body: JSON.stringify({ name, arguments: args }),
-    signal: AbortSignal.timeout(125_000),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(125_000)]),
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -163,11 +83,11 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
     if (request.id !== undefined) errorResponse(request.id, -32600, "Invalid request");
     return;
   }
-  if (
-    request.method === "notifications/initialized" ||
-    request.method === "notifications/cancelled"
-  )
+  if (request.method === "notifications/initialized") return;
+  if (request.method === "notifications/cancelled") {
+    if (isObject(request.params)) cancellations.get(request.params.requestId)?.abort.abort();
     return;
+  }
   if (request.id === undefined) return;
   if (request.method === "initialize") {
     const protocolVersion =
@@ -205,7 +125,7 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
             readOnlyHint: tool.readOnly,
             destructiveHint: tool.destructive,
             idempotentHint: tool.readOnly,
-            openWorldHint: false,
+            openWorldHint: tool.kind === "browser",
           },
         })),
       },
@@ -217,8 +137,31 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
       toolResponse(request.id, { error: "Invalid tool call" }, true);
       return;
     }
+    if (cancellations.has(request.id)) {
+      errorResponse(request.id, -32600, "Duplicate request ID");
+      return;
+    }
+    const cancellation = new AbortController();
+    cancellations.set(request.id, {
+      abort: cancellation,
+      browser: request.params.name === "code60_browser",
+    });
     try {
-      const result = await callGateway(request.params.name, request.params.arguments ?? {});
+      const result = await callGateway(
+        request.params.name,
+        request.params.arguments ?? {},
+        cancellation.signal,
+      );
+      if (
+        request.params.name === "code60_browser" &&
+        isObject(result) &&
+        isObject(result.result) &&
+        Array.isArray(result.result.content)
+      ) {
+        // Preserve Playwright image content and tool errors rather than JSON-encoding images.
+        send({ jsonrpc: "2.0", id: request.id, result: result.result });
+        return;
+      }
       toolResponse(request.id, result);
     } catch (error) {
       toolResponse(
@@ -229,6 +172,8 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
         },
         true,
       );
+    } finally {
+      cancellations.delete(request.id);
     }
     return;
   }
@@ -240,6 +185,10 @@ export function serveMcpStdio(): void {
   let pending = "";
   let inFlight = 0;
   process.stdin.setEncoding("utf8");
+  process.stdin.once("end", () => {
+    for (const cancellation of cancellations.values())
+      if (cancellation.browser) cancellation.abort.abort();
+  });
   process.stdin.on("data", (chunk: string) => {
     pending += chunk;
     if (pending.length > MAX_LINE_LENGTH && !pending.includes("\n")) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   appendFile,
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -16,10 +17,15 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Plan } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
+import { MemoryService } from "../src/desktop/memory-service.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import * as storage from "../src/desktop/relay-storage.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
+
+// Native helper launches make real private writes/stream-draining slower than
+// POSIX. The Windows log already has passing lifecycle cases taking 4–5 s.
 
 let root: string;
 let agents: FakeAgents;
@@ -36,7 +42,12 @@ beforeEach(async () => {
   relay = create();
   await mkdir(join(root, "target"));
 });
-function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn()) {
+function create(
+  beforeMkdir?: () => Promise<void>,
+  notify: () => void = vi.fn(),
+  confirm: (title: string, detail: string) => Promise<boolean> = async () => false,
+  memory?: MemoryService,
+) {
   const deps = defaultDeps();
   const git = new FakeGit();
   git.repoInfo = async () => {
@@ -58,6 +69,8 @@ function create(beforeMkdir?: () => Promise<void>, notify: () => void = vi.fn())
     },
     { XDG_STATE_HOME: join(root, "state") },
     notify,
+    { confirm },
+    memory,
   );
   services.push(service);
   return service;
@@ -72,12 +85,238 @@ async function connect() {
     ...DEFAULT_CONFIG,
     agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
   });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
 }
+it("does not advertise a disconnected member from a frozen human task", async () => {
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: {
+      claude: required(DEFAULT_CONFIG.agents.claude),
+      codex: required(DEFAULT_CONFIG.agents.codex),
+    },
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Observe providers" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect((await tool("code60_get_context")).providers).toEqual(["claude", "codex"]);
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
+  });
+  expect(relay.snapshot().run?.id).toBe(id);
+  expect((await tool("code60_get_context")).providers).toEqual(["claude"]);
+});
+it("denies browser authority during ACP startup and after slow turn cancellation", async () => {
+  let release!: () => void;
+  agents.startGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const connecting = connect();
+  try {
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(1));
+    await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+      "active chat request",
+    );
+  } finally {
+    release();
+  }
+  await connecting;
+  agents.script = () => "hang";
+  agents.sessions[0]!.onCancel = "ignore";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "headless" });
+  await relay.action({ type: "cancel", id });
+  await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+    "active chat request",
+  );
+});
+it("gates browser controls to active requests, isolates modes and resets them on connection restart", async () => {
+  await connect();
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  agents.script = () => "hang";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a visible browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "set-mode", mode: "visible" })).toMatchObject({
+    mode: "visible",
+    connected: false,
+  });
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "visible" });
+  await relay.action({ type: "cancel", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  await relay.action({ type: "restart", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "Report browser mode",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({
+    mode: "headless",
+    connected: false,
+  });
+});
+it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
+  const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+  relay = create(undefined, vi.fn(), confirm);
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Surviving prefix" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({ type: "send", id, text: "Discarded request marker" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const checkpointId = required(relay.snapshot().checkpoint).id;
+  const request = { type: "undo-request" as const, id, checkpointId, replacesDraft: true };
+  expect(await relay.action(request)).toBeUndefined();
+  expect(agents.sessions[0]?.stops).toHaveLength(0);
+  expect(await relay.action(request)).toEqual({
+    type: "rewound",
+    checkpointId,
+    text: "Discarded request marker",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect(confirm).toHaveBeenLastCalledWith("Undo this request?", expect.stringContaining("unsent"));
+  expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+  expect(agents.sessions[1]?.prompts).toHaveLength(0);
+  expect(JSON.stringify(relay.snapshot().events)).not.toContain("Discarded request marker");
+  const nextId = required(relay.snapshot().run).id;
+  expect(nextId).not.toBe(id);
+  await relay.action({ type: "send", id: nextId, text: "A fresh follow-up" });
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1));
+  expect(agents.sessions[1]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[1]?.prompts[0]).not.toContain("Discarded request marker");
+  await relay.shutdown();
+  relay = create();
+  await connect();
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "After restart",
+  });
+  await vi.waitFor(() => expect(agents.sessions[2]?.prompts).toHaveLength(1));
+  expect(agents.sessions[2]?.prompts[0]).toContain("Surviving prefix");
+  expect(agents.sessions[2]?.prompts[0]).not.toContain("Discarded request marker");
+});
+it("does not await a worker update queued behind the native Undo confirmation", async () => {
+  let accept!: (value: boolean) => void;
+  const confirm = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        accept = resolve;
+      }),
+  );
+  relay = create(undefined, vi.fn(), confirm);
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Undo this worker request" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const { scope } = await tool("code60_get_context");
+  await tool("code60_dispatch_agent", {
+    scope,
+    requestId: "queued-update",
+    cwd: join(root, "target"),
+    workspaceMode: "direct",
+    prompt: "Complete before confirmation",
+  });
+  let result: unknown;
+  const undo = relay
+    .action({
+      type: "undo-request",
+      id,
+      checkpointId: required(relay.snapshot().checkpoint).id,
+      replacesDraft: false,
+    })
+    .then((value) => {
+      result = value;
+    });
+  await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+  // biome-ignore lint/complexity/useLiteralKeys: Observe the real conversation queue, without dispatching a private action.
+  const blocked = relay["turns"];
+  let releaseCleanup = () => {};
+  const cleanupGate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
+  // biome-ignore lint/complexity/useLiteralKeys: A regressed queued-delivery drain must not deadlock suite cleanup.
+  const running = relay["deliveries"];
+  const wrapped: Promise<unknown>[] = [];
+  try {
+    await vi.waitFor(() => {
+      // biome-ignore lint/complexity/useLiteralKeys: The worker timer must queue its actual automatic delivery behind Undo.
+      expect(relay["turns"]).not.toBe(blocked);
+    });
+    for (const operation of running) {
+      running.delete(operation);
+      const entry = Promise.race([operation, cleanupGate]);
+      wrapped.push(entry);
+    }
+    for (const entry of wrapped) running.add(entry);
+    accept(true);
+    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }), { timeout: 5000 });
+  } finally {
+    accept(true);
+    releaseCleanup();
+    await undo;
+    for (const entry of wrapped) running.delete(entry);
+  }
+});
+it("rewinds worker memory only for the request's Relay generation", async () => {
+  const memory = new MemoryService(
+    join(root, "memory"),
+    join(root, "models"),
+    defaultDeps(),
+    () => null,
+    false,
+  );
+  const rewind = vi.spyOn(memory, "rewind");
+  relay = create(undefined, vi.fn(), async () => true, memory);
+  try {
+    await connect();
+    let id = required(relay.snapshot().run).id;
+    await relay.action({ type: "send", id, text: "Earlier generation" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    let context = await tool("code60_get_context");
+    const old = await tool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "old-worker",
+      cwd: join(root, "target"),
+      workspaceMode: "direct",
+      prompt: "Earlier evidence",
+    });
+    await relay.action({ type: "stop", id });
+    await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    id = required(relay.snapshot().run).id;
+    await relay.action({ type: "send", id, text: "Current generation" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    context = await tool("code60_get_context");
+    const current = await tool("code60_dispatch_agent", {
+      scope: context.scope,
+      requestId: "new-worker",
+      cwd: join(root, "target"),
+      workspaceMode: "direct",
+      prompt: "Current evidence",
+    });
+    expect(relay.execution.list().map((worker) => worker.id)).toContain(old.runId);
+    await relay.action({
+      type: "undo-request",
+      id,
+      checkpointId: required(relay.snapshot().checkpoint).id,
+      replacesDraft: false,
+    });
+    expect(rewind).toHaveBeenCalledWith(`worker:${current.runId}`, 0);
+    expect(rewind).not.toHaveBeenCalledWith(`worker:${old.runId}`, expect.anything());
+  } finally {
+    await memory.close();
+  }
+});
 it.each(["removed", "replaced", "symlink"])(
   "refuses a %s workspace on in-process Retry",
   async (kind) => {
-    if (kind === "symlink" && process.platform === "win32") return;
     await connect();
     const workspace = required(relay.snapshot().directory);
     await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -98,7 +337,7 @@ it("revalidates workspace identity between preparation and agent launch", async 
     replace = false;
     const workspace = required(relay.snapshot().directory);
     await rename(workspace, `${workspace}-saved`);
-    await mkdir(workspace, { mode: 0o700 });
+    await privateDirectory(workspace);
   });
   await connect();
   await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -634,6 +873,9 @@ it("refreshes verified providers without reconnecting and freezes each task's pr
   expect(worker.provider).toBe("codex");
   if (typeof worker.runId !== "string") throw new Error("Dispatch must return a run ID");
   const workerId = worker.runId;
+  // A newly constructed session is also inactive while native preparation is
+  // pending. Wait for the first completed prompt, not that pre-launch state.
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1), { timeout: 5000 });
   await vi.waitFor(() => expect(agents.sessions[1]?.turnActive).toBe(false));
   await relay.action({ type: "cancel", id });
   await relay.sync("claude", {
@@ -742,6 +984,7 @@ it("pages through bounded opaque cursors without replacing first-Send history or
 });
 
 it("saves thousands of streaming chunks without failing or cancelling the conversation", async () => {
+  const expected = Array.from({ length: 3000 }, (_, index) => `chunk ${index} 😀\n`).join("");
   agents.script = (_text, session) => {
     for (let index = 0; index < 3000; index++)
       session.update({ type: "message", text: `chunk ${index} 😀\n` });
@@ -750,19 +993,96 @@ it("saves thousands of streaming chunks without failing or cancelling the conver
   await connect();
   await relay.action({ type: "send", id: required(relay.snapshot().run).id, text: "Stream" });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const live = relay.snapshot().events;
+  expect(live.some(({ event }) => event.type === "prompt" && event.text === "Stream")).toBe(true);
+  expect(live.flatMap(({ event }) => (event.type === "message" ? [event.text] : [])).join("")).toBe(
+    expected,
+  );
   await relay.shutdown();
   const store = await RelayStore.open(join(root, "state", "code60", "relay"));
   try {
     const history = await store.history();
     expect(history.incomplete).toBe(false);
-    expect(history.messages.at(-1)?.text).toBe(
-      Array.from({ length: 3000 }, (_, index) => `chunk ${index} 😀\n`).join(""),
-    );
+    expect(history.messages.at(-1)?.text).toBe(expected);
   } finally {
     await store.close();
   }
   expect(relay.snapshot().error).toBeNull();
   expect(agents.sessions[0]?.cancels).toBe(0);
+});
+
+it("retains earlier Relay turns while tiny fragments arrive within the character budget", async () => {
+  agents.script = (_text, session) => {
+    for (let index = 0; index < 700; index++) session.update({ type: "message", text: "😀" });
+    return "end_turn";
+  };
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  for (const text of ["First request", "Second request"]) {
+    await relay.action({ type: "send", id, text });
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
+  }
+  const events = relay.snapshot().events;
+  expect(events.flatMap(({ event }) => (event.type === "prompt" ? [event.text] : []))).toEqual([
+    "First request",
+    "Second request",
+  ]);
+  expect(
+    events.flatMap(({ event }) => (event.type === "message" ? [event.text] : [])).join(""),
+  ).toBe("😀".repeat(1400));
+});
+
+it("evicts only above one million serialized characters and resets the budget on reconnect", async () => {
+  await connect();
+  const session = required(agents.sessions[0]);
+  session.update({ type: "thought", text: "" });
+  const sample = required(relay.snapshot().events.at(-1));
+  const next = { ...sample, revision: sample.revision + 1 };
+  const text = "x".repeat(1_000_000 - JSON.stringify(next).length);
+  session.update({ type: "thought", text });
+  const full = relay.snapshot().events;
+  expect(full).toHaveLength(1);
+  expect(JSON.stringify(full[0]).length).toBe(1_000_000);
+  expect(full[0]?.event).toMatchObject({ type: "thought", text });
+  session.update({ type: "thought", text: "New tail" });
+  expect(relay.snapshot().events.map(({ event }) => event)).toEqual([
+    expect.objectContaining({ type: "thought", text: "New tail" }),
+  ]);
+  session.update({ type: "thought", text: "😀".repeat(500_001) });
+  expect(relay.snapshot().events).toEqual([]);
+  session.update({ type: "thought", text: '"\\\n😀' });
+  expect(relay.snapshot().events.map(({ event }) => event)).toEqual([
+    expect.objectContaining({ type: "thought", text: '"\\\n😀' }),
+  ]);
+  const reconnectedText = "r".repeat(950_000);
+  session.update({ type: "thought", text: reconnectedText });
+  await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
+  await relay.action({ type: "restart", id: required(relay.snapshot().conversationId) });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  required(agents.sessions.at(-1)).update({ type: "thought", text: reconnectedText });
+  expect(
+    relay
+      .snapshot()
+      .events.some(({ event }) => event.type === "thought" && event.text === reconnectedText),
+  ).toBe(true);
+});
+
+it("checkpoints live requests when history permissions change without weakening journal reads", async () => {
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  const journal = join(root, "state", "code60", "relay", "history.frames");
+  await chmod(journal, 0o400);
+  try {
+    await relay.action({ type: "send", id, text: "Continue with unavailable history" });
+    await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await relay.action({ type: "send", id, text: "Another checkpointed request" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
+    expect(relay.snapshot().checkpoint).toBeDefined();
+    expect(relay.snapshot().error).toBeNull();
+  } finally {
+    await chmod(journal, 0o600);
+  }
 });
 
 it.each(["write", "sync"] as const)(

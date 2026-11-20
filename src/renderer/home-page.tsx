@@ -1,19 +1,19 @@
 import { useRef, useState } from "react";
-import { Icon } from "./icons.js";
 import { pageAvailable, pageDefinitions } from "./navigation.js";
-import { NavigationIcon } from "./navigation-icons.js";
-import { RelayNavigationIcon } from "./relay-navigation-icon.js";
+import { NavigationHomePage } from "./navigation-home-page.js";
 
 export function HomePage({
+  page = "home",
   database,
   relayAvailable,
   onOpenRelay,
-  onOpenTool,
+  onOpenPage,
 }: {
+  page?: "home" | "assistants";
   database: string | null;
   relayAvailable: boolean;
   onOpenRelay(): Promise<void>;
-  onOpenTool(id: "commands" | "prompts"): void;
+  onOpenPage(id: "custom-agents" | "search" | "projects" | "apps" | "sessions"): void;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -35,65 +35,36 @@ export function HomePage({
   const cards = [
     {
       id: "relay",
-      name: "Relay",
-      description: "Your Always-On Assistant",
-      icon: <RelayNavigationIcon working={false} />,
-      disabled: !relayAvailable || pending,
+      label: "Relay",
+      icon: "app-steering-wheel" as const,
+      available: relayAvailable && !pending,
+      reason: pending ? "Opening Relay" : "Relay is unavailable",
       action: () => void openRelay(),
     },
-    ...(["commands", "prompts"] as const).map((id) => {
+    ...(page === "assistants"
+      ? (["custom-agents"] as const)
+      : (["custom-agents", "search", "projects", "apps", "sessions"] as const)
+    ).map((id) => {
       const page = pageDefinitions[id];
       return {
         id,
-        name: page.label,
-        description:
-          id === "commands" ? "Create Custom Commands" : "Adjust Code60's built-in Prompts",
-        icon: page.icon && <NavigationIcon name={page.icon} />,
-        disabled: !pageAvailable(id, database) || pending,
-        action: () => onOpenTool(id),
+        label: page.label,
+        icon: page.icon,
+        available: pageAvailable(id, database) && !pending,
+        reason: !pageAvailable(id, database)
+          ? "Connect to a database first"
+          : "Wait for the current action to finish",
+        action: () => onOpenPage(id),
       };
     }),
   ];
   return (
-    <main className="home-page" aria-labelledby="home-title">
-      <div className="table-controls">
-        <h1 className="table-title" id="home-title">
-          Home
-        </h1>
-      </div>
-      <div className="home-content">
-        <div className="home-cards">
-          {cards.map((card) => (
-            <button
-              key={card.id}
-              type="button"
-              className="home-card"
-              data-feature={card.id}
-              aria-label={`Open ${card.name}`}
-              aria-describedby={`home-${card.id}-description`}
-              disabled={card.disabled}
-              title={!database && card.id !== "relay" ? "Connect to a database first" : undefined}
-              onClick={card.action}
-            >
-              <span className="home-card-art" aria-hidden="true">
-                {card.icon}
-              </span>
-              <span className="home-card-copy">
-                <span className="home-card-name">{card.name}</span>
-                <span className="home-card-description" id={`home-${card.id}-description`}>
-                  {card.description}
-                </span>
-              </span>
-              <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
-            </button>
-          ))}
-        </div>
-        {error && (
-          <p className="error-banner" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-    </main>
+    <NavigationHomePage
+      page={page}
+      intro={page === "home" && <p className="home-welcome">Welcome to Code60</p>}
+      cards={cards}
+      error={error}
+      onOpen={(card) => card.action()}
+    />
   );
 }

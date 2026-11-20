@@ -16,7 +16,7 @@ describe("completed turn separators", () => {
   it("places a separator immediately below a completed worker timing notice", () => {
     const html = renderToStaticMarkup(<TurnTimer timing={completed} visible={false} />);
     expect(html).toBe(
-      '<p class="turn-timer" aria-live="off">Worked for 12s (finished)</p><hr class="turn-separator"/>',
+      '<p class="turn-timer" aria-live="off"><span class="turn-timer-text">Worked for 12s (finished)</span></p><hr class="turn-separator"/>',
     );
   });
 
@@ -33,7 +33,7 @@ describe("completed turn separators", () => {
       expect(html).toContain('class="turn-timer activity-history-toggle"');
       expect(html).toContain(`aria-expanded="${expanded}"`);
       expect(html).toContain('aria-controls="details"');
-      expect(html).toContain("Worked for 12s (finished)</button><hr");
+      expect(html).toContain("Worked for 12s (finished)</span></button><hr");
       expect(html.match(/class="turn-separator"/g)).toHaveLength(1);
     },
   );

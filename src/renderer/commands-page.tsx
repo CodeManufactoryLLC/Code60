@@ -10,6 +10,7 @@ import {
 } from "./commands-model.js";
 import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
+import { PageTitle } from "./page-title.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { TableControlGroup } from "./table-controls.js";
 
@@ -87,23 +88,23 @@ export function CommandsPage({
   return (
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
-        <h1 className="table-title" id={`${id}-heading`}>
-          Commands
-        </h1>
+        <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <InfoTip label="About commands">
           Reusable prompts shared across projects in this database. Start an orchestrator message
-          with /name to use one.
+          with $name to use one.
         </InfoTip>
         <TableControlGroup label="Command actions">
           <button
             type="button"
+            className="icon-button"
+            aria-label="New command"
             disabled={busy || commands.length >= COMMAND_LIMIT}
             onClick={() => {
               setSelected("new");
               setError("");
             }}
           >
-            <Icon name="add" /> New command
+            <Icon name="add" />
           </button>
         </TableControlGroup>
       </header>
@@ -121,7 +122,7 @@ export function CommandsPage({
                   setError("");
                 }}
               >
-                <span className="prompt-editor-name">/{entry.name}</span>
+                <span className="prompt-editor-name">${entry.name}</span>
                 <span className="prompt-editor-source">{entry.title}</span>
                 {drafts[entry.id] && <span className="prompt-editor-source">Unsaved changes</span>}
               </button>
@@ -179,7 +180,7 @@ export function CommandsPage({
                     </div>
                   ) : (
                     <div className={field === "name" ? "command-name-input" : undefined}>
-                      {field === "name" && <span aria-hidden="true">/</span>}
+                      {field === "name" && <span aria-hidden="true">$</span>}
                       <input
                         {...control}
                         maxLength={field === "title" ? 120 : field === "name" ? 64 : 500}

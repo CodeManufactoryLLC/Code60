@@ -1,0 +1,502 @@
+/* Scheduled jobs: independent header actions, inline details and native history. */
+.automations-page {
+  box-sizing: border-box;
+  container: automations / inline-size;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  max-width: 1440px;
+  width: 100%;
+  margin-inline: auto;
+  padding: 0 var(--page-padding) 20px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.automation-page-heading {
+  display: flex;
+  padding-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 var(--page-header-gap);
+}
+.automation-page-heading > h2 {
+  margin: 0;
+}
+.automation-action-group,
+.automation-details-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.automations-page [role="alert"] {
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+.automation-schedules {
+  margin: 0 4px 28px 0;
+}
+.neo-accordion {
+  display: grid;
+  gap: 14px;
+}
+.neo-accordion-item {
+  min-width: 0;
+  background: var(--surface);
+}
+.automation-job-header {
+  display: flex;
+  align-items: stretch;
+  background: var(--primary);
+  color: var(--primary-text);
+  /* The fill sits inside the 2px outline, so its concentric radius is smaller. */
+  border-radius: max(0px, calc(var(--navigation-card-radius) - 2px));
+}
+.automation-job:has(> .neo-accordion-content:not([hidden])) > .automation-job-header {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.automation-job-header h3 {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+  padding: 16px 20px;
+}
+.neo-accordion-trigger {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  height: auto;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
+}
+.automation-job-header:hover {
+  background: var(--primary-hover);
+}
+.automation-job-header .neo-accordion-trigger,
+.automation-job-header .neo-accordion-trigger:is(:hover, :active):enabled {
+  background: transparent;
+  color: inherit;
+}
+.neo-accordion-trigger .carbon-icon {
+  flex-shrink: 0;
+  rotate: -90deg;
+  transition: rotate var(--motion) var(--ease);
+}
+.neo-accordion-trigger[aria-expanded="true"] .carbon-icon {
+  rotate: 0deg;
+}
+.neo-accordion-trigger:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -4px;
+}
+.automation-job-heading {
+  min-width: 0;
+}
+.automation-job-name,
+.automation-editor h3 {
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
+}
+.automation-job-name {
+  overflow-wrap: anywhere;
+}
+.automation-job-controls {
+  /* Keep the shared disabled treatment transparent over the header. */
+  --disabled-fill: transparent;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 12px 0;
+}
+.automation-job-controls > button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  --icon-size: 16px;
+}
+.automation-job-controls :is(.automation-header-circle, .neo-accordion-indicator) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #000000;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--primary-text);
+  box-shadow: 2px 2px 0 #000000;
+}
+.automation-job-controls > button:is(:hover, :active):enabled {
+  background: transparent;
+}
+.automation-job-controls
+  > button:is(:hover, :focus-visible):enabled
+  :is(.automation-header-circle, .neo-accordion-indicator) {
+  background: transparent;
+  color: var(--primary-text);
+}
+.automation-job-controls
+  > button:active:enabled
+  :is(.automation-header-circle, .neo-accordion-indicator) {
+  translate: 1px 1px;
+  box-shadow: 1px 1px 0 #000000;
+}
+.automation-job-controls > button:focus-visible {
+  outline: none;
+}
+.automation-job-controls
+  > button:focus-visible
+  :is(.automation-header-circle, .neo-accordion-indicator) {
+  outline: 2px solid var(--primary-text);
+  outline-offset: 2px;
+}
+.automation-run-button.is-running .carbon-icon {
+  animation: automation-stop-pulse 1.4s ease-in-out infinite;
+}
+@keyframes automation-stop-pulse {
+  50% {
+    opacity: 0.7;
+    transform: scale(0.82);
+  }
+}
+.neo-accordion-content:not([hidden]) {
+  padding: 20px;
+  border-top: 2px solid var(--panel-border);
+}
+.neo-accordion-content[hidden] {
+  display: none;
+}
+.automation-job-details[data-slot="card"] {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.automation-job-details > [data-slot="card-content"] {
+  padding: 0;
+}
+.automation-prompt-section {
+  margin-bottom: 24px;
+}
+.automation-prompt-section h4 {
+  margin: 0 0 10px;
+  font: inherit;
+  font-weight: var(--card-weight);
+}
+.automation-prompt-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  max-height: 22rem;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.automation-job-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
+  margin: 0;
+}
+.automation-job-facts > div {
+  min-width: 0;
+}
+.automation-job-facts dt {
+  color: var(--muted);
+  margin: 0 0 5px;
+}
+.automation-job-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.automation-fact-wide {
+  grid-column: 1 / -1;
+}
+.automation-tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.automation-tool-tags > span {
+  padding: 3px 9px;
+  border: 2px solid var(--control-border);
+  background: var(--control-fill);
+  border-radius: var(--navigation-card-radius);
+}
+.automation-details-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+.automation-empty {
+  padding: 24px 0;
+  color: var(--muted);
+}
+.automation-grid {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+}
+.automation-history-grid {
+  height: 280px;
+  min-height: 180px;
+}
+.automation-table-card {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--surface);
+}
+.automation-table-card > .data-table {
+  border-radius: inherit;
+}
+.automation-table-card .table-controls {
+  padding: 12px 16px;
+  margin-bottom: 0;
+}
+.automation-history-footer,
+.automation-evidence-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 8px 0 16px;
+}
+.automation-evidence-actions {
+  margin-top: -8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.automation-evidence-actions > span {
+  min-width: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.automation-evidence {
+  max-height: 70vh;
+  white-space: pre-wrap;
+  overflow: auto;
+  padding: 12px;
+  scrollbar-gutter: stable;
+}
+.automation-editor {
+  margin: 0 4px 24px 0;
+}
+.neo-accordion-content .automation-editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+.neo-accordion-content .automation-editor > [data-slot="card-content"] {
+  padding: 0;
+}
+.automation-editor h3 {
+  margin: 0 0 20px;
+}
+.automation-form {
+  display: grid;
+  gap: 20px;
+}
+.automation-form .automation-form-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.automation-form-fields > fieldset {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  border: 0;
+  border-top: 2px solid var(--panel-border);
+  margin: 0;
+  padding: 16px 0 0;
+  min-width: 0;
+}
+.automation-form-fields > fieldset:last-of-type {
+  grid-column: 1 / -1;
+}
+.automation-form-fields > fieldset > legend {
+  padding: 0 10px 0 0;
+  font-weight: var(--card-weight);
+}
+.automation-form label,
+.automation-form-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.automation-name-field,
+.automation-form-prompt {
+  grid-column: 1 / -1;
+}
+.automation-form input:not([type="checkbox"]),
+.automation-form select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 10px;
+  border: 2px solid var(--control-border);
+  border-radius: var(--navigation-card-radius);
+  background: var(--field-fill);
+  color: var(--text);
+}
+.automation-form textarea {
+  min-height: 144px;
+  max-height: 50vh;
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.automation-repository-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.automation-repository-choice > span {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+.automation-form .automation-form-enabled,
+.automation-form .automation-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.automation-form .automation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+.automation-form input[type="checkbox"] {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+}
+.automation-permissions-help {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.automation-preview {
+  display: grid;
+  gap: 6px;
+}
+.automation-preview > span {
+  color: var(--muted);
+}
+.automation-preview > strong {
+  font-weight: inherit;
+}
+.automation-form .automation-form-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+@media (max-width: 700px) {
+  .automation-form .automation-form-fields,
+  .automation-job-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .automation-job-header h3 {
+    padding: 14px 12px;
+  }
+  .automation-job-controls {
+    padding-right: 12px;
+    gap: 8px;
+  }
+  .neo-accordion-content:not([hidden]) {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .neo-accordion-trigger .carbon-icon {
+    transition: none;
+  }
+  .automation-run-button.is-running .carbon-icon {
+    animation: none;
+  }
+  .automation-job-controls
+    > button:active:enabled
+    :is(.automation-header-circle, .neo-accordion-indicator) {
+    translate: none;
+  }
+}
+[inert] .automation-run-button .carbon-icon,
+.automations-page[data-active="false"] .automation-run-button .carbon-icon {
+  animation-play-state: paused;
+}
+@media (forced-colors: active) {
+  .neo-accordion-item,
+  .automation-job-header,
+  .neo-accordion-trigger,
+  .automation-tool-tags > span {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+  .automation-job-controls button {
+    color: inherit;
+  }
+  .automation-job-controls :is(.automation-header-circle, .neo-accordion-indicator),
+  .automation-job-controls
+    > button:active:enabled
+    :is(.automation-header-circle, .neo-accordion-indicator) {
+    border-color: currentColor;
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+  }
+  .automation-job-controls
+    > button:is(:hover, :focus-visible):enabled
+    :is(.automation-header-circle, .neo-accordion-indicator) {
+    background: transparent;
+    color: inherit;
+    forced-color-adjust: none;
+  }
+  .automation-job-controls
+    > button:focus-visible
+    :is(.automation-header-circle, .neo-accordion-indicator) {
+    outline-color: currentColor;
+  }
+}
+
+@container automations (max-width: 650px) {
+  .automation-form .automation-form-fields,
+  .automation-job-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

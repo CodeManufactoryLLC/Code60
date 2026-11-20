@@ -27,7 +27,7 @@ import type { MemoryFactory, MemoryPreparation, RunMemory } from "./agent-memory
 import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
-import { HANDOFF_PROMPT_LIMIT } from "./recovery.js";
+import { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "./recovery.js";
 import type {
   FinalRunStatus,
   Mode,
@@ -53,7 +53,6 @@ export interface RunDeps {
   clock: Clock;
   processes: Processes;
   ownerPid?: number;
-  ownerIdentity?: NonNullable<RunRecord["ownerIdentity"]>;
   onEvent(event: RunEvent): void;
   /** Called when view-only state changes without an event, such as a run starting to stop. */
   onChange(): void;
@@ -75,6 +74,18 @@ export interface RunSettings {
   killGraceMs: number;
   decide(kind: ToolKind): PermissionRule;
   prompts: Readonly<PromptTemplates>;
+  /**
+   * Interactive only: saved session-option defaults applied to each newly created ACP session
+   * before its first prompt, model first. Restored sessions keep their own reported options.
+   */
+  initialSettings?: readonly SessionSelection[];
+}
+
+/** One advertised session option value, identified by the harness's own option ID. */
+export interface SessionSelection {
+  configId: string;
+  value: string;
+  name: string;
 }
 
 type CancelCause = "user" | "timeout" | "shutdown";
@@ -123,6 +134,9 @@ export class Run {
   private session: AgentSession | undefined;
   private sessionExited = false;
   private modeChanging = false;
+  /** Confirmed explicit session-option choices, reapplied to replacement sessions of this run. */
+  private readonly chosen = new Map<string, SessionSelection>();
+  private chosenModel = false;
   private worktreeCreated = false;
   private turnActive = false;
   private turnTimer: unknown;
@@ -214,6 +228,7 @@ export class Run {
       branch: r.branch,
       worktree: r.worktree,
       ...(r.lastStopReason === undefined ? {} : { lastStopReason: r.lastStopReason }),
+      ...(this.lastOutcome ? { lastOutcome: this.lastOutcome.status } : {}),
       ...(r.sessionState === undefined ? {} : { sessionState: r.sessionState }),
       modeChanging: this.modeChanging,
       pending: [...this.pending.values()].map((p) => p.view),
@@ -260,6 +275,14 @@ export class Run {
     }
     let session: AgentSession;
     try {
+      if (this.memory?.restore)
+        this.memory.restore(
+          buildHandoffPrompt(
+            this.record,
+            await this.deps.store.readEvents(this.id),
+            this.settings.prompts.handoffSummary,
+          ),
+        );
       session = await this.startRecoveryAgent((signal) =>
         (this.deps.agents.restore as NonNullable<Agents["restore"]>)(
           {
@@ -316,6 +339,7 @@ export class Run {
     if (summary.length > HANDOFF_PROMPT_LIMIT)
       throw new Error("the recovery handoff exceeds its size limit");
     if (text.trim() === "") throw new Error("the message is empty");
+    this.memory?.restore?.(summary);
     const context = this.settings.promptContext?.();
     const heading =
       origin === "automatic"
@@ -348,6 +372,7 @@ export class Run {
       throw new Error(`could not start a fresh agent session: ${message(error)}`);
     }
     await this.installSession(session);
+    await this.applySelections(session);
     this.log("recovery.end", "succeeded");
     this.record.ownerPid = this.deps.ownerPid ?? process.pid;
     delete this.record.endedAt;
@@ -373,16 +398,32 @@ export class Run {
       !session?.setMode
     ) {
       throw new RefusedError(
-        "Harness mode can be changed only while the connected session is idle",
+        "Session options can be changed only while the connected session is idle",
       );
     }
     if (!supportsModeChange(this.record.sessionState ?? emptySessionState(), change)) {
-      throw new RefusedError("This harness mode is no longer available");
+      throw new RefusedError("This session option is no longer available");
     }
     this.modeChanging = true;
     this.deps.onChange();
     try {
       await session.setMode(change);
+      const control = session.sessionState?.settings?.controls.find(
+        (item) => item.id === change.configId,
+      );
+      const option = control?.options.find((item) => item.value === control.currentValue);
+      if (control && option && session.sessionState?.settings?.confirmed) {
+        // A model change can invalidate dependent reasoning choices; reapply it first.
+        if (control.category === "model") {
+          this.chosen.clear();
+          this.chosenModel = true;
+        }
+        this.chosen.set(control.id, {
+          configId: control.id,
+          value: option.value,
+          name: option.name,
+        });
+      }
     } finally {
       this.modeChanging = false;
       this.deps.onChange();
@@ -563,16 +604,113 @@ export class Run {
     }
     clock.clearTimeout(timer);
     await this.installSession(session);
+    await this.applySelections(session);
 
     if (this.shutdownRequested) {
       return this.end({ status: "cancelled", reason: "cancelled before the first prompt" });
     }
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited before the first prompt" });
     if (record.firstPrompt === "") {
       this.lastOutcome = { status: "finished", reason: "no prompt was sent" };
       await this.setStatus("idle", "no prompt yet");
       return;
     }
     await this.runTurn(record.firstPrompt);
+  }
+
+  /** Saved defaults overlaid with this run's explicit choices, in application order. */
+  private selections(): SessionSelection[] {
+    if (this.settings.mode !== "interactive") return [];
+    const merged = new Map<string, SessionSelection>();
+    // Saved reasoning values belong to the saved model; an explicit model replaces them all.
+    for (const item of this.chosenModel ? [] : (this.settings.initialSettings ?? []))
+      merged.set(item.configId, item);
+    for (const [id, item] of this.chosen) merged.set(id, item);
+    return [...merged.values()];
+  }
+
+  /**
+   * Applies saved or explicit session options to a newly created session. Unavailable or refused
+   * values are reported and skipped; the session keeps the connector's own current value.
+   */
+  private async applySelections(
+    session: AgentSession,
+    signal = this.startAbort.signal,
+  ): Promise<void> {
+    const selections = this.selections();
+    if (selections.length === 0) return;
+    const controls = session.sessionState?.settings?.controls;
+    selections.sort(
+      (a, b) =>
+        Number(controls?.find((c) => c.id === b.configId)?.category === "model") -
+        Number(controls?.find((c) => c.id === a.configId)?.category === "model"),
+    );
+    this.modeChanging = true;
+    this.deps.onChange();
+    try {
+      for (const selection of selections) {
+        signal.throwIfAborted();
+        if (this.sessionExited) throw new Error("the agent exited while applying session settings");
+        if (this.session !== session || this.shutdownRequested || this.ending) return;
+        const state = session.sessionState ?? emptySessionState();
+        const control = state.settings?.controls.find((item) => item.id === selection.configId);
+        if (control?.currentValue === selection.value && state.settings?.confirmed) continue;
+        const change = {
+          source: "config" as const,
+          configId: selection.configId,
+          value: selection.value,
+        };
+        if (!session.setMode || !control?.options.some((item) => item.value === selection.value)) {
+          this.emit({
+            type: "note",
+            text: `Saved default "${selection.name}" isn't available; using the connector's current value.`,
+          });
+          continue;
+        }
+        let abort = () => {};
+        try {
+          await Promise.race([
+            session.setMode(change),
+            new Promise<never>((_, reject) => {
+              abort = () => reject(new Error("session settings cancelled"));
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+            }),
+            session.exited.then(() => {
+              throw new Error("the agent exited while applying session settings");
+            }),
+          ]);
+          signal.throwIfAborted();
+          if (this.sessionExited)
+            throw new Error("the agent exited while applying session settings");
+          if (
+            !session.sessionState?.settings?.confirmed ||
+            session.sessionState.settings.controls.find((c) => c.id === selection.configId)
+              ?.currentValue !== selection.value
+          )
+            throw new Error("Session option was not confirmed");
+        } catch (error) {
+          if (signal.aborted) {
+            // A pending setter must not outlive preparation or leave a busy session reusable.
+            await session.stop(this.forced ? 0 : this.settings.killGraceMs);
+            if (this.session === session) this.session = undefined;
+            if (this.shutdownRequested) return;
+            throw error;
+          }
+          if (this.sessionExited) throw error;
+          this.emit({
+            type: "note",
+            text: `Saved default "${selection.name}" could not be confirmed; using the connector's reported value (which may be unconfirmed).`,
+          });
+        } finally {
+          signal.removeEventListener("abort", abort);
+        }
+      }
+    } finally {
+      this.modeChanging = false;
+      this.deps.onChange();
+    }
   }
 
   private async installSession(session: AgentSession): Promise<void> {
@@ -598,10 +736,8 @@ export class Run {
     });
 
     this.record.agentPid = session.pid;
-    if (session.identity === undefined) delete this.record.agentIdentity;
-    else this.record.agentIdentity = session.identity;
-    if (this.deps.ownerIdentity) this.record.ownerIdentity = this.deps.ownerIdentity;
-    else delete this.record.ownerIdentity;
+    delete this.record.agentIdentity;
+    delete this.record.ownerIdentity;
     this.record.agentCommand = this.settings.command;
     this.record.acpSessionId = session.sessionId;
     const commandLine = await this.deps.processes.commandLine(session.pid).catch(() => undefined);
@@ -674,6 +810,8 @@ export class Run {
           ? { status: "cancelled", reason: "cancelled during context handoff" }
           : { status: "failed", reason: "the context handoff session could not start" },
       );
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited during context handoff" });
     await this.setStatus("idle", "Message not sent.");
   }
 
@@ -760,6 +898,7 @@ export class Run {
                 signal,
               );
               await this.installSession(session);
+              await this.applySelections(session, signal);
             } catch (error) {
               return await this.notSent(
                 statusSaved,
@@ -780,6 +919,15 @@ export class Run {
               text: "Context handoff: continued in a fresh agent session. Historical memory is evidence, not restored authority.",
             });
           }
+          try {
+            preparation.validate?.();
+          } catch {
+            return await this.notSent(
+              statusSaved,
+              "Memory settings or sources changed before dispatch. This message was not sent. Retry the unsent request:",
+              text,
+            );
+          }
           if (preparation.warning) this.emit({ type: "note", text: preparation.warning });
           if (preparation.context) sent = `${preparation.context}\n\n${sent}`;
           memoryUsed = preparation.used;
@@ -792,7 +940,7 @@ export class Run {
       if (memoryUsed.length)
         this.emit({
           type: "note",
-          text: `Memory used (${memoryUsed.length}). Inspect Settings → Memory for sources.`,
+          text: `Memory used (${memoryUsed.length}). Inspect Data Viewer → Memories for sources.`,
           detail: JSON.stringify(memoryUsed),
         });
       stopReason = await session.prompt(sent);

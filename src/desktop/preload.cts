@@ -2,6 +2,14 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 // Keep this sandboxed preload self-contained; do not expose ipcRenderer or raw channels.
 contextBridge.exposeInMainWorld("desktop", {
+  modelDefault: (request: unknown) => ipcRenderer.invoke("desktop:model-default", request),
+  customAgent: (request: unknown) => ipcRenderer.invoke("desktop:custom-agent", request),
+  automation: (request: unknown) => ipcRenderer.invoke("desktop:automation", request),
+  onAutomationChanged: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("desktop:automation-changed", handler);
+    return () => ipcRenderer.removeListener("desktop:automation-changed", handler);
+  },
   memorySnapshot: () => ipcRenderer.invoke("desktop:memory-snapshot"),
   browseMemories: (request: unknown) => ipcRenderer.invoke("desktop:memory-browse", request),
   memoryDetail: (request: unknown) => ipcRenderer.invoke("desktop:memory-detail", request),
@@ -47,6 +55,7 @@ contextBridge.exposeInMainWorld("desktop", {
   readReviewFile: (request: unknown) => ipcRenderer.invoke("desktop:review-file", request),
   readDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-read", request),
   cancelDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-cancel", request),
+  providerAction: (request: unknown) => ipcRenderer.invoke("desktop:provider-action", request),
   beginAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-begin", request),
   attemptAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-attempt", request),
   cancelAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-cancel", request),
@@ -58,6 +67,13 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("desktop:app-update-state", handler);
     return () => ipcRenderer.removeListener("desktop:app-update-state", handler);
   },
+  searchProjects: (request: unknown) => ipcRenderer.invoke("desktop:project-search", request),
+  searchProjectsPage: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-page", request),
+  cancelProjectSearch: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-cancel", request),
+  openSearchSource: (request: unknown) =>
+    ipcRenderer.invoke("desktop:project-search-open", request),
   summarizeSearch: (request: unknown) => ipcRenderer.invoke("desktop:search-summary", request),
   cancelSearchSummary: (requestId: unknown) =>
     ipcRenderer.invoke("desktop:search-summary-cancel", requestId),
@@ -67,7 +83,13 @@ contextBridge.exposeInMainWorld("desktop", {
   orchestrationChatAction: (request: unknown) =>
     ipcRenderer.invoke("desktop:orchestration-chat", request),
   windowAppearance: () => ipcRenderer.invoke("desktop:window-appearance"),
-  setWindowTheme: (dark: unknown) => ipcRenderer.invoke("desktop:window-theme", dark),
+  controlWindow: (action: unknown) => ipcRenderer.invoke("desktop:window-control", action),
+  setSidebarBackdrop: (request: unknown) => ipcRenderer.invoke("desktop:sidebar-backdrop", request),
+  onSidebarBackdropError: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("desktop:sidebar-backdrop-error", handler);
+    return () => ipcRenderer.removeListener("desktop:sidebar-backdrop-error", handler);
+  },
   setTransparent: (enabled: unknown) => ipcRenderer.invoke("desktop:transparent", enabled),
   setBackgroundHitTest: (ignore: unknown) =>
     ipcRenderer.invoke("desktop:background-hit-test", ignore),
@@ -76,6 +98,8 @@ contextBridge.exposeInMainWorld("desktop", {
   subscribeDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-subscribe", request),
   readDetails: (request: unknown) => ipcRenderer.invoke("desktop:detail-read", request),
   setRelayFileContext: (request: unknown) => ipcRenderer.invoke("desktop:relay-files", request),
+  knowledgeRenderer: () => ipcRenderer.invoke("desktop:knowledge-renderer"),
+  reportKnowledge: (request: unknown) => ipcRenderer.invoke("desktop:knowledge-report", request),
   unsubscribeDetails: (request: unknown) =>
     ipcRenderer.invoke("desktop:detail-unsubscribe", request),
   onDetails: (listener: (frame: unknown) => void) => {

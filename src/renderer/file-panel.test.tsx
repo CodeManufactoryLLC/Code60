@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
-import type { ReviewSummary } from "../bridge/index.js";
-import { RevisionList } from "./file-panel.js";
+import { expect, it, vi } from "vitest";
+import type { DesktopApi, ReviewSummary } from "../bridge/index.js";
+import { FilePanel, RevisionList } from "./file-panel.js";
+import { emptyFileTabs, updateFileTabs } from "./file-tabs.js";
+import type { FileBrowser } from "./files.js";
 
 const review = (id: string, title: string, chatId: string | null): ReviewSummary => ({
   id,
@@ -17,6 +19,59 @@ const review = (id: string, title: string, chatId: string | null): ReviewSummary
     { id: `${id}-two`, at: "2026-11-08T00:00:00Z" },
   ],
   submissions: [],
+});
+
+it("offers recall beside Files without opening it automatically and never mounts hidden recall content", () => {
+  const memoryDetail = vi.fn();
+  const api = { memoryDetail } as unknown as DesktopApi;
+  const render = (kind: "recall" | "blank", active: boolean, open: boolean) =>
+    renderToStaticMarkup(
+      <FilePanel
+        tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+        onAction={() => {}}
+        browser={{} as FileBrowser}
+        open={open}
+        active={active}
+        onOpenProject={() => {}}
+        onToggle={() => {}}
+        api={api}
+        recallSource={{ owner: "owner", runId: "run", events: [] }}
+      />,
+    );
+  const blank = render("blank", true, true);
+  expect(blank).toContain("Open Files");
+  expect(blank).toContain("Open Memory Recall");
+  expect(blank).not.toContain('class="memory-recall"');
+  for (const [active, open] of [
+    [false, true],
+    [true, false],
+    [false, false],
+  ] as const)
+    expect(render("recall", active, open)).not.toContain('class="memory-recall"');
+  expect(render("recall", true, true)).toContain('class="memory-recall"');
+  expect(memoryDetail).not.toHaveBeenCalled();
+});
+
+it.each(["empty", "blank"])("groups %s tab choices in one centered action list", (state) => {
+  const empty = emptyFileTabs("/project");
+  const html = renderToStaticMarkup(
+    <FilePanel
+      tabs={state === "blank" ? updateFileTabs(empty, { type: "blank" }) : empty}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+      emptyContent={<button type="button">Open Changes</button>}
+    />,
+  );
+  const actions = html.match(/class="file-panel-empty-actions">(.*?)<\/div>/)?.[1] ?? "";
+  expect(actions).toContain(">Open Changes</button>");
+  expect(actions).toContain(">Open Files</button>");
+  expect(actions).toContain(">Open Memory Recall</button>");
+  expect(actions.match(/<button/g)).toHaveLength(3);
+  expect(html.match(/class="file-panel-empty"/g)).toHaveLength(1);
 });
 
 it("nests all revisions under their task without a review dropdown or diff", () => {

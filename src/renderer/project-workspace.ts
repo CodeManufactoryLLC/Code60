@@ -5,6 +5,7 @@ import { prepareFileNavigation, showsProjectFiles } from "./file-navigation.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
 import { useFiles } from "./files.js";
 import type { ChatNavigation } from "./history-navigation.js";
+import { isNavigationHome } from "./navigation-tree.js";
 import { useProjectScope } from "./project-scope.js";
 import { updateTabs } from "./tabs.js";
 import { useTranscripts } from "./transcripts.js";
@@ -16,7 +17,7 @@ type WorkspaceProps = Pick<
 > & {
   setBusy(busy: boolean): void;
   onWorkerSelection(id: string | undefined): void;
-  /** Lets navigation history wait for orchestrator selection made by a review. */
+  navigationPending: boolean;
   onChatNavigation?: ChatNavigation;
 };
 export function useProjectWorkspace({
@@ -29,6 +30,7 @@ export function useProjectWorkspace({
   notify,
   setBusy,
   onWorkerSelection,
+  navigationPending,
   onChatNavigation,
 }: WorkspaceProps) {
   const snapshot = state?.snapshot;
@@ -79,7 +81,11 @@ export function useProjectWorkspace({
         ? workerSelection.id
         : undefined;
   useEffect(() => onWorkerSelection(workerId), [onWorkerSelection, workerId]);
-  const selectWorker = (id: string | undefined, projectId?: string | null) => {
+  const selectWorker = (
+    id: string | undefined,
+    projectId?: string | null,
+    navigationCurrent: () => boolean = () => true,
+  ) => {
     setExplicitFileScope(undefined);
     setRequestedProjectWorker(undefined);
     if (id === undefined && projectId !== undefined) {
@@ -93,19 +99,23 @@ export function useProjectWorkspace({
       return;
     }
     const owner = id
-      ? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id))
+      ? (snapshot?.openProjects?.find(
+          (owner) => owner.id === snapshot.projectInstanceId && owner.workerIds.includes(id),
+        ) ?? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id)))
       : undefined;
     if (owner && owner.id !== snapshot?.projectInstanceId) {
       const current = scope.capture();
-      void api
+      return api
         .projectAction({ type: "select", projectId: owner.id })
         .then(() => {
-          if (current()) setRequestedProjectWorker(id);
+          if (!current() || !navigationCurrent()) return false;
+          setRequestedProjectWorker(id);
+          return true;
         })
         .catch((cause) => {
-          if (current()) setError(message(cause));
+          if (current() && navigationCurrent()) setError(message(cause));
+          return false;
         });
-      return;
     }
     if (id && snapshot?.runs.some((run) => run.relay && run.record.id === id)) {
       setRelayWorkerSelection(id);
@@ -123,6 +133,10 @@ export function useProjectWorkspace({
   };
   useEffect(() => {
     if (!requestedProjectWorker || !snapshot) return;
+    if (tabs.active !== "chat") {
+      setRequestedProjectWorker(undefined);
+      return;
+    }
     const owner = snapshot.openProjects?.find((owner) =>
       owner.workerIds.includes(requestedProjectWorker),
     );
@@ -141,6 +155,7 @@ export function useProjectWorkspace({
     setRequestedProjectWorker(undefined);
   }, [
     requestedProjectWorker,
+    tabs.active,
     snapshot,
     workerScope,
     setWorkerSelection,
@@ -167,9 +182,10 @@ export function useProjectWorkspace({
   };
   const explicitProjectFiles = explicitFileScope === scope.viewKey;
   const activeFileTab = currentFileTabs.entries.find((tab) => tab.id === currentFileTabs.active);
+  const readsActive = !splash && !navigationPending && !isNavigationHome(tabs.active);
   const filesActive =
     (showsProjectFiles(snapshot, workerId) || explicitProjectFiles) &&
-    !splash &&
+    readsActive &&
     tabs.active === "chat" &&
     explorerOpen &&
     activeFileTab !== undefined &&
@@ -186,7 +202,7 @@ export function useProjectWorkspace({
   const projectTranscripts = useTranscripts(
     api,
     scope.viewKey,
-    !!directory && !splash,
+    !!directory && readsActive && tabs.active !== "search",
     tabs.active === "chat"
       ? snapshot?.runs.filter((run) => !run.relay && run.record.id === workerId)
       : snapshot?.runs.filter((run) => !run.relay),
@@ -197,7 +213,7 @@ export function useProjectWorkspace({
   const relayTranscripts = useTranscripts(
     api,
     "relay-workers",
-    !splash,
+    readsActive && tabs.active !== "search",
     snapshot?.runs.filter(
       (run) => run.relay && (tabs.active !== "chat" || run.record.id === workerId),
     ),
@@ -260,7 +276,8 @@ export function useProjectWorkspace({
     );
   }, [reviewSummaries, workspace, scope, setFileTabs]);
   useEffect(() => {
-    if (splash || workerId || snapshot?.chat.kind === "relay") return;
+    if (!readsActive || tabs.active !== "chat" || workerId || snapshot?.chat.kind === "relay")
+      return;
     for (const plan of snapshot?.chat.plans ?? []) {
       if (plan.state !== "draft" || scope.openedPlans.get(plan.id) === plan.proposalRevision)
         continue;
@@ -277,8 +294,9 @@ export function useProjectWorkspace({
     }
   }, [
     snapshot?.chat.plans,
+    tabs.active,
     snapshot?.chat.kind,
-    splash,
+    readsActive,
     workerId,
     workspace,
     scope,

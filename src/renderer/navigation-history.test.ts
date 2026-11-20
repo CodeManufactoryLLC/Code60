@@ -10,7 +10,7 @@ import {
 const chat = (id: string): Destination => ({ page: "chat", chat: id });
 const chatless: Destination = { page: "chat" };
 const sessions: Destination = { page: "sessions" };
-const settings: Destination = { page: "settings", section: "agents" };
+const settings: Destination = { page: "settings", section: "appearance" };
 const logs: Destination = { page: "logs" };
 const always = () => true;
 const isChat = (id: string) => (entry: Destination) => entry.page === "chat" && entry.chat === id;
@@ -58,9 +58,9 @@ describe("destinations", () => {
       page: "settings",
       section: "updates",
     });
-    expect(destination("chat", "agents", "run-1")).toEqual(chat("run-1"));
-    expect(destination("chat", "agents", undefined)).toEqual(chatless);
-    expect(destination("events", "agents", "run-1")).toEqual({ page: "events" });
+    expect(destination("chat", "appearance", "run-1")).toEqual(chat("run-1"));
+    expect(destination("chat", "appearance", undefined)).toEqual(chatless);
+    expect(destination("events", "appearance", "run-1")).toEqual({ page: "events" });
   });
 });
 

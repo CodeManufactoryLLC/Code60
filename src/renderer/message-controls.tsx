@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { durationText, messageAgeText, type TurnTiming, timingText } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { useTicker } from "./ticker.js";
@@ -32,12 +32,14 @@ export function MessageCopy({
   visible = true,
   onCopied,
   readSource,
+  actions,
 }: {
   text: string;
   at?: string | undefined;
   visible?: boolean;
   onCopied?: (() => void) | undefined;
   readSource?: (() => Promise<string>) | undefined;
+  actions?: ReactNode;
 }) {
   const [state, setState] = useState<"idle" | "copying" | "failed">("idle");
   const [press, setPress] = useState(0);
@@ -85,6 +87,7 @@ export function MessageCopy({
           <Icon name="copy" />
         </span>
       </button>
+      {actions}
       <span className="message-copy-feedback" role={state === "failed" ? "status" : undefined}>
         {state === "failed"
           ? readSource
@@ -118,11 +121,11 @@ export function TurnTimer({
           aria-controls={disclosure.controls}
           onClick={disclosure.toggle}
         >
-          {timingText(timing, now)}
+          <span className="turn-timer-text">{timingText(timing, now)}</span>
         </button>
       ) : (
         <p className="turn-timer" aria-live="off">
-          {timingText(timing, now)}
+          <span className="turn-timer-text">{timingText(timing, now)}</span>
         </p>
       )}
       {!timing.active && <hr className="turn-separator" />}

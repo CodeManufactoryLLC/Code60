@@ -3,6 +3,7 @@ import type { DesktopApi } from "../bridge/index.js";
 import { ChatMarkdown } from "./chat-markdown.js";
 import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy } from "./message-controls.js";
+import { BubbleContent } from "./neobrutalism/bubble.js";
 import type { Block } from "./transcript.js";
 export function ChatMessage({
   block,
@@ -18,6 +19,7 @@ export function ChatMessage({
   onCopied,
   copyable = true,
   readSource,
+  actions,
 }: {
   block: Block;
   at?: string | undefined;
@@ -32,6 +34,7 @@ export function ChatMessage({
   onCopied?: (() => void) | undefined;
   copyable?: boolean;
   readSource?: (() => Promise<string>) | undefined;
+  actions?: ReactNode;
 }) {
   const [entering, setEntering] = useState(incoming);
   useEffect(() => {
@@ -81,11 +84,13 @@ export function ChatMessage({
       {block.type !== "message" && <div className="chat-message-speaker">{speaker}</div>}
       <McpBadge mcp={block.mcp} />
       {block.type === "message" ? (
-        <ChatMarkdown text={block.text} openLink={openLink} />
+        <BubbleContent as="div" variant="agent" className="agent-message-bubble">
+          <ChatMarkdown text={block.text} openLink={openLink} />
+        </BubbleContent>
+      ) : block.type === "prompt" && !block.automatic ? (
+        <BubbleContent>{prompt ?? block.text}</BubbleContent>
       ) : (
-        <pre>
-          {block.type === "prompt" && !block.automatic ? (prompt ?? block.text) : block.text}
-        </pre>
+        <pre>{block.text}</pre>
       )}
       {copyable && (block.type === "message" || (block.type === "prompt" && !block.automatic)) && (
         <MessageCopy
@@ -94,6 +99,7 @@ export function ChatMessage({
           visible={visible}
           onCopied={onCopied}
           readSource={readSource}
+          actions={actions}
         />
       )}
       {detail ?? (block.detail && <pre>{block.detail}</pre>)}

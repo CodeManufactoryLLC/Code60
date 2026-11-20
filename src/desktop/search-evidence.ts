@@ -41,6 +41,7 @@ export async function projectSearchEvidence(
   query: string,
   signal: AbortSignal,
   read: typeof readFiles = readFiles,
+  issue: (description: string) => void = () => {},
 ): Promise<SearchSummarySource[]> {
   const folders = [""];
   const candidates: string[] = [];
@@ -55,6 +56,8 @@ export async function projectSearchEvidence(
     const directory = snapshot.directories.find((entry) => entry.path === folder);
     if (!folder && directory?.error)
       throw new Error(`Project files unavailable: ${directory.error}`);
+    if (directory?.error || directory?.truncated)
+      issue("Some project directories could not be completely read");
     for (const entry of directory?.entries ?? []) {
       if (entry.name.startsWith(".") || excluded.has(entry.name)) continue;
       if (entry.kind === "directory" && entry.path.split("/").length <= 4 && folders.length < 64)
@@ -79,6 +82,7 @@ export async function projectSearchEvidence(
       { project: root, root, directories: [""], preview: path },
       () => !signal.aborted,
     );
+    if (snapshot.preview?.error) issue("Some project files could not be read");
     const text = snapshot.preview?.text;
     if (text === undefined || text === null || !text.trim()) continue;
     const lower = text.toLocaleLowerCase();

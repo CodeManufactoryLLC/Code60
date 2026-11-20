@@ -4,10 +4,15 @@ import type { RunEvent } from "../core/index.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
-import { type Conversation, conversationId, conversations, reconcileDisclosure } from "./chats.js";
+import {
+  type Conversation,
+  conversationId,
+  conversations,
+  hasConversationRun,
+  reconcileDisclosure,
+} from "./chats.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { RelayNavigationIcon } from "./relay-navigation-icon.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
 
@@ -19,11 +24,14 @@ export function ChatSidebar({
   database,
   eventsByRun,
   open,
+  conversationVisible = open,
   pending,
   onSelect,
   onAction,
   relayNavigation = false,
   onKeyDown,
+  entries: suppliedEntries,
+  ancestorsExpanded = true,
 }: {
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -32,17 +40,23 @@ export function ChatSidebar({
   database: string | null;
   eventsByRun: Readonly<Record<string, readonly RunEvent[]>>;
   open: boolean;
+  conversationVisible?: boolean;
   pending: boolean;
   onSelect(id: string): void;
   onAction?(request: OrchestrationChatAction): Promise<boolean>;
   relayNavigation?: boolean;
   onKeyDown?(event: KeyboardEvent<HTMLElement>): void;
+  entries?: readonly Conversation[];
+  ancestorsExpanded?: boolean;
 }) {
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
   );
   const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null);
-  const entries = useMemo(() => conversations(chats, runs, selectedId), [chats, runs, selectedId]);
+  const entries = useMemo(
+    () => suppliedEntries ?? conversations(chats, runs, selectedId),
+    [suppliedEntries, chats, runs, selectedId],
+  );
   const archivedFocus = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!archivedFocus.current || entries.some((entry) => entry.id === archivedFocus.current))
@@ -78,12 +92,16 @@ export function ChatSidebar({
   const markerKey = (scope: string, id: string) =>
     readMarkerKey(scope, id, summaries.has(id) ? "reply-count" : undefined);
   const selectedMarkerKey =
-    selectedMarkerScope && selectedId ? markerKey(selectedMarkerScope, selectedId) : null;
+    selectedMarkerScope && selectedId && hasConversationRun(chats, runs, selectedId)
+      ? markerKey(selectedMarkerScope, selectedId)
+      : null;
   const selectedReplies = summaries.get(selectedId ?? "")?.count;
   useLayoutEffect(() => {
     const prior = previous.current;
     setCollapsed((current) => {
       const next = reconcileDisclosure(prior, entries, current);
+      if (!ancestorsExpanded)
+        for (const entry of entries) if (entry.parentId) next.add(entry.parentId);
       return next.size === current.size && [...next].every((id) => current.has(id))
         ? current
         : next;
@@ -96,7 +114,7 @@ export function ChatSidebar({
       }
     }
     previous.current = children;
-  }, [entries]);
+  }, [entries, ancestorsExpanded]);
   const parentId = entries.find(({ id }) => id === selectedId)?.parentId;
   // biome-ignore lint/correctness/useExhaustiveDependencies: explicit navigation to the same worker must reveal its parent.
   useLayoutEffect(() => {
@@ -109,7 +127,7 @@ export function ChatSidebar({
     });
   }, [selectedId, parentId, open, navigationSerial]);
   useLayoutEffect(() => {
-    if (!selectedMarkerKey || !open || !selectedId) return;
+    if (!selectedMarkerKey || !conversationVisible || !selectedId) return;
     const key = selectedMarkerKey;
     const read =
       selectedReplies ??
@@ -123,7 +141,7 @@ export function ChatSidebar({
     } catch {
       // Keep in-memory read state when browser storage is unavailable.
     }
-  }, [selectedMarkerKey, open, selectedId, replies, selectedReplies]);
+  }, [selectedMarkerKey, conversationVisible, selectedId, replies, selectedReplies]);
 
   const chatById = new Map(chats.map((chat) => [conversationId(chat), chat]));
   const runById = new Map(runs.map((run) => [run.record.id, run]));
@@ -142,9 +160,7 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
-    const relayHeading = relayNavigation && chat?.kind === "relay";
-    const relayWorking =
-      relayHeading && view?.status === "running" && view.turns > 0 && !view.stopping;
+    const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
@@ -216,23 +232,28 @@ export function ChatSidebar({
               }
             }}
           >
-            {relayHeading && <RelayNavigationIcon working={relayWorking} />}
-            {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-              <NavigationIcon name="chat-circle" />
-            )}
-            {entry.role === "worker" && <NavigationIcon name="arrow-elbow-down-right" />}
-            <span className="chat-sidebar-label">{entry.label}</span>
-            <span className="chat-sidebar-indicators">
-              {unread > 0 && (
-                <span className="chat-unread" role="img" aria-label={unreadLabel}>
-                  <span>{unread}</span>
-                </span>
+            <span className="chat-sidebar-artwork" aria-hidden="true">
+              {relayHeading && (
+                <NavigationIcon
+                  name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
+                />
               )}
-              {(error || presentation.icon !== "chat") && (
-                <span className="chat-sidebar-status">{error ? "Error" : presentation.label}</span>
+              {entry.role === "orchestrator" && chat?.kind !== "relay" && (
+                <NavigationIcon name="app-communication" />
               )}
-              {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
+              {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
             </span>
+            <span className="chat-sidebar-label">{entry.label}</span>
+            {(unread > 0 || approvals > 0) && (
+              <span className="chat-sidebar-indicators">
+                {unread > 0 && (
+                  <span className="chat-unread" role="img" aria-label={unreadLabel}>
+                    <span>{unread}</span>
+                  </span>
+                )}
+                {approvals > 0 && <span className="chat-approval-count">({approvals})</span>}
+              </span>
+            )}
             <span className="sr-only">{description}</span>
           </button>
           {entry.role === "orchestrator" && chat?.kind !== "relay" && (

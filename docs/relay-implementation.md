@@ -1,5 +1,17 @@
 # Relay implementation status
 
+## Conversation checkpoint follow-up
+
+Project chats and Relay now checkpoint human requests, automatically integrate
+settled isolated edits and expose confirmed code-and-conversation Undo beside
+the latest human message. Direct workers stay writable under bounded folder
+snapshots, with a warning that manual edits since the snapshot also rewind.
+Undo returns the request and its saved-code references unsent. Recovery remains
+explicit, including after provider shutdown; restart never replays work.
+The earlier measured desktop results below describe the previous workflow,
+not validation of this follow-up. Its desktop execution is blocked by the
+active disk-pressure restriction on test-image builds.
+
 ## PR review correctness follow-up
 
 Reconnect validates the retained private workspace before preparation and again
@@ -56,13 +68,15 @@ This branch implements Relay and retained project runtimes as described in
 - Conversation-wide capacity reservations across targets, accepted-request
   deduplication, task-qualified authority and originating-task result delivery.
 - Target-labelled worker rows, bounded live transcript windows and human worker
-  controls without an open project or database. Direct workers show the absence
-  of isolated apply, undo and discard.
+  controls without an open project or database. Direct workers warn that
+  message Undo also rewinds concurrent manual edits; they do not offer isolated
+  application or discard.
 - Target-qualified plans with revision-specific human acceptance, live task
   authority and first-default-dispatch baselines shared per task and target.
   Saved plans never regain execution authority from a request retry.
-- Target-grouped Changes, bounded review pages, pinned revision diffs, reviewed
-  files, line-anchored feedback and checkout-local prepare/preview/apply/undo.
+- Target-grouped Changes, bounded review pages, pinned read-only revision diffs,
+  quiet request-level links and exact Add to chat code references. Corrections
+  use the ordinary composer; host checkpoints own integration and message Undo.
   Direct edits are labelled separately and never offer isolated application.
   Review records, immutable source captures and application journals are private,
   application-owned evidence, independent of any project database.
@@ -71,7 +85,7 @@ This branch implements Relay and retained project runtimes as described in
   worker turns, process ownership and current files, including after native
   confirmation. Redirecting a run record to another checkout in the same Git
   repository cannot redirect review. Older unpinned evidence stays readable only.
-- Feedback delivery runs between Relay turns with originating-task context,
+- Legacy feedback delivery runs between Relay turns with originating-task context,
   bounded queues and delivery receipts. Failures preserve editable evidence;
   restart never reconnects workers or replays pending submissions. Interrupted
   review-index rollover recovers only a validated single pending page, without
@@ -148,7 +162,9 @@ This branch implements Relay and retained project runtimes as described in
   root changes and ignored responses for released subscriptions.
 - The Relay screen shows the live transcript and composer without a historical
   transcript panel or its paging and Copy controls. Live-message Copy remains
-  available. Stored history continues to supply bounded first-Send context.
+  available. The live transcript uses a 1,000,000-serialized-UTF-16-code-unit
+  character budget with no event-count cap; oldest events are evicted only when
+  that budget is exceeded. Stored history continues to supply bounded first-Send context.
   The backend retains bounded original-source reads for compatibility.
   Original-source reads use pinned, expiring opaque cursors outside lifecycle
   queues, with at most two concurrent bounded reads. Source requests never send
@@ -163,13 +179,13 @@ This branch implements Relay and retained project runtimes as described in
   escalation and stops every execution owner. Presentation callback failures
   cannot turn an accepted dispatch into a retry or strand its process.
 
-CLI defaults, run-record format and SQLite schema 5 are unchanged.
+Scheduler defaults, run-record format and SQLite schema 5 are unchanged.
 
 ## Implemented plan and navigation details
 
 Execution now freezes current saved files per live conversation generation,
 human task and canonical target. Explicit Git bases resolve to commits; direct
-mode never captures a baseline. Concurrent dispatches share preparation, failures
+mode captures bounded filesystem preimages instead of Git baselines. Concurrent dispatches share preparation, failures
 remain retryable, and folder/Stop all cancels pending captures. Real-Git tests
 check isolated contents, ignored credential fixtures, unchanged HEAD and staging.
 Target-qualified plans and review bindings share these baselines.
@@ -229,7 +245,7 @@ Git's own cross-process locks and checkout-local application locks remain distin
 
 ## Validation still required
 
-- Native Windows/macOS desktop, packaged and installer validation has not run in
+- Native macOS desktop, packaged and installer validation has not run in
   this environment. Linux containers do not validate native ACLs, process jobs,
   native dialogs or packaged startup on those platforms.
 
@@ -299,7 +315,7 @@ The benchmark independently checked the oversized source SHA-256, bounded I/O,
 zero startup prompts, prompt-free paging and exactly-once first-Send history.
 `git diff --check` passed.
 
-Native Windows/macOS desktop, packaged and installer tests remain unrun.
+Native macOS desktop, packaged and installer tests remain unrun.
 All session test containers and images were removed, verified with both container
 and image listings. BuildKit cache and host artifacts are retained. Final desktop
 artifacts are under `test-results/container/2026-11-12T22-10-10.282Z-aPAMeL`.
@@ -317,9 +333,10 @@ Relay, project chats add 24px and their owned workers add another 24px.
 It also checks label-based disclosures without chevrons, separate actions, anchored and viewport-clamped
 menus, outside/Escape/scroll/resize dismissal, focus restoration, project
 collapse/reopen, project close/reopen, retained drafts and unchanged idle workers.
-The Projects heading uses the Phosphor clipboard icon and a separate plus action
-labelled Open Project. That action opens the existing project modal; there is no
-standalone opener above the heading. Archiving the currently displayed project
+The Projects heading uses its supplied icon; the expanded list starts with a labelled “+ Add Project” action
+above all project entries. That action opens the existing project modal when
+connected or the database connection flow otherwise; the heading has no plus button. Each individual project list similarly
+starts with “+ New Session” above its conversations; More remains in its heading. Archiving the currently displayed project
 chat shows a “Chat archived.” toast and selects Relay. Archiving other chats
 leaves the displayed conversation unchanged.
 
@@ -347,7 +364,7 @@ All session-owned test containers and images were removed. Container, labeled
 image and tagged image listings were empty; BuildKit cache and host artifacts
 remain intentionally retained. `git diff --check` passed.
 
-Native Windows/macOS desktop, packaged and installer validation remain unrun.
+Native macOS desktop, packaged and installer validation remain unrun.
 The earlier Relay performance results above are baseline measurements, not a new
 performance run for this UI-only follow-up.
 The sidebar fixes remain uncommitted for review; no push, PR update or automatic

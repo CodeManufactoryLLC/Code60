@@ -13,7 +13,7 @@ import type { Clock } from "./clock.js";
 import { decide, type PolicyOverrides } from "./policy.js";
 import type { Processes } from "./processes.js";
 import type { RecordStore } from "./records.js";
-import { Run } from "./run.js";
+import { Run, type SessionSelection } from "./run.js";
 import type {
   AgentConfig,
   FinalRunStatus,
@@ -72,6 +72,8 @@ export interface OrchestratorOptions {
   promptContext?: () => string;
   /** Recorded on new runs so project history readers can exclude Relay-owned workers. */
   owner?: "relay";
+  /** Interactive only: saved session-option defaults for each provider's new sessions. */
+  initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
 }
 
 /** Drives a set of runs. The CLI renders it; nothing here needs a terminal. */
@@ -109,6 +111,8 @@ export interface Orchestrator {
   finish(runId: string): void;
   /** Resolves after this run's cleanup and final record write, independently of other runs. */
   settled(runId: string): Promise<void>;
+  /** Stop just this owned run, without interrupting other conversations' workers. */
+  stop(runId: string): Promise<void>;
   cancelTurn(runId: string): boolean;
   answerPermission(permissionId: string, answer: PermissionAnswer): boolean;
   /** Cancels every active turn and ends every run. With `force`, skips the grace periods. */
@@ -129,8 +133,6 @@ export async function createOrchestrator(
   deps: OrchestratorDeps,
   options: OrchestratorOptions,
 ): Promise<Orchestrator> {
-  const ownerIdentity = await deps.processes.identity?.(deps.ownerPid);
-  if (ownerIdentity === null) throw new Error("Cannot verify the run owner");
   const eventListeners = new Set<(event: RunEvent) => void>();
   const changeListeners = new Set<() => void>();
   const warningListeners = new Set<(message: string) => void>();
@@ -147,7 +149,6 @@ export async function createOrchestrator(
     clock: deps.clock,
     processes: deps.processes,
     ownerPid: deps.ownerPid,
-    ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
     onEvent(event: RunEvent) {
       for (const listener of eventListeners) listener(event);
       notifyChange();
@@ -172,7 +173,15 @@ export async function createOrchestrator(
     }
   };
 
-  const runSettings = (config: AgentConfig) => ({
+  const runSettings = (name: string, config: AgentConfig) => {
+    const initialSettings =
+      options.mode === "interactive" ? options.initialSettings?.(name) : undefined;
+    return {
+      ...baseSettings(config),
+      ...(initialSettings?.length ? { initialSettings } : {}),
+    };
+  };
+  const baseSettings = (config: AgentConfig) => ({
     mode: options.mode,
     repoDir: options.repoDir,
     command: config.command,
@@ -192,7 +201,7 @@ export async function createOrchestrator(
         (() => {
           const agent = options.agents.find(({ name }) => name === options.recovery?.agent);
           if (!agent) throw new Error(`agent '${options.recovery.agent}' is not configured`);
-          return new Run(options.recovery, runDeps, runSettings(agent.config));
+          return new Run(options.recovery, runDeps, runSettings(agent.name, agent.config));
         })(),
       ]
     : options.agents.map(({ name, config }) => {
@@ -211,11 +220,10 @@ export async function createOrchestrator(
               }
             : { base: null, branch: null, worktree: options.directory }),
           ownerPid: deps.ownerPid,
-          ...(ownerIdentity === undefined ? {} : { ownerIdentity }),
           ...(options.owner === undefined ? {} : { owner: options.owner }),
           startedAt,
         };
-        return new Run(record, runDeps, runSettings(config));
+        return new Run(record, runDeps, runSettings(name, config));
       });
   if (!options.recovery) await Promise.all(runs.map((run) => run.queue()));
 
@@ -263,6 +271,7 @@ export async function createOrchestrator(
       find(runId).handoff(summary, text, reason, deliveredText, origin),
     setMode: (runId, change) => find(runId).setMode(change),
     finish: (runId) => find(runId).finish(),
+    stop: (runId) => find(runId).shutdown(false),
     cancelTurn: (runId) => find(runId).cancelTurn("user"),
     answerPermission(permissionId, answer) {
       return runs.some((run) => run.answerPermission(permissionId, answer));

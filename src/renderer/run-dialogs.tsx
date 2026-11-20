@@ -3,6 +3,7 @@ import type { Snapshot, StartRequest } from "../bridge/index.js";
 import { agentCount, providers } from "./configurations.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 
 const kinds = [
   "read",
@@ -44,7 +45,6 @@ export function NewSession(props: {
     );
   return (
     <Modal title="Select run configuration" busy={props.busy} onClose={props.onClose}>
-      <p className="muted">Choose saved settings or configure this batch without a preset.</p>
       {props.snapshot.configurations.length === 0 && <p>No saved run configurations.</p>}
       <ul className="project-list" aria-label="Available run configurations">
         {props.snapshot.configurations.map((entry) => (
@@ -207,9 +207,10 @@ export function NewRun({
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
+    dialog.current?.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
   }, []);
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog"
       aria-label={editing ? "Run configuration" : "New agent sessions"}
@@ -238,11 +239,6 @@ export function NewRun({
             <Icon name="close" />
           </button>
         </div>
-        <p className="muted">
-          {editing
-            ? "Reusable settings shared across projects in this database. Task prompts are never saved."
-            : "Each agent gets a separate worktree when Git is available."}
-        </p>
         {unavailable.length > 0 && (
           <p role="alert" className="error-banner">
             Unavailable providers: {[...new Set(unavailable.map((agent) => agent.name))].join(", ")}
@@ -259,7 +255,7 @@ export function NewRun({
             <label>
               Configuration name
               <input
-                autoFocus
+                data-initial-focus
                 required
                 maxLength={128}
                 value={name}
@@ -268,21 +264,16 @@ export function NewRun({
             </label>
           )}
           {!editing && (
-            <>
-              <label>
-                Task prompt <span className="muted">(optional)</span>
-                <textarea
-                  autoFocus
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder="What would you like your agents to do?"
-                  rows={5}
-                />
-              </label>
-              <p className="field-hint">
-                Leave blank to start sessions and send each agent its own prompt later.
-              </p>
-            </>
+            <label>
+              Task prompt <span className="muted">(optional)</span>
+              <textarea
+                data-initial-focus
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="What would you like your agents to do?"
+                rows={5}
+              />
+            </label>
           )}
           <p className="field-label">Agents</p>
           {agents.map((agent, index) => (
@@ -414,6 +405,6 @@ export function NewRun({
           </button>
         </div>
       </form>
-    </dialog>
+    </DialogContent>
   );
 }

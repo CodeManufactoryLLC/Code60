@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import {
   editableFilter,
   type FilterField,
@@ -80,26 +82,32 @@ export function FilterControls({
     <>
       <button
         type="button"
+        className="icon-button"
         ref={trigger}
+        aria-label={`Filters${active ? `: ${filterIdentity(active).name}` : ""}`}
+        data-active={library.active ? "true" : undefined}
         onClick={() => {
           setOpen(true);
           setSelected(library.active ?? "");
         }}
       >
-        <span
-          className="filter-trigger-label"
-          title={active ? filterIdentity(active).name : undefined}
-        >
-          Filters{active ? `: ${filterIdentity(active).name}` : ""}
-        </span>
+        <Icon name="filter" />
       </button>
       {library.active && (
-        <button type="button" onClick={() => onChange({ ...library, active: null })}>
-          Unapply filter
+        <button
+          type="button"
+          className="filter-chip"
+          aria-label="Unapply filter"
+          onClick={() => onChange({ ...library, active: null })}
+        >
+          <span className="filter-trigger-label">
+            {active ? filterIdentity(active).name : "Filter"}
+          </span>
+          <Icon name="close" />
         </button>
       )}
       {createPortal(
-        <dialog
+        <DialogContent
           ref={dialog}
           className="filter-dialog setup-dialog"
           aria-labelledby={titleId}
@@ -387,7 +395,7 @@ export function FilterControls({
               </form>
             )}
           </div>
-        </dialog>,
+        </DialogContent>,
         document.querySelector(".app") ?? document.body,
       )}
     </>

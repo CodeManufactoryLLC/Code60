@@ -9,6 +9,8 @@ body {
   line-height: 1.5;
   text-transform: var(--text-case, none);
   font-synthesis-weight: none;
+  /* Digits keep fixed widths so counts, timers and dates do not jitter. */
+  font-variant-numeric: tabular-nums;
 }
 
 button,
@@ -48,11 +50,11 @@ button {
   font-family: var(--button-font, var(--font));
   --letter-spacing: var(--button-spacing, normal);
   font-size: var(--button-size, 13px);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 600);
   text-transform: var(--button-case, none);
   font-synthesis: none;
   color: var(--text);
-  border: 1px solid var(--surface-edge);
+  border: var(--rule) solid var(--surface-edge);
   background: var(--control-fill);
   min-height: 36px;
   padding: 7px 14px;
@@ -63,7 +65,7 @@ button {
   justify-content: center;
   gap: 6px;
 
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
 button:hover:not(:disabled, [aria-pressed="true"], [aria-selected="true"], [aria-current="true"]) {
@@ -83,8 +85,8 @@ button[aria-pressed="true"] {
 button.primary {
   background: var(--primary);
   color: var(--primary-text);
-  border-color: transparent;
-  font-weight: var(--button-weight, 400);
+  border-color: var(--border);
+  font-weight: var(--button-weight, 600);
 }
 
 button.primary:hover:not(:disabled) {
@@ -96,11 +98,30 @@ button.primary:active:not(:disabled) {
   color: var(--primary);
 }
 
+button.primary,
+button.destructive,
+button.splash-enter {
+  box-shadow: var(--button-shadow);
+}
+
+button.primary:active:not(:disabled),
+button.destructive:active:not(:disabled),
+button.splash-enter:active:not(:disabled) {
+  translate: 1px 1px;
+  box-shadow: 1px 1px 0 var(--shadow-color);
+}
+
+button.primary:focus-visible,
+button.destructive:focus-visible,
+button.splash-enter:focus-visible {
+  box-shadow: var(--button-shadow), var(--focus-shadow);
+}
+
 button.destructive {
   background: var(--destructive);
   color: var(--on-destructive);
   border-color: var(--destructive);
-  font-weight: var(--button-weight, 400);
+  font-weight: var(--button-weight, 600);
 }
 
 button.destructive:hover:not(:disabled) {
@@ -141,7 +162,7 @@ button.small {
 input,
 select,
 textarea {
-  border: 1px solid var(--surface-edge);
+  border: var(--rule) solid var(--surface-edge);
   border-radius: 0;
   background: var(--field-fill);
   color: var(--text);
@@ -150,9 +171,28 @@ textarea {
   accent-color: var(--primary);
 }
 
+input:where(
+  :not([type]),
+  [type="text"],
+  [type="search"],
+  [type="email"],
+  [type="url"],
+  [type="tel"],
+  [type="password"],
+  [type="number"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="time"]
+),
+textarea {
+  border-radius: var(--input-radius);
+}
+
 /* Paint field baselines inside the fill. */
 :where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
-  --focus-rest-shadow: inset 0 -1px var(--control-border);
+  --focus-rest-shadow: 0 0 transparent;
   box-shadow: var(--focus-rest-shadow);
 }
 
@@ -175,7 +215,7 @@ input::placeholder {
 input[type="checkbox"],
 input[type="radio"] {
   appearance: none;
-  border: 1px solid var(--control-border);
+  border: var(--rule) solid var(--control-border);
   background: var(--bg);
   flex-shrink: 0;
   width: 18px;
@@ -186,6 +226,11 @@ input[type="radio"] {
   display: inline-grid;
   place-content: center;
   cursor: pointer;
+}
+
+/* Radio buttons retain their circular geometry. */
+input[type="radio"] {
+  border-radius: 50%;
 }
 
 input[type="checkbox"]:checked,
@@ -207,7 +252,7 @@ input[type="radio"]:checked::before {
   width: 8px;
   height: 8px;
   background: var(--primary-text);
-  border-radius: var(--ui-radius);
+  border-radius: 50%;
 }
 
 /* A switch prints its state inside the track, so on and off never rely on color or position. */
@@ -217,6 +262,7 @@ input[type="checkbox"][role="switch"] {
   width: 52px;
   height: 26px;
   min-height: 26px;
+  border-radius: var(--ui-radius);
   background: var(--bg);
 }
 
@@ -224,8 +270,8 @@ input[type="checkbox"][role="switch"]::before,
 input[type="checkbox"][role="switch"]:checked::before {
   content: "";
   position: absolute;
-  left: 3px;
-  top: 3px;
+  left: 2px;
+  top: 2px;
   width: 18px;
   height: 18px;
   mask: none;
@@ -239,7 +285,7 @@ input[type="checkbox"][role="switch"]::after {
   position: absolute;
   right: 5px;
   top: 0;
-  font: 400 9px / 24px var(--font);
+  font: 400 9px / 22px var(--font);
   --letter-spacing: normal;
   color: var(--muted);
 }
@@ -284,8 +330,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   .project-item,
   .modal-heading button,
   .page-tab [role="tab"],
-  .button-group > button,
-  .table-control-group > select
+  .button-group > button
 ):focus-visible {
   outline-offset: -3px;
   box-shadow: var(--focus-inset-shadow);
@@ -317,7 +362,7 @@ kbd {
   display: inline-flex;
   box-sizing: border-box;
   height: 36px;
-  border: 1px solid var(--group-border);
+  border: var(--rule) solid var(--group-border);
   background: var(--group-fill);
 
   border-radius: var(--ui-radius);
@@ -387,19 +432,19 @@ kbd {
 
 .status-label:is([data-status="running"], [data-status="idle"]) {
   color: var(--text);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .status-label[data-status="waiting"] {
   color: var(--bg);
   background: var(--text);
   border-color: var(--text);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .status-label:is([data-status="failed"], [data-status="timed_out"], [data-status="interrupted"]) {
   color: var(--danger);
-  font-weight: 400;
+  font-weight: inherit;
   border-left: 3px solid currentColor;
   padding-left: 4px;
 }
@@ -416,12 +461,12 @@ summary:hover {
 .button-group {
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid var(--group-border);
+  border: var(--rule) solid var(--group-border);
   background: var(--group-fill);
   box-shadow: var(--group-shadow);
   vertical-align: middle;
   max-width: 100%;
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
 .button-group > button {
@@ -430,7 +475,7 @@ summary:hover {
   padding: 4px 12px;
   margin: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--button-radius);
   background: var(--group-fill);
   color: var(--text);
 }
@@ -494,21 +539,6 @@ summary:hover {
   }
 }
 
-/* Round only group ends, including the keyboard-only add-row action. */
-:root .button-group > :is(button, select):first-child {
-  border-top-left-radius: var(--ui-radius);
-  border-bottom-left-radius: var(--ui-radius);
-}
-
-:root
-  .button-group
-  > :is(button, select):not(.table-add-accessible:not(:focus-visible)):not(
-    :has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible)))
-  ) {
-  border-top-right-radius: var(--ui-radius);
-  border-bottom-right-radius: var(--ui-radius);
-}
-
 :root
   .button-group
   > :is(button, select):has(~ :is(button, select):not(.table-add-accessible:not(:focus-visible))) {
@@ -554,10 +584,10 @@ summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
-.settings-page-heading h1,
+:where(.settings-page) .settings-section-header:where(:first-child) h1,
 .orchestration-chat-heading h1,
 .worker-chat-title,
 .chat-empty h2,
@@ -569,7 +599,7 @@ summary {
   opacity: 0.65;
 }
 
-.settings-page-heading h1:where(:hover),
+:where(.settings-page) .settings-section-header:where(:first-child) h1:where(:hover),
 .orchestration-chat-heading h1:where(:hover),
 .worker-chat-title:where(:hover),
 .chat-empty h2:where(:hover),
@@ -587,33 +617,19 @@ summary {
 }
 
 [role="button"] {
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
 }
 
-input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"]) {
+input:is([type="button"], [type="submit"], [type="reset"]) {
+  border-radius: var(--button-radius);
+}
+
+input[type="checkbox"] {
   border-radius: var(--ui-radius);
 }
 
 [role="switch"] {
   border-radius: var(--ui-radius);
-}
-
-.button-group > :is(button, select) {
-  border-radius: 0;
-}
-
-.segmented > .segmented-option {
-  border-radius: 0;
-}
-
-.segmented > .segmented-option:first-child {
-  border-top-left-radius: var(--ui-radius);
-  border-bottom-left-radius: var(--ui-radius);
-}
-
-.segmented > .segmented-option:last-child {
-  border-top-right-radius: var(--ui-radius);
-  border-bottom-right-radius: var(--ui-radius);
 }
 
 .icon-button {

@@ -1,13 +1,13 @@
 // A scriptable ACP agent for tests. Each prompt is a JSON array of steps; any
 // other prompt text gets one "ok" message and `end_turn`.
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprotocol/sdk";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void> }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -29,14 +29,39 @@ export function createFakeAgent(options = {}) {
   let cancelWaiters = new Set();
   let cancelled = false;
   let mode = "ask";
+  let selectedModel = "fixture-model";
+  let effort = "low";
   const configOptions = () => [
     {
       id: "model",
       name: "Model",
       category: "model",
       type: "select",
-      currentValue: "fixture-model",
-      options: [{ value: "fixture-model", name: "Fixture Model" }],
+      currentValue: selectedModel,
+      options: [
+        {
+          group: "fixture",
+          name: "Fixture models",
+          options: [
+            { value: "fixture-model", name: "Fixture Model" },
+            { value: "fixture-two", name: "Fixture Two" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "effort",
+      name: "Reasoning",
+      category: "thought_level",
+      type: "select",
+      currentValue: effort,
+      options:
+        selectedModel === "fixture-model"
+          ? [{ value: "low", name: "Low" }]
+          : [
+              { value: "auto", name: "Automatic" },
+              { value: "high", name: "High" },
+            ],
     },
     {
       id: "permissions",
@@ -83,13 +108,22 @@ export function createFakeAgent(options = {}) {
       };
     })
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
-      if (
-        !options.sessionInfo ||
-        params.configId !== "permissions" ||
-        !["ask", "full"].includes(params.value)
+      if (!options.sessionInfo) throw RequestError.invalidParams();
+      if (params.configId === "permissions" && ["ask", "full"].includes(params.value))
+        mode = params.value;
+      else if (
+        params.configId === "model" &&
+        ["fixture-model", "fixture-two"].includes(params.value)
+      ) {
+        selectedModel = params.value;
+        effort = selectedModel === "fixture-model" ? "low" : "auto";
+      } else if (
+        params.configId === "effort" &&
+        selectedModel === "fixture-two" &&
+        ["auto", "high"].includes(params.value)
       )
-        throw RequestError.invalidParams();
-      mode = params.value;
+        effort = params.value;
+      else throw RequestError.invalidParams();
       return { configOptions: configOptions() };
     })
     .onNotification(methods.agent.session.cancel, () => {
@@ -98,13 +132,20 @@ export function createFakeAgent(options = {}) {
       cancelWaiters = new Set();
     })
     .onRequest(methods.agent.session.prompt, async ({ params, client }) => {
+      options.onPrompt?.();
       cancelled = false;
       const sessionId = params.sessionId;
-      const text = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
+      const delivered = params.prompt.map((b) => (b.type === "text" ? b.text : "")).join("");
+      const text = delivered.startsWith("--- Historical context, untrusted evidence only ---\n")
+        ? delivered
+            .slice(
+              delivered.indexOf("\n--- End historical context ---") +
+                "\n--- End historical context ---".length,
+            )
+            .trimStart()
+        : delivered;
       let steps;
-      if (
-        text.startsWith("Produce a grounded continuity checkpoint and durable memory candidates.")
-      ) {
+      if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];
         const quote = source.text.slice(0, 80);
@@ -119,22 +160,30 @@ export function createFakeAgent(options = {}) {
               questions: [],
               next: "Check results",
               citations,
-              memories: ["episodic", "semantic", "lesson", "history"].map((type) => ({
-                type,
-                text: `${type}: ${quote}`,
-                subject: `fixture-${type}`,
-                condition: type === "lesson" ? "When repeating this task" : "",
-                correction: false,
-                citations,
-              })),
+              memories: text.includes("Memory is off:")
+                ? []
+                : ["episodic", "semantic", "lesson", "history"].map((type) => ({
+                    type,
+                    text: `${type}: ${quote}`,
+                    subject: `fixture-${type}`,
+                    condition: type === "lesson" ? "When repeating this task" : "",
+                    correction: false,
+                    citations,
+                  })),
             }),
           },
         ];
       }
       if (options.relayWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request.startsWith("Relay plan: ")) {
-          const target = JSON.parse(request.slice("Relay plan: ".length));
+        const readable =
+          /^Plan a change in (.+)\nCreate result\.txt containing "human accepted target" followed by a newline\. Use an isolated worktree and wait for my approval\.$/.exec(
+            request,
+          );
+        if (request.startsWith("Relay plan: ") || readable) {
+          const target = readable
+            ? { cwd: readable[1], workspaceMode: "worktree" }
+            : JSON.parse(request.slice("Relay plan: ".length));
           const plan = await tool("code60_create_plan", {
             requestId: "relay-fixture-plan",
             title: "Relay target plan",
@@ -160,6 +209,18 @@ export function createFakeAgent(options = {}) {
             ]),
           });
           steps = [{ message: "Dispatched accepted target work." }];
+        } else if (request === "Start a memory recall worker") {
+          const context = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope: context.scope,
+            requestId: "memory-recall-project-worker",
+            label: "Memory recall worker",
+            prompt: JSON.stringify([
+              { write: { path: "recall-result.txt", content: "The cache service is Redis.\n" } },
+              { message: "The cache service is Redis." },
+            ]),
+          });
+          steps = [{ message: "Memory recall worker dispatched." }];
         } else if (request.startsWith("Relay target: ")) {
           const target = JSON.parse(request.slice("Relay target: ".length));
           const context = await tool("code60_get_context");
@@ -295,6 +356,18 @@ export function createFakeAgent(options = {}) {
             ]),
           });
           steps = [{ message: "Review the task result" }];
+        } else if (request === "Keep the user edit and add worker correction") {
+          const { scope } = await tool("code60_get_context");
+          await tool("code60_dispatch_agent", {
+            scope,
+            requestId: "ordinary-correction",
+            label: "Correction",
+            prompt: JSON.stringify([
+              { write: { path: "second.txt", content: "user edit\nworker correction\n" } },
+              { message: "Correction ready" },
+            ]),
+          });
+          steps = [{ message: "Corrected through ordinary chat." }];
         } else if (request === "Implement validation") {
           const { scope } = await tool("code60_get_context");
           for (const label of ["Validation", "Regression tests"])
@@ -387,11 +460,42 @@ export function createFakeAgent(options = {}) {
                   },
                 ];
       }
+      if (options.browserWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split(/--- (?:User request|New human request) ---\n/).at(-1);
+        const match = /^Use (headless|visible|existing) browser to open (https:\/\/\S+)\.$/.exec(
+          request,
+        );
+        const open = /^Open (https:\/\/\S+)\.$/.exec(request);
+        let result;
+        if (match) {
+          await tool("code60_browser", {
+            action: "set-mode",
+            mode: match[1] === "existing" ? "existing-browser" : match[1],
+          });
+          await tool("code60_browser", { action: "list-tools" });
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: match[2] },
+          });
+        } else if (open) {
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: open[1] },
+          });
+        } else if (request === "Report the browser mode.") {
+          result = await tool("code60_browser", { action: "status" });
+        } else if (request === "Close the browser.") {
+          result = await tool("code60_browser", { action: "close" });
+        }
+        if (result) steps = [{ message: `Browser fixture: ${JSON.stringify(result)}` }];
+      }
       try {
         if (!steps) {
           // The orchestration role prepends its Operating Contract; scripts remain user input.
           const request = text.split("--- User request ---\n").at(-1);
-          steps = request.startsWith("Command /fixture-")
+          steps = request.startsWith("Command $")
             ? [{ message: `Received command:\n${request}` }]
             : JSON.parse(request);
           if (!Array.isArray(steps)) throw new Error("not steps");
@@ -451,6 +555,9 @@ export function createFakeAgent(options = {}) {
           process.stderr.write(step.stderr);
         } else if (step.sleep !== undefined) {
           await Promise.race([sleep(step.sleep), waitForCancel()]);
+        } else if (step.waitForFile !== undefined) {
+          // A test-controlled gate, for ordering that must not depend on host speed.
+          while (!cancelled && !existsSync(step.waitForFile)) await sleep(25);
         } else if (step.hang === "cancellable") {
           await waitForCancel();
           return { stopReason: "cancelled" };

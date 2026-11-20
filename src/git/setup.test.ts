@@ -69,24 +69,20 @@ it("distinguishes missing Git and preserves cancellation", async () => {
   abort.abort(new Error("cancelled"));
   await expect(gitSetup.readiness(root, abort.signal)).rejects.toThrow("cancelled");
 });
-it.skipIf(process.platform === "win32")(
-  "respects failing hooks and leaves staged files intact without a commit",
-  async () => {
-    await writeFile(join(root, "file.txt"), "content");
-    await gitSetup.initialize(root);
-    git("config", "commit.gpgsign", "false");
-    await mkdir(join(root, ".git", "hooks"), { recursive: true });
-    const hook = join(root, ".git", "hooks", "pre-commit");
-    await writeFile(hook, "#!/bin/sh\nexit 1\n");
-    await chmod(hook, 0o700);
-    git("config", "core.hooksPath", join(root, ".git", "hooks"));
-    const preview = await gitSetup.preview(root);
-    await expect(gitSetup.commit(root, preview.files, author)).rejects.toThrow();
-    expect((await gitSetup.readiness(root)).status).toBe("no_commits");
-    expect(git("ls-files").trim()).toBe("file.txt");
-  },
-  20_000,
-);
+it("respects failing hooks and leaves staged files intact without a commit", async () => {
+  await writeFile(join(root, "file.txt"), "content");
+  await gitSetup.initialize(root);
+  git("config", "commit.gpgsign", "false");
+  await mkdir(join(root, ".git", "hooks"), { recursive: true });
+  const hook = join(root, ".git", "hooks", "pre-commit");
+  await writeFile(hook, "#!/bin/sh\nexit 1\n");
+  await chmod(hook, 0o700);
+  git("config", "core.hooksPath", join(root, ".git", "hooks"));
+  const preview = await gitSetup.preview(root);
+  await expect(gitSetup.commit(root, preview.files, author)).rejects.toThrow();
+  expect((await gitSetup.readiness(root)).status).toBe("no_commits");
+  expect(git("ls-files").trim()).toBe("file.txt");
+}, 20_000);
 
 it("does not offer Code60 private data and rejects bare repositories", async () => {
   await mkdir(join(root, ".code60_workspace"));
@@ -110,44 +106,40 @@ it("writes missing author settings only locally and respects signing failures", 
   expect(git("config", "--local", "user.name").trim()).toBe(author.name);
   expect(git("config", "--local", "user.email").trim()).toBe(author.email);
 });
-it.skipIf(process.platform === "win32")(
-  "cancels a commit and its hook process while preserving staged files",
-  async () => {
-    await gitSetup.initialize(root);
-    git("config", "commit.gpgsign", "false");
-    await writeFile(join(root, "file.txt"), "keep");
-    const hook = join(root, ".git", "hooks", "pre-commit");
-    await writeFile(hook, '#!/bin/sh\necho $$ > "$PWD/.git/hook-pid"\nexec sleep 60\n', {
-      mode: 0o700,
-    });
-    git("config", "core.hooksPath", join(root, ".git", "hooks"));
-    const preview = await gitSetup.preview(root);
-    const abort = new AbortController();
-    const pending = gitSetup.commit(root, preview.files, author, abort.signal);
-    const rejected = expect(pending).rejects.toThrow("cancelled");
-    let settled = false;
-    pending.then(
-      () => (settled = true),
-      () => (settled = true),
-    );
-    // Wait for the hook itself, not a fixed delay: Git startup is slow under a loaded suite.
-    let pid = 0;
-    for (;;) {
-      const done = settled;
-      pid = Number(await readFile(join(root, ".git", "hook-pid"), "utf8").catch(() => "0"));
-      if (pid > 0) break;
-      if (done) throw new Error("The commit settled before its hook reported a PID");
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    abort.abort(new Error("cancelled"));
-    await rejected;
-    expect(() => process.kill(pid, 0)).toThrow();
-    expect((await gitSetup.readiness(root)).status).toBe("no_commits");
-    expect(git("ls-files").trim()).toBe("file.txt");
-    expect(await readFile(join(root, "file.txt"), "utf8")).toBe("keep");
-  },
-  20_000,
-);
+it("cancels a commit and its hook process while preserving staged files", async () => {
+  await gitSetup.initialize(root);
+  git("config", "commit.gpgsign", "false");
+  await writeFile(join(root, "file.txt"), "keep");
+  const hook = join(root, ".git", "hooks", "pre-commit");
+  await writeFile(hook, '#!/bin/sh\necho $$ > "$PWD/.git/hook-pid"\nexec sleep 60\n', {
+    mode: 0o700,
+  });
+  git("config", "core.hooksPath", join(root, ".git", "hooks"));
+  const preview = await gitSetup.preview(root);
+  const abort = new AbortController();
+  const pending = gitSetup.commit(root, preview.files, author, abort.signal);
+  const rejected = expect(pending).rejects.toThrow("cancelled");
+  let settled = false;
+  pending.then(
+    () => (settled = true),
+    () => (settled = true),
+  );
+  // Wait for the hook itself, not a fixed delay: Git startup is slow under a loaded suite.
+  let pid = 0;
+  for (;;) {
+    const done = settled;
+    pid = Number(await readFile(join(root, ".git", "hook-pid"), "utf8").catch(() => "0"));
+    if (pid > 0) break;
+    if (done) throw new Error("The commit settled before its hook reported a PID");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  abort.abort(new Error("cancelled"));
+  await rejected;
+  expect(() => process.kill(pid, 0)).toThrow();
+  expect((await gitSetup.readiness(root)).status).toBe("no_commits");
+  expect(git("ls-files").trim()).toBe("file.txt");
+  expect(await readFile(join(root, "file.txt"), "utf8")).toBe("keep");
+}, 20_000);
 
 it("reports a disappeared project as unavailable rather than missing Git", async () => {
   expect((await gitSetup.readiness(join(root, "gone"))).status).toBe("unavailable");

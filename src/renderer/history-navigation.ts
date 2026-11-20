@@ -1,6 +1,7 @@
-import type { DesktopApi, OrchestrationChatAction, Snapshot } from "../bridge/index.js";
+import type { DesktopRun, OrchestrationChatAction, Snapshot } from "../bridge/index.js";
 import { conversationId } from "./chats.js";
 import { pageAvailable } from "./navigation.js";
+import type { NavigationActions, NavigationIntent } from "./navigation-actions.js";
 import {
   type Current,
   type Destination,
@@ -9,111 +10,136 @@ import {
   type Settle,
   useNavigationHistory,
 } from "./navigation-history.js";
-import { type PageId, type PageTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
+import type { NavigationTarget } from "./navigation-tree.js";
+import type { PageTabs, SettingsSectionId } from "./tabs.js";
 
-/** Announces an orchestrator change before it is requested from the main process. */
 export type ChatNavigation = (request: OrchestrationChatAction) => [Settle, Current] | undefined;
 
-const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
-
 interface HistoryDependencies {
-  api: Pick<DesktopApi, "orchestrationChatAction">;
   snapshot: Snapshot | undefined;
   tabs: PageTabs;
-  settingsSection: SettingsSectionId;
+  settingsSection: SettingsSectionId | null;
   workerId: string | undefined;
-  setTabs(update: (current: PageTabs) => PageTabs): void;
-  setSettingsSection(id: SettingsSectionId): void;
-  closeMenus(): void;
-  selectWorker(id: string | undefined): void;
-  openChat(id: string): void;
+  runs: readonly DesktopRun[];
+  navigation: Pick<NavigationActions, "open" | "busy">;
   setError(message: string): void;
 }
 
-const currentDestination = ({ snapshot, tabs, settingsSection, workerId }: HistoryDependencies) =>
-  destination(
+const currentDestination = ({
+  snapshot,
+  tabs,
+  settingsSection,
+  workerId,
+}: HistoryDependencies): Destination => {
+  if (tabs.active === "project" && tabs.projectId)
+    return { page: "project", project: tabs.projectId };
+  if (tabs.active === "provider" && tabs.providerId)
+    return { page: "provider", provider: tabs.providerId };
+  return destination(
     tabs.active,
     settingsSection,
     workerId ?? (snapshot && conversationId(snapshot.chat)),
   );
+};
 
-/** Back and Forward for the window: pages, Settings pages and specific chats. */
 export function useHistoryNavigation(dependencies: HistoryDependencies) {
   return historyNavigation(useNavigationHistory(currentDestination(dependencies)), dependencies);
 }
 
-/** Connects a recorder to the app's page, Settings and chat selection. */
+/** Use the same owner-aware selection paths as sidebar and breadcrumb navigation. */
 export function historyNavigation(recorder: NavigationRecorder, dependencies: HistoryDependencies) {
-  const {
-    api,
-    snapshot,
-    workerId,
-    setTabs,
-    setSettingsSection,
-    closeMenus,
-    selectWorker,
-    openChat,
-    setError,
-  } = dependencies;
+  const { snapshot, runs, navigation, setError, workerId } = dependencies;
   const database = snapshot?.database ?? null;
   const orchestrator = snapshot && conversationId(snapshot.chat);
   const current = currentDestination(dependencies);
-  const orchestratorChat = (id: string) =>
-    snapshot?.chats.find((chat) => conversationId(chat) === id);
+  const chatById = (id: string) => snapshot?.chats.find((chat) => conversationId(chat) === id);
   const available = (entry: Destination) => {
     if (!pageAvailable(entry.page, database)) return false;
+    if (entry.project)
+      return Boolean(snapshot?.openProjects?.some((project) => project.id === entry.project));
+    if (entry.provider) return Boolean(snapshot?.agentSetup?.enabled.includes(entry.provider));
+    if (entry.page === "project" || entry.page === "provider") return false;
     if (!entry.chat) return true;
-    const chat = orchestratorChat(entry.chat);
-    if (chat) return !chat.archived;
-    return Boolean(snapshot?.runs.some(({ record }) => record.id === entry.chat));
+    const chat = chatById(entry.chat);
+    if (chat) return !chat.archived && (Boolean(database) || chat.kind === "relay");
+    return runs.some((run) => run.record.id === entry.chat && (Boolean(database) || run.relay));
   };
-  // Orchestrator selection shows Chat with the old selection until the snapshot catches up.
   const passing = (): Destination[] => [
     current,
     { page: "chat" },
     ...(orchestrator ? [{ page: "chat" as const, chat: orchestrator }] : []),
     ...(workerId ? [{ page: "chat" as const, chat: workerId }] : []),
   ];
-  const selectPage = (id: PageId) => {
-    closeMenus();
-    setTabs((tabs) => updateTabs(tabs, { type: "select", id }));
+  const restore = async (entry: Destination) => {
+    const target: NavigationTarget = entry.chat
+      ? { kind: "conversation", id: entry.chat }
+      : entry.project
+        ? { kind: "project", id: entry.project }
+        : entry.provider
+          ? { kind: "provider", id: entry.provider }
+          : entry.section
+            ? { kind: "settings", id: entry.section }
+            : { kind: "page", id: entry.page };
+    if (!(await navigation.open(target)))
+      throw new Error("Unable to restore navigation destination.");
   };
-  const restore = async (entry: Destination, isCurrent: Current) => {
-    if (entry.section) setSettingsSection(entry.section);
-    if (!entry.chat) return selectPage(entry.page);
-    closeMenus();
-    if (!orchestratorChat(entry.chat)) return openChat(entry.chat);
-    if (orchestrator !== entry.chat) {
-      try {
-        await api.orchestrationChatAction({ type: "select", id: entry.chat });
-      } catch (cause) {
-        if (isCurrent()) setError(message(cause));
-        throw cause;
-      }
-      // A newer navigation wins over a slow restore.
-      if (!isCurrent()) return;
-    }
-    selectWorker(undefined);
-    selectPage("chat");
-  };
-  const expectChat: ChatNavigation = (request) => {
-    if (request.type === "select")
-      return recorder.expect(({ page, chat }) => page === "chat" && chat === request.id, passing());
-    if (request.type !== "new") return undefined;
+  const expectTarget = (target: NavigationIntent): [Settle, Current] | undefined => {
+    // Restores already own the recorder's pending traversal; do not turn them into visits.
+    if (recorder.traversing) return undefined;
     const known = new Set([
       ...(snapshot?.chats.flatMap((chat) => conversationId(chat) ?? []) ?? []),
-      ...(snapshot?.runs.map(({ record }) => record.id) ?? []),
+      ...runs.map(({ record }) => record.id),
     ]);
-    return recorder.expect(
-      ({ page, chat }) => page === "chat" && chat !== undefined && !known.has(chat),
+    return recorder.expect((entry) => {
+      switch (target.kind) {
+        case "conversation":
+          return entry.page === "chat" && entry.chat === target.id;
+        case "new-conversation":
+          return entry.page === "chat" && entry.chat !== undefined && !known.has(entry.chat);
+        case "custom-agent":
+          return (
+            entry.page === "chat" &&
+            Boolean(entry.chat && chatById(entry.chat)?.customAgentId === target.id)
+          );
+        case "project":
+          return entry.page === "project" && entry.project === target.id;
+        case "provider":
+          return entry.page === "provider" && entry.provider === target.id;
+        case "settings":
+          return entry.page === "settings" && entry.section === target.id;
+        case "page":
+          return entry.page === target.id;
+      }
+    }, passing());
+  };
+  const expectChat: ChatNavigation = (request) =>
+    request.type === "select"
+      ? expectTarget({ kind: "conversation", id: request.id })
+      : request.type === "new"
+        ? expectTarget({ kind: "new-conversation" })
+        : undefined;
+  const go = (direction: -1 | 1) => {
+    if (navigation.busy) return;
+    recorder.go(
+      direction,
+      available,
+      async (entry, isCurrent) => {
+        try {
+          await restore(entry);
+        } catch (cause) {
+          if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
+          throw cause;
+        }
+      },
       passing(),
     );
   };
   return {
-    canGoBack: recorder.canGo(-1, available),
-    canGoForward: recorder.canGo(1, available),
-    back: () => recorder.go(-1, available, restore, passing()),
-    forward: () => recorder.go(1, available, restore, passing()),
+    canGoBack: !navigation.busy && recorder.canGo(-1, available),
+    canGoForward: !navigation.busy && recorder.canGo(1, available),
+    back: () => go(-1),
+    forward: () => go(1),
     expectChat,
+    expectTarget,
   };
 }

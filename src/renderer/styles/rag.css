@@ -40,10 +40,10 @@
   margin-block: 16px;
   padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--card-radius);
 }
 .rag-results h3 {
-  font-weight: 400;
+  font-weight: inherit;
   margin: 0 0 8px;
 }
 .rag-metadata {

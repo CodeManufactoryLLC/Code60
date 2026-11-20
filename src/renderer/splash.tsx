@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
@@ -6,6 +6,7 @@ import { DatabaseNotice } from "./database-notice.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
+  windowControls,
   ready,
   snapshot,
   api,
@@ -16,6 +17,7 @@ export function Splash({
   onEnter,
   onConnectDatabase,
 }: {
+  windowControls?: ReactNode;
   ready: boolean;
   snapshot: Snapshot | undefined;
   api: DesktopApi;
@@ -66,6 +68,7 @@ export function Splash({
           if (configured) enter();
         }}
       >
+        {!setup && windowControls}
         <div className="splash-brand">
           {ready && snapshot && !snapshot.database && (
             <DatabaseNotice
@@ -80,7 +83,7 @@ export function Splash({
                 Code<b>60</b>
               </span>
               <p id={`${id}-subtitle`} className="splash-subtitle">
-                v0.2 'Paddock' (Beta)
+                v0.2 Paddock (Beta)
               </p>
               {ready && (
                 <>
@@ -115,6 +118,7 @@ export function Splash({
       {setup && snapshot && (
         <AgentSetupWizard
           snapshot={snapshot}
+          windowControls={windowControls}
           api={api}
           mode="primary"
           onClose={() => setSetup(false)}

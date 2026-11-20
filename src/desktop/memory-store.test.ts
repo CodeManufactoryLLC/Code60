@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rename, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_MEMORY_SETTINGS,
   type MemoryGeneration,
@@ -10,6 +10,21 @@ import {
 } from "../bridge/index.js";
 import { MemoryStore } from "./memory-store.js";
 import { sqliteAvailable } from "./projects.js";
+
+// Node 22.12 has SQLite but lacks the FTS5 tables required by these memory fixtures.
+function sqliteFtsAvailable(): boolean {
+  if (!sqliteAvailable()) return false;
+  const sqlite = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+  const database = new sqlite.DatabaseSync(":memory:");
+  try {
+    return (
+      database.prepare("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled").get()
+        ?.enabled === 1
+    );
+  } finally {
+    database.close();
+  }
+}
 
 function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Expected test fixture value");
@@ -24,6 +39,7 @@ beforeEach(async () => {
   store = new MemoryStore(join(dir, "memory"));
 });
 afterEach(async () => {
+  vi.useRealTimers();
   store.close();
   await rm(dir, { recursive: true, force: true });
 });
@@ -66,7 +82,99 @@ function publish(cid: string, s: MemorySource, value = generation(s)) {
   store.publish(cid, range.cursor, range.boundary, value, "fixture");
   return must(store.browse({ conversationId: cid }).records[0]);
 }
-describe.skipIf(!sqliteAvailable())("private application memory", () => {
+describe.skipIf(!sqliteFtsAvailable())("private application memory", () => {
+  it.each([false, true])(
+    "restores a surviving fact after rewinding a correction=%s",
+    (correction) => {
+      const c = store.register("project:rewind", "Chat", dir);
+      const original = publish(c.id, source(c.id));
+      const changed = { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 };
+      const value = generation(changed);
+      must(value.memories[0]).correction = correction;
+      publish(c.id, changed, value);
+      expect(store.detail(original.id).record.state).toBe(correction ? "superseded" : "disputed");
+      store.close();
+      store = new MemoryStore(join(dir, "memory"));
+      store.rewind("project:rewind", 2);
+      expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+      store.rewind("project:rewind", 2);
+      expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+    },
+  );
+  it("preserves a human edit made after a discarded correction", () => {
+    const c = store.register("project:rewind", "Chat", dir);
+    const original = publish(c.id, source(c.id));
+    const changed = { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 };
+    const value = generation(changed);
+    must(value.memories[0]).correction = true;
+    publish(c.id, changed, value);
+    const current = store.detail(original.id).record;
+    store.action({
+      type: "edit",
+      id: original.id,
+      revision: current.revision,
+      text: "Human cache choice",
+      pinned: true,
+    });
+    const edited = store.detail(original.id).record;
+    store.rewind("project:rewind", 2);
+    expect(store.detail(original.id).record).toEqual(edited);
+  });
+  it("restores derived state across consecutive request Undos", () => {
+    const c = store.register("project:rewind", "Chat", dir);
+    const original = publish(c.id, source(c.id));
+    publish(c.id, { ...source(c.id, "Use SQLite for the cache."), ordinal: 2 });
+    publish(c.id, { ...source(c.id, "Use Memcached for the cache."), ordinal: 3 });
+    store.rewind("project:rewind", 3);
+    expect(store.detail(original.id).record.state).toBe("disputed");
+    store.rewind("project:rewind", 2);
+    expect(store.eligible(c.id).map((record) => record.text)).toEqual([original.text]);
+  });
+  it.each([true, false])(
+    "ignores discarded project candidates when relearning identical=%s evidence",
+    (identical) => {
+      const c = store.register("project:rewind", "Chat", dir);
+      const discarded = publish(c.id, source(c.id));
+      store.rewind("project:rewind", 1);
+      const fresh = {
+        ...source(c.id, identical ? discarded.text : "Use SQLite for the cache."),
+        ordinal: 2,
+      };
+      const learned = publish(c.id, fresh);
+      expect(learned.id).not.toBe(discarded.id);
+      expect(learned.state).toBe("active");
+      expect(store.eligible(c.id).map((record) => record.id)).toEqual([learned.id]);
+    },
+  );
+
+  it("suppresses discarded turns and stale extraction while retaining surviving and unrelated evidence", () => {
+    const c = store.register("project:chat", "Chat", null);
+    const other = store.register("project:other", "Other", null);
+    const surviving = source(c.id, "Use Redis for the cache.");
+    publish(c.id, surviving);
+    const discarded = { ...source(c.id, "Retry failed requests seven times."), ordinal: 2 };
+    const value = generation(discarded);
+    must(value.memories[0]).subject = "retries";
+    publish(c.id, discarded, value);
+    publish(other.id, source(other.id, "Other chat remains available."));
+    const pending = { ...source(c.id, "Pending discarded extraction."), ordinal: 3 };
+    store.append(c.id, "pending", [pending], true);
+    const range = store.range(c.id);
+    expect(store.checkpoint(c.id)).not.toBe("");
+    expect(store.rewind("project:chat", 2)).toEqual([c.id]);
+    expect(store.eligible(c.id).map((record) => record.text)).toEqual([surviving.text]);
+    expect(store.lexical(c.id, "seven")).toEqual([]);
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.checkpoint(c.id)).toBe("");
+    expect(store.eligible(other.id).map((record) => record.text)).toEqual([
+      "Other chat remains available.",
+    ]);
+    expect(() =>
+      store.publish(c.id, range.cursor, range.boundary, generation(pending), "late"),
+    ).toThrow("changed");
+    expect(store.browse({ conversationId: c.id }).records).toHaveLength(2);
+    expect(() => store.rewind("project:chat", -1)).toThrow("boundary");
+  });
   it("distinguishes type, conditions, subject and dated events when deduplicating", () => {
     const c = store.register("c", "Chat", null);
     publish(c.id, source(c.id));
@@ -110,14 +218,13 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     const record = must(store.browse({}).records[0]);
     expect(store.detail(record.id).sources[0]?.text).toBe("history: Redis was unavailable.");
     expect(store.detail(record.id).revisions).toHaveLength(1);
-    store.configure({ ...DEFAULT_MEMORY_SETTINGS, dailyCalls: 3 });
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
     store.close();
     store = new MemoryStore(join(dir, "memory"));
-    expect(store.settings().dailyCalls).toBe(3);
+    expect(store.settings().enabled).toBe(false);
     expect(store.register("chat", "Chat", null).id).toBe(c.id);
     expect(store.browse({}).records).toHaveLength(4);
-    if (process.platform !== "win32")
-      expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
+    expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
   });
   it("shares only durable project identity and human-promoted global memories", async () => {
     const a = join(dir, "a"),
@@ -250,7 +357,7 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.tail(c.id)).toEqual([]);
     expect(store.eligible(c.id).map((r) => r.id)).toEqual([shared.id]);
   });
-  it("supports revisions, stable paging, retention, vector rebuilds, call limits and do-not-remember", () => {
+  it("supports revisions, stable paging, vector rebuilds and authoritative Off mode", () => {
     const c = store.register("c", "Chat", null);
     for (let i = 0; i < 28; i++) {
       const s = source(c.id, `Cache event ${i}`);
@@ -284,29 +391,100 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.vectors(r.id, "other")).toEqual([]);
     store.reindex();
     expect(store.vectors(r.id, "fixture")).toEqual([]);
-    store.reserveCall(1);
-    expect(() => store.reserveCall(1)).toThrow("daily");
-    expect(store.snapshot().dailyCalls).toBe(1);
-    store.action({ type: "remember", conversationId: c.id, enabled: false });
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
     store.append(c.id, "ignored", [source(c.id)], true);
-    expect(store.range(c.id).remember).toBe(false);
-    expect(store.register("c", "Chat", null).remember).toBe(false);
-    store.configure({
-      ...DEFAULT_MEMORY_SETTINGS,
-      retentionDays: { ...DEFAULT_MEMORY_SETTINGS.retentionDays, episodic: 1 },
-    });
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.eligible(c.id)).toEqual([]);
+    expect(store.lexical(c.id, "cache")).toEqual([]);
+    expect(store.register("c", "Chat", null).id).toBe(c.id);
     expect(store.snapshot().count).toBe(28);
   });
-  it.skipIf(process.platform === "win32")(
-    "rejects linked and unsafe storage instead of resetting it",
-    async () => {
-      const linked = join(dir, "linked");
-      await mkdir(linked, { mode: 0o700 });
-      await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
-      expect(() => new MemoryStore(linked)).toThrow();
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
-      expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
-    },
-  );
+  it("deletes expired unpinned records, preserves pinned shared evidence and suppresses recreation", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+    const c = store.register("retention", "Retention", null);
+    const s = source(c.id);
+    const value = generation(s);
+    value.memories.push({ ...must(value.memories[0]), type: "history", text: "Pinned history" });
+    publish(c.id, s, value);
+    const pinned = must(store.browse({ type: "history" }).records[0]);
+    const expired = must(store.browse({ type: "semantic" }).records[0]);
+    store.action({ type: "edit", id: pinned.id, revision: 1, text: pinned.text, pinned: true });
+    store.setVectors(expired.id, "test", [new Float32Array([1, 0])]);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 });
+    vi.setSystemTime(new Date(Date.parse(at) + 30 * 86400000 - 1));
+    expect(store.expireBatch()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(store.eligible(c.id).map((r) => r.id)).toEqual([pinned.id]);
+    expect(store.expireBatch()).toBe(1);
+    expect(() => store.detail(expired.id)).toThrow("unavailable");
+    expect(store.vectors(expired.id, "test")).toEqual([]);
+    expect(store.detail(pinned.id).incomplete).toBe(false);
+    expect(store.detail(pinned.id).sources).toHaveLength(1);
+    expect(store.lexical(c.id, "history")).toEqual([pinned.id]);
+    expect(store.checkpoint(c.id)).toBe("");
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.expireBatch()).toBe(0);
+  });
+  it("bounds retention batches and revalidates preview tokens after edits or restart", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+    const c = store.register("batch", "Batch", null);
+    for (let i = 0; i < 70; i++) {
+      const s = source(c.id, `Unique event ${i}`);
+      const value = generation(s, "episodic");
+      must(value.memories[0]).subject = `event-${i}`;
+      publish(c.id, s, value);
+    }
+    vi.setSystemTime(new Date(Date.parse(at) + 91 * 86400000));
+    const preview = store.previewRetention(30);
+    expect(preview.count).toBe(70);
+    const r = must(store.browse({}).records[0]);
+    store.action({ type: "edit", id: r.id, revision: r.revision, text: r.text, pinned: true });
+    expect(() =>
+      store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, preview.token),
+    ).toThrow("changed");
+    expect(store.settings().retentionDays).toBe(0);
+    const next = store.previewRetention(30);
+    expect(next.count).toBe(69);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, next.token);
+    expect(store.expireBatch()).toBe(64);
+    expect(store.expireBatch()).toBe(5);
+    expect(store.expireBatch()).toBe(0);
+    expect(store.browse({}).records.map((record) => record.id)).toEqual([r.id]);
+    const old = store.previewRetention(30);
+    store.close();
+    store = new MemoryStore(join(dir, "memory"));
+    expect(() =>
+      store.configure({ ...DEFAULT_MEMORY_SETTINGS, retentionDays: 30 }, old.token),
+    ).toThrow("changed");
+  });
+  it("discards learning-only evidence when Off while preserving saved records and citations", () => {
+    const c = store.register("toggle", "Toggle", null);
+    const saved = publish(c.id, source(c.id));
+    store.append(c.id, "pending", [source(c.id, "An unprocessed fact")], true);
+    const range = store.range(c.id);
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
+    store.configure(DEFAULT_MEMORY_SETTINGS);
+    expect(store.range(c.id).sources).toEqual([]);
+    expect(store.detail(saved.id).incomplete).toBe(false);
+    expect(() =>
+      store.publish(
+        c.id,
+        range.cursor,
+        range.boundary,
+        generation(must(range.sources[0])),
+        "fixture",
+      ),
+    ).toThrow("changed");
+  });
+  it("rejects linked and unsafe storage instead of resetting it", async () => {
+    const linked = join(dir, "linked");
+    await mkdir(linked, { mode: 0o700 });
+    await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
+    expect(() => new MemoryStore(linked)).toThrow();
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
+    expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
+  });
 });

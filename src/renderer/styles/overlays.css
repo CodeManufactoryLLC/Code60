@@ -7,10 +7,6 @@
   margin-top: 16px;
 }
 
-.project-row > button + button {
-  border-left: 0;
-}
-
 .project-dialog .project-row > button {
   border: 0;
 }
@@ -21,34 +17,38 @@
   width: min(100%, 300px);
 }
 
-/* Banners: a written prefix and a 2px left rule. */
+/* A single compact status row with a 3px warning rule. */
 .database-notice {
   position: relative;
   z-index: 12;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 4px 10px;
   flex-shrink: 0;
-  min-height: 88px;
-  margin: 0 var(--page-margin) 12px;
-  padding: 16px 20px;
+  min-height: 40px;
+  margin: 0 var(--page-margin) 8px;
+  padding: 4px 6px 4px 12px;
   color: var(--warning-text);
   background: var(--warning-bg);
-  border: 1px solid currentColor;
-  border-left-width: 4px;
+  border: 0;
+  border-left: 3px solid currentColor;
   -webkit-app-region: no-drag;
 }
 
 .database-notice > div {
-  flex: 1 1 240px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  flex: 1 1 200px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .database-notice h2 {
-  margin: 0 0 4px;
-  font-size: var(--title-size, 18px);
+  margin: 0;
+  font-size: var(--text-size, 13px);
 }
 
 .database-notice p {
@@ -89,7 +89,7 @@
   border: 1px solid var(--danger);
   border-left-width: 2px;
   color: var(--danger);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .error-banner::before {
@@ -116,17 +116,15 @@
 }
 
 /* Dialogs: a 48px title bar and footer stay in place while the body scrolls. */
-.setup-dialog {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--surface-edge);
-  border-radius: var(--ui-radius);
+:where(.setup-dialog) {
   padding: 0 16px;
+}
+
+.setup-dialog {
   width: min(600px, calc(100vw - 32px));
   max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
-  scrollbar-gutter: stable;
-  box-shadow: var(--overlay-shadow);
+  scrollbar-gutter: auto;
 }
 
 .picker-dialog {
@@ -176,6 +174,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-dialog > .modal-heading {
+  border-bottom: 0;
 }
 
 .modal-heading > button {
@@ -337,7 +339,13 @@ label.check-label {
 }
 
 .project-remove {
-  font-size: 10px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
   opacity: 0.5;
   transition: opacity var(--motion) ease;
 }
@@ -348,9 +356,20 @@ label.check-label {
 }
 
 .project-row {
+  position: relative;
   display: flex;
   gap: 0;
   margin-bottom: 0;
+  border-radius: var(--button-radius);
+}
+
+.project-row:has(> button:hover:not(:disabled)) {
+  background: var(--hover-bg);
+}
+
+.project-row > .project-item:not(:disabled) {
+  background: transparent;
+  color: var(--text);
 }
 
 .project-item {
@@ -361,12 +380,13 @@ label.check-label {
   gap: 4px;
   text-align: left;
   min-width: 0;
+  padding-right: 40px;
   font-family: var(--font);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .project-item strong {
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .project-list > li > .project-item {
@@ -378,11 +398,12 @@ label.check-label {
 }
 
 .project-open-folder {
-  align-self: flex-start;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
+  margin-inline: auto;
   padding: 8px 0;
   border: 0;
   background: transparent;
@@ -416,8 +437,8 @@ label.check-label {
   max-width: calc(100vw - 16px);
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid transparent;
+  background: var(--surface);
+  border: var(--rule) solid var(--border);
   box-shadow: var(--overlay-shadow);
 
   border-radius: var(--ui-radius);
@@ -441,7 +462,7 @@ label.check-label {
   padding: 4px 12px 4px 8px;
   border: 0;
   border-top: 1px solid transparent;
-  background: var(--bg);
+  background: var(--surface);
   text-align: left;
   font: 400 13px var(--font);
   --letter-spacing: normal;
@@ -491,6 +512,37 @@ label.check-label {
   .menu-group
   > [role="menuitem"]:is(:disabled, [aria-disabled="true"]):first-child {
   border-top-width: 0;
+}
+
+/* Adapted Neobrutalism dropdown popup/items; other anchored menus stay unchanged. */
+.actions-menu.neo-dropdown-menu {
+  min-width: 12rem;
+  padding: 4px;
+  border: 2px solid var(--panel-border);
+  border-radius: var(--navigation-card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.neo-dropdown-menu [role="menuitem"] {
+  display: flex;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: var(--navigation-card-radius);
+  box-shadow: none;
+  font: var(--button-weight, 600) var(--button-size, 13px) / 1.25 var(--button-font, var(--font));
+  text-transform: var(--button-case, none);
+  --letter-spacing: var(--button-spacing, normal);
+}
+
+.neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--control-border);
+}
+
+.neo-dropdown-menu [role="menuitem"]:focus-visible {
+  outline: 2px solid var(--primary-text);
+  outline-offset: -4px;
 }
 
 /* Tooltip: inverted, with a muted-yellow top edge and a stem toward its control. */
@@ -549,13 +601,9 @@ label.check-label {
   width: min(640px, calc(100vw - 32px));
   max-height: 76vh;
   padding: 0;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid transparent;
   overflow: hidden;
   scrollbar-gutter: auto;
   flex-direction: column;
-  box-shadow: var(--overlay-shadow);
 }
 
 .command-palette[open] {
@@ -612,7 +660,7 @@ label.check-label {
 .command-palette .palette-group {
   padding: 8px 16px 4px;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--muted);
 }
 
@@ -625,7 +673,7 @@ label.check-label {
   gap: 8px;
   border: 0;
   padding: 0 16px 0 12px;
-  background: var(--bg);
+  background: var(--surface);
   font: 400 14px var(--font);
   --letter-spacing: normal;
   text-transform: none;
@@ -641,7 +689,7 @@ label.check-label {
 .command-palette [role="option"] mark {
   background: none;
   color: inherit;
-  font-weight: 400;
+  font-weight: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -702,10 +750,9 @@ label.check-label {
   gap: 10px;
   padding: 10px 6px 12px 12px;
   padding-right: 12px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
-  border: 1px solid transparent;
-  border-left: 3px solid var(--border);
+  border: var(--rule) solid var(--border);
   margin: 0;
   min-width: 0;
   pointer-events: auto;
@@ -730,7 +777,7 @@ label.check-label {
 
 .app-toast .toast-kind {
   font-size: 11px;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .app-toast .toast-actions {
@@ -893,7 +940,6 @@ label.check-label {
 
 .polling-dialog {
   min-height: min(200px, calc(100dvh - 32px));
-  scrollbar-gutter: stable both-edges;
 }
 
 .polling-dialog[open] {
@@ -911,11 +957,11 @@ label.check-label {
 }
 
 dialog:not(.splash) {
-  border-radius: var(--ui-radius);
+  border-radius: var(--dialog-radius);
 }
 
 [role="dialog"] {
-  border-radius: var(--ui-radius);
+  border-radius: var(--dialog-radius);
 }
 
 [popover] {

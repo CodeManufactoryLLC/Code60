@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { Card } from "./neobrutalism/card.js";
 
 export interface PanelTab {
   id: number;
@@ -85,7 +86,10 @@ export function PanelShell({
     while (container && container.getClientRects().length === 0)
       container = container.parentElement;
     const available = container?.getBoundingClientRect().width ?? 600;
-    setWidth(Math.max(120, Math.min(available - 300, value)));
+    const gap = panel.current
+      ? Number.parseFloat(getComputedStyle(panel.current).marginInlineStart) || 0
+      : 0;
+    setWidth(Math.max(120, Math.min(available - 300 - gap, value)));
   };
   const toggle = (
     <button
@@ -107,7 +111,8 @@ export function PanelShell({
   );
   return (
     <>
-      <aside
+      <Card
+        as="aside"
         ref={panel}
         id={id}
         className="file-panel"
@@ -272,7 +277,7 @@ export function PanelShell({
         <span className="sr-only" role="status">
           {announcement}
         </span>
-      </aside>
+      </Card>
       {active && !open && toggle}
     </>
   );

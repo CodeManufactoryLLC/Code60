@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DialogContent } from "./neobrutalism/dialog.js";
 
 export function RenameChat({
   title,
@@ -24,7 +25,7 @@ export function RenameChat({
     };
   }, []);
   return createPortal(
-    <dialog ref={dialog} aria-label="Rename chat" onCancel={onClose}>
+    <DialogContent ref={dialog} aria-label="Rename chat" onCancel={onClose}>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -60,7 +61,7 @@ export function RenameChat({
           </button>
         </div>
       </form>
-    </dialog>,
+    </DialogContent>,
     document.body,
   );
 }

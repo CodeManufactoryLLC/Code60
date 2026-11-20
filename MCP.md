@@ -32,6 +32,53 @@ These are placeholders. Install and configure your own servers before using them
 On Windows use an installed executable and JSON-escaped absolute paths such as
 `C:\\tools\\server.js`. Code60 does not install MCP servers.
 
+## Browser modes in chat
+
+Relay, Custom Assistants and project chats include the `code60_browser` tool.
+You do not need an MCP configuration entry or a Settings selector. Tell the
+assistant what you prefer:
+
+- “Open this page headlessly and take a screenshot.”
+- “Use a visible browser so I can watch.”
+- “Use my existing browser where I’m already signed in.”
+
+Headless is the default. Headless and Visible use separate in-memory profiles;
+Existing Browser connects to Chrome through Microsoft's
+[Playwright extension](https://github.com/microsoft/playwright/tree/main/packages/extension#readme).
+Install the extension and approve its connection/tab selection when prompted.
+Code60 does not bypass that approval or configure an extension token. This
+controls web content, not native desktop applications.
+
+Install Chrome and Node.js/npm on the machine running Code60. Playwright starts
+only when needed through `npx -y @playwright/mcp@0.0.84`, which may download the
+package on first use. Mode selection alone never downloads or launches it.
+Each live chat owns its connection and preference. Switching modes closes its
+previous connection and loses isolated state; there is no automatic fallback.
+Cancel releases the browser connection; Stop, Undo, replacing the conversation
+and quitting clean up its processes. External website changes are not reversed
+by message Undo. App restart starts with Headless, preserving chat history.
+The managed browser tool is not given to workers, setup probes, helpers or the
+scheduler; your explicitly configured servers remain independent.
+
+For agent integrations, use the provider's actual catalog path for
+`code60_browser`. Call `{"action":"set-mode","mode":"visible"}` (or
+`headless`/`existing-browser`), then `{"action":"list-tools"}`. Invoke a
+discovered tool with, for example,
+`{"action":"call","name":"browser_navigate","arguments":{"url":"https://example.com"}}`.
+`status` reports the selected mode and connection; `close` releases it. Calls
+must be sequential. A request is bounded to 100 seconds; errors require inspection
+before retrying. Existing Browser prerequisites and real browser availability are
+checked on use, never inferred from successful provider setup.
+
+Managed Playwright launches in an application-controlled npm context outside
+repositories, with fixed npm configuration and package pinning. Only product-allowed
+browser tools are exposed; host-code execution, installation, file upload and
+page-registered WebMCP tools are unavailable. Automatic captures have a 32 MiB
+budget and are temporary. Use an explicit filename directly in the conversation
+workspace to retain a requested file across mode changes. Browser authority ends
+on cancellation, turn failure/timeout or process exit. Cleanup waits for isolated
+Chromium to acknowledge closing; unverified cleanup is reported for retry.
+
 ## Bundled starter file
 
 [`mcp.default.json`](mcp.default.json) includes two **opt-in** stdio servers:
@@ -83,11 +130,12 @@ session startup with an explicit transport error. Code60 never drops unsupported
 servers. Use another compatible provider or change the configuration.
 Server connection and authentication failures are handled by the agent.
 
-### Using Playwright in Chat
+### Using a separately configured Playwright server in Chat
 
 After enabling Playwright, start a **new chat** and ask:
 
-> Use Playwright MCP to open https://example.com, take an accessibility snapshot,
+> Use the configured playwright server, rather than the managed browser tool, to
+> open https://example.com, take an accessibility snapshot,
 > report the page title and main heading, and save a screenshot as example-com.png.
 > Report the screenshot's full path. Do not substitute shell commands or webfetch.
 
@@ -159,24 +207,24 @@ under the existing transcript rules.
 
 ## Orchestrator commands
 
-Start a Chat message with the built-in `/create-command`, followed by instructions
-for the command you want. For example, `/create-command Make a review command that
+Start a project chat message with the built-in `$create-command`, followed by instructions
+for the command you want. For example, `$create-command Make a review command that
 checks changes for bugs.` The bundled prompt guides the agent to infer the fields,
 ask for missing details, and use the creation tool without executing the saved
-prompt. It is available in the slash picker without adding a database row; a saved
+prompt. It is available in the dollar-command picker without adding a database row; a saved
 command with the same name takes precedence.
 
-Ask the desktop orchestrator to create a reusable slash command. Its
-`code60_create_command` tool takes `name` (without `/`), `title`, optional
+Ask the desktop orchestrator to create a reusable command. Its
+`code60_create_command` tool takes `name` (without `$`), `title`, optional
 `description`, and `prompt`. It saves immediately in the connected database,
 shared across projects, and returns the saved command. It does not run the prompt.
-Use `/name` at the start of an orchestrator message to invoke it.
+Use `$name` at the start of a project orchestrator message to invoke it.
 
 Names use 1–64 lowercase letters, digits or hyphens, starting with a letter or
 digit. Titles are single-line and at most 120 characters, descriptions at most
 500, and prompts nonempty and at most 100,000. A database holds at most 200 commands.
 The tool is create-only: duplicate names fail rather than overwrite. Edit or delete
-commands on the Commands page. Workers and CLI runs do not receive this capability.
+commands in Command Builder. Workers and CLI runs do not receive this capability.
 
 ## Orchestrator plans
 

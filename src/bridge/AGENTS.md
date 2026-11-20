@@ -1,5 +1,17 @@
 # Bridge
 
+- `code60_browser` is an orchestrator gateway tool, not a renderer process API.
+  Re-export its browser-safe strict requests only; modes are conversation-local
+  and no mode preference or generic execution method crosses desktop IPC.
+
+- Scheduling Service status reuses automation scheduler/status with a browser-safe
+  typed installation/native/live result. It grants no process/path capability or
+  automatic installation authority; the live scheduler protocol remains unchanged.
+
+- `snapshot.versions` may include read-only configured embedding metadata and
+  installed ONNX Runtime identity/version/execution details. These are main-owned
+  display values, not accepted model/path/command inputs or inference authority.
+
 - Application memory accepts only opaque record/conversation/project IDs, strict
   bounded settings and revision-checked actions. Expose snapshot, paged browsing,
   cited detail, fixed actions and payload-free change notices. Never accept paths,
@@ -23,6 +35,17 @@
   the current presentation generation, with no cwd or project-path fallback.
   Worker evidence may include a pinned checkout identity, canonical directory,
   branch and base. These are main-produced provenance, never request fields.
+- Conversation timeline pages contain bounded capture metadata and optional
+  frozen worker outcomes, not full reviews, checkout provenance or file bodies.
+  Older revisions without outcomes remain valid evidence; never infer success
+  or turn associations for them. Application tabs carry opaque proposal/file
+  identities and remain read-only. Host-owned checkpoints integrate edits;
+  message Undo and explicit interrupted-operation recovery retain confirmation.
+- Send accepts at most eight strict saved-code references with generated review/
+  revision IDs and optional file/side/line bounds, never filesystem capabilities.
+  Undo accepts only the chat, checkpoint UUID and draft-replacement status.
+  Its result returns the original unsent text and saved-code references; renderer fields grant no restore
+  authority. Initialize Zod jitless parsing before constructing exported schemas.
 - RAG requests accept only opaque database identity, request UUID, captured
   database epoch and bounded query text. Relay-enabled main requires the epoch.
   Expose status/rebuild/retrieve/cancel/clear and pushed progress,
@@ -74,10 +97,49 @@
   Keep lifecycle timing metadata optional for older events; add no clipboard or generic
   filesystem capability for renderer presentation.
 
-- Search summary requests carry only request/project identity, a bounded query, an optional project-file inclusion flag and bounded saved-source excerpts with local addresses. Empty source lists are valid; file sources are supplied only by main-process retrieval and returned with the completed overview. Reject unknown fields and malformed IDs; cancellation targets a request ID, never a generic agent command.
+- Project Search accepts strict captured database epochs and request UUIDs with bounded query/Type/Sort values. Paging uses opaque cursors; cancellation uses the query identity; source opening uses an opaque captured source ID. Main resolves the complete registered project set, never caller roots. Overview requests reference captured search evidence plus their own UUID, never raw renderer excerpts, paths or provider commands. Return project-qualified provenance and exact numbered evidence. Reject stale database/member/source actions; native closed-project confirmation is revalidated before navigation.
 
 - Setup actions accept only a strict mode, session UUID and provider ID. Never accept commands, environment values or directories. Snapshots carry the main-process setup transaction and enabled membership; persisted command identities are hashes, not credentials or live connection assertions.
 
 - Diff reads accept only a UUID request ID and validated run ID; cancellation accepts only the request ID. Reject unknown fields and paths. Keep the existing diff action as a compatibility adapter.
 
 - Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; agents have no setup mutation capability.
+
+## Custom Assistants
+
+The Custom Assistants section of `ARCHITECTURE.md` extends the Relay-only rules above.
+Reuse the Relay runtime for custom application-owned conversations. Route all
+requests by explicit conversation/generation ownership, including file previews,
+worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
+Custom definitions are private, revision-checked and database-independent.
+
+- Sidebar backdrop updates contain only strict bounded width, 0–100 strength and
+  visibility. Never accept coordinates, window handles, materials, paths or code.
+  Main derives bounds from its owned window; this grants no screen capture access.
+
+Transparent Linux windows use three renderer caption buttons in the native drag
+strip because Electron hides its native caption controls for translucent windows.
+A strict minimize/maximize/close enum targets only the owned main window. Close
+must call the normal guarded close path, never destroy the window or kill work.
+macOS retains native window controls. No arbitrary window IDs cross the bridge.
+
+Native sidebar backdrop failures use a payload-free main-to-renderer notification.
+The renderer shows a fixed error; no native error, path or window handle crosses IPC.
+
+Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
+decorative window from Mission Control. A payload-free failure notice reports native
+event failures beside Appearance controls, separately from preference save errors; a
+successful adjustment clears the native error. Keep caption controls inside the active
+splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
+Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
+
+
+## Providers
+
+Follow the Providers navigation and management section of `ARCHITECTURE.md`.
+Providers replaces the Agents settings destination. Preserve v1 verified membership,
+model defaults, histories and external logins. Set-primary/disconnect are strict
+human-only bridge actions, guarded in main against active desktop work, setup and
+overlapping writes. The primary must be replaced before disconnecting. Publish
+main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.

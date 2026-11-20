@@ -1,23 +1,28 @@
 import { type ComponentProps, useLayoutEffect, useRef, useState } from "react";
 import type { OpenProject, ProjectAction } from "../bridge/index.js";
-import { AnchoredMenu } from "./anchored-menu.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
+import { NavigationIcon } from "./navigation-icons.js";
+import { projectConversations } from "./navigation-tree.js";
 import { pathLabel } from "./path-label.js";
 
 type Props = ComponentProps<typeof ChatSidebar> & {
   projects: readonly OpenProject[];
   selectedProjectId: string | null | undefined;
   onProjectAction(request: ProjectAction): Promise<boolean>;
+  homeProjectId: string | undefined;
+  onProjectOpen(id: string): void;
 };
 
 export function ProjectChatSidebar({
   projects,
   selectedProjectId,
   onProjectAction,
+  homeProjectId,
+  onProjectOpen,
+  ancestorsExpanded = true,
   ...props
 }: Props) {
-  const [menu, setMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(projects.map((project) => project.id)),
   );
@@ -34,34 +39,19 @@ export function ProjectChatSidebar({
         : next;
     });
   }, [projects]);
-  const selectedProject =
-    props.chats.find((chat) => chat.run?.id === props.selectedId)?.projectId ??
-    projects.find((project) => project.workerIds.includes(props.selectedId ?? ""))?.id;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: New or explicit same-project destinations must reveal their manually collapsed ancestor.
-  useLayoutEffect(() => {
-    if (selectedProject)
-      setExpanded((current) =>
-        current.has(selectedProject) ? current : new Set([...current, selectedProject]),
-      );
-  }, [selectedProject, props.selectedId, props.navigationSerial]);
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   return (
     <>
       {projects.map((project) => {
         const open = expanded.has(project.id);
         const panelId = `project-chats-${project.id}`;
         const name = pathLabel(project.path);
-        const workerIds = new Set(project.workerIds);
-        const toggleProject = () => {
-          if (props.pending) return;
-          toggle(project.id);
-          if (!open) void onProjectAction({ type: "select", projectId: project.id });
+        const setOpen = (value: boolean) => {
+          setExpanded((current) => {
+            const next = new Set(current);
+            if (value) next.add(project.id);
+            else next.delete(project.id);
+            return next;
+          });
         };
         return (
           <section
@@ -75,61 +65,76 @@ export function ProjectChatSidebar({
               aria-label={`Project controls for ${project.path}`}
               className="project-chat-heading"
               data-project-selected={selectedProjectId === project.id}
-              onClick={(event) => {
-                if (event.target === event.currentTarget) toggleProject();
-              }}
+              data-nav-active={homeProjectId === project.id}
               onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                setExpanded((current) => {
-                  const next = new Set(current);
-                  if (event.key === "ArrowLeft") next.delete(project.id);
-                  else next.add(project.id);
-                  return next;
-                });
+                // Row navigation never changes this project's disclosure.
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
               }}
             >
               <button
                 type="button"
                 className="project-chat-name"
+                id={`project-${project.id}`}
                 title={project.path}
-                aria-current={selectedProjectId === project.id || undefined}
-                aria-expanded={open}
-                aria-controls={panelId}
+                aria-current={homeProjectId === project.id ? "page" : undefined}
+                aria-controls="panel-project"
                 disabled={props.pending}
-                onClick={toggleProject}
+                onClick={() => onProjectOpen(project.id)}
               >
                 <span className="project-chat-label">
-                  <Icon name="folder" />
+                  <NavigationIcon name="app-folder" />
                   <span className="project-chat-title">{name}</span>
                 </span>
                 {project.active && <span className="project-chat-activity">Active</span>}
               </button>
               <button
                 type="button"
-                className="icon-button"
-                aria-label={`New chat in ${name}`}
-                title={`New chat in ${project.path}`}
+                className="icon-button project-session-add"
+                aria-label={`New Session in ${name}`}
+                title={`New Session in ${project.path}`}
+                data-tooltip="New Session"
                 disabled={props.pending}
                 onClick={() => void props.onAction?.({ type: "new", projectId: project.id })}
               >
-                <Icon name="add" />
+                <span className="sidebar-card-add" aria-hidden="true">
+                  <Icon name="add" />
+                </span>
               </button>
               <button
                 type="button"
-                className="icon-button"
-                aria-label={`More for ${project.path}`}
-                title={`More for ${project.path}`}
-                aria-haspopup="menu"
-                aria-expanded={menu?.projectId === project.id}
+                className="icon-button project-folder-stop"
+                aria-label={`Close Project: ${project.path}`}
+                title="Close Project"
+                data-tooltip="Close Project"
                 disabled={props.pending}
-                onClick={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setMenu({ projectId: project.id, x: rect.left, y: rect.bottom });
+                onClick={() => void onProjectAction({ type: "stop-folder", projectId: project.id })}
+              >
+                <span className="sidebar-card-stop" aria-hidden="true">
+                  <Icon name="close" />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="icon-button project-chat-toggle"
+                id={`project-toggle-${project.id}`}
+                aria-label={`${open ? "Collapse" : "Expand"} project ${project.path}`}
+                aria-expanded={open}
+                aria-controls={panelId}
+                data-tooltip=""
+                onClick={() => setOpen(!open)}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setOpen(event.key === "ArrowRight");
                 }}
               >
-                <Icon name="overflow-menu--horizontal" />
+                <span className="sidebar-card-chevron" aria-hidden="true">
+                  <Icon name="chevron--down" />
+                </span>
               </button>
             </div>
             <div
@@ -141,28 +146,10 @@ export function ProjectChatSidebar({
             >
               <ChatSidebar
                 {...props}
-                chats={props.chats.filter((chat) => chat.projectId === project.id)}
-                runs={props.runs.filter((run) => !run.relay && workerIds.has(run.record.id))}
+                ancestorsExpanded={ancestorsExpanded && open}
+                entries={projectConversations(project, props.chats, props.runs, props.selectedId)}
               />
             </div>
-            {menu?.projectId === project.id && (
-              <AnchoredMenu
-                x={menu.x}
-                y={menu.y}
-                label={`Actions for ${project.path}`}
-                onClose={() => setMenu(null)}
-                items={[
-                  {
-                    label: "Stop folder",
-                    run: () => void onProjectAction({ type: "stop-folder", projectId: project.id }),
-                  },
-                  {
-                    label: "Close project",
-                    run: () => void onProjectAction({ type: "close", projectId: project.id }),
-                  },
-                ]}
-              />
-            )}
           </section>
         );
       })}

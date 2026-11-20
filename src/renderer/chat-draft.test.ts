@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChatDraft } from "./chat-draft.js";
+import type { OrchestrationChat } from "../bridge/index.js";
+import { ChatDraft, chatDraftKey } from "./chat-draft.js";
+
+const attachment = {
+  reference: {
+    reviewId: "b6555384-79d3-4e54-98ba-a1b262c1a6d1",
+    revisionId: "73810d58-9e5c-4ad7-af25-930a42df1330",
+    fileKey: "opaque",
+    side: "modified" as const,
+    start: 2,
+    end: 4,
+  },
+  label: "file.ts:2-4 (modified)",
+};
 
 function storage() {
   const values = new Map<string, string>();
@@ -14,6 +27,95 @@ function storage() {
   };
 }
 describe("conversation drafts", () => {
+  it("keeps the Relay draft owner stable as its conversation identity appears", () => {
+    const beforeConnection = {
+      kind: "relay",
+      run: { id: "relay-run" } as NonNullable<OrchestrationChat["run"]>,
+    } as OrchestrationChat;
+    const afterConnection = {
+      ...beforeConnection,
+      conversationId: "relay-conversation",
+    };
+
+    expect(chatDraftKey(beforeConnection)).toBe("code60.orchestrationDraft:relay");
+    expect(chatDraftKey(afterConnection)).toBe(chatDraftKey(beforeConnection));
+  });
+
+  it("keeps custom drafts separate from Relay and each other across connection hydration", () => {
+    const relay = { kind: "relay" } as OrchestrationChat;
+    const reviewer = { ...relay, customAgentId: "reviewer" };
+    const writer = { ...relay, customAgentId: "writer" };
+    const owners = [relay, reviewer, writer];
+    const keys = owners.map(chatDraftKey);
+    expect(new Set(keys).size).toBe(3);
+    const saved = storage();
+    for (const [index, chat] of owners.entries()) {
+      const key = chatDraftKey(chat);
+      const draft = new ChatDraft(key, saved);
+      draft.edit(`Draft ${index}`);
+      draft.attach(attachment);
+      const hydrated = { ...chat, conversationId: `conversation-${index}` };
+      expect(chatDraftKey(hydrated)).toBe(key);
+      expect(new ChatDraft(chatDraftKey(hydrated), saved).snapshot()).toMatchObject({
+        text: `Draft ${index}`,
+        attachments: [attachment],
+      });
+    }
+    const reviewerDraft = new ChatDraft(chatDraftKey(reviewer), saved);
+    reviewerDraft.clear(reviewerDraft.sent());
+    expect(new ChatDraft(chatDraftKey(relay), saved).snapshot().text).toBe("Draft 0");
+    expect(new ChatDraft(chatDraftKey(writer), saved).snapshot().text).toBe("Draft 2");
+  });
+
+  it("keeps pinned code references across reload and removes them only after a matching Send", () => {
+    const saved = storage();
+    const draft = new ChatDraft("key", saved);
+    draft.edit("Keep my correction.");
+    draft.attach(attachment);
+    const loaded = new ChatDraft("key", saved);
+    expect(loaded.snapshot()).toMatchObject({
+      text: "Keep my correction.",
+      attachments: [attachment],
+    });
+    loaded.clear(loaded.sent());
+    expect(new ChatDraft("key", saved).snapshot()).toMatchObject({ text: "", attachments: [] });
+  });
+  it("preserves source text but rejects malformed saved references", () => {
+    const saved = storage();
+    saved.setItem("key", "Keep this.");
+    saved.setItem(
+      "key:references",
+      JSON.stringify([{ ...attachment, reference: { ...attachment.reference, end: 1 } }]),
+    );
+    const draft = new ChatDraft("key", saved);
+    expect(draft.snapshot()).toMatchObject({ text: "Keep this.", attachments: [] });
+    expect(draft.snapshot().storageError).toContain("could not be saved");
+  });
+  it("adds and removes exact references without replacing or sending a draft", () => {
+    const draft = new ChatDraft("key", storage());
+    draft.edit("Please adjust this.");
+    expect(draft.attach(attachment)).toBe(true);
+    expect(draft.attach(attachment)).toBe(true);
+    expect(draft.sent()).toMatchObject({ text: "Please adjust this.", attachments: [attachment] });
+    const sent = draft.sent();
+    draft.remove(0);
+    draft.clear(sent);
+    expect(draft.snapshot().text).toBe("Please adjust this.");
+    expect(draft.snapshot().attachments).toEqual([]);
+  });
+  it("restores the original request only to the confirmed draft version, never resending", () => {
+    const saved = storage();
+    const draft = new ChatDraft("key", saved);
+    draft.edit("unsent");
+    draft.attach(attachment);
+    expect(draft.restore(draft.sent(), "Original request")).toBe(true);
+    expect(draft.snapshot()).toMatchObject({ text: "Original request", attachments: [] });
+    expect(saved.getItem("key")).toBe("Original request");
+    const sent = draft.sent();
+    draft.edit("newer");
+    expect(draft.restore(sent, "stale")).toBe(false);
+    expect(draft.snapshot().text).toBe("newer");
+  });
   it("retains exact source, uses existing per-role keys, and clears only a successful sent version", () => {
     const saved = storage();
     const orchestrator = new ChatDraft("code60.orchestrationDraft:a", saved);
@@ -29,6 +131,19 @@ describe("conversation drafts", () => {
     expect(saved.getItem("code60.orchestrationDraft:a")).toBeNull();
     expect(worker.snapshot().text).toBe("worker");
     off();
+  });
+  it("returns original exact code references with the request and preserves newer attachments", () => {
+    const saved = storage();
+    const draft = new ChatDraft("key", saved);
+    expect(draft.restore(draft.sent(), "Original correction", [attachment.reference])).toBe(true);
+    expect(draft.snapshot().attachments[0]?.reference).toEqual(attachment.reference);
+    expect(new ChatDraft("key", saved).snapshot().attachments).toEqual(
+      draft.snapshot().attachments,
+    );
+    const sent = draft.sent();
+    draft.attach({ ...attachment, reference: { ...attachment.reference, start: 1 } });
+    expect(draft.restore(sent, "Stale", [])).toBe(false);
+    expect(draft.snapshot().attachments).toHaveLength(2);
   });
   it("does not clear later edits, even if they return to the submitted text", () => {
     const draft = new ChatDraft("key", storage());

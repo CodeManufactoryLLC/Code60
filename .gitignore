@@ -13,7 +13,6 @@ target/
 *.tsbuildinfo
 /release/
 /release-assets/
-/native/win32/
 /models/
 
 # Test output and logs

@@ -18,6 +18,7 @@ export interface TaskGit {
   snapshot(directory: string, options?: TaskSnapshotOptions, signal?: AbortSignal): Promise<string>;
   tree(directory: string, commit: string): Promise<Record<string, TaskEntry>>;
   blob(directory: string, oid: string, path?: string): Promise<Buffer>;
+  hash(directory: string, path: string, data: Buffer): Promise<string>;
   merge(base: Buffer, current: Buffer, proposed: Buffer): Promise<Buffer | null>;
   identity(directory: string): Promise<string>;
   lockPath(directory: string): Promise<string>;
@@ -207,6 +208,27 @@ export const taskGit: TaskGit = {
             ? reject(new Error("Could not read task file within the 32 MiB limit"))
             : resolve(stdout),
       );
+    });
+  },
+  async hash(directory, path, data) {
+    return new Promise((resolve, reject) => {
+      const child = execFile(
+        "git",
+        ["hash-object", `--path=${path}`, "--stdin"],
+        { cwd: directory, timeout: 60_000, maxBuffer: 1024 * 1024, windowsHide: true },
+        (error, stdout) => {
+          if (error) reject(new Error("Could not clean-filter task file"));
+          else {
+            try {
+              resolve(objectId(stdout.trim()));
+            } catch (cause) {
+              reject(cause);
+            }
+          }
+        },
+      );
+      child.stdin?.on("error", reject);
+      child.stdin?.end(data);
     });
   },
   async merge(base, current, proposed) {

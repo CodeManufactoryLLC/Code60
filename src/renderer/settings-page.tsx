@@ -1,11 +1,12 @@
 import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
-import { parseTheme, type Theme } from "./appearance.js";
+import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
+import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
+import { SidebarAppearanceSettings } from "./sidebar-appearance-settings.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
-import type { SettingsSectionId } from "./tabs.js";
 import { TextSettings } from "./text-settings.js";
 import { TransitionSettings } from "./transition-settings.js";
 import type { TextStyles } from "./typography.js";
@@ -13,7 +14,6 @@ export function SettingsPage({
   section,
   updates,
   versions,
-  orchestration,
   memory,
   pollingControls,
   transparent,
@@ -21,6 +21,11 @@ export function SettingsPage({
   onTransparent,
   theme,
   onTheme,
+  sidebarAppearance,
+  sidebarAppearanceSaved,
+  sidebarBlurSupported,
+  sidebarBlurError,
+  onSidebarAppearance,
   textStyles,
   onTextStyles,
   lines,
@@ -36,10 +41,9 @@ export function SettingsPage({
   charts,
   onCharts,
 }: {
-  section: SettingsSectionId;
+  section: SettingsSectionId | null;
   updates: ReactNode;
   versions: Versions | undefined;
-  orchestration: ReactNode;
   memory?: ReactNode;
   pollingControls: ReactNode;
   focusHighlight: boolean;
@@ -53,6 +57,11 @@ export function SettingsPage({
   onTransparent(enabled: boolean): void;
   theme: Theme;
   onTheme(theme: Theme): void;
+  sidebarAppearance: SidebarAppearance;
+  sidebarAppearanceSaved: boolean;
+  sidebarBlurSupported: boolean | undefined;
+  sidebarBlurError: string;
+  onSidebarAppearance(appearance: SidebarAppearance): void;
   textStyles: TextStyles;
   onTextStyles(styles: TextStyles): void;
   lines: TableLines;
@@ -74,16 +83,23 @@ export function SettingsPage({
     </div>
   );
   return (
-    <main className="settings-page" aria-labelledby={id}>
-      <div className="settings-page-heading">
-        <h1 id={id}>Settings</h1>
-      </div>
-      {settingsPanel("agents", orchestration)}
+    <main
+      className="settings-page"
+      aria-label={section ? settingsLabels[section] : undefined}
+      hidden={section === null}
+    >
       {settingsPanel("memory", memory)}
       {settingsPanel(
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
-          <SettingsHeader id={`${id}-appearance`} title="Appearance" />
+          <SettingsHeader page="appearance" id={`${id}-appearance`} />
+          <SidebarAppearanceSettings
+            appearance={sidebarAppearance}
+            saved={sidebarAppearanceSaved}
+            blurSupported={sidebarBlurSupported}
+            nativeError={sidebarBlurError}
+            onChange={onSidebarAppearance}
+          />
           <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">
@@ -102,9 +118,10 @@ export function SettingsPage({
               <span className="settings-label">
                 <span id={`${id}-transparent-label`}>Transparent background</span>
                 <InfoTip label="Transparent background" id={`${id}-transparent`}>
-                  Applies after restart. Makes the area outside the content frame and tabs fully
-                  transparent. On macOS, clicks in that area pass through to the desktop; on Linux,
-                  the window stays clickable.
+                  Applies after restart. Makes the other areas outside the content frame and
+                  navigation transparent. On macOS, clicks in those areas pass through to the
+                  desktop; on Linux, the window stays clickable. Left sidebar opacity is controlled
+                  separately and applies immediately.
                 </InfoTip>
               </span>
               <input
@@ -155,8 +172,8 @@ export function SettingsPage({
         "table-defaults",
         <section className="settings-section" aria-labelledby={`${id}-table`}>
           <SettingsHeader
+            page="table-defaults"
             id={`${id}-table`}
-            title="Table defaults"
             tip="Defaults for tables without local overrides. Use each table’s Settings to customize it."
           />
           <SettingsCard title="Lines">
@@ -182,7 +199,11 @@ export function SettingsPage({
           <SettingsCard title="Layout">
             <div className="settings-row">
               <span id={`${id}-density`}>Row density</span>
-              <div className="segmented" role="radiogroup" aria-labelledby={`${id}-density`}>
+              <div
+                className="segmented table-density-selector"
+                role="radiogroup"
+                aria-labelledby={`${id}-density`}
+              >
                 {rowDensities.map((entry) => (
                   <label key={entry.id} className="segmented-option">
                     <input

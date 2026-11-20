@@ -15,7 +15,7 @@
   overflow: hidden;
   scrollbar-gutter: auto;
   isolation: isolate;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   -webkit-app-region: no-drag;
 }
@@ -27,7 +27,7 @@
 }
 
 .splash::backdrop {
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .splash > .window-drag-strip {
@@ -48,7 +48,7 @@
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   padding: calc(var(--app-titlebar-height) + 48px) 24px 80px;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .splash-theme-toggle {
@@ -91,7 +91,7 @@
   --letter-spacing: normal;
   margin: 0;
   color: var(--splash-logo-text);
-  font-family: var(--font);
+  font-family: "D-DIN", sans-serif;
   font-size: 18px;
   font-weight: 400;
   text-align: center;
@@ -102,13 +102,20 @@
   min-width: 120px;
   margin-top: 24px;
   padding: 10px 32px;
-  background: transparent;
-  color: var(--text);
+  background: var(--primary);
+  color: var(--primary-text);
+  border: var(--rule) solid var(--border);
+  box-shadow: var(--button-shadow);
   -webkit-app-region: no-drag;
 }
 
+.splash-enter:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--primary-text);
+}
+
 .wordmark {
-  font-family: var(--font);
+  font-family: "D-DIN", sans-serif;
   font-weight: 400;
   --letter-spacing: 0.02em;
   text-transform: none;

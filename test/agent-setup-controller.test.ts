@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CoreDeps } from "../src/core/index.js";
+import { ChatCheckpoints } from "../src/desktop/chat-checkpoints.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import { filePreferences } from "../src/desktop/preferences.js";
 import { openProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
@@ -16,7 +17,7 @@ afterEach(async () => {
     directories.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
   );
 });
-async function fixture() {
+async function fixture(relay = false) {
   const dir = await fs.mkdtemp(join(tmpdir(), "code60-setup-controller-"));
   directories.push(dir);
   const agents = new FakeAgents();
@@ -36,7 +37,7 @@ async function fixture() {
       },
       env,
       { confirm: async () => true },
-      { preferences, openDatabase, detectAgent: detect },
+      { preferences, openDatabase, detectAgent: detect, relay },
     );
     controllers.push(controller);
     return controller;
@@ -187,10 +188,196 @@ it.runIf(sqliteAvailable())(
     await controller.finishAgentSetup(identity());
     expect(controller.snapshot().chat.run?.id).toBe(chatId);
     expect((await call("code60_get_context")).body.result.providers).toEqual(["claude", "codex"]);
+    await controller.providerAction({ type: "disconnect", provider: "codex" });
+    expect(controller.snapshot().chat.run?.id).toBe(chatId);
+    expect((await call("code60_get_context")).body.result.providers).toEqual(["claude"]);
+    await controller.beginAgentSetup({ mode: "add" });
+    await attempt("codex");
+    await controller.finishAgentSetup(identity());
     agents.script = () => "hang";
     await controller.orchestrationChatAction({ type: "send", id: chatId as string, text: "work" });
+    expect((await call("code60_browser", { action: "status" })).body.result).toMatchObject({
+      mode: "headless",
+      connected: false,
+    });
+    expect(
+      (await call("code60_browser", { action: "set-mode", mode: "visible" })).body.result,
+    ).toMatchObject({ mode: "visible", connected: false });
+    expect((await call("code60_browser", { action: "set-mode", mode: "native" })).status).toBe(400);
+    expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain(
+      "active agent work",
+    );
+    await expect(
+      controller.providerAction({ type: "set-primary", provider: "codex" }),
+    ).rejects.toThrow("active agent work");
+    await expect(
+      controller.providerAction({ type: "disconnect", provider: "codex" }),
+    ).rejects.toThrow("active agent work");
     await expect(controller.beginAgentSetup({ mode: "primary" })).rejects.toThrow(
       "active orchestration work",
     );
+  },
+);
+
+it("publishes management eligibility, saves membership changes and preserves it across restart", async () => {
+  const { controller, preferences, agents, create, identity, attempt } = await fixture();
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain("setup");
+  await controller.finishAgentSetup(identity());
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toBeNull();
+  const defaults = {
+    version: 1 as const,
+    providers: { claude: { worker: [{ configId: "model", value: "saved", name: "Saved" }] } },
+  };
+  await preferences.setModelDefaults?.(defaults);
+  const probeCount = agents.specs.length;
+  await controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().orchestration.provider).toBe("codex");
+  expect(controller.snapshot().agents).toEqual(["claude", "codex"]);
+  expect(agents.specs).toHaveLength(probeCount);
+  await controller.providerAction({ type: "disconnect", provider: "claude" });
+  expect(await preferences.agentSetup?.()).toMatchObject({ primary: "codex", enabled: ["codex"] });
+  await expect(
+    controller.providerAction({ type: "disconnect", provider: "codex" }),
+  ).rejects.toThrow("Set another provider");
+  const restored = create();
+  await restored.restore();
+  expect(restored.snapshot().agents).toEqual(["codex"]);
+  expect(await preferences.modelDefaults?.()).toEqual(defaults);
+  expect(restored.snapshot().orchestration.provider).toBe("codex");
+});
+
+it("rejects duplicate queued management requests and retains state when persistence fails", async () => {
+  const { controller, preferences, identity, attempt } = await fixture();
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  await controller.finishAgentSetup(identity());
+  const save = vi
+    .spyOn(preferences, "setAgentSetup")
+    .mockRejectedValueOnce(new Error("Save failed. Retry."));
+  const pending = controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain("Wait");
+  await expect(
+    controller.providerAction({ type: "disconnect", provider: "codex" }),
+  ).rejects.toThrow("Wait");
+  await expect(pending).rejects.toThrow("Save failed");
+  expect(controller.snapshot().orchestration.provider).toBe("claude");
+  expect(controller.snapshot().agents).toEqual(["claude", "codex"]);
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toBeNull();
+  save.mockRestore();
+  await controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().orchestration.provider).toBe("codex");
+});
+it("excludes Relay sends throughout a pending primary-provider write", async () => {
+  const { controller, preferences, identity, attempt } = await fixture(true);
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  await controller.finishAgentSetup(identity());
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  const id = controller.snapshot().chat.run!.id;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const original = preferences.setAgentSetup!.bind(preferences);
+  const save = vi.spyOn(preferences, "setAgentSetup").mockImplementationOnce(async (record) => {
+    await gate;
+    await original(record);
+  });
+  const change = controller.providerAction({ type: "set-primary", provider: "codex" });
+  try {
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    await expect(async () =>
+      controller.orchestrationChatAction({
+        type: "send",
+        id,
+        text: "Do not reach outgoing provider",
+      }),
+    ).rejects.toThrow("provider change");
+  } finally {
+    release();
+  }
+  await change;
+  save.mockRestore();
+  expect(controller.snapshot().orchestration.provider).toBe("codex");
+});
+it("counts Relay request preparation as active work before changing a provider", async () => {
+  const { controller, agents, identity, attempt } = await fixture(true);
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  await controller.finishAgentSetup(identity());
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const original = ChatCheckpoints.prototype.begin;
+  const checkpoint = vi
+    .spyOn(ChatCheckpoints.prototype, "begin")
+    .mockImplementationOnce(async function (this: ChatCheckpoints, ...args) {
+      await gate;
+      return original.apply(this, args);
+    });
+  agents.script = () => "hang";
+  const send = controller.orchestrationChatAction({
+    type: "send",
+    id: controller.snapshot().chat.run!.id,
+    text: "Pending preparation",
+  });
+  try {
+    await vi.waitFor(() => expect(checkpoint).toHaveBeenCalledOnce());
+    await expect(
+      controller.providerAction({ type: "set-primary", provider: "codex" }),
+    ).rejects.toThrow("active agent work");
+  } finally {
+    release();
+    checkpoint.mockRestore();
+  }
+  await send;
+  expect(controller.snapshot().orchestration.provider).toBe("claude");
+});
+
+it.skipIf(!sqliteAvailable())(
+  "retains every saved conversation when changing the primary in an open workspace",
+  async () => {
+    const { dir, controller, identity, attempt } = await fixture(true);
+    await controller.beginAgentSetup({ mode: "primary" });
+    await attempt("claude");
+    await attempt("codex");
+    await controller.finishAgentSetup(identity());
+    const database = join(dir, "project.sqlite");
+    const db = openProjectDatabase(database, true);
+    db.record(dir, new Date().toISOString());
+    db.close();
+    await controller.connect(database, false);
+    await controller.openProject(dir, controller.snapshot().databaseEpoch);
+    const projectId = controller.snapshot().projectInstanceId!;
+    await controller.orchestrationChatAction({ type: "new", projectId });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({
+      type: "rename",
+      id: controller.snapshot().chat.run!.id,
+      title: "Alpha",
+    });
+    await controller.orchestrationChatAction({ type: "new", projectId });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({
+      type: "rename",
+      id: controller.snapshot().chat.run!.id,
+      title: "Beta",
+    });
+    await controller.providerAction({ type: "set-primary", provider: "codex" });
+    expect(
+      controller
+        .snapshot()
+        .chats.filter((chat) => chat.projectId === projectId)
+        .map((chat) => chat.title)
+        .sort(),
+    ).toEqual(["Alpha", "Beta"]);
   },
 );

@@ -27,13 +27,36 @@ describe("separate chat action owners", () => {
     expect(owner.snapshot()).toEqual({ pending: null, error: "Retry selection" });
   });
   it("does not send disconnected or disposed conversations", async () => {
-    const api = { orchestrationChatAction: vi.fn(async () => {}) };
+    const api = { orchestrationChatAction: vi.fn(async () => undefined) };
     const disconnected = new OrchestratorActions(api, "none", false);
     expect(await disconnected.action({ type: "select", id: "chat" })).toBe(false);
     const disposed = new OrchestratorActions(api, "db/chat", true);
     disposed.dispose();
     expect(await disposed.action({ type: "select", id: "chat" })).toBe(false);
     expect(api.orchestrationChatAction).not.toHaveBeenCalled();
+  });
+  it("restores a request only from a successful current Undo result, not a declined confirmation", async () => {
+    const result = {
+      type: "rewound" as const,
+      checkpointId: "checkpoint",
+      text: "Original request",
+    };
+    const api = {
+      orchestrationChatAction: vi.fn().mockResolvedValueOnce(undefined).mockResolvedValue(result),
+    };
+    const owner = new OrchestratorActions(api, "relay", true);
+    const restore = vi.fn();
+    const request = {
+      type: "undo-request" as const,
+      id: "chat",
+      checkpointId: "checkpoint",
+      replacesDraft: true,
+    };
+    await owner.action(request, restore);
+    expect(restore).not.toHaveBeenCalled();
+    await owner.action(request, restore);
+    expect(restore).toHaveBeenCalledExactlyOnceWith(result);
+    expect(owner.snapshot().pending).toBeNull();
   });
   it("invalidates old sends across disposal and effect replay without leaving pending stuck", async () => {
     const pending = deferred();

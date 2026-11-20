@@ -8,6 +8,8 @@ export interface Destination {
   section?: SettingsSectionId;
   /** The orchestrator or worker run shown, when `page` is `chat`. */
   chat?: string;
+  project?: string;
+  provider?: string;
 }
 
 export interface NavigationHistory {
@@ -28,16 +30,20 @@ const settleMs = 2000;
 
 export function destination(
   page: PageId,
-  section: SettingsSectionId,
+  section: SettingsSectionId | null,
   chat: string | undefined,
 ): Destination {
-  if (page === "settings") return { page, section };
+  if (page === "settings") return section ? { page, section } : { page };
   if (page === "chat" && chat) return { page, chat };
   return { page };
 }
 
 const sameDestination = (a: Destination, b: Destination) =>
-  a.page === b.page && a.section === b.section && a.chat === b.chat;
+  a.page === b.page &&
+  a.section === b.section &&
+  a.chat === b.chat &&
+  a.project === b.project &&
+  a.provider === b.provider;
 
 /** Chat without a conversation is a placeholder that any conversation fulfils. */
 const fulfils = (actual: Destination, target: Destination) =>
@@ -128,6 +134,10 @@ export class NavigationRecorder {
   ) {
     this.current = current;
     this.history = { entries: [current], index: 0 };
+  }
+
+  get traversing(): boolean {
+    return this.pending?.traversal === true;
   }
 
   /** Report where the user is now. */
@@ -248,8 +258,7 @@ export class NavigationRecorder {
   }
 }
 
-const destinationKey = ({ page, section, chat }: Destination) =>
-  `${page}\u0000${section ?? ""}\u0000${chat ?? ""}`;
+const destinationKey = (entry: Destination) => JSON.stringify(entry);
 
 /** One history per window session; it starts fresh whenever the renderer starts. */
 export function useNavigationHistory(current: Destination): NavigationRecorder {

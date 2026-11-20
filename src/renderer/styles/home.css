@@ -11,6 +11,10 @@
   min-height: 38px;
 }
 
+.home-page[hidden] {
+  display: none;
+}
+
 .home-content {
   display: flex;
   flex-direction: column;
@@ -21,20 +25,46 @@
   scrollbar-gutter: stable both-edges;
 }
 
-.home-cards {
-  display: grid;
-  grid-template-columns: repeat(
-      auto-fit,
-      minmax(min(100%, max(240px, calc(var(--text-size, 13px) * 16))), 1fr)
-    );
-  gap: 16px;
+.home-welcome {
+  flex-shrink: 0;
   width: 100%;
-  max-width: 840px;
+  max-width: 736px;
+  margin: auto auto 24px;
+  font: var(--card-weight, 700) var(--card-size, 22px) var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.home-cards {
+  --navigation-card-width: 224px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, var(--navigation-card-width));
+  gap: 32px;
+  justify-content: safe center;
+  width: 100%;
+  max-width: 736px;
   margin: auto;
   flex-shrink: 0;
 }
 
+.home-welcome + .home-cards {
+  margin-top: 0;
+}
+
+.navigation-card {
+  position: relative;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  transition:
+    background-color var(--motion) var(--ease),
+    box-shadow var(--motion) var(--ease);
+}
+
 .home-card {
+  box-sizing: border-box;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -42,72 +72,80 @@
   justify-content: flex-start;
   gap: 0;
   min-width: 0;
+  width: 100%;
+  flex: 1;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--group-shadow);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
   text-align: left;
   white-space: normal;
-  transition:
-    background-color var(--motion) var(--ease),
-    box-shadow var(--motion) var(--ease);
+  transition: background-color var(--motion) var(--ease);
 }
 
 .home-card-art {
   display: flex;
   align-items: center;
-  padding: 24px 20px;
-  min-height: 100px;
+  padding: 16px;
+  min-height: 72px;
   box-sizing: border-box;
-  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, var(--primary) 14%, var(--surface)),
-    var(--surface)
-  );
-  color: var(--accent);
+  border-radius: calc(var(--navigation-card-radius) - var(--rule))
+    calc(var(--navigation-card-radius) - var(--rule)) 0 0;
+  background: var(--card-header-fill);
+  color: var(--card-header-text);
 }
 
 .home-card-art .navigation-icon {
   position: static;
-  width: 48px;
-  height: 48px;
+  width: calc(36px * var(--nav-icon-scale));
+  height: calc(36px * var(--nav-icon-scale));
   transform: none;
-}
-
-.home-card-art .relay-navigation-icon {
-  width: 57px;
-  height: 51px;
 }
 
 .home-card-copy {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 20px 20px 48px;
+  padding: 16px 16px 40px;
   overflow-wrap: anywhere;
 }
 
 .home-card-name {
-  font: var(--title-weight, 400) max(22px, var(--title-size, 18px)) var(--title-font, var(--font));
-  text-transform: var(--title-case, none);
-  --letter-spacing: var(--title-spacing, normal);
+  font: var(--card-weight, 700) max(8px, calc(var(--card-size, 22px) * 9 / 11))
+    var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
 }
 
-.home-card-description {
-  font:
-    var(--text-weight, 400) max(15px, var(--text-size, 13px)) / 1.5 var(--text-font, var(--font));
-  text-transform: var(--text-case, none);
-  --letter-spacing: var(--text-spacing, normal);
-  color: var(--muted);
+.home-card-create {
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 16px;
+}
+
+.home-card-create .home-card-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.home-card-create .carbon-icon {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
 }
 
 .home-card-arrow {
   position: absolute;
-  right: 20px;
-  bottom: 16px;
+  right: 16px;
+  bottom: 12px;
   color: var(--accent);
   transform: rotate(180deg);
 }
@@ -116,26 +154,34 @@
 .home-card:active:not(:disabled) {
   background: color-mix(in srgb, var(--primary) 5%, var(--surface));
   color: var(--text);
-  box-shadow: var(--overlay-shadow);
+}
+
+.navigation-card:has(> .home-card:active:not(:disabled)) {
+  translate: 1px 1px;
+  box-shadow: 3px 3px 0 var(--shadow-color);
 }
 
 .home-card:disabled .home-card-art {
   opacity: 0.45;
 }
 
-.home-card:focus-visible {
-  box-shadow: var(--focus-shadow), var(--group-shadow);
+.navigation-card:has(> .home-card:focus-visible) {
+  box-shadow: var(--card-shadow), var(--focus-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-card {
+  .home-card,
+  .navigation-card {
     transition: none;
+  }
+  .navigation-card:has(> .home-card:active:not(:disabled)) {
+    translate: none;
   }
 }
 
 @media (forced-colors: active) {
-  .home-card,
-  .home-card:focus-visible {
+  .navigation-card,
+  .navigation-card:has(> .home-card:focus-visible) {
     border-color: ButtonText;
     box-shadow: none;
   }
@@ -146,4 +192,139 @@
   .home-card-arrow {
     color: ButtonText;
   }
+}
+
+.custom-agents-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.home-card-action {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.custom-agent-editor form,
+.custom-agent-editor label {
+  display: grid;
+  gap: 12px;
+}
+.custom-agent-editor textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 160px;
+}
+
+/* Provider controls adapt the licensed Neobrutalism menu and checkbox. */
+.providers-page .home-card-arrow {
+  left: 16px;
+  right: auto;
+}
+.providers-page .home-card-copy {
+  padding-bottom: 60px;
+}
+.providers-page .home-card > [data-slot="card-header"] {
+  padding-right: 48px;
+}
+.provider-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 2px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-text);
+}
+.provider-primary > .carbon-icon {
+  --icon-size: 22px;
+}
+.provider-primary:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 3px;
+}
+.providers-page .navigation-card > .provider-primary {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+}
+.provider-primary-compact {
+  width: 18px;
+  height: 18px;
+}
+.provider-primary-compact > .carbon-icon {
+  --icon-size: 12px;
+}
+.provider-sidebar-row {
+  align-items: center;
+  gap: 4px;
+}
+.provider-sidebar-row .chat-sidebar-artwork > .agent-logo {
+  width: 28px;
+  height: 28px;
+}
+.provider-sidebar-row > .icon-button {
+  flex-shrink: 0;
+}
+.provider-detail-content {
+  padding: 24px var(--page-padding);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.provider-detail-content > .settings-card {
+  max-width: 640px;
+  margin: 24px auto;
+}
+.provider-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.actions-menu.provider-dropdown {
+  padding: 4px;
+  border: 2px solid var(--control-border);
+  border-radius: 5px;
+  box-shadow: var(--card-shadow);
+}
+.actions-menu.provider-dropdown [role="menuitem"] {
+  display: flex;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font: var(--button-weight, 600) var(--button-size, 13px) var(--button-font, var(--font));
+  text-transform: var(--button-case, none);
+  --letter-spacing: var(--button-spacing, normal);
+}
+.actions-menu.provider-dropdown [role="menuitem"]:is(:hover, :focus):not([aria-disabled="true"]) {
+  border-color: var(--control-border);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+@media (forced-colors: active) {
+  .provider-primary {
+    background: Highlight;
+    color: HighlightText;
+    border-color: ButtonText;
+  }
+  .actions-menu.provider-dropdown {
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+}
+
+.providers-page .navigation-card:has(> .home-card-create) {
+  border: 3px dashed var(--control-border);
+}
+.provider-sidebar-row .chat-sidebar-artwork {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 28px;
 }

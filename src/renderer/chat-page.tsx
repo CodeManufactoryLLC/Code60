@@ -1,4 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   Command,
   DesktopApi,
@@ -8,16 +16,28 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
-import { useChatDraft } from "./chat-draft.js";
+import { chatDraftKey, useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
 import { RenameChat } from "./chat-name.js";
-import { delegatedActivity, turnTimings } from "./chat-presentation.js";
+import {
+  chatFailureReason,
+  delegatedActivity,
+  isLiveMessage,
+  turnTimings,
+} from "./chat-presentation.js";
 import { useChatScroll } from "./chat-scroll.js";
+import { conversationId, type OpenChat } from "./chats.js";
 import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
+import { revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
+import { Button } from "./neobrutalism/button.js";
+import { Card } from "./neobrutalism/card.js";
+import { ScrollArea } from "./neobrutalism/scroll-area.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
+import { PageTitle } from "./page-title.js";
+import type { ReviewPreview } from "./review-actions.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
@@ -39,12 +59,6 @@ function feedbackAt(review: ReviewSummary, chatId: string | undefined, turn: num
     )
   );
 }
-function reviewAt(review: ReviewSummary, chatId: string | undefined, turn: number) {
-  return (
-    review.chatId === chatId &&
-    ((review.originChatId === chatId && review.turn === turn) || feedbackAt(review, chatId, turn))
-  );
-}
 
 export function ChatPage({
   api,
@@ -59,11 +73,16 @@ export function ChatPage({
   reviews = [],
   commands = [],
   onReview,
+  onRevisionPreview,
   onCopied,
+  notice,
+  request,
+  selectionPending = false,
 }: {
   api: DesktopApi;
   chat: OrchestrationChat | undefined;
   hidden?: boolean;
+  selectionPending?: boolean;
   events: readonly RunEvent[];
   database: string | null;
   project?: string | null;
@@ -73,21 +92,21 @@ export function ChatPage({
   reviews?: ReviewSummary[];
   commands?: readonly Command[];
   onReview?(id: string): void;
+  onRevisionPreview?(preview: ReviewPreview): void;
   onCopied?: (() => void) | undefined;
+  notice?: ReactNode;
+  request?: OpenChat | undefined;
 }) {
   const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
+  const titleTarget = chat && conversationId(chat);
   const relay = chat?.kind === "relay";
   const available = !!database || relay;
-  const key = chat?.conversationId
-    ? `code60.orchestrationDraft:${chat.conversationId}`
-    : run
-      ? `code60.orchestrationDraft:${run.id}`
-      : "";
+  const key = chatDraftKey(chat);
   const currentKey = useRef(key);
   currentKey.current = key;
-  const draftState = useChatDraft(key);
+  const draftState = useChatDraft(key, run?.id, chat?.conversationId);
   const { draft, edit } = draftState;
   const {
     pending,
@@ -107,6 +126,18 @@ export function ChatPage({
     resume,
     reveal: revealActivity,
   } = useChatScroll(active && !hidden, key);
+  const shown = active && !hidden;
+  const revisionFlow = useConversationRevisions({
+    api,
+    chat,
+    reviews,
+    runs,
+    active: shown,
+    onPreview: onRevisionPreview,
+  });
+  const visibility = useRef({ key, shown, since: Date.now() });
+  if (visibility.current.key !== key || visibility.current.shown !== shown)
+    visibility.current = { key, shown, since: Date.now() };
   const receivedEvents = useRef({ key, count: events.length });
   if (receivedEvents.current.key !== key) receivedEvents.current = { key, count: events.length };
   useLayoutEffect(() => {
@@ -116,6 +147,7 @@ export function ChatPage({
   const connecting = run?.status === "queued" || (run?.status === "running" && run.turns === 0);
   const ready =
     available &&
+    chat?.checkpoint?.phase !== "undoing" &&
     !!run &&
     (run.status === "idle" ||
       !!chat?.restored ||
@@ -126,7 +158,10 @@ export function ChatPage({
   const initialized = Boolean(
     available && run && (run.turns > 0 || run.status === "idle" || chat?.restored || ended),
   );
+  const target = request?.id === run?.id ? request : undefined;
+  const matched = useRef("");
   const blocks = useMemo(() => transcript(events), [events]);
+  const latestRequest = blocks.findLast((block) => block.type === "prompt" && !block.automatic);
   const timings = useMemo(
     () => turnTimings(events, run?.status ?? "interrupted"),
     [events, run?.status],
@@ -148,6 +183,16 @@ export function ChatPage({
     }
     return result;
   }, [blocks, visible]);
+  const revisionSlots = new Map<number, ReactNode[]>();
+  for (const card of revisionFlow.cards) {
+    const slot = revisionSlot(
+      card.at,
+      card.summary.originChatId,
+      run?.id,
+      items.map((item) => events[Number(item.blocks[0]?.key)]?.at),
+    );
+    revisionSlots.set(slot, [...(revisionSlots.get(slot) ?? []), card.content]);
+  }
   const activityTurns = useMemo(() => {
     const groups = new Map<string, Block[]>();
     const included = new Set(blocks.slice(-visible).map((block) => block.key));
@@ -169,6 +214,49 @@ export function ChatPage({
     (chat?.activity && chat.activity.state !== "idle")
   );
   const liveTurn = liveActivity ? activityTurns.current : null;
+  useEffect(() => {
+    if (!shown || target?.eventIndex === undefined || matched.current === `${key}:${target.serial}`)
+      return;
+    const blockIndex = blocks.findIndex((block) => block.key === String(target.eventIndex));
+    if (blockIndex < 0) return;
+    if (blocks.length - blockIndex > visible) {
+      setVisible(blocks.length - blockIndex);
+      return;
+    }
+    const group = [...activityTurns.groups].find(([, blocks]) =>
+      blocks.some((block) => block.key === String(target.eventIndex)),
+    )?.[0];
+    if (group && !expandedActivities.has(group)) {
+      setExpandedActivities((current) => new Set([...current, group]));
+      return;
+    }
+    const element = scroll.current?.querySelector<HTMLElement>(
+      `[data-event-index="${target.eventIndex}"]`,
+    );
+    const viewport = scroll.current;
+    if (!element || !viewport) return;
+    pause();
+    const top =
+      viewport.scrollTop +
+      element.getBoundingClientRect().top -
+      viewport.getBoundingClientRect().top -
+      viewport.clientHeight / 3;
+    revealActivity(top, group ? detailsDuration : 0, () => element.isConnected);
+    element.focus({ preventScroll: true });
+    matched.current = `${key}:${target.serial}`;
+  }, [
+    shown,
+    target,
+    key,
+    blocks,
+    visible,
+    activityTurns,
+    expandedActivities,
+    scroll,
+    pause,
+    revealActivity,
+    detailsDuration,
+  ]);
   const detailsId = (turn: string) => `${id}-activity-details-${turn}`;
   const historyId = (turn: string) => `${id}-activity-history-${turn}`;
   const toggleActivity = (turn: string) => {
@@ -226,7 +314,14 @@ export function ChatPage({
           {activityTurns.groups
             .get(turn)
             ?.map((block) => (
-              <ChatMessage key={block.key} block={block} openLink={api.openWebLink} />
+              <ChatMessage
+                key={block.key}
+                block={block}
+                openLink={api.openWebLink}
+                eventIndex={block.key}
+                className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
+                {...(target?.eventIndex === Number(block.key) ? { tabIndex: -1 } : {})}
+              />
             )) ?? <p>No activity yet.</p>}
         </div>
       </div>
@@ -256,7 +351,8 @@ export function ChatPage({
               ? "Sending"
               : "";
   const failed = run && ["failed", "timed_out", "interrupted"].includes(run.status);
-  const failure = error || chat?.error || (failed ? run.reason : "");
+  const failure =
+    error || chatFailureReason(run?.status, chat?.error || (failed ? run.reason : undefined));
   const opening = progress === "Connecting" && !failure;
   useEffect(() => {
     setError("");
@@ -273,12 +369,32 @@ export function ChatPage({
         type: "send",
         id: run.id,
         text,
+        ...(sent.attachments.length
+          ? { references: sent.attachments.map((item) => item.reference) }
+          : {}),
         ...(command ? { command: command.name } : {}),
       })
     ) {
       draftState.clear(sent);
       resume();
     }
+  }
+  async function undoRequest() {
+    const undoId = run?.id ?? (relay ? chat?.conversationId : undefined);
+    if (!undoId || !chat?.checkpoint || busy) return;
+    const sent = draftState.sent();
+    await action(
+      {
+        type: "undo-request",
+        id: undoId,
+        checkpointId: chat.checkpoint.id,
+        replacesDraft: !!sent.text || sent.attachments.length > 0,
+      },
+      (result) => {
+        if (!draftState.restore(sent, result.text, result.references))
+          setError("Undo finished, but a newer draft was preserved.");
+      },
+    );
   }
   const label = connecting
     ? "Connecting"
@@ -292,20 +408,32 @@ export function ChatPage({
       className="orchestration-chat-page"
       aria-labelledby={id}
       hidden={hidden}
+      inert={selectionPending}
+      data-navigation-pending={selectionPending || undefined}
+      aria-busy={selectionPending || undefined}
       data-chat-id={run?.id}
     >
       <header className="orchestration-chat-heading">
-        <h1 id={id}>
-          <button
-            type="button"
-            className="chat-title"
-            aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
-            disabled={relay || !available || !run}
-            onClick={() => setRenaming(true)}
-          >
-            {chat?.title ?? "Chat"}
-          </button>
-        </h1>
+        <PageTitle
+          page={relay && !chat?.customAgentId ? "relay" : chat ? "orchestrator" : "chat"}
+          id={id}
+          target={titleTarget ? { kind: "conversation", id: titleTarget } : undefined}
+        >
+          {relay ? (
+            (chat?.title ?? "Relay")
+          ) : (
+            <Button
+              variant="quiet"
+              type="button"
+              className="chat-title"
+              aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
+              disabled={!available || !run}
+              onClick={() => setRenaming(true)}
+            >
+              {chat?.title ?? "Chat"}
+            </Button>
+          )}
+        </PageTitle>
         {renaming && run && (
           <RenameChat
             title={chat?.title ?? "Chat"}
@@ -315,32 +443,34 @@ export function ChatPage({
         )}
         <div className="orchestration-chat-status">
           {!available ? (
-            <button type="button" onClick={onDatabase}>
+            <Button type="button" onClick={onDatabase}>
               Connect to database
-            </button>
+            </Button>
           ) : connecting && !chat?.restored ? (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={() => void action({ type: "stop", id: run?.id ?? null })}
             >
               Cancel
-            </button>
+            </Button>
           ) : (
+            relay &&
             (!run || ended) && (
-              <button
+              <Button
                 type="button"
                 disabled={busy}
                 onClick={() =>
                   void action({ type: "restart", id: run?.id ?? chat?.conversationId ?? null })
                 }
               >
-                {relay ? "Retry connection" : "New session"}
-              </button>
+                Retry connection
+              </Button>
             )
           )}
         </div>
       </header>
+      {notice}
       {failure && (
         <div className="error-banner" role="alert">
           {failure}
@@ -349,47 +479,6 @@ export function ChatPage({
       {relay && chat?.historySaving === "unavailable" && (
         <div className="warning-banner" role="status">
           History isn’t being saved. Recent messages may be unavailable after restart.
-        </div>
-      )}
-      {relay && chat?.historySaving !== "unavailable" && chat?.history?.incomplete && (
-        <div className="warning-banner" role="status">
-          Some earlier Relay messages weren’t saved. Available history is incomplete.
-        </div>
-      )}
-      {chat?.restored && (
-        <div className="warning-banner" role="status">
-          <span>
-            Saved chat is stopped. Send starts a new request with the selected tactic. Continue task
-            uses its original instructions. Previous workers are history only.
-          </span>
-          {run && chat.taskId && (
-            <button
-              type="button"
-              disabled={busy || !database}
-              onClick={() => {
-                if (chat.taskId)
-                  void action({ type: "continue-task", id: run.id, taskId: chat.taskId });
-              }}
-            >
-              Continue task
-            </button>
-          )}
-        </div>
-      )}
-      {run && !ended && chat?.updates.paused && (
-        <div className="warning-banner" role="status">
-          <span>
-            Automatic worker updates are paused
-            {chat.updates.pending > 0 ? ` (${chat.updates.pending} waiting)` : ""}. Sending a
-            message also resumes them.
-          </span>
-          <button
-            type="button"
-            disabled={!available || busy}
-            onClick={() => void action({ type: "resume-updates", id: run.id })}
-          >
-            Resume updates
-          </button>
         </div>
       )}
       <div className="orchestration-chat-body">
@@ -410,7 +499,7 @@ export function ChatPage({
               progress === "Stopping"
             }
           />
-          <div
+          <ScrollArea
             className="transcript"
             ref={scroll}
             role="log"
@@ -424,7 +513,8 @@ export function ChatPage({
                 </div>
               )}
               {blocks.length > visible && (
-                <button
+                <Button
+                  variant="quiet"
                   type="button"
                   onClick={() => {
                     pause();
@@ -432,35 +522,61 @@ export function ChatPage({
                   }}
                 >
                   Show earlier activity
-                </button>
+                </Button>
               )}
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <div className="chat-turn-content" key={item.key}>
+                  {revisionSlots.get(index)}
                   {!item.activity &&
                     (() => {
                       const block = item.blocks[0] as Block;
                       const event = events[Number(block.key)];
                       const feedback =
                         event?.type === "prompt"
-                          ? reviews.find((review) => feedbackAt(review, run?.id, event.turn))
+                          ? revisionFlow.summaries.find((review) =>
+                              feedbackAt(review, run?.id, event.turn),
+                            )
                           : undefined;
                       const fresh =
                         Number(block.key) >= receivedEvents.current.count &&
+                        isLiveMessage(event?.at, visibility.current.since) &&
                         !chat?.restored &&
                         active &&
                         !hidden;
                       const message = feedback ? (
-                        <article className="event prompt" aria-label="Your review feedback">
+                        <article
+                          className={`event prompt${target?.eventIndex === Number(block.key) ? " search-match" : ""}`}
+                          data-event-index={block.key}
+                          tabIndex={-1}
+                          aria-label="Your review feedback"
+                        >
                           <div className="chat-message-speaker">You</div>
                           <p>Feedback on {feedback.title}</p>
-                          <button type="button" onClick={() => onReview?.(feedback.id)}>
+                          <Button
+                            variant="quiet"
+                            type="button"
+                            onClick={() => {
+                              const batch = feedback.submissions.find(
+                                (batch) =>
+                                  (batch.deliveredChatId ?? feedback.originChatId) === run?.id &&
+                                  batch.deliveredTurn ===
+                                    (event?.type === "prompt" ? event.turn : undefined),
+                              );
+                              if (batch && revisionFlow.showFeedback(feedback.id, batch.revisionId))
+                                return;
+                              if (!relay) onReview?.(feedback.id);
+                            }}
+                          >
                             View submitted feedback
-                          </button>
+                          </Button>
                         </article>
                       ) : (
                         <ChatMessage
                           key={item.key}
                           block={block}
+                          eventIndex={block.key}
+                          className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
+                          {...(target?.eventIndex === Number(block.key) ? { tabIndex: -1 } : {})}
                           at={events[Number(block.key)]?.at}
                           prompt={
                             relay ? (
@@ -473,6 +589,20 @@ export function ChatPage({
                           incoming={block.type === "message" && fresh}
                           visible={active && !hidden}
                           onCopied={onCopied}
+                          actions={
+                            block === latestRequest &&
+                            chat?.checkpoint && (
+                              <Button
+                                variant="quiet"
+                                className="message-undo"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void undoRequest()}
+                              >
+                                Undo
+                              </Button>
+                            )
+                          }
                         />
                       );
                       return block.type === "message" || block.type === "prompt" ? (
@@ -483,30 +613,6 @@ export function ChatPage({
                         message
                       );
                     })()}
-                  {item.blocks.flatMap((block) => {
-                    const event = events[Number(block.key)];
-                    if (event?.type !== "prompt") return [];
-                    return reviews
-                      .filter((review) => reviewAt(review, run?.id, event.turn))
-                      .map((review) => (
-                        <div className="chat-review-activity" key={review.id}>
-                          <span>{review.title}</span>
-                          <span>
-                            {review.workers
-                              .map(
-                                (worker) =>
-                                  `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                              )
-                              .join(" · ")}
-                          </span>
-                          <button type="button" onClick={() => onReview?.(review.id)}>
-                            {review.submissions.some((batch) => batch.state === "delivered")
-                              ? "Review updates"
-                              : "Review changes"}
-                          </button>
-                        </div>
-                      ));
-                  })}
                   {item.blocks.map((block) => {
                     const timing = timings.get(block.key);
                     return timing && !timing.active ? (
@@ -533,33 +639,8 @@ export function ChatPage({
                   })}
                 </div>
               ))}
-              {reviews
-                .filter(
-                  (review) =>
-                    review.chatId === run?.id &&
-                    review.workers.length > 0 &&
-                    !events.some(
-                      (event) => event.type === "prompt" && reviewAt(review, run?.id, event.turn),
-                    ),
-                )
-                .map((review) => (
-                  <div className="chat-review-activity" key={review.id}>
-                    <span>{review.title}</span>
-                    <span>
-                      {review.workers
-                        .map(
-                          (worker) =>
-                            `${worker.label}: ${statusSpec[runs.find((run) => run.record.id === worker.runId)?.view?.status ?? runs.find((run) => run.record.id === worker.runId)?.record.status ?? "interrupted"].label}`,
-                        )
-                        .join(" · ")}
-                    </span>
-                    <button type="button" onClick={() => onReview?.(review.id)}>
-                      {review.submissions.some((batch) => batch.state === "delivered")
-                        ? "Review updates"
-                        : "Review changes"}
-                    </button>
-                  </div>
-                ))}
+              {revisionSlots.get(items.length)}
+              {revisionFlow.footer}
               {!opening && (
                 <ActivityDisplay
                   key={run?.id ?? "empty"}
@@ -585,7 +666,8 @@ export function ChatPage({
                 activityTurns.current === "session" &&
                 activityTurns.groups.has("session") && (
                   <>
-                    <button
+                    <Button
+                      variant="quiet"
                       type="button"
                       className="activity-history-toggle"
                       id={historyId("session")}
@@ -594,14 +676,40 @@ export function ChatPage({
                       onClick={() => toggleActivity("session")}
                     >
                       Session details
-                    </button>
+                    </Button>
                     {activityDetails("session")}
                   </>
                 )}
             </div>
-          </div>
+          </ScrollArea>
         </div>
-        <section className="composer" aria-label="Chat composer">
+        <Card as="section" className="composer" aria-label="Chat composer">
+          {chat?.checkpoint?.phase === "undoing" && (
+            <p role="alert">
+              Undo needs recovery before another request can start.
+              <Button type="button" disabled={busy} onClick={() => void undoRequest()}>
+                Resume Undo
+              </Button>
+            </p>
+          )}
+          {!!draftState.attachments.length && (
+            <ul className="chat-attachments" aria-label="Attached code references">
+              {draftState.attachments.map((attachment, index) => (
+                <li key={JSON.stringify(attachment.reference)}>
+                  {attachment.label}
+                  <Button
+                    variant="quiet"
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Remove ${attachment.label}`}
+                    onClick={() => draftState.remove(index)}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
           <label className="sr-only" htmlFor={`${id}-message`}>
             Message to orchestrator
           </label>
@@ -611,7 +719,9 @@ export function ChatPage({
             value={draft}
             commands={commands}
             commandsEnabled={!relay}
-            disabled={!available || !run || (connecting && !chat?.restored)}
+            disabled={
+              !available || !run || pending === "undo-request" || (connecting && !chat?.restored)
+            }
             onChange={edit}
             onSend={() => void send()}
           />
@@ -639,12 +749,16 @@ export function ChatPage({
             editable={ready && !busy}
             changing={!!run?.modeChanging || pending === "set-mode"}
             autoApproval
+            sessionRole="orchestrator"
+            onSaveDefault={() => {
+              if (run) void action({ type: "save-model-default", id: run.id });
+            }}
             onMode={(change) => {
               if (run) void action({ type: "set-mode", id: run.id, change });
             }}
           >
             {working ? (
-              <button
+              <Button
                 type="button"
                 className="composer-send"
                 disabled={!available || busy || !!run?.stopping}
@@ -652,19 +766,20 @@ export function ChatPage({
               >
                 <Icon name="stop" />
                 Stop
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="primary"
                 type="button"
                 className="primary composer-send"
                 disabled={busy || !ready || !draft.trim()}
                 onClick={() => void send()}
               >
                 Send <Icon name="arrow--up" />
-              </button>
+              </Button>
             )}
           </SessionInfo>
-        </section>
+        </Card>
       </div>
     </main>
   );

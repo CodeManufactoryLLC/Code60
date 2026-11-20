@@ -2,6 +2,72 @@
 
 @media (forced-colors: active) {
   :root {
+    --shadow-color: CanvasText;
+    --border: CanvasText;
+    --panel-border: CanvasText;
+    --card-header-fill: Canvas;
+    --card-header-text: CanvasText;
+    --card-header-muted: CanvasText;
+    --card-header-hover: Highlight;
+    --control-border: ButtonText;
+    --card-shadow: none;
+    --overlay-shadow: none;
+    --button-shadow: none;
+    --focus-shadow: 0 0 transparent;
+    --focus-inset-shadow: inset 0 0 0 2px Highlight;
+    --workspace-background: Canvas;
+  }
+
+  .home-card:active:not(:disabled),
+  .navigation-card:has(> .home-card:active:not(:disabled)),
+  button.primary:active:not(:disabled),
+  button.destructive:active:not(:disabled),
+  button.splash-enter:active:not(:disabled) {
+    translate: none;
+    box-shadow: none;
+  }
+
+  .sidebar-navigation-card,
+  .sidebar-navigation-card::before,
+  .file-panel-toolbar {
+    background: Canvas;
+  }
+
+  .workspace-breadcrumbs {
+    background: Canvas;
+    border-color: CanvasText;
+  }
+
+  .sidebar-card-chevron,
+  .sidebar-card-add,
+  .sidebar-card-stop {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: Canvas;
+    box-shadow: none;
+    translate: none;
+  }
+
+  .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+  .project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+  .project-folder-stop:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-stop,
+  .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
+  .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .app:has(.sidebar)::before {
+    display: none;
+  }
+
+  .sidebar-background {
+    opacity: 1;
+    background: Canvas;
+    backdrop-filter: none;
+  }
+
+  :root {
     --focus-line: Highlight;
     --focus-outline: Highlight;
   }
@@ -14,6 +80,13 @@
 }
 
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .app,
+  .sidebar,
+  .sidebar-card-toggle,
+  .sidebar-card-chevron,
+  .sidebar-card-chevron > .carbon-icon,
+  .sidebar-card-add,
+  .sidebar-card-stop,
   .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
     transition: none;
   }
@@ -115,6 +188,23 @@
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--scrollbar-thumb-hover);
   }
+
+  /* Native adaptation of Neobrutalism Scroll Area: compact solid rounded thumb.
+     Scope to chat viewports; system high-contrast scrollbars remain native. */
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+    width: var(--chat-scrollbar-size);
+    height: var(--chat-scrollbar-size);
+  }
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb {
+    background: var(--control-border);
+    border: 3px solid var(--surface);
+    border-radius: 999px;
+    background-clip: padding-box;
+    min-height: 32px;
+  }
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text);
+  }
 }
 
 @media (forced-colors: active) {
@@ -125,9 +215,12 @@
   input,
   select,
   textarea,
-  .button-group,
-  .composer {
+  .button-group {
     border: 1px solid ButtonText;
+  }
+  .composer {
+    background: Canvas;
+    outline: 1px solid ButtonText;
   }
   .page-tab [aria-selected="true"],
   .search-results [aria-selected="true"],
@@ -200,9 +293,21 @@
 @media (forced-colors: active) {
   .event.prompt:not(.automatic) pre {
     border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
   }
-  .orchestration-chat-body .composer:focus-within {
-    border-color: Highlight;
+  .event.message.search-match > .agent-message-bubble {
+    outline-color: Highlight;
+  }
+  .agent-message-bubble {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+  }
+  .composer:focus-within {
+    background: Canvas;
+    outline: 2px solid Highlight;
   }
 }
 
@@ -218,8 +323,9 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .message-copy {
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .message-copy,
+  .message-copy-glyph {
     transition: none;
   }
   .message-copy-glyph[data-clicked] {
@@ -343,5 +449,88 @@
   }
   .plan-toolbar progress::-moz-progress-bar {
     background: Highlight;
+  }
+}
+
+/* Preserve card boundaries in system high-contrast themes. */
+@media (forced-colors: active) {
+  .sidebar-navigation-card,
+  .workspace-breadcrumbs,
+  .page-panel:not(#panel-chat),
+  .chat-conversations,
+  .navigation-card,
+  .file-panel,
+  .settings-card,
+  .settings-group {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .sidebar .navigation-icon:not(.sidebar-card-header .navigation-icon) {
+    opacity: 1;
+  }
+}
+
+@media (forced-colors: active) {
+  .home-card:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .neo-button:not([data-variant="quiet"]):active:enabled {
+    translate: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .neo-button,
+  .neo-button:not([data-variant="quiet"]):active:enabled {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+
+  .neo-button:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (forced-colors: active) {
+  .neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+    background: Highlight;
+    color: HighlightText;
+    border-color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .automation-job-header:hover {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .automation-job-header:hover .neo-accordion-trigger {
+    background: transparent;
+    color: inherit;
+  }
+  .automation-job-controls > button,
+  .automation-job-controls > button:active:enabled {
+    background: transparent;
+    color: inherit;
+    border: 0;
+    box-shadow: none;
+    forced-color-adjust: none;
+  }
+  .automation-job-controls > button:focus-visible {
+    outline: none;
   }
 }

@@ -1,8 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Action, DesktopApi } from "../bridge/index.js";
+import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { useAppPreferences } from "./app-preferences.js";
 import type { FileTabAction } from "./file-tabs.js";
 import type { FileBrowser } from "./files.js";
+import type { NavigationActions } from "./navigation-actions.js";
 import type { ToastMessage, ToastTone } from "./overlays.js";
 import type { useProjectScope } from "./project-scope.js";
 import type { DesktopState } from "./snapshot-state.js";
@@ -12,6 +13,7 @@ import type { useUpdates } from "./updates.js";
 import type { useWindowAppearance } from "./window-appearance.js";
 
 export interface AppPagesProps {
+  providerManagement: import("./provider-management.js").ProviderManagement;
   api: DesktopApi;
   state: DesktopState | undefined;
   project: ReturnType<typeof useProjectScope> & {
@@ -21,10 +23,13 @@ export interface AppPagesProps {
     explicitProjectFiles?: boolean;
   };
   preferences: ReturnType<typeof useAppPreferences>;
+  sidebarBlurError: string;
   appearance: ReturnType<typeof useWindowAppearance>;
   updates: ReturnType<typeof useUpdates>;
   tabs: PageTabs;
-  settingsSection: SettingsSectionId;
+  settingsSection: SettingsSectionId | null;
+  navigation: NavigationActions;
+  navigationRuns: readonly DesktopRun[];
   splash: boolean;
   busy: boolean;
   error: string;
@@ -33,6 +38,7 @@ export interface AppPagesProps {
   transcripts: Transcripts;
   orchestratorConfigured: boolean;
   setTabs: Dispatch<SetStateAction<PageTabs>>;
+  setSettingsSection(section: SettingsSectionId | null): void;
   setError(message: string): void;
   showPicker(kind: "database" | "project"): void;
   attempt(operation: () => Promise<unknown>, current?: () => boolean): Promise<boolean>;

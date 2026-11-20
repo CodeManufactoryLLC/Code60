@@ -15,12 +15,28 @@ function mergeEvents(
 ): SequencedEvent[] {
   return [...previous, ...next.filter((entry) => entry.revision > after)];
 }
+function rewound(previous: DetailFrame, frame: DetailFrame): boolean {
+  return (
+    !previous.closed &&
+    !frame.closed &&
+    previous.payload.kind === "conversation" &&
+    frame.payload.kind === "conversation" &&
+    (previous.payload.chat.rewindRevision ?? 0) !== (frame.payload.chat.rewindRevision ?? 0)
+  );
+}
 export function mergeDetailFrame(
   previous: DetailFrame | undefined,
   frame: DetailFrame,
 ): DetailFrame {
   if (previous && frame.revision <= previous.revision) return previous;
-  if (frame.closed || !previous || previous.closed || frame.previousRevision === null) return frame;
+  if (
+    frame.closed ||
+    !previous ||
+    previous.closed ||
+    frame.previousRevision === null ||
+    rewound(previous, frame)
+  )
+    return frame;
   const before = previous.payload;
   const next = frame.payload;
   let payload: DetailPayload = next;
@@ -99,7 +115,7 @@ export function startDetailStream(
       !frame.closed &&
       frame.revision > previous.revision &&
       frame.previousRevision !== null &&
-      frame.previousRevision > previous.revision,
+      (frame.previousRevision > previous.revision || rewound(previous, frame)),
     publish: (frame) => {
       if (frame === current) return;
       current = frame;

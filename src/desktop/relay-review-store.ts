@@ -15,6 +15,7 @@ interface Assignment {
   targetId: string;
   turn: number;
   pinned: boolean;
+  workerSaved: boolean;
 }
 const groupKey = (worker: ExecutionWorker) =>
   JSON.stringify([
@@ -52,7 +53,12 @@ export class RelayReviewStore {
     for (const path of [this.root, join(this.root, "records"), join(this.root, "index")])
       await verifyRelayStorage(path, true);
   }
-  async read(id: string, create = false): Promise<ReviewStore> {
+  read(id: string, create = false): Promise<ReviewStore> {
+    // Native privacy checks hold non-delete-sharing handles. Keep bounded record
+    // reads and publication in one I/O queue; Git capture stays outside it.
+    return this.serial(() => this.load(id, create));
+  }
+  private async load(id: string, create = false): Promise<ReviewStore> {
     await this.storage();
     const store = await ReviewStore.open(join(this.root, "records"), this.id, {
       recordId: id,
@@ -65,7 +71,7 @@ export class RelayReviewStore {
     return store;
   }
   write<T>(id: string, action: (store: ReviewStore) => Promise<T>): Promise<T> {
-    return this.serial(async () => action(await this.read(id)));
+    return this.serial(async () => action(await this.load(id)));
   }
   private serial<T>(work: () => Promise<T>): Promise<T> {
     if (this.pending >= 256) return Promise.reject(new Error("Relay review writes are busy"));
@@ -104,6 +110,7 @@ export class RelayReviewStore {
     baseline = worker.taskBaseline?.taskId === worker.owner.taskId
       ? worker.taskBaseline.commit
       : undefined,
+    origin?: { chatId: string; turn: number },
   ): Promise<string | undefined> {
     if (worker.workspaceMode === "direct") return Promise.resolve(undefined);
     const epoch = this.epoch;
@@ -116,10 +123,16 @@ export class RelayReviewStore {
       valid();
       if (worker.owner.id !== this.id) throw new Error("Worker belongs to another Relay");
       const previous = this.assignments.get(worker.id);
-      if (previous?.key === key && previous.turn === turn && previous.pinned === !!worker.checkout)
+      if (
+        previous?.key === key &&
+        previous.turn === turn &&
+        previous.workerSaved &&
+        previous.pinned === !!worker.checkout
+      ) {
         return previous.reviewId;
+      }
       let id = previous?.key === key ? previous.reviewId : this.groups.get(key);
-      let store = id ? await this.read(id) : undefined;
+      let store = id ? await this.load(id) : undefined;
       valid();
       if (
         store &&
@@ -133,13 +146,15 @@ export class RelayReviewStore {
       const fresh = !id;
       id ??= randomUUID();
       // Keep the accepted worker's evidence link even if a later write fails.
-      this.assignments.set(worker.id, {
+      const assignment: Assignment = {
         key,
         reviewId: id,
         targetId: worker.target.id,
         turn,
         pinned: !!worker.checkout,
-      });
+        workerSaved: false,
+      };
+      this.assignments.set(worker.id, assignment);
       if (
         previous &&
         previous.key !== key &&
@@ -149,19 +164,24 @@ export class RelayReviewStore {
         this.groups.delete(previous.key);
       if (fresh || !this.groups.has(key)) this.groups.set(key, id);
       if (!store) {
-        store = await this.read(id, true);
+        store = await this.load(id, true);
         valid();
-        await store.create(this.id, 0, worker.label ?? `${worker.provider} changes`, {
-          conversationId: this.id,
-          generation: worker.owner.generation,
-          taskId: worker.owner.taskId,
-          targetId: worker.target.id,
-          cwd: worker.target.cwd,
-          device: worker.target.device.toString(),
-          inode: worker.target.inode.toString(),
-          workspaceMode: worker.workspaceMode,
-          ...(baseline ? { baseline } : {}),
-        });
+        await store.create(
+          origin?.chatId ?? this.id,
+          origin?.turn ?? 0,
+          worker.label ?? `${worker.provider} changes`,
+          {
+            conversationId: this.id,
+            generation: worker.owner.generation,
+            taskId: worker.owner.taskId,
+            targetId: worker.target.id,
+            cwd: worker.target.cwd,
+            device: worker.target.device.toString(),
+            inode: worker.target.inode.toString(),
+            workspaceMode: worker.workspaceMode,
+            ...(baseline ? { baseline } : {}),
+          },
+        );
       }
       valid();
       if (baseline && !store.get(id).relay?.baseline)
@@ -192,7 +212,12 @@ export class RelayReviewStore {
             }
           : undefined,
       );
+      const savedCheckout = store
+        .get(id)
+        .workers.find((item) => item.runId === worker.id)?.checkout;
       valid();
+      assignment.pinned = !!savedCheckout;
+      assignment.workerSaved = true;
       if (fresh) {
         const label = [...worker.target.cwd];
         const entry: RelayReviewEntry = {

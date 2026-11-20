@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createPrivateDirectory, createPrivateFileSync } from "../platform/index.js";
 import * as storage from "./relay-storage.js";
 import { type RelaySourceCursor, RelayStore } from "./relay-store.js";
 
@@ -28,6 +29,20 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.allSettled(stores.map((store) => store.close()));
   await rm(directory, { recursive: true, force: true });
+});
+
+it("keeps the owned checkpoint boundary without trusting externally changed history", async () => {
+  const store = await open();
+  const at = new Date().toISOString();
+  await store.append({ id: randomUUID(), role: "human", at, text: "Owned" });
+  const boundary = await store.boundary();
+  await appendFile(join(store.root, "history.frames"), "outside");
+  expect(await store.boundary()).toBe(boundary);
+  expect(await store.history()).toMatchObject({ damaged: true, messages: [] });
+  await expect(
+    store.append({ id: randomUUID(), role: "human", at, text: "Not replayed" }),
+  ).rejects.toThrow();
+  expect(await store.boundary()).toBe(boundary);
 });
 
 it.each(["open", "validate", "write", "sync", "close"] as const)(
@@ -149,10 +164,8 @@ it("retains one identity and workspace across generations and excludes competing
   expect(second.workspace).toBe(first.workspace);
   expect((await second.history()).messages[0]?.text).toBe("Keep this source\n");
   expect(await stat(join(second.workspace, ".git")).catch(() => null)).toBeNull();
-  if (process.platform !== "win32") {
-    expect((await stat(second.workspace)).mode & 0o777).toBe(0o700);
-    expect((await stat(join(second.root, "state.json"))).mode & 0o777).toBe(0o600);
-  }
+  expect((await stat(second.workspace)).mode & 0o777).toBe(0o700);
+  expect((await stat(join(second.root, "state.json"))).mode & 0o777).toBe(0o600);
 });
 it("reads a bounded tail of a long-lived journal and preserves oversized Unicode source", async () => {
   const store = await open();
@@ -190,27 +203,24 @@ it("does not silently recreate missing workspaces or malformed metadata", async 
   await writeFile(join(store.root, "state.json"), "{}");
   await expect(open()).rejects.toThrow();
 });
-it.skipIf(process.platform === "win32")(
-  "refuses unsafe permissions and symbolic links",
-  async () => {
-    const store = await open();
-    await store.close();
-    await chmod(store.workspace, 0o755);
-    await expect(open()).rejects.toThrow("permissions");
-    await chmod(store.workspace, 0o700);
-    const state = join(store.root, "state.json");
-    const original = await readFile(state);
-    await rm(state);
-    const other = join(directory, "other");
-    await writeFile(other, original, { mode: 0o600 });
-    await symlink(other, state);
-    await expect(open()).rejects.toThrow("Unsafe");
-  },
-);
+it("refuses unsafe permissions and symbolic links", async () => {
+  const store = await open();
+  await store.close();
+  await chmod(store.workspace, 0o755);
+  await expect(open()).rejects.toThrow("permissions");
+  await chmod(store.workspace, 0o700);
+  const state = join(store.root, "state.json");
+  const original = await readFile(state);
+  await rm(state);
+  const other = join(directory, "other");
+  await writeFile(other, original, { mode: 0o600 });
+  await symlink(other, state);
+  await expect(open()).rejects.toThrow("Unsafe");
+});
 it("never displaces an unverifiable lock owner", async () => {
   const store = await open();
   await store.close();
-  await mkdir(join(store.root, ".writer"), { mode: 0o700 });
+  await createPrivateDirectory(join(store.root, ".writer"));
   await expect(open()).rejects.toThrow("cannot be verified");
 });
 
@@ -385,7 +395,8 @@ it.each(["same-size valid UTF-8", "identical replacement", "mutation before appe
     const bytes = await readFile(path);
     if (kind === "identical replacement") {
       await rename(path, `${path}.retained`);
-      await writeFile(path, bytes, { mode: 0o600, flag: "wx" });
+      createPrivateFileSync(path);
+      await writeFile(path, bytes);
     } else {
       bytes[bytes.indexOf(Buffer.from("Original"))] = "X".charCodeAt(0);
       await writeFile(path, bytes);

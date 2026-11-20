@@ -23,7 +23,7 @@ it("replaces the AppImage atomically, preserving its custom filename", async () 
   const { directory, source, destination } = await fixture();
   await installAppImage(source, destination);
   expect(await readFile(destination, "utf8")).toBe("new version");
-  if (process.platform !== "win32") expect((await stat(destination)).mode & 0o777).toBe(0o755);
+  expect((await stat(destination)).mode & 0o777).toBe(0o755);
   expect(await readdir(directory)).toHaveLength(2);
 });
 it("keeps the old AppImage when staging fails", async () => {
@@ -32,13 +32,10 @@ it("keeps the old AppImage when staging fails", async () => {
   expect(await readFile(destination, "utf8")).toBe("old version");
   expect(await readdir(directory)).toHaveLength(2);
 });
-it.skipIf(process.platform === "win32")(
-  "rejects symlinks rather than replacing unrelated files",
-  async () => {
-    const { directory, source, destination } = await fixture();
-    const link = join(directory, "link");
-    await symlink(destination, link);
-    await expect(installAppImage(source, link)).rejects.toThrow("regular file");
-    expect(await readFile(destination, "utf8")).toBe("old version");
-  },
-);
+it("rejects symlinks rather than replacing unrelated files", async () => {
+  const { directory, source, destination } = await fixture();
+  const link = join(directory, "link");
+  await symlink(destination, link);
+  await expect(installAppImage(source, link)).rejects.toThrow("regular file");
+  expect(await readFile(destination, "utf8")).toBe("old version");
+});

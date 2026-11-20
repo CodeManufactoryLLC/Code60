@@ -19,29 +19,12 @@ const digest = (text: string) => createHash("sha256").update(text).digest("hex")
 const MAX_RECORD = 16 * 1_048_576;
 const MAX_LINE_STATS_WORK = 2_000_000;
 async function readJson(path: string): Promise<unknown> {
-  const file = await open(
-    path,
-    constants.O_RDONLY |
-      constants.O_NONBLOCK |
-      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
-  );
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
   try {
     // Inspect and read the same handle, even if the pathname is replaced meanwhile.
     const info = await file.stat({ bigint: true });
     if (!info.isFile() || info.size > BigInt(MAX_RECORD))
       throw new Error("Review record is unavailable or too large");
-    if (process.platform === "win32") {
-      // Node does not expose O_NOFOLLOW on Windows. Reject links and verify that
-      // the opened handle names the regular file inspected here before reading it.
-      const entry = await lstat(path, { bigint: true });
-      if (
-        !entry.isFile() ||
-        entry.isSymbolicLink() ||
-        entry.dev !== info.dev ||
-        entry.ino !== info.ino
-      )
-        throw new Error("Review record changed or is a symbolic link");
-    }
     const buffer = Buffer.alloc(MAX_RECORD + 1);
     let length = 0;
     while (length < buffer.length) {
@@ -224,6 +207,7 @@ export class ReviewStore {
     id: string,
     results: { runId: string; files?: ReviewSnapshotFile[]; error?: string }[],
     sources?: TaskSource[],
+    outcomes?: ReviewRevision["outcomes"],
   ): Promise<void> {
     const contents = results.flatMap((result) =>
       (result.files ?? []).map((file) => ({
@@ -245,8 +229,8 @@ export class ReviewStore {
       const previous = review.revisions.at(-1);
       if (
         previous &&
-        JSON.stringify([previous.files, previous.errors, previous.sources]) ===
-          JSON.stringify([files, errors, sources])
+        JSON.stringify([previous.files, previous.errors, previous.sources, previous.outcomes]) ===
+          JSON.stringify([files, errors, sources, outcomes])
       ) {
         delete review.error;
         return;
@@ -259,8 +243,9 @@ export class ReviewStore {
         files,
         errors,
         ...(sources ? { sources } : {}),
+        ...(outcomes ? { outcomes } : {}),
       };
-      // Keep revision paths no longer than review metadata paths on Windows.
+      // Keep revision paths no longer than review metadata paths.
       await save(join(this.root, `${revision.id}.rev`), contents);
       review.revisions.push(revision);
       delete review.error;

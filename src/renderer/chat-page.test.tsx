@@ -26,6 +26,8 @@ function render(
   database: string | null = "/db",
   turns = 1,
   runChanges: Partial<RunView> = {},
+  chatChanges: Partial<OrchestrationChat> = {},
+  selectionPending = false,
 ) {
   return renderToStaticMarkup(
     <ChatPage
@@ -56,19 +58,155 @@ function render(
           },
           workers,
           updates: { paused: true, pending: 1 },
+          ...chatChanges,
         } as OrchestrationChat
       }
       events={events}
       database={database}
-      active
+      active={!selectionPending}
+      selectionPending={selectionPending}
       onDatabase={() => {}}
       runs={runs}
       reviews={reviews}
+      notice={<p role="status">Project readiness</p>}
     />,
   );
 }
 
 describe("orchestration activity presentation", () => {
+  it("keeps a pending selection visible and inert with its existing transcript and composer", () => {
+    const html = render("idle", [], [], [], [], "/db", 1, {}, {}, true);
+    const main = html.match(/<main[^>]*>/)?.[0];
+    expect(main).toContain('inert=""');
+    expect(main).toContain('data-navigation-pending="true"');
+    expect(main).toContain('aria-busy="true"');
+    expect(main).not.toContain("hidden=");
+    expect(html).toContain('class="transcript"');
+    expect(html).toMatch(/class="[^"]*composer"/);
+  });
+  it("omits the stale PID warning in restored chats but preserves actual failures", () => {
+    const reason = "the owning process (PID 12345) is gone";
+    for (const error of [null, reason]) {
+      const html = render(
+        "interrupted",
+        [],
+        [],
+        [],
+        [],
+        "/db",
+        1,
+        { reason },
+        {
+          restored: true,
+          error,
+        },
+      );
+      expect(html).not.toContain(reason);
+      expect(html).not.toContain('class="error-banner"');
+      expect(html).toMatch(/class="[^"]*composer"/);
+    }
+    expect(
+      render(
+        "interrupted",
+        [],
+        [],
+        [],
+        [],
+        "/db",
+        1,
+        {
+          reason: "Provider connection failed",
+        },
+        { restored: true },
+      ),
+    ).toContain("Provider connection failed");
+  });
+
+  it.each(["finished", "failed", "cancelled", "timed_out", "interrupted"] as const)(
+    "omits stopped-chat controls and warnings for %s chats, including restored tasks",
+    (status) => {
+      for (const restored of [false, true]) {
+        const html = render(
+          status,
+          [],
+          [],
+          [],
+          [],
+          "/db",
+          1,
+          {},
+          {
+            restored,
+            taskId: "saved-task",
+          },
+        );
+        expect(html).not.toContain("New session");
+        expect(html).not.toContain("Continue task");
+        expect(html).not.toContain("Saved chat is stopped");
+        expect(html).not.toContain("Previous workers are history only");
+        expect(html.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
+        expect(html).toMatch(/class="[^"]*primary composer-send"/);
+        expect(html).toContain(">Send ");
+      }
+    },
+  );
+
+  it("keeps Relay connection retry and current history-saving warnings", () => {
+    const html = render(
+      "failed",
+      [],
+      [],
+      [],
+      [],
+      null,
+      1,
+      {},
+      {
+        kind: "relay",
+        conversationId: "relay",
+        historySaving: "unavailable",
+        error: "Connection failed",
+      },
+    );
+    expect(html).toContain("Retry connection");
+    expect(html).toContain("Connection failed");
+    expect(html).toContain("History isn’t being saved");
+    expect(html).not.toContain("New session");
+  });
+
+  it("renders Relay as ordinary title text, not a doubly dimmed disabled rename control", () => {
+    const html = renderToStaticMarkup(
+      <ChatPage
+        api={{} as DesktopApi}
+        chat={{
+          kind: "relay",
+          conversationId: "relay",
+          title: "Relay",
+          directory: "/relay",
+          workers: [],
+          run: run("relay", "idle"),
+          events: [],
+          error: null,
+          updates: { paused: false, pending: 0 },
+        }}
+        events={[]}
+        database={null}
+        active
+        onDatabase={() => {}}
+        runs={[]}
+      />,
+    );
+    expect(html).toContain('<span class="page-title-text">Relay</span>');
+    expect(html).not.toContain("Rename chat: Relay");
+    expect(html).not.toContain('class="chat-title"');
+  });
+  it("keeps project notices below the page heading", () => {
+    const html = render("idle", [], []);
+    expect(html.indexOf("Project readiness")).toBeGreaterThan(html.indexOf("</header>"));
+    expect(html.indexOf("Project readiness")).toBeLessThan(
+      html.indexOf('class="orchestration-chat-body"'),
+    );
+  });
   it("does not duplicate plan tabs with chat-header plan buttons", () => {
     const html = renderToStaticMarkup(
       <ChatPage
@@ -112,8 +250,9 @@ describe("orchestration activity presentation", () => {
       const html = render(status, [], [], [], [], "/db", 0);
       expect(html).toContain('class="chat-connection-frame"');
       expect(html).toContain('class="chat-connecting" role="status"');
-      expect(html).toContain("communicating.gif");
+      expect(html.match(/<div class="chat-connecting"[\s\S]*?<\/div>/)?.[0]).not.toContain("<img");
       expect(html).toContain(">Connecting...</span>");
+      expect(html).toContain(">Cancel</button>");
       expect(html).not.toContain("Give Code60 a task.");
       expect(html).not.toContain('class="chat-progress activity-display"');
       expect(html).not.toContain('class="activity-timer"');
@@ -139,6 +278,7 @@ describe("orchestration activity presentation", () => {
       />,
     );
     expect(html).not.toContain("Give Code60 a task.");
+    expect(html).not.toContain("New session");
   });
 
   it("renders only agent replies as Markdown, including adjacent streamed chunks", () => {
@@ -157,7 +297,7 @@ describe("orchestration activity presentation", () => {
     expect(html).toContain("<h2>Result</h2>");
     expect(html).toContain("<strong>Bold</strong>");
     expect(html).toContain("<code>code</code>");
-    expect(html).toContain("<pre>**literal user**</pre>");
+    expect(html).toMatch(/<pre[^>]*>\*\*literal user\*\*<\/pre>/);
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
     expect(events[1]).toMatchObject({ text: "## Result\n\n**Bo" });
   });
@@ -165,7 +305,7 @@ describe("orchestration activity presentation", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
       expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
-      expect(html.match(/<button[^>]*class="chat-title"[^>]*>/)?.[0]).toContain("disabled");
+      expect(html.match(/<button[^>]*class="[^"]*chat-title"[^>]*>/)?.[0]).toContain("disabled");
       const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
       expect(action).toContain("disabled");
       expect(html).toContain("Connect to database");
@@ -270,7 +410,9 @@ describe("orchestration activity presentation", () => {
       ],
     );
     expect(completed).toContain('class="turn-timer activity-history-toggle"');
-    expect(completed).toMatch(/Worked for 12s \(finished\)<\/button><hr class="turn-separator"/);
+    expect(completed).toMatch(
+      /Worked for 12s \(finished\)<\/span><\/button><hr class="turn-separator"/,
+    );
     expect(completed).toContain("Checking evidence");
     expect(completed).not.toContain('class="chat-progress activity-display"');
   });
@@ -306,7 +448,7 @@ describe("orchestration activity presentation", () => {
       },
     ];
     const html = render("idle", [], [], events, [review]);
-    expect(html).toContain("<pre>Unrelated new request</pre>");
+    expect(html).toMatch(/<pre[^>]*>Unrelated new request<\/pre>/);
     expect(html).not.toContain('aria-label="Your review feedback"');
     const batch = review.submissions[0];
     if (!batch) throw new Error("Missing batch");
@@ -324,7 +466,8 @@ describe("orchestration activity presentation", () => {
     );
     expect(html).not.toContain('class="chat-loader"');
     expect(html).toContain("2 subagents: waiting for approval");
-    expect(html).toContain("Automatic worker updates are paused");
+    expect(html).not.toContain("Automatic worker updates are paused");
+    expect(html).not.toContain("Resume updates");
     expect(html).not.toContain(">Stop<");
     expect(html).toMatch(/<textarea(?![^>]*disabled)[^>]*>/);
   });
@@ -393,9 +536,9 @@ describe("orchestration activity presentation", () => {
         event({ type: "prompt", turn: 2, text: "worker update", origin: "automatic" }),
       ],
     );
-    expect(html).toMatch(/<pre>user source<\/pre><div class="message-copy">/);
+    expect(html).toMatch(/<pre[^>]*>user source<\/pre><div class="message-copy">/);
     expect(html).toMatch(
-      /<div class="chat-markdown"><p>assistant source<\/p><\/div><div class="message-copy">/,
+      /<div class="chat-markdown"><p>assistant source<\/p><\/div><\/div><div class="message-copy">/,
     );
     expect(html).toContain('class="event prompt automatic"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);

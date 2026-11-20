@@ -11,7 +11,9 @@ import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const root = resolve(import.meta.dirname, "..");
 async function openLogs(page: Page) {
-  const tables = page.getByRole("button", { name: "Tables", exact: true });
+  const apps = page.locator("#tab-apps");
+  if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+  const tables = page.getByRole("button", { name: "Data Viewer", exact: true });
   if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
   await page.getByRole("tab", { name: "Logs", exact: true }).click();
   await expect(page.locator("#panel-logs")).toBeVisible();
@@ -61,7 +63,9 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await page.locator(".splash").getByRole("button", { name: "Start", exact: true }).click();
     await openLogs(page);
     const logs = page.locator("#panel-logs");
-    await expect(logs.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
+    await expect(
+      page.locator(".workspace-breadcrumbs").getByRole("heading", { name: "Logs", exact: true }),
+    ).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
     await expect(logs.getByRole("button", { name: "Older page", exact: true })).toBeEnabled();
     await logs.getByRole("button", { name: "Older page", exact: true }).click();
@@ -72,12 +76,12 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await search.press("Enter");
     await expect(logs.getByText("Page 1", { exact: true })).toBeVisible();
     await expect(logs.getByRole("button", { name: "Older page", exact: true })).toBeDisabled();
-    await logs.getByLabel("Current app launch only").check();
+    await logs.getByLabel("Current launch only").check();
     await expect(logs.getByText("No diagnostic logs match these filters.")).toBeVisible();
     await search.fill("retained-138");
     await search.press("Enter");
     await expect(logs.getByText("No diagnostic logs match these filters.")).toBeVisible();
-    await logs.getByLabel("Current app launch only").uncheck();
+    await logs.getByLabel("Current launch only").uncheck();
     await expect(logs.getByText("No diagnostic logs match these filters.")).toHaveCount(0);
     await search.fill("retained-139");
     await search.press("Enter");
@@ -145,7 +149,7 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     const id = retained.records[0]?.id;
     expect(id).toBeTruthy();
     for (const theme of ["dark", "light", "system"]) {
-      const settingsPages = page.getByRole("tab", { name: "Settings", exact: true });
+      const settingsPages = page.locator("#settings-card-toggle");
       if ((await settingsPages.getAttribute("aria-expanded")) === "false")
         await settingsPages.press("ArrowRight");
       await page
@@ -167,29 +171,37 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     page = await application.firstWindow();
     await page.locator(".splash").getByRole("button", { name: "Start", exact: true }).click();
     await openLogs(page);
+    await page
+      .locator("#panel-logs")
+      .getByRole("button", { name: "Pause viewing", exact: true })
+      .click();
+    const clearLogs = page
+      .locator("#panel-logs")
+      .getByRole("button", { name: "Clear logs", exact: true });
+    const refreshed = page
+      .locator("#panel-logs")
+      .getByRole("button", { name: /^(Refresh logs|New records available, show latest)$/ });
+    await expect(refreshed).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
-    await page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Clear logs", exact: true })
-      .click();
+    await clearLogs.click();
+    await expect(clearLogs).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Clear logs", exact: true })
-      .click();
-    await expect
-      .poll(() => page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id))
-      .toBeNull();
+    await clearLogs.click();
+    await expect(clearLogs).toBeEnabled();
+    await expect(refreshed).toBeEnabled();
+    expect(
+      await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
+    ).toBeNull();
     expect((await readFile(database)).byteLength).toBeGreaterThan(0);
     expect(errors).toEqual([]);
   } finally {

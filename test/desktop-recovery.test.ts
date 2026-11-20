@@ -72,6 +72,7 @@ async function setup(
   const database: ProjectDatabase = {
     path: join(dir, "db.sqlite"),
     list: () => [...projects],
+    all: () => [...projects],
     record(path, openedAt) {
       const existing = projects.find((entry) => entry.path === path);
       if (existing) existing.openedAt = openedAt;

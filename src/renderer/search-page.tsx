@@ -1,24 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   type DesktopApi,
-  type DesktopRun,
+  type ProjectSearchOpened,
+  type ProjectSearchSource,
   SEARCH_QUERY_LIMIT,
-  type SearchSummarySource,
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
-import {
-  highlights,
-  type SearchKind,
-  type SearchResult,
-  searchContext,
-  searchExcerpt,
-  searchIndex,
-  searchResults,
-  sourceResult,
-  summaryParts,
-  summarySources,
-} from "./search.js";
-import { TranscriptNotice, type Transcripts } from "./transcripts.js";
+import { Modal } from "./modal.js";
+import { PageTitle } from "./page-title.js";
+import { highlights, type SearchKind, searchExcerpt, summaryParts } from "./search.js";
 
 function Highlight({ text, query }: { text: string; query: string }) {
   return (
@@ -48,138 +38,207 @@ type SearchCriteria = {
   sort: keyof typeof sortLabels;
 };
 type SubmittedSearch = SearchCriteria & {
-  results: SearchResult[] | null;
-  evidence: SearchResult[];
+  results: ProjectSearchSource[] | null;
+  nextCursor: string | null;
+  warnings: string[];
 };
 type Overview =
   | { status: "generating" }
-  | { status: "complete"; text: string; sources: SearchSummarySource[] }
+  | { status: "complete"; text: string; sources: ProjectSearchSource[] }
   | { status: "error"; error: string };
 
 export function SearchPage({
   api,
   provider,
-  directory,
-  runs,
-  data,
+  database,
+  databaseEpoch,
   onOpen,
 }: {
-  api: Pick<DesktopApi, "summarizeSearch" | "cancelSearchSummary">;
+  api: Pick<
+    DesktopApi,
+    | "searchProjects"
+    | "searchProjectsPage"
+    | "cancelProjectSearch"
+    | "openSearchSource"
+    | "summarizeSearch"
+    | "cancelSearchSummary"
+  >;
   provider: string | null;
-  directory: string | null;
-  runs: readonly DesktopRun[];
-  data: Transcripts;
-  onOpen(result: SearchResult): void;
+  database: string | null;
+  databaseEpoch: number;
+  onOpen(result: ProjectSearchOpened): void;
 }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<SearchCriteria["kind"]>("all");
   const [sort, setSort] = useState<SearchCriteria["sort"]>("relevance");
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const [opening, setOpening] = useState(false);
+  const [preview, setPreview] = useState<ProjectSearchSource | null>(null);
   const active = useRef<string | undefined>(undefined);
+  const summaryActive = useRef<string | undefined>(undefined);
+  const providerRef = useRef(provider);
+  providerRef.current = provider;
   const list = useRef<HTMLUListElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const expanded = submitted !== null;
   const loading = submitted?.results === null || overview?.status === "generating";
   const unapplied =
     submitted !== null &&
     (query.trim() !== submitted.query || kind !== submitted.kind || sort !== submitted.sort);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: provider changes invalidate an in-flight helper even though the provider is resolved in main.
-  useEffect(() => {
-    setOverview(null);
-    setSubmitted((current) => (current?.results === null ? null : current));
-    return () => {
+  useEffect(
+    () => () => {
       const id = active.current;
       active.current = undefined;
-      if (id) void api.cancelSearchSummary(id).catch(() => {});
-    };
+      if (id) void api.cancelProjectSearch({ requestId: id, databaseEpoch }).catch(() => {});
+      const summary = summaryActive.current;
+      summaryActive.current = undefined;
+      if (summary) void api.cancelSearchSummary(summary).catch(() => {});
+    },
+    [api, databaseEpoch],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Provider changes retire only the overview; submitted literal results remain usable.
+  useEffect(() => {
+    setOverview(null);
+    const id = summaryActive.current;
+    summaryActive.current = undefined;
+    if (id) void api.cancelSearchSummary(id).catch(() => {});
   }, [api, provider]);
 
   function cancel() {
     const id = active.current;
     active.current = undefined;
-    if (id) void api.cancelSearchSummary(id).catch(() => {});
+    if (id) void api.cancelProjectSearch({ requestId: id, databaseEpoch }).catch(() => {});
+    const summary = summaryActive.current;
+    summaryActive.current = undefined;
+    if (summary) void api.cancelSearchSummary(summary).catch(() => {});
+    setPageLoading(false);
   }
 
-  async function generate(id: string, search: SubmittedSearch) {
-    if (!directory || active.current !== id) return;
+  async function generate(searchId: string) {
+    if (active.current !== searchId) return;
+    const previous = summaryActive.current;
+    if (previous) void api.cancelSearchSummary(previous).catch(() => {});
+    if (!providerRef.current) {
+      setOverview({
+        status: "error",
+        error: "Select an available orchestration provider in Settings for an overview.",
+      });
+      return;
+    }
+    const id = crypto.randomUUID();
+    summaryActive.current = id;
     setOverview({ status: "generating" });
     try {
-      const result = await api.summarizeSearch({
-        requestId: id,
-        directory,
-        query: search.query,
-        sources: summarySources(search.evidence, search.query),
-        includeFiles: search.kind === "all" || search.kind === "file",
-      });
-      if (active.current === id && result.requestId === id) {
+      const result = await api.summarizeSearch({ requestId: id, searchId, databaseEpoch });
+      if (active.current === searchId && summaryActive.current === id && result.requestId === id) {
         setOverview({ status: "complete", text: result.text, sources: result.sources });
         setSubmitted((current) => {
           if (!current) return current;
           const rows = current.results ?? [];
-          const seen = new Set(rows.map((row) => row.id));
           return {
             ...current,
-            results: [
-              ...rows,
-              ...result.sources.filter((source) => !seen.has(source.id)).map(sourceResult),
-            ],
+            results: rows.length ? rows : result.sources,
           };
         });
       }
     } catch (error) {
-      if (active.current === id)
+      if (active.current === searchId && summaryActive.current === id)
         setOverview({
           status: "error",
           error: error instanceof Error ? error.message : String(error),
         });
     } finally {
-      if (active.current === id) active.current = undefined;
+      if (summaryActive.current === id) summaryActive.current = undefined;
     }
   }
 
   async function submit() {
     const criteria = { query: query.trim(), kind, sort };
-    if (!directory || !criteria.query) return;
+    if (!database || !criteria.query) return;
     cancel();
     const id = crypto.randomUUID();
     active.current = id;
-    setSubmitted({ ...criteria, results: null, evidence: [] });
+    setSubmitted({ ...criteria, results: null, nextCursor: null, warnings: [] });
     setOverview(null);
+    setSourceError("");
+    content.current?.scrollTo({ top: 0, behavior: "instant" });
     try {
-      const events = await data.read();
-      if (active.current !== id) return;
-      const index = searchIndex(directory, runs, events);
-      const results = searchResults(index, criteria.query, criteria.kind, criteria.sort);
-      const search = {
+      const page = await api.searchProjects({ requestId: id, databaseEpoch, ...criteria });
+      if (active.current !== id || page.requestId !== id) return;
+      setSubmitted({
         ...criteria,
-        results,
-        evidence: results.length ? results : searchContext(index, criteria.query, criteria.kind),
-      };
-      setSubmitted(search);
-      await generate(id, search);
+        results: page.results,
+        nextCursor: page.nextCursor,
+        warnings: page.warnings,
+      });
+      await generate(id);
     } catch (error) {
       if (active.current === id) {
-        setSubmitted({ ...criteria, results: [], evidence: [] });
+        setSubmitted({ ...criteria, results: [], nextCursor: null, warnings: [] });
         setOverview({
           status: "error",
           error: error instanceof Error ? error.message : String(error),
         });
-        active.current = undefined;
       }
     }
   }
-
   function retry() {
-    if (!submitted) return;
-    cancel();
-    const id = crypto.randomUUID();
-    active.current = id;
-    void generate(id, submitted);
+    if (active.current) void generate(active.current);
+  }
+  async function loadMore() {
+    const id = active.current;
+    const cursor = submitted?.nextCursor;
+    if (!id || !cursor || pageLoading) return;
+    setPageLoading(true);
+    try {
+      const page = await api.searchProjectsPage({ requestId: id, databaseEpoch, cursor });
+      if (active.current !== id) return;
+      setSubmitted((current) => {
+        if (!current) return current;
+        const rows = current.results ?? [];
+        const seen = new Set(rows.map((row) => row.id));
+        return {
+          ...current,
+          results: [...rows, ...page.results.filter((row) => !seen.has(row.id))],
+          nextCursor: page.nextCursor,
+        };
+      });
+    } catch (error) {
+      if (active.current === id)
+        setSourceError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (active.current === id) setPageLoading(false);
+    }
+  }
+  async function openSource(source: ProjectSearchSource) {
+    const id = active.current;
+    if (!id || opening) return;
+    setOpening(true);
+    setSourceError("");
+    try {
+      const target = await api.openSearchSource({
+        requestId: id,
+        databaseEpoch,
+        sourceId: source.id,
+      });
+      if (active.current !== id || !target) return;
+      if (target.archived) setPreview(source);
+      else onOpen(target);
+    } catch (error) {
+      if (active.current === id)
+        setSourceError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOpening(false);
+    }
   }
 
   return (
     <main className="search-page" aria-label="Search" data-expanded={expanded}>
+      <PageTitle page="search" className="table-title" />
       <div className="search-lead-space" aria-hidden="true" />
       <search className="search-entry">
         <form
@@ -196,7 +255,7 @@ export function SearchPage({
                 type="search"
                 value={query}
                 maxLength={SEARCH_QUERY_LIMIT}
-                placeholder="Search this project"
+                placeholder="Search all projects"
                 onChange={(event) => {
                   const value = event.target.value;
                   setQuery(value);
@@ -216,7 +275,7 @@ export function SearchPage({
               <button
                 className="primary search-submit"
                 type="submit"
-                disabled={!directory || !query.trim()}
+                disabled={!database || !query.trim()}
               >
                 <Icon name="search" />
                 Search
@@ -264,8 +323,8 @@ export function SearchPage({
           </div>
         </form>
       </search>
-      <div className="search-content" hidden={!expanded && !!directory}>
-        {!directory && <p>Open a project to search.</p>}
+      <div ref={content} className="search-content" hidden={!expanded && !!database}>
+        {!database && <p>Connect to a database to search.</p>}
         {expanded && (
           <div className="search-pending" hidden={!loading} inert={!loading}>
             <div className="search-loading" role="status">
@@ -276,7 +335,17 @@ export function SearchPage({
             </div>
           </div>
         )}
-        {expanded && <TranscriptNotice data={data} />}
+        {sourceError && <p role="alert">{sourceError}</p>}
+        {!!submitted?.warnings.length && (
+          <details className="search-warnings">
+            <summary>Some sources could not be searched</summary>
+            <ul>
+              {submitted.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         {expanded && (
           <div className="search-pending search-placeholders" hidden={!loading} aria-hidden="true">
             <div className="search-overview search-summary-skeleton">
@@ -324,10 +393,11 @@ export function SearchPage({
                           type="button"
                           className="search-citation"
                           key={part.start}
-                          aria-label={`Source ${part.source + 1}: ${overview.sources[part.source]?.title}`}
+                          aria-label={`Source ${part.source + 1}: ${overview.sources[part.source]?.title} · ${overview.sources[part.source]?.project.name}`}
+                          data-tooltip={overview.sources[part.source]?.project.name}
                           onClick={() => {
                             const source = overview.sources[part.source as number];
-                            if (source) onOpen(sourceResult(source));
+                            if (source) void openSource(source);
                           }}
                         >
                           {part.text}
@@ -375,8 +445,9 @@ export function SearchPage({
                 const showType = !result.title.startsWith(`${type} / `);
                 return (
                   <li key={result.id}>
-                    {(showType || result.at) && (
+                    {(result.project || showType || result.at) && (
                       <div className="search-result-meta">
+                        <span>{result.project.name}</span>
                         {showType && <span>{type}</span>}
                         {result.at && (
                           <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
@@ -388,7 +459,7 @@ export function SearchPage({
                         type="button"
                         className="search-result-title"
                         data-result-index={i}
-                        onClick={() => onOpen(result)}
+                        onClick={() => void openSource(result)}
                       >
                         <Highlight text={result.title} query={submitted.query} />
                       </button>
@@ -403,9 +474,20 @@ export function SearchPage({
                 );
               })}
             </ul>
+            {submitted.nextCursor && (
+              <button type="button" disabled={pageLoading} onClick={() => void loadMore()}>
+                {pageLoading ? "Loading…" : "Load more"}
+              </button>
+            )}
           </div>
         )}
       </div>
+      {preview && (
+        <Modal title={preview.title} busy={false} onClose={() => setPreview(null)}>
+          <p>{preview.project.name} · Archived conversation</p>
+          <pre>{preview.text}</pre>
+        </Modal>
+      )}
     </main>
   );
 }

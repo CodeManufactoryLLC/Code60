@@ -26,12 +26,19 @@
   padding-right: 64px;
 }
 
-/* Chat's single file workspace shares the navigation fill. */
+/* Chat frames the conversation separately from its adjacent inspector card. */
 #panel-chat {
   flex-direction: column;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .chat-workspace-body {
+  --file-panel-gap: var(--page-margin);
   position: relative;
   display: flex;
   flex: 1;
@@ -40,26 +47,44 @@
   overflow: hidden;
 }
 
+/* Extend only the side-by-side card into the space beside the breadcrumb row. */
+@media (min-width: 1201px) {
+  #panel-chat,
+  .chat-workspace-body {
+    overflow: visible;
+  }
+
+  .file-panel:not([data-minimized="true"]) {
+    margin-block-start: calc(-1 * var(--right-panel-rise, 0px));
+  }
+}
+
 .file-panel {
+  box-sizing: border-box;
   --control-fill: var(--chat-neutral);
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px));
+  width: clamp(120px, var(--file-panel-width, 20%), calc(100% - 300px - var(--file-panel-gap)));
+  margin-inline-start: var(--file-panel-gap);
   min-width: 0;
   overflow: hidden;
-  transition: width var(--motion) ease;
+  transition:
+    width var(--motion) ease,
+    margin-inline-start var(--motion) ease;
   min-height: 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-width: 0 0 0 1px;
-  background: var(--chat-neutral);
+  padding: 1px;
+  gap: 0;
+  --nb-card-fill: var(--chat-neutral);
 }
 
 .file-panel[data-minimized="true"] {
   width: 0;
-  border-width: 0;
+  padding: 0;
+  margin-inline-start: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .file-panel[data-resizing="true"] {
@@ -98,6 +123,8 @@
 
 .file-panel-toolbar {
   align-items: center;
+  background: var(--card-header-fill);
+  border-radius: 2px 2px 0 0;
 }
 
 .file-tab {
@@ -108,6 +135,7 @@
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
+  border-radius: var(--button-radius);
 }
 
 .file-tab > :where([role="tab"]) {
@@ -168,6 +196,25 @@
   flex: 1;
 }
 
+.file-panel-empty-actions,
+.file-panel-saved-plans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  text-align: left;
+}
+
+.file-panel-empty-actions {
+  padding: 16px;
+}
+
+.file-panel-empty-actions button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 button.file-open-link {
   padding: 8px;
   border: 0;
@@ -190,16 +237,19 @@ button.file-open-link {
 }
 
 .orchestration-chat-body .chat-turn-history > .turn-timer {
-  margin-left: 18px;
+  margin-left: 20px;
 }
 
 .orchestration-chat-body .chat-turn-history > .turn-separator {
-  margin-inline: 18px;
+  margin-inline: 0;
 }
 
 @media (max-width: 1200px) {
   .chat-workspace-body {
     flex-direction: column;
+    /* Let the scroller paint card shadows without shifting its contents. */
+    margin: -4px;
+    padding: 4px;
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -232,12 +282,15 @@ button.file-open-link {
 
 @media (max-width: 1200px) {
   .chat-workspace-body .file-panel {
-    transition: flex-basis var(--motion) ease;
+    transition:
+      flex-basis var(--motion) ease,
+      margin-block-start var(--motion) ease;
     flex: 1 0 max(340px, calc(10 * max(var(--button-size, 13px), var(--text-size, 13px)) + 180px));
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    padding-left: 0;
+    margin-inline-start: 0;
+    margin-block-start: var(--file-panel-gap);
   }
 }
 
@@ -247,6 +300,7 @@ button.file-open-link {
     height: 0;
     flex-basis: 0;
     flex-grow: 0;
+    margin-block-start: 0;
   }
 }
 
@@ -297,7 +351,7 @@ button.file-open-link {
 .files-header h2,
 .file-inspector-header h2 {
   margin: 0;
-  font: var(--title-weight, 400) var(--title-size, 18px) var(--title-font, var(--font));
+  font: var(--title-weight, 300) var(--title-size, 16px) var(--title-font, var(--font));
   text-transform: var(--title-case, none);
   --letter-spacing: var(--title-spacing, normal);
   overflow-wrap: anywhere;
@@ -366,7 +420,7 @@ button.file-open-link {
 
 .file-tree-item[aria-selected="true"] {
   background: var(--accent-bg);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .file-tree-item[aria-disabled="true"] {
@@ -428,8 +482,8 @@ button.file-open-link {
   padding: 0;
   border: 0;
   box-shadow: none;
-  border-radius: var(--ui-radius);
-  background: var(--chat-neutral);
+  border-radius: var(--button-radius);
+  background: transparent;
   z-index: 2;
   cursor: col-resize;
   touch-action: none;
@@ -492,7 +546,7 @@ button.file-open-link {
 .revision-task {
   margin: 0;
   font-size: inherit;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .revision-task > span:first-of-type,
@@ -613,7 +667,7 @@ button.file-open-link {
 .review-feedback :where(h3) {
   margin: 0;
   font-size: 15px;
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 .review-heading :where(h2) {
@@ -927,8 +981,8 @@ button.file-open-link {
 .plan-title {
   font-family: var(--title-font, var(--font));
   --letter-spacing: var(--title-spacing, normal);
-  font-size: max(var(--title-size, 18px), 1.2em);
-  font-weight: var(--title-weight, 400);
+  font-size: max(var(--title-size, 16px), 1.2em);
+  font-weight: var(--title-weight, 300);
   text-transform: var(--title-case, none);
   line-height: 1.3;
 }
@@ -1075,4 +1129,20 @@ button.file-open-link {
 
 .file-tab-actions > .icon-button {
   flex-shrink: 0;
+}
+
+/* Dark plum bands separate compact headers from near-black reading surfaces. */
+:root[data-color-scheme="dark"] .file-panel-toolbar {
+  --text: var(--card-header-text);
+  --muted: var(--card-header-muted);
+  --focus-line: var(--card-header-text);
+  --focus-outline: var(--card-header-text);
+  --accent: var(--card-header-text);
+  --hover-bg: var(--card-header-hover);
+  --accent-bg: var(--card-header-hover);
+  --control-hover: var(--card-header-hover);
+}
+
+:root[data-color-scheme="dark"] .file-panel-toolbar .icon-button {
+  color: var(--muted);
 }

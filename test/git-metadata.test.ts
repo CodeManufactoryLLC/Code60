@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 it("serializes canonical aliases while unrelated repositories make independent progress", async () => {
   const alias = join(root, "alias");
-  await symlink(a, alias, process.platform === "win32" ? "junction" : "dir");
+  await symlink(a, alias, "dir");
   const gate = deferred();
   const first = vi.fn(async () => gate.promise);
   const second = vi.fn(async () => {});
@@ -146,49 +146,45 @@ it("cancels actual worktree creation while another Git instance owns the metadat
   ).toBe("");
   await expect(access(path)).rejects.toMatchObject({ code: "ENOENT" });
 });
-it.skipIf(process.platform === "win32")(
-  "stops a started worktree hook before releasing its metadata queue",
-  async () => {
-    commitFixture(a);
-    const hooks = join(a, ".git", "hooks");
-    await writeFile(
-      join(hooks, "post-checkout"),
-      '#!/bin/sh\necho $$ > "$PWD/../hook-pid"\nexec sleep 60\n',
-      { mode: 0o700 },
-    );
-    execFileSync("git", ["config", "core.hooksPath", hooks], { cwd: a });
-    const abort = new AbortController();
-    const path = join(root, "started-worker");
-    const work = createGit().addWorktree(
-      {
-        repoDir: a,
-        path,
-        branch: "code60/started-worker",
-        base: "HEAD",
+it("stops a started worktree hook before releasing its metadata queue", async () => {
+  commitFixture(a);
+  const hooks = join(a, ".git", "hooks");
+  await writeFile(
+    join(hooks, "post-checkout"),
+    '#!/bin/sh\necho $$ > "$PWD/../hook-pid"\nexec sleep 60\n',
+    { mode: 0o700 },
+  );
+  execFileSync("git", ["config", "core.hooksPath", hooks], { cwd: a });
+  const abort = new AbortController();
+  const path = join(root, "started-worker");
+  const work = createGit().addWorktree(
+    {
+      repoDir: a,
+      path,
+      branch: "code60/started-worker",
+      base: "HEAD",
+    },
+    abort.signal,
+  );
+  const rejected = expect(work).rejects.toThrow("cancel started");
+  let pid = 0;
+  try {
+    await vi.waitFor(
+      async () => {
+        pid = Number(await readFile(join(root, "hook-pid"), "utf8"));
+        expect(pid).toBeGreaterThan(0);
       },
-      abort.signal,
+      { timeout: 10_000 },
     );
-    const rejected = expect(work).rejects.toThrow("cancel started");
-    let pid = 0;
-    try {
-      await vi.waitFor(
-        async () => {
-          pid = Number(await readFile(join(root, "hook-pid"), "utf8"));
-          expect(pid).toBeGreaterThan(0);
-        },
-        { timeout: 10_000 },
-      );
-    } finally {
-      abort.abort(new Error("cancel started"));
-      await rejected;
-    }
-    expect(() => process.kill(pid, 0)).toThrow();
-    await coordinateMetadata(a, async () => {});
-    // Git may already have created the worktree. Preserve it as evidence.
-    expect((await stat(path)).isDirectory()).toBe(true);
-  },
-  20_000,
-);
+  } finally {
+    abort.abort(new Error("cancel started"));
+    await rejected;
+  }
+  expect(() => process.kill(pid, 0)).toThrow();
+  await coordinateMetadata(a, async () => {});
+  // Git may already have created the worktree. Preserve it as evidence.
+  expect((await stat(path)).isDirectory()).toBe(true);
+}, 20_000);
 it("waits for started work's cleanup on cancellation and releases the queue after failure", async () => {
   const abort = new AbortController();
   const cleanup = deferred();
@@ -242,11 +238,17 @@ it("refuses a linked checkout redirected to another still-existing repository wh
   const waiting = vi.fn(async () => {});
   const next = coordinateMetadata(linked, waiting);
   const rejected = expect(next).rejects.toThrow("changed while waiting");
-  await queued(linked);
-  await writeFile(join(linked, ".git"), `gitdir: ${join(b, ".git")}\n`);
-  gate.release();
-  await first;
-  await rejected;
+  try {
+    await queued(linked);
+    // Git marks worktree .git pointers hidden on Windows; truncating a hidden
+    // file with CREATE_ALWAYS fails with EPERM. Replace the entry instead.
+    await rm(join(linked, ".git"));
+    await writeFile(join(linked, ".git"), `gitdir: ${join(b, ".git")}\n`);
+  } finally {
+    gate.release();
+    await first;
+    await rejected;
+  }
   expect(waiting).not.toHaveBeenCalled();
 });
 it("refuses a replaced checkout even when it still points to the original common directory", async () => {

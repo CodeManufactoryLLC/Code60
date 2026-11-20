@@ -11,6 +11,7 @@ import {
   DEFAULT_PROMPT_TEMPLATES,
   type DetailFrame,
   type DetailRequest,
+  type ModelDefaultsRecord,
   type Plan,
   type PollSettingsPatch,
   type ProjectRequestIdentity,
@@ -31,12 +32,14 @@ import type {
   ConversationCoordinator,
 } from "../src/desktop/conversation-coordinator.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
-import type { ProjectDatabase } from "../src/desktop/projects.js";
+import { ProjectSessionStore } from "../src/desktop/project-session.js";
+import { type ProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
 import type { RagExecutor } from "../src/desktop/rag-service.js";
 import { RagStore } from "../src/desktop/rag-store.js";
 import type { RagConversation } from "../src/desktop/rag-worker.js";
 import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -50,6 +53,7 @@ let tick = 0;
 let stored: string | undefined;
 let preferencesFail = false;
 let orchestrationProvider: string | null = null;
+let modelDefaults: ModelDefaultsRecord = { version: 1, providers: {} };
 let listGate: (() => Promise<void>) | undefined;
 let ragSources: RagConversation[];
 let ragWaitForAbort = false;
@@ -91,6 +95,7 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   let open = true;
   return {
     path,
+    all: () => [...shared.entries].map(([path, openedAt]) => ({ path, openedAt })),
     list: () => {
       if (!open) throw new Error("closed");
       return [...shared.entries]
@@ -172,6 +177,10 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   };
 });
 const preferences: DesktopPreferences = {
+  modelDefaults: async () => modelDefaults,
+  setModelDefaults: async (record) => {
+    modelDefaults = structuredClone(record);
+  },
   agentSetup: async () =>
     orchestrationProvider
       ? verifiedAgents(
@@ -224,7 +233,9 @@ const controllerDeps = (): CoreDeps => {
 };
 
 beforeEach(async () => {
-  directory = await fs.mkdtemp(join(tmpdir(), "code60-desktop-"));
+  // Project chat roots include a SHA-256 key, UUID and atomic-write suffix.
+  // Keep those generated paths below the Windows helper's 248-character limit.
+  directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
   agents = new FakeAgents();
   git = new FakeGit();
   git.repoInfo = async () => ({ topLevel: directory, commonDir: join(directory, ".git") });
@@ -233,6 +244,7 @@ beforeEach(async () => {
   stored = undefined;
   preferencesFail = false;
   orchestrationProvider = null;
+  modelDefaults = { version: 1, providers: {} };
   listGate = undefined;
   ragSources = [];
   ragWaitForAbort = false;
@@ -260,7 +272,78 @@ afterEach(async () => {
   await fs.rm(directory, { recursive: true, force: true });
 });
 
-describe("database-wide RAG discovery", () => {
+it("saves main-owned confirmed model defaults by role, applies only to new sessions, and clears independently", async () => {
+  const startAgent = agents.start.bind(agents);
+  agents.start = async (spec, signal) => {
+    const session = await startAgent(spec, signal);
+    const settings = {
+      confirmed: true,
+      reportedAt: "2026-11-16T00:00:00.000Z",
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [
+            { value: "m1", name: "One" },
+            { value: "m2", name: "Two" },
+          ],
+        },
+      ],
+    };
+    const state = { model: null, modes: null, usage: null, settings };
+    return Object.assign(session, {
+      sessionState: state,
+      setMode: async (change: { configId: string; value: string }) => {
+        const control = settings.controls.find((c) => c.id === change.configId);
+        if (control) control.currentValue = change.value;
+        agents.sessions
+          .find((s) => s.sessionId === session.sessionId)
+          ?.update({ type: "sessionState", state: structuredClone(state) });
+      },
+    });
+  };
+  await setProvider("claude");
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  const chatId = controller.snapshot().chat.run?.id as string;
+  await controller.orchestrationChatAction({
+    type: "set-mode",
+    id: chatId,
+    change: { source: "config", configId: "model", value: "m2" },
+  });
+  await controller.orchestrationChatAction({ type: "save-model-default", id: chatId });
+  expect(modelDefaults.providers.claude?.orchestrator).toEqual([
+    { configId: "model", value: "m2", name: "Two" },
+  ]);
+  const workerId = await start();
+  expect(
+    controller.snapshot().runs.find((r) => r.record.id === workerId)?.view?.sessionState?.settings
+      ?.controls[0]?.currentValue,
+  ).toBe("m1");
+  await controller.action({ type: "save-model-default", id: workerId });
+  expect(modelDefaults.providers.claude?.worker?.[0]?.value).toBe("m1");
+  await controller.orchestrationChatAction({ type: "new" });
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await controller.modelDefault({ type: "clear", provider: "claude", role: "orchestrator" });
+  expect(controller.snapshot().modelDefaults?.providers.claude?.orchestrator).toBeUndefined();
+  expect(modelDefaults.providers.claude?.worker).toHaveLength(1);
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await expect(controller.action({ type: "save-model-default", id: chatId })).rejects.toThrow(
+    /no longer controlled/,
+  );
+});
+
+// These journeys persist multiple chats, run records and private RAG files;
+// each durable write launches native owner/ACL verification on Windows.
+describe("database-wide RAG discovery", {
+  timeout: 5000,
+}, () => {
   const identity = () => ({
     databaseKey: controller.rag.snapshot().databaseKey ?? "",
     requestId: randomUUID(),
@@ -309,7 +392,7 @@ describe("database-wide RAG discovery", () => {
     await controller.rebuildRag(identity());
     const previous = controller.rag.snapshot().index;
     const root = join(directory, ".code60_workspace", "chats");
-    await fs.mkdir(root, { recursive: true });
+    await privateDirectory(root);
     const corrupt = join(root, `${randomUUID()}.json`);
     await fs.writeFile(corrupt, "{}");
     await expect(controller.rebuildRag(identity())).rejects.toThrow("unreadable");
@@ -320,6 +403,29 @@ describe("database-wide RAG discovery", () => {
       ?.entries.set(join(directory, "missing"), new Date().toISOString());
     await expect(controller.rebuildRag(identity())).rejects.toThrow();
     expect(controller.rag.snapshot().index).toEqual(previous);
+  });
+  it("excludes discarded chat events from live and saved-only RAG rebuilds", async () => {
+    agents.script = (_text, session) => {
+      session.update({ type: "message", text: "DISCARDED_RAG_REPLY" });
+      return "end_turn";
+    };
+    await setProvider("claude");
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "DISCARDED_RAG_REQUEST" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({
+      type: "undo-request",
+      id,
+      checkpointId: controller.snapshot().chat.checkpoint?.id as string,
+      replacesDraft: false,
+    });
+    await controller.rebuildRag(identity());
+    expect(JSON.stringify(ragSources)).not.toContain("DISCARDED_RAG_");
+    await setProvider(null);
+    await controller.rebuildRag(identity());
+    expect(JSON.stringify(ragSources)).not.toContain("DISCARDED_RAG_");
+    expect(ragSources.some((source) => source.source.runId === id)).toBe(true);
   });
 });
 
@@ -380,8 +486,212 @@ async function configureMcp(version = "first") {
   ];
 }
 
-describe("retained project runtimes", () => {
-  it.each(["search", "memory"] as const)(
+// Windows CI completed sibling native-backed save/reopen journeys in up to 8.7 s.
+describe("retained project runtimes", {
+  timeout: 5000,
+}, () => {
+  it("restores open projects and stopped chats on Relay without starting project providers", async () => {
+    await prepareRelay();
+    const a = await project("restart-a");
+    const chat = await newChat(a.id);
+    const id = chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "Saved exchange" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    await controller.orchestrationChatAction({ type: "rename", id, title: "Saved title" });
+    const archived = await newChat(a.id);
+    await controller.orchestrationChatAction({
+      type: "archive",
+      id: archived.run?.id as string,
+    });
+    const b = await project("restart-b");
+    const closed = await project("restart-closed");
+    await newChat(closed.id);
+    await controller.projectAction({ type: "close", projectId: closed.id });
+    const database = controller.snapshot().database as string;
+    const before = controller.snapshot().projects;
+    const starts = agents.specs.length;
+    const readHistory = vi.spyOn(ChatStore.prototype, "readHistory");
+    try {
+      await prepareRelay(); // A new controller and Relay using the same private state.
+      const restored = controller.snapshot();
+      expect(restored.chat.kind).toBe("relay");
+      expect(restored.openProjects?.map((entry) => entry.path)).toEqual([a.path, b.path]);
+      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(a.id);
+      expect(restored.openProjects?.map((entry) => entry.id)).not.toContain(b.id);
+      expect(restored.projects).toEqual(before); // Startup is not a new human open.
+      expect(restored.chats.find((entry) => entry.run?.id === id)).toMatchObject({
+        title: "Saved title",
+        restored: true,
+        workers: [],
+        events: [],
+        updates: { paused: true },
+      });
+      expect(restored.chats.find((entry) => entry.run?.id === archived.run?.id)?.archived).toBe(
+        true,
+      );
+      expect(restored.chats.filter((entry) => entry.kind === "project")).toHaveLength(2);
+      expect(agents.specs.slice(starts).map((spec) => spec.cwd)).toEqual([restored.chat.directory]);
+      expect(readHistory.mock.calls.every(([, , path]) => !path.endsWith("events.jsonl"))).toBe(
+        true,
+      );
+      expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+      await controller.orchestrationChatAction({ type: "select", id });
+      expect(controller.snapshot().chat.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            event: expect.objectContaining({ type: "prompt", text: "Saved exchange" }),
+          }),
+        ]),
+      );
+      expect(agents.specs).toHaveLength(starts + 1);
+    } finally {
+      readHistory.mockRestore();
+    }
+  }, 5000); // Multiple native-backed chat saves/reopens exceeded 5 s in CI.
+
+  it("persists confirmed closes, preserves cancelled closes, and isolates database replacement", async () => {
+    await prepareRelay();
+    const first = controller.snapshot().database as string;
+    const a = await project("session-a");
+    const b = await project("session-b");
+    confirm.mockResolvedValueOnce(false);
+    await controller.projectAction({ type: "close", projectId: a.id });
+    expect(await new ProjectSessionStore(first).load()).toEqual([a.path, b.path]);
+    await controller.projectAction({ type: "close", projectId: b.id });
+    expect(await new ProjectSessionStore(first).load()).toEqual([a.path]);
+    const other = join(directory, "other-session.sqlite");
+    await controller.connect(other, true);
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const c = await project("session-c");
+    await controller.connect(first, false);
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([a.path]);
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(await new ProjectSessionStore(other).load()).toEqual([c.path]);
+    expect(() => controller.projectAction({ type: "select", projectId: a.id })).toThrow(
+      "no longer open",
+    );
+    const current = controller.snapshot().openProjects?.[0];
+    if (!current) throw new Error("Missing restored project");
+    await controller.projectAction({ type: "close", projectId: current.id });
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+  });
+
+  it("warns on missing projects without erasing the saved set or blocking other projects", async () => {
+    await prepareRelay();
+    const a = await project("missing-a");
+    const b = await project("available-b");
+    const database = controller.snapshot().database as string;
+    await controller.shutdown(true);
+    await fs.rename(a.path, `${a.path}-moved`);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([b.path]);
+    expect(controller.snapshot().warnings.join("\n")).toContain("Could not reopen project:");
+    expect(controller.snapshot().chat.kind).toBe("relay");
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, b.path]);
+    await expect(fs.stat(a.path)).rejects.toMatchObject({ code: "ENOENT" });
+    const c = await project("available-c");
+    const restoredB = controller.snapshot().openProjects?.find((entry) => entry.path === b.path);
+    if (!restoredB) throw new Error("Missing available project");
+    await controller.projectAction({ type: "close", projectId: restoredB.id });
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, c.path]);
+    await controller.shutdown(true);
+    await fs.rename(`${a.path}-moved`, a.path);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects?.map((entry) => entry.path)).toEqual([
+      a.path,
+      c.path,
+    ]);
+    // Reopening an unavailable saved path must not duplicate or reorder its entry.
+    await controller.open(a.path);
+    expect(await new ProjectSessionStore(database).load()).toEqual([a.path, c.path]);
+  });
+
+  it("leaves invalid saved sessions untouched and warns when later changes cannot be saved", async () => {
+    await prepareRelay();
+    await project("invalid-session-a");
+    await controller.shutdown(true);
+    const root = join(directory, ".code60_workspace", "sessions");
+    const [name] = await fs.readdir(root);
+    if (!name) throw new Error("Missing session record");
+    const file = join(root, name);
+    await fs.writeFile(file, "{invalid");
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+    expect(controller.snapshot().warnings.join("\n")).toContain(
+      "Saved open projects could not be read safely",
+    );
+    await project("invalid-session-b");
+    expect(controller.snapshot().warnings.join("\n")).toContain("Open projects could not be saved");
+    expect(await fs.readFile(file, "utf8")).toBe("{invalid");
+  });
+
+  it("counts unavailable saved projects toward capacity and frees a slot only on confirmed close", async () => {
+    await prepareRelay();
+    const database = controller.snapshot().database as string;
+    const parent = await realOf(directory);
+    const paths = Array.from({ length: 64 }, (_, i) => join(parent, `offline-${i}`));
+    await new ProjectSessionStore(database).save(paths);
+    await prepareRelay();
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const extra = join(directory, "extra-project");
+    await fs.mkdir(extra);
+    await expect(controller.open(extra)).rejects.toThrow("64-project limit");
+    expect(await new ProjectSessionStore(database).load()).toEqual(paths);
+    expect(controller.snapshot().openProjects).toEqual([]);
+    const recovered = paths[0] as string;
+    await fs.mkdir(recovered);
+    await controller.open(recovered);
+    expect(await new ProjectSessionStore(database).load()).toEqual(paths);
+    const owner = controller.snapshot().openProjects?.[0];
+    if (!owner) throw new Error("Missing recovered project");
+    confirm.mockResolvedValueOnce(false);
+    await controller.projectAction({ type: "close", projectId: owner.id });
+    await expect(controller.open(extra)).rejects.toThrow("64-project limit");
+    await controller.projectAction({ type: "close", projectId: owner.id });
+    await controller.open(extra);
+    expect(await new ProjectSessionStore(database).load()).toEqual([
+      ...paths.slice(1),
+      await realOf(extra),
+    ]);
+  });
+
+  it("publishes a persistence warning even when saving fails after the open was already shown", async () => {
+    await prepareRelay();
+    const path = join(directory, "slow-save");
+    await fs.mkdir(path);
+    const canonical = await realOf(path);
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const save = vi
+      .spyOn(ProjectSessionStore.prototype, "save")
+      .mockImplementationOnce(async () => {
+        await gate;
+        throw new Error("disk is full");
+      });
+    const updates: ReturnType<DesktopController["snapshot"]>[] = [];
+    const unsubscribe = controller.subscribe((snapshot) => updates.push(snapshot));
+    const opening = controller.open(path);
+    try {
+      await vi.waitFor(() =>
+        expect(updates.some((snapshot) => snapshot.directory === canonical)).toBe(true),
+      );
+      release();
+      await opening;
+      await vi.waitFor(() =>
+        expect(updates.at(-1)?.warnings.join("\n")).toContain("Open projects could not be saved"),
+      );
+    } finally {
+      release();
+      await opening;
+      unsubscribe();
+      save.mockRestore();
+    }
+  });
+
+  it.each(sqliteAvailable() ? (["search", "memory"] as const) : (["memory"] as const))(
     "cancels an originating %s helper after switching projects",
     async (kind) => {
       await prepareRelay();
@@ -395,16 +705,20 @@ describe("retained project runtimes", () => {
       await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
       await controller.action({ type: "finish", id });
       const requestId = randomUUID();
+      const searchId = randomUUID();
+      const databaseEpoch = controller.snapshot().databaseEpoch ?? 0;
+      if (kind === "search")
+        await controller.searchProjects({
+          requestId: searchId,
+          databaseEpoch,
+          query: "evidence",
+          kind: "all",
+          sort: "relevance",
+        });
       agents.script = () => "hang";
       const pending =
         kind === "search"
-          ? controller.summarizeSearch({
-              requestId,
-              directory: a.path,
-              query: "evidence",
-              includeFiles: false,
-              sources: [{ id: a.path, kind: "project", title: "A", text: "Evidence" }],
-            })
+          ? controller.summarizeSearch({ requestId, searchId, databaseEpoch })
           : controller.extractMemory({
               requestId,
               directory: a.path,
@@ -539,7 +853,11 @@ describe("retained project runtimes", () => {
     );
     const a = await project("a");
     await fs.writeFile(join(a.path, "relay-note.txt"), "Not Relay");
-    await controller.connect(join(directory, "replacement.sqlite"), true);
+    await controller.connect(
+      join(directory, "replacement.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
     expect(controller.readDetails(details)).toMatchObject({
       payload: { files: { preview: { text: "Relay workspace only" } } },
     });
@@ -1616,6 +1934,64 @@ describe("retained project runtimes", () => {
     await controller.projectAction({ type: "close", projectId: a.id });
     await expect(controller.start({ ...request, ...identity })).rejects.toThrow("no longer open");
   });
+  it("retains independent custom-agent work and details across project closure and database replacement", async () => {
+    await prepareRelay();
+    const a = (
+      await controller.customAgent({
+        type: "create",
+        name: "Reviewer",
+        instructions: "Only Reviewer",
+      })
+    ).agent;
+    const b = (
+      await controller.customAgent({ type: "create", name: "Writer", instructions: "Only Writer" })
+    ).agent;
+    if (!a || !b) throw new Error("Missing custom assistants");
+    await controller.customAgent({ type: "open", id: a.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const aChat = controller.snapshot().chat;
+    const aSession = agents.sessions.at(-1);
+    const subscription = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation" as const,
+        conversationId: aChat.conversationId!,
+        generation: aChat.generation!,
+      },
+    };
+    controller.subscribeDetails(subscription, () => {});
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: aChat.run!.id,
+      text: "Reviewer evidence",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    agents.script = () => "hang";
+    await controller.customAgent({ type: "open", id: b.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const bChat = controller.snapshot().chat;
+    const bSession = agents.sessions.at(-1);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: bChat.run!.id,
+      text: "Continue Writer work",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("running"));
+    const p = await project("custom-unrelated");
+    await controller.projectAction({ type: "close", projectId: p.id });
+    await controller.connect(join(directory, "custom-replacement.sqlite"), true);
+    expect(aSession?.stops).toHaveLength(0);
+    expect(bSession?.stops).toHaveLength(0);
+    const details = controller.readDetails(subscription);
+    expect(JSON.stringify(details)).toContain("Reviewer evidence");
+    expect(JSON.stringify(details)).not.toContain("Continue Writer work");
+    const chats = controller.snapshot().chats;
+    expect(chats.find((chat) => chat.customAgentId === b.id)?.run?.status).toBe("running");
+    expect(chats.find((chat) => chat.customAgentId === a.id)?.conversationId).toBe(
+      aChat.conversationId,
+    );
+    controller.unsubscribeDetails({ subscriptionId: subscription.subscriptionId });
+  });
   async function prepareRelay() {
     await controller.shutdown(true);
     orchestrationProvider = "claude";
@@ -1741,6 +2117,119 @@ describe("retained project runtimes", () => {
     return body.result;
   }
 
+  it("answers self-knowledge reads for Relay and project chats without new authority", async () => {
+    await prepareRelay();
+    const relayId = controller.snapshot().chat.run?.id as string;
+    const a = await project("aware-a");
+    const chat = await newChat(a.id);
+    const chatId = chat.run?.id as string;
+    const b = await project("aware-b");
+    const sessions = agents.sessions.length;
+    const specs = agents.specs.length;
+    const result = (value: Record<string, unknown>) => value.result as Record<string, unknown>;
+
+    const capabilities = result(await call(relayId, "code60_get_capabilities", { query: "relay" }));
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "relay",
+        availability: expect.objectContaining({ status: "available" }),
+      }),
+    );
+    const projects = result(await call(relayId, "code60_get_app_state", { section: "projects" }));
+    expect((projects.entries as { id: string }[]).map((entry) => entry.id).sort()).toEqual(
+      [a.id, b.id].sort(),
+    );
+    const summary = result(await call(chatId, "code60_get_app_state"));
+    expect(summary).toMatchObject({
+      selectedProjectId: b.id,
+      caller: { kind: "project", projectId: a.id },
+    });
+    expect(JSON.stringify(summary)).not.toMatch(/TOKEN|Bearer|GATEWAY/);
+    expect((await call(relayId, "code60_get_context")).knowledge).toMatchObject({
+      schemaVersion: 1,
+    });
+    expect((await call(chatId, "code60_get_context")).knowledge).toMatchObject({
+      schemaVersion: 1,
+    });
+
+    const prompts = result(await call(relayId, "code60_list_customizations", { kind: "prompt" }));
+    expect(
+      (prompts.entries as { source: string }[]).every((entry) => entry.source === "built-in"),
+    ).toBe(true);
+
+    for (const id of [relayId, chatId]) {
+      const commands = result(await call(id, "code60_list_customizations", { kind: "command" }));
+      expect(commands.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ title: expect.stringMatching(/^\$plan · /) }),
+        ]),
+      );
+      expect(
+        (commands.entries as { title: string }[]).every((entry) => entry.title.startsWith("$")),
+      ).toBe(true);
+    }
+
+    const renderer = controller.knowledge.rendererIdentity();
+    const panelId = randomUUID();
+    const planId = randomUUID();
+    controller.knowledge.report({
+      renderer,
+      sequence: 1,
+      view: {
+        kind: "panel",
+        id: panelId,
+        owner: {
+          kind: "project",
+          projectId: a.id,
+          databaseEpoch: controller.snapshot().databaseEpoch,
+        },
+        active: false,
+        open: true,
+        selected: 1,
+        tabs: [{ id: 1, kind: "plan", planId }],
+        incomplete: false,
+      },
+    });
+    const relayTabs = result(await call(relayId, "code60_get_app_state", { section: "tabs" }));
+    const [tab] = relayTabs.entries as { readableOwner: boolean; revision: string }[];
+    expect(tab).toMatchObject({ panelId, readableOwner: false });
+    await expect(
+      call(relayId, "code60_read_view", { panelId, tabId: 1, revision: tab?.revision }),
+    ).rejects.toThrow("not owned");
+    const owned = result(
+      await call(chatId, "code60_read_view", { panelId, tabId: 1, revision: tab?.revision }),
+    );
+    expect(owned).toMatchObject({ available: false, complete: false });
+
+    controller.clearDetailSubscriptions();
+    expect(
+      result(await call(relayId, "code60_get_app_state", { section: "tabs" })).entries,
+    ).toEqual([]);
+    expect(() =>
+      controller.knowledge.report({ renderer, sequence: 2, view: { kind: "remove", id: panelId } }),
+    ).toThrow("Stale renderer");
+
+    await controller.orchestrationChatAction({ type: "send", id: relayId, text: "What is open?" });
+    await vi.waitFor(() =>
+      expect(controller.snapshot().chats.find((c) => c.run?.id === relayId)?.run?.status).toBe(
+        "idle",
+      ),
+    );
+    const delivered = agents.sessions[0]?.prompts.at(-1) ?? "";
+    const envelope = delivered.slice(delivered.indexOf("--- Live Code60 desktop observations"));
+    expect(envelope).toContain('"projects":2');
+    expect(
+      Buffer.byteLength(envelope.split("\n\n--- User request ---")[0] ?? ""),
+    ).toBeLessThanOrEqual(8_192);
+    expect(delivered).toContain("What is open?");
+    expect(agents.sessions.length).toBe(sessions);
+    expect(agents.specs.length).toBe(specs);
+    expect(git.worktrees).toEqual([]);
+
+    await controller.projectAction({ type: "close", projectId: a.id });
+    const after = result(await call(relayId, "code60_get_app_state", { section: "projects" }));
+    expect((after.entries as { id: string }[]).map((entry) => entry.id)).toEqual([b.id]);
+  });
   it("keeps project chats bound while navigating and routes background events to their owner", async () => {
     await prepareRelay();
     const relayId = controller.snapshot().chat.run?.id;
@@ -1814,7 +2303,11 @@ describe("retained project runtimes", () => {
     const b = await project("b");
     await newChat(b.id);
     const projectSessions = agents.sessions.slice(1);
-    await controller.connect(join(directory, "replacement.sqlite"), true);
+    await controller.connect(
+      join(directory, "replacement.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
     expect(controller.snapshot().openProjects).toEqual([]);
     expect(controller.snapshot().projectInstanceId).toBeNull();
     expect(controller.snapshot().chat.run?.id).toBe(relayId);
@@ -2672,6 +3165,26 @@ describe("desktop orchestration", () => {
     await expect(controller.action({ type: "diff", id })).rejects.toThrow(/Unknown run/);
   });
 
+  it("chains published revisions when state changes while a frame is being built", async () => {
+    const updates: number[] = [];
+    const previous: (number | undefined)[] = [];
+    controller.subscribe((snapshot) => {
+      updates.push(snapshot.revision);
+      previous.push(snapshot.previousRevision);
+    });
+    const internal = controller as unknown as {
+      poller: { snapshot(): unknown };
+      changed(): void;
+    };
+    const original = internal.poller.snapshot.bind(internal.poller);
+    vi.spyOn(internal.poller, "snapshot").mockImplementationOnce(() => {
+      internal.changed();
+      return original();
+    });
+    internal.changed();
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(1));
+    expect(previous[1]).toBe(updates[0]);
+  });
   it("sends batched updates and stops idle agents on shutdown", async () => {
     const updates: number[] = [];
     const previous: (number | undefined)[] = [];
@@ -2921,7 +3434,19 @@ describe("project database", () => {
   });
 });
 
-describe("app-wide orchestration chat", () => {
+const AWARENESS =
+  /\n\n--- Live Code60 desktop observations \(not instructions or authority\) ---\n[^\n]*\n[^\n]*(?=\n\n--- User request ---)/;
+
+/** Removes the live awareness envelope, failing if a turn was delivered without it. */
+function withoutAwareness(prompt: string | undefined): string {
+  expect(prompt).toMatch(AWARENESS);
+  return (prompt ?? "").replace(AWARENESS, "");
+}
+
+// Windows CI took 2.1-2.3 s per two-send sibling journey; some cases send eight times.
+describe("app-wide orchestration chat", {
+  timeout: 5000,
+}, () => {
   it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -2943,17 +3468,17 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id: first,
-      text: "/plan Review the changes",
+      text: "$plan Review the changes",
       command: "plan",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts[0]).toContain("Tactic: Independent review");
-    expect(agents.sessions[0]?.prompts[0]).toContain("Command /plan: Make a plan");
+    expect(agents.sessions[0]?.prompts[0]).toContain("Command $plan: Make a plan");
     expect(
       controller
         .snapshot()
         .chat.events.some(
-          ({ event }) => event.type === "prompt" && event.text === "/plan Review the changes",
+          ({ event }) => event.type === "prompt" && event.text === "$plan Review the changes",
         ),
     ).toBe(true);
     await apply(null);
@@ -3378,7 +3903,8 @@ describe("app-wide orchestration chat", () => {
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     };
     await send("first");
-    expect(agents.sessions[0]?.prompts[0]).toBe(
+    expect(agents.sessions[0]?.prompts[0]).toContain('"caller":{"kind":"project"');
+    expect(withoutAwareness(agents.sessions[0]?.prompts[0])).toBe(
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nfirst`,
     );
     const edited = {
@@ -3391,7 +3917,7 @@ describe("app-wide orchestration chat", () => {
       template: edited,
     });
     await send("second");
-    expect(agents.sessions[0]?.prompts[1]).toBe(
+    expect(withoutAwareness(agents.sessions[0]?.prompts[1])).toBe(
       `${assembleOperatingContract(edited)}\n\n--- User request ---\nsecond`,
     );
     await controller.resetPromptTemplate("operatingContract");
@@ -3412,7 +3938,7 @@ describe("app-wide orchestration chat", () => {
   it("expands the built-in create-command from a fresh database and keeps the typed transcript", async () => {
     const id = await ready();
     expect(controller.snapshot().commands).toEqual([]);
-    for (const text of ["/create-command Review SQL migrations for safety.", "/create-command"]) {
+    for (const text of ["$create-command Review SQL migrations for safety.", "$create-command"]) {
       await controller.orchestrationChatAction({
         type: "send",
         id,
@@ -3441,31 +3967,31 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id,
-      text: "/create-command",
+      text: "$create-command",
       command: "create-command",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts.at(-1)).toContain("User-defined creator.");
-    expect(agents.sessions[0]?.prompts.at(-1)).toBe(
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /create-command: My creator\nUser-defined creator.`,
+    expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $create-command: My creator\nUser-defined creator.`,
     );
   });
 
   it.each(["plan", "business-evaluation"])(
-    "delivers the complete /%s built-in without saving it",
+    "delivers the complete $%s built-in without saving it",
     async (name) => {
       const id = await ready();
       const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
-      if (!builtin) throw new Error(`Missing /${name}`);
+      if (!builtin) throw new Error(`Missing $${name}`);
       for (const suffix of [
         "",
         " A tool for independent bookshops.\nCompare possible business models.",
       ]) {
-        const text = `/${name}${suffix}`;
+        const text = `$${name}${suffix}`;
         await controller.orchestrationChatAction({ type: "send", id, text, command: name });
         await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-        expect(agents.sessions[0]?.prompts.at(-1)).toBe(
-          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand /${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
+        expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
+          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
         );
         expect(controller.snapshot().commands).toEqual([]);
         expect(
@@ -3489,11 +4015,21 @@ describe("app-wide orchestration chat", () => {
     await controller.saveCommand(fields);
     const command = controller.snapshot().commands[0];
     expect(command?.name).toBe("review");
+    await expect(
+      controller.orchestrationChatAction({ type: "send", id, text: "/review", command: "review" }),
+    ).rejects.toThrow(/beginning/);
+    for (const text of ["/review", "/plan", "/tmp is full"]) {
+      await controller.orchestrationChatAction({ type: "send", id, text });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
+        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${text}`,
+      );
+    }
     for (const [text, expected] of [
-      ["/review", "Command /review: Review code\nInspect the diff."],
+      ["$review", "Command $review: Review code\nInspect the diff."],
       [
-        "/REVIEW  Focus on errors.\n",
-        "Command /review: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus on errors.",
+        "$REVIEW  Focus on errors.\n",
+        "Command $review: Review code\nInspect the diff.\n\nAdditional instructions:\nFocus on errors.",
       ],
     ]) {
       await controller.orchestrationChatAction({
@@ -3503,7 +4039,7 @@ describe("app-wide orchestration chat", () => {
         command: "review",
       });
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-      expect(agents.sessions[0]?.prompts.at(-1)).toBe(
+      expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
         `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${expected}`,
       );
       const event = controller
@@ -3520,7 +4056,7 @@ describe("app-wide orchestration chat", () => {
     await controller.orchestrationChatAction({
       type: "send",
       id,
-      text: "/review",
+      text: "$review",
       command: "review",
     });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -3539,8 +4075,8 @@ describe("app-wide orchestration chat", () => {
     expect(await controller.deleteCommand({ id: command?.id as string })).toBe(true);
     const turns = controller.snapshot().chat.run?.turns;
     await expect(
-      controller.orchestrationChatAction({ type: "send", id, text: "/review", command: "review" }),
-    ).rejects.toThrow("Command /review no longer exists");
+      controller.orchestrationChatAction({ type: "send", id, text: "$review", command: "review" }),
+    ).rejects.toThrow("Command $review no longer exists");
     expect(controller.snapshot().chat.run?.turns).toBe(turns);
     await controller.orchestrationChatAction({ type: "send", id, text: "/tmp is full" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -3644,6 +4180,40 @@ describe("app-wide orchestration chat", () => {
     await expect(call("code60_read_sessions")).rejects.toThrow();
   });
 
+  it("generates a title only from the surviving exchange after Undoing the first request", async () => {
+    const titles: string[] = [];
+    agents.script = (text, session) => {
+      if (text.startsWith("Write a descriptive chat title")) {
+        titles.push(text);
+        if (titles.length === 1) return "hang";
+        session.update({ type: "message", text: "Public work" });
+      } else {
+        session.update({
+          type: "message",
+          text: text.includes("DISCARDED_TITLE_REQUEST")
+            ? "DISCARDED_TITLE_REPLY"
+            : "PUBLIC_TITLE_REPLY",
+        });
+      }
+      return "end_turn";
+    };
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "DISCARDED_TITLE_REQUEST" });
+    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await controller.orchestrationChatAction({
+      type: "undo-request",
+      id,
+      checkpointId: controller.snapshot().chat.checkpoint?.id as string,
+      replacesDraft: false,
+    });
+    await controller.orchestrationChatAction({ type: "send", id, text: "PUBLIC_TITLE_REQUEST" });
+    await vi.waitFor(() => expect(titles).toHaveLength(2));
+    expect(titles[1]).toContain("PUBLIC_TITLE_REQUEST");
+    expect(titles[1]).toContain("PUBLIC_TITLE_REPLY");
+    expect(titles[1]).not.toContain("DISCARDED_TITLE_");
+    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Public work"));
+  });
+
   it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
     agents.script = (_text, session) => {
       session.update({ type: "message", text: "Parser validation" });
@@ -3737,8 +4307,7 @@ describe("app-wide orchestration chat", () => {
     const secondId = second.run?.id as string;
     expect(secondId).not.toBe(firstId);
     expect(second.directory).not.toBe(first.directory);
-    if (process.platform !== "win32")
-      expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
     expect(await fs.readFile(join(first.directory as string, "notes.txt"), "utf8")).toBe(
       "first chat",
     );
@@ -3906,7 +4475,7 @@ describe("app-wide orchestration chat", () => {
     agents.script = () => "end_turn";
     // The existing fake session retains its original hanging turn script.
     await controller.orchestrationChatAction({ type: "send", id, text: "again" });
-    expect(agents.sessions[0]?.prompts).toEqual([
+    expect(agents.sessions[0]?.prompts.map(withoutAwareness)).toEqual([
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nworking`,
       `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nagain`,
     ]);
@@ -3950,7 +4519,7 @@ describe("app-wide orchestration chat", () => {
     await fs.rm(folder);
     await controller.orchestrationChatAction({ type: "restart", id: null });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    if (process.platform !== "win32") expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
   });
 });
 
@@ -4055,7 +4624,11 @@ it("refuses Git setup while project workers are still owned", async () => {
   expect(preview).not.toHaveBeenCalled();
 });
 
-describe("orchestrated workers over ACP", () => {
+// Worker dispatch and Undo persist real private checkpoint/chat/run records,
+// each requiring native ACL checks and atomic replacement on Windows.
+describe("orchestrated workers over ACP", {
+  timeout: 5000,
+}, () => {
   it("keeps correction and failure updates with the original tactic after a newer human task and capacity rejection", async () => {
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
@@ -4202,6 +4775,155 @@ describe("orchestrated workers over ACP", () => {
     });
     return { call, scope: context.body.result.scope as string };
   }
+
+  it("does not wait for a dispatch queued behind the native Undo confirmation", async () => {
+    const { call, scope } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "HANG undo target" });
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    const current = (controller as unknown as { conversations: ConversationCoordinator })
+      .conversations.current;
+    let confirmUndo!: (value: boolean) => void;
+    confirm.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          confirmUndo = resolve;
+        }),
+    );
+    let result: unknown;
+    const undo = controller
+      .orchestrationChatAction({ type: "undo-request", id, checkpointId, replacesDraft: false })
+      .then((value) => {
+        result = value;
+      });
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+    const starts = agents.specs.length;
+    const queued = call("code60_dispatch_agent", {
+      scope,
+      requestId: "during-undo",
+      prompt: "Never launch this stale request",
+    }).catch(() => undefined);
+    let releaseCleanup: (() => void) | undefined;
+    try {
+      await vi.waitFor(() => expect(current.dispatches.has("during-undo")).toBe(true));
+      const entry = current.dispatches.get("during-undo");
+      if (!entry) throw new Error("Missing queued dispatch");
+      // Let cleanup release a regressed queue cycle rather than hang the whole suite.
+      const cleanupGate = new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      });
+      entry.result = Promise.race([entry.result, cleanupGate]);
+      void entry.result.catch(() => {});
+      confirmUndo(true);
+      // Undo stops the chat process and atomically rewrites checkpoint and chat records;
+      // each private write runs the native helper on Windows.
+      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }), {
+        timeout: 1000,
+      });
+      expect(agents.specs).toHaveLength(starts);
+    } finally {
+      confirmUndo(true);
+      releaseCleanup?.();
+      await undo;
+      await queued;
+    }
+  });
+
+  it("retains worker memory rewind boundaries after a fallible rewind loses execution ownership", async () => {
+    const { call, scope } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({ type: "send", id, text: "HANG discarded" });
+    const worker = await dispatch(call, scope, "HANG worker");
+    await vi.waitFor(() => expect(session(worker)?.turnActive).toBe(true));
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    // biome-ignore lint/complexity/useLiteralKeys: Fail the real host's memory recovery boundary once.
+    const rewind = vi.spyOn(controller["memory"], "rewind");
+    rewind.mockRejectedValueOnce(new Error("Memory temporarily unavailable"));
+    const action = { type: "undo-request" as const, id, checkpointId, replacesDraft: false };
+    try {
+      await expect(controller.orchestrationChatAction(action)).rejects.toThrow(
+        "Memory temporarily",
+      );
+      expect(controller.snapshot().chat.workers).toEqual([]);
+      await expect(controller.orchestrationChatAction(action)).resolves.toMatchObject({
+        type: "rewound",
+      });
+      expect(rewind).toHaveBeenCalledWith(`worker:${worker}`, 0);
+    } finally {
+      rewind.mockRestore();
+    }
+  });
+
+  it("rewinds an active project request, stops only owned work and uses a fresh surviving-history provider on Send", async () => {
+    const { call } = await setup();
+    const id = controller.snapshot().chat.run?.id as string;
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "SURVIVING_PROJECT_PREFIX",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const discarded = "DISCARDED_PROJECT_Z9 HANG";
+    await controller.orchestrationChatAction({ type: "send", id, text: discarded });
+    const { scope } = (await call("code60_get_context")).body.result;
+    const owned = await dispatch(call, scope, "HANG owned worker");
+    const [unrelated] = await controller.start({ ...request, prompt: "HANG unrelated worker" });
+    await vi.waitFor(() =>
+      expect(agents.sessions.filter((session) => session.turnActive)).toHaveLength(3),
+    );
+    await vi.waitFor(() =>
+      expect(
+        controller.snapshot().runs.filter((run) => run.view?.status === "running"),
+      ).toHaveLength(2),
+    );
+    const checkpointId = controller.snapshot().chat.checkpoint?.id as string;
+    const starts = agents.sessions.length;
+    confirm.mockResolvedValueOnce(false);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toBeUndefined();
+    expect(chatStatus()).toBe("running");
+    expect(confirm.mock.calls.at(-1)?.[1]).toContain(discarded);
+    expect(
+      await controller.orchestrationChatAction({
+        type: "undo-request",
+        id,
+        checkpointId,
+        replacesDraft: true,
+      }),
+    ).toEqual({ type: "rewound", checkpointId, text: discarded });
+    expect(agents.sessions).toHaveLength(starts);
+    expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
+    expect(session(owned)?.stops.length).toBeGreaterThan(0);
+    const workspace = await openWorkspace(controllerDeps(), directory, {
+      XDG_STATE_HOME: join(directory, "state"),
+    });
+    expect((await workspace.store.read(owned)).status).toBe("cancelled");
+    expect(
+      controller.snapshot().runs.find((run) => run.record.id === unrelated)?.view?.status,
+    ).toBe("running");
+    expect(JSON.stringify(controller.snapshot().chat.events)).not.toContain("DISCARDED_PROJECT_Z9");
+    expect(controller.snapshot().chat.workers).toEqual([]);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id,
+      text: "Continue from the surviving prefix.",
+    });
+    await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+    const freshIndex = agents.specs.findLastIndex((spec) =>
+      spec.mcpServers?.some((server) => server.name === "code60"),
+    );
+    expect(freshIndex).toBeGreaterThan(0);
+    const fresh = agents.sessions[freshIndex];
+    expect(fresh?.prompts).toHaveLength(1);
+    expect(fresh?.prompts[0]).toContain("SURVIVING_PROJECT_PREFIX");
+    expect(fresh?.prompts[0]).not.toContain("DISCARDED_PROJECT_Z9");
+  });
 
   it("creates reusable commands through the chat gateway without executing or overwriting them", async () => {
     const { call } = await setup();
@@ -4515,7 +5237,7 @@ describe("orchestrated workers over ACP", () => {
   describe("desktop task application boundaries", () => {
     afterEach(() => vi.restoreAllMocks());
 
-    async function taskFixture(content = Buffer.from("after\n")) {
+    async function taskFixture(content = Buffer.from("after\n"), automatic = false) {
       const project = await realOf(directory);
       const base = "a".repeat(40);
       const commit = "b".repeat(40);
@@ -4531,6 +5253,9 @@ describe("orchestrated workers over ACP", () => {
         blob: vi.fn(async (_path: string, oid: string) =>
           oid === before ? Buffer.from("before\n") : content,
         ),
+        hash: vi.fn<TaskGit["hash"]>(async () => {
+          throw new Error("This fixture does not convert checkout line endings");
+        }),
         merge: vi.fn<TaskGit["merge"]>(async (_base, _current, proposed) => proposed),
         identity: vi.fn(async () => "unchanged-head-and-index"),
         lockPath: async () => join(project, ".git", "task.lock"),
@@ -4553,11 +5278,19 @@ describe("orchestrated workers over ACP", () => {
         }),
       });
       const { call, scope } = await setup();
-      const worker = await dispatch(call, scope, "task worker");
+      if (automatic) {
+        await controller.orchestrationChatAction({
+          type: "send",
+          id: controller.snapshot().chat.run?.id as string,
+          text: "Change task",
+        });
+        await vi.waitFor(() => expect(chatStatus()).toBe("idle"));
+      }
+      const worker = await dispatch(call, scope, automatic ? "HANG task worker" : "task worker");
       await vi.waitFor(() =>
         expect(
           controller.snapshot().runs.find((run) => run.record.id === worker)?.view?.status,
-        ).toBe("idle"),
+        ).toBe(automatic ? "running" : "idle"),
       );
       const reviewId = controller.snapshot().reviews?.[0]?.id;
       if (!reviewId) throw new Error("Missing task review");
@@ -4568,6 +5301,22 @@ describe("orchestrated workers over ACP", () => {
       if (!revisionId) throw new Error("Missing task revision");
       return { identity, revisionId, tasks, call, scope, worker };
     }
+
+    it("keeps a busy worker and its settled sibling read-only until every captured turn settles", async () => {
+      const { identity, call, scope, worker } = await taskFixture(Buffer.from("after\n"), true);
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      const sibling = await dispatch(call, scope, "settled sibling", "sibling");
+      await vi.waitFor(() => expect(session(sibling)?.turnActive).toBe(false));
+      await controller.captureReview({ ...identity, requestId: randomUUID() });
+      expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
+      session(worker)?.endTurn("end_turn");
+      // Integration writes several private journals; each is a native helper launch on Windows.
+      await vi.waitFor(
+        async () =>
+          expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+        { timeout: 10_000 },
+      );
+    });
 
     it("prepares, previews, applies and undoes through the real controller and task store", async () => {
       const { identity, revisionId, tasks } = await taskFixture();
@@ -5314,6 +6063,53 @@ describe("orchestrated workers over ACP", () => {
     expect(chatPrompts()[3]).toContain(`Worker ${one} (claude): idle after turn 2`);
   });
 
+  it("retains a worker's terminal view when an older history read finishes after Stop", async () => {
+    const { call, scope } = await setup();
+    const runId = await dispatch(call, scope, "HANG work");
+    await vi.waitFor(() => expect(session(runId)?.turnActive).toBe(true));
+    await controller.poll(["history"]);
+    // biome-ignore lint/complexity/useLiteralKeys: Hold the host history boundary across real worker cleanup.
+    const store = controller["workspace"]?.store;
+    if (!store) throw new Error("Missing fixture workspace");
+    const list = store.list.bind(store);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let captured = false;
+    const listing = vi.spyOn(store, "list").mockImplementationOnce(async (...args) => {
+      const records = await list(...args);
+      expect(records.find((record) => record.id === runId)?.status).toBe("running");
+      captured = true;
+      await gate;
+      return records;
+    });
+    const pending = controller.poll(["history"]);
+    try {
+      await vi.waitFor(() => expect(captured).toBe(true));
+      expect((await call("code60_stop_agent", { scope, runId })).status).toBe(200);
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      release();
+      await pending;
+      expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.view?.status).toBe(
+        "cancelled",
+      );
+      expect((await call("code60_list_agents")).body.result.workers[0]).toMatchObject({
+        status: "cancelled",
+        actions: ["resume"],
+      });
+      await controller.poll(["history"]);
+      expect((await store.read(runId)).status).toBe("cancelled");
+      expect(
+        controller.snapshot().runs.find((run) => run.record.id === runId)?.view,
+      ).toBeUndefined();
+    } finally {
+      release();
+      await pending;
+      listing.mockRestore();
+    }
+  });
+
   it("stops and resumes owned workers with allow-all, and revokes tools when the chat is replaced", async () => {
     const { call, scope } = await setup();
     const runId = await dispatch(call, scope, "HANG work");
@@ -5447,39 +6243,270 @@ describe("episodic memory controller", () => {
   );
 });
 
-describe("search overview helpers", () => {
-  async function summaryRequest() {
+describe.skipIf(!sqliteAvailable())("registered-project Search navigation", () => {
+  async function fixture() {
+    await controller.shutdown(true);
+    orchestrationProvider = "claude";
+    const adapter: CoreDeps["git"] = git;
+    adapter.repoInfo = async (cwd) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
+    controller = new DesktopController(
+      controllerDeps(),
+      {
+        XDG_CONFIG_HOME: join(directory, "config"),
+        XDG_STATE_HOME: join(directory, "state"),
+      },
+      { confirm },
+      { openDatabase, preferences, relay: true, ragExecutor },
+    );
+    await controller.restore();
+    const database = join(directory, "search.sqlite");
+    await controller.connect(database, true, controller.snapshot().databaseEpoch);
+    const canonical = await realOf(directory);
+    const roots = [join(canonical, "one", "same"), join(canonical, "two", "same")];
+    for (const [index, root] of roots.entries()) {
+      await fs.mkdir(root, { recursive: true });
+      const workspace = await openWorkspace(controllerDeps(), root, {
+        XDG_STATE_HOME: join(directory, "state"),
+      });
+      await workspace.store.save({
+        id: "duplicate-id",
+        agent: "claude",
+        status: "running",
+        firstPrompt: "needle",
+        turns: 1,
+        base: null,
+        branch: null,
+        worktree: root,
+        ownerPid: 999999,
+        startedAt: "2026-01-01",
+      });
+      await workspace.store.appendEvent({
+        type: "message",
+        runId: "duplicate-id",
+        text: `needle from project ${index}`,
+        at: "2026-01-01",
+      });
+      await fs.writeFile(join(root, "README.md"), `needle file from project ${index}`);
+      databases.get(database)?.entries.set(await realOf(root), "2026-01-01");
+    }
+    return {
+      database,
+      roots,
+      identity: {
+        requestId: randomUUID(),
+        databaseEpoch: controller.snapshot().databaseEpoch ?? 0,
+      },
+    };
+  }
+  it("searches closed projects without a selection, runtime opens, history writes or agent starts", async () => {
+    const { roots, identity } = await fixture();
+    const paths = await Promise.all(roots.map(realOf));
+    const before = await Promise.all(
+      roots.map(async (root) => {
+        const workspace = await openWorkspace(controllerDeps(), root, {
+          XDG_STATE_HOME: join(directory, "state"),
+        });
+        return fs.readFile(join(workspace.store.dir, "duplicate-id", "run.json"));
+      }),
+    );
+    const initial = controller.snapshot();
+    const starts = agents.sessions.length;
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "all",
+      sort: "relevance",
+    });
+    expect(result.partial).toBe(false);
+    expect(result.results.filter((s) => s.kind === "message")).toHaveLength(2);
+    expect(new Set(result.results.map((s) => s.id)).size).toBe(result.results.length);
+    expect(new Set(result.results.map((s) => s.project.name))).toEqual(new Set(paths));
+    expect(controller.snapshot().openProjects).toEqual(initial.openProjects);
+    expect(controller.snapshot().directory).toBe(initial.directory);
+    expect(agents.sessions.length).toBe(starts);
+    for (const [index, root] of roots.entries()) {
+      const workspace = await openWorkspace(controllerDeps(), root, {
+        XDG_STATE_HOME: join(directory, "state"),
+      });
+      expect(await fs.readFile(join(workspace.store.dir, "duplicate-id", "run.json"))).toEqual(
+        before[index],
+      );
+    }
+  });
+  it("builds one globally attributed overview and preserves literal evidence when its provider changes or fails", async () => {
+    const { identity, roots } = await fixture();
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "file",
+      sort: "relevance",
+    });
+    agents.script = (prompt, session) => {
+      const data = JSON.parse(prompt.split("Search data (JSON):\n\n")[1] ?? "{}");
+      expect(
+        new Set(data.results.map((source: { project: { path: string } }) => source.project.path)),
+      ).toEqual(new Set(roots));
+      session.update({ type: "message", text: "Both projects have documentation. [1] [2]" });
+      return "end_turn";
+    };
+    const starts = agents.sessions.length;
+    const summary = await controller.summarizeSearch({
+      requestId: randomUUID(),
+      searchId: identity.requestId,
+      databaseEpoch: identity.databaseEpoch,
+    });
+    expect(summary.sources).toHaveLength(2);
+    expect(new Set(summary.sources.map((s) => s.id)).size).toBe(2);
+    expect(agents.sessions.length).toBe(starts + 1);
+    expect(controller.snapshot().openProjects).toHaveLength(0);
+    await setProvider("codex");
+    agents.script = () => {
+      throw new Error("Provider unavailable");
+    };
+    await expect(
+      controller.summarizeSearch({
+        requestId: randomUUID(),
+        searchId: identity.requestId,
+        databaseEpoch: identity.databaseEpoch,
+      }),
+    ).rejects.toThrow(/setup|provider/i);
+    expect(
+      await controller.openSearchSource(
+        { ...identity, sourceId: result.results[0]?.id },
+        async () => false,
+      ),
+    ).toBeNull();
+  });
+  it.each(["cancel", "clear"])(
+    "retires a query cancelled during initialization: %s",
+    async (mode) => {
+      const { identity } = await fixture();
+      const pending = controller.searchProjects({
+        ...identity,
+        query: "needle",
+        kind: "all",
+        sort: "relevance",
+      });
+      const stopped = expect(pending).rejects.toThrow(/cancelled/);
+      if (mode === "clear") await controller.clearSearch();
+      else await controller.cancelProjectSearch(identity);
+      await stopped;
+      await expect(
+        controller.openSearchSource({ ...identity, sourceId: "a".repeat(64) }),
+      ).rejects.toThrow(/expired/);
+    },
+  );
+  it("confirms a closed source before changing navigation, reuses its owner and reads duplicate IDs in that owner", async () => {
+    const { roots, identity } = await fixture();
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "message",
+      sort: "relevance",
+    });
+    const first = result.results.find((s) => s.project.path === roots[0]);
+    const second = result.results.find((s) => s.project.path === roots[1]);
+    if (!first || !second) throw new Error("Missing project-qualified history");
+    const denied = vi.fn(async () => false);
+    const initial = controller.snapshot();
+    expect(
+      await controller.openSearchSource({ ...identity, sourceId: first.id }, denied),
+    ).toBeNull();
+    expect(denied).toHaveBeenCalledWith(roots[0]);
+    expect(controller.snapshot().openProjects).toEqual(initial.openProjects);
+    const accept = vi.fn(async () => true);
+    for (const source of [first, second, first]) {
+      const target = await controller.openSearchSource(
+        { ...identity, sourceId: source.id },
+        accept,
+      );
+      expect(target?.source.project.path).toBe(source.project.path);
+      expect(controller.snapshot().directory).toBe(source.project.path);
+      expect(await controller.action({ type: "events", id: "duplicate-id" })).toEqual(
+        expect.arrayContaining([expect.objectContaining({ text: source.text })]),
+      );
+    }
+    expect(accept).toHaveBeenCalledTimes(2);
+  });
+  it("rechecks the database after confirmation and keeps new registry members for the next submission", async () => {
+    const { database, identity } = await fixture();
+    const request = {
+      ...identity,
+      query: "needle",
+      kind: "file" as const,
+      sort: "relevance" as const,
+    };
+    const result = await controller.searchProjects(request);
+    const added = join(directory, "new");
+    await fs.mkdir(added);
+    await fs.writeFile(join(added, "README.md"), "needle new member");
+    databases.get(database)?.entries.set(await realOf(added), "2026-01-02");
+    const next = await controller.searchProjects({ ...request, requestId: randomUUID() });
+    expect(result.results).toHaveLength(2);
+    expect(next.results).toHaveLength(3);
+    const source = next.results[0];
+    if (!source) throw new Error("Missing captured source");
+    await expect(
+      controller.openSearchSource(
+        { ...identity, requestId: next.requestId, sourceId: source.id },
+        async () => {
+          await controller.connect(
+            join(directory, "replacement.sqlite"),
+            true,
+            controller.snapshot().databaseEpoch,
+          );
+          return true;
+        },
+      ),
+    ).rejects.toThrow(/database/i);
+    expect(controller.snapshot().openProjects ?? []).toHaveLength(0);
+  });
+});
+
+describe.skipIf(!sqliteAvailable())("database-scoped search overview helpers", () => {
+  async function summaryRequest(query = "parser") {
     await controller.open(directory);
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    const path = controller.snapshot().directory as string;
-    return {
-      requestId: crypto.randomUUID(),
-      directory: path,
-      query: "parser",
-      sources: [{ id: path, kind: "project" as const, title: "Project", text: "Parser fixed." }],
-    };
+    await fs.writeFile(
+      join(directory, "README.md"),
+      "This project builds an accessible parser and color palettes.",
+    );
+    const searchId = randomUUID();
+    const databaseEpoch = controller.snapshot().databaseEpoch ?? 0;
+    await controller.searchProjects({
+      requestId: searchId,
+      databaseEpoch,
+      query,
+      kind: "all",
+      sort: "relevance",
+    });
+    return { requestId: randomUUID(), searchId, databaseEpoch };
   }
 
-  it("uses the orchestration provider in a disposable directory without records or worktrees", async () => {
+  it("uses captured evidence in a disposable directory without records or worktrees", async () => {
     await configureMcp();
-    const input = { ...(await summaryRequest()), includeFiles: false };
+    const input = await summaryRequest();
     const initial = controller.snapshot();
     const count = agents.sessions.length;
-    agents.script = (_, session) => {
+    agents.script = (prompt, session) => {
+      expect(prompt).toContain("accessible parser");
       session.update({ type: "message", text: "Parser fixed. [1]" });
       return "end_turn";
     };
-    expect(await controller.summarizeSearch(input)).toEqual({
-      requestId: input.requestId,
-      text: "Parser fixed. [1]",
-      sources: input.sources,
+    const result = await controller.summarizeSearch(input);
+    expect(result.requestId).toBe(input.requestId);
+    expect(result.text).toBe("Parser fixed. [1]");
+    expect(result.sources[0]).toMatchObject({
+      kind: "file",
+      path: "README.md",
+      project: { path: await realOf(directory) },
     });
     expect(agents.sessions).toHaveLength(count + 1);
     const spec = agents.specs.at(-1);
     expect(spec?.name).toBe("claude");
     expect(spec?.mcpServers).toBeUndefined();
-    expect(spec?.cwd).not.toBe(input.directory);
+    expect(spec?.cwd).not.toBe(directory);
     await expect(fs.stat(spec?.cwd as string)).rejects.toThrow();
     expect(agents.sessions.at(-1)?.stops).toEqual([1000]);
     expect(controller.snapshot().runs).toEqual(initial.runs);
@@ -5487,50 +6514,32 @@ describe("search overview helpers", () => {
     expect(git.worktrees).toEqual([]);
   });
 
-  it("starts a worker for a natural-language question with no matching saved sessions", async () => {
-    const input = await summaryRequest();
-    await fs.writeFile(
-      join(directory, "README.md"),
-      "This project builds accessible color palettes.",
-    );
+  it("answers a natural-language question using captured files without literal matches", async () => {
+    const input = await summaryRequest("What is this project about?");
     agents.script = (prompt, session) => {
-      expect(prompt).toContain("This project builds accessible color palettes.");
+      expect(prompt).toContain("accessible parser and color palettes");
       session.update({ type: "message", text: "It builds accessible color palettes. [1]" });
       return "end_turn";
     };
-    const result = await controller.summarizeSearch({
-      ...input,
-      query: "What is this project about?",
-      sources: [],
-    });
+    const result = await controller.summarizeSearch(input);
     expect(result.text).toContain("color palettes");
     expect(result.sources[0]).toMatchObject({ kind: "file", path: "README.md" });
     expect(controller.snapshot().runs).toHaveLength(0);
   });
 
-  it("rejects stale projects, foreign sessions and malformed source addresses", async () => {
+  it("rejects stale database/query identities and renderer-supplied evidence or paths", async () => {
     const input = await summaryRequest();
-    await expect(controller.summarizeSearch({ ...input, directory: "/elsewhere" })).rejects.toThrow(
-      "project changed",
+    await expect(
+      controller.summarizeSearch({ ...input, databaseEpoch: input.databaseEpoch + 1 }),
+    ).rejects.toThrow(/database/i);
+    await expect(controller.summarizeSearch({ ...input, searchId: randomUUID() })).rejects.toThrow(
+      /current/i,
     );
-    for (const source of [
-      { id: "/elsewhere", kind: "project" as const, title: "Project", text: "" },
-      { id: "foreign", kind: "run" as const, title: "Foreign", text: "", runId: "foreign" },
-      {
-        id: "foreign:0",
-        kind: "message" as const,
-        title: "Foreign",
-        text: "",
-        runId: "foreign",
-        eventIndex: 0,
-      },
-    ])
-      await expect(controller.summarizeSearch({ ...input, sources: [source] })).rejects.toThrow(
-        "source",
-      );
+    for (const extra of [{ directory: "/elsewhere" }, { sources: [] }, { query: "injected" }])
+      await expect(controller.summarizeSearch({ ...input, ...extra })).rejects.toThrow();
   });
 
-  it("fully stops a superseded worker before starting the replacement and ignores stale cancellation", async () => {
+  it("fully stops a superseded worker before starting its replacement and ignores stale cancellation", async () => {
     const input = await summaryRequest();
     agents.script = () => "hang";
     const first = controller.summarizeSearch(input);
@@ -5543,14 +6552,15 @@ describe("search overview helpers", () => {
       session.update({ type: "message", text: "Replacement. [1]" });
       return "end_turn";
     };
-    const next = { ...input, requestId: crypto.randomUUID() };
-    expect((await controller.summarizeSearch(next)).text).toBe("Replacement. [1]");
+    expect((await controller.summarizeSearch({ ...input, requestId: randomUUID() })).text).toBe(
+      "Replacement. [1]",
+    );
     await rejected;
     await expect(fs.stat(oldDirectory)).rejects.toThrow();
     await controller.cancelSearchSummary(input.requestId);
   });
 
-  it.each(["cancel", "reload", "provider", "project", "database", "stop-all", "shutdown"])(
+  it.each(["cancel", "reload", "provider", "database", "stop-all", "shutdown"])(
     "cancels and cleans up on %s",
     async (mode) => {
       const input = await summaryRequest();
@@ -5561,14 +6571,9 @@ describe("search overview helpers", () => {
       const worker = agents.sessions.at(-1);
       const cwd = agents.specs.at(-1)?.cwd as string;
       if (mode === "cancel") await controller.cancelSearchSummary(input.requestId);
-      else if (mode === "reload") await controller.cancelSearchSummary();
+      else if (mode === "reload") await controller.clearSearch();
       else if (mode === "provider") await setProvider(null);
-      else if (mode === "project") {
-        const next = join(directory, "next-project");
-        await fs.mkdir(next);
-        await controller.open(next);
-      } else if (mode === "database")
-        await controller.connect(join(directory, "next.sqlite"), true);
+      else if (mode === "database") await controller.connect(join(directory, "next.sqlite"), true);
       else if (mode === "stop-all") await controller.stopAll();
       else await controller.shutdown(true);
       await rejected;
@@ -5577,13 +6582,35 @@ describe("search overview helpers", () => {
     },
   );
 
+  it("keeps the query and overview alive across project selection", async () => {
+    const input = await summaryRequest();
+    agents.script = () => "hang";
+    const pending = controller.summarizeSearch(input);
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+    const helper = agents.sessions.at(-1);
+    const next = join(directory, "another-project");
+    await fs.mkdir(next);
+    await controller.open(next);
+    expect(helper?.turnActive).toBe(true);
+    await controller.cancelSearchSummary(input.requestId);
+    await rejected;
+    await expect(
+      controller.openSearchSource({
+        requestId: input.searchId,
+        databaseEpoch: input.databaseEpoch,
+        sourceId: "a".repeat(64),
+      }),
+    ).rejects.toThrow("Unknown search source");
+  });
+
   it("does not cancel the active worker for another request ID", async () => {
     const input = await summaryRequest();
     agents.script = () => "hang";
     const pending = controller.summarizeSearch(input);
     const rejected = expect(pending).rejects.toThrow("cancelled");
     await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
-    await controller.cancelSearchSummary(crypto.randomUUID());
+    await controller.cancelSearchSummary(randomUUID());
     expect(agents.sessions.at(-1)?.turnActive).toBe(true);
     await controller.cancelSearchSummary(input.requestId);
     await rejected;

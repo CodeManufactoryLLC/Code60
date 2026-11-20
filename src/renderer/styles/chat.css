@@ -1,5 +1,53 @@
 /* Chat styles. Imported into its declared layer by style.css. */
 
+.conversation-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.conversation-changes-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.conversation-changes-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-attachments li,
+.revision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-attachments li {
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--control-border);
+  overflow-wrap: anywhere;
+}
+
 .project-file-panel-scope:not([hidden]) {
   display: contents;
 }
@@ -109,6 +157,27 @@
   font-synthesis: weight style;
 }
 
+/* Agent bubbles share human padding; metadata follows the inner text edge. */
+.agent-message-bubble {
+  width: 100%;
+}
+
+.event.message.search-match > .agent-message-bubble {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+}
+
+.event.message > .message-copy {
+  margin-top: 4px;
+  margin-left: 20px;
+  max-width: calc(100% - 20px);
+}
+
+.chat-markdown :is(p, ul, ol, blockquote, pre, .chat-markdown-table) {
+  margin-block: 0.75em;
+}
+
+/* Boundary rules follow block spacing so paragraph/code/table margins cannot reopen it. */
 .chat-markdown > :first-child {
   margin-top: 0;
 }
@@ -117,14 +186,10 @@
   margin-bottom: 0;
 }
 
-.chat-markdown :is(p, ul, ol, blockquote, pre, .chat-markdown-table) {
-  margin-block: 0.75em;
-}
-
 .chat-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin-block: 1em 0.4em;
   font-family: inherit;
-  font-weight: 400;
+  font-weight: inherit;
   line-height: 1.3;
 }
 
@@ -170,7 +235,7 @@
 .event.message .chat-markdown :is(pre, code) {
   font-family: var(--mono);
   font-size: 0.95em;
-  font-weight: 400;
+  font-weight: inherit;
   text-transform: none;
   --letter-spacing: normal;
 }
@@ -217,7 +282,7 @@
 }
 
 .chat-markdown th {
-  font-weight: 400;
+  font-weight: inherit;
   background: var(--field-fill);
 }
 
@@ -256,9 +321,12 @@
   font-family: var(--human-font, var(--font));
   --letter-spacing: var(--human-spacing, normal);
   font-size: var(--human-size, 14px);
-  font-weight: var(--human-prompt-weight, 400);
+  font-weight: var(--human-weight, 400);
   text-transform: var(--human-case, none);
   line-height: 1.65;
+}
+
+.event.prompt pre:not([data-slot="bubble-content"]) {
   color: var(--human-text);
 }
 
@@ -270,14 +338,9 @@
   border: 0;
 }
 
-.event.prompt:where(:not(.automatic)) pre {
+.event.prompt:where(:not(.automatic)) pre,
+.agent-message-bubble {
   padding: 12px 18px;
-  border: 1px solid var(--user-bubble);
-  box-shadow: 1px 1px 1px var(--border);
-  background: transparent;
-  color: var(--on-user-bubble);
-
-  border-radius: var(--ui-radius);
 }
 
 .event.toolCall {
@@ -323,13 +386,14 @@
 /* Composer */
 .composer {
   margin: 12px;
-  border: 1px solid var(--surface-edge);
-  box-shadow: var(--composer-shadow);
-  background: var(--field-fill);
+  display: block;
+  padding: 1px;
+  gap: 0;
+  --nb-card-fill: var(--composer-bg);
+  --nb-card-border: var(--control-border);
+  --nb-card-shadow: var(--composer-shadow);
   flex-shrink: 0;
   overflow: hidden;
-
-  border-radius: var(--ui-radius);
 }
 
 .composer textarea {
@@ -338,6 +402,7 @@
   max-height: 220px;
   display: block;
   border: 0;
+  border-radius: 0;
   resize: vertical;
   padding: 12px;
   background: transparent;
@@ -348,10 +413,10 @@
   box-shadow: none;
 }
 
-:where(:root[data-focus-highlight="on"]) .composer:focus-within {
-  border-color: var(--focus-line);
-  outline: 0;
-  box-shadow: var(--composer-shadow);
+.composer:focus-within {
+  --nb-card-fill: var(--composer-focus-bg);
+  outline: 2px solid var(--focus-line);
+  outline-offset: 2px;
 }
 
 .composer-footer {
@@ -361,7 +426,7 @@
   justify-content: space-between;
   padding: 8px 10px;
   border-top: 1px solid transparent;
-  background: var(--surface);
+  background: transparent;
 }
 
 .composer-footer span {
@@ -373,16 +438,10 @@
   display: grid;
   min-height: 142px;
   place-items: center;
-  border-style: dashed;
   background-color: var(--disabled-fill);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 4px,
-    var(--disabled-stripe) 4px 6px
-  );
   color: var(--muted);
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
 }
 
 /* Approval card */
@@ -398,13 +457,13 @@
   display: flex;
   gap: 9px;
   align-items: center;
-  background: var(--warning-bg);
-  border: 1px solid var(--surface-edge);
-  border-left: 2px solid var(--accent);
+  flex-direction: row;
+  flex-wrap: wrap;
+  --nb-card-fill: var(--warning-bg);
+  --nb-card-shadow: none;
+  border-left-color: var(--accent);
   padding: 12px;
   margin: 7px 0;
-
-  border-radius: var(--ui-radius);
 }
 
 .approval > div {
@@ -414,7 +473,7 @@
 
 .approval strong {
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--warning-text);
 }
 
@@ -467,7 +526,7 @@
 
 .orchestration-chat-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 12px;
@@ -484,23 +543,44 @@
   font-size: var(--text-size, 13px);
 }
 
+.orchestration-chat-status:empty {
+  display: none;
+}
+
 .orchestration-chat-body {
+  --chat-column-width: 800px;
+  --chat-inline-inset: 24px;
+  --chat-message-inset: 12px;
+  --chat-scrollbar-size: 14px;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  width: min(100%, 800px);
+  width: 100%;
+  padding: 0 0 var(--space-4);
+}
+
+.orchestration-chat-body > :not(.chat-connection-frame, .transcript) {
+  box-sizing: border-box;
+  width: min(
+    calc(100% - 2 * var(--chat-inline-inset)),
+    calc(var(--chat-column-width) - 2 * var(--chat-inline-inset))
+  );
   align-self: center;
-  padding: 0 24px;
+  min-width: 0;
 }
 
 .orchestration-chat-body .transcript {
   flex: 1;
   min-height: 0;
-  padding: 24px 12px 32px;
+  padding: 24px 0 32px;
   scrollbar-gutter: stable;
   overflow-anchor: none;
   scroll-behavior: auto;
+}
+
+.orchestration-chat-body .transcript:focus-visible {
+  outline-offset: -2px;
 }
 
 .chat-connection-frame {
@@ -547,7 +627,8 @@
 }
 
 .orchestration-chat-body .event.message {
-  padding: 16px 18px;
+  margin-bottom: 8px;
+  padding: 0 0 16px;
   border: 0;
 }
 
@@ -590,7 +671,7 @@
 
 .chat-message-speaker {
   font-size: var(--text-size, 12px);
-  font-weight: 400;
+  font-weight: inherit;
   margin-bottom: 8px;
   color: var(--muted);
 }
@@ -658,15 +739,10 @@
   position: relative;
   flex-shrink: 0;
   margin: 1px;
-  border: 1px solid var(--control-border);
-  box-shadow: var(--composer-shadow);
-  background: var(--chat-neutral);
-}
-
-.orchestration-chat-body .composer:focus-within {
-  border-color: var(--focus-line);
-  outline: 0;
-  box-shadow: var(--composer-shadow);
+  width: min(
+    calc(100% - 2 * var(--chat-inline-inset) - 2px),
+    calc(var(--chat-column-width) - 2 * var(--chat-inline-inset) - 2px)
+  );
 }
 
 .chat-provider {
@@ -707,13 +783,14 @@
 
 @media (max-width: 900px) {
   .orchestration-chat-body {
-    padding: 0 12px;
+    --chat-inline-inset: 12px;
+    --chat-message-inset: 4px;
   }
 }
 
 @media (max-width: 900px) {
   .orchestration-chat-body .transcript {
-    padding: 16px 4px 24px;
+    padding: 16px 0 24px;
   }
 }
 
@@ -747,29 +824,8 @@
   overflow-wrap: anywhere;
 }
 
-.chat-role-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 1em;
-  width: 1em;
-  height: 1em;
-  line-height: 0;
-}
-
-.chat-role-icon > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .chat-orchestrator-icon > .chat-orchestrator-icon-dark {
   display: none;
-}
-
-.chat-role-icon > .carbon-icon {
-  width: 100%;
-  height: 100%;
 }
 
 :root[data-color-scheme="dark"] .chat-orchestrator-icon > .chat-orchestrator-icon-light {
@@ -796,7 +852,8 @@
   min-width: 0;
 }
 
-.composer-mode {
+.composer-mode,
+.session-option-picker {
   min-width: 0;
   max-width: 100%;
 }
@@ -900,7 +957,7 @@
   box-shadow: var(--overlay-shadow);
 }
 
-.session-info .composer-mode .harness-mode-menu button {
+.session-info .harness-mode-menu button {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -913,7 +970,7 @@
   overflow-wrap: anywhere;
 }
 
-.session-info .composer-mode .harness-mode-menu button:focus-visible {
+.session-info .harness-mode-menu button:focus-visible {
   background: var(--hover-bg);
   outline: 1px solid var(--focus-line);
   outline-offset: -1px;
@@ -926,13 +983,21 @@
 }
 
 /* The content observer follows expanding activity only when already at the bottom. */
+.chat-transcript-content,
+.worker-transcript-content {
+  box-sizing: border-box;
+  width: min(100%, calc(var(--chat-column-width) - var(--chat-scrollbar-size)));
+  margin-inline: auto;
+  padding-inline: calc(var(--chat-inline-inset) + var(--chat-message-inset));
+}
+
 .chat-transcript-content {
   --activity-size: 48px;
-  --activity-gutter: calc(var(--activity-size) + 12px - 18px);
+  --activity-gutter: calc(var(--activity-size) + 12px - 20px);
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding-left: var(--activity-gutter);
+  padding-left: calc(var(--chat-inline-inset) + var(--chat-message-inset) + var(--activity-gutter));
 }
 
 .chat-transcript-content > * {
@@ -950,7 +1015,7 @@
 .activity-display {
   padding: 0;
   border: 0;
-  border-radius: var(--ui-radius);
+  border-radius: var(--button-radius);
   min-height: 0;
   background: transparent;
   box-shadow: none;
@@ -968,7 +1033,7 @@
   gap: 12px;
   max-width: 100%;
   overflow: hidden;
-  margin: 12px 0 0 calc(-1 * var(--activity-gutter, 42px));
+  margin: 12px 0 0 calc(-1 * var(--activity-gutter, 40px));
   color: var(--muted);
   cursor: pointer;
 }
@@ -1020,24 +1085,11 @@
   height: 16px;
 }
 
-.activity-visual img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-
-:root[data-color-scheme="dark"] .activity-visual img {
-  filter: invert(1) hue-rotate(180deg);
-  mix-blend-mode: screen;
-}
-
 .activity-name {
   flex: 1;
   min-width: 0;
   font-size: var(--text-size, 13px);
-  font-weight: 400;
+  font-weight: var(--text-weight, 400);
   font-variant-numeric: tabular-nums;
   text-align: left;
   overflow-wrap: anywhere;
@@ -1151,12 +1203,15 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   border: 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  margin: 4px 0 0 calc(var(--title-size, 18px) + 8px);
+  margin: 4px 0 0 calc(var(--page-title-space-size, 64px) + 8px);
   font-size: var(--text-size, 13px);
 }
 
 .chat-conversations {
+  box-sizing: border-box;
   flex: 1;
+  padding: 1px;
+  gap: 0;
   min-width: 300px;
   min-height: 0;
   overflow: hidden;
@@ -1210,10 +1265,11 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   place-items: center;
   width: 16px;
   height: 16px;
+  transition: transform 60ms ease-out;
 }
 
 .message-copy-glyph[data-clicked] {
-  animation: message-copy-depress var(--motion) ease;
+  animation: message-copy-depress 150ms ease;
 }
 
 .message-copy button:active .message-copy-glyph {
@@ -1221,15 +1277,32 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 
 .turn-timer {
-  margin: 8px 0;
+  display: flex;
+  align-items: flex-end;
+  min-height: 24px;
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: var(--text-size, 13px);
+  line-height: max(24px, 1.5em);
   text-transform: none;
   overflow-wrap: anywhere;
 }
 
+.turn-timer-text {
+  /* Remove font leading beneath the label without shrinking its click target. */
+  display: block;
+  text-box: trim-end cap text;
+  white-space: normal;
+}
+
+.turn-timer.activity-history-toggle {
+  min-height: 24px;
+  padding: 0;
+}
+
 .turn-separator {
-  margin: 12px 0;
+  /* Account for the remaining font descent, scaling with saved body text size. */
+  margin: calc(8px - 0.15em) 0 8px;
   border: 0;
   border-top: 1px solid var(--border);
 }
@@ -1259,6 +1332,18 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   background-image: none;
   box-shadow: none;
   color: var(--muted);
+}
+
+.message-copy .message-undo {
+  width: auto;
+  flex-basis: auto;
+  padding-inline: 8px;
+}
+
+.event.message > .message-copy > .message-sent-time {
+  flex: 0 1 auto;
+  width: auto;
+  text-align: left;
 }
 
 .event:is(:hover, :focus-within) > .message-copy {

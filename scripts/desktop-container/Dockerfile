@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git xvfb xauth fonts-dejavu-core fonts-liberation \
+    ca-certificates git xvfb xauth openbox fonts-dejavu-core fonts-liberation \
     libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2 \
     libxss1 libx11-xcb1 libdrm2 libxkbcommon0 libxdamage1 \
     libxfixes3 libxrandr2 libxcomposite1 libcups2 \

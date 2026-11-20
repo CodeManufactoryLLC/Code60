@@ -1,8 +1,15 @@
 # Contracts
 
+- Browser requests have fixed action-specific fields and exactly Headless,
+  Visible and Existing Browser modes. Describe lazy startup, connection/state loss
+  on switching, external effects and runtime prerequisites in the tool/catalog.
+  No browser request accepts executable, environment or endpoint overrides.
+
 `src/contracts` holds browser-safe schemas and values shared by core, agents, and bridge.
 
-- Depend only on Zod. Do not import other application modules, Node.js, Electron, or React.
+- Production contracts depend only on Zod. Colocated unit tests may import
+  Vitest; other module and browser-safety boundaries still apply to those tests.
+  Do not import other application modules, Node.js, Electron, or React.
 - Keep side effects and I/O out of schemas. Use `parseValue` for concise errors and CSP-safe parsing.
 - Preserve input limits and strict IPC field rejection. Do not coerce untrusted values.
 - Keep bundled tactics versioned, browser-safe and side-effect-free. Compose shared
@@ -18,3 +25,17 @@
   mode; project dispatch still rejects directories and requires Git isolation.
   Shared identities and history-window policies remain browser-safe, strict and
   free of I/O. No executable/environment fields are permitted.
+- The self-knowledge catalog in `knowledge.ts` must classify every page, settings
+  section and MCP tool. Update descriptors with any capability-affecting change,
+  then run `npm run generate:capabilities`; never hand-edit `docs/capabilities.md`.
+  Catalog text describes product behavior; it is never authority or instructions.
+
+
+## Providers
+
+Follow the Providers navigation and management section of `ARCHITECTURE.md`.
+Providers replaces the Agents settings destination. Preserve v1 verified membership,
+model defaults, histories and external logins. Set-primary/disconnect are strict
+human-only bridge actions, guarded in main against active desktop work, setup and
+overlapping writes. The primary must be replaced before disconnecting. Publish
+main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.

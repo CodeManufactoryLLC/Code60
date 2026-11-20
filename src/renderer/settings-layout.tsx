@@ -1,22 +1,31 @@
 import type { ReactNode } from "react";
+import {
+  isSettingsSection,
+  type PageId,
+  pageDefinitions,
+  type SettingsSectionId,
+  settingsLabels,
+} from "./navigation.js";
 import { InfoTip } from "./overlays.js";
+import { PageTitle } from "./page-title.js";
 
 /** A Settings page header: its title, an optional explanation tooltip, and page-wide actions. */
 export function SettingsHeader({
   id,
-  title,
+  page,
   tip,
   children,
 }: {
   id?: string;
-  title: string;
+  page: PageId | SettingsSectionId;
   tip?: string;
   children?: ReactNode;
 }) {
+  const title = isSettingsSection(page) ? settingsLabels[page] : pageDefinitions[page].label;
   return (
     <div className="settings-section-header">
       <div className="settings-title">
-        <h2 id={id}>{title}</h2>
+        <PageTitle page={page} as={isSettingsSection(page) ? "h1" : "h2"} id={id} />
         {tip && <InfoTip label={title}>{tip}</InfoTip>}
       </div>
       {children && <div className="settings-actions">{children}</div>}
