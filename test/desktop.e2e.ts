@@ -12601,9 +12601,16 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
-    await expect
-      .poll(() => scrollProbe.evaluate((probe) => probe.measure()))
-      .toMatchObject({ atBottom: true });
+    try {
+      await expect
+        .poll(() => scrollProbe.evaluate((probe) => probe.measure()))
+        .toMatchObject({ atBottom: true });
+    } finally {
+      await test.info().attach("chat-resize-scroll-observation", {
+        body: JSON.stringify(await scrollProbe.evaluate((probe) => probe.measure()), null, 2),
+        contentType: "application/json",
+      });
+    }
     await scrollProbe.evaluate((probe) => probe.dispose());
     await scrollProbe.dispose();
     await page.screenshot({ path: test.info().outputPath("agent-bubbles-dark-narrow.png") });
