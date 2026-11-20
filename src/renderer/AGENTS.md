@@ -499,6 +499,8 @@
 - Main Chat follows streamed growth with one retargetable scroll animation. Preserve
   follow across resize-generated scroll events between measurement and the next
   controller write. Upward input or reading activity details still cancels follow.
+  Retain existing follow at a native one-pixel rounding gap; explicit upward input
+  must remain paused there, and downward movement can resume following.
   This fix adds no capability, setting or self-knowledge catalog change.
   Restore history/reading positions
   without animation. Fade/translate new visible assistant messages only once, never

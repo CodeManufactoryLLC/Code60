@@ -116,6 +116,12 @@
   Historical evidence reads cannot reconnect workers or replay feedback.
   Pin each review worker's accepted worktree identity, branch and base; recheck
   before capture/application so editable run records cannot redirect evidence.
+  Coordinate worker session-option changes with automatic capture per target.
+  Finish active capture before changing options; retain pending capture until
+  the option change settles, including provider failure. Other targets continue.
+  Cancel queued option changes on folder stop, renderer loss and owner replacement;
+  recheck the captured owner before invoking the provider. Never replay prompts or
+  retry uncertain checkout writes. This reliability fix adds no capability/catalog entry.
 - RAG discovery is database-wide and read-only, including archived/stopped chats
   and legacy/current project histories. Read saved chats for registered projects
   even when closed, and capture live events from all retained project owners.

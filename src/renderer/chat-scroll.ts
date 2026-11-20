@@ -114,7 +114,10 @@ export function createChatScroll(
       if (Math.abs(top - written) < 1) return;
       if (revealFrame !== undefined) cancel();
       const down = top > position.top;
-      position.following = bottom() - top < 1 || (down && bottom() - top < 80);
+      // Integer scrollHeight/clientHeight can leave a one-pixel native clamp.
+      // Retain existing follow there; paused readers still need downward movement.
+      position.following =
+        (position.following && bottom() - top <= 1) || (down && bottom() - top < 80);
       position.top = top;
       written = top;
       if (position.following) update();
