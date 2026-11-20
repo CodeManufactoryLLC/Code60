@@ -168,11 +168,17 @@ external inference service is permitted. Installer-size measurements require
 actual release builds; do not build full local installers on a disk-constrained host.
 
 PRs and pushes to main run checks and builds on Linux with
-Node 22.12 and 24. Node 24 additionally runs the Electron suite under Xvfb,
-builds both Linux installers, installs the DEB, and launches both the installed
-DEB application and the actual AppImage. An ephemeral runner-only user-namespace
+Node 22.12 and 24. In parallel, Node 24 runs the full Electron suite under Xvfb
+across three independent runners with one worker each, using
+`--fully-parallel --workers=1 --shard=N/3` to split individual tests. A separate
+Node 24 job builds both Linux installers, installs the DEB, and launches both the
+installed DEB application and the actual AppImage. Checks, desktop shards and
+installer validation do not wait for one another. An ephemeral runner-only user-namespace
 setting allows Electron to retain its Chromium sandbox on Ubuntu 24.04.
-These Linux jobs are required by **CI passed**; PRs receive no signing secrets.
+Both Node checks, all three desktop shards, and the installer job must succeed
+for **CI passed**; failures, cancellations and skips block the aggregate.
+PRs receive no signing secrets. Local test defaults and release job ordering
+remain unchanged.
 macOS checks are release-only, so macOS-specific regressions on
 those systems are detected during release validation rather than on every PR.
 
