@@ -10731,7 +10731,10 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await appendRow(page);
     await page.getByRole("button", { name: "Do not use a run configuration" }).click();
     await expect(page.getByLabel("Agent 1", { exact: true })).toHaveValue("fake");
-    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New agent sessions", exact: true })
+      .getByRole("button", { name: "Back", exact: true })
+      .click();
     await page.getByRole("button", { name: /^Team/ }).click();
     await expect(page.getByLabel("Agent 2", { exact: true })).toHaveValue("fake2");
     await expect(page.getByLabel("Maximum active runs")).toHaveValue("1");
@@ -10739,7 +10742,10 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await expect(page.getByLabel("Task prompt")).toBeFocused();
     await page.getByLabel("Task prompt").fill("one-time private task");
     await page.getByLabel("Maximum active runs").fill("2");
-    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New agent sessions", exact: true })
+      .getByRole("button", { name: "Back", exact: true })
+      .click();
     await page.getByRole("button", { name: /^Team/ }).click();
     await expect(page.getByLabel("Task prompt")).toHaveValue("one-time private task");
     await page.getByRole("button", { name: "Start agents", exact: true }).click();
