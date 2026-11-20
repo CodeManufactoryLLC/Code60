@@ -43,6 +43,8 @@ jobs:
     needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      NODE_OPTIONS: ${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}
     strategy:
       fail-fast: true
       matrix:

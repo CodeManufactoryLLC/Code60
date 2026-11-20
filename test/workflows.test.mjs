@@ -84,11 +84,13 @@ describe("CI and release gates", () => {
   });
 
   it("enables SQLite for Node 22.12 so database tests participate in coverage", () => {
-    expect(ci.jobs.check.strategy.matrix.node).toContain("22.12");
-    expect(ci.jobs.check.env.NODE_OPTIONS).toBe(
-      "${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}",
-    );
-    expect(ci.jobs.check.steps.some((step) => step.run === "npm run check")).toBe(true);
+    for (const job of [ci.jobs.check, release.jobs["linux-check"]]) {
+      expect(job.strategy.matrix.node).toContain("22.12");
+      expect(job.env.NODE_OPTIONS).toBe(
+        "${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}",
+      );
+      expect(job.steps.some((step) => step.run === "npm run check")).toBe(true);
+    }
     expect(ci.jobs.passed.needs).toContain("check");
   });
 
