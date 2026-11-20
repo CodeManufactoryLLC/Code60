@@ -96,7 +96,11 @@ export function createChatScroll(
       previous = performance.now();
       remainder = 0;
       frame = requestAnimationFrame(tick);
-    } else if (frame === undefined) settleLayout();
+    } else if (frame === undefined && layoutPending) {
+      // A resize may already have clamped the viewport to its new bottom.
+      // Adopt that offset so the settlement check can finish without a motion loop.
+      write(bottom());
+    }
   };
   return {
     update,

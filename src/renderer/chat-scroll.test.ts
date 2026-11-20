@@ -254,6 +254,19 @@ describe("main-chat smooth following", () => {
     expect(frames.size).toBe(0);
   });
 
+  it("settles when a taller viewport already clamped the offset to its new bottom", () => {
+    const { element, position, controller, finish } = setup();
+    controller.update(true);
+    element.clientHeight = 600;
+    element.scrollTop = 800;
+    controller.update();
+    controller.onScroll();
+    finish();
+    expect(position.following).toBe(true);
+    expect(position.top).toBe(800);
+    expect(element.scrollTop).toBe(800);
+  });
+
   it("upward input cancels an in-flight animation even inside the bottom threshold", () => {
     const { element, position, controller, frames, advance } = setup();
     controller.update(true);
