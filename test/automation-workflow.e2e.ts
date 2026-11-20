@@ -11,7 +11,11 @@ const root = resolve(import.meta.dirname, "..");
 
 test("workflow: desktop automation survives app quit, retains history and cancels without CLI", async () => {
   test.setTimeout(120_000);
-  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-scheduler-workflow-")));
+  // Darwin's per-user TMPDIR can exceed the scheduler's local-socket path limit.
+  const temporaryRoot = process.platform === "darwin" ? "/tmp" : tmpdir();
+  const directory = await realpath(
+    await mkdtemp(join(temporaryRoot, "code60-scheduler-workflow-")),
+  );
   const repo = join(directory, "project");
   const gate = join(directory, "release-worker");
   const stateFile = join(directory, "state/code60/automations/state.json");
@@ -80,6 +84,15 @@ test("workflow: desktop automation survives app quit, retains history and cancel
   };
   try {
     await expect.poll(async () => (await saved().catch(() => null))?.format).toBe(1);
+    await expect
+      .poll(async () => {
+        const endpoint = await readFile(
+          join(directory, "state/code60/automations/connection.json"),
+          "utf8",
+        ).catch(() => "null");
+        return JSON.parse(endpoint)?.v;
+      })
+      .toBe(1);
     let page = await launch();
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
