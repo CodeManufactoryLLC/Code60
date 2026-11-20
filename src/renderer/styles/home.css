@@ -215,3 +215,116 @@
   resize: vertical;
   min-height: 160px;
 }
+
+/* Provider controls adapt the licensed Neobrutalism menu and checkbox. */
+.providers-page .home-card-arrow {
+  left: 16px;
+  right: auto;
+}
+.providers-page .home-card-copy {
+  padding-bottom: 60px;
+}
+.providers-page .home-card > [data-slot="card-header"] {
+  padding-right: 48px;
+}
+.provider-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 2px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-text);
+}
+.provider-primary > .carbon-icon {
+  width: 22px;
+  height: 22px;
+}
+.provider-primary:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 3px;
+}
+.providers-page .navigation-card > .provider-primary {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+}
+.provider-primary-compact {
+  width: 18px;
+  height: 18px;
+}
+.provider-primary-compact > .carbon-icon {
+  width: 12px;
+  height: 12px;
+}
+.provider-sidebar-row {
+  align-items: center;
+  gap: 4px;
+}
+.provider-sidebar-row .chat-sidebar-artwork > .agent-logo {
+  width: 28px;
+  height: 28px;
+}
+.provider-sidebar-row > .icon-button {
+  flex-shrink: 0;
+}
+.provider-detail-content {
+  padding: 24px var(--page-padding);
+  overflow: auto;
+}
+.provider-detail-content > .settings-card {
+  max-width: 640px;
+  margin: 24px auto;
+}
+.provider-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.actions-menu.provider-dropdown {
+  padding: 4px;
+  border: 2px solid var(--control-border);
+  border-radius: 5px;
+  box-shadow: var(--card-shadow);
+}
+.actions-menu.provider-dropdown [role="menuitem"] {
+  display: flex;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font: var(--button-weight, 600) var(--button-size, 13px) var(--button-font, var(--font));
+  text-transform: var(--button-case, none);
+}
+.actions-menu.provider-dropdown [role="menuitem"]:is(:hover, :focus):not([aria-disabled="true"]) {
+  border-color: var(--control-border);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+@media (forced-colors: active) {
+  .provider-primary {
+    background: Highlight;
+    color: HighlightText;
+    border-color: ButtonText;
+  }
+  .actions-menu.provider-dropdown {
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+}
+
+.providers-page .navigation-card:has(> .home-card-create) {
+  border: 3px dashed var(--control-border);
+}
+.provider-sidebar-row .chat-sidebar-artwork {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 28px;
+}

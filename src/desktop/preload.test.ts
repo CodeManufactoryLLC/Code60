@@ -101,6 +101,7 @@ describe("sandboxed diagnostic preload", () => {
       readReviewFile: "review-file",
       readDiff: "diff-read",
       cancelDiff: "diff-cancel",
+      providerAction: "provider-action",
       beginAgentSetup: "setup-begin",
       attemptAgentSetup: "setup-attempt",
       cancelAgentSetup: "setup-cancel",

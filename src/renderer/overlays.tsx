@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import { markParts, rankCommands } from "./palette.js";
 import { captureTooltipScroll } from "./tooltip-scroll.js";
 
@@ -64,7 +65,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
         entries: matches.filter((entry) => entry.command.group === name),
       }));
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="command-palette"
       aria-label="Command palette"
@@ -167,7 +168,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
           {matches.length} {matches.length === 1 ? "result" : "results"}
         </span>
       </footer>
-    </dialog>
+    </DialogContent>
   );
 }
 

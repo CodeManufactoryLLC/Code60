@@ -24,7 +24,7 @@
   --ui-radius: 0;
   --button-radius: 0px;
   --chat-radius: 0px;
-  --dialog-radius: 0px;
+  --dialog-radius: 10px;
   --card-radius: 0px;
   --navigation-card-radius: 5px;
   --settings-card-radius: 0px;

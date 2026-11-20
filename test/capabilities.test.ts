@@ -16,6 +16,18 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("exposes conversational browser modes only through the orchestrator gateway", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
+      prerequisite: "provider",
+      purpose: expect.stringContaining("Headless, Visible or Existing Browser"),
+      limitations: expect.stringContaining("unavailable to workers"),
+    });
+    for (const role of ["relay", "project"] as const)
+      expect(mcpToolsForRole(role).find((tool) => tool.name === "code60_browser")).toMatchObject({
+        kind: "browser",
+        readOnly: false,
+      });
+  });
   it("describes all registered project Search with captured provenance and closed-source consent", () => {
     const search = DESKTOP_CAPABILITIES.find((capability) => capability.id === "search");
     expect(search).toMatchObject({ prerequisite: "database", agentAccess: "human-only" });
@@ -107,6 +119,19 @@ describe("desktop capability catalog", () => {
     expect(service?.limitations).toContain("global Pause polling");
     expect(service?.limitations).toContain("sixty seconds");
     expect(service?.limitations).toContain("no native Stop action");
+  });
+  it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
+    expect(PAGE_CAPABILITIES.providers).toBe("providers");
+    expect(PAGE_CAPABILITIES.provider).toBe("providers");
+    expect(SETTINGS_CAPABILITIES).not.toHaveProperty("agents");
+    const providers = DESKTOP_CAPABILITIES.find((capability) => capability.id === "providers");
+    expect(providers).toMatchObject({
+      label: "Providers",
+      access: "Providers → provider details",
+      prerequisite: "none",
+    });
+    expect(providers?.limitations).toContain("stopped desktop agent work");
+    expect(providers?.limitations).toContain("No automatic installation or management MCP tools");
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({

@@ -123,6 +123,21 @@ describe("MCP tool errors", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("preserves browser image content and upstream tool-error status", async () => {
+    const fetch = gateway();
+    const result = {
+      content: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
+      isError: true,
+    };
+    fetch.mockResolvedValue(new Response(JSON.stringify({ result: { mode: "visible", result } })));
+    expect(
+      await call({
+        name: "code60_browser",
+        arguments: { action: "call", name: "browser_take_screenshot", arguments: {} },
+      }),
+    ).toMatchObject({ result });
+  });
+
   it.each([undefined, null, [], {}, { name: 42 }])(
     "rejects malformed tool calls (%j) without contacting the gateway",
     async (params) => {

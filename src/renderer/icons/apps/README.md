@@ -55,7 +55,7 @@ User-supplied SVGs, retaining their original colors and geometry. Only each root
 - `table.svg`: retained original table SVG and geometry reference.
 - `under-construction.svg`: Contributor Tools
 - `bookshelf.svg`: Settings → Memory
-- `helmet.svg`: Settings → Agents
+- `helmet.svg`: Providers
 - `chemical.svg`: Settings → Advanced → Experiments
 
 The original Text SVG remains a geometry reference; the visible Text icon uses
@@ -94,7 +94,7 @@ System Manager and Prompt Builder preserve enclosed white artwork details and th
 the same hover/focus-once card and click-only sidebar behavior as other animated icons.
 
 About uses `info.gif`/`info.png` (27 frames, 1.48 seconds); Advanced uses
-`laptop.gif`/`laptop.png` (174 frames, 3.6 seconds); Agents uses
+`laptop.gif`/`laptop.png` (174 frames, 3.6 seconds); Providers uses
 `setting.gif`/`setting.png` (180 frames, 3.6 seconds); Memory uses
 `books.gif`/`books.png` (124 frames, 3 seconds). All supplied 640px canvases and
 exact frame delays are preserved. Only exterior white background is removed;

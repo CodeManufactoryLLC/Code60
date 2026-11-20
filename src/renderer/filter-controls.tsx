@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import {
   editableFilter,
   type FilterField,
@@ -106,7 +107,7 @@ export function FilterControls({
         </button>
       )}
       {createPortal(
-        <dialog
+        <DialogContent
           ref={dialog}
           className="filter-dialog setup-dialog"
           aria-labelledby={titleId}
@@ -394,7 +395,7 @@ export function FilterControls({
               </form>
             )}
           </div>
-        </dialog>,
+        </DialogContent>,
         document.querySelector(".app") ?? document.body,
       )}
     </>

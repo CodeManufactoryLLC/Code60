@@ -12,7 +12,6 @@ const props: ComponentProps<typeof SettingsPage> = {
   section: "about",
   updates: <SettingsHeader page="updates" />,
   versions: undefined,
-  orchestration: <SettingsHeader page="agents" />,
   memory: <SettingsHeader page="memory" />,
   pollingControls: <SettingsHeader page="polling-settings" />,
   transparent: false,

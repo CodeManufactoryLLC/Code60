@@ -1,5 +1,14 @@
 # Desktop
 
+- Conversational browser automation is a lazy, per-chat `code60_browser` gateway
+  tool. Follow the corresponding architecture section. Main fixes the pinned
+  executable arguments and isolates mode/state between owners; never accept a
+  command, environment, profile or CDP endpoint from the agent. Strip ambient
+  Playwright overrides. Keep Existing Browser extension approval intact. Bound
+  requests and output, never retry uncertain calls, and stop owned process groups
+  on cancel/Stop/Undo/replacement/shutdown. Browser actions do not undo website
+  effects. Workers and helpers receive no browser gateway or authority.
+
 - Install the optional stdout/stderr broken-pipe guards before desktop imports
   can log. A closed launching terminal must not raise an uncaught EPIPE dialog
   or stop desktop work. Handle only EPIPE on these optional GUI streams; keep
@@ -196,7 +205,7 @@
 - Database-wide Search reads the complete connected registry, including closed projects, through four bounded read-only project readers. Never use `listRuns`, reconcile interrupted history, initialize storage, open runtimes or resume agents during retrieval. Legacy database-wide, Relay and Custom Assistant histories remain excluded. Keep project-qualified excerpts in a private temporary SQLite store, with immutable global ranking and 100-result pages. Resolve only captured opaque source IDs, checking database epoch, retained membership and directory identity; closed-project navigation uses the native Open Project confirmation. Preserve archived history as read-only.
 - Search overview helpers consume only main-captured search evidence, with the configured provider in a generated temporary directory, denied permissions and no gateway, run records, worktrees or chat entries. Bound excerpts, response and runtime; serialize replacement and stop processes before deleting their directories. Project/page selection preserves Search. Replacement/clear, database changes, renderer reload, Stop all and shutdown dispose owned reads, helpers and results; provider changes cancel only the overview. New registry entries join the next search; removal invalidates captured searches. Return exact project-attributed numbered evidence, never accept renderer excerpts or filesystem roots.
 
-- Enforce enabled membership and unchanged verified command identities in snapshots, desktop launch/recovery, saved configurations and MCP worker tools. Headless CLI behavior stays unchanged. Settings add transactions preserve primary and live chats; primary changes require active work to finish or stop. Keep existing settings until commit.
+- Enforce enabled membership and unchanged verified command identities in snapshots, desktop launch/recovery, saved configurations and MCP worker tools. Headless CLI behavior stays unchanged. Provider add transactions preserve primary and live chats; primary changes require active work to finish or stop. Keep existing settings until commit.
 
 - Diff preparation is serialized with lifecycle mutations; expensive reads run through DiffReads outside the action queue, with at most two in flight. Cancel reads on context replacement, renderer reload and shutdown, and settle a run's reads before discard. Queued preparation cancellation must not deadlock the control queue.
   Retained-project reads capture their runtime even when selected. Tag diff,
@@ -257,3 +266,13 @@ event failures beside Appearance controls, separately from preference save error
 successful adjustment clears the native error. Keep caption controls inside the active
 splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
 Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
+
+
+## Providers
+
+Follow the Providers navigation and management section of `ARCHITECTURE.md`.
+Providers replaces the Agents settings destination. Preserve v1 verified membership,
+model defaults, histories and external logins. Set-primary/disconnect are strict
+human-only bridge actions, guarded in main against active desktop work, setup and
+overlapping writes. The primary must be replaced before disconnecting. Publish
+main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.

@@ -1,5 +1,9 @@
 # Bridge
 
+- `code60_browser` is an orchestrator gateway tool, not a renderer process API.
+  Re-export its browser-safe strict requests only; modes are conversation-local
+  and no mode preference or generic execution method crosses desktop IPC.
+
 - Scheduling Service status reuses automation scheduler/status with a browser-safe
   typed installation/native/live result. It grants no process/path capability or
   automatic installation authority; the live scheduler protocol remains unchanged.
@@ -129,3 +133,13 @@ event failures beside Appearance controls, separately from preference save error
 successful adjustment clears the native error. Keep caption controls inside the active
 splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
 Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
+
+
+## Providers
+
+Follow the Providers navigation and management section of `ARCHITECTURE.md`.
+Providers replaces the Agents settings destination. Preserve v1 verified membership,
+model defaults, histories and external logins. Set-primary/disconnect are strict
+human-only bridge actions, guarded in main against active desktop work, setup and
+overlapping writes. The primary must be replaced before disconnecting. Publish
+main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.

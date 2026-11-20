@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import { rowDensities } from "./table-preferences.js";
 import { TablePreview } from "./table-preview.js";
 import {
@@ -90,7 +91,7 @@ export function TableSettings({
   };
   const change = (next: TableView) => setDraft(visibleSettingsView(columns, next));
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog table-settings-dialog"
       aria-labelledby={`${id}-title`}
@@ -281,6 +282,6 @@ export function TableSettings({
           </button>
         </div>
       </footer>
-    </dialog>
+    </DialogContent>
   );
 }

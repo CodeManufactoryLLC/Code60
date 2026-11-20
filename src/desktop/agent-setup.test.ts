@@ -165,3 +165,81 @@ describe("agent setup transaction", () => {
     expect(setup.enabled).toEqual([]);
   });
 });
+
+async function connectedFixture() {
+  const value = fixture();
+  value.setup.begin({ mode: "primary" });
+  await value.attempt("claude");
+  await value.attempt("codex");
+  await value.attempt("droid");
+  await value.setup.finish(value.identity());
+  return value;
+}
+
+it("changes primary without probing or losing other memberships, then disconnects only the requested provider", async () => {
+  const { setup, deps } = await connectedFixture();
+  const old = structuredClone(setup.record);
+  const calls = vi.mocked(deps.probe).mock.calls.length;
+  await setup.manage({ type: "set-primary", provider: "codex" });
+  expect(setup.record).toEqual({ ...old, primary: "codex" });
+  expect(vi.mocked(deps.probe).mock.calls).toHaveLength(calls);
+  await setup.manage({ type: "disconnect", provider: "claude" });
+  expect(setup.record).toMatchObject({ primary: "codex", enabled: ["codex", "droid"] });
+  expect(setup.record?.commands).not.toHaveProperty("claude");
+  expect(setup.complete).toBe(true);
+  const restored = fixture().setup;
+  restored.restore(setup.record);
+  expect(restored.snapshot()).toMatchObject({
+    primary: "codex",
+    enabled: ["codex", "droid"],
+    session: null,
+  });
+});
+
+it("rejects stale membership, changed commands, current primary, active work and setup transactions", async () => {
+  const { setup, deps, commands, identity } = await connectedFixture();
+  const saved = structuredClone(setup.record);
+  await expect(setup.manage({ type: "disconnect", provider: "claude" })).rejects.toThrow(
+    "Set another provider",
+  );
+  await expect(setup.manage({ type: "set-primary", provider: "claude" })).rejects.toThrow(
+    "already the primary",
+  );
+  await expect(setup.manage({ type: "set-primary", provider: "kiro" })).rejects.toThrow("verify");
+  await expect(setup.manage({ type: "disconnect", provider: "unknown" })).rejects.toThrow("verify");
+  deps.canChangePrimary = () => false;
+  await expect(setup.manage({ type: "disconnect", provider: "codex" })).rejects.toThrow(
+    "active agent work",
+  );
+  deps.canChangePrimary = () => true;
+  setup.begin({ mode: "add" });
+  await expect(setup.manage({ type: "set-primary", provider: "codex" })).rejects.toThrow(
+    "setup first",
+  );
+  await setup.abandon(identity());
+  commands.codex = ["changed"];
+  await expect(setup.manage({ type: "set-primary", provider: "codex" })).rejects.toThrow("verify");
+  expect(setup.record).toEqual(saved);
+});
+
+it("retains the previous record on save failure and excludes overlapping writes and setup", async () => {
+  const { setup, deps } = await connectedFixture();
+  const old = structuredClone(setup.record);
+  vi.mocked(deps.save).mockRejectedValueOnce(new Error("Cannot save. Retry."));
+  await expect(setup.manage({ type: "set-primary", provider: "codex" })).rejects.toThrow("Retry");
+  expect(setup.record).toEqual(old);
+  let release!: () => void;
+  vi.mocked(deps.save).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = setup.manage({ type: "set-primary", provider: "codex" });
+  await expect(setup.manage({ type: "disconnect", provider: "droid" })).rejects.toThrow("Wait");
+  expect(() => setup.begin({ mode: "add" })).toThrow("Wait");
+  expect(setup.record).toEqual(old);
+  release();
+  await pending;
+  expect(setup.record?.primary).toBe("codex");
+});

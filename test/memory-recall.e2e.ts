@@ -181,7 +181,7 @@ for (const kind of ["Relay", "project"] as const) {
       await expect(wizard).toBeVisible();
       await wizard.getByRole("button", { name: "Claude", exact: true }).click();
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
-      await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+      await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await page.getByRole("button", { name: "Start", exact: true }).click();
       let snapshot = await page.evaluate(() => window.desktop.snapshot());
       expect(snapshot.database).toBeNull();

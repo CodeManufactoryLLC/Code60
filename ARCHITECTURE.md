@@ -28,7 +28,7 @@ features, resource bounds and remaining native-platform validation.
   Project chats belong to individual open projects. Selecting or expanding a
   project changes presentation, never Relay's authority.
   Home is the first sidebar page-list destination, with a Phosphor house icon
-  and a database-independent launchpad, followed by Search, Assistants and Projects.
+  and a database-independent launchpad, followed by Search, Assistants, Projects and Providers.
   Assistants is a database-independent navigation home containing exactly two
   title-only cards: Relay and Custom Assistants. Its sidebar heading opens this
   page without toggling its children; the separate chevron retains saved expansion
@@ -992,6 +992,40 @@ credential writes, OAuth implementation or environment-variable interpolation.
 Users must trust their providers and servers: configured environment/header values
 are sent to the selected provider, and agent/tool output can still contain sensitive
 content in ordinary transcripts. Keep the config private and out of source control.
+
+### Conversational browser automation
+
+The built-in orchestration gateway exposes `code60_browser` to Relay, Custom
+Assistants and project chats. A user states a preference in chat, without a
+Settings selector or persisted mode. Each live conversation defaults to Headless;
+`set-mode` chooses `headless`, `visible` or `existing-browser`. `status` and mode
+selection do not start a process. `list-tools` and `call` lazily launch the fixed
+`npx -y @playwright/mcp@0.0.84` command in that conversation's private workspace.
+Headless adds `--isolated --headless`; Visible adds `--isolated`; Existing Browser
+adds `--extension`. Chrome and Node.js/npm are user-installed prerequisites.
+The first requested use may download the pinned MCP package. Existing Browser
+requires Microsoft's Playwright extension and its connection approval; ambient
+`PLAYWRIGHT_MCP_*` overrides, including approval-bypass tokens, are not inherited.
+User-configured MCP servers remain separate and unchanged.
+
+`browser-automation.ts` owns one connection and rejects overlapping calls. It
+validates strict action/mode inputs, discovers the upstream tool catalog and
+accepts only catalogued `browser_*` names. `browser-client.ts` implements bounded
+stdio MCP initialization, tool discovery/paging and calls, with no host sampling,
+elicitation, roots or arbitrary executable capability. Main owns the subprocess
+group through `platform`; stdout is protocol-only and stderr is drained without
+capture. One action has a 100-second deadline, responses are bounded to 8 MiB and
+catalogs to 128 tools. The gateway preserves browser images and upstream tool
+errors. Failure never retries an uncertain action or silently selects a new mode.
+
+Changing modes closes the old connection before publishing the new mode and loses
+isolated state. Cancel aborts pending work and releases the connection; Stop,
+message Undo, replacement, close and shutdown retire owned processes. Navigation
+does not transfer ownership or stop another chat's browser. Restart restores
+history only, with a new Headless selection. External website effects are not
+reversed by message Undo. Workers, setup probes, isolated helpers and the scheduler
+never receive this gateway tool. It automates browser content, not native desktop
+applications. Self-knowledge reports unverified runtime prerequisites as unknown.
 
 ### Prompt templates
 
@@ -2336,3 +2370,53 @@ trims trailing font leading with text-box trim-end (cap/text) and aligns to the
 bottom of that target. The optical descent correction scales with saved body size. This spacing update
 is presentation-only and adds no capability, bridge contract, setting or schema;
 no self-knowledge catalog change is needed.
+
+
+## Providers navigation and management
+
+Providers replaces Settings → Agents. A database-independent sidebar Card after
+Projects has independent heading, Add Provider and disclosure controls. Its saved
+membership order, names, logos, primary marker and More actions match the gallery.
+The gallery starts with a dashed Add Provider card, always present and disabled
+when all catalog providers are enabled. Cards and sidebar rows open provider
+details with scoped saved orchestrator/worker model defaults and Clear actions;
+opening never probes or starts a provider. Details breadcrumbs link to Providers.
+The old read-only fixed auto-approval switch is removed; permission behavior is unchanged.
+
+`providerAction` accepts only strict set-primary/disconnect actions and a provider
+ID, with main-owned management availability in the setup snapshot. Validate again
+inside the controller queue, reject overlapping changes, setup transactions and
+active desktop work across Relay, custom assistants, projects and workers. A
+verified primary change checks the current command hash without probing and
+preserves other memberships. The primary cannot disconnect until replaced.
+Disconnect removes only the selected non-primary membership and hash, retaining
+model defaults, history and external credentials. Existing v1 setup records remain
+compatible. Save atomically before publishing; failed saves preserve the previous
+record. Use the existing provider lifecycle for primary replacement and refresh
+allowed membership without restarting unrelated chats on additional disconnect.
+
+Both visible menu items expose disabled reasons. Reuse native anchored-menu
+positioning, keyboard, dismissal and focus behavior with licensed Neobrutalism
+menu presentation. The primary gallery card alone has a 36px circular read-only
+checked status at bottom right with a Primary Provider hover/focus tooltip; sidebar
+markers are compact. Share mutation state/errors across views, return disconnected
+details to Providers, remember disclosure and reveal explicit provider destinations.
+Use local Neobrutalism adaptations with existing themes, typography and accessibility;
+no Base UI runtime, arbitrary provider configuration, management MCP tool or version
+bump is introduced. This section supersedes earlier Settings → Agents descriptions.
+
+## Neobrutalism modal dialogs
+
+In-app modal windows use the licensed local DialogContent native-dialog adapter:
+2px outline, theme-aware fill/text, hard 4px shadow and 10px border radius.
+Callers retain native showModal, focus restoration, Escape, busy guards and their
+existing header/body/footer layout. Use border-box sizing and viewport-bounded
+widths. Compact content has equal 16px side padding; zero-padding layouts such as
+table settings and the command palette keep their own body spacing, without a
+second outer inset. Modal shells and their native scrolling body panes use auto
+scrollbar gutters, eliminating empty reserved right-hand strips. Actual overflow
+still scrolls. Other reading surfaces retain stable gutters. Full-screen splash
+layout is unchanged. Forced colors uses system fills/outlines without decorative
+shadows. This supersedes earlier dialog corner and stable-modal-gutter guidance.
+No capability, permission, bridge or persisted preference changes are introduced;
+no self-knowledge catalog update is needed for this presentation-only change.

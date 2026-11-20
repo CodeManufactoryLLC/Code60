@@ -13,6 +13,7 @@ import type { useUpdates } from "./updates.js";
 import type { useWindowAppearance } from "./window-appearance.js";
 
 export interface AppPagesProps {
+  providerManagement: import("./provider-management.js").ProviderManagement;
   api: DesktopApi;
   state: DesktopState | undefined;
   project: ReturnType<typeof useProjectScope> & {

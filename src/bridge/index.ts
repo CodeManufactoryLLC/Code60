@@ -1,6 +1,7 @@
 import { type ChatUndoResult, chatReferenceSchema } from "./chat-context.js";
 
 export {
+  type BrowserMode,
   type Capability,
   capabilityReference,
   capabilityReferences,
@@ -22,6 +23,7 @@ export {
   type ParentPageId,
   pages,
   parentPageIds,
+  parseBrowserRequest,
   parseKnowledge,
   settingsSections,
 } from "../contracts/index.js";
@@ -448,6 +450,7 @@ export interface DesktopApi {
   ): Promise<import("./reviews.js").ReviewContent>;
   readDiff(request: DiffRequest): Promise<string>;
   cancelDiff(request: DiffIdentity): Promise<void>;
+  providerAction(request: import("./agent-setup.js").ProviderAction): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
   cancelAgentSetup(request: SetupIdentity): Promise<void>;

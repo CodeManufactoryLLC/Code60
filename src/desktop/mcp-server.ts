@@ -124,7 +124,7 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
             readOnlyHint: tool.readOnly,
             destructiveHint: tool.destructive,
             idempotentHint: tool.readOnly,
-            openWorldHint: false,
+            openWorldHint: tool.kind === "browser",
           },
         })),
       },
@@ -138,6 +138,16 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
     }
     try {
       const result = await callGateway(request.params.name, request.params.arguments ?? {});
+      if (
+        request.params.name === "code60_browser" &&
+        isObject(result) &&
+        isObject(result.result) &&
+        Array.isArray(result.result.content)
+      ) {
+        // Preserve Playwright image content and tool errors rather than JSON-encoding images.
+        send({ jsonrpc: "2.0", id: request.id, result: result.result });
+        return;
+      }
       toolResponse(request.id, result);
     } catch (error) {
       toolResponse(

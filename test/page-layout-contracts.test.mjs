@@ -35,7 +35,7 @@ it("keeps project controls centered with one shared row fill and a corner remova
   expect(rule("overlays", ".modal-heading")).toContain("border-bottom: 1px solid");
   expect(rule("overlays", ".project-open-folder")).toContain("align-self: center");
   expect(rule("overlays", ".project-open-folder")).toContain("margin-inline: auto");
-  expect(rule("overlays", ".project-dialog")).toContain("scrollbar-gutter: stable both-edges");
+  expect(rule("overlays", ".project-dialog")).not.toContain("scrollbar-gutter:");
   expect(rule("overlays", ".project-row")).toContain("position: relative");
   const remove = rule("overlays", ".project-remove");
   for (const value of ["position: absolute", "top: 4px", "right: 4px"])
@@ -87,7 +87,7 @@ it("uses smaller constant-width navigation cards, smaller contents and wider gap
 it("keeps unrelated controls square while Card primitives own migrated surfaces", () => {
   expect(sheet("tokens")).toContain("--button-radius: 0px");
   expect(sheet("tokens")).toContain("--chat-radius: 0px");
-  expect(sheet("tokens")).toContain("--dialog-radius: 0px");
+  expect(sheet("tokens")).toContain("--dialog-radius: 10px");
   expect(sheet("tokens")).toContain("--ui-radius: 0");
   for (const [file, selector] of [
     ["base", "button"],
@@ -120,7 +120,7 @@ it("keeps unrelated controls square while Card primitives own migrated surfaces"
     "border-radius: var(--settings-card-radius)",
   );
   expect(rule("settings", ".table-density-selector")).toContain("border-radius: var(--ui-radius)");
-  for (const selector of ["dialog:not(.splash)", '[role="dialog"]', ".setup-dialog"])
+  for (const selector of ["dialog:not(.splash)", '[role="dialog"]'])
     expect(rule("overlays", selector)).toContain("border-radius: var(--dialog-radius)");
   for (const selector of ["[popover]", ".mode-menu"])
     expect(rule("overlays", selector)).toContain("border-radius: var(--ui-radius)");

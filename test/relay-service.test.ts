@@ -87,6 +87,34 @@ async function connect() {
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
 }
+it("gates browser controls to active requests, isolates modes and resets them on connection restart", async () => {
+  await connect();
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  agents.script = () => "hang";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a visible browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "set-mode", mode: "visible" })).toMatchObject({
+    mode: "visible",
+    connected: false,
+  });
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "visible" });
+  await relay.action({ type: "cancel", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  await relay.action({ type: "restart", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "Report browser mode",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({
+    mode: "headless",
+    connected: false,
+  });
+});
 it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
   const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
   relay = create(undefined, vi.fn(), confirm);

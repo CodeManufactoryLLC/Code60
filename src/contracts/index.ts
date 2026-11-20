@@ -22,6 +22,7 @@ export function parseValue<S extends z.ZodType>(schema: S, value: unknown): z.ou
 
 export * from "./activity.js";
 export * from "./automation.js";
+export * from "./browser.js";
 export * from "./commands.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";

@@ -15,9 +15,9 @@ import {
 import { staticChildren } from "./navigation-tree.js";
 
 describe("navigation registry", () => {
-  it("uses the supplied artwork for Memory, Agents and Experiments", () => {
+  it("uses the supplied artwork for Memory, Providers and Experiments", () => {
     expect(settingsIcons.memory).toBe("app-bookshelf");
-    expect(settingsIcons.agents).toBe("app-helmet");
+    expect(pageDefinitions.providers.icon).toBe("app-helmet");
     expect(groups.experiments.icon).toBe("app-chemical");
     expect(pageDefinitions["episodic-memory"].icon).toBe("brain");
     expect(pageDefinitions.rag.icon).toBe("flask");
@@ -32,7 +32,6 @@ describe("navigation registry", () => {
     expect(staticChildren("settings", "/db").map(({ target }) => target.id)).toEqual([
       "about",
       "advanced",
-      "agents",
       "appearance",
       "memory",
       "polling-settings",
@@ -60,6 +59,7 @@ describe("navigation registry", () => {
       "home",
       "assistants",
       "custom-agents",
+      "providers",
       "apps",
       "search",
     ]);

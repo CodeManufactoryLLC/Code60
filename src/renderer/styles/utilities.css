@@ -17,6 +17,15 @@
   opacity: 0.6;
 }
 
+/* Provider menus keep readable disabled labels, a neutral fill and focusable reasons. */
+.actions-menu.provider-dropdown [role="menuitem"][aria-disabled="true"] {
+  border: 2px solid transparent;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 /* Unavailable navigation destinations are dimmed labels, not outlined controls. */
 .app .sidebar :is(button, [role="tab"]):is(:disabled, [aria-disabled="true"]) {
   border-color: transparent;

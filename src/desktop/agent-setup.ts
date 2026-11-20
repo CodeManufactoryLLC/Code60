@@ -3,12 +3,14 @@ import type {
   AgentSetupRecord,
   AgentSetupSession,
   AgentSetupSnapshot,
+  ProviderAction,
   SetupAttempt,
   SetupBegin,
   SetupIdentity,
 } from "../bridge/index.js";
 import {
   parseAgentSetupRecord,
+  parseProviderAction,
   parseSetupAttempt,
   parseSetupBegin,
   parseSetupSession,
@@ -25,9 +27,10 @@ export interface SetupDependencies {
   changed(): void;
   canChangePrimary(): boolean;
 }
-/** In-memory transaction; only finish writes durable membership. */
+/** Setup attempts are transactional; finish and explicit management save membership atomically. */
 export class AgentSetup {
   record: AgentSetupRecord | null = null;
+  private managing = false;
   private session: AgentSetupSession | null = null;
   private commands: Record<string, string> = {};
   private running: { abort: AbortController; done: Promise<void> } | undefined;
@@ -55,8 +58,52 @@ export class AgentSetup {
   restore(value: unknown): void {
     this.record = value == null ? null : parseAgentSetupRecord(value);
   }
+  async manage(value: ProviderAction): Promise<AgentSetupRecord> {
+    const action = parseProviderAction(value);
+    if (this.managing) throw new Error("Wait for the provider change to finish");
+    if (this.session) throw new Error("Finish or cancel provider setup first");
+    if (!this.deps.canChangePrimary())
+      throw new Error("Finish or stop active agent work before changing providers");
+    if (
+      !PROVIDERS.some((provider) => provider.id === action.provider) ||
+      !this.enabled.includes(action.provider)
+    )
+      throw new Error("Connect and verify this provider first");
+    const previous = this.record;
+    if (!previous) throw new Error("Complete provider setup first");
+    if (action.provider === previous.primary)
+      throw new Error(
+        action.type === "disconnect"
+          ? "Set another provider as primary first"
+          : "This is already the primary provider",
+      );
+    const record = parseAgentSetupRecord(
+      action.type === "set-primary"
+        ? {
+            ...previous,
+            primary: action.provider,
+          }
+        : {
+            ...previous,
+            enabled: previous.enabled.filter((id) => id !== action.provider),
+            commands: Object.fromEntries(
+              Object.entries(previous.commands).filter(([id]) => id !== action.provider),
+            ),
+          },
+    );
+    this.managing = true;
+    try {
+      await this.deps.save(record);
+      this.record = record;
+      this.deps.changed();
+      return record;
+    } finally {
+      this.managing = false;
+    }
+  }
   begin(value: SetupBegin): void {
     const { mode } = parseSetupBegin(value);
+    if (this.managing) throw new Error("Wait for the provider change to finish");
     if (this.running) throw new Error("Cancel the current attempt first");
     if (this.session) throw new Error("Finish or cancel the current setup first");
     if (mode === "primary" && !this.deps.canChangePrimary())

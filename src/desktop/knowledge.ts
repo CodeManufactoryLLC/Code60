@@ -243,12 +243,19 @@ export class DesktopKnowledge {
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";
-      action = "Settings → Agents.";
+      action = "Providers → provider details.";
     } else if (cap.id === "model-settings") {
       status = "unknown";
       reason =
         "Human-only controls require a connected idle session and connector-advertised choices; provider verification alone does not establish model switching availability.";
-      action = "Inspect the session's Model picker. Clear saved defaults in Settings → Agents.";
+      action =
+        "Inspect the session's Model picker. Clear saved defaults in Providers → provider details.";
+    } else if (cap.id === "browser") {
+      status = "unknown";
+      reason =
+        "The browser tool is available, but Node.js/npm, Chrome and Existing Browser extension approval are checked only when used. No browser was probed.";
+      action =
+        "Use code60_browser status, select the mode requested in chat, then list-tools and call. Report missing prerequisites without switching modes.";
     } else if (cap.prerequisite === "project" && !state.projectOpen) {
       status = "blocked";
       reason = "Caller has no bound open project.";

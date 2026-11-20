@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
+import { AgentSetupWizard } from "./agent-setup.js";
 import { useAppActions } from "./app-actions.js";
 import { appCommands } from "./app-commands.js";
 import { AppDialogs } from "./app-dialogs.js";
@@ -28,6 +29,7 @@ import { PageTabBar } from "./page-tabs.js";
 import { usePressFeedback } from "./press-feedback.js";
 import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
+import { useProviderManagement } from "./provider-management.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { useScopedDetails } from "./scoped-details.js";
 import { createSessionCommands } from "./session-commands.js";
@@ -60,6 +62,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     () => bindDatabaseWrites(transport, snapshot?.databaseEpoch),
     [transport, snapshot?.databaseEpoch],
   );
+  const providerManagement = useProviderManagement(api, snapshot);
   const appearance = useWindowAppearance(transport, setError);
 
   const [palette, setPalette] = useState(false);
@@ -196,6 +199,9 @@ export function App({ api: transport }: { api: DesktopApi }) {
     selectedId: navigationSelectedId,
     onPage: selectPage,
     onSection: setSettingsSection,
+    providers: snapshot?.agentSetup?.enabled ?? [],
+    onProvider: (providerId) =>
+      setTabs((current) => updateTabs(current, { type: "provider", providerId })),
     onProject: (projectId) =>
       setTabs((current) => updateTabs(current, { type: "project", projectId })),
     selectWorker,
@@ -210,6 +216,15 @@ export function App({ api: transport }: { api: DesktopApi }) {
       setTabs((current) => updateTabs(current, { type: "select", id: "projects" }));
   }, [snapshot, tabs.active, tabs.projectId]);
 
+  useEffect(() => {
+    if (
+      snapshot &&
+      tabs.active === "provider" &&
+      !snapshot.agentSetup?.enabled.includes(tabs.providerId ?? "")
+    )
+      setTabs((current) => updateTabs(current, { type: "select", id: "providers" }));
+  }, [snapshot, tabs.active, tabs.providerId]);
+
   useLayoutEffect(() => {
     // Reveal nested sidebar ancestors before focus, without waiting for another frame.
     if (splash) return;
@@ -218,9 +233,9 @@ export function App({ api: transport }: { api: DesktopApi }) {
         ? `tab-settings-${settingsSection}`
         : tabs.active === "chat" && navigationSelectedId
           ? `conversation-${navigationSelectedId}`
-          : sidebarPageElementId(tabs.active, tabs.projectId);
+          : sidebarPageElementId(tabs.active, tabs.projectId, tabs.providerId);
     return focusNavigation(id);
-  }, [tabs.active, tabs.projectId, settingsSection, splash, navigationSelectedId]);
+  }, [tabs.active, tabs.projectId, tabs.providerId, settingsSection, splash, navigationSelectedId]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -343,6 +358,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
             navigation={navigation}
             openProjects={snapshot?.openProjects}
             selectedProjectId={snapshot?.projectInstanceId}
+            providerSetup={snapshot?.agentSetup}
+            providerManagement={providerManagement}
             customAgents={snapshot?.customAgents ?? []}
             chats={snapshot?.chats ?? []}
             selectedId={navigationSelectedId}
@@ -360,6 +377,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
           />
         )}
         <AppPages
+          providerManagement={providerManagement}
           updates={updates}
           api={api}
           state={state}
@@ -412,6 +430,17 @@ export function App({ api: transport }: { api: DesktopApi }) {
           onReturn={returnToSplash}
         />
       )}
+      {!splash &&
+        snapshot &&
+        (providerManagement.mode ||
+          (snapshot.agentSetup?.complete && snapshot.agentSetup.session)) && (
+          <AgentSetupWizard
+            snapshot={snapshot}
+            api={api}
+            mode={providerManagement.mode ?? snapshot.agentSetup?.session?.mode ?? "add"}
+            onClose={providerManagement.closeSetup}
+          />
+        )}
       <AppDialogs
         api={api}
         state={state}

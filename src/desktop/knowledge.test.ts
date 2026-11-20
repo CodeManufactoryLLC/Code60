@@ -83,7 +83,7 @@ const navigation = (renderer: string, sequence: number) => ({
   view: {
     kind: "navigation",
     page: "chat",
-    settingsSection: "agents",
+    settingsSection: null,
     splash: false,
     visible: true,
     workerId: null,
@@ -113,6 +113,35 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("does not claim browser prerequisites or extension approval have been verified", async () => {
+    const { knowledge, reads } = setup({ database: null });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Browser automation" }, relay),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "browser",
+        tools: ["code60_browser"],
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("No browser was probed"),
+        }),
+      }),
+    ]);
+    expect(reads).toEqual([]);
+    const blocked = setup({ providers: [] });
+    expect(
+      result(
+        await blocked.knowledge.call(
+          "code60_get_capabilities",
+          { query: "Browser automation" },
+          relay,
+        ),
+      ).entries,
+    ).toEqual([
+      expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
+    ]);
+  });
   it.each(["sidebar background opacity", "Scientifica"])(
     "keeps %s settings discoverable and human-only without a database",
     async (query) => {
@@ -178,6 +207,31 @@ describe("DesktopKnowledge", () => {
       ]);
     },
   );
+  it("keeps Providers discoverable without a database and directs model setup to its details", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Providers" }, relay),
+    );
+    expect(capabilities.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "providers",
+          availability: expect.objectContaining({ status: "available" }),
+        }),
+      ]),
+    );
+    const models = result(
+      await knowledge.call("code60_get_capabilities", { query: "Model and reasoning" }, relay),
+    );
+    expect(models.entries).toEqual([
+      expect.objectContaining({
+        availability: expect.objectContaining({
+          status: "blocked",
+          action: "Providers → provider details.",
+        }),
+      }),
+    ]);
+  });
   it("discovers bounded human-only custom assistants without a database or verified provider", async () => {
     const { knowledge } = setup({ database: null, providers: [] });
     const capabilities = result(

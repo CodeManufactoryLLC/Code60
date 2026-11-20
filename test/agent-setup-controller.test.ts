@@ -187,10 +187,86 @@ it.runIf(sqliteAvailable())(
     await controller.finishAgentSetup(identity());
     expect(controller.snapshot().chat.run?.id).toBe(chatId);
     expect((await call("code60_get_context")).body.result.providers).toEqual(["claude", "codex"]);
+    await controller.providerAction({ type: "disconnect", provider: "codex" });
+    expect(controller.snapshot().chat.run?.id).toBe(chatId);
+    expect((await call("code60_get_context")).body.result.providers).toEqual(["claude"]);
+    await controller.beginAgentSetup({ mode: "add" });
+    await attempt("codex");
+    await controller.finishAgentSetup(identity());
     agents.script = () => "hang";
     await controller.orchestrationChatAction({ type: "send", id: chatId as string, text: "work" });
+    expect((await call("code60_browser", { action: "status" })).body.result).toMatchObject({
+      mode: "headless",
+      connected: false,
+    });
+    expect(
+      (await call("code60_browser", { action: "set-mode", mode: "visible" })).body.result,
+    ).toMatchObject({ mode: "visible", connected: false });
+    expect((await call("code60_browser", { action: "set-mode", mode: "native" })).status).toBe(400);
+    expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain(
+      "active agent work",
+    );
+    await expect(
+      controller.providerAction({ type: "set-primary", provider: "codex" }),
+    ).rejects.toThrow("active agent work");
+    await expect(
+      controller.providerAction({ type: "disconnect", provider: "codex" }),
+    ).rejects.toThrow("active agent work");
     await expect(controller.beginAgentSetup({ mode: "primary" })).rejects.toThrow(
       "active orchestration work",
     );
   },
 );
+
+it("publishes management eligibility, saves membership changes and preserves it across restart", async () => {
+  const { controller, preferences, agents, create, identity, attempt } = await fixture();
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain("setup");
+  await controller.finishAgentSetup(identity());
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toBeNull();
+  const defaults = {
+    version: 1 as const,
+    providers: { claude: { worker: [{ configId: "model", value: "saved", name: "Saved" }] } },
+  };
+  await preferences.setModelDefaults?.(defaults);
+  const probeCount = agents.specs.length;
+  await controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().orchestration.provider).toBe("codex");
+  expect(controller.snapshot().agents).toEqual(["claude", "codex"]);
+  expect(agents.specs).toHaveLength(probeCount);
+  await controller.providerAction({ type: "disconnect", provider: "claude" });
+  expect(await preferences.agentSetup?.()).toMatchObject({ primary: "codex", enabled: ["codex"] });
+  await expect(
+    controller.providerAction({ type: "disconnect", provider: "codex" }),
+  ).rejects.toThrow("Set another provider");
+  const restored = create();
+  await restored.restore();
+  expect(restored.snapshot().agents).toEqual(["codex"]);
+  expect(await preferences.modelDefaults?.()).toEqual(defaults);
+  expect(restored.snapshot().orchestration.provider).toBe("codex");
+});
+
+it("rejects duplicate queued management requests and retains state when persistence fails", async () => {
+  const { controller, preferences, identity, attempt } = await fixture();
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await attempt("codex");
+  await controller.finishAgentSetup(identity());
+  const save = vi
+    .spyOn(preferences, "setAgentSetup")
+    .mockRejectedValueOnce(new Error("Save failed. Retry."));
+  const pending = controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toContain("Wait");
+  await expect(
+    controller.providerAction({ type: "disconnect", provider: "codex" }),
+  ).rejects.toThrow("Wait");
+  await expect(pending).rejects.toThrow("Save failed");
+  expect(controller.snapshot().orchestration.provider).toBe("claude");
+  expect(controller.snapshot().agents).toEqual(["claude", "codex"]);
+  expect(controller.snapshot().agentSetup?.management?.blockedReason).toBeNull();
+  save.mockRestore();
+  await controller.providerAction({ type: "set-primary", provider: "codex" });
+  expect(controller.snapshot().orchestration.provider).toBe("codex");
+});
