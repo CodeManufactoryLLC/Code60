@@ -13,6 +13,7 @@ function navigation(
   expanded = true,
   sidebarOpen = true,
   busy = false,
+  history = { canGoBack: false, canGoForward: false },
 ) {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) =>
@@ -21,6 +22,7 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      {...history}
       tabs={{ ...initialTabs, active }}
       settingsSection={settingsSection}
       database={database}
@@ -350,7 +352,7 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
       expect(html.match(/<img/g)).toHaveLength(31);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(9);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(11);
       expect(html.match(/class="navigation-icon"/g)).toHaveLength(33);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
@@ -415,5 +417,20 @@ describe("sidebar labels and disclosure icons", () => {
         expect(toggle).not.toContain('class="carbon-icon"');
       }
     }
+  });
+});
+
+describe("window navigation history", () => {
+  it("keeps history available when the sidebar is closed", () => {
+    const html = navigation(null, undefined, null, "home", false, false, false, {
+      canGoBack: true,
+      canGoForward: false,
+    });
+    const back = html.match(/<button[^>]*aria-label="Back"[^>]*>/)?.[0];
+    const forward = html.match(/<button[^>]*aria-label="Forward"[^>]*>/)?.[0];
+    expect(back).toBeDefined();
+    expect(back).not.toContain("disabled");
+    expect(forward).toContain("disabled");
+    expect(html.indexOf('aria-label="Back"')).toBeGreaterThan(html.indexOf("</nav>"));
   });
 });

@@ -10731,7 +10731,10 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await appendRow(page);
     await page.getByRole("button", { name: "Do not use a run configuration" }).click();
     await expect(page.getByLabel("Agent 1", { exact: true })).toHaveValue("fake");
-    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New agent sessions", exact: true })
+      .getByRole("button", { name: "Back", exact: true })
+      .click();
     await page.getByRole("button", { name: /^Team/ }).click();
     await expect(page.getByLabel("Agent 2", { exact: true })).toHaveValue("fake2");
     await expect(page.getByLabel("Maximum active runs")).toHaveValue("1");
@@ -10739,7 +10742,10 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await expect(page.getByLabel("Task prompt")).toBeFocused();
     await page.getByLabel("Task prompt").fill("one-time private task");
     await page.getByLabel("Maximum active runs").fill("2");
-    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New agent sessions", exact: true })
+      .getByRole("button", { name: "Back", exact: true })
+      .click();
     await page.getByRole("button", { name: /^Team/ }).click();
     await expect(page.getByLabel("Task prompt")).toHaveValue("one-time private task");
     await page.getByRole("button", { name: "Start agents", exact: true }).click();
@@ -17819,6 +17825,106 @@ test("desktop: plan task rows align checkboxes with their first line of text", a
     await expect(panel.getByRole("checkbox", { name: "Short task" })).toBeChecked();
     await expect(panel.getByRole("checkbox", { name: "Short task" })).toBeDisabled();
     await expect(panel.getByText("Blocked", { exact: true })).toBeVisible();
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: Back and Forward restore pages and chat drafts without creating work", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-navigation-history-")));
+  const folder = join(directory, "project-a");
+  execFileSync("git", ["init", "-q", folder]);
+  commitFixture(folder);
+  const gitBefore = execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString();
+  const headBefore = execFileSync("git", ["rev-parse", "HEAD"], { cwd: folder }).toString();
+  try {
+    application = await launch(directory, folder, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const back = page.getByRole("button", { name: "Back", exact: true });
+    const forward = page.getByRole("button", { name: "Forward", exact: true });
+    await expect(back).toBeDisabled();
+    await expect(forward).toBeDisabled();
+    await page.locator("#tab-home").click();
+    await page.locator("#tab-settings").click();
+    await page
+      .locator("#panel-settings")
+      .getByRole("button", { name: "Open Text", exact: true })
+      .click();
+    await expect(page.locator("#panel-settings-text")).toBeVisible();
+    await back.click();
+    await expect(page.locator("#panel-settings .home-page")).toBeVisible();
+    await back.click();
+    await expect(page.locator("#panel-home")).toBeVisible();
+    await forward.click();
+    await expect(page.locator("#panel-settings .home-page")).toBeVisible();
+    await page.locator(".sidebar-toggle").click();
+    await expect(back).toBeVisible();
+    await forward.click();
+    await expect(page.locator("#panel-settings-text")).toBeVisible();
+    await expect(forward).toBeDisabled();
+    await page.locator(".sidebar-toggle").click();
+    await page.locator("#tab-home").click();
+    await expect(forward).toBeDisabled();
+
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await expect(page.locator("#tab-search")).toBeEnabled();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    const group = page.getByRole("region", { name: `Project ${folder}`, exact: true });
+    const add = group.locator(".project-session-add");
+    const composer = () => page.locator(".orchestration-chat-page:visible").getByRole("combobox");
+    await add.click();
+    await expect(composer()).toBeEnabled();
+    const first = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    expect(first).toBeTruthy();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${first}"]`)).toBeVisible();
+    await composer().fill("First unsent navigation draft");
+    await add.click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
+      .not.toBe(first);
+    await expect(composer()).toBeEnabled();
+    const second = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${second}"]`)).toBeVisible();
+    await expect(composer()).toBeEnabled();
+    await expect(composer()).toHaveValue("");
+    await composer().fill("Second unsent navigation draft");
+    await back.click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${first}"]`)).toBeVisible();
+    await expect(composer()).toHaveValue("First unsent navigation draft");
+    await forward.click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${second}"]`)).toBeVisible();
+    await expect(composer()).toHaveValue("Second unsent navigation draft");
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    expect(snapshot.runs).toEqual([]);
+    expect(
+      snapshot.chats
+        .filter((chat) => chat.projectId)
+        .map((chat) => chat.run?.id)
+        .sort(),
+    ).toEqual([first, second].sort());
+    expect(
+      snapshot.chats.filter((chat) => chat.projectId).every((chat) => chat.run?.turns === 0),
+    ).toBe(true);
+    expect(execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString()).toBe(
+      gitBefore,
+    );
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: folder }).toString()).toBe(headBefore);
+    const inventory = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: folder,
+    }).toString();
+    expect(inventory.match(/^worktree /gm)).toHaveLength(1);
+    await page.screenshot({ path: test.info().outputPath("navigation-history.png") });
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

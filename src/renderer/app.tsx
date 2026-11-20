@@ -12,6 +12,7 @@ import { builtinRelayId, conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
+import { useHistoryNavigation } from "./history-navigation.js";
 import { useKnowledgeNavigation } from "./knowledge-report.js";
 import { pageAvailable } from "./navigation.js";
 import { useNavigationActions } from "./navigation-actions.js";
@@ -136,6 +137,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     setBusy,
     onWorkerSelection: setDetailWorkerId,
     navigationPending: projectNavigationPending.current,
+    onChatNavigation: (request) => history.expectChat(request),
   });
   const {
     scope,
@@ -206,6 +208,16 @@ export function App({ api: transport }: { api: DesktopApi }) {
       setTabs((current) => updateTabs(current, { type: "project", projectId })),
     selectWorker,
     onArchived: () => notify("Chat archived."),
+    onNavigate: (target) => history.expectTarget(target),
+  });
+  const history = useHistoryNavigation({
+    snapshot,
+    tabs,
+    settingsSection,
+    workerId,
+    runs: navigationRuns,
+    navigation,
+    setError,
   });
   useEffect(() => {
     if (
@@ -374,6 +386,10 @@ export function App({ api: transport }: { api: DesktopApi }) {
               busy || !snapshot || Boolean(snapshot.active && !snapshot.openProjects)
             }
             onSelect={selectPage}
+            canGoBack={history.canGoBack}
+            canGoForward={history.canGoForward}
+            onBack={history.back}
+            onForward={history.forward}
           />
         )}
         <AppPages

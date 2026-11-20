@@ -9,10 +9,14 @@ import type {
 } from "../bridge/index.js";
 import { conversationId } from "./chats.js";
 import type { PageId, SettingsSectionId } from "./navigation.js";
+import type { Current, Settle } from "./navigation-history.js";
 import type { NavigationTarget } from "./navigation-tree.js";
 import type { PageTabs } from "./tabs.js";
 
+export type NavigationIntent = NavigationTarget | { kind: "new-conversation" };
+
 interface Context {
+  onNavigate?(target: NavigationIntent): [Settle, Current] | undefined;
   api: DesktopApi;
   tabs: PageTabs;
   database: string | null;
@@ -49,6 +53,7 @@ export function createNavigationActions(
     projectPending = false,
     valid: () => boolean = () => true,
     blocking = true,
+    target?: NavigationIntent,
   ) {
     if (pending) return false;
     pending = true;
@@ -57,11 +62,14 @@ export function createNavigationActions(
     const destination = read().tabs;
     const current = () =>
       ticket === serial && owner === scope() && read().tabs === destination && valid();
+    const expectation = target ? read().onNavigate?.(target) : undefined;
+    let succeeded = false;
     status(true, "", projectPending, blocking);
     try {
       await operation(current);
       if (!current()) return false;
       success?.();
+      succeeded = true;
       return true;
     } catch (cause) {
       if (current())
@@ -73,6 +81,7 @@ export function createNavigationActions(
         );
       return false;
     } finally {
+      expectation?.[0](succeeded);
       pending = false;
       status(false, "", false);
     }
@@ -121,6 +130,11 @@ export function createNavigationActions(
         return true;
       },
       request.type !== "select",
+      request.type === "select"
+        ? { kind: "conversation", id: request.id }
+        : request.type === "new"
+          ? { kind: "new-conversation" }
+          : undefined,
     );
   };
   const open = async (target: NavigationTarget) => {
@@ -143,6 +157,10 @@ export function createNavigationActions(
             read().onPage("chat");
             reveal(target);
           },
+          false,
+          () => true,
+          true,
+          target,
         );
       case "page":
         ++serial;
@@ -167,6 +185,7 @@ export function createNavigationActions(
           true,
           () => read().projects.some((project) => project.id === target.id),
           false,
+          target,
         );
       case "conversation":
         if (context.chats.some((chat) => !chat.archived && conversationId(chat) === target.id))
@@ -186,6 +205,7 @@ export function createNavigationActions(
             false,
             () => read().runs.some((run) => run.record.id === target.id),
             false,
+            target,
           );
         }
         return false;

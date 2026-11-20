@@ -17,6 +17,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("classifies bounded human-only navigation history without database prerequisites", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Title bar"),
+      limitations: expect.stringContaining("100 destinations"),
+    });
+  });
   it("exposes conversational browser modes only through the orchestrator gateway", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
       prerequisite: "provider",

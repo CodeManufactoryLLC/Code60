@@ -296,6 +296,8 @@
   outlines. Unavailable sidebar destinations are dimmed labels without outlines.
 - The database notice is one compact status row with its connect action.
 
+- Keep labelled Back and Forward icon buttons in the title bar beside the sidebar toggle, backed by `navigation-history.ts` and `history-navigation.ts`. Record destinations (page, Settings page, or conversation ID for orchestrator, Relay and worker chats) by observing state, never by instrumenting each entry point. Wrap orchestrator selection that completes in the main process with `expect`, listing the destinations it passes through; anything else is the user moving on and is recorded at once. Arriving at a history entry updates it in place. Restore chats through the existing selection paths, skip a slow restore that a newer navigation superseded, skip unavailable chats, reuse `pageAvailable`, and keep history in memory only.
+
 ## Ownership and style boundaries
 
 - Keep `main.tsx` as bootstrap and `App` as composition, not another monolithic

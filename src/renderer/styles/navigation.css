@@ -1032,3 +1032,19 @@
   --accent-bg: var(--card-header-hover);
   --control-hover: var(--card-header-hover);
 }
+
+/* History shares the native-control row with the sidebar toggle. */
+.sidebar-history {
+  position: fixed;
+  top: 0;
+  left: calc(max(80px, calc(var(--titlebar-left) + 8px)) + var(--sidebar-toggle-width) + 4px);
+  z-index: 12;
+  height: var(--app-titlebar-height);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+.sidebar-history > .icon-button {
+  width: 28px;
+  height: 28px;
+}

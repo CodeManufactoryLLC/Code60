@@ -151,6 +151,10 @@ const carbonIcons = {
     size: 16,
     paths: [{ d: "M6.7 12.3 2.9 8.5 15 8.5 15 7.5 2.9 7.5 6.7 3.7 6 3 1 8 6 13z" }],
   },
+  "arrow--right": {
+    size: 16,
+    paths: [{ d: "M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z" }],
+  },
   draggable: {
     size: 32,
     paths: [

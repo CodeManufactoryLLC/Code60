@@ -229,6 +229,16 @@ const feature = (
 });
 export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
+    "navigation-history",
+    "Back and Forward",
+    "Return to visited pages, Settings sections, project and provider homes, and specific chats.",
+    "Title bar → Back / Forward, beside the navigation sidebar toggle",
+    "none",
+    "human-only",
+    "Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.",
+    "No confirmation; navigation only.",
+  ),
+  feature(
     "memory-recall",
     "Memory Recall",
     "Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.",

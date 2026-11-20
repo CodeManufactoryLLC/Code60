@@ -50,7 +50,15 @@ export function PageTabBar({
   eventsByRun,
   openProjects,
   selectedProjectId,
+  canGoBack = false,
+  canGoForward = false,
+  onBack = () => {},
+  onForward = () => {},
 }: {
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  onBack?(): void;
+  onForward?(): void;
   tabs: PageTabs;
   settingsSection: SettingsSectionId | null;
   onSelect(id: PageId): void;
@@ -187,9 +195,78 @@ export function PageTabBar({
         >
           <Icon name={open ? "side-panel--close" : "side-panel--open"} />
         </button>
+        <HistoryControls
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onBack={onBack}
+          onForward={onForward}
+        />
         <Card className="workspace-breadcrumbs" ref={breadcrumbCard} />
       </header>
     </>
+  );
+}
+
+type HistoryDirection = "back" | "forward";
+
+function HistoryControls({
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
+}: {
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onBack(): void;
+  onForward(): void;
+}) {
+  const back = useRef<HTMLButtonElement>(null);
+  const forward = useRef<HTMLButtonElement>(null);
+  // The browser drops focus as soon as a button becomes disabled, so remember which one the
+  // user pressed and hand focus to its sibling, or to Chat, when it runs out of destinations.
+  const pressed = useRef<HistoryDirection | undefined>(undefined);
+  useEffect(() => {
+    const direction = pressed.current;
+    pressed.current = undefined;
+    if (!direction) return;
+    const [button, enabled, sibling, siblingEnabled] =
+      direction === "back"
+        ? [back.current, canGoBack, forward.current, canGoForward]
+        : [forward.current, canGoForward, back.current, canGoBack];
+    const focused = document.activeElement;
+    if (enabled || (focused !== button && focused !== document.body && focused !== null)) return;
+    (siblingEnabled ? sibling : document.getElementById("tab-chat"))?.focus();
+  }, [canGoBack, canGoForward]);
+  const press = (direction: HistoryDirection, go: () => void) => () => {
+    pressed.current = direction;
+    go();
+  };
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a toolbar of two buttons, not a form fieldset.
+    <div className="sidebar-history" role="group" aria-label="Navigation history">
+      <button
+        ref={back}
+        type="button"
+        className="icon-button"
+        aria-label="Back"
+        title="Back"
+        disabled={!canGoBack}
+        onClick={press("back", onBack)}
+      >
+        <Icon name="arrow--left" />
+      </button>
+      <button
+        ref={forward}
+        type="button"
+        className="icon-button"
+        aria-label="Forward"
+        title="Forward"
+        disabled={!canGoForward}
+        onClick={press("forward", onForward)}
+      >
+        <Icon name="arrow--right" />
+      </button>
+    </div>
   );
 }
 

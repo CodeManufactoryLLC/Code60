@@ -43,6 +43,25 @@ function deferred() {
 }
 
 describe("shared navigation actions", () => {
+  it.each([true, false])(
+    "settles history observation after chat selection (success=%s)",
+    async (success) => {
+      const { actions, context } = fixture();
+      const settle = vi.fn();
+      context.onNavigate = vi.fn((): [typeof settle, () => boolean] => [settle, () => true]);
+      if (!success)
+        vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(
+          new Error("Selection failed"),
+        );
+      expect(await actions.open({ kind: "conversation", id: "chat" })).toBe(success);
+      expect(context.onNavigate).toHaveBeenCalledExactlyOnceWith({
+        kind: "conversation",
+        id: "chat",
+      });
+      expect(settle).toHaveBeenCalledExactlyOnceWith(success);
+    },
+  );
+
   it("opens Custom Assistants management without a database or conversation action", async () => {
     const { actions, context } = fixture();
     context.database = null;

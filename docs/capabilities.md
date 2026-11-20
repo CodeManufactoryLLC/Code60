@@ -4,6 +4,20 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
+## Back and Forward
+
+- ID: `navigation-history`
+- Status: shipped
+- Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
+- Access: Title bar → Back / Forward, beside the navigation sidebar toggle
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: No confirmation; navigation only.
+- Limits: Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Memory Recall
 
 - ID: `memory-recall`
