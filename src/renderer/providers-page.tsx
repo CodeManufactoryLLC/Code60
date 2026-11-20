@@ -1,4 +1,3 @@
-import { useEffect, useId, useState } from "react";
 import type { DesktopApi, ModelDefaultAction, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { NavigationCards } from "./navigation-cards.js";
@@ -7,47 +6,6 @@ import { PageTitle } from "./page-title.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
 import { SettingsCard } from "./settings-layout.js";
-
-function OrchestrationPermissions({ api, enabled }: { api: DesktopApi; enabled: boolean }) {
-  const id = useId();
-  const [autoApproval, setAutoApproval] = useState(enabled);
-  useEffect(() => setAutoApproval(enabled), [enabled]);
-  const [savingApproval, setSavingApproval] = useState(false);
-  const [approvalError, setApprovalError] = useState("");
-  return (
-    <SettingsCard title="Permissions">
-      <label className="settings-row">
-        Code60 auto-approval
-        <input
-          type="checkbox"
-          role="switch"
-          checked={autoApproval}
-          aria-checked={autoApproval}
-          disabled={savingApproval}
-          aria-describedby={`${id}-approval-help`}
-          onChange={async (event) => {
-            const next = event.currentTarget.checked;
-            setAutoApproval(next);
-            setSavingApproval(true);
-            setApprovalError("");
-            try {
-              await api.setOrchestrationAutoApproval(next);
-            } catch {
-              setAutoApproval(enabled);
-              setApprovalError("Could not save Code60 auto-approval. Try again.");
-            } finally {
-              setSavingApproval(false);
-            }
-          }}
-        />
-      </label>
-      <p className="field-hint" id={`${id}-approval-help`}>
-        Turn off to review each new permission request in the chat or worker that requested it.
-      </p>
-      {approvalError && <p role="alert">{approvalError}</p>}
-    </SettingsCard>
-  );
-}
 
 export function ProvidersPage({
   api,
@@ -149,9 +107,6 @@ export function ProvidersPage({
           }
         >
           {management.error && <p role="alert">{management.error}</p>}
-          {snapshot && (
-            <OrchestrationPermissions api={api} enabled={snapshot.orchestration.allowAll} />
-          )}
         </NavigationCards>
       )}
     </main>

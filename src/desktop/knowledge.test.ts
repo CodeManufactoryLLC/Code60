@@ -200,7 +200,10 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({
         id: "orchestration-permissions",
         agentAccess: "human-only",
-        availability: expect.objectContaining({ status: "available" }),
+        availability: expect.objectContaining({
+          status: "available",
+          action: expect.stringContaining("beside Harness mode"),
+        }),
       }),
     );
   });

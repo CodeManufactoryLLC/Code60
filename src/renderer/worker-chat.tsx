@@ -328,7 +328,10 @@ export function WorkerChat({
               active={active}
               editable={false}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated && autoApproval}
+              autoApproval={autoApproval}
+              onAutoApprovalChange={
+                orchestrated ? (value) => api.setOrchestrationAutoApproval(value) : undefined
+              }
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}
@@ -372,7 +375,10 @@ export function WorkerChat({
                 void act({ type: "save-model-default", id });
               }}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated && autoApproval}
+              autoApproval={autoApproval}
+              onAutoApprovalChange={
+                orchestrated ? (value) => api.setOrchestrationAutoApproval(value) : undefined
+              }
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}

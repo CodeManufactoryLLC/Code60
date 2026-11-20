@@ -5,12 +5,6 @@
   min-width: 0;
   flex-wrap: wrap;
 }
-.composer-mode:has(.tactics-control) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .tactics-trigger {
   display: inline-flex;
   align-items: center;

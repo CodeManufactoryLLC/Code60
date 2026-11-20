@@ -1749,11 +1749,13 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup" }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    const providers = page.locator("#tab-providers");
-    await providers.click();
-    const toggle = page.getByRole("switch", { name: "Code60 auto-approval", exact: true });
-    await expect(toggle).toBeChecked();
-    await toggle.uncheck();
+    const relay = page.getByRole("button", { name: "Relay", exact: true });
+    await relay.click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const toggle = chat.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await expect
       .poll(
         async () =>
@@ -1761,9 +1763,6 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
             .orchestrationAutoApproval,
       )
       .toBe(false);
-    const relay = page.getByRole("button", { name: "Relay", exact: true });
-    await relay.click();
-    const chat = page.locator(".orchestration-chat-page:visible");
     const send = async (text: string) => {
       const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
       await composer.fill(text);
@@ -1793,8 +1792,10 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await expect(worker.getByRole("region", { name: "Pending approvals" })).toContainText(
       "worker-read",
     );
-    await providers.click();
-    await toggle.check();
+    const workerToggle = worker.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    await expect(workerToggle).toHaveAttribute("aria-pressed", "false");
+    await workerToggle.click();
+    await expect(workerToggle).toHaveAttribute("aria-pressed", "true");
     await expect
       .poll(
         async () =>
@@ -1802,7 +1803,6 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
             .orchestrationAutoApproval,
       )
       .toBe(true);
-    await workerTab.click();
     await expect(readFile(join(target, "done.txt"))).rejects.toMatchObject({ code: "ENOENT" });
     await worker.getByRole("button", { name: "Allow once" }).click();
     await expect

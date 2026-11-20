@@ -113,3 +113,11 @@ padding. Empty scrollbar gutters are removed from modal shells and native modal
 body panes; actual scrollbars remain available. Full-screen splash layout is
 separate. Forced colors uses system fills/edges without shadows. No Base UI,
 new dependency, remote runtime fetch, motion or capability is introduced.
+
+Chat harness approval menus use the Dropdown Menu presentation above and retain
+the native popover's grouped radio choices and keyboard navigation.
+The adjacent [Toggle](https://www.neobrutalism.dev/r/toggle.json) adapts the
+registry's small outlined, filled-when-pressed button to native aria-pressed
+semantics and Code60 theme colors.
+
+Registry SHA-256: `b42d88044834c0bbeb74b66148093b267907f6cc86894889e0823ea3a4fee517`.

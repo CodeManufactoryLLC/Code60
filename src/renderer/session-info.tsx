@@ -4,6 +4,8 @@ import type { ModeChange, SessionState } from "../core/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 import { menuAnchorMoved } from "./menu-anchor.js";
+import { Button } from "./neobrutalism/button.js";
+import { Toggle } from "./neobrutalism/toggle.js";
 
 export function contextUsage(usage: SessionState["usage"]): string {
   if (!usage) return "N/A";
@@ -55,6 +57,8 @@ export function SessionOptionPicker({
   onSave?: (() => void) | undefined;
   saveLabel?: string;
 }) {
+  const harnessMenu = label === "Harness mode";
+  const Trigger = harnessMenu ? Button : "button";
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -126,7 +130,7 @@ export function SessionOptionPicker({
   }, [open]);
   return (
     <div className={label === "Model" ? "composer-model" : "session-option-picker"}>
-      <button
+      <Trigger
         ref={trigger}
         type="button"
         className="mode-trigger"
@@ -148,7 +152,7 @@ export function SessionOptionPicker({
       >
         <span className="mode-value">{selected}</span>
         <Icon name="chevron--down" />
-      </button>
+      </Trigger>
       {changing && (
         <span className="sr-only" role="status">
           Changing session option…
@@ -161,7 +165,7 @@ export function SessionOptionPicker({
           role="menu"
           aria-label={menuLabel}
           popover="manual"
-          className="harness-mode-menu"
+          className={harnessMenu ? "harness-mode-menu neo-dropdown-menu" : "harness-mode-menu"}
           onKeyDown={(event) => {
             const buttons = [
               ...(menu.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []),
@@ -239,6 +243,43 @@ export function SessionOptionPicker({
   );
 }
 
+function AutoApprovalToggle({
+  enabled,
+  active,
+  save,
+}: {
+  enabled: boolean;
+  active: boolean;
+  save(value: boolean): Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  return (
+    <>
+      <Toggle
+        aria-label="Code60 auto-approval"
+        aria-pressed={enabled}
+        disabled={!active || saving}
+        data-tooltip="Auto-approve permission requests across all orchestration chats and their workers"
+        onClick={async () => {
+          setSaving(true);
+          setError(false);
+          try {
+            await save(!enabled);
+          } catch {
+            setError(true);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        Code60 auto-approval <span aria-hidden="true">{enabled ? "On" : "Off"}</span>
+      </Toggle>
+      {error && <span role="alert">Could not save Code60 auto-approval. Try again.</span>}
+    </>
+  );
+}
+
 /** Shared between all orchestrator and worker composers. Choices are connector-owned. */
 export function SessionInfo({
   state,
@@ -246,6 +287,7 @@ export function SessionInfo({
   editable,
   changing,
   autoApproval,
+  onAutoApprovalChange,
   onMode,
   harness,
   sessionId,
@@ -260,6 +302,7 @@ export function SessionInfo({
   editable: boolean;
   changing: boolean;
   autoApproval: boolean;
+  onAutoApprovalChange?: ((value: boolean) => Promise<void>) | undefined;
   onMode(change: ModeChange): void;
   harness: string;
   sessionId: string;
@@ -299,9 +342,12 @@ export function SessionInfo({
           label="Harness mode"
           menuLabel="Harness modes"
           selected={selected}
-          tip={`${historical}Harness mode: ${selected} · Code60 auto-approval: ${autoApproval ? "On" : "Off"}${unavailable}`}
+          tip={`${historical}Harness mode: ${selected}${unavailable}`}
           {...{ ended, editable, changing, onMode, sessionId, active }}
         />
+        {onAutoApprovalChange && (
+          <AutoApprovalToggle enabled={autoApproval} active={active} save={onAutoApprovalChange} />
+        )}
       </div>
       <div className="composer-session-summary">
         <span

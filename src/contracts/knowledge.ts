@@ -383,7 +383,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "orchestration-permissions",
     "Code60 auto-approval",
     "Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.",
-    "Providers → Permissions",
+    "Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)",
     "none",
     "human-only",
     "Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.",

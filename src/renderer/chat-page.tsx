@@ -761,6 +761,7 @@ export function ChatPage({
             editable={ready && !busy}
             changing={!!run?.modeChanging || pending === "set-mode"}
             autoApproval={autoApproval}
+            onAutoApprovalChange={(value) => api.setOrchestrationAutoApproval(value)}
             sessionRole="orchestrator"
             onSaveDefault={() => {
               if (run) void action({ type: "save-model-default", id: run.id });

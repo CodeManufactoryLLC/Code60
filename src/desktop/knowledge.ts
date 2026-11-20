@@ -215,8 +215,9 @@ export class DesktopKnowledge {
     let action: string | null = null;
     if (cap.id === "orchestration-permissions") {
       reason =
-        "The application-wide switch is available independently of database and provider setup.";
-      action = "Open Providers → Permissions.";
+        "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";
+      action =
+        "Open an orchestration chat or its worker and use Code60 auto-approval beside Harness mode.";
     } else if (cap.id === "custom-agents") {
       reason =
         "Assistant management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";

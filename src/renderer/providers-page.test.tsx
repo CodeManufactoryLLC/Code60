@@ -40,8 +40,7 @@ it("uses saved membership order, a first-position creation card, independent men
   const html = renderToStaticMarkup(
     <ProvidersPage snapshot={snapshot} api={api} management={management} onOpen={() => {}} />,
   );
-  expect(html).toContain('role="switch"');
-  expect(html).toContain('aria-checked="false"');
+  expect(html).not.toContain("Code60 auto-approval");
   expect(html.indexOf('aria-label="Add Provider"')).toBeLessThan(
     html.indexOf('aria-label="Open claude"'),
   );

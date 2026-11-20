@@ -15762,7 +15762,10 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     const context = info.locator(".context-donut");
     await expect(context).toHaveAttribute("data-tooltip", /26.5%/);
     const selector = info.getByLabel("Harness mode", { exact: true });
-    await expect(selector).toHaveAttribute("data-tooltip", /Code60 auto-approval: On/);
+    await expect(info.getByRole("button", { name: "Code60 auto-approval" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(selector).toHaveText("Ask for approval");
     await expect(selector).toHaveAttribute("aria-disabled", "false");
     await expect(info.locator(".composer-harness img")).toHaveCSS("width", "20px");
@@ -15774,6 +15777,11 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     const menu = page.getByRole("menu", { name: "Harness modes", exact: true });
     await expect(menu).toBeVisible();
     await expect(menu.getByText("Standard", { exact: true })).toBeVisible();
+    const selectedOption = menu.getByRole("menuitemradio", { checked: true });
+    await expect(selectedOption.locator("span")).toHaveCSS(
+      "color",
+      await selectedOption.evaluate((button) => getComputedStyle(button).color),
+    );
     const menuBox = await menu.boundingBox();
     const modeBox = await selector.boundingBox();
     expect(menuBox && modeBox && menuBox.y + menuBox.height <= modeBox.y).toBe(true);
@@ -15836,6 +15844,7 @@ test("desktop: ACP session information and idle-only harness modes", async () =>
     await expect(worker.getByLabel("Message", { exact: true })).toBeEnabled();
     const workerInfo = worker.getByLabel("Session information", { exact: true });
     await expect(workerInfo).toContainText("Fixture Model");
+    await expect(workerInfo.getByRole("button", { name: "Code60 auto-approval" })).toHaveCount(0);
     const workerMode = workerInfo.getByLabel("Harness mode", { exact: true });
     await choose(workerMode, "Full Access");
     await expect(workerMode).toHaveText("Full Access");

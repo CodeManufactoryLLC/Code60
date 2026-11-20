@@ -233,7 +233,7 @@ Schema version: 1
 - ID: `orchestration-permissions`
 - Status: shipped
 - Purpose: Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.
-- Access: Providers → Permissions
+- Access: Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: When off, choose Allow once or Deny in the requesting conversation.

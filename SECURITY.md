@@ -46,7 +46,7 @@ agent does not submit for approval.
 - **Scheduled automations:** use the saved explicit allowlist and deny other
   requests. The internal headless executor never prompts.
 - **Orchestration chats and their workers:** Code60 auto-approval defaults on.
-  Turn it off in Providers → Permissions to review each new ACP request
+  Turn it off beside **Harness mode** in the chat or worker composer to review each new ACP request
   in the originating Relay, custom assistant, project chat or worker. Choose **Allow
   once** or **Deny**. The setting persists across restarts and applies to live
   sessions. A request already awaiting review still requires a decision after
