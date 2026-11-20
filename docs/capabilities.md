@@ -162,12 +162,12 @@ Schema version: 1
 
 - ID: `commands`
 - Status: shipped
-- Purpose: Use bundled or saved reusable prompts with a leading $name.
+- Purpose: Use bundled or saved reusable prompts with a leading $name. Bundled commands: $create-command: Create a reusable $ command from your instructions. $plan: Propose a plan for your request and wait for Code60 acceptance. $business-evaluation: Plan an evidence-based business evaluation, then wait for Code60 acceptance. $catch-me-up: Explain the broader context and anything I may have missed. $big-picture: Step back from the details and reassess the value and approach. $pushback: Challenge your conclusion and re-evaluate the evidence. $simplify: Explain the current topic in simple, plain language.
 - Access: Apps → Command Builder; project composer $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Saved names override bundled names; /name is plain text, not a command. Relay has no command creation tool; reading never executes.
+- Limits: Saved names override bundled names; /name is plain text, not a command. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.
 - Pages: `commands`
 - Settings sections: none
 - Tools: `code60_create_command`

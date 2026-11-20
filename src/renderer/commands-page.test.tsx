@@ -77,17 +77,20 @@ it("offers and recognizes the built-in create-command with no saved commands", (
   );
   expect(html).not.toContain("will be sent as plain text");
 });
-it.each(["plan", "business-evaluation"])("offers $%s without a saved command", (name) => {
-  const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
-  expect(builtin).toBeDefined();
-  expect(matchingCommands([], `$${name}`, name.length + 1)).toEqual([builtin]);
-  expect(invokedCommand([], `$${name} My request`)).toEqual(builtin);
-  const override = { ...command, name };
-  expect(matchingCommands([override], `$${name}`, name.length + 1)).toEqual([override]);
-  expect(renderToStaticMarkup(<CommandMessage commands={[]} text={`$${name} My request`} />)).toBe(
-    `<mark class="command-label">$${name}</mark> My request`,
-  );
-});
+it.each(["plan", "business-evaluation", "catch-me-up", "big-picture", "pushback", "simplify"])(
+  "offers $%s without a saved command",
+  (name) => {
+    const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
+    expect(builtin).toBeDefined();
+    expect(matchingCommands([], `$${name}`, name.length + 1)).toEqual([builtin]);
+    expect(invokedCommand([], `$${name} My request`)).toEqual(builtin);
+    const override = { ...command, name };
+    expect(matchingCommands([override], `$${name}`, name.length + 1)).toEqual([override]);
+    expect(
+      renderToStaticMarkup(<CommandMessage commands={[]} text={`$${name} My request`} />),
+    ).toBe(`<mark class="command-label">$${name}</mark> My request`);
+  },
+);
 it("shows the plain-text fallback and marks only a recognized leading command", () => {
   const html = renderToStaticMarkup(
     <CommandComposer

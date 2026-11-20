@@ -1078,7 +1078,7 @@ legacy string overrides reset to built-in clauses instead of being migrated.
 ### Commands
 
 Commands are reusable user-authored prompts, separate from system prompt templates.
-The Command Builder page precedes Prompt Builder under Apps. It lists `/name` and title beside an editor
+The Command Builder page precedes Prompt Builder under Apps. It lists `$name` and title beside an editor
 for Name, Title, Description and Prompt, with Save, Discard and natively confirmed
 Delete. The name follows the title until manually edited. Drafts stay in memory
 across page, project and command switches within the connected database.
@@ -1115,6 +1115,13 @@ when useful, and five documents or labelled sections: decision brief, supporting
 feasibility analysis, market/economics model, risks/assumptions, and validation plan.
 These are prompt instructions, not new execution authority or automated jobs;
 existing plan, Git-readiness, worker ownership and permission checks still apply.
+Four bundled conversation commands use the current conversation and optional
+additional instructions: `$catch-me-up` explains broader context and missed
+background; `$big-picture` pauses the current line of work and reassesses its
+value and approach; `$pushback` rechecks disputed claims against evidence,
+correcting errors without agreeing merely to appease; `$simplify` explains the
+current topic in plain language without requesting code refactoring. These
+commands request explanation or reassessment, not expanded execution authority.
 Built-ins are supplied by contracts and resolved by main at send time. They do not
 count toward the 200 saved-command limit or appear as editable database rows.
 An existing saved command with the same name takes precedence in both the picker

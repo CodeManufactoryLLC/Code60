@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUILTIN_COMMANDS,
   capabilityReference,
   DESKTOP_CAPABILITIES,
   isKnowledgeTool,
@@ -215,6 +216,11 @@ describe("desktop capability catalog", () => {
       access: expect.stringContaining("$ command picker"),
       limitations: expect.stringContaining("/name is plain text"),
     });
+    for (const command of BUILTIN_COMMANDS)
+      expect(commands?.purpose).toContain(`$${command.name}: ${command.description}`);
+    expect(commands?.limitations).toContain("only in project orchestrator chats");
+    expect(commands?.limitations).toContain("not Relay or worker chats");
+    expect(commands?.limitations).toContain("do not grant new execution authority");
   });
 
   it("matches the generated bundled reference", async () => {

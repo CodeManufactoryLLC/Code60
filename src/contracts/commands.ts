@@ -85,6 +85,63 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
     createdAt: "2026-11-10T00:00:00.000Z",
     updatedAt: "2026-11-10T00:00:00.000Z",
   },
+  {
+    id: "00000000-0000-4000-8000-000000000004",
+    name: "catch-me-up",
+    title: "Catch me up",
+    description: "Explain the broader context and anything I may have missed.",
+    prompt: [
+      "Give the user broader context for what you are currently discussing, using the conversation and any additional instructions below.",
+      "Explain the overall goal, how the current topic fits into it, and why it matters. Cover relevant background, terms, decisions, progress and unresolved questions the user may have missed; do not assume they followed every step.",
+      "Distinguish established facts from assumptions and proposals. Be clear about missing context rather than inventing earlier events or decisions.",
+      "Use a concise, self-contained explanation and end with where things stand and the next meaningful decision or step. This request is for an explanation, not additional implementation.",
+    ].join("\n"),
+    createdAt: "2026-11-19T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000005",
+    name: "big-picture",
+    title: "Reassess the big picture",
+    description: "Step back from the details and reassess the value and approach.",
+    prompt: [
+      "The user is signaling that you are going down a rabbit hole. Pause the current line of investigation and step back, using the conversation and any additional instructions below.",
+      "Restate the user's actual goal and what a useful outcome would be. Assess whether the current work materially advances that goal, whether its effort is justified, and which assumptions or details are distracting from it.",
+      "Re-evaluate the approach, including simpler alternatives and whether to continue, change direction or stop this line of work. Recommend the smallest useful next step and explain its value and tradeoffs.",
+      "Respond with the reassessment before resuming work. Do not treat this command as approval to expand scope or change an accepted plan.",
+    ].join("\n"),
+    createdAt: "2026-11-19T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000006",
+    name: "pushback",
+    title: "Recheck the evidence",
+    description: "Challenge your conclusion and re-evaluate the evidence.",
+    prompt: [
+      "The user believes your current claim, conclusion or approach is wrong. Take that challenge seriously and re-evaluate it using the conversation and any additional instructions below.",
+      "Identify the disputed claim, revisit the underlying evidence, and check for unsupported assumptions, contradictions, missing context and plausible alternative explanations. Seek the strongest evidence against your current position rather than defending it reflexively.",
+      "Verify material disputed facts with available sources or tools when needed. Separate direct evidence, inference and uncertainty; do not claim to have checked evidence you cannot access.",
+      "Correct any error plainly and explain what changed and why. If the evidence still supports some or all of your original conclusion, explain that respectfully with specific support and acknowledge remaining uncertainty; do not agree merely to appease the user.",
+      "Give the revised assessment before continuing dependent work. This command requests reassessment, not unrelated edits or expanded scope.",
+    ].join("\n"),
+    createdAt: "2026-11-19T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000007",
+    name: "simplify",
+    title: "Explain it simply",
+    description: "Explain the current topic in simple, plain language.",
+    prompt: [
+      "Explain the current topic or your previous response in simple, plain language, using the conversation and any additional instructions below.",
+      "Lead with the main point. Use familiar words and short, connected sentences. Remove jargon, acronyms and unnecessary detail; briefly explain any technical term that is essential.",
+      "Use a concrete example or analogy if it makes the idea easier to understand. Preserve the meaning, important caveats and uncertainty without talking down to the user.",
+      "Provide the simpler explanation directly. This is a request to simplify your explanation, not to refactor code, change files or alter the task's scope.",
+    ].join("\n"),
+    createdAt: "2026-11-19T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+  },
 ];
 
 /** Keep saved commands first and preserve existing user commands with a built-in name. */
