@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { menuAnchorMoved } from "./menu-anchor.js";
+import { menuTypeahead } from "./menu-typeahead.js";
 
 export function AnchoredMenu({
   x,
@@ -83,7 +84,6 @@ export function AnchoredMenu({
       ref={menu}
       id={id}
       className={appearance ? "actions-menu neo-dropdown-menu" : "actions-menu"}
-      data-slot={appearance ? "dropdown-menu-content" : undefined}
       role="menu"
       aria-label={label}
       style={position}
@@ -104,10 +104,7 @@ export function AnchoredMenu({
                 : (index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length;
           buttons[next]?.focus();
         } else if (/^\p{L}$/u.test(event.key) && !event.metaKey && !event.ctrlKey) {
-          const letter = event.key.toLocaleLowerCase();
-          const next = [...buttons.slice(index + 1), ...buttons.slice(0, index + 1)].find(
-            (button) => button.textContent?.trim().toLocaleLowerCase().startsWith(letter),
-          );
+          const next = menuTypeahead(buttons, index, event.key);
           if (next) {
             event.preventDefault();
             next.focus();
@@ -119,7 +116,6 @@ export function AnchoredMenu({
         <button
           type="button"
           role="menuitem"
-          data-slot={appearance ? "dropdown-menu-item" : undefined}
           key={item.label}
           onClick={() => {
             onClose();

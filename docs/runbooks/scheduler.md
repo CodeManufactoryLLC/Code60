@@ -27,7 +27,8 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
    work, cancel active work and stop the service, only after explaining the
    interruption. There is no separate pause-and-cancel button. Wait for cleanup
    to settle and review Scheduled Jobs history. To cancel just one job (including
-   on a standalone scheduler), use Scheduled Jobs → More actions → Cancel active run.
+   on a standalone scheduler), use the job header's Stop control (the pulsing pause
+   icon). Its separate disclosure chevron opens details; recurrence pause is independent.
 2. Check Scheduling Service status in System Manager: Not installed offers Install,
    Stopped offers Start, and Running offers Stop. Jobs paused still means the
    service is running. Checking or Status unavailable is not proof of installation

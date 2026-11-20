@@ -8,6 +8,8 @@ class Control {
   copy = false;
   iconOnly = false;
   accordion = false;
+  neoVariant: "quiet" | "neutral" | undefined;
+  jobControl = false;
   sidebar = false;
   raised = false;
   isConnected = true;
@@ -32,7 +34,14 @@ class Control {
   matches(selector: string) {
     if (selector.includes(":disabled")) return this.disabled;
     if (selector.includes(".home-card"))
-      return this.raised || (selector.includes(".neo-accordion-trigger") && this.accordion);
+      return (
+        this.raised ||
+        (selector.includes(".neo-accordion-trigger") && this.accordion) ||
+        (selector.includes(".automation-job-controls") && this.jobControl) ||
+        (this.neoVariant !== undefined &&
+          selector.includes(".neo-button") &&
+          (!selector.includes("[data-variant='quiet']") || this.neoVariant !== "quiet"))
+      );
     if (selector.includes(".icon-button")) return this.iconOnly;
     return selector === this.kind;
   }
@@ -147,6 +156,23 @@ it("keeps accordion headers stationary and leaves feedback to disclosure rotatio
   vi.advanceTimersByTime(100);
   expect(control.animate).not.toHaveBeenCalled();
   expect(control.icon.animate).not.toHaveBeenCalled();
+});
+
+it.each(["quiet", "neutral"] as const)(
+  "keeps the appropriate press feedback for %s native buttons",
+  (variant) => {
+    const { control, emit } = fixture();
+    control.neoVariant = variant;
+    emit("pointerdown");
+    expect(control.animate).toHaveBeenCalledTimes(variant === "quiet" ? 1 : 0);
+  },
+);
+it("leaves custom job control feedback to its circular CSS face", () => {
+  const { control, emit } = fixture();
+  control.neoVariant = "quiet";
+  control.jobControl = true;
+  emit("pointerdown");
+  expect(control.animate).not.toHaveBeenCalled();
 });
 
 it("keeps sidebar navigation backgrounds and selection edges fixed during press and release", () => {

@@ -120,6 +120,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await editor.getByRole("button", { name: "Choose repository", exact: true }).click();
     await editor.getByRole("button", { name: "Create job", exact: true }).click();
     await expect(editor).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Actions", exact: true })).toBeFocused();
     expect((await saved()).automations).toHaveLength(1);
     expect((await saved()).automations[0].enabled).toBe(false);
     expect((await saved()).executions).toHaveLength(0);
@@ -211,6 +212,9 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       page.getByRole("button", { name: "Stop Retained scheduler", exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Delete Retained scheduler" })).toBeDisabled();
+    for (const button of await page.locator(".automation-job-controls > button").all()) {
+      await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    }
     const stopIcon = page.getByRole("button", { name: "Stop Retained scheduler" }).locator("svg");
     await expect(stopIcon).toHaveCSS("animation-name", "automation-stop-pulse");
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -245,6 +249,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await unlink(gate);
     await expandJob(page);
     await expect(page.locator(".automation-job-details")).toContainText("main");
+    await expect(page.locator(".automation-prompt-text")).toHaveCSS("scrollbar-gutter", "stable");
     await expect(page.locator('[data-slot="accordion-trigger"] .carbon-icon')).toHaveCSS(
       "rotate",
       "0deg",
@@ -282,10 +287,14 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await expect.poll(async () => (await saved()).automations[0].enabled).toBe(false);
     await page.getByRole("button", { name: "Edit job", exact: true }).click();
     const edit = page.getByRole("region", { name: "Edit scheduled job", exact: true });
+    await expect(edit.getByLabel("Name", { exact: true })).toBeFocused();
     await expect(edit.getByRole("button", { name: "Save changes" })).toBeDisabled();
     await edit.getByLabel("Turn timeout", { exact: true }).fill("2m");
     await edit.getByRole("button", { name: "Save changes" }).click();
     await expect(edit).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Collapse Retained scheduler", exact: true }),
+    ).toBeFocused();
     await expect.poll(async () => (await saved()).automations[0].turnTimeout).toBe("2m");
     const trigger = page.locator('[data-slot="accordion-trigger"]').first();
     await trigger.focus();

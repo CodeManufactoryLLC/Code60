@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type {
   AutomationEditor,
   AutomationSummary,
   AutomationUiRequest,
   DesktopApi,
 } from "../bridge/index.js";
-import { automationDate } from "./automation-date.js";
+import { automationDate, automationWeekdays } from "./automation-date.js";
 import { AutomationForm } from "./automation-form.js";
 import { Icon } from "./icons.js";
 import { AccordionContent, AccordionItem, AccordionTrigger } from "./neobrutalism/accordion.js";
@@ -15,13 +15,12 @@ import { Card, CardContent } from "./neobrutalism/card.js";
 function cadence(schedule: AutomationEditor["draft"]["schedule"]) {
   if (schedule.type === "interval")
     return `Every ${schedule.everyMinutes} ${schedule.everyMinutes === 1 ? "minute" : "minutes"}`;
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${
     schedule.type === "daily"
       ? "Daily"
       : [...schedule.days]
           .sort()
-          .map((day) => days[day])
+          .map((day) => automationWeekdays[day])
           .join(", ")
   } at ${schedule.time} · ${schedule.timeZone}`;
 }
@@ -51,6 +50,13 @@ export function AutomationJob({
   const [editor, setEditor] = useState<AutomationEditor>();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
+  const disclosureTrigger = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  useLayoutEffect(() => {
+    const closed = wasEditing.current && !editing;
+    wasEditing.current = editing;
+    if (closed && active && open) disclosureTrigger.current?.focus({ preventScroll: true });
+  }, [editing, active, open]);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(false);
   const generation = useRef(0);
@@ -81,7 +87,7 @@ export function AutomationJob({
   const runLabel = `${running ? "Stop" : "Run"} ${job.name}`;
   const draft = editor?.draft;
   return (
-    <AccordionItem className="automation-job" data-running={running}>
+    <AccordionItem className="automation-job">
       <div className="automation-job-header">
         <h3 id={`${id}-name`}>
           <span className="automation-job-heading">
@@ -117,7 +123,7 @@ export function AutomationJob({
             </span>
           </Button>
           <AccordionTrigger
-            id={`${id}-trigger`}
+            ref={disclosureTrigger}
             aria-label={`${open ? "Collapse" : "Expand"} ${job.name}`}
             title={`${open ? "Collapse" : "Expand"} ${job.name}`}
             aria-controls={`${id}-details`}

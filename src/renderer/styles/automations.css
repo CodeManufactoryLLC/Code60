@@ -104,13 +104,18 @@
 .automation-job-heading {
   min-width: 0;
 }
+.automation-job-name,
+.automation-editor h3 {
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  text-transform: var(--card-case, none);
+  --letter-spacing: var(--card-spacing, normal);
+}
 .automation-job-name {
-  font-family: var(--card-font, var(--font));
-  font-size: var(--card-size, 22px);
-  font-weight: var(--card-weight);
   overflow-wrap: anywhere;
 }
 .automation-job-controls {
+  /* Keep the shared disabled treatment transparent over the header. */
+  --disabled-fill: transparent;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -169,18 +174,12 @@
   outline: 2px solid var(--primary-text);
   outline-offset: 2px;
 }
-.automation-job-controls
-  > .automation-delete-button:is(:hover, :focus-visible):enabled
-  .automation-header-circle {
-  background: transparent;
-  color: var(--primary-text);
-}
 .automation-run-button.is-running .carbon-icon {
   animation: automation-stop-pulse 1.4s ease-in-out infinite;
 }
 @keyframes automation-stop-pulse {
   50% {
-    opacity: 0.4;
+    opacity: 0.7;
     transform: scale(0.82);
   }
 }
@@ -214,6 +213,7 @@
   line-height: 1.65;
   max-height: 22rem;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .automation-job-facts {
   display: grid;
@@ -319,8 +319,6 @@
 }
 .automation-editor h3 {
   margin: 0 0 20px;
-  font-size: var(--card-size, 22px);
-  font-weight: var(--card-weight);
 }
 .automation-form {
   display: grid;
@@ -410,8 +408,6 @@
 }
 .automation-permissions-help {
   color: var(--muted);
-}
-.automation-permissions-help p {
   line-height: 1.6;
 }
 .automation-preview {

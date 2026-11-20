@@ -1,5 +1,5 @@
 // Adapted from neobrutalism.dev/r/dropdown-menu.json; see README.md and LICENSE.
-import { useEffect, useId, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { AnchoredMenu } from "../anchored-menu.js";
 import { Icon } from "../icons.js";
 import { Button } from "./button.js";
@@ -10,26 +10,22 @@ export function DropdownMenu({
   active,
   disabled,
   items,
+  triggerRef,
 }: {
   label: string;
   active: boolean;
   disabled: boolean;
   items: readonly { label: string; run(): void }[];
+  triggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const id = useId();
-  const trigger = useRef<HTMLButtonElement>(null);
+  const localTrigger = useRef<HTMLButtonElement>(null);
+  const trigger = triggerRef ?? localTrigger;
   const [position, setPosition] = useState<{ x: number; y: number; last: boolean }>();
   const expanded = active && !disabled && !!position;
   useEffect(() => {
     if (!active || disabled) setPosition(undefined);
   }, [active, disabled]);
-  useEffect(() => {
-    const hidden = () => {
-      if (document.hidden) setPosition(undefined);
-    };
-    document.addEventListener("visibilitychange", hidden);
-    return () => document.removeEventListener("visibilitychange", hidden);
-  }, []);
   const open = (last = false) => {
     const bounds = trigger.current?.getBoundingClientRect();
     if (bounds) setPosition({ x: bounds.right, y: bounds.bottom + 4, last });
@@ -38,7 +34,6 @@ export function DropdownMenu({
     <>
       <Button
         ref={trigger}
-        data-slot="dropdown-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={expanded ? id : undefined}

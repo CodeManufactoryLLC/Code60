@@ -1556,9 +1556,24 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(menu).toHaveCount(0);
     await actions.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: "New scheduled job" })).toBeFocused();
+    await page.keyboard.press("r");
+    await expect(menu.getByRole("menuitem", { name: "Refresh", exact: true })).toBeFocused();
+    await page.keyboard.press("n");
+    await expect(menu.getByRole("menuitem", { name: "New scheduled job" })).toBeFocused();
     await page.keyboard.press("Enter");
     const editor = panel.getByRole("region", { name: "New scheduled job", exact: true });
+    await expect(editor.getByLabel("Name", { exact: true })).toBeFocused();
     await expect(editor.getByLabel("Saved prompt", { exact: true })).toBeVisible();
+    await expect(editor.locator(".automation-preview")).toContainText("Next occurrence preview");
+    await expect(editor.locator(".automation-permissions-help")).toBeVisible();
+    await expect(editor.locator(".automation-permissions-help")).toContainText(
+      "A worktree is not a sandbox.",
+    );
+    await expect(editor.getByRole("checkbox", { name: "execute", exact: true })).toHaveAttribute(
+      "aria-describedby",
+      (await editor.locator(".automation-permissions-help").getAttribute("id")) ??
+        "missing-help-id",
+    );
     await page.screenshot({ path: test.info().outputPath("automation-editor-wide.png") });
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(760, 650),
@@ -1572,6 +1587,7 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(page.getByRole("dialog", { name: "New scheduled job" })).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("automation-editor-narrow.png") });
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(actions).toBeFocused();
     expect(
       await panel
         .locator(".automations-page")

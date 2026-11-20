@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   AutomationEditor,
   AutomationHistoryEntry,
@@ -14,6 +14,7 @@ import { Modal } from "./modal.js";
 import { Accordion } from "./neobrutalism/accordion.js";
 import { DropdownMenu } from "./neobrutalism/dropdown-menu.js";
 import { PageTitle } from "./page-title.js";
+import { useDocumentVisible } from "./use-document-visible.js";
 
 const historyColumns = [
   { key: "automationName", title: "Scheduled job", width: 160, filter: "text" },
@@ -54,26 +55,35 @@ export function AutomationsPage({
   active: boolean;
   agents: string[];
 } & Pick<TableOptions, "lines" | "density" | "fit" | "textStyles">) {
-  const [documentVisible, setDocumentVisible] = useState(
-    () => typeof document === "undefined" || !document.hidden,
-  );
-  const visible = active && documentVisible;
-  useEffect(() => {
-    const changed = () => setDocumentVisible(!document.hidden);
-    document.addEventListener("visibilitychange", changed);
-    return () => document.removeEventListener("visibilitychange", changed);
-  }, []);
+  const visible = useDocumentVisible() && active;
   const [automations, setAutomations] = useState<AutomationSummary[]>([]);
   const [history, setHistory] = useState<AutomationHistoryEntry[]>([]);
   const [selected, setSelected] = useState<string>();
+  const [expanded, setExpanded] = useState<string>();
   const [selectedExecution, setSelectedExecution] = useState<string>();
   const [before, setBefore] = useState<number>();
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [editor, setEditor] = useState<AutomationEditor>();
   const [evidence, setEvidence] = useState("");
   const generation = useRef(0);
+  const pageGeneration = useRef(0);
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const hadEditor = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: API/visibility changes invalidate page-owned actions; history filters do not.
+  useLayoutEffect(() => {
+    pageGeneration.current++;
+    return () => {
+      pageGeneration.current++;
+    };
+  }, [api, visible]);
+  useLayoutEffect(() => {
+    const closed = hadEditor.current && !editor;
+    hadEditor.current = !!editor;
+    if (closed && visible) actionsTrigger.current?.focus({ preventScroll: true });
+  }, [editor, visible]);
   const dirty = useRef(false);
   const flight = useRef(false);
   const refreshLatest = useRef<() => Promise<void>>(async () => {});
@@ -124,17 +134,20 @@ export function AutomationsPage({
   const act = async (request: AutomationUiRequest) => {
     if (pending.current) return;
     pending.current = true;
-    const owner = generation.current;
+    const owner = pageGeneration.current;
+    const readOwner = generation.current;
+    const evidenceRequest = request.action === "transcript" || request.action === "diff";
+    const current = () =>
+      owner === pageGeneration.current && (!evidenceRequest || readOwner === generation.current);
     setBusy(true);
-    setError("");
+    setActionError("");
     try {
       const result = await api.automation(request);
-      if (owner !== generation.current) return;
-      if (request.action === "transcript" || request.action === "diff")
-        setEvidence(JSON.stringify(result, null, 2));
-      await refresh();
+      if (!current()) return;
+      if (evidenceRequest) setEvidence(JSON.stringify(result, null, 2));
+      await refreshLatest.current();
     } catch (error) {
-      if (owner === generation.current) setError((error as Error).message);
+      if (current()) setActionError((error as Error).message);
     } finally {
       pending.current = false;
       setBusy(false);
@@ -150,6 +163,7 @@ export function AutomationsPage({
         </h2>
         <DropdownMenu
           label="Actions"
+          triggerRef={actionsTrigger}
           active={visible}
           disabled={busy || !!editor}
           items={[
@@ -163,12 +177,18 @@ export function AutomationsPage({
                   draft: freshDraft(agents[0] ?? ""),
                 }),
             },
-            { label: "Refresh", run: () => void refresh() },
+            {
+              label: "Refresh",
+              run: () => {
+                setActionError("");
+                void refreshLatest.current();
+              },
+            },
           ]}
         />
       </header>
 
-      {error && <p role="alert">{error}</p>}
+      {(actionError || error) && <p role="alert">{actionError || error}</p>}
       {editor && (
         <AutomationForm
           api={api}
@@ -178,7 +198,7 @@ export function AutomationsPage({
           onClose={() => setEditor(undefined)}
           onSaved={() => {
             setEditor(undefined);
-            void refresh();
+            void refreshLatest.current();
           }}
         />
       )}
@@ -193,14 +213,16 @@ export function AutomationsPage({
                 api={api}
                 agents={agents}
                 active={visible}
-                open={selected === job.id}
+                open={expanded === job.id}
                 busy={busy}
                 onToggle={() => {
-                  setSelected(selected === job.id ? undefined : job.id);
+                  const next = expanded === job.id ? undefined : job.id;
+                  setExpanded(next);
+                  setSelected(next);
                   setBefore(undefined);
                 }}
                 onAction={act}
-                onSaved={() => void refresh()}
+                onSaved={() => void refreshLatest.current()}
               />
             ))}
         </Accordion>

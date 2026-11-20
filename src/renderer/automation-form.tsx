@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   type AutomationEditor,
   type DesktopApi,
   type RendererAutomationDraft,
   TOOL_KINDS,
 } from "../bridge/index.js";
-import { automationDate } from "./automation-date.js";
+import { automationDate, automationWeekdays } from "./automation-date.js";
 import { Button } from "./neobrutalism/button.js";
 import { Card, CardContent } from "./neobrutalism/card.js";
 import { Textarea } from "./neobrutalism/textarea.js";
@@ -26,6 +26,15 @@ export function AutomationForm({
   onSaved(): void;
 }) {
   const promptId = useId();
+  const permissionHelpId = useId();
+  const nameInput = useRef<HTMLInputElement>(null);
+  const focused = useRef(false);
+  useLayoutEffect(() => {
+    if (active && !focused.current) {
+      focused.current = true;
+      nameInput.current?.focus();
+    }
+  }, [active]);
   const [draft, setDraft] = useState(editor.draft);
   const [repository, setRepository] = useState(editor.repositoryLabel);
   const [preview, setPreview] = useState<string[]>([]);
@@ -121,6 +130,7 @@ export function AutomationForm({
               <input
                 required
                 maxLength={80}
+                ref={nameInput}
                 value={draft.name}
                 onChange={(event) => set("name", event.target.value)}
               />
@@ -249,7 +259,7 @@ export function AutomationForm({
               )}
               {schedule.type === "weekly" && (
                 <div className="automation-actions">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
+                  {automationWeekdays.map((day, index) => (
                     <label key={day}>
                       <input
                         type="checkbox"
@@ -269,7 +279,7 @@ export function AutomationForm({
                 </div>
               )}
               <div className="automation-preview" aria-live="polite">
-                <span>Next run</span>
+                <span>Next occurrence preview</span>
                 <strong>
                   {preview[0] ? automationDate(preview[0]) : "Enter a valid schedule"}
                 </strong>
@@ -285,19 +295,17 @@ export function AutomationForm({
             </fieldset>
             <fieldset>
               <legend>Allowed tool kinds</legend>
-              <details className="automation-permissions-help">
-                <summary>Permission limits</summary>
-                <p>
-                  Everything else is denied without waiting for approval. Execute can grant broad
-                  user-account and network access. A worktree is not a sandbox.
-                </p>
-              </details>
+              <p className="automation-permissions-help" id={permissionHelpId}>
+                Everything else is denied without waiting for approval. Execute can grant broad
+                user-account and network access. A worktree is not a sandbox.
+              </p>
               <div className="automation-actions">
                 {TOOL_KINDS.map((kind) => (
                   <label key={kind}>
                     <input
                       type="checkbox"
                       checked={draft.allow.includes(kind)}
+                      aria-describedby={kind === "execute" ? permissionHelpId : undefined}
                       onChange={(event) =>
                         set(
                           "allow",

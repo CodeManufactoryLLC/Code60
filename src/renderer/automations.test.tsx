@@ -33,7 +33,6 @@ it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
   expect(markup).not.toContain("Install service");
   expect(markup).not.toContain('data-test-table="automations"');
   expect(markup).toContain('data-slot="accordion"');
-  expect(markup).toContain('data-slot="dropdown-menu-trigger"');
   expect(markup).toContain('aria-haspopup="menu"');
   expect(markup).not.toContain("Refresh scheduled jobs");
   expect(markup).not.toContain("New scheduled job");

@@ -65,9 +65,12 @@ export class Scheduler {
         "Schedule persistence failed. No further launches are allowed.",
       );
     }
+    this.notify();
+  }
+  private notify() {
     for (const listener of this.listeners) {
       try {
-        listener(next.revision);
+        listener(this.store.state.revision);
       } catch {
         /* Client failures cannot affect dispatch. */
       }
@@ -300,6 +303,8 @@ export class Scheduler {
       this.failed = true; // An uncertain save cannot authorize more execution.
     } finally {
       this.active = null;
+      // Live ownership changes even when saving the final outcome failed.
+      this.notify();
     }
   }
 
