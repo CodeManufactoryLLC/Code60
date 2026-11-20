@@ -273,6 +273,10 @@
   with accessible labels that the shared tooltip displays. Keep a native select
   as the accessible control behind the Columns glyph. Active saved/column filters
   appear as removable chips. Server-paged tables use the shared `TablePager`.
+- Shared tooltips snapshot ancestor scroll positions when hover/focus begins.
+  Ignore queued notifications for unchanged positions; actual scrolling still
+  dismisses them. Preserve Escape, press, leave and focus cleanup, including a
+  cancelled pending reveal. This reliability fix adds no capability or catalog entry.
 - Disabled controls are dimmed with solid borders: no hatching or dashed
   outlines. Unavailable sidebar destinations are dimmed labels without outlines.
 - The database notice is one compact status row with its connect action.
