@@ -9,7 +9,7 @@
 
 The sole deliverable for this task is this Markdown document. Do not implement
 any phase, modify application code or configuration, install/start/stop services,
-commit, publish, or change release state. Proposed modules, APIs, CLI controls
+commit, publish, or change release state. Proposed modules, APIs, local controls
 and lifecycle behavior below are design targets, not claims of availability.
 
 For this documentation-only task, run only `npm run check:instructions` and
@@ -35,10 +35,10 @@ Agreed behavior:
 - Browser access is explicitly enabled and authenticated, bound only to the IPv4 loopback address `127.0.0.1`. Both clients share execution state; presentation, subscriptions and drafts belong to individual client sessions.
 - New interactive permissions require a human. Without a UI, work waits safely where supported or ends safely at its existing deadline; it is never implicitly approved.
 - Daemon restart restores evidence and scheduler recurrence metadata, not interactive task authority, live provider sessions or uncertain work.
-- Headless `code60 run` remains independent and unchanged. Existing automation commands retain their domain operations and output contracts through compatibility adapters.
+- Preserve the shipped desktop automation operations, internal scheduler service/client contracts and internal headless executor behavior/record formats. The public CLI was removed; restoring public run, automation, scheduler or gateway commands is new scope outside this migration, not a compatibility obligation.
 - The browser's loopback HTTP/event listener is the only new TCP exposure. No wildcard/LAN/public binding, remote access, reverse-proxy deployment, multi-user hosting, task replay, catch-up or exactly-once claim is included.
 
-Each phase is independently reviewable, runnable and reversible under its stated ownership conditions. The planning session required keeping the pending beta release separate and reconciling the Windows agent’s handoff before implementation changes this checkout. Recheck that handoff and release status before any future implementation; this document authorizes no release action.
+Each phase is independently reviewable, runnable and reversible under its stated ownership conditions. Keep release preparation separate and reconcile earlier platform handoffs with the currently supported macOS/Linux architecture before implementation. This plan does not restore Windows support or authorize release actions.
 
 ## Target architecture
 
@@ -57,7 +57,7 @@ flowchart TD
     A --> M[Memory sidecar]
     S --> X[Scheduled agents]
     S --> H[Schedule store]
-    L[Automation CLI] --> G
+    L[Internal automation client] --> G
     G -->|Controlling-client approval request| E
     E --> N[Native dialog]
     G -->|Controlling-client approval request| T
@@ -98,8 +98,8 @@ application state, send prompts, accept plans or answer permissions. Control
 transfer requires an explicit human action and a gateway-issued lease generation;
 connection order, focus and reconnect never confer control. Losing control
 invalidates that client's pending confirmations, not already approved work.
-Scope browser control to a tab connection as well as its login session, since
-tabs may share cookies. Bound leases and detect lost connections without relying
+Scope browser control to a tab connection as well as its authenticated session.
+Each newly loaded tab pairs separately. Bound leases and detect lost connections without relying
 on tab-close notifications. New execution remains disabled until control is
 explicitly acquired; there is no collaborative or multi-user permission model.
 
@@ -113,17 +113,31 @@ explicitly acquired; there is no collaborative or multi-user permission model.
   second application host. Disabling browser mode detaches browser clients only.
 - Provide a local launch/pairing path that works without Electron running and
   requires access to private per-user state. Exchange a short-lived, single-use
-  pairing proof for an expiring, revocable HttpOnly, SameSite=Strict session
-  cookie. Never put reusable gateway credentials in JavaScript, URLs, browser
-  storage, provider environments or logs. If the launcher passes a pairing proof
-  in a URL fragment, clear it immediately before loading application state and
-  serve the bootstrap without third-party resources or referrer leakage.
+  pairing proof for a short-lived, revocable browser-session token, scoped to the
+  current daemon and tab. Hold that token only in the tab's JavaScript memory;
+  it is distinct from reusable local-IPC credentials, which never enter the
+  renderer. Do not use cookies, HTTP authentication caches, URL parameters or
+  persistent browser storage for session authentication. A fresh page load or
+  refresh requires pairing again; already approved work continues independently.
+  If the launcher passes a pairing proof in a URL fragment, clear it immediately
+  before loading application state and serve the bootstrap without third-party
+  resources or referrer leakage. Never log pairing proofs or browser tokens.
+- Send the browser token only in an explicit `X-Code60-Session` header on
+  application API requests to the pinned gateway origin, including its port.
+  Use `fetch` with `mode: "same-origin"`, `credentials: "omit"` and
+  `redirect: "error"`; never attach the header to assets, external links or
+  arbitrary caller-supplied URLs. Consume SSE through a streaming fetch with the
+  same header and options, not native EventSource or a credential-bearing URL.
+  No cookie is set or accepted as authentication. Cookie attributes cannot
+  provide port isolation: see [RFC 6265, section 8.5](https://datatracker.ietf.org/doc/html/rfc6265#section-8.5).
 - Enforce authentication for application reads and writes, same-origin checks,
-  CSRF protection on mutations and authenticated event-stream handshakes. No
+  CSRF protection on mutations and authenticated event-stream handshakes. An
+  explicit non-safelisted session header and rejection of cross-origin requests
+  protect both reads and writes; Origin/Host checks alone never authenticate. No
   permissive CORS or state-changing GET requests. Loopback location alone is not
   authentication; test malicious sites, DNS rebinding and invalid/missing origins.
   Pairing never supplies task authority or a controlling-client lease.
-- Use HTTP requests for typed operations and a bounded server-sent event stream
+- Use HTTP requests for typed operations and a bounded fetch-consumed server-sent event stream
   for summaries, details and notices. Reuse the local IPC protocol's identities,
   validation, cancellation, outcome lookup and gap recovery. Reconnect does not
   retry consequential mutations. Slow/disconnected clients cannot block backend
@@ -170,14 +184,14 @@ not succeed as silent no-ops or depend on an unseen Electron dialog.
 - `src/desktop`: native shell, trusted-renderer validation, native interaction broker and installer integration.
 - `src/renderer`: one shared React application with explicit preload and browser API adapters and capability-based shell behavior. Neither adapter imports backend modules, Node.js or Electron; browser transport uses the shared browser-safe contracts.
 
-Update architecture, module instructions and boundary tests together. Backend modules must not import `desktop`. If additive gateway CLI controls need a new dependency, explicitly allow only the public gateway API rather than bypassing module rules.
+Update architecture, module instructions and boundary tests together. Backend modules must not import `desktop`. Local management adapters use only the public gateway module API; public terminal-command restoration requires a separate scope/architecture decision.
 
 ## Phase 0 — Baseline, inventory and migration contract
 
 **Implementation**
 
 1. Document the target, temporary modes and ownership handoffs.
-2. Inventory Electron backend handlers/direct service accesses, native-only operations, shutdown/reload paths, scheduler entry points, CLI operations and update hooks. Classify each UI operation as shared, adapted for browsers or explicitly native-only, and reconcile older CLI/platform assumptions with the current architecture.
+2. Inventory Electron backend handlers/direct service accesses, native-only operations, shutdown/reload paths, scheduler entry points, internal service/client operations and update hooks. Classify each UI operation as shared, adapted for browsers or explicitly native-only. Exclude removed public CLI interfaces and Windows support from compatibility gates.
 3. Classify settings: daemon-owned application configuration versus client presentation, visibility and drafts.
 4. Record baseline workflow, process, startup/reconnect and resource measurements. Record existing native failures separately. Define the browser support matrix, pairing/allowed-root setup and controlling-client handoff journeys before browser implementation.
 
@@ -224,7 +238,7 @@ Update architecture, module instructions and boundary tests together. Backend mo
 
 **Implementation**
 
-1. Reuse/generalize scheduler transport patterns: Unix sockets on macOS/Linux and named pipes on Windows, private endpoint metadata, token authentication and explicit current-user pipe access.
+1. Reuse/generalize scheduler transport patterns: private Unix sockets on macOS/Linux, private endpoint metadata, token authentication and current-user access checks. Windows/named-pipe support is outside this migration.
 2. Add version handshake, daemon-instance/client-session/request IDs, cancellation, operation status and explicit errors. Keep reusable local-IPC credentials/tokens out of the renderer, provider environments and logs; browser authentication follows the separate session design above.
 3. Strictly validate requests in the daemon. Preserve owner/generation/database-epoch/revision checks. Encode native bigint identities as validated decimal strings, not JSON numbers.
 4. Implement the local-IPC `ApplicationClient`. Preserve summary/detail pushes, subscribe-before-read, predecessor revisions and bounded gap recovery. Bound clients, frames, queues, subscriptions and outgoing buffers; page/chunk supported large reads instead of truncating silently.
@@ -235,7 +249,7 @@ Update architecture, module instructions and boundary tests together. Backend mo
 
 **Workable state:** production remains embedded. Development/tests can run Electron and the browser against one foreground gateway child. Its explicit test/development owner stops it at session end; detaching one UI never tears down another client's host. This is not yet the supported browser preview or background-work policy.
 
-**Gate:** run application contract/UI journeys through embedded, local-IPC and HTTP/SSE adapters. Inject lost responses during Send/Accept/Undo, duplicate/conflicting IDs, dropped streams, malformed/oversized frames, slow clients, stale approvals, simultaneous starts and daemon termination. Independently prove no duplicate provider launch, worktree or checkout write. Verify cross-client selection/visibility isolation, tab-bound control transfer, pairing replay/expiry, invalid origins/hosts, unauthorized streams, CSRF, chooser escapes and asset traversal.
+**Gate:** run application contract/UI journeys through embedded, local-IPC and HTTP/SSE adapters. Inject lost responses during Send/Accept/Undo, duplicate/conflicting IDs, dropped streams, malformed/oversized frames, slow clients, stale approvals, simultaneous starts and daemon termination. Independently prove no duplicate provider launch, worktree or checkout write. Verify cross-client selection/visibility isolation, tab-bound control transfer, pairing replay/expiry, invalid origins/hosts, unauthorized streams, CSRF, chooser escapes and asset traversal. Run a second server on another `127.0.0.1` port and exercise navigation, matching paths, forms, fetches, streams and redirects; it must receive no pairing/session credential, and unauthenticated requests with forged Host/Origin must still fail.
 
 **Rollback:** stop and verify gateway/process-tree exit before restarting embedded. Never automatically fall back after IPC failure.
 
@@ -244,7 +258,7 @@ Update architecture, module instructions and boundary tests together. Backend mo
 **Implementation**
 
 1. Parameterize native registration while preserving scheduler identities. Add a distinct gateway login registration and System Manager install/repair/start/stop/uninstall controls with native consent.
-2. Launch the bundled runtime in Node mode. Support macOS, Windows, DEB and AppImage without persisting temporary mount paths; verify native child/job ownership does not belong to Electron.
+2. Launch the bundled runtime in Node mode. Support macOS, Linux DEB and AppImage without persisting temporary mount paths; verify native child/process ownership does not belong to Electron.
 3. Move provider/PATH discovery into the backend environment. Preserve verified executable identities and existing credentials; do not write credentials into service registration or silently substitute providers.
 4. Login starts an idle application host, without prompts, restored live sessions or replayed provider/extraction requests. The standalone scheduler still follows its existing recurrence rules.
 5. Implement update coordination before enabling installed mode: fence new dispatch, safely drain/cancel owners, flush stores, stop both existing services as appropriate, replace binaries, repair consented registration and restart idle. Cleanup failure blocks installation; incompatible versions stay in recovery.
@@ -297,7 +311,8 @@ confirmed Undo journey in each supported browser with Electron absent, then atta
 Electron and verify identical owners, outcomes and one backend PID. Exercise two
 tabs, read-only clients, control transfer during approvals, client-local cleanup,
 lost mutation responses, listener disable/re-enable, pairing/session expiry,
-daemon restart, stale assets and update barriers. Assert real Git/file/process
+daemon restart, refresh/re-pairing, cross-port credential isolation, stale assets
+and update barriers. Assert real Git/file/process
 outcomes and negative authentication/path-boundary cases, not only UI messages.
 
 **Rollback:** disable the loopback listener and revoke browser sessions, leases and
@@ -341,18 +356,18 @@ stateDiagram
 - Use current restart recurrence behavior: advance to future occurrences, preserve claims/history and never catch up occurrences lost during handoff. Make any scheduling gap visible; do not claim seamless or exactly-once transfer.
 - A crash at any step leaves enough evidence for explicit recovery. No participant resumes dispatch solely because a migration marker exists. A supervisor restart must respect an incomplete handoff.
 
-### Service and CLI compatibility
+### Shipped service and desktop compatibility
 
 - Final native state: one gateway registration; the legacy scheduler registration is removed/disabled and cannot be recreated by updated clients.
-- Preserve `code60 automation ...` operations, formats and exit behavior through the automation facade.
-- Retain `code60 scheduler ...` as clearly documented **scheduler-component** controls. Stop/uninstall affects scheduling, not unrelated interactive work; install/repair requiring shared-service installation must explicitly disclose and obtain consent for that broader lifecycle. Preserve the existing response shape with component-appropriate values.
-- Add explicit `code60 gateway status|install|repair|start|stop|uninstall` for whole-service control. Destructive whole-service controls require explicit noninteractive confirmation; stdout remains machine-readable and diagnostics go to stderr.
+- Preserve the shipped Scheduled Jobs/System Manager domain operations, validated renderer requests and internal automation client/service protocol, including response semantics, cancellation and surfaced failures. These are the compatibility baseline, not removed public CLI formats or exit codes.
+- Keep **scheduler-component** controls distinct: pause/stop/disable scheduling must not stop unrelated interactive work. Installation/repair that enrolls the shared service must disclose and obtain consent for that broader lifecycle. Preserve compatible internal response shapes with component-appropriate values.
+- Provide explicit whole-gateway status/install/repair/start/stop/uninstall operations through the consented local management interface. Browser-only setup may use a dedicated local setup/launch helper; it does not reintroduce the removed general-purpose public CLI. Any later public CLI proposal needs its own architecture, command, output/exit and noninteractive-consent design.
 - Replace separate gateway/scheduler updater hooks with one shared-service update barrier that settles **both** components before replacing binaries. Do not double-stop or double-restart the same service.
 - System Manager shows one service with separate application/scheduler health and workload controls. Uninstalling the gateway stops both components while preserving their stores and evidence.
 
 **Workable state:** consenting preview users now have one service hosting both backends; no competing scheduler process. Users not yet migrated retain the supported legacy mode until final cutover.
 
-**Gate:** test new installations, existing running/idle/paused/blocked schedulers, disabled enrollment, simultaneous startup, legacy-owner contention, disconnects and crashes after every handoff step. Verify exact schedule/claim/history preservation, future recurrence, no duplicate scheduled dispatch, no replay and no checkout integration by scheduled workers. Native checks prove old registration removal, one gateway PID, CLI compatibility, login recurrence and shared update/uninstall cleanup.
+**Gate:** test new installations, existing running/idle/paused/blocked schedulers, disabled enrollment, simultaneous startup, legacy-owner contention, disconnects and crashes after every handoff step. Verify exact schedule/claim/history preservation, future recurrence, no duplicate scheduled dispatch, no replay and no checkout integration by scheduled workers. Native checks prove old registration removal, one gateway PID, shipped desktop/internal service contract compatibility, login recurrence and shared update/uninstall cleanup.
 
 **Rollback:** first pause/drain the integrated scheduler, release its lock and verify its agents are gone; explicitly restore the old registration under the saved consent/pause policy. Never restart the old scheduler while the gateway owns that store. If ownership is uncertain, remain blocked and preserve evidence.
 
@@ -368,7 +383,7 @@ stateDiagram
 6. Finalize architecture and module rules. For each earlier capability-affecting phase as well as this one, update `src/contracts/knowledge.ts`, availability rules and tests, then run `npm run generate:capabilities`; do not defer those updates until final cutover. Update QA workflow cards to distinguish UI reconnect from daemon restart and domain Stop all from whole-service shutdown.
 7. Version/release through the normal separate preparation process; do not piggyback on the pending beta.
 
-**Workable state:** one consented login service, with application and scheduler components; Electron and the optional localhost browser share its backend and React application. Either UI can be absent; ordinary headless runs remain independent.
+**Workable state:** one consented login service, with application and scheduler components; Electron and the optional localhost browser share its backend and React application. Either UI can be absent; the internal headless executor retains its existing behavior without a public CLI.
 
 **Gate:** full default-path first-use/upgrade journeys through both clients, check/build, relevant E2E suites and native package/install/update/uninstall validation. Measure cold startup, browser asset delivery, reconnection, stream latency/backpressure, scheduled dispatch under interactive load, memory usage and process cleanup against Phase 0. Address real regressions without loosening correctness or inventing permissive thresholds.
 
@@ -379,7 +394,7 @@ stateDiagram
 - Run `npm run check:instructions` for documentation and instruction changes. Update `ARCHITECTURE.md`, module instructions and `test/boundaries.test.ts` together when changing module rules. Run narrow tests first, then `npm run check` before every commit. Run `npm run build` for changed entry points/build boundaries. Follow the repository’s Linux Node.js 22.12/24 check matrix and release-only native Node.js 24 validation. Model/runtime changes additionally require `npm run prepare:models`, offline smoke and packaged-target checks. Never lower coverage floors or broaden unused-code exclusions to conceal extraction issues.
 - Follow the [repository QA skill](../.factory/skills/qa/SKILL.md). Exercise visible first-use setup → human request → plan/Accept → automatic edits → read-only diff/code attachment → declined and confirmed Undo. Assert intermediate authority and independent filesystem/Git/process outcomes.
 - Add scheduler, memory On/Off/no-backfill, stale-owner, reconnect, permission, low-disk, multi-owner, update and migration-failure journeys. Test final defaults, not just development switches.
-- Run browser journeys against the real Node gateway with isolated stores/Git and fake providers, without Electron; cover the declared browser matrix and then simultaneous native/browser attachment. Add security and slow-client tests for loopback binding, host/origin/CSRF validation, pairing/session isolation, static assets and chooser scope. Record browser-specific PASS/FAIL/BLOCKED separately from desktop results; this documentation revision does not authorize starting either suite.
+- Run browser journeys against the real Node gateway with isolated stores/Git and fake providers, without Electron; cover the declared browser matrix and then simultaneous native/browser attachment. Add security and slow-client tests for loopback binding, host/origin/CSRF validation, pairing/session isolation, cross-port credential disclosure and redirect refusal, static assets and chooser scope. Record browser-specific PASS/FAIL/BLOCKED separately from desktop results; this documentation revision does not authorize starting either suite.
 - Desktop E2E runs locally only through `npm run test:desktop:container`, never `npm run test:desktop` on the host. If Docker is unavailable, report BLOCKED rather than using the host. Current restrictions below prohibit starting a new Docker build for this task. If future container testing is authorized, remove only that session’s containers and built test images afterward, preserve dependency/build caches and host artifacts, and verify cleanup without global prune commands.
 - Record PASS/FAIL/BLOCKED with evidence. Unit checks/test collection alone do not establish E2E success.
 - Restrictions carried forward from the planning session remain in force for this task and must be revisited explicitly before future execution: no new Docker builds, dependency installation, worktrees or host desktop-test fallback. Use suitable authorized CI/native environments; report blocked local validation. Do not install a real login service on this computer without separate permission.
@@ -445,8 +460,10 @@ These are acceptance criteria for the future migration, not completed checks:
   interactive authority, pending approvals or uncertain execution.
 - [ ] Schedules, claims, history, recovery blocks and enrollment policy survive
   tested handoff failures, with no duplicate dispatch and no catch-up/retry.
-- [ ] Headless run behavior and automation output/exit contracts remain compatible;
-  scheduler-component controls cannot unexpectedly stop interactive work.
+- [ ] Internal headless execution, desktop automation operations and internal
+  service/client contracts remain compatible; removed public CLI interfaces are
+  not presumed available or restored. Scheduler-component controls cannot
+  unexpectedly stop interactive work.
 - [ ] Shared updates, restart, uninstall and recovery settle both components,
   preserve data and fail closed on uncertain ownership.
 - [ ] Repository, browser-only and simultaneous-client journeys, and supported
@@ -456,4 +473,4 @@ These are acceptance criteria for the future migration, not completed checks:
 
 ## Intended result
 
-Electron and a localhost browser share one React application and **one Code60 service** for backend state and execution. Either or both UIs can close while approved interactive work, memory and scheduled execution continue. Reopening safely reattaches; new permissions still require a human controlling client. Restart never replays uncertain work. Browser access remains optional, authenticated and loopback-only. The standalone scheduler registration is gone, its schedules/claims/history are preserved, and existing headless run behavior remains intact.
+Electron and a localhost browser share one React application and **one Code60 service** for backend state and execution. Either or both UIs can close while approved interactive work, memory and scheduled execution continue. Reopening safely reattaches after any required browser re-pairing; new permissions still require a human controlling client. Restart never replays uncertain work. Browser access remains optional, authenticated and loopback-only, with no cross-port ambient session credentials. The standalone scheduler registration is gone, its schedules/claims/history and internal execution behavior are preserved, and no removed public CLI or platform support is restored.
