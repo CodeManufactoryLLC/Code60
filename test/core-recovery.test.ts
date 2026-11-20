@@ -100,6 +100,14 @@ describe("ended run recovery", () => {
           sessionState: state,
           setMode: async (change: ModeChange) => {
             changes.push(change);
+            const fake = agents.sessions.find((agent) => agent === session);
+            if (!fake) throw new Error("Missing fake session");
+            const answer = await fake.requestPermission({
+              kind: "execute",
+              title: "Apply default",
+              toolCallId: "mode",
+            });
+            if (answer !== "allow") throw new Error("Permission denied");
             const control = state.settings?.controls[0];
             if (control) control.currentValue = change.value;
           },
@@ -112,7 +120,13 @@ describe("ended run recovery", () => {
       ]);
       try {
         if (method === "restore") await orchestrator.restore("run-1");
-        else await orchestrator.handoff("run-1", "Summary", "Continue", "Fresh session");
+        else {
+          await orchestrator.handoff("run-1", "Summary", "Continue", "Fresh session");
+          const request = orchestrator.runs()[0]?.pending[0];
+          if (!request) throw new Error("Missing handoff option request");
+          expect(agents.sessions[0]?.prompts).toHaveLength(0);
+          expect(orchestrator.answerPermission(request.id, "allow")).toBe(true);
+        }
         await flush();
         expect(changes).toHaveLength(method === "restore" ? 0 : 1);
         expect(agents.sessions[0]?.prompts).toHaveLength(method === "restore" ? 0 : 1);

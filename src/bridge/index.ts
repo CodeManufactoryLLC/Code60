@@ -616,6 +616,7 @@ const objectError = (issue: { code: string }) =>
   issue.code === "unrecognized_keys" ? "Unknown field" : "Expected an object";
 const booleanSchema = z.boolean({ error: "Expected a boolean" });
 const configurationIdSchema = boundedString("configuration ID", 80).pipe(runIdSchema);
+const permissionAnswerSchema = z.enum(["allow", "deny"], { error: "Invalid answer" });
 const permissionIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{0,63}#\d+$/, "Invalid permission ID")
@@ -644,7 +645,7 @@ const orchestrationChatActionSchema = z.discriminatedUnion("type", [
     type: z.literal("permission"),
     id: runIdSchema,
     permissionId: permissionIdSchema,
-    answer: z.enum(["allow", "deny"]),
+    answer: permissionAnswerSchema,
   }),
   z.strictObject({ type: z.literal("save-model-default"), id: runIdSchema }),
   z.strictObject({ type: z.literal("new"), projectId: z.string().uuid().optional() }),
@@ -835,7 +836,7 @@ const actionSchema = z.discriminatedUnion(
       {
         type: z.literal("permission"),
         id: permissionIdSchema,
-        answer: z.enum(["allow", "deny"], { error: "Invalid answer" }),
+        answer: permissionAnswerSchema,
       },
       { error: objectError },
     ),

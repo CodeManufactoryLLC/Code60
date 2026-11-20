@@ -387,7 +387,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "none",
     "human-only",
     "Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.",
-    "When off, choose Allow once or Deny in the requesting conversation.",
+    "When off, choose Allow once or Deny in the requesting conversation. The footer approval count opens a waiting conversation, including archived project chats with a pending request.",
   ),
   feature(
     "providers",

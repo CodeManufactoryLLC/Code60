@@ -1772,6 +1772,9 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await send(JSON.stringify([permission("relay-read")]));
     const review = chat.getByRole("region", { name: "Pending approvals" });
     await expect(review).toContainText("relay-read");
+    await page.locator("#tab-providers").click();
+    await page.locator(".app-footer").getByRole("button", { name: "1 approvals waiting" }).click();
+    await expect(review).toContainText("relay-read");
     await review.getByRole("button", { name: "Deny" }).click();
     await expect(chat.locator(".event.message").last()).toContainText("opt-reject_once");
     await send(

@@ -59,9 +59,9 @@ export function filePreferences(file: string): DesktopPreferences & {
   }
   // Database and appearance writes share one queue so neither can lose the other's changes.
   let pending = Promise.resolve();
-  function update(patch: Record<string, unknown>): Promise<void> {
+  function update(patch: Record<string, unknown>, strict = false): Promise<void> {
     const result = pending.then(async () => {
-      const value = { ...(await load()), ...patch };
+      const value = { ...(await load(strict)), ...patch };
       await privateDirectory(dirname(file));
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
@@ -124,7 +124,7 @@ export function filePreferences(file: string): DesktopPreferences & {
       return value === undefined ? true : parseBoolean(value);
     },
     setOrchestrationAutoApproval(enabled) {
-      return update({ orchestrationAutoApproval: parseBoolean(enabled) });
+      return update({ orchestrationAutoApproval: parseBoolean(enabled) }, true);
     },
     async orchestrationProvider() {
       const value = (await load()).orchestrationProvider;

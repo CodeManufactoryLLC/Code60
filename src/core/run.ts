@@ -375,7 +375,6 @@ export class Run {
       throw new Error(`could not start a fresh agent session: ${message(error)}`);
     }
     await this.installSession(session);
-    await this.applySelections(session);
     this.log("recovery.end", "succeeded");
     this.record.ownerPid = this.deps.ownerPid ?? process.pid;
     delete this.record.endedAt;
@@ -854,6 +853,21 @@ export class Run {
     let failure: unknown;
     let memoryUsed: string[] = [];
     try {
+      // Let the host publish the live handoff before a saved option can wait for human approval.
+      if (preserveInterruptedOnFailure) {
+        const abort = new AbortController();
+        this.preparationAbort = abort;
+        try {
+          await this.applySelections(
+            session,
+            AbortSignal.any([abort.signal, this.startAbort.signal]),
+          );
+        } finally {
+          this.preparationAbort = undefined;
+        }
+        if (this.cancelCause || this.shutdownRequested)
+          return await this.notSent(statusSaved, "Cancelled before this message was sent.", text);
+      }
       if (this.memory) {
         const abort = new AbortController();
         this.preparationAbort = abort;
@@ -1111,6 +1125,13 @@ export class Run {
     timing?: { turn: number; completedAt: string },
   ): Promise<void> {
     if (reason !== undefined) reason = diagnosticText(reason);
+    if (status === "idle") {
+      this.cancelCause = undefined;
+      if (this.pending.size) {
+        this.waitingFromIdle = true;
+        status = "waiting";
+      }
+    }
     this.record.status = status;
     if (reason === undefined) delete this.record.reason;
     else this.record.reason = reason;

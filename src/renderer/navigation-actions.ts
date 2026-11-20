@@ -13,6 +13,10 @@ import type { Current, Settle } from "./navigation-history.js";
 import type { NavigationTarget } from "./navigation-tree.js";
 import type { PageTabs } from "./tabs.js";
 
+function canOpenChat(chat: OrchestrationChat, id: string | null) {
+  return conversationId(chat) === id && (!chat.archived || Boolean(chat.run?.pending.length));
+}
+
 export type NavigationIntent = NavigationTarget | { kind: "new-conversation" };
 
 interface Context {
@@ -124,7 +128,7 @@ export function createNavigationActions(
       false,
       () => {
         if (request.type === "select")
-          return read().chats.some((chat) => conversationId(chat) === request.id && !chat.archived);
+          return read().chats.some((chat) => canOpenChat(chat, request.id));
         if (request.type === "new" && request.projectId)
           return read().projects.some((project) => project.id === request.projectId);
         return true;
@@ -188,7 +192,7 @@ export function createNavigationActions(
           target,
         );
       case "conversation":
-        if (context.chats.some((chat) => !chat.archived && conversationId(chat) === target.id))
+        if (context.chats.some((chat) => canOpenChat(chat, target.id)))
           return chatAction({ type: "select", id: target.id });
         if (!pending && context.runs.some((run) => run.record.id === target.id)) {
           const worker = context.runs.find((run) => run.record.id === target.id);

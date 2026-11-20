@@ -64,7 +64,11 @@ it("persists orchestration approval independently of provider setup and enables 
   );
   await expect(restarted.setOrchestrationAutoApproval(true)).rejects.toThrow("read-only");
   expect(restarted.snapshot().orchestration.allowAll).toBe(false);
-  await fs.writeFile(join(dir, "state", "desktop.json"), '{"orchestrationAutoApproval":"invalid"}');
+  const path = join(dir, "state", "desktop.json");
+  await fs.writeFile(path, "{unfinished");
+  await expect(restarted.setOrchestrationAutoApproval(true)).rejects.toThrow();
+  expect(await fs.readFile(path, "utf8")).toBe("{unfinished");
+  await fs.writeFile(path, '{"orchestrationAutoApproval":"invalid"}');
   await restarted.restore();
   expect(restarted.snapshot().orchestration.allowAll).toBe(false);
   expect(restarted.snapshot().warnings).toContainEqual(

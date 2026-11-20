@@ -601,6 +601,34 @@ describe("permissions", () => {
     await orch.shutdown();
   });
 
+  it("keeps startup permission requests waiting until answered", async () => {
+    const { orch, agents, processes, status } = await setup({ mode: "interactive", prompt: "" });
+    let release!: (value: string) => void;
+    const metadata = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(processes, "commandLine").mockReturnValue(metadata);
+    orch.start();
+    await flush();
+    const session = agents.sessions[0];
+    if (!session) throw new Error("Missing starting session");
+    const decision = session.requestPermission({
+      toolCallId: "start",
+      title: "Inspect",
+      kind: "execute",
+    });
+    release("agent");
+    await flush();
+    const request = orch.runs()[0]?.pending[0];
+    if (!request) throw new Error("Missing startup request");
+    expect(status("r1")).toBe("waiting");
+    expect(() => orch.reply("r1", "next")).toThrow("idle");
+    expect(orch.answerPermission(request.id, "deny")).toBe(true);
+    expect(await decision).toBe("deny");
+    expect(status("r1")).toBe("idle");
+    await orch.shutdown();
+  });
+
   it("returns to idle after an out-of-turn permission and withdraws it on shutdown", async () => {
     const { orch, agents } = await setup({ mode: "interactive", prompt: "" });
     orch.start();
@@ -646,7 +674,7 @@ describe("permissions", () => {
   });
 
   it("cancelling a waiting turn withdraws its permission request", async () => {
-    const { orch, status } = await setup({
+    const { orch, agents, status } = await setup({
       mode: "interactive",
       script: (_t, s) => {
         void s.requestPermission({ toolCallId: "x", title: "t", kind: "execute" });
@@ -660,6 +688,15 @@ describe("permissions", () => {
     await flush();
     expect(orch.runs()[0]?.pending).toEqual([]);
     expect(status("r1")).toBe("idle");
+    const next = agents.sessions[0]?.requestPermission({
+      toolCallId: "next",
+      title: "Inspect",
+      kind: "execute",
+    });
+    const request = orch.runs()[0]?.pending[0];
+    if (!request) throw new Error("Missing idle request after cancellation");
+    expect(orch.answerPermission(request.id, "allow")).toBe(true);
+    expect(await next).toBe("allow");
     await orch.shutdown();
   });
 });

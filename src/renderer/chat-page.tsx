@@ -689,9 +689,9 @@ export function ChatPage({
         {run && (
           <PendingApprovals
             requests={run.pending}
-            busy={busy}
+            key={run.id}
             onAnswer={(permissionId, answer) =>
-              void action({ type: "permission", id: run.id, permissionId, answer })
+              api.orchestrationChatAction({ type: "permission", id: run.id, permissionId, answer })
             }
           />
         )}

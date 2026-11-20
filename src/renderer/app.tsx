@@ -440,7 +440,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
           workerId={workerId}
           busy={busy}
           showPicker={showPicker}
-          openChat={openChat}
+          navigation={navigation}
+          navigationRuns={navigationRuns}
           updates={updates}
           openUpdates={openUpdates}
           onReturn={returnToSplash}

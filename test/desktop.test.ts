@@ -5971,6 +5971,9 @@ describe("orchestrated workers over ACP", {
       const workerRequest = snapshot.runs.find((run) => run.record.id === workerId)?.view
         ?.pending[0];
       if (!chatRequest || !workerRequest) throw new Error("Missing pending permission");
+      await controller.orchestrationChatAction({ type: "archive", id: chat.id });
+      await controller.orchestrationChatAction({ type: "select", id: chat.id });
+      expect(controller.snapshot().chat.run?.pending[0]?.id).toBe(chatRequest.id);
       await expect(
         controller.orchestrationChatAction({
           type: "permission",

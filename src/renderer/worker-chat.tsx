@@ -314,8 +314,7 @@ export function WorkerChat({
         </ScrollArea>
         <PendingApprovals
           requests={runPending}
-          busy={busy}
-          onAnswer={(id, answer) => void act({ type: "permission", id, answer })}
+          onAnswer={(id, answer) => api.action({ type: "permission", id, answer })}
         />
         {inactive ? (
           <Card className="composer composer-inactive" role="status">

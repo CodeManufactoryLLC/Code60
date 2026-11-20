@@ -3517,6 +3517,14 @@ export class DesktopController {
     if (this.relay && !this.workspace)
       return Promise.reject(new Error("Open a project to create or use a project chat."));
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
+    // A provider operation inside exclusive() may itself be waiting for this decision.
+    if (request.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const session = this.conversations.sessions.find((entry) => entry.run?.id === request.id);
+      return session?.chat?.answerPermission(request.permissionId, request.answer)
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
     if (request.type === "save-model-default")
@@ -3539,11 +3547,6 @@ export class DesktopController {
       const run = session?.run;
       if (!session || request.id !== (run?.id ?? null))
         throw new Error("This orchestration chat is no longer current");
-      if (request.type === "permission") {
-        if (!session.chat?.answerPermission(request.permissionId, request.answer))
-          throw new Error("This approval request is no longer pending");
-        return;
-      }
       if (request.type === "undo-request") return this.undoChatRequest(session, request);
       if (request.type === "set-tactic") {
         if (
@@ -3562,7 +3565,7 @@ export class DesktopController {
           throw cause;
         }
       } else if (request.type === "select") {
-        if (session.archived) throw new Error("This chat is archived");
+        if (session.archived && !run?.pending.length) throw new Error("This chat is archived");
         this.conversations.current = session;
         await this.loadChatHistory(session).catch(() => {
           session.chatError =
@@ -5665,6 +5668,15 @@ export class DesktopController {
           );
     if (owner && owner !== this.projectHost.current)
       return this.projectHost.run(owner, () => this.action(action));
+    if (action.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const answered = [...this.batches].some(
+        ([batch, state]) => state.active && batch.answerPermission(action.id, action.answer),
+      );
+      return answered
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
@@ -5676,21 +5688,8 @@ export class DesktopController {
       const orchestrator = [...this.batches.entries()]
         .reverse()
         .find(
-          ([batch, state]) =>
-            state.active &&
-            batch
-              .runs()
-              .some((run) =>
-                action.type === "permission"
-                  ? run.pending.some((permission) => permission.id === action.id)
-                  : run.id === action.id,
-              ),
+          ([batch, state]) => state.active && batch.runs().some((run) => run.id === action.id),
         )?.[0];
-      if (action.type === "permission") {
-        if (!orchestrator?.answerPermission(action.id, action.answer))
-          throw new Error("This approval request is no longer pending");
-        return;
-      }
       if (!this.history.some((run) => run.record.id === action.id))
         throw new Error("Unknown run in this workspace");
       if (action.type === "continue") return this.continueRun(workspace, action.id, action.text);
