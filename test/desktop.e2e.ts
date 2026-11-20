@@ -14222,6 +14222,9 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
         }),
     );
     await expect(page.getByRole("tooltip")).toHaveCount(0);
+    // Escape dismisses the current hover; prove a real pointer re-entry afterward.
+    await page.mouse.move(1, 1);
+    await expect.poll(() => about.evaluate((element) => element.matches(":hover"))).toBe(false);
     await about.hover();
     await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
     // The information button sits inside the row's label without toggling its switch.
@@ -16138,59 +16141,82 @@ test("desktop: incoming message height moves status smoothly and keeps it anchor
             "\n",
           )
         : "Short reply stays below the message.";
+      const gate = join(directory, `release-${overflowing ? "long" : "short"}-reply`);
       await input.fill(
         JSON.stringify([
           { activity: { activityType: "verifying", label: "Checking motion" } },
-          { sleep: 1200 },
+          { waitForFile: gate },
           { message },
           { hang: "cancellable" },
         ]),
       );
       const count = await chat.locator(".event.message").count();
-      const [motion] = await Promise.all([
-        page.evaluate(
-          (previousMessages) =>
-            new Promise<{ before: number; overflow: boolean; rows: number[] }>(
-              (resolve, reject) => {
-                const started = performance.now();
-                let entered: number | undefined;
-                let before: number | undefined;
-                let overflow = false;
-                const rows: number[] = [];
-                const sample = () => {
-                  const chat = document.querySelector(".orchestration-chat-page:not([hidden])");
-                  const status = chat?.querySelector(".activity-display");
-                  const viewport = chat?.querySelector(".transcript");
-                  if (status && viewport) {
-                    const top = status.getBoundingClientRect().top;
-                    if (
-                      (chat?.querySelectorAll(".event.message").length ?? 0) <= previousMessages
-                    ) {
-                      before = top;
-                      overflow = viewport.scrollHeight > viewport.clientHeight + 1;
-                    } else {
-                      entered ??= performance.now();
-                      rows.push(top);
-                      if (performance.now() - entered > 600 && before !== undefined) {
-                        resolve({ before, overflow, rows });
-                        return;
-                      }
+      const prompts = await chat.locator(".event.prompt").count();
+      await input.press("Enter");
+      await expect(chat.locator(".event.prompt")).toHaveCount(prompts + 1);
+      await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+      await expect(chat.locator(".activity-display")).toBeVisible();
+      await expect(chat.locator('.chat-message-layout[data-layout-animating="true"]')).toHaveCount(
+        0,
+      );
+      await expect(chat.locator('.activity-display[data-exiting="true"]')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
+      await expect
+        .poll(() =>
+          chat
+            .locator(".transcript")
+            .evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
+        )
+        .toBeLessThan(2);
+      // Arm the read-only sampler before releasing the external provider boundary.
+      // Reply arrival must not race an assumed delay or the initial prompt's scroll.
+      const sampling = await page.evaluateHandle(
+        (previousMessages) => ({
+          finished: new Promise<{ before: number; overflow: boolean; rows: number[] }>(
+            (resolve, reject) => {
+              const started = performance.now();
+              let entered: number | undefined;
+              let before: number | undefined;
+              let overflow = false;
+              const rows: number[] = [];
+              const sample = () => {
+                const chat = document.querySelector(".orchestration-chat-page:not([hidden])");
+                const status = chat?.querySelector(".activity-display");
+                const viewport = chat?.querySelector(".transcript");
+                if (status && viewport) {
+                  const top = status.getBoundingClientRect().top;
+                  if ((chat?.querySelectorAll(".event.message").length ?? 0) <= previousMessages) {
+                    before = top;
+                    overflow = viewport.scrollHeight > viewport.clientHeight + 1;
+                  } else {
+                    entered ??= performance.now();
+                    rows.push(top);
+                    if (performance.now() - entered > 600 && before !== undefined) {
+                      resolve({ before, overflow, rows });
+                      return;
                     }
                   }
-                  if (performance.now() - started > 6000) {
-                    reject(new Error("Could not sample status movement around the incoming reply"));
-                    return;
-                  }
-                  // Sample after layout observers have synchronized scrolling for the painted frame.
-                  requestAnimationFrame(() => setTimeout(sample, 0));
-                };
-                sample();
-              },
-            ),
-          count,
-        ),
-        input.press("Enter"),
-      ]);
+                }
+                if (performance.now() - started > 6000) {
+                  reject(new Error("Could not sample status movement around the incoming reply"));
+                  return;
+                }
+                // Sample after layout observers have synchronized scrolling for the painted frame.
+                requestAnimationFrame(() => setTimeout(sample, 0));
+              };
+              sample();
+            },
+          ),
+        }),
+        count,
+      );
+      let motion: { before: number; overflow: boolean; rows: number[] };
+      try {
+        await writeFile(gate, "release");
+        motion = await sampling.evaluate(({ finished }) => finished);
+      } finally {
+        await sampling.dispose();
+      }
       expect(motion.overflow).toBe(overflowing);
       if (overflowing) {
         expect(Math.max(...motion.rows.map((top) => Math.abs(top - motion.before)))).toBeLessThan(

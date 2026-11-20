@@ -6,6 +6,7 @@ import { type ElectronApplication, expect, type Page, test } from "@playwright/t
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { nativeSupervisorFixture } from "./fixtures/native-supervisor.js";
+import { recordedAgentPid } from "./fixtures/run-readiness.js";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -154,10 +155,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
           (entry: { status: string }) => entry.status === "running",
         );
         if (!execution?.runId) return 0;
-        const record = JSON.parse(
-          await readFile(join(repo, ".git/code60/runs", execution.runId, "run.json"), "utf8"),
-        );
-        return record.agentPid ?? 0;
+        return recordedAgentPid(join(repo, ".git/code60/runs", execution.runId, "run.json"));
       })
       .toBeGreaterThan(0);
     await page.locator("#panel-automations .automation-more-actions > summary").click();
