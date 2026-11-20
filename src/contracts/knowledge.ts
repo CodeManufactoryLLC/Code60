@@ -380,6 +380,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Saved settings are not live provider health.",
   ),
   feature(
+    "orchestration-permissions",
+    "Code60 auto-approval",
+    "Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.",
+    "Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)",
+    "none",
+    "human-only",
+    "Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.",
+    "When off, choose Allow once or Deny in the requesting conversation. The footer approval count opens a waiting conversation, including archived project chats with a pending request.",
+  ),
+  feature(
     "providers",
     "Providers",
     "Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.",

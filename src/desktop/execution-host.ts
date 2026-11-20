@@ -77,6 +77,7 @@ export class ExecutionHost {
     private readonly deps: CoreDeps,
     private readonly env: Readonly<Record<string, string | undefined>>,
     private readonly hooks: {
+      orchestrationAutoApproval?: () => boolean;
       authorize(owner: ExecutionOwner): void;
       event(worker: ExecutionWorker, event: RunEvent): void;
       changed(targetId?: string): void;
@@ -292,7 +293,7 @@ export class ExecutionHost {
         workspaceMode: request.workspaceMode,
         agents: [request.provider],
         prompt: request.prompt,
-        allowAll: true,
+        orchestrationAutoApproval: this.hooks.orchestrationAutoApproval ?? (() => true),
         owner: "relay",
         initialSettings: (provider) => this.hooks.initialSettings?.(provider),
         ...(base === undefined ? {} : { base }),

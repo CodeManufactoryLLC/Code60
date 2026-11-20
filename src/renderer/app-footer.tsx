@@ -6,7 +6,15 @@ import { UpdateIndicator, type useUpdates } from "./updates.js";
 
 type FooterProps = Pick<
   AppPagesProps,
-  "api" | "state" | "transcripts" | "tabs" | "workerId" | "busy" | "showPicker" | "openChat"
+  | "api"
+  | "state"
+  | "transcripts"
+  | "tabs"
+  | "workerId"
+  | "busy"
+  | "showPicker"
+  | "navigation"
+  | "navigationRuns"
 > & {
   updates: ReturnType<typeof useUpdates>;
   openUpdates(): void;
@@ -20,13 +28,19 @@ export function AppFooter({
   workerId,
   busy,
   showPicker,
-  openChat,
+  navigation,
+  navigationRuns,
   updates,
   openUpdates,
   onReturn,
 }: FooterProps) {
   const snapshot = state?.snapshot;
   const database = snapshot?.database ?? null;
+  const waiting = [
+    ...(snapshot?.chats ?? []).map((chat) => chat.run),
+    ...navigationRuns.map((run) => run.view),
+  ].filter((run) => run != null && run.pending.length > 0);
+  const first = waiting[0];
   return (
     <footer className="app-footer">
       <div className="footer-sidebar">
@@ -64,17 +78,13 @@ export function AppFooter({
         />
       </div>
       <UpdateIndicator state={updates.state} onOpen={openUpdates} />
-      {snapshot?.runs.some((run) => run.view?.pending.length) && (
+      {first && (
         <button
           type="button"
           className="footer-note"
-          onClick={() => {
-            const waiting = snapshot.runs.find((run) => run.view?.pending.length);
-            if (waiting) openChat(waiting.record.id);
-          }}
+          onClick={() => void navigation.open({ kind: "conversation", id: first.id })}
         >
-          {snapshot.runs.reduce((sum, run) => sum + (run.view?.pending.length ?? 0), 0)} approvals
-          waiting
+          {waiting.reduce((sum, run) => sum + (run?.pending.length ?? 0), 0)} approvals waiting
         </button>
       )}
       <div className="app-version" role="note" aria-label="Running Code60 version">

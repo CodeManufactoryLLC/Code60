@@ -462,6 +462,7 @@ export class DesktopController {
     connection: "idle",
     error: null,
   };
+  private readonly orchestrationAutoApproval = () => this.orchestration.allowAll;
   private get memoryExtraction():
     | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
     | undefined {
@@ -1911,6 +1912,7 @@ export class DesktopController {
           dialogs,
           this.memory,
           this.modelDefaults,
+          this.orchestrationAutoApproval,
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -2222,8 +2224,8 @@ export class DesktopController {
           await this.cancelSearchSummary();
           this.chatKey = "";
           this.orchestration = {
+            ...this.orchestration,
             provider: record.primary,
-            allowAll: true,
             connection: "idle",
             error: null,
           };
@@ -2269,12 +2271,22 @@ export class DesktopController {
         this.chatKey = "";
       }
       this.orchestration = {
+        ...this.orchestration,
         provider: record.primary,
-        allowAll: true,
         connection: "idle",
         error: null,
       };
       await this.syncOrchestrationChat();
+      this.changed();
+    });
+  }
+
+  setOrchestrationAutoApproval(enabled: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      if (!this.storage.preferences.setOrchestrationAutoApproval)
+        throw new Error("Orchestration settings cannot be saved");
+      await this.storage.preferences.setOrchestrationAutoApproval(enabled);
+      this.orchestration = { ...this.orchestration, allowAll: enabled };
       this.changed();
     });
   }
@@ -2293,7 +2305,7 @@ export class DesktopController {
       if (!this.storage.preferences.setOrchestrationProvider)
         throw new Error("Orchestration settings cannot be saved");
       await this.storage.preferences.setOrchestrationProvider(provider);
-      this.orchestration = { provider, allowAll: true, connection: "idle", error: null };
+      this.orchestration = { ...this.orchestration, provider, connection: "idle", error: null };
       await this.syncOrchestrationChat();
       this.changed();
     });
@@ -3129,6 +3141,7 @@ export class DesktopController {
         config,
         {
           mcpServers,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(
@@ -3296,6 +3309,7 @@ export class DesktopController {
         this.config,
         {
           recovery: record,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
@@ -3503,6 +3517,14 @@ export class DesktopController {
     if (this.relay && !this.workspace)
       return Promise.reject(new Error("Open a project to create or use a project chat."));
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
+    // A provider operation inside exclusive() may itself be waiting for this decision.
+    if (request.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const session = this.conversations.sessions.find((entry) => entry.run?.id === request.id);
+      return session?.chat?.answerPermission(request.permissionId, request.answer)
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
     if (request.type === "save-model-default")
@@ -3543,7 +3565,7 @@ export class DesktopController {
           throw cause;
         }
       } else if (request.type === "select") {
-        if (session.archived) throw new Error("This chat is archived");
+        if (session.archived && !run?.pending.length) throw new Error("This chat is archived");
         this.conversations.current = session;
         await this.loadChatHistory(session).catch(() => {
           session.chatError =
@@ -4494,10 +4516,19 @@ export class DesktopController {
         );
       }
       try {
+        this.orchestration.allowAll =
+          (await this.storage.preferences.orchestrationAutoApproval?.()) ?? true;
+      } catch {
+        this.orchestration.allowAll = false;
+        this.warnings.push(
+          "Could not read Code60 auto-approval. Permission requests will require review.",
+        );
+      }
+      try {
         this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
           provider: this.agentSetup.record?.primary ?? null,
-          allowAll: true,
+          allowAll: this.orchestration.allowAll,
           connection: "idle",
           error: null,
         };
@@ -5414,10 +5445,10 @@ export class DesktopController {
     });
   }
 
-  /** `register` sees the new run IDs before any of them starts. */
+  /** `registerWorkers` sees the new run IDs before any of them starts. */
   private async startBatch(
     request: StartRequest,
-    register?: (ids: string[], workspace: Workspace) => void,
+    registerWorkers?: (ids: string[], workspace: Workspace) => void,
   ): Promise<string[]> {
     const launchEpoch = this.projectState.launchEpoch;
     await this.requireGitRun();
@@ -5445,6 +5476,7 @@ export class DesktopController {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
         initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
       enabledConfig,
@@ -5469,7 +5501,7 @@ export class DesktopController {
 
     this.history = history;
     this.activateBatch(orchestrator, workspace);
-    register?.(
+    registerWorkers?.(
       orchestrator.runs().map((run) => run.id),
       workspace,
     );
@@ -5636,6 +5668,15 @@ export class DesktopController {
           );
     if (owner && owner !== this.projectHost.current)
       return this.projectHost.run(owner, () => this.action(action));
+    if (action.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const answered = [...this.batches].some(
+        ([batch, state]) => state.active && batch.answerPermission(action.id, action.answer),
+      );
+      return answered
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
@@ -5647,21 +5688,8 @@ export class DesktopController {
       const orchestrator = [...this.batches.entries()]
         .reverse()
         .find(
-          ([batch, state]) =>
-            state.active &&
-            batch
-              .runs()
-              .some((run) =>
-                action.type === "permission"
-                  ? run.pending.some((permission) => permission.id === action.id)
-                  : run.id === action.id,
-              ),
+          ([batch, state]) => state.active && batch.runs().some((run) => run.id === action.id),
         )?.[0];
-      if (action.type === "permission") {
-        if (!orchestrator?.answerPermission(action.id, action.answer))
-          throw new Error("This approval request is no longer pending");
-        return;
-      }
       if (!this.history.some((run) => run.record.id === action.id))
         throw new Error("Unknown run in this workspace");
       if (action.type === "continue") return this.continueRun(workspace, action.id, action.text);
@@ -5725,9 +5753,11 @@ export class DesktopController {
     });
   }
 
-  /** Orchestrated workers keep their fixed allow-all policy through restore and handoff. */
+  /** Orchestrated workers keep their live orchestration approval policy through restore and handoff. */
   private workerOverrides(id: string) {
-    return this.conversations.workers.has(id) ? { allow: [], allowAll: true } : undefined;
+    return this.conversations.workers.has(id)
+      ? { orchestrationAutoApproval: this.orchestrationAutoApproval }
+      : undefined;
   }
 
   private liveBatch(id: string): Orchestrator | undefined {
@@ -6029,7 +6059,7 @@ export class DesktopController {
           {
             agents: [provider],
             allow: [],
-            allowAll: true,
+            allowAll: this.orchestration.allowAll,
             prompt: request.prompt,
             ...(base === undefined ? {} : { base }),
             ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),

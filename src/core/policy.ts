@@ -5,6 +5,8 @@ import { UsageError } from "./types.js";
 export interface PolicyOverrides {
   allow?: readonly ToolKind[];
   allowAll?: boolean;
+  /** Desktop orchestration preference, sampled when each request arrives. */
+  orchestrationAutoApproval?: () => boolean;
 }
 
 /** Decides one permission request. Flags win, then the policy; headless mode turns `ask` into `deny`. */
@@ -14,6 +16,8 @@ export function decide(
   mode: Mode,
   overrides: PolicyOverrides = {},
 ): PermissionRule {
+  if (mode === "interactive" && overrides.orchestrationAutoApproval)
+    return overrides.orchestrationAutoApproval() ? "allow" : "ask";
   if (overrides.allowAll || overrides.allow?.includes(kind)) return "allow";
   const rule = policy[kind] ?? policy.default;
   return rule === "ask" && mode === "headless" ? "deny" : rule;

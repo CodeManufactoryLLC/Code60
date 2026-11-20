@@ -172,7 +172,7 @@ session used for a handoff. No definitions are recovered from run records.
 Only configure servers and providers you trust. Stdio commands run under your
 agent's permissions, not in a Code60 sandbox. The agent owns MCP processes and
 connections; ordinary Code60 agent cleanup and permission policies are unchanged.
-Orchestration chats and their workers retain once-only allow-all behavior.
+Orchestration chats and workers follow Providers → Permissions for each new ACP permission request.
 
 Environment and header values are literal strings, with no `${VARIABLE}`
 expansion. Code60 does not write credentials, manage OAuth or supply a credential

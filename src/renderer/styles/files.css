@@ -274,7 +274,7 @@ button.file-open-link {
       contain: size;
     }
 
-    .worker-chat-page .approvals {
+    .orchestration-chat-body .approvals {
       max-height: min(45dvh, 240px);
     }
   }

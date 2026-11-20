@@ -160,10 +160,12 @@ export class RelayService {
     private readonly memory?: MemoryService,
     private readonly identity?: { id: string; name: string; instructions: string; root: string },
     private readonly modelDefaults?: ModelDefaults,
+    private readonly orchestrationAutoApproval: () => boolean = () => true,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
     this.execution = new ExecutionHost(memory?.attach(deps, "worker") ?? deps, env, {
+      orchestrationAutoApproval,
       authorize: (owner) => this.authorize(owner),
       authorizeTarget: (owner, request, target) => {
         this.plans?.validate(owner, request, target);
@@ -413,6 +415,12 @@ export class RelayService {
       return Promise.reject(
         new Error("Relay workers do not support project-local recovery or review actions."),
       );
+    if (request.type === "permission") {
+      const owned = this.execution.owned(worker.owner, worker.id);
+      return owned.orchestrator.answerPermission(request.id, request.answer)
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     return this.execution.control(worker.owner, worker.id, async (worker) => {
       if (request.type === "reply") {
         this.reviews?.assertWritableTarget(worker.target);
@@ -429,9 +437,6 @@ export class RelayService {
         const run = worker.orchestrator.runs().find((run) => run.id === worker.id);
         if (!run || !this.modelDefaults) throw new Error("Model defaults are unavailable");
         await this.modelDefaults.save(run, "worker");
-      } else if (request.type === "permission") {
-        if (!worker.orchestrator.answerPermission(request.id, request.answer))
-          throw new Error("This approval request is no longer pending");
       } else if (request.type === "stop") await worker.orchestrator.shutdown();
       else if (request.type === "finish") worker.orchestrator.finish(worker.id);
       else if (!worker.orchestrator.cancelTurn(worker.id))
@@ -719,6 +724,7 @@ export class RelayService {
           prompts: DEFAULT_PROMPT_TEMPLATES,
         },
         {
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults?.selections(provider, "orchestrator") ?? [],
           mcpServers: [
             {
@@ -928,6 +934,17 @@ export class RelayService {
     }
   }
   action(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
+    if (request.type === "permission") {
+      const chat = this.chat;
+      if (
+        this.closing ||
+        !chat ||
+        request.id !== chat.runs()[0]?.id ||
+        !chat.answerPermission(request.permissionId, request.answer)
+      )
+        return Promise.reject(new Error("This approval request is no longer pending"));
+      return Promise.resolve(undefined);
+    }
     const result = this.turns.then(async () => {
       if (this.closing) throw new Error("Relay is stopping");
       if (request.type === "restart") return this.connect();

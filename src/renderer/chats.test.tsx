@@ -465,7 +465,7 @@ describe("embedded worker chat", () => {
     expect(html).toContain('class="page-title worker-chat-title"');
     expect(html).toContain('data-icon="app-down-right"');
     expect(html).toContain("Orchestrator worker");
-    expect(html).toContain("Code60 auto-approval: On");
+    expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
     expect(html).toContain('aria-label="Worker composer"');
     expect(html).not.toContain('role="dialog"');
     for (const label of ["Minimize chat", "Close chat", "full screen"])

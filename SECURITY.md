@@ -45,9 +45,12 @@ agent does not submit for approval.
   `think`, and `edit`, and asks for other kinds. Configuration and explicit desktop permission choices can change these decisions.
 - **Scheduled automations:** use the saved explicit allowlist and deny other
   requests. The internal headless executor never prompts.
-- **Orchestration chats and their workers:** Code60 automatically allows
-  permission requests using the agent's supported `allow_once` option. These
-  sessions do not use the manual-run policy to ask you for each action.
+- **Orchestration chats and their workers:** Code60 auto-approval defaults on.
+  Turn it off beside **Harness mode** in the chat or worker composer to review each new ACP request
+  in the originating Relay, custom assistant, project chat or worker. Choose **Allow
+  once** or **Deny**. The setting persists across restarts and applies to live
+  sessions. A request already awaiting review still requires a decision after
+  you turn auto-approval back on.
 - **Once-only decisions:** Code60 chooses the corresponding once-only
   allow/deny option, never an always-allow grant. If no matching once-only
   option exists, the request is answered as cancelled. Once-only does not

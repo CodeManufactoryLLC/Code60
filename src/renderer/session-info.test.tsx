@@ -36,6 +36,7 @@ const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
       editable
       changing={false}
       autoApproval
+      onAutoApprovalChange={async () => {}}
       onMode={() => {}}
       {...overrides}
     />,
@@ -50,7 +51,11 @@ describe("session information", () => {
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('width="20"');
     expect(html).toContain('stroke-dasharray="26.5 100"');
-    expect(html).toContain("Code60 auto-approval: On");
+    expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
+    expect(render({ autoApproval: false, editable: false })).toContain(
+      'aria-label="Code60 auto-approval" aria-pressed="false" data-tooltip=',
+    );
+    expect(render({ onAutoApprovalChange: undefined })).not.toContain('data-slot="toggle"');
     expect(html).toContain('aria-disabled="false"');
     expect(html).not.toContain("<select");
   });

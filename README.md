@@ -149,10 +149,11 @@ execute commands beyond their worktree.
   with context isolation and no Node.js integration. Desktop requests are
   validated in the main process. The local MCP gateway uses authentication
   and scoped worker controls.
-- **Agent permissions:** orchestration chats and their workers automatically
-  approve supported once-only permission requests. Choosing an Ask mode in
-  the provider's harness does not disable Code60 auto-approval. Automation and manual
-  desktop runs use a separate permission policy.
+- **Agent permissions:** orchestration chats and their workers approve once-only
+  permission requests automatically by default. Turn off **Code60 auto-approval** beside **Harness mode** in the
+  chat or worker composer to choose **Allow once** or **Deny** in
+  the requesting chat or worker. This takes effect on the next request, including
+  in live sessions. Manual desktop runs and scheduled automations use their own permission policies.
 - **Local history, external providers:** Code60 stores run records locally,
   with restrictive permissions for newly created record files. Configured
   agents may send prompts, code, and context to their providers. Local storage

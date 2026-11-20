@@ -191,6 +191,22 @@ describe("DesktopKnowledge", () => {
     );
     expect(reads).toEqual([]);
   });
+  it("exposes approval settings as human-only even without a provider or database", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Code60 auto-approval" }, relay),
+    );
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "orchestration-permissions",
+        agentAccess: "human-only",
+        availability: expect.objectContaining({
+          status: "available",
+          action: expect.stringContaining("beside Harness mode"),
+        }),
+      }),
+    );
+  });
   it.each([false, true])(
     "does not infer model switching availability from provider verification: %s",
     async (verified) => {

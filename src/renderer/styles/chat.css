@@ -840,7 +840,7 @@
   flex-shrink: 0;
 }
 
-.worker-chat-page .approvals {
+.orchestration-chat-body .approvals {
   padding-inline: 0;
 }
 
@@ -858,15 +858,31 @@
   max-width: 100%;
 }
 
+.composer-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .mode-trigger {
   min-width: 0;
   max-width: 100%;
   min-height: 36px;
   padding: 4px 12px;
+  gap: 6px;
+}
+
+.composer-model .mode-trigger {
   border: 0;
   background: transparent;
   box-shadow: none;
-  gap: 6px;
+}
+
+/* Permission controls use the button's state colors and saved button typography. */
+.composer-mode :is(.mode-trigger, .neo-dropdown-menu button, .neo-toggle) span {
+  color: inherit;
+  font-size: inherit;
 }
 
 .mode-trigger[aria-disabled="true"] {
@@ -957,7 +973,7 @@
   box-shadow: var(--overlay-shadow);
 }
 
-.session-info .harness-mode-menu button {
+.harness-mode-menu button {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -970,7 +986,7 @@
   overflow-wrap: anywhere;
 }
 
-.session-info .harness-mode-menu button:focus-visible {
+.harness-mode-menu button:focus-visible {
   background: var(--hover-bg);
   outline: 1px solid var(--focus-line);
   outline-offset: -1px;
@@ -1311,7 +1327,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   display: contents;
 }
 
-.worker-chat-page .approvals {
+.orchestration-chat-body .approvals {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 45%;

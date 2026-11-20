@@ -507,7 +507,7 @@
 }
 
 @media (forced-colors: active) {
-  .neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+  .neo-dropdown-menu [role^="menuitem"]:is(:focus, :hover:not(:disabled)) {
     background: Highlight;
     color: HighlightText;
     border-color: HighlightText;

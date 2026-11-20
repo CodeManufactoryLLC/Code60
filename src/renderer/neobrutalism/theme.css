@@ -5,6 +5,7 @@
 @source "./accordion.tsx";
 @source "./dialog.tsx";
 @source "./button.tsx";
+@source "./toggle.tsx";
 @source "./textarea.tsx";
 @source "./breadcrumb.tsx";
 @source "./bubble.tsx";

@@ -515,7 +515,7 @@ label.check-label {
 }
 
 /* Adapted Neobrutalism dropdown popup/items; other anchored menus stay unchanged. */
-.actions-menu.neo-dropdown-menu {
+:is(.actions-menu, .harness-mode-menu).neo-dropdown-menu {
   min-width: 12rem;
   padding: 4px;
   border: 2px solid var(--panel-border);
@@ -523,7 +523,7 @@ label.check-label {
   box-shadow: var(--card-shadow);
 }
 
-.neo-dropdown-menu [role="menuitem"] {
+.neo-dropdown-menu [role^="menuitem"] {
   display: flex;
   padding: 6px 8px;
   border: 2px solid transparent;
@@ -534,13 +534,13 @@ label.check-label {
   --letter-spacing: var(--button-spacing, normal);
 }
 
-.neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+.neo-dropdown-menu [role^="menuitem"]:is(:focus, :hover:not(:disabled)) {
   background: var(--primary);
   color: var(--primary-text);
   border-color: var(--control-border);
 }
 
-.neo-dropdown-menu [role="menuitem"]:focus-visible {
+.neo-dropdown-menu [role^="menuitem"]:focus-visible {
   outline: 2px solid var(--primary-text);
   outline-offset: -4px;
 }

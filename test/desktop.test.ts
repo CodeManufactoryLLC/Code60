@@ -5950,6 +5950,55 @@ describe("orchestrated workers over ACP", {
     expect(chatPrompts()).toHaveLength(2);
   });
 
+  it("reviews live project chat and worker permissions independently across setting changes", async () => {
+    const { call, scope } = await setup();
+    const chat = controller.snapshot().chat.run;
+    const parent = agents.sessions[0];
+    if (!chat || !parent) throw new Error("Missing project chat");
+    await controller.orchestrationChatAction({ type: "send", id: chat.id, text: "HANG chat" });
+    const workerId = await dispatch(call, scope, "HANG worker");
+    await vi.waitFor(() => expect(session(workerId)?.turnActive).toBe(true));
+    const worker = session(workerId);
+    if (!worker) throw new Error("Missing worker");
+    preferences.setOrchestrationAutoApproval = async () => {};
+    try {
+      await controller.setOrchestrationAutoApproval(false);
+      const request = { toolCallId: "inspect", title: "Inspect file", kind: "read" as const };
+      const first = parent.requestPermission(request);
+      const second = worker.requestPermission(request);
+      const snapshot = controller.snapshot();
+      const chatRequest = snapshot.chat.run?.pending[0];
+      const workerRequest = snapshot.runs.find((run) => run.record.id === workerId)?.view
+        ?.pending[0];
+      if (!chatRequest || !workerRequest) throw new Error("Missing pending permission");
+      await controller.orchestrationChatAction({ type: "archive", id: chat.id });
+      await controller.orchestrationChatAction({ type: "select", id: chat.id });
+      expect(controller.snapshot().chat.run?.pending[0]?.id).toBe(chatRequest.id);
+      await expect(
+        controller.orchestrationChatAction({
+          type: "permission",
+          id: chat.id,
+          permissionId: workerRequest.id,
+          answer: "allow",
+        }),
+      ).rejects.toThrow("no longer pending");
+      await controller.setOrchestrationAutoApproval(true);
+      await controller.orchestrationChatAction({
+        type: "permission",
+        id: chat.id,
+        permissionId: chatRequest.id,
+        answer: "deny",
+      });
+      expect(await first).toBe("deny");
+      await controller.action({ type: "permission", id: workerRequest.id, answer: "allow" });
+      expect(await second).toBe("allow");
+      expect(await parent.requestPermission(request)).toBe("allow");
+    } finally {
+      worker.endTurn("end_turn");
+      parent.endTurn("end_turn");
+      delete preferences.setOrchestrationAutoApproval;
+    }
+  });
   it("rejects stale scopes, unknown arguments, manual sessions, and the chat itself", async () => {
     const { call, scope } = await setup();
     const [manual] = await controller.start({ ...request, prompt: "manual" });

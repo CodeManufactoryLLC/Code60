@@ -228,6 +228,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: `code60_read_configurations`, `code60_search_configurations`
 
+## Code60 auto-approval
+
+- ID: `orchestration-permissions`
+- Status: shipped
+- Purpose: Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.
+- Access: Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: When off, choose Allow once or Deny in the requesting conversation. The footer approval count opens a waiting conversation, including archived project chats with a pending request.
+- Limits: Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Providers
 
 - ID: `providers`
