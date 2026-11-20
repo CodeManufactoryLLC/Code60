@@ -13,58 +13,25 @@ export function createChatScroll(
   animate: () => boolean,
   response: () => number = () => defaultTransitionTimes.scrollResponse,
   layoutMoving: () => boolean = () => false,
-  visible: () => boolean = () => true,
 ) {
   let frame: number | undefined;
   let revealFrame: number | undefined;
-  let layoutFrame: number | undefined;
   let previous = 0;
   let remainder = 0;
   let written = element.scrollTop;
   let layoutPending = false;
-  let layoutRevision = 0;
   const geometry = () => `${element.clientWidth}:${element.clientHeight}:${element.scrollHeight}`;
   let measured = geometry();
   const bottom = () => Math.max(0, element.scrollHeight - element.clientHeight);
-  const settleLayout = (): void => {
-    if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
-    layoutFrame = undefined;
-    if (!visible()) layoutPending = false;
-    if (!layoutPending) return;
-    const revisionAtWrite = layoutRevision;
-    const offsetAtWrite = written;
-    const scheduled = requestAnimationFrame(() => {
-      if (layoutFrame !== scheduled) return;
-      layoutFrame = undefined;
-      if (!visible()) layoutPending = false;
-      if (!position.following || !layoutPending) return;
-      if (
-        revisionAtWrite === layoutRevision &&
-        offsetAtWrite === written &&
-        measured === geometry() &&
-        Math.abs(element.scrollTop - written) < 1
-      ) {
-        layoutPending = false;
-      } else {
-        update();
-        if (layoutFrame === undefined) settleLayout();
-      }
-    });
-    layoutFrame = scheduled;
-  };
   const write = (top: number) => {
     element.scrollTop = top;
     written = element.scrollTop;
     position.top = written;
-    // The browser can apply a layout anchor after this write. Verify settlement
-    // in the next rendering step, after its queued scroll events are delivered.
-    settleLayout();
+    layoutPending = false;
   };
   const cancelFollow = () => {
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
-    if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
-    layoutFrame = undefined;
     remainder = 0;
     layoutPending = false;
   };
@@ -92,10 +59,7 @@ export function createChatScroll(
   };
   const update = (immediate = false) => {
     const nextGeometry = geometry();
-    if (measured !== nextGeometry) {
-      layoutPending = true;
-      layoutRevision += 1;
-    }
+    if (measured !== nextGeometry) layoutPending = true;
     measured = nextGeometry;
     if (!position.following) {
       cancelFollow();
@@ -104,19 +68,13 @@ export function createChatScroll(
         write(position.top);
       }
     } else if (immediate || !animate() || response() <= 0 || layoutMoving()) {
-      const pending = layoutPending;
       cancel();
-      layoutPending = pending;
       write(bottom());
     } else if (frame === undefined && Math.abs(bottom() - element.scrollTop) > 1) {
       previous = performance.now();
       remainder = 0;
       frame = requestAnimationFrame(tick);
-    } else if (frame === undefined && layoutPending) {
-      // A resize may already have clamped the viewport to its new bottom.
-      // Adopt that offset so the settlement check can finish without a motion loop.
-      write(bottom());
-    }
+    } else if (frame === undefined) layoutPending = false;
   };
   return {
     update,
@@ -147,7 +105,7 @@ export function createChatScroll(
     onScroll() {
       // Layout changes and our own frames are not user requests to stop following.
       // ResizeObserver can measure before the browser delivers its layout scroll.
-      // Preserve follow until the write settles; explicit input calls pause() first.
+      // Preserve follow until our next write; explicit input calls pause() first.
       if (position.following && (layoutPending || measured !== geometry())) {
         update();
         return;
@@ -156,7 +114,10 @@ export function createChatScroll(
       if (Math.abs(top - written) < 1) return;
       if (revealFrame !== undefined) cancel();
       const down = top > position.top;
-      position.following = bottom() - top < 1 || (down && bottom() - top < 80);
+      // Integer scrollHeight/clientHeight can leave a one-pixel native clamp.
+      // Retain existing follow there; paused readers still need downward movement.
+      position.following =
+        (position.following && bottom() - top <= 1) || (down && bottom() - top < 80);
       position.top = top;
       written = top;
       if (position.following) update();
@@ -187,7 +148,6 @@ export function useChatScroll(active: boolean, key: string) {
       // Height already eases each frame. Applying a second easing would throw the status
       // below the viewport before scrolling caught up with it.
       () => content.current?.querySelector("[data-layout-animating='true']") != null,
-      () => document.visibilityState === "visible",
     );
     controller.current = current;
     // Initial history and returning to a conversation restore without replaying motion.

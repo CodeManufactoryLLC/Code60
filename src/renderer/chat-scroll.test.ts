@@ -13,7 +13,6 @@ function setup(initialResponse = 75) {
   let animated = true;
   let response = initialResponse;
   let layoutMoving = false;
-  let visible = true;
   const frames = new Map<number, FrameRequestCallback>();
   const element = {
     scrollHeight: 1400,
@@ -40,7 +39,6 @@ function setup(initialResponse = 75) {
     () => animated,
     () => response,
     () => layoutMoving,
-    () => visible,
   );
   const advance = (elapsed = 16) => {
     now += elapsed;
@@ -69,13 +67,39 @@ function setup(initialResponse = 75) {
     reduce: () => {
       animated = false;
     },
-    hide: () => {
-      visible = false;
-    },
   };
 }
 
 describe("main-chat smooth following", () => {
+  it.each([
+    { pixels: 1, following: true },
+    { pixels: 2, following: false },
+  ])("handles a $pixels-pixel native scroll offset", ({ pixels, following }) => {
+    const { element, position, controller, finish } = setup();
+    controller.update(true);
+    element.scrollTop -= pixels;
+    controller.onScroll();
+    expect(position.following).toBe(following);
+    element.clientHeight = 300;
+    controller.update();
+    finish();
+    expect(element.scrollTop).toBe(following ? 1100 : 998);
+  });
+
+  it("keeps an explicit one-pixel upward gesture paused at the rounding boundary", () => {
+    const { element, position, controller, frames, advance } = setup();
+    controller.update(true);
+    controller.pause();
+    element.scrollTop -= 1;
+    controller.onScroll();
+    expect(position.following).toBe(false);
+    element.scrollHeight += 100;
+    controller.update();
+    advance();
+    expect(element.scrollTop).toBe(999);
+    expect(frames.size).toBe(0);
+  });
+
   it("keeps status anchored during already-smoothed message growth instead of applying a second lag", () => {
     const { element, controller, position, frames, advance, setLayoutMoving } = setup();
     controller.update(true);
@@ -85,15 +109,10 @@ describe("main-chat smooth following", () => {
     setLayoutMoving(true);
     advance();
     expect(element.scrollTop).toBe(1100);
-    // Settlement only verifies the written offset; it adds no second movement.
-    advance();
-    expect(element.scrollTop).toBe(1100);
     expect(frames.size).toBe(0);
     for (const growth of [1, 8, 25, 60]) {
       element.scrollHeight += growth;
       controller.update();
-      expect(element.scrollHeight - element.clientHeight - element.scrollTop).toBe(0);
-      advance();
       expect(element.scrollHeight - element.clientHeight - element.scrollTop).toBe(0);
       expect(frames.size).toBe(0);
     }
@@ -216,105 +235,6 @@ describe("main-chat smooth following", () => {
     expect(element.scrollTop).toBe(1330);
   });
 
-  it("keeps following when layout anchoring arrives after the first resize animation frame", () => {
-    const { element, position, controller, advance, finish } = setup();
-    controller.update(true);
-    element.clientWidth = 450;
-    element.clientHeight = 250;
-    element.scrollHeight = 1600;
-    controller.update();
-    advance();
-    // A delayed browser anchor restores an older offset after our first write.
-    element.scrollTop = 980;
-    controller.onScroll();
-    expect(position.following).toBe(true);
-    finish();
-    expect(element.scrollTop).toBe(1350);
-    element.scrollTop -= 200;
-    controller.onScroll();
-    expect(position.following).toBe(false);
-  });
-
-  it("cancels layout settlement on upward input and disposal, including queued callbacks", () => {
-    const { element, position, controller, frames, setResponse } = setup();
-    controller.update(true);
-    setResponse(0);
-    element.scrollHeight += 100;
-    controller.update();
-    const paused = [...frames.values()][0];
-    controller.pause();
-    element.scrollTop -= 20;
-    paused?.(16);
-    expect(position.following).toBe(false);
-    expect(element.scrollTop).toBe(1080);
-    expect(frames.size).toBe(0);
-    controller.resume();
-    element.scrollHeight += 100;
-    controller.update();
-    const disposed = [...frames.values()][0];
-    controller.dispose();
-    element.scrollTop = 200;
-    disposed?.(32);
-    expect(element.scrollTop).toBe(200);
-    expect(frames.size).toBe(0);
-  });
-
-  it("settles when a taller viewport already clamped the offset to its new bottom", () => {
-    const { element, position, controller, finish } = setup();
-    controller.update(true);
-    element.clientHeight = 600;
-    element.scrollTop = 800;
-    controller.update();
-    controller.onScroll();
-    finish();
-    expect(position.following).toBe(true);
-    expect(position.top).toBe(800);
-    expect(element.scrollTop).toBe(800);
-  });
-
-  it.each([false, true])(
-    "keeps settlement pending across consecutive resizes (restored geometry: %s)",
-    (restored) => {
-      const { element, position, controller, advance, finish } = setup();
-      controller.update(true);
-      element.clientWidth = 450;
-      element.scrollHeight = 1600;
-      controller.update();
-      advance();
-      element.clientWidth = 400;
-      element.scrollHeight = 1800;
-      controller.update();
-      if (restored) {
-        element.clientWidth = 450;
-        element.scrollHeight = 1600;
-        controller.update();
-      }
-      advance();
-      element.scrollTop = 980;
-      controller.onScroll();
-      expect(position.following).toBe(true);
-      finish();
-      expect(element.scrollTop).toBe(restored ? 1200 : 1400);
-    },
-  );
-
-  it("writes the hidden document position immediately without requeueing settlement", () => {
-    const { element, position, controller, advance, frames, hide } = setup();
-    controller.update(true);
-    element.scrollHeight = 1600;
-    controller.update();
-    advance();
-    const queued = [...frames.values()];
-    hide();
-    controller.update(true);
-    expect(element.scrollTop).toBe(1200);
-    expect(position.following).toBe(true);
-    expect(frames.size).toBe(0);
-    for (const callback of queued) callback(32);
-    expect(frames.size).toBe(0);
-    expect(element.scrollTop).toBe(1200);
-  });
-
   it("upward input cancels an in-flight animation even inside the bottom threshold", () => {
     const { element, position, controller, frames, advance } = setup();
     controller.update(true);
@@ -370,8 +290,6 @@ describe("main-chat smooth following", () => {
     expect(frames.size).toBe(0);
     element.scrollHeight += 400;
     controller.update();
-    expect(element.scrollTop).toBe(1400);
-    advance();
     expect(element.scrollTop).toBe(1400);
     expect(frames.size).toBe(0);
   });

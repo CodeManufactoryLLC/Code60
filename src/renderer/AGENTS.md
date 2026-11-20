@@ -482,12 +482,10 @@
   This presentation change adds no capability, API, setting, schema or migration,
   so the self-knowledge catalog and generated capabilities need no change.
 - Main Chat follows streamed growth with one retargetable scroll animation. Preserve
-  follow across resize-generated scroll events until the written offset settles,
-  including browser anchors delivered after the first write. Cancel settlement on
-  pause, hide, disposal and replacement. Upward input or reading activity details
-  still cancels follow. Pin checks to their layout revision and written offset;
-  restored geometry cannot validate an older check. Hidden documents settle
-  immediately without queueing settlement.
+  follow across resize-generated scroll events between measurement and the next
+  controller write. Upward input or reading activity details still cancels follow.
+  Retain existing follow at a native one-pixel rounding gap; explicit upward input
+  must remain paused there, and downward movement can resume following.
   This fix adds no capability, setting or self-knowledge catalog change.
   Restore history/reading positions
   without animation. Fade/translate new visible assistant messages only once, never
