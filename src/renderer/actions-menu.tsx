@@ -1,6 +1,7 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { menuTypeahead } from "./menu-typeahead.js";
 
 type MenuItem = {
   label: string;
@@ -105,10 +106,7 @@ export function ActionsMenu({
           focusAt(index + (event.key === "ArrowDown" ? 1 : list.length - 1));
         } else if (/^\p{L}$/u.test(event.key) && !event.metaKey && !event.ctrlKey) {
           // Typing a letter jumps to the next item that starts with it.
-          const letter = event.key.toLocaleLowerCase();
-          const next = [...list.slice(index + 1), ...list.slice(0, index + 1)].find((item) =>
-            item.textContent?.trim().toLocaleLowerCase().startsWith(letter),
-          );
+          const next = menuTypeahead(list, index, event.key);
           if (next) {
             event.preventDefault();
             next.focus();

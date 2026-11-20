@@ -406,7 +406,7 @@ before Command Builder in both display and keyboard order. Its Apps home card op
 the same page and remains enabled without a database. The quit dialog explains that
 background automations continue. Apps → System Manager owns the Scheduling Service
 status, install/repair/start/stop/uninstall, resume and recovery controls,
-separate from Scheduled Jobs's schedule and history tables. System Manager
+separate from Scheduled Jobs's schedule accordions and history table. System Manager
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
@@ -1736,10 +1736,38 @@ ownership, never the globally selected project. Relay remains application-owned.
 Secondary section headings, file-panel headings and embedded table history are not
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
-Scheduled Jobs's Schedules and Execution history are bordered table cards with
-one icon-free heading each, using the independent Card Titles role. Only the
-outer Scheduled Jobs heading is a page breadcrumb. Navigation cards keep their
-224px width and 32px gaps when rows wrap rather than stretching remaining columns.
+Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Schedules
+and the Actions dropdown share the top row, with a 16px inset inside the main
+content area. Actions offers the existing New scheduled job and Refresh handlers;
+creation and editing use inline Card/Button/Textarea controls. Execution history
+remains a table, with its own icon-free Card Titles heading. Only the outer
+Scheduled Jobs title is a page breadcrumb.
+
+Each collapsed job header has independent run/cancel, delete and disclosure
+buttons in DOM and visual order. Use 24px transparent circles in 28px targets,
+black outlines, 2px hard shadows, 1px press offsets and contrasting glyphs over
+the blue fill. Paint hover on the full stationary header, without generic press
+scaling. Its 3px inner corners fit the outer 5px radius and 2px border; square
+lower corners while expanded. The noninteractive job heading labels the details
+panel; only the final chevron toggles it. Omit agent/runtime/next-run subtitles;
+append `(Paused)` beside disabled schedules, independently of manual execution.
+Preserve visible keyboard focus, narrow wrapping, reduced motion and system
+fills/outlines without shadows in forced colors.
+
+Run starts one turn. The live pause glyph retains the Stop label and cancels
+that run; its pulse is static for reduced motion/forced colors. The service list
+adds optional ephemeral live ownership, independently of recurrence and history
+paging. Older services without that field require a restart before run controls
+are available. Never persist it or infer it from unfinished history. Expanded
+jobs load their saved prompt, schedule, next run, repository, agent, branch,
+timeout and permissions. Enable/pause remains a separate recurrence action.
+Native delete confirmation, active-run refusal, revision checks and retained
+evidence remain authoritative. Update the capability catalog for this workflow;
+its presentation refinements introduce no additional capability, setting,
+bridge method or stored format.
+
+Navigation cards keep their 224px width and 32px gaps when rows wrap rather than
+stretching remaining columns.
 Projects and individual project homes prepend New Project and New Session creation
 cards instead of page-header plus buttons. Each is a keyboard-native card with
 the same width and corners as normal cards, a thick dashed border, no gradient

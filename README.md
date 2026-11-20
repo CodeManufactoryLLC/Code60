@@ -102,7 +102,18 @@ without creating long-term memories. See [memory behavior and validation](docs/m
 
 Open **Apps → Scheduled Jobs** to save one agent, prompt, isolated Git repository
 and explicit tool permissions on an interval, daily or weekly schedule.
-Open **Apps → System Manager** to install and manage the background service,
+Each job has an expandable details card. Use its **play** button to run once;
+while it runs, the button shows a pulsating **pause** icon; its **Stop** action cancels
+that run. The ordered circular controls are play/stop, delete and expand/collapse.
+Disabled schedules show **(Paused)** beside their name.
+Both run/stop and **×** (delete) remain available when details are closed.
+Deletion requires confirmation and active work must stop first; run evidence stays.
+Expand a job to inspect its prompt and settings, enable/pause its schedule, or edit
+it inline. **Actions → New scheduled job** opens an inline editor; **Actions → Refresh**
+reloads the saved jobs and history. Execution history stays
+below the job list. Reduced motion keeps the stop icon static.
+
+Open **Apps → System Manager** to install and manage the Scheduling Service,
 with native confirmation, to keep scheduling after Code60 quits.
 The computer must stay awake and the user logged in. Missed occurrences are skipped,
 not replayed, and an agent finishing a turn is not proof the task succeeded.

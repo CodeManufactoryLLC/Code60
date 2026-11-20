@@ -69,19 +69,21 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       supervisor.environment,
     );
     const page = await application.firstWindow();
-    return page;
+    return { page, instance: application };
   };
   const automations = async (page: Page) => {
     await page.locator("#tab-apps").press("ArrowRight");
     await page.locator("#tab-automations").click();
     await expect(page.locator("#panel-automations")).toBeVisible();
   };
-  const selectSchedule = async (page: Page) => {
-    const canvas = page.locator(".automation-schedules-grid").getByTestId("data-grid-canvas");
-    const box = await canvas.boundingBox();
-    if (!box) throw new Error("Missing schedule grid");
-    await page.mouse.click(box.x + 100, box.y + 44);
-    await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeVisible();
+  const job = (page: Page) =>
+    page
+      .locator(".automation-job")
+      .filter({ has: page.getByRole("button", { name: "Run Retained scheduler", exact: true }) });
+  const expandJob = async (page: Page) => {
+    const trigger = page.locator('[data-slot="accordion-trigger"]').first();
+    if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+    await expect(page.locator(".automation-job-details")).toBeVisible();
   };
   try {
     await expect.poll(async () => (await saved().catch(() => null))?.format).toBe(1);
@@ -94,15 +96,16 @@ test("workflow: desktop automation survives app quit, retains history and cancel
         return JSON.parse(endpoint)?.v;
       })
       .toBe(1);
-    let page = await launch();
+    let { page } = await launch();
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
-    await page.getByRole("button", { name: "New scheduled job", exact: true }).click();
-    const editor = page.getByRole("dialog", { name: "New scheduled job", exact: true });
+    await page.getByRole("button", { name: "Actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New scheduled job", exact: true }).click();
+    const editor = page.getByRole("region", { name: "New scheduled job", exact: true });
     await editor.getByLabel("Name", { exact: true }).fill("Retained scheduler");
     await editor.getByLabel("Local base branch", { exact: true }).fill("main");
     await editor
@@ -115,14 +118,119 @@ test("workflow: desktop automation survives app quit, retains history and cancel
         ]),
       );
     await editor.getByRole("button", { name: "Choose repository", exact: true }).click();
-    await editor.getByRole("button", { name: "Save automation", exact: true }).click();
+    await editor.getByRole("button", { name: "Create job", exact: true }).click();
     await expect(editor).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Actions", exact: true })).toBeFocused();
     expect((await saved()).automations).toHaveLength(1);
     expect((await saved()).automations[0].enabled).toBe(false);
     expect((await saved()).executions).toHaveLength(0);
-    await selectSchedule(page);
-    await page.getByRole("button", { name: "Run now", exact: true }).click();
+    await expect(page.locator('[data-slot="accordion-trigger"]')).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(
+      job(page).getByRole("button", { name: "Delete Retained scheduler" }),
+    ).toBeVisible();
+    for (const scheme of ["light", "dark"]) {
+      await page.evaluate(
+        (value) => document.documentElement.setAttribute("data-color-scheme", value),
+        scheme,
+      );
+      const trigger = job(page).locator('[data-slot="accordion-trigger"]');
+      const controls = job(page).locator(".automation-job-controls");
+      await expect(job(page).locator(".automation-job-name")).toHaveText(
+        "Retained scheduler (Paused)",
+      );
+      await expect(job(page).locator(".automation-job-meta")).toHaveCount(0);
+      await expect(job(page)).toHaveCSS("border-top-left-radius", "5px");
+      await expect(job(page).locator(".automation-job-header")).toHaveCSS(
+        "border-top-left-radius",
+        "3px",
+      );
+      await expect(job(page).locator(".automation-job-header")).toHaveCSS(
+        "border-bottom-left-radius",
+        "3px",
+      );
+      await expect(controls.locator("button")).toHaveCount(3);
+      await expect(controls.locator("button").nth(0)).toHaveAccessibleName(
+        "Run Retained scheduler",
+      );
+      await expect(controls.locator("button").nth(1)).toHaveAccessibleName(
+        "Delete Retained scheduler",
+      );
+      await expect(controls.locator("button").nth(2)).toHaveAccessibleName(
+        "Expand Retained scheduler",
+      );
+      await controls.locator("button").nth(0).focus();
+      await page.keyboard.press("Tab");
+      await expect(controls.locator("button").nth(1)).toBeFocused();
+      await expect(
+        controls.locator("button").nth(1).locator(".automation-header-circle"),
+      ).toHaveCSS("outline-style", "solid");
+      await page.keyboard.press("Tab");
+      await expect(trigger).toBeFocused();
+      for (const circle of await controls
+        .locator(".automation-header-circle, .neo-accordion-indicator")
+        .all()) {
+        await expect(circle).toHaveCSS("border-radius", "50%");
+        await expect(circle).toHaveCSS("border-top-color", "rgb(0, 0, 0)");
+        await expect(circle).toHaveCSS("width", "24px");
+        await expect(circle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      }
+      await job(page).locator("h3").click();
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      await trigger.hover();
+      const bounds = await trigger.boundingBox();
+      const header = job(page).locator(".automation-job-header");
+      const fill = await header.evaluate((element) => getComputedStyle(element).backgroundColor);
+      await expect(trigger).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await header.screenshot({ path: test.info().outputPath(`job-header-hover-${scheme}.png`) });
+      await page.mouse.down();
+      await expect(trigger).toHaveCSS("scale", "none");
+      expect(await trigger.boundingBox()).toEqual(bounds);
+      await expect(header.locator(".automation-job-name")).toBeVisible();
+      await expect(header.locator(".automation-job-name")).toHaveCSS("color", "rgb(255, 255, 255)");
+      await page.screenshot({ path: test.info().outputPath(`job-header-held-${scheme}.png`) });
+      await page.mouse.up();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      await expect(job(page).locator(".automation-job-details")).toBeVisible();
+      await expect(header).toHaveCSS("border-bottom-left-radius", "0px");
+      await expect(header).toHaveCSS("border-top-left-radius", "3px");
+      await trigger.click();
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      await job(page).getByRole("button", { name: "Delete Retained scheduler" }).hover();
+      await expect(header).toHaveCSS("background-color", fill);
+      await expect(trigger).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(controls.locator(".automation-header-circle").nth(1)).toHaveCSS(
+        "background-color",
+        "rgba(0, 0, 0, 0)",
+      );
+    }
+    await page.getByRole("button", { name: "Run Retained scheduler", exact: true }).click();
     await expect.poll(async () => (await saved()).executions[0]?.status).toBe("running");
+    await expect(
+      page.getByRole("button", { name: "Stop Retained scheduler", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Delete Retained scheduler" })).toBeDisabled();
+    for (const button of await page.locator(".automation-job-controls > button").all()) {
+      await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    }
+    const stopIcon = page.getByRole("button", { name: "Stop Retained scheduler" }).locator("svg");
+    await expect(stopIcon).toHaveCSS("animation-name", "automation-stop-pulse");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(stopIcon).toHaveCSS("animation-name", "none");
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+    await expect(stopIcon).toHaveCSS("animation-name", "none");
+    for (const circle of await page
+      .locator(".automation-header-circle, .neo-accordion-indicator")
+      .all()) {
+      await expect(circle).toHaveCSS("box-shadow", "none");
+    }
+    for (const button of await page.locator(".automation-job-controls > button").all()) {
+      await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    }
+    await page.screenshot({ path: test.info().outputPath("job-circles-forced-colors.png") });
+    await page.emulateMedia({ forcedColors: "none" });
     const first = (await saved()).executions[0];
     // Desktop exit cannot terminate the independent service or its work.
     await application?.close();
@@ -131,15 +239,68 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     expect((await saved()).executions[0].status).toBe("running");
     await writeFile(gate, "release");
     await expect.poll(async () => (await saved()).executions[0]?.status).toBe("finished");
-    page = await launch();
+    const reopened = await launch();
+    page = reopened.page;
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
     await expect(page.locator(".automation-history-grid")).toContainText("finished");
     expect((await saved()).executions).toHaveLength(1);
     expect((await saved()).executions[0].id).toBe(first.id);
     await unlink(gate);
-    await selectSchedule(page);
-    await page.getByRole("button", { name: "Run now", exact: true }).click();
+    await expandJob(page);
+    await expect(page.locator(".automation-job-details")).toContainText("main");
+    await expect(page.locator(".automation-prompt-text")).toHaveCSS("scrollbar-gutter", "stable");
+    await expect(page.locator('[data-slot="accordion-trigger"] .carbon-icon')).toHaveCSS(
+      "rotate",
+      "0deg",
+    );
+    await reopened.instance.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(760, 650),
+    );
+    expect(
+      await page
+        .locator(".automation-job")
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(false);
+    await expect
+      .poll(() =>
+        page
+          .locator(".automation-job-facts")
+          .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length),
+      )
+      .toBe(1);
+    await page.screenshot({ path: test.info().outputPath("job-details-narrow.png") });
+    await reopened.instance.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1280, 860),
+    );
+    await page.screenshot({ path: test.info().outputPath("job-details-light.png") });
+    await page
+      .locator("html")
+      .evaluate((element) => element.setAttribute("data-color-scheme", "dark"));
+    await page.screenshot({ path: test.info().outputPath("job-details-dark.png") });
+    await page
+      .locator("html")
+      .evaluate((element) => element.setAttribute("data-color-scheme", "light"));
+    await page.getByRole("button", { name: "Enable schedule", exact: true }).click();
+    await expect.poll(async () => (await saved()).automations[0].enabled).toBe(true);
+    await page.getByRole("button", { name: "Pause schedule", exact: true }).click();
+    await expect.poll(async () => (await saved()).automations[0].enabled).toBe(false);
+    await page.getByRole("button", { name: "Edit job", exact: true }).click();
+    const edit = page.getByRole("region", { name: "Edit scheduled job", exact: true });
+    await expect(edit.getByLabel("Name", { exact: true })).toBeFocused();
+    await expect(edit.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await edit.getByLabel("Turn timeout", { exact: true }).fill("2m");
+    await edit.getByRole("button", { name: "Save changes" }).click();
+    await expect(edit).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Collapse Retained scheduler", exact: true }),
+    ).toBeFocused();
+    await expect.poll(async () => (await saved()).automations[0].turnTimeout).toBe("2m");
+    const trigger = page.locator('[data-slot="accordion-trigger"]').first();
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: "Run Retained scheduler", exact: true }).click();
     await expect
       .poll(
         async () =>
@@ -158,8 +319,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
         return recordedAgentPid(join(repo, ".git/code60/runs", execution.runId, "run.json"));
       })
       .toBeGreaterThan(0);
-    await page.locator("#panel-automations .automation-more-actions > summary").click();
-    await page.getByRole("button", { name: "Cancel active run", exact: true }).click();
+    await page.getByRole("button", { name: "Stop Retained scheduler", exact: true }).click();
     await expect
       .poll(
         async () =>
@@ -196,7 +356,32 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     expect(await readFile(join(repo, ".git/index"))).toEqual(before.index);
     expect(git("rev-parse", "HEAD")).toBe(before.head);
     expect(git("worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(3);
+    await expect(
+      page.getByRole("button", { name: "Run Retained scheduler", exact: true }),
+    ).toBeVisible();
+    await reopened.instance.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await page.getByRole("button", { name: "Delete Retained scheduler" }).click();
+    await expect(page.getByRole("button", { name: "Delete Retained scheduler" })).toBeEnabled();
+    expect((await saved()).automations).toHaveLength(1);
+    await reopened.instance.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (options) => {
+        if (!("message" in options) || options.message !== "Delete automation?")
+          throw new Error("Unexpected confirmation");
+        return { response: 1, checkboxChecked: false };
+      };
+    });
+    await page.getByRole("button", { name: "Delete Retained scheduler" }).click();
+    await expect(page.locator(".automation-job")).toHaveCount(0);
+    expect((await saved()).automations).toHaveLength(0);
+    expect((await saved()).executions).toHaveLength(2);
   } finally {
+    await application
+      ?.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+      })
+      .catch(() => {});
     await application?.close();
     service.kill("SIGTERM");
     try {

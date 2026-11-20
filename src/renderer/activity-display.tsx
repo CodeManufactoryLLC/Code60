@@ -4,6 +4,7 @@ import { durationText } from "./chat-presentation.js";
 import { Icon, type IconName } from "./icons.js";
 import { useTicker } from "./ticker.js";
 import { useTransitionTimes } from "./transition-times.js";
+import { useDocumentVisible } from "./use-document-visible.js";
 
 /** Presentation is local: the MCP vocabulary never contains these choices. */
 const visuals: Partial<Record<ActivityState, IconName>> = {
@@ -120,9 +121,7 @@ export function ActivityDisplay({
   const previousFade = useRef(activityFade);
   const [displayed, setDisplayed] = useState(target);
   const [exiting, setExiting] = useState(false);
-  const [documentVisible, setDocumentVisible] = useState(
-    () => typeof document === "undefined" || !document.hidden,
-  );
+  const documentVisible = useDocumentVisible();
   const [reducedMotion, setReducedMotion] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -174,10 +173,7 @@ export function ActivityDisplay({
     }
   }, [signature, immediate, displayed?.state, activityFade]);
   useEffect(() => {
-    const visibility = () => setDocumentVisible(!document.hidden);
-    document.addEventListener("visibilitychange", visibility);
     return () => {
-      document.removeEventListener("visibilitychange", visibility);
       if (timer.current !== undefined) clearTimeout(timer.current);
     };
   }, []);

@@ -505,3 +505,32 @@
     outline: 2px solid Highlight;
   }
 }
+
+@media (forced-colors: active) {
+  .neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+    background: Highlight;
+    color: HighlightText;
+    border-color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .automation-job-header:hover {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .automation-job-header:hover .neo-accordion-trigger {
+    background: transparent;
+    color: inherit;
+  }
+  .automation-job-controls > button,
+  .automation-job-controls > button:active:enabled {
+    background: transparent;
+    color: inherit;
+    border: 0;
+    box-shadow: none;
+    forced-color-adjust: none;
+  }
+  .automation-job-controls > button:focus-visible {
+    outline: none;
+  }
+}

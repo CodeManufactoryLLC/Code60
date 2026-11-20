@@ -9,3 +9,7 @@ size. Its circles are represented as equivalent paths for the shared SVG and can
 Overflow Menu Horizontal uses the 16px artboard with its circles represented as equivalent paths.
 Database uses the official data--base 32px artboard with its circles represented as equivalent paths.
 Arrow Left uses the official 16px artboard with its polygon represented as an equivalent path.
+
+Play uses the official 16px Carbon play.svg geometry, retrieved 2026-11-20 from
+https://github.com/carbon-design-system/carbon/blob/main/packages/icons/src/svg/16/play.svg
+It is the outline triangle, without the Play Filled circle behind it.
