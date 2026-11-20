@@ -1976,7 +1976,10 @@ fade the image and label out together over 175 ms by default, then fade in the l
 The row expands from zero height when opened and shrinks to zero height while fading
 to idle before removal. A content resize observer follows the changing transcript
 height only if the user is already following its bottom; reading older messages
-does not get pulled to the activity row. Main Chat uses one frame-driven, retargetable
+does not get pulled to the activity row. Preserve follow across resize-generated scroll
+events between measurement and the next controller write; upward input still cancels immediately.
+This existing-behavior fix adds no capability or self-knowledge catalog change.
+Main Chat uses one frame-driven, retargetable
 scroll animation for incoming content, not repeated bottom jumps or restarted native
 smooth scrolls. Upward input cancels it immediately. Initial history and returning
 to a conversation restore instantly; hidden views and reduced motion skip scrolling
