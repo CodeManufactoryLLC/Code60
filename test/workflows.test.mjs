@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -62,7 +63,7 @@ describe("branch protection policy", () => {
     expect(ci.on.pull_request).toBeNull();
     expect(ci.on.push).toEqual({ branches: ["main"] });
     expect(ci.jobs.passed.if).toBe("always()");
-    expect(ci.jobs.passed.needs).toEqual(["check", "desktop"]);
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop", "installers"]);
   });
 });
 
@@ -124,7 +125,6 @@ describe("CI and release gates", () => {
     expect(nativeTests.permissions).toEqual({ contents: "read" });
     expect(Object.keys(nativeTests.jobs)).toEqual(["test"]);
     const job = nativeTests.jobs.test;
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
     expect(job["runs-on"]).toBe("macos-15");
     expect(job.steps.find((step) => step.uses?.startsWith("actions/checkout@")).with).toEqual({
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
@@ -207,18 +207,110 @@ describe("CI and release gates", () => {
   });
   it("checks only Linux without signing secrets or publication rights", () => {
     expect(ci.permissions).toEqual({ contents: "read" });
-    expect(Object.keys(ci.jobs).sort()).toEqual(["check", "desktop", "passed"]);
+    expect(Object.keys(ci.jobs).sort()).toEqual(["check", "desktop", "installers", "passed"]);
     for (const job of Object.values(ci.jobs)) expect(job["runs-on"]).toBe("ubuntu-24.04");
     expect(JSON.stringify(ci)).not.toContain("secrets.");
     expect(ci.jobs.check.strategy.matrix.node).toEqual(["22.12", "24"]);
     expect(ci.jobs.passed.name).toBe("CI passed");
     expect(ci.jobs.passed.if).toBe("always()");
-    expect(ci.jobs.passed.needs).toEqual(["check", "desktop"]);
-    expect(Object.keys(ci.jobs.passed.steps[0].env).sort()).toEqual(["CHECK", "DESKTOP"]);
+    expect(ci.jobs.passed.needs).toEqual(["check", "desktop", "installers"]);
+    expect(ci.jobs.passed.steps[0].env).toEqual({
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      CHECK: "${{ needs.check.result }}",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      DESKTOP: "${{ needs.desktop.result }}",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+      INSTALLERS: "${{ needs.installers.result }}",
+    });
     expect(ci.jobs.passed.steps[0].run).toBe(
-      'test "$CHECK" = success && test "$DESKTOP" = success',
+      'test "$CHECK" = success && test "$DESKTOP" = success && test "$INSTALLERS" = success',
     );
   });
+  it("runs all three desktop shards and installers independently of both Node checks", () => {
+    for (const name of ["check", "desktop", "installers"]) {
+      const job = ci.jobs[name];
+      expect(job.needs).toBeUndefined();
+      expect(job.if).toBeUndefined();
+      expect(job["continue-on-error"]).toBeUndefined();
+      for (const step of job.steps) expect(step["continue-on-error"]).toBeUndefined();
+    }
+    expect(ci.jobs.desktop.strategy).toEqual({
+      "fail-fast": false,
+      matrix: { shard: [1, 2, 3] },
+    });
+    const desktop = ci.jobs.desktop.steps.find((step) => step.name === "Desktop tests");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+    expect(desktop.env).toEqual({ SHARD: "${{ matrix.shard }}" });
+    expect(desktop.if).toBeUndefined();
+    expect(desktop.run).toBe(
+      'xvfb-run -a npm run test:desktop -- --fully-parallel --workers=1 --shard="$SHARD/3"',
+    );
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression, not JavaScript.
+    const desktopArtifact = "linux-desktop-${{ matrix.shard }}-failure";
+    for (const name of ["desktop", "installers"]) {
+      const job = ci.jobs[name];
+      expect(job["timeout-minutes"]).toBe(30);
+      expect(
+        job.steps.find((step) => step.uses?.startsWith("actions/setup-node@")).with,
+      ).toMatchObject({ "node-version": "24" });
+      expect(job.steps.some((step) => step.uses === "./.github/actions/setup-linux-desktop")).toBe(
+        true,
+      );
+      expect(job.steps.filter((step) => step.run).map((step) => step.run)).toEqual([
+        "npm ci",
+        "node scripts/install-electron.mjs",
+        "npm run prepare:models",
+        ...(name === "desktop"
+          ? [desktop.run]
+          : ["npm run package:linux", "xvfb-run -a npm run test:installers"]),
+      ]);
+      const artifact = job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
+      expect(artifact.if).toBe("failure()");
+      expect(artifact.with).toEqual({
+        name: name === "desktop" ? desktopArtifact : "linux-installers-failure",
+        path: "test-results/",
+        "retention-days": 7,
+        "if-no-files-found": "ignore",
+      });
+    }
+  });
+  it("retains complete checks, coverage gates and offline model validation on both Node versions", () => {
+    expect(ci.jobs.check.strategy.matrix.node).toEqual(["22.12", "24"]);
+    expect(ci.jobs.check.steps.filter((step) => step.run).map((step) => step.run)).toEqual([
+      "npm ci",
+      "npm run check",
+      "npm run build",
+      "npm run prepare:models",
+      "node scripts/test-rag-model.mjs",
+    ]);
+    for (const step of ci.jobs.check.steps.filter((step) => step.run))
+      expect(step.if).toBeUndefined();
+    expect(packageJson.scripts.check).toBe(
+      "npm run check:instructions && npm run typecheck && npm run lint && npm run check:unused && npm run test:coverage",
+    );
+    expect(packageJson.scripts["test:coverage"]).toBe(
+      "vitest run --coverage && node scripts/check-coverage.mjs",
+    );
+  });
+  it.each(["CHECK", "DESKTOP", "INSTALLERS"])(
+    "fails the aggregate when %s fails, is cancelled or is skipped",
+    (dependency) => {
+      for (const result of ["success", "failure", "cancelled", "skipped"]) {
+        const execution = spawnSync("sh", ["-c", ci.jobs.passed.steps[0].run], {
+          env: {
+            ...process.env,
+            CHECK: "success",
+            DESKTOP: "success",
+            INSTALLERS: "success",
+            [dependency]: result,
+          },
+          timeout: 3_000,
+        });
+        expect(execution.error).toBeUndefined();
+        expect(execution.status).toBe(result === "success" ? 0 : 1);
+      }
+    },
+  );
   it("requires an explicit dispatch on main, then Linux checks before parallel installer jobs", () => {
     expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
