@@ -1104,6 +1104,11 @@ expand commands.
 
 ## Desktop app
 
+Shared desktop tooltips ignore delayed scroll notifications whose ancestor positions
+already match those captured at hover/focus. Actual movement still dismisses them;
+Escape and pending-reveal cleanup remain independent. This reliability correction
+adds no capability, bridge method, setting, persisted schema or self-knowledge entry.
+
 ### Renderer ownership and composition
 
 `main.tsx` only loads assets, runs existing preference migrations and mounts the

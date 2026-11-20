@@ -14225,46 +14225,12 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     // Escape dismisses the current hover; prove a real pointer re-entry afterward.
     await page.mouse.move(1, 1);
     await expect.poll(() => about.evaluate((element) => element.matches(":hover"))).toBe(false);
-    const observation = await about.evaluateHandle((element) => {
-      const events: unknown[] = [];
-      const targetLabel = (target: EventTarget | null) =>
-        target instanceof Element ? `${target.tagName}.${target.getAttribute("class")}` : null;
-      const record = (event: Event) => {
-        if (events.length >= 100) return;
-        events.push({
-          type: event.type,
-          target: targetLabel(event.target),
-          related:
-            "relatedTarget" in event ? targetLabel(event.relatedTarget as EventTarget) : null,
-          buttons: "buttons" in event ? event.buttons : null,
-          time: performance.now(),
-          hovered: element.matches(":hover"),
-          focused: document.activeElement === element,
-          visibility: document.visibilityState,
-          bounds: element.getBoundingClientRect().toJSON(),
-          tooltip: document.querySelector('[role="tooltip"]')?.textContent,
-        });
-      };
-      const types = ["pointerover", "pointerout", "focusin", "focusout", "scroll", "resize"];
-      for (const type of types) window.addEventListener(type, record, true);
-      return {
-        events,
-        dispose() {
-          for (const type of types) window.removeEventListener(type, record, true);
-        },
-      };
+    await about.hover();
+    // A queued automatic-scroll notification at the same position must not cancel hover.
+    await page.locator(".settings-page").evaluate((element) => {
+      element.dispatchEvent(new Event("scroll"));
     });
-    try {
-      await about.hover();
-      await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
-    } finally {
-      await test.info().attach("tooltip-event-observation", {
-        body: JSON.stringify(await observation.evaluate(({ events }) => events), null, 2),
-        contentType: "application/json",
-      });
-      await observation.evaluate(({ dispose }) => dispose());
-      await observation.dispose();
-    }
+    await expect(page.getByRole("tooltip")).toHaveText(/^Adds color to status labels/);
     // The information button sits inside the row's label without toggling its switch.
     await about.click();
     await expect(signals).not.toBeChecked();

@@ -10,6 +10,13 @@ export async function recordedAgentPid(path: string): Promise<number> {
     throw error;
   }
   const record: unknown = JSON.parse(text);
-  const pid = record && typeof record === "object" && "agentPid" in record ? record.agentPid : 0;
-  return typeof pid === "number" && Number.isSafeInteger(pid) && pid > 0 ? pid : 0;
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new Error("Invalid run record");
+  }
+  if (!("agentPid" in record)) return 0;
+  const pid = record.agentPid;
+  if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error("Invalid agentPid in run record");
+  }
+  return pid;
 }

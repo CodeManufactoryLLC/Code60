@@ -29,3 +29,25 @@ it("does not turn corrupt records or other filesystem errors into pending readin
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it.each([
+  null,
+  [],
+  "record",
+  1,
+  { agentPid: null },
+  { agentPid: "123" },
+  { agentPid: 0 },
+  { agentPid: -1 },
+  { agentPid: 1.5 },
+  { agentPid: Number.MAX_SAFE_INTEGER + 1 },
+])("rejects invalid record shape or PID: %j", async (record) => {
+  const directory = await mkdtemp(join(tmpdir(), "code60-run-readiness-"));
+  try {
+    const path = join(directory, "run.json");
+    await writeFile(path, JSON.stringify(record));
+    await expect(recordedAgentPid(path)).rejects.toThrow(/Invalid/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
