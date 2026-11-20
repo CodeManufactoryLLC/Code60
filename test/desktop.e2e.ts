@@ -17094,7 +17094,7 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
     await page.mouse.click(rail.x + rail.width - 7, rail.y + rail.height - 20);
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await scroller.focus();
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+ArrowUp" : "Control+Home");
+    await page.keyboard.press(process.platform === "darwin" ? "Home" : "Control+Home");
     await expect(scroller).toBeFocused();
     // Native key scrolling can round a fractional layout origin to one CSS pixel.
     await expect
