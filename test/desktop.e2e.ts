@@ -715,7 +715,7 @@ async function expectIndustrialSurfaces(page: Page) {
                 : element.matches("dialog:not(.splash), [role=dialog]")
                   ? 10
                   : element.matches(
-                        "[data-slot=card], .home-card, [data-slot=bubble-content], button[data-slot=button]:not([data-variant=quiet])",
+                        "[data-slot=card], .home-card, [data-slot=bubble-content], button[data-slot=toggle], button[data-slot=button]:not([data-variant=quiet])",
                       )
                     ? 5
                     : 0,
@@ -3267,7 +3267,11 @@ test("desktop: square controls, compact cards and collapsible navigation", async
           .filter(
             (button) =>
               getComputedStyle(button).borderRadius !==
-              (button.matches('[data-slot="button"]:not([data-variant="quiet"])') ? "5px" : "0px"),
+              (button.matches(
+                '[data-slot="toggle"], [data-slot="button"]:not([data-variant="quiet"])',
+              )
+                ? "5px"
+                : "0px"),
           )
           .map((button) => button.getAttribute("aria-label") ?? button.textContent),
       );
