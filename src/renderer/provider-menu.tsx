@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AgentSetupSnapshot } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import { ProviderDropdown } from "./neobrutalism/provider-controls.js";
@@ -18,6 +18,7 @@ export function ProviderMenu({
   active?: boolean;
 }) {
   const [position, setPosition] = useState<{ x: number; y: number }>();
+  const trigger = useRef<HTMLButtonElement>(null);
   const connected = setup?.enabled.includes(provider);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Close a popup when its owner, visibility or pending state changes.
   useEffect(() => {
@@ -27,13 +28,15 @@ export function ProviderMenu({
   return (
     <>
       <button
+        ref={trigger}
         type="button"
         className="icon-button"
         aria-label={`More actions for ${name}`}
         aria-haspopup="menu"
         aria-expanded={Boolean(position)}
-        disabled={management.pending}
+        aria-disabled={management.pending || undefined}
         onClick={(event) => {
+          if (management.pending) return;
           const bounds = event.currentTarget.getBoundingClientRect();
           setPosition(position ? undefined : { x: bounds.right, y: bounds.bottom });
         }}
@@ -42,6 +45,7 @@ export function ProviderMenu({
       </button>
       {position && active && connected && (
         <ProviderDropdown
+          anchor={trigger.current}
           {...position}
           label={`${name} actions`}
           onClose={() => setPosition(undefined)}

@@ -103,6 +103,7 @@ export class RelayService {
   private chat: Orchestrator | undefined;
   private gateway: McpGateway | undefined;
   private browser: BrowserAutomation | undefined;
+  private browserTurn: number | undefined;
   private config: Config | undefined;
   private provider: string | undefined;
   private key = "";
@@ -524,6 +525,7 @@ export class RelayService {
   }
 
   private async stopChat(force = false): Promise<void> {
+    this.browserTurn = undefined;
     const epoch = ++this.connectionEpoch;
     this.paused = true;
     this.task = undefined;
@@ -684,9 +686,9 @@ export class RelayService {
       this.writer = new RelayWriter(store, this.deps.log, () => this.changed());
       browser = new BrowserAutomation(store.workspace, this.env);
       this.browser = browser;
-      gateway = await createMcpGateway((name, args) => {
+      gateway = await createMcpGateway((name, args, signal) => {
         if (!current()) return Promise.reject(new Error("Relay gateway is closed"));
-        return this.tool(name, args);
+        return this.tool(name, args, signal);
       });
       if (!current()) return await retire();
       this.gateway = gateway;
@@ -957,6 +959,7 @@ export class RelayService {
         return this.modelDefaults.save(run, "orchestrator");
       }
       if (request.type === "stop" || request.type === "cancel") {
+        this.browserTurn = undefined;
         this.paused = true;
         if (request.type === "cancel") chat.cancelTurn(run.id);
         else await this.stopChat();
@@ -1065,6 +1068,20 @@ export class RelayService {
     this.changed();
   }
   private event(event: RunEvent): void {
+    if (event.runId === this.chat?.runs()[0]?.id) {
+      if (event.type === "prompt") this.browserTurn = event.turn;
+      if (
+        event.type === "turnEnd" ||
+        (event.type === "status" && !ACTIVE_STATUSES.has(event.status))
+      ) {
+        this.browserTurn = undefined;
+        if (event.type !== "turnEnd" || event.stopReason !== "end_turn")
+          void this.browser?.cancel().catch(() => {
+            this.error = "Browser cleanup requires retry.";
+            this.changed();
+          });
+      }
+    }
     this.activity.event(event);
     this.replySummary.event(event);
     if (event.type === "prompt") this.assistant = undefined;
@@ -1132,14 +1149,20 @@ export class RelayService {
       ? this.execution.list({ id: this.store.id, generation: this.generation })
       : [];
   }
-  private async tool(name: string, args: unknown): Promise<unknown> {
+  private async tool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
     if (this.closing || !this.gateway) throw new Error("Relay gateway is closed");
     if (name === "code60_browser") {
       if (!this.browser) throw new Error("This browser session has ended.");
       const run = this.chat?.runs()[0];
-      if (!run || run.stopping || !["running", "waiting"].includes(run.status))
+      if (
+        !run ||
+        !this.browserTurn ||
+        this.browserTurn !== run.turns ||
+        run.stopping ||
+        !["running", "waiting"].includes(run.status)
+      )
         throw new Error("Browser actions require an active chat request.");
-      return this.browser.call(args);
+      return this.browser.call(args, signal);
     }
     if (isKnowledgeTool(name)) {
       if (!this.knowledge) throw new Error("Code60 awareness is unavailable");
@@ -1164,7 +1187,7 @@ export class RelayService {
           (this.task && this.tasks.get(this.task.taskId)?.config.agents) ||
             this.config?.agents ||
             {},
-        ),
+        ).filter((provider) => Object.hasOwn(this.config?.agents ?? {}, provider)),
         defaultProvider: this.provider,
         maxParallel: this.config?.maxParallel,
         liveWorkers: this.task ? this.execution.liveCount(this.task) : 0,

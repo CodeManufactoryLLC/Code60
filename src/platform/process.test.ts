@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type OwnedProcess, spawnOwnedProcess } from "./index.js";
 
 const children: OwnedProcess[] = [];
@@ -92,6 +92,33 @@ describe("owned native processes", () => {
       expect(() => process.kill(sentinel.pid as number, 0)).not.toThrow();
     } finally {
       sentinel.kill();
+    }
+  });
+  it("retries verification after a delayed group exit without re-signalling an old identifier", async () => {
+    const child = await launch("process.exit(0)");
+    await child.exited;
+    const original = process.kill.bind(process);
+    let groupPresent = true;
+    const signals: (number | string | undefined)[] = [];
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid === -child.pid) {
+        if (signal === 0 && groupPresent) return true;
+        if (signal !== 0) signals.push(signal);
+      }
+      return original(pid, signal);
+    });
+    vi.useFakeTimers();
+    try {
+      const failed = expect(child.stop(0)).rejects.toThrow("cleanup exceeded");
+      await vi.advanceTimersByTimeAsync(7_100);
+      await failed;
+      const previous = [...signals];
+      groupPresent = false;
+      await child.stop(0);
+      expect(signals).toEqual(previous);
+    } finally {
+      kill.mockRestore();
+      vi.useRealTimers();
     }
   });
 });

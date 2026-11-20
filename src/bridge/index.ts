@@ -8,6 +8,7 @@ export {
   DESKTOP_CAPABILITIES,
   defaultableSelections,
   type Group,
+  isAllowedBrowserTool,
   isKnowledgeRelativePath,
   isKnowledgeTool,
   KNOWLEDGE_LIMITS,

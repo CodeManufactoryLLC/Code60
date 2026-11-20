@@ -11,7 +11,14 @@ const mode = args.includes("--extension")
   : args.includes("--headless")
     ? "headless"
     : "visible";
-const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+  stdio: "ignore",
+  detached: true,
+});
+let childExited = false;
+child.once("exit", () => {
+  childExited = true;
+});
 const log = (entry) =>
   appendFileSync(
     process.env.FAKE_BROWSER_LOG,
@@ -44,6 +51,15 @@ input.on("line", (line) => {
       ],
     });
   } else if (request.method === "tools/call") {
+    if (request.params.name === "browser_close") {
+      log({ event: "browser-close" });
+      if (childExited) send(request.id, { content: [] });
+      else {
+        child.once("exit", () => send(request.id, { content: [] }));
+        child.kill();
+      }
+      return;
+    }
     log({ event: "call", name: request.params.name, arguments: request.params.arguments });
     if (request.params.arguments.url.includes("slow")) return;
     const extensionMissing =
@@ -65,6 +81,10 @@ let stopping = false;
 const stop = () => {
   if (stopping) return;
   stopping = true;
+  if (childExited) {
+    process.exit(0);
+    return;
+  }
   child.once("exit", () => process.exit(0));
   child.kill();
 };

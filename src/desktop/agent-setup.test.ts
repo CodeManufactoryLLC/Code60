@@ -23,6 +23,20 @@ function fixture() {
 }
 
 describe("agent setup transaction", () => {
+  it("preserves unaffected verified memberships when recovering a changed primary command", async () => {
+    const { setup, commands, identity, attempt } = fixture();
+    setup.begin({ mode: "primary" });
+    await attempt("claude");
+    await attempt("codex");
+    await setup.finish(identity());
+    commands.claude = ["changed-command"];
+    expect(setup.complete).toBe(false);
+    setup.begin({ mode: "primary" });
+    expect(setup.snapshot().session?.verified).toEqual(["codex"]);
+    await attempt("droid");
+    await setup.finish(identity());
+    expect(setup.record).toMatchObject({ primary: "droid", enabled: ["codex", "droid"] });
+  });
   it("detects then connects a primary and repeated additions, preserving primary and preventing duplicates", async () => {
     const { setup, deps, identity, attempt } = fixture();
     const phases: string[] = [];
@@ -79,7 +93,7 @@ describe("agent setup transaction", () => {
     await attempt("droid");
     expect(setup.record?.primary).toBe("claude");
     await setup.finish(identity());
-    expect(setup.enabled).toEqual(["droid"]);
+    expect(setup.enabled).toEqual(["claude", "codex", "droid"]);
   });
   it("does not persist detection or authentication failures and allows retry", async () => {
     const { setup, deps, identity, attempt } = fixture();

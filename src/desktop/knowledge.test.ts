@@ -227,7 +227,7 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({
         availability: expect.objectContaining({
           status: "blocked",
-          action: "Providers → provider details.",
+          action: "Providers → Add Provider.",
         }),
       }),
     ]);

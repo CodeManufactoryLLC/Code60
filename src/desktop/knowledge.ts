@@ -243,7 +243,7 @@ export class DesktopKnowledge {
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";
-      action = "Providers → provider details.";
+      action = "Providers → Add Provider.";
     } else if (cap.id === "model-settings") {
       status = "unknown";
       reason =

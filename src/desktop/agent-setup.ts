@@ -109,10 +109,9 @@ export class AgentSetup {
     if (mode === "primary" && !this.deps.canChangePrimary())
       throw new Error("Finish or stop active orchestration work before changing the primary");
     if (mode === "add" && !this.complete) throw new Error("Set up the primary first");
-    this.commands =
-      mode === "add"
-        ? Object.fromEntries(this.enabled.map((id) => [id, this.record?.commands[id] as string]))
-        : {};
+    this.commands = Object.fromEntries(
+      this.enabled.map((id) => [id, this.record?.commands[id] as string]),
+    );
     this.session = {
       id: randomUUID(),
       mode,

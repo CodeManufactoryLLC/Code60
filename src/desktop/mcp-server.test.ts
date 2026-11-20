@@ -137,6 +137,31 @@ describe("MCP tool errors", () => {
       }),
     ).toMatchObject({ result });
   });
+  it("propagates MCP request cancellation to its browser gateway fetch", async () => {
+    const fetch = gateway();
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    let signal: AbortSignal | undefined;
+    fetch.mockImplementation(async (_url, init) => {
+      signal = init.signal;
+      return new Promise((_resolve, reject) =>
+        signal?.addEventListener("abort", () => reject(new Error("Cancelled")), { once: true }),
+      );
+    });
+    const call = handleMcpRequest({
+      jsonrpc: "2.0",
+      id: 23,
+      method: "tools/call",
+      params: { name: "code60_browser", arguments: { action: "list-tools" } },
+    });
+    await handleMcpRequest({
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: 23 },
+    });
+    await call;
+    expect(signal?.aborted).toBe(true);
+    expect(JSON.parse(String(write.mock.calls[0]?.[0])).result.isError).toBe(true);
+  });
 
   it.each([undefined, null, [], {}, { name: 42 }])(
     "rejects malformed tool calls (%j) without contacting the gateway",

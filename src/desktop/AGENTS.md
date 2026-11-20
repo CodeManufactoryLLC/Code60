@@ -8,6 +8,12 @@
   requests and output, never retry uncertain calls, and stop owned process groups
   on cancel/Stop/Undo/replacement/shutdown. Browser actions do not undo website
   effects. Workers and helpers receive no browser gateway or authority.
+  Authorize only dispatched turns; revoke before cancellation and on terminal
+  events. Propagate MCP/HTTP cancellation. Filter discovery and calls through the
+  product tool allowlist. Launch npm only from a private generated context with
+  fixed configuration outside repositories. Budget automatic artifacts separately
+  from requested files. Await isolated browser-close acknowledgement before
+  stopping its watchdog; retain uncertain cleanup ownership for verification.
 
 - Install the optional stdout/stderr broken-pipe guards before desktop imports
   can log. A closed launching terminal must not raise an uncaught EPIPE dialog
@@ -276,3 +282,6 @@ model defaults, histories and external logins. Set-primary/disconnect are strict
 human-only bridge actions, guarded in main against active desktop work, setup and
 overlapping writes. The primary must be replaced before disconnecting. Publish
 main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
+Reserve provider transitions across Relay/Custom Assistant sends, including
+pending request preparation. Reload saved project chats on primary changes;
+recovering an invalid primary retains all unaffected verified memberships.

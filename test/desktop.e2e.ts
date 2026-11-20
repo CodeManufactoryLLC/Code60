@@ -2372,11 +2372,12 @@ test("desktop: sidebar card chevrons own expansion independently of header navig
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.locator(".sidebar-card-toggle")).toHaveCount(5);
+    await expect(page.locator(".sidebar-card-toggle")).toHaveCount(6);
     for (const [toggleId, panelId, headerId, destination] of [
       ["home-card-toggle", "home-pages", "tab-home", "home"],
       ["assistants-toggle", "assistants-pages", "tab-assistants", "assistants"],
       ["projects-card-toggle", "chat-pages", "tab-chat", "projects"],
+      ["providers-card-toggle", "provider-pages", "tab-providers", "providers"],
       ["apps-card-toggle", "app-pages", "tab-apps", "apps"],
       ["settings-card-toggle", "settings-pages", "tab-settings", "settings"],
     ] as const) {
@@ -7287,7 +7288,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
     await expect(
       page.locator(
-        ".sidebar svg:not(.navigation-icon):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon)",
+        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
       ),
     ).toHaveCount(0);
     await expect(
@@ -7476,7 +7477,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           );
         expect(geometry).toHaveLength(
           pageIcons.length +
-            (await sidebar.locator(".chat-sidebar-entry:visible").count()) +
+            (await sidebar
+              .locator(".chat-sidebar-row:not(.provider-sidebar-row) > .chat-sidebar-entry:visible")
+              .count()) +
             (await sidebar.locator(".project-chat-label > .navigation-icon:visible").count()) +
             (await sidebar
               .locator(
@@ -7510,14 +7513,16 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           icons.map((icon) => ({
             width: icon.getBoundingClientRect().width,
             height: icon.getBoundingClientRect().height,
-            fixedChevron: !!icon.closest(
-              ".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop",
-            ),
+            fixedSize: icon.closest(".provider-primary-compact")
+              ? 12
+              : icon.closest(".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop")
+                ? 16
+                : undefined,
           })),
         );
         expect(actionSizes.length).toBeGreaterThan(0);
         for (const action of actionSizes) {
-          const expectedSize = action.fixedChevron ? 16 : size;
+          const expectedSize = action.fixedSize ?? size;
           expect(action.width).toBe(expectedSize);
           expect(action.height).toBe(expectedSize);
         }
@@ -8489,7 +8494,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
     await expect(palette).toBeVisible();
-    await expect(palette).toHaveCSS("border-radius", "0px");
+    await expect(palette).toHaveCSS("border-radius", "10px");
     const searchCommands = palette.getByRole("combobox", { name: "Search commands" });
     await expect(searchCommands).toBeFocused();
     await searchCommands.fill("new agent");

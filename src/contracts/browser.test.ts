@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { browserModes, parseBrowserRequest } from "../src/contracts/index.js";
+import { browserModes, parseBrowserRequest } from "./index.js";
 
 describe("browser requests", () => {
   it("accepts only the fixed modes and action-specific fields", () => {
@@ -23,6 +23,7 @@ describe("browser requests", () => {
       { action: "status", mode: "visible" },
       { action: "close", command: "node" },
       { action: "call", name: "exec", arguments: {} },
+      { action: "call", name: "browser_run_code_unsafe", arguments: { code: "process.exit(1)" } },
       { action: "call", name: "browser_navigate", arguments: [] },
       { action: "call", name: "browser_navigate", arguments: {}, env: {} },
     ])

@@ -2212,21 +2212,26 @@ export class DesktopController {
     this.providerMutation = true;
     this.changed();
     return this.exclusive(async () => {
-      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
-      await this.cancelOrchestrationTest();
-      const record = await this.agentSetup.manage(request);
-      if (request.type === "set-primary") {
-        await this.stopMemoryExtraction();
-        await this.cancelSearchSummary();
-        this.chatKey = "";
-        this.orchestration = {
-          provider: record.primary,
-          allowAll: true,
-          connection: "idle",
-          error: null,
-        };
+      const release = this.relay?.beginProviderChange();
+      try {
+        await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+        await this.cancelOrchestrationTest();
+        const record = await this.agentSetup.manage(request);
+        if (request.type === "set-primary") {
+          await this.stopMemoryExtraction();
+          await this.cancelSearchSummary();
+          this.chatKey = "";
+          this.orchestration = {
+            provider: record.primary,
+            allowAll: true,
+            connection: "idle",
+            error: null,
+          };
+        }
+        await this.syncOrchestrationChat();
+      } finally {
+        release?.();
       }
-      await this.syncOrchestrationChat();
     }).finally(() => {
       this.providerMutation = false;
       this.changed();
@@ -2652,12 +2657,12 @@ export class DesktopController {
   private async mcpAgentServer(session: ChatSession): Promise<AgentMcpServer[]> {
     if (!session.mcpGateway) {
       const owner = this.projectHost.current;
-      session.mcpGateway = await createMcpGateway((name, args) =>
+      session.mcpGateway = await createMcpGateway((name, args, signal) =>
         this.projectHost.run(owner, async () => {
           this.projectHost.assertCurrent(owner);
           if (this.closing) throw new Error("Code60 is shutting down");
           if (session.revoked) throw new Error("This orchestration chat is no longer current");
-          const result = await this.callChatTool(name, args, session);
+          const result = await this.callChatTool(name, args, session, signal);
           this.projectHost.assertCurrent(owner);
           return result;
         }),
@@ -2677,15 +2682,27 @@ export class DesktopController {
     ];
   }
 
-  private async callChatTool(name: string, args: unknown, session: ChatSession): Promise<unknown> {
+  private async callChatTool(
+    name: string,
+    args: unknown,
+    session: ChatSession,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     this.conversations.assertCurrent(session);
     if (name === "code60_browser") {
       const run = session.chat?.runs()[0];
-      if (!run || run.stopping || !["running", "waiting"].includes(run.status))
+      if (
+        !run ||
+        !session.browserTurn ||
+        session.browserTurn !== run.turns ||
+        run.stopping ||
+        !["running", "waiting"].includes(run.status)
+      )
         throw new Error("Browser actions require an active chat request.");
       if (!session.chatDirectory) throw new Error("This chat's browser workspace is unavailable.");
       session.browser ??= new BrowserAutomation(session.chatDirectory, this.env);
-      return session.browser.call(args);
+      session.browserChat = session.chat;
+      return session.browser.call(args, signal);
     }
     if (isKnowledgeTool(name))
       return this.knowledge.call(name, args, this.knowledgeCaller(session));
@@ -2715,13 +2732,17 @@ export class DesktopController {
   }
 
   private async closeMcpGateway(session: ChatSession): Promise<void> {
+    session.browserTurn = undefined;
     session.activity.invalidate();
     const gateway = session.mcpGateway;
     const browser = session.browser;
     const results = await Promise.allSettled([gateway?.close(), browser?.shutdown()]);
     if (results.some((result) => result.status === "rejected"))
       throw new Error("This chat's browser or tool connection could not be stopped.");
-    if (session.browser === browser) session.browser = undefined;
+    if (session.browser === browser) {
+      session.browser = undefined;
+      session.browserChat = undefined;
+    }
     if (session.mcpGateway === gateway) session.mcpGateway = undefined;
   }
 
@@ -2965,7 +2986,7 @@ export class DesktopController {
         ? projectChatRoot(this.database.path, this.workspace.dir)
         : join(dirname(this.database.path), ".code60_workspace")
       : undefined;
-    if (this.chatStore?.root !== root) this.chatRegistryLoaded = false;
+    if ((this.relay && !restart) || this.chatStore?.root !== root) this.chatRegistryLoaded = false;
     const loadSaved = !restart && !!root && !this.chatRegistryLoaded;
     if (restart) {
       const previous = this.conversations.current;
@@ -3138,13 +3159,33 @@ export class DesktopController {
     const gateway = session.mcpGateway;
     void chat.done
       .then(async () => {
-        await gateway?.close();
+        const browser = session.browserChat === chat ? session.browser : undefined;
+        await Promise.all([gateway?.close(), browser?.shutdown()]);
+        if (session.browserChat === chat && session.browser === browser) {
+          session.browser = undefined;
+          session.browserChat = undefined;
+          session.browserTurn = undefined;
+        }
         if (session.mcpGateway === gateway) session.mcpGateway = undefined;
       })
       .catch(() => {});
     session.chatDisposers = [
       chat.onEvent(
         this.projectHost.bind((event) => {
+          if (session.chat === chat) {
+            if (event.type === "prompt") session.browserTurn = event.turn;
+            if (
+              event.type === "turnEnd" ||
+              (event.type === "status" && !ACTIVE_STATUSES.has(event.status))
+            ) {
+              session.browserTurn = undefined;
+              if (event.type !== "turnEnd" || event.stopReason !== "end_turn")
+                void session.browser?.cancel().catch(() => {
+                  session.chatError = "Browser cleanup requires retry.";
+                  this.changed();
+                });
+            }
+          }
           session.activity.event(event);
           session.replies.event(event);
           if (
@@ -3626,15 +3667,21 @@ export class DesktopController {
         }
       } else if (!session.chat || !run) throw new Error("No orchestration session is available");
       else if (request.type === "cancel") {
+        session.browserTurn = undefined;
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
         this.conversations.pause(session);
         await session.browser?.cancel();
         await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
       } else {
+        session.browserTurn = undefined;
         this.conversations.pause(session);
         await this.pausePlan(session, "Conversation stopped.");
-        await this.closeMcpGateway(session);
-        await session.chat.shutdown();
+        const results = await Promise.allSettled([
+          this.closeMcpGateway(session),
+          session.chat.shutdown(),
+        ]);
+        if (results.some((result) => result.status === "rejected"))
+          throw new Error("Some conversation processes could not be stopped. Retry cleanup.");
       }
       this.changed();
     });

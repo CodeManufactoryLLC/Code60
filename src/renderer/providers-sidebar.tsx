@@ -84,6 +84,8 @@ export function ProvidersSidebar({
       <button
         type="button"
         className="icon-button sidebar-card-toggle"
+        id="providers-card-toggle"
+        data-tooltip=""
         aria-label={`${expanded ? "Collapse" : "Expand"} Providers`}
         aria-controls="provider-pages"
         aria-expanded={expanded}

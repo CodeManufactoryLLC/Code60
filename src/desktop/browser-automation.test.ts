@@ -30,6 +30,39 @@ function deferred() {
 }
 
 describe("conversation browser ownership", () => {
+  it("rejects browser output outside its own workspace without dispatching the call", async () => {
+    const { browser, client } = fixture();
+    client.listTools.mockResolvedValueOnce([{ name: "browser_take_screenshot", inputSchema: {} }]);
+    await expect(
+      browser.call({
+        action: "call",
+        name: "browser_take_screenshot",
+        arguments: { filename: "/tmp/another-owner.png" },
+      }),
+    ).rejects.toThrow("conversation's workspace");
+    expect(client.call).not.toHaveBeenCalled();
+    expect(client.close).toHaveBeenCalledOnce();
+  });
+  it("reports dead upstream connections and reconnects only on a fresh explicit action", async () => {
+    const { browser, client, connect } = fixture();
+    let connected = true;
+    Object.assign(client, { connected: () => connected });
+    await browser.call(navigation);
+    connected = false;
+    expect(await browser.call({ action: "status" })).toEqual({
+      mode: "headless",
+      connected: false,
+    });
+    expect(connect).toHaveBeenCalledOnce();
+    connect.mockImplementationOnce(async () => {
+      connected = true;
+      return client;
+    });
+    await browser.call(navigation);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(client.call).toHaveBeenCalledTimes(2);
+    await browser.shutdown();
+  });
   it("starts lazily, defaults to headless, discovers tools and preserves rich results", async () => {
     const { browser, client, connect } = fixture();
     expect(await browser.call({ action: "status" })).toEqual({
@@ -81,7 +114,7 @@ describe("conversation browser ownership", () => {
       mode: "existing-browser",
       connected: false,
     });
-    await expect(browser.call({ ...navigation, name: "browser_unknown" })).rejects.toThrow(
+    await expect(browser.call({ ...navigation, name: "browser_snapshot" })).rejects.toThrow(
       "Unknown Playwright tool",
     );
     expect(client.call).not.toHaveBeenCalled();

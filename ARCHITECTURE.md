@@ -759,7 +759,7 @@ flowchart LR
 - `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
 - `desktop` depends on `core`, `bridge`, `automation` and `platform`. `bridge` and `renderer` may import only types from `core`; neither may import `platform`. The renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
 - `agents` and `git` never import each other or `core`. `core` receives them as injected interfaces, so tests can use fakes.
-- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP.
+- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP. Colocated contracts unit tests may import Vitest; production imports remain restricted to Zod, and all other boundaries still apply to tests.
 - Domain logic lives in `core` and runs without the desktop app.
 - `core`, `agents`, `git`, and `desktop` may import `platform` only through its index. `platform` imports no application modules, Electron, React, or provider SDKs. Bridge, renderer, and contracts remain browser-safe.
 
@@ -1000,7 +1000,11 @@ Assistants and project chats. A user states a preference in chat, without a
 Settings selector or persisted mode. Each live conversation defaults to Headless;
 `set-mode` chooses `headless`, `visible` or `existing-browser`. `status` and mode
 selection do not start a process. `list-tools` and `call` lazily launch the fixed
-`npx -y @playwright/mcp@0.0.84` command in that conversation's private workspace.
+`npx -y @playwright/mcp@0.0.84` command in a generated private npm context outside
+repositories and conversation directories. A fixed package manifest, empty
+user/global npm configuration, fixed public registry, script shell and private
+application cache prevent repository package/config substitution. npm/Node
+override variables are removed and package installation scripts are disabled.
 Headless adds `--isolated --headless`; Visible adds `--isolated`; Existing Browser
 adds `--extension`. Chrome and Node.js/npm are user-installed prerequisites.
 The first requested use may download the pinned MCP package. Existing Browser
@@ -1010,13 +1014,31 @@ User-configured MCP servers remain separate and unchanged.
 
 `browser-automation.ts` owns one connection and rejects overlapping calls. It
 validates strict action/mode inputs, discovers the upstream tool catalog and
-accepts only catalogued `browser_*` names. `browser-client.ts` implements bounded
+accepts only the intersection of that catalog and the product-owned browser tool
+allowlist. Unsafe host-code, installation, upload and page-registered WebMCP tools
+are excluded from both discovery and dispatch. `browser-client.ts` implements bounded
 stdio MCP initialization, tool discovery/paging and calls, with no host sampling,
-elicitation, roots or arbitrary executable capability. Main owns the subprocess
+elicitation or arbitrary executable capability. Its sole fixed workspace root is
+the host-owned conversation directory, independently of npm's private cwd, so
+requested outputs retain their scope without repository-controlled resolution.
+Main owns the subprocess
 group through `platform`; stdout is protocol-only and stderr is drained without
 capture. One action has a 100-second deadline, responses are bounded to 8 MiB and
 catalogs to 128 tools. The gateway preserves browser images and upstream tool
 errors. Failure never retries an uncertain action or silently selects a new mode.
+Automatically named artifacts use a separate temporary directory with a 32 MiB
+eviction budget and are removed after verified cleanup. Explicit output filenames
+are restricted to regular files directly in the owning conversation workspace.
+Only Chrome is currently selected for Existing Browser; no Edge support is implied.
+
+Browser authority starts at the dispatched prompt event, never process startup.
+Cancel revokes it before asynchronous ACP cancellation; turn failure/timeout and
+agent exit revoke and release browser work. MCP cancellation aborts its gateway
+fetch, whose disconnect signal cancels the owned browser action. Isolated Chromium
+uses a separate group, so cleanup awaits its browser-close acknowledgement before
+terminating the MCP watchdog group. Unverified shutdown retains ownership and
+reports a retryable cleanup failure; verification retries never re-signal a stale
+process group. Existing Browser only detaches its connection, preserving Chrome.
 
 Changing modes closes the old connection before publishing the new mode and loses
 isolated state. Cancel aborts pending work and releases the connection; Stop,

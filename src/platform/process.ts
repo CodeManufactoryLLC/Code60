@@ -81,6 +81,7 @@ async function posixProcess(
   const pid = child.pid as number;
   let deadline = Number.POSITIVE_INFINITY;
   let stopping: Promise<void> | undefined;
+  let terminationSent = false;
   return {
     pid,
     ...streams(child),
@@ -89,9 +90,12 @@ async function posixProcess(
     stop(graceMs = 5_000) {
       deadline = Math.min(deadline, Date.now() + Math.max(0, graceMs));
       stopping ??= (async () => {
-        signalGroup(pid, "SIGTERM");
-        while (signalGroup(pid, 0) && Date.now() < deadline) await sleep(25);
-        signalGroup(pid, "SIGKILL");
+        if (!terminationSent) {
+          signalGroup(pid, "SIGTERM");
+          while (signalGroup(pid, 0) && Date.now() < deadline) await sleep(25);
+          signalGroup(pid, "SIGKILL");
+          terminationSent = true;
+        }
         await boundedExit(exited);
         const verifyUntil = Date.now() + EXIT_DEADLINE_MS;
         while (signalGroup(pid, 0)) {
@@ -103,6 +107,9 @@ async function posixProcess(
         child.stdout.destroy();
         child.stderr.destroy();
       })();
+      void stopping.catch(() => {
+        stopping = undefined;
+      });
       return stopping;
     },
   };

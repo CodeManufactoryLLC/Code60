@@ -87,6 +87,52 @@ async function connect() {
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
 }
+it("does not advertise a disconnected member from a frozen human task", async () => {
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: {
+      claude: required(DEFAULT_CONFIG.agents.claude),
+      codex: required(DEFAULT_CONFIG.agents.codex),
+    },
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Observe providers" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect((await tool("code60_get_context")).providers).toEqual(["claude", "codex"]);
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
+  });
+  expect(relay.snapshot().run?.id).toBe(id);
+  expect((await tool("code60_get_context")).providers).toEqual(["claude"]);
+});
+it("denies browser authority during ACP startup and after slow turn cancellation", async () => {
+  let release!: () => void;
+  agents.startGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const connecting = connect();
+  try {
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(1));
+    await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+      "active chat request",
+    );
+  } finally {
+    release();
+  }
+  await connecting;
+  agents.script = () => "hang";
+  agents.sessions[0]!.onCancel = "ignore";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "headless" });
+  await relay.action({ type: "cancel", id });
+  await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+    "active chat request",
+  );
+});
 it("gates browser controls to active requests, isolates modes and resets them on connection restart", async () => {
   await connect();
   await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");

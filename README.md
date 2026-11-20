@@ -134,7 +134,7 @@ Schedules, evidence and worktrees are preserved.
 For browser tasks, tell Relay, a Custom Assistant or a project chat to use
 **Headless**, **Visible**, or **Existing Browser**. Headless is the default;
 Visible opens a separate window and Existing Browser uses the Playwright
-Chrome/Edge extension with its connection approval. Install Chrome and Node.js/npm;
+Chrome extension with its connection approval. Install Chrome and Node.js/npm;
 the pinned Playwright MCP package starts on demand. Preferences last for that live
 conversation, and switching modes loses isolated browser state. Website changes
 are not reversed by message Undo. See [browser modes](MCP.md#browser-modes-in-chat).

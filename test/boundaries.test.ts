@@ -63,7 +63,11 @@ function findViolations(files: readonly SourceFile[]): string[] {
       )
         violations.push(`${where}: renderer contracts may not import Node.js`);
       if (!spec.startsWith(".")) {
-        if (from === "contracts" && spec !== "zod") {
+        if (
+          from === "contracts" &&
+          spec !== "zod" &&
+          !(spec === "vitest" && file.path.endsWith(".test.ts"))
+        ) {
           violations.push(`${where}: contracts may only import zod`);
         }
         const pkg = Object.keys(PACKAGE_OWNERS).find((p) => spec === p || spec.startsWith(`${p}/`));
@@ -105,6 +109,14 @@ function readSources(dir: string): SourceFile[] {
 }
 
 describe("module boundaries", () => {
+  it("allows only the test runner in colocated schema tests while preserving production and Node boundaries", () => {
+    const file = (name: string, text: string) => ({ path: join(SRC, "contracts", name), text });
+    expect(findViolations([file("browser.test.ts", 'import { it } from "vitest";')])).toEqual([]);
+    expect(findViolations([file("browser.ts", 'import { it } from "vitest";')])).not.toEqual([]);
+    expect(
+      findViolations([file("browser.test.ts", 'import { readFile } from "node:fs";')]),
+    ).not.toEqual([]);
+  });
   it("src follows the dependency rules in ARCHITECTURE.md", () => {
     expect(findViolations(readSources(SRC))).toEqual([]);
   });

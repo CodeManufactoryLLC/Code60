@@ -16,8 +16,9 @@ dialog.neo-dialog
     .project-list,
     [role="listbox"],
     .git-setup-body,
-    .git-setup-files,
-    .git-setup-preview,
+    .git-setup-files > fieldset,
+    .git-setup-files pre,
+    .table-column-settings,
     .tactics-list,
     .tactic-content
   ) {

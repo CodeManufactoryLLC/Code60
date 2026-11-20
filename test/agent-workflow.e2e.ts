@@ -114,6 +114,11 @@ test("workflow: conversational browser modes, external errors, cancellation and 
       "@playwright/mcp@0.0.84",
       "--isolated",
       "--headless",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
     ]);
     const first = (await starts())[0] as BrowserEvidence;
     expect(alive(first.pid)).toBe(true);
@@ -124,7 +129,16 @@ test("workflow: conversational browser modes, external errors, cancellation and 
     );
     await expect.poll(() => alive(first.pid) || alive(first.child)).toBe(false);
     const visible = (await starts())[1] as BrowserEvidence;
-    expect(visible.args).toEqual(["-y", "@playwright/mcp@0.0.84", "--isolated"]);
+    expect(visible.args).toEqual([
+      "-y",
+      "@playwright/mcp@0.0.84",
+      "--isolated",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
+    ]);
     await send("Open https://example.com/still-visible.", "Fixture navigation in visible");
     expect(await starts()).toHaveLength(2); // A later request retains this conversation's preference.
     await page.getByRole("tab", { name: "Home", exact: true }).click();
@@ -161,7 +175,16 @@ test("workflow: conversational browser modes, external errors, cancellation and 
     );
     await expect.poll(() => alive(visible.pid) || alive(visible.child)).toBe(false);
     const existing = (await starts())[2] as BrowserEvidence;
-    expect(existing.args).toEqual(["-y", "@playwright/mcp@0.0.84", "--extension"]);
+    expect(existing.args).toEqual([
+      "-y",
+      "@playwright/mcp@0.0.84",
+      "--extension",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
+    ]);
     await send("Report the browser mode.", '"mode":"existing-browser"');
     expect(await starts()).toHaveLength(3); // An upstream isError never silently selects another mode.
     // Simulate the external extension becoming installed/approved, not an app mutation.

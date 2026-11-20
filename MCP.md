@@ -43,7 +43,7 @@ assistant what you prefer:
 - “Use my existing browser where I’m already signed in.”
 
 Headless is the default. Headless and Visible use separate in-memory profiles;
-Existing Browser connects to Chrome/Edge through Microsoft's
+Existing Browser connects to Chrome through Microsoft's
 [Playwright extension](https://github.com/microsoft/playwright/tree/main/packages/extension#readme).
 Install the extension and approve its connection/tab selection when prompted.
 Code60 does not bypass that approval or configure an extension token. This
@@ -69,6 +69,15 @@ discovered tool with, for example,
 must be sequential. A request is bounded to 100 seconds; errors require inspection
 before retrying. Existing Browser prerequisites and real browser availability are
 checked on use, never inferred from successful provider setup.
+
+Managed Playwright launches in an application-controlled npm context outside
+repositories, with fixed npm configuration and package pinning. Only product-allowed
+browser tools are exposed; host-code execution, installation, file upload and
+page-registered WebMCP tools are unavailable. Automatic captures have a 32 MiB
+budget and are temporary. Use an explicit filename directly in the conversation
+workspace to retain a requested file across mode changes. Browser authority ends
+on cancellation, turn failure/timeout or process exit. Cleanup waits for isolated
+Chromium to acknowledge closing; unverified cleanup is reported for retry.
 
 ## Bundled starter file
 

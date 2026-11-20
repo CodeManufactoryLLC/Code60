@@ -74,6 +74,8 @@ export class ChatSession {
   chatDisposers: (() => void)[] = [];
   mcpGateway: McpGateway | undefined;
   browser: BrowserAutomation | undefined;
+  browserChat: Orchestrator | undefined;
+  browserTurn: number | undefined;
   dispatches = new Map<string, { key: string; result: Promise<unknown> }>();
   workerScope = randomUUID();
   inbox: WorkerUpdate[] = [];

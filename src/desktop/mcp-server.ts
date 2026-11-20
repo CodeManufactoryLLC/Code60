@@ -5,6 +5,7 @@ import { CODE60_VERSION } from "../core/index.js";
 import { diagnosticText } from "../platform/index.js";
 
 const MAX_LINE_LENGTH = 1_048_576;
+const cancellations = new Map<unknown, { abort: AbortController; browser: boolean }>();
 
 const toolDefinitions = () =>
   mcpToolsForRole(process.env.CODE60_MCP_ROLE === "relay" ? "relay" : "project");
@@ -52,7 +53,7 @@ function gatewayConfiguration(): { url: string; token: string } {
   return { url, token };
 }
 
-async function callGateway(name: string, args: unknown): Promise<unknown> {
+async function callGateway(name: string, args: unknown, signal: AbortSignal): Promise<unknown> {
   if (!toolDefinitions().some((tool) => tool.name === name)) throw new Error("Unknown Code60 tool");
   const gateway = gatewayConfiguration();
   const response = await fetch(gateway.url, {
@@ -62,7 +63,7 @@ async function callGateway(name: string, args: unknown): Promise<unknown> {
       "content-type": "application/json",
     },
     body: JSON.stringify({ name, arguments: args }),
-    signal: AbortSignal.timeout(125_000),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(125_000)]),
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -82,11 +83,11 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
     if (request.id !== undefined) errorResponse(request.id, -32600, "Invalid request");
     return;
   }
-  if (
-    request.method === "notifications/initialized" ||
-    request.method === "notifications/cancelled"
-  )
+  if (request.method === "notifications/initialized") return;
+  if (request.method === "notifications/cancelled") {
+    if (isObject(request.params)) cancellations.get(request.params.requestId)?.abort.abort();
     return;
+  }
   if (request.id === undefined) return;
   if (request.method === "initialize") {
     const protocolVersion =
@@ -136,8 +137,21 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
       toolResponse(request.id, { error: "Invalid tool call" }, true);
       return;
     }
+    if (cancellations.has(request.id)) {
+      errorResponse(request.id, -32600, "Duplicate request ID");
+      return;
+    }
+    const cancellation = new AbortController();
+    cancellations.set(request.id, {
+      abort: cancellation,
+      browser: request.params.name === "code60_browser",
+    });
     try {
-      const result = await callGateway(request.params.name, request.params.arguments ?? {});
+      const result = await callGateway(
+        request.params.name,
+        request.params.arguments ?? {},
+        cancellation.signal,
+      );
       if (
         request.params.name === "code60_browser" &&
         isObject(result) &&
@@ -158,6 +172,8 @@ export async function handleMcpRequest(request: RpcRequest): Promise<void> {
         },
         true,
       );
+    } finally {
+      cancellations.delete(request.id);
     }
     return;
   }
@@ -169,6 +185,10 @@ export function serveMcpStdio(): void {
   let pending = "";
   let inFlight = 0;
   process.stdin.setEncoding("utf8");
+  process.stdin.once("end", () => {
+    for (const cancellation of cancellations.values())
+      if (cancellation.browser) cancellation.abort.abort();
+  });
   process.stdin.on("data", (chunk: string) => {
     pending += chunk;
     if (pending.length > MAX_LINE_LENGTH && !pending.includes("\n")) {
