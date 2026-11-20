@@ -1488,7 +1488,7 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
   }
 });
 
-test("desktop: Scheduled Jobs excludes service controls and adapts its editor to narrow windows", async () => {
+test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow widths", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-automations-layout-")));
   try {
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
@@ -1502,7 +1502,8 @@ test("desktop: Scheduled Jobs excludes service controls and adapts its editor to
         .getByRole("heading", { name: "Scheduled Jobs", exact: true }),
     ).toBeVisible();
     await expect(panel.locator(".automation-service")).toHaveCount(0);
-    await expect(panel.locator(".automation-table-card")).toHaveCount(2);
+    await expect(panel.locator(".automation-table-card")).toHaveCount(1);
+    await expect(panel.locator('[data-slot="accordion"]')).toHaveCount(1);
     for (const title of ["Schedules", "Execution history"]) {
       const heading = panel.getByRole("heading", { name: title, exact: true });
       await expect(heading).toHaveCount(1);
@@ -1532,26 +1533,43 @@ test("desktop: Scheduled Jobs excludes service controls and adapts its editor to
         (value) => document.documentElement.setAttribute("data-color-scheme", value),
         scheme,
       );
+      const actions = panel.getByRole("button", { name: "Actions", exact: true });
+      const heading = await panel
+        .getByRole("heading", { name: "Schedules", exact: true })
+        .boundingBox();
+      const control = await actions.boundingBox();
+      if (!heading || !control) throw new Error("Missing scheduled header");
+      expect(
+        Math.abs(heading.y + heading.height / 2 - control.y - control.height / 2),
+      ).toBeLessThan(2);
+      await actions.click();
+      await expect(page.getByRole("menu", { name: "Actions" })).toBeVisible();
       await page.screenshot({ path: test.info().outputPath(`automations-${scheme}.png`) });
+      await page.keyboard.press("Escape");
+      await expect(actions).toBeFocused();
     }
-    await panel.getByRole("button", { name: "New scheduled job", exact: true }).click();
-    const editor = page.getByRole("dialog", { name: "New scheduled job", exact: true });
+    const actions = panel.getByRole("button", { name: "Actions", exact: true });
+    await actions.press("ArrowUp");
+    const menu = page.getByRole("menu", { name: "Actions" });
+    await expect(menu.getByRole("menuitem", { name: "Refresh", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(menu).toHaveCount(0);
+    await actions.press("ArrowDown");
+    await expect(menu.getByRole("menuitem", { name: "New scheduled job" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    const editor = panel.getByRole("region", { name: "New scheduled job", exact: true });
     await expect(editor.getByLabel("Saved prompt", { exact: true })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("automation-editor-wide.png") });
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(760, 650),
     );
     await expect(editor).toBeVisible();
-    expect(
-      await editor.locator(".automation-form").evaluate((element) => ({
-        overflow: element.scrollWidth > element.clientWidth,
-        scrollable: element.scrollHeight > element.clientHeight,
-      })),
-    ).toEqual({ overflow: false, scrollable: true });
-    await editor
-      .getByRole("button", { name: "Save automation", exact: true })
-      .scrollIntoViewIfNeeded();
+    expect(await editor.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+      false,
+    );
+    await editor.getByRole("button", { name: "Create job", exact: true }).scrollIntoViewIfNeeded();
     await expect(editor.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+    await expect(page.getByRole("dialog", { name: "New scheduled job" })).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("automation-editor-narrow.png") });
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(
@@ -1559,6 +1577,20 @@ test("desktop: Scheduled Jobs excludes service controls and adapts its editor to
         .locator(".automations-page")
         .evaluate((element) => element.scrollWidth > element.clientWidth),
     ).toBe(false);
+    await actions.click();
+    await expect(menu).toBeVisible();
+    await actions.click();
+    await expect(menu).toHaveCount(0);
+    await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
+    await actions.click();
+    await expect(menu).toBeInViewport();
+    await expect(menu).toHaveCSS("box-shadow", "none");
+    await page.screenshot({ path: test.info().outputPath("automations-narrow-forced-colors.png") });
+    await selectSidebarPage(page, "Home");
+    await expect(menu).toHaveCount(0);
+    await selectSidebarPage(page, "Scheduled Jobs");
+    await expect(actions).toHaveAttribute("aria-expanded", "false");
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
     await page.screenshot({ path: test.info().outputPath("automations-narrow.png") });
   } finally {
     await application?.close().catch(() => {});

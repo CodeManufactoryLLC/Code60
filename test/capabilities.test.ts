@@ -54,6 +54,12 @@ describe("desktop capability catalog", () => {
       confirmation: "Human installation and schedule consent.",
     });
   });
+  it("describes scheduled-job controls independently from recurring enablement", () => {
+    const jobs = DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations");
+    expect(jobs?.purpose).toContain("Play starts one run");
+    expect(jobs?.purpose).toContain("separate schedule enable/pause");
+    expect(jobs?.limitations).toContain("Delete requires native confirmation");
+  });
   it("uses the Custom Assistants name with the existing stable capability ID", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
       "Sidebar → Assistants → Relay",

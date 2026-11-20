@@ -341,6 +341,11 @@ export class Scheduler {
         case "list":
           return state.automations.map(({ prompt: _prompt, repository, ...value }) => ({
             ...value,
+            running:
+              this.active?.automationId === value.id &&
+              state.executions.some(
+                (entry) => entry.id === this.active?.executionId && unfinished(entry),
+              ),
             repository: { dev: repository.dev, ino: repository.ino },
           }));
         case "get":

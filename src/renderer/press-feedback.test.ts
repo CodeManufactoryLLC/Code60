@@ -7,6 +7,7 @@ class Control {
   blocked = false;
   copy = false;
   iconOnly = false;
+  accordion = false;
   sidebar = false;
   raised = false;
   isConnected = true;
@@ -30,7 +31,8 @@ class Control {
   }
   matches(selector: string) {
     if (selector.includes(":disabled")) return this.disabled;
-    if (selector.includes(".home-card")) return this.raised;
+    if (selector.includes(".home-card"))
+      return this.raised || (selector.includes(".neo-accordion-trigger") && this.accordion);
     if (selector.includes(".icon-button")) return this.iconOnly;
     return selector === this.kind;
   }
@@ -134,6 +136,17 @@ it("animates only the glyph of an icon action, keeping its control hit target fi
     scale: "0.9",
     transformOrigin: "center",
   });
+});
+
+it("keeps accordion headers stationary and leaves feedback to disclosure rotation", () => {
+  const { control, emit } = fixture();
+  control.accordion = true;
+  control.icon = new Control();
+  emit("pointerdown");
+  emit("pointerup");
+  vi.advanceTimersByTime(100);
+  expect(control.animate).not.toHaveBeenCalled();
+  expect(control.icon.animate).not.toHaveBeenCalled();
 });
 
 it("keeps sidebar navigation backgrounds and selection edges fixed during press and release", () => {

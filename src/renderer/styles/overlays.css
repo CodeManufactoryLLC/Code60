@@ -517,6 +517,37 @@ label.check-label {
   border-top-width: 0;
 }
 
+/* Adapted Neobrutalism dropdown popup/items; other anchored menus stay unchanged. */
+.actions-menu.neo-dropdown-menu {
+  min-width: 12rem;
+  padding: 4px;
+  border: 2px solid var(--panel-border);
+  border-radius: var(--navigation-card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.neo-dropdown-menu [role="menuitem"] {
+  display: flex;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: var(--navigation-card-radius);
+  box-shadow: none;
+  font: var(--button-weight, 600) var(--button-size, 13px) / 1.25 var(--button-font, var(--font));
+  text-transform: var(--button-case, none);
+  --letter-spacing: var(--button-spacing, normal);
+}
+
+.neo-dropdown-menu [role="menuitem"]:is(:focus, :hover:not(:disabled)) {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--control-border);
+}
+
+.neo-dropdown-menu [role="menuitem"]:focus-visible {
+  outline: 2px solid var(--primary-text);
+  outline-offset: -4px;
+}
+
 /* Tooltip: inverted, with a muted-yellow top edge and a stem toward its control. */
 .app-tooltip[popover] {
   position: fixed;

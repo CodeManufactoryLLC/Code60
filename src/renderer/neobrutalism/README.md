@@ -57,3 +57,29 @@ remain authoritative. Its visible thumb uses the live control edge for contrast;
 forced colors keeps the system scrollbar. The viewport spans the conversation
 Card to its inner edge while inner message/composer widths retain their reading
 column. Other app scrollbars are unchanged.
+
+Scheduled Jobs adapts [Accordion](https://www.neobrutalism.dev/docs/accordion)
+from [accordion.json](https://www.neobrutalism.dev/r/accordion.json), retrieved
+2026-11-19, SHA-256 `b7e04619023703b6fee740ad71c42c99e1bd31d615a1557fa349b64b5813f516`.
+The MIT license above also covers this primitive. Local native disclosure buttons and
+hidden panels replace Base UI, with controlled expansion, stable labelled panels,
+and Arrow/Home/End navigation between triggers. Independent run/stop and delete
+buttons precede the final circular disclosure beside the noninteractive heading,
+never nested in its trigger. The name labels its expanded panel; the chevron
+retains arrow/Home/End navigation and explicit expanded state. The prefixed
+outline, main-color heading and hard shadow follow upstream; theme colors,
+saved typography, native focus, reduced motion and forced colors remain Code60-owned.
+Expanded job details and inline create/edit forms use Card, Button and Textarea.
+
+Dropdown Menu adapts the [upstream registry](https://www.neobrutalism.dev/r/dropdown-menu.json)
+(MIT, retrieved 2026-11-20, SHA-256
+`ed66e3e704cf2659089924601e0916fdddbad5bf2423f206e3567a4166fd12d2`).
+Only the used trigger, popup and item presentation is adapted. The local native
+Button and shared AnchoredMenu supply keyboard activation, arrows/Home/End,
+typeahead, Escape, focus restoration, viewport clamping and dismissal. There is
+no Base UI or icon dependency, global palette/reset or remote runtime fetch.
+Popup/items retain upstream 2px edges, rounded corners and blue item highlights,
+with Code60's 5px radius, hard shadow, saved control typography and live theme
+colors. Close on page hide, disable, window blur, anchor movement or document
+hide. Scheduled Jobs alone uses the adapter; existing unrelated menus retain
+their appearance. This rearranges existing actions and adds no capability.

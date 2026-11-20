@@ -82,6 +82,33 @@ const flush = async () => {
 };
 
 describe("durable automation scheduler", () => {
+  it("reports live job ownership independently of recurrence and history paging", async () => {
+    const s = setup();
+    const job = (await s.scheduler.request({
+      action: "create",
+      draft: { ...draft, enabled: false },
+    })) as Automation;
+    const list = async () =>
+      (await s.scheduler.request({ action: "list" })) as {
+        id: string;
+        enabled: boolean;
+        running: boolean;
+      }[];
+    expect(await list()).toMatchObject([{ id: job.id, enabled: false, running: false }]);
+    await s.scheduler.request({ action: "runNow", id: job.id });
+    await flush();
+    expect(await list()).toMatchObject([{ id: job.id, enabled: false, running: true }]);
+    await s.scheduler.request({ action: "history", before: 1 });
+    expect((await list())[0]?.running).toBe(true);
+    await expect(
+      s.scheduler.request({ action: "delete", id: job.id, revision: job.revision }),
+    ).rejects.toThrow("Cancel active work");
+    await s.scheduler.request({ action: "cancel", id: job.id });
+    await s.scheduler.stop();
+    expect((await list())[0]?.running).toBe(false);
+    expect(s.store.state.executions[0]?.status).toBe("cancelled");
+    expect(s.store.state.automations[0]).not.toHaveProperty("running");
+  });
   it("fences a claim still being saved when shutdown begins", async () => {
     const s = setup();
     const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;

@@ -56,6 +56,8 @@ export interface AutomationSummary {
   agent: string;
   enabled: boolean;
   nextRunAt: string | null;
+  /** Live ownership, independent of the selected history page. Older services omit it. */
+  running?: boolean;
 }
 export interface AutomationHistoryEntry {
   id: string;

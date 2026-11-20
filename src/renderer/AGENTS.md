@@ -205,8 +205,23 @@
   Feature pages add no extra top padding. Align header contents to the top so
   small title sizes and taller actions do not shift titles. Put project-readiness
   notices below chat headers, not above them.
-- Scheduled Jobs has one page title and two bordered table cards. Use compact,
-  icon-free Card Titles headings for Schedules and Execution history, not page trails.
+- Scheduled Jobs uses local Neobrutalism accordions for jobs and a table for
+  Execution history. Align Schedules and Actions with a 16px top inset; Actions
+  contains New scheduled job/Refresh, and creation/editing stays inline.
+  Order independent run/cancel, delete and disclosure controls in DOM and visually.
+  Use 24px transparent circles in 28px targets with black outlines, 2px hard
+  shadows, 1px press offsets and contrasting glyphs. Only the final chevron toggles
+  details; the noninteractive title labels the panel. Paint hover on the full
+  stationary header; skip generic header scaling. Fit 3px inner corners to the
+  outer 5px/2px frame and square lower corners while expanded without clipping focus.
+  Omit the agent/status/next-run subtitle; show `(Paused)` beside disabled schedules,
+  independently of manual execution. The live pause glyph retains Stop/cancel
+  behavior; its pulse is static for reduced motion and forced colors. Preserve
+  independent focus, narrow wrapping and system fills/outlines without shadows.
+  Load details only for an expanded active job. Keep recurrence enable/pause
+  independent, with original native deletion consent, active-run refusal,
+  revision checks, history and service ownership. Update self-knowledge for the
+  workflow; styling adds no further capability, setting, bridge or stored format.
 - Navigation cards use a fixed 224px width, 36px artwork, 18px default titles and
   32px gaps as columns wrap. Scale the independent Card Titles role by 9/11,
   with an 8px minimum; preserve saved text choices.

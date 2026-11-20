@@ -31,10 +31,15 @@ it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
   expect(markup).not.toContain("Background service");
   expect(markup).not.toContain("Service options");
   expect(markup).not.toContain("Install service");
-  expect(markup).toContain('data-test-table="automations"');
+  expect(markup).not.toContain('data-test-table="automations"');
+  expect(markup).toContain('data-slot="accordion"');
+  expect(markup).toContain('data-slot="dropdown-menu-trigger"');
+  expect(markup).toContain('aria-haspopup="menu"');
+  expect(markup).not.toContain("Refresh scheduled jobs");
+  expect(markup).not.toContain("New scheduled job");
   expect(markup).toContain('data-test-table="automation-history"');
-  expect(markup.match(/automation-table-card/g)).toHaveLength(2);
-  expect(markup).toContain('aria-label="Schedules"');
+  expect(markup.match(/automation-table-card/g)).toHaveLength(1);
+  expect(markup).toContain('aria-labelledby="schedules-heading"');
   expect(markup).toContain('aria-label="Execution history"');
   expect(markup).not.toContain("Cancel active run");
   expect(markup).not.toContain("Delete automation");
