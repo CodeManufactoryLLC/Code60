@@ -88,6 +88,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: `code60_get_context`, `code60_dispatch_agent`, `code60_list_agents`, `code60_read_agent`, `code60_send_agent`, `code60_cancel_agent`, `code60_finish_agent`, `code60_stop_agent`, `code60_resume_agent`
 
+## Browser automation
+
+- ID: `browser`
+- Status: shipped
+- Purpose: Use Headless, Visible or Existing Browser by stating a preference in chat.
+- Access: Relay, Custom Assistant or project chat → ask for browser automation; code60_browser
+- Prerequisite: provider
+- Agent access: existing-tools
+- Confirmation: Existing Browser uses the extension's connection approval; Code60 does not bypass it or provide an extension token.
+- Limits: Default Headless. Each live conversation owns its mode and browser connection; no saved setting. status/set-mode never launch processes. list-tools/call lazily run pinned Playwright MCP through Node.js/npm; Chrome must be installed. Existing Browser requires the Playwright Chrome extension and connection approval. Switching modes closes the old connection and loses isolated state; errors never fall back. Calls are serialized, bounded to 100 seconds, and cancellation/Stop/Undo/provider replacement/shutdown close owned processes. External website changes are not undone by message Undo. Browser tools are unavailable to workers, setup probes, helpers and the scheduler. User-configured MCP servers stay independent. Only product-allowed browser tools; no host-code, install, upload or WebMCP tools. Private npm context; 32 MiB temporary automatic artifacts, explicit outputs directly in the owning conversation workspace. Only dispatched turns have browser authority. No native desktop control.
+- Pages: none
+- Settings sections: none
+- Tools: `code60_browser`
+
 ## Plans
 
 - ID: `plans`
@@ -200,18 +214,18 @@ Schema version: 1
 - Settings sections: none
 - Tools: `code60_read_configurations`, `code60_search_configurations`
 
-## Agents
+## Providers
 
 - ID: `providers`
 - Status: shipped
 - Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
-- Access: Settings → Agents
+- Access: Providers → provider details
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Configured does not mean detected, verified, or connected. No automatic installation.
-- Pages: none
-- Settings sections: `agents`
+- Limits: Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped desktop agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.
+- Pages: `providers`, `provider`
+- Settings sections: none
 - Tools: none
 
 ## Model and reasoning
@@ -219,7 +233,7 @@ Schema version: 1
 - ID: `model-settings`
 - Status: shipped
 - Purpose: Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.
-- Access: Chat or worker composer → Model; Settings → Agents → Default models to clear
+- Access: Chat or worker composer → Model; Providers → provider details → Default models to clear
 - Prerequisite: provider
 - Agent access: human-only
 - Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.

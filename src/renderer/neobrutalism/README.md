@@ -11,7 +11,7 @@ shells, and quiet worker approval Cards. Card accepts div, section or aside and 
 Local adaptations: `nb:` Tailwind prefix, `--nb-card-spacing` layout variable,
 explicit border style/box sizing because Preflight is absent, span-compatible
 parts inside native buttons, and simple class joining without runtime dependencies.
-Code60's navigation adapters supply the main-content gallery and all five sidebar
+Code60's navigation adapters supply the main-content gallery and all six sidebar
 group containers, preserving their layout, artwork and native actions,
 text roles, pressed/focus and accessibility behavior. The Card owns the 2px outline with 5px corners, live theme fill/text and 4px hard shadow.
 
@@ -83,3 +83,33 @@ with Code60's 5px radius, hard shadow, saved control typography and live theme
 colors. Close on page hide, disable, window blur, anchor movement or document
 hide. Scheduled Jobs alone uses the adapter; existing unrelated menus retain
 their appearance. This rearranges existing actions and adds no capability.
+
+Provider controls adapt the MIT Dropdown Menu and Checkbox registry presentation,
+retrieved 2026-11-19:
+
+| Primitive | Source | SHA-256 |
+| --- | --- | --- |
+| Dropdown Menu | [dropdown-menu.json](https://www.neobrutalism.dev/r/dropdown-menu.json) | `ed66e3e704cf2659089924601e0916fdddbad5bf2423f206e3567a4166fd12d2` |
+| Checkbox | [checkbox.json](https://www.neobrutalism.dev/r/checkbox.json) | `8f4b35e7cdbdfebbaffade46c2fab7d49182f49ea77b1ea3376194d49adde790` |
+
+ProviderDropdown retains native AnchoredMenu behavior instead of Base UI, with
+2px outlined rounded items, inset padding, theme-aware highlighted fills and hard
+shadow. Disabled items remain focusable with accessible reasons and never execute.
+PrimaryProviderMark adapts the checked fill/check glyph into a circular read-only
+status image, 36px in cards and 18px in rows, with the existing hover/focus tooltip.
+It is not an input and cannot toggle membership. Styling lives in home.css and
+uses live Code60 tokens, saved typography and forced-colors overrides.
+
+DialogContent adapts [Neobrutalism Dialog](https://www.neobrutalism.dev/docs/dialog),
+[dialog.json](https://www.neobrutalism.dev/r/dialog.json), retrieved 2026-11-19.
+Registry SHA-256: `ad7c77988523e32e01d6cf23a9e3e7f86352d21e2c4066c0934bb3bc47a0e8a6`.
+It uses the native dialog element, forwards its props/ref, and preserves each
+caller's showModal, focus, Escape and pending-action ownership. Only the used
+content surface is vendored: a 2px outline, hard 4px shadow, theme fill/text and
+10px corners. Existing widths and header/body/footer layouts remain adapters;
+border-box sizing bounds them to the viewport. Compact dialogs retain balanced
+16px content padding, while table settings and the palette retain their own
+padding. Empty scrollbar gutters are removed from modal shells and native modal
+body panes; actual scrollbars remain available. Full-screen splash layout is
+separate. Forced colors uses system fills/edges without shadows. No Base UI,
+new dependency, remote runtime fetch, motion or capability is introduced.

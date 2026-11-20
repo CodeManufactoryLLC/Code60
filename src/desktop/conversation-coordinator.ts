@@ -8,6 +8,7 @@ import {
 import { ACTIVE_STATUSES, type Orchestrator, type RunEvent, type RunView } from "../core/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import type { BrowserAutomation } from "./browser-automation.js";
 import type { ChatCheckpoints } from "./chat-checkpoints.js";
 import { ConversationReplies } from "./conversation-replies.js";
 import type { WorkerUpdate } from "./mcp-control.js";
@@ -72,6 +73,9 @@ export class ChatSession {
   chatPending: SequencedEvent[] = [];
   chatDisposers: (() => void)[] = [];
   mcpGateway: McpGateway | undefined;
+  browser: BrowserAutomation | undefined;
+  browserChat: Orchestrator | undefined;
+  browserTurn: number | undefined;
   dispatches = new Map<string, { key: string; result: Promise<unknown> }>();
   workerScope = randomUUID();
   inbox: WorkerUpdate[] = [];

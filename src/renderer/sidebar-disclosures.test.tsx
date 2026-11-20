@@ -538,3 +538,21 @@ it("propagates an explicit project-chevron collapse to its retained worker discl
   expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
 });
+
+it("preserves collapsed Providers until an explicit provider destination changes", () => {
+  const tabs = { ...initialTabs, active: "provider" as const, providerId: "claude" };
+  const view = tabList({ tabs });
+  const providers = () =>
+    find(
+      view.tree(),
+      (element) => typeof element.type === "function" && element.type.name === "ProvidersSidebar",
+    );
+  expect(providers().props.expanded).toBe(true);
+  (providers().props.onExpanded as (open: boolean) => void)(false);
+  view.render();
+  expect(providers().props.expanded).toBe(false);
+  view.render({ tabs: { ...tabs } });
+  expect(providers().props.expanded).toBe(false);
+  view.render({ tabs: { ...tabs, providerId: "codex" } });
+  expect(providers().props.expanded).toBe(true);
+});

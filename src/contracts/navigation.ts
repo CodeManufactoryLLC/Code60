@@ -23,6 +23,7 @@ export interface PageDefinition {
 export const parentPageIds = [
   "assistants",
   "projects",
+  "providers",
   "apps",
   "tables",
   "settings",
@@ -58,6 +59,26 @@ export const pages = [
     initialOrder: 18,
     database: false,
     icon: "app-backlog",
+  },
+  {
+    id: "providers",
+    label: "Providers",
+    group: "primary",
+    order: 1,
+    initialOrder: 25,
+    database: false,
+    icon: "app-helmet",
+  },
+  {
+    id: "provider",
+    label: "Provider",
+    group: "legacy",
+    order: 0,
+    initialOrder: 26,
+    database: false,
+    icon: "app-helmet",
+    parent: "providers",
+    internal: true,
   },
   {
     id: "project",
@@ -295,7 +316,6 @@ export const pages = [
 
 export const settingsSections = [
   { id: "about", label: "About", icon: "app-info" },
-  { id: "agents", label: "Agents", icon: "app-helmet" },
   { id: "appearance", label: "Appearance", icon: "app-color-palette" },
   { id: "memory", label: "Memory", icon: "app-bookshelf" },
   { id: "polling-settings", label: "Polling", icon: "app-heart-rate" },

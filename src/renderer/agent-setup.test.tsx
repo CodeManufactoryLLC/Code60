@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import type { AgentSetupSession, DesktopApi, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
-import { OrchestrationSettings } from "./orchestration-settings.js";
 
 function snapshot(phase: AgentSetupSession["phase"], detected = false): Snapshot {
   return {
@@ -42,7 +41,7 @@ function render(phase: AgentSetupSession["phase"], detected = false) {
 
 it("starts with connector buttons and no confirmation or review controls", () => {
   const html = render("select");
-  expect(html).toContain("Select your Primary / Orchestrator");
+  expect(html).toContain("Select your Primary Provider");
   expect(html).toContain('class="agent-choice"');
   expect(html).not.toMatch(/Continue|Finish setup|Review agents|Yes,|No,/);
 });
@@ -71,42 +70,4 @@ it("does not present an unsaved verification as a completed connection", () => {
   expect(html).toContain("Saving connection…");
   expect(html).not.toContain("Connected");
   expect(html).not.toMatch(/Finish setup|Review agents|Yes,|No,/);
-});
-
-it.each([false, true])("recovers a Settings setup session only when active is %s", (active) => {
-  const state = snapshot("select");
-  if (!state.agentSetup) throw new Error("Missing fixture setup");
-  state.agentSetup.complete = true;
-  state.agentSetup.primary = "claude";
-  state.agentSetup.enabled = ["claude"];
-  const html = renderToStaticMarkup(
-    <OrchestrationSettings snapshot={state} api={{} as DesktopApi} active={active} />,
-  );
-  expect(html.includes("agent-setup-dialog")).toBe(active);
-});
-
-it("lists role-scoped model defaults with bounded clear controls and an empty state", () => {
-  const state = snapshot("select");
-  const props = {
-    snapshot: state,
-    api: { modelDefault: async () => {} } as Partial<DesktopApi> as DesktopApi,
-    active: false,
-  };
-  expect(renderToStaticMarkup(<OrchestrationSettings {...props} />)).toContain(
-    "No saved model defaults.",
-  );
-  state.modelDefaults = {
-    version: 1,
-    providers: {
-      claude: {
-        orchestrator: [{ configId: "model", value: "m1", name: "Model One" }],
-        worker: [{ configId: "model", value: "m2", name: "Model Two" }],
-      },
-    },
-  };
-  const html = renderToStaticMarkup(<OrchestrationSettings {...props} />);
-  expect(html).toContain("Default models");
-  expect(html).toContain("Model One");
-  expect(html).toContain("Model Two");
-  expect(html).toContain('aria-label="Clear claude worker model default"');
 });

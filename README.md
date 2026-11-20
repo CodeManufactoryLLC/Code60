@@ -66,7 +66,7 @@ and platform-validation status.
 In any connected chat, use the **Model** picker between turns to choose the
 connector's advertised model and reasoning settings. **Save as default** applies
 to new sessions for that connector and role, orchestrator (Relay, project chats
-and Custom Assistants) or worker. Clear saved choices in **Settings → Agents →
+and Custom Assistants) or worker. Clear saved choices in **Providers → provider details →
 Default models**. Existing sessions and automation defaults do not change.
 Unavailable defaults produce a note; Code60 never substitutes a model.
 
@@ -128,6 +128,16 @@ new runtime, and preserve its previous global pause state. Stop a standalone
 development scheduler before installing an app update. If restart fails, Code60
 shows a recovery message; repair the service from Apps → System Manager.
 Schedules, evidence and worktrees are preserved.
+
+## Browser automation
+
+For browser tasks, tell Relay, a Custom Assistant or a project chat to use
+**Headless**, **Visible**, or **Existing Browser**. Headless is the default;
+Visible opens a separate window and Existing Browser uses the Playwright
+Chrome extension with its connection approval. Install Chrome and Node.js/npm;
+the pinned Playwright MCP package starts on demand. Preferences last for that live
+conversation, and switching modes loses isolated browser state. Website changes
+are not reversed by message Undo. See [browser modes](MCP.md#browser-modes-in-chat).
 
 ## Security and privacy
 
@@ -281,3 +291,16 @@ The public Code60 CLI and Windows support have been removed. There is no replace
 terminal command or compatibility shim. Existing configuration, databases, run records,
 histories and worktrees are preserved. Provider CLIs remain desktop prerequisites.
 This is a breaking removal for the next release; release preparation sets the version.
+
+### Providers
+
+Open **Providers** after Projects in the sidebar to manage verified coding-agent
+providers without a database. **+ Add Provider** uses the existing connection
+wizard; provider cards and sidebar entries open the same details and saved model
+defaults. Their More menus offer **Disconnect** and **Set as Primary**.
+
+The checked circle marks the primary provider. Set another provider as primary
+before disconnecting it. Primary changes preserve other memberships. Both menu
+actions require stopped desktop agent work and no setup transaction. Disconnect
+removes Code60 membership only; histories, model defaults and external logins remain.
+Verified membership does not indicate a live connection.

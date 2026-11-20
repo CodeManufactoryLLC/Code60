@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld("desktop", {
   readReviewFile: (request: unknown) => ipcRenderer.invoke("desktop:review-file", request),
   readDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-read", request),
   cancelDiff: (request: unknown) => ipcRenderer.invoke("desktop:diff-cancel", request),
+  providerAction: (request: unknown) => ipcRenderer.invoke("desktop:provider-action", request),
   beginAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-begin", request),
   attemptAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-attempt", request),
   cancelAgentSetup: (request: unknown) => ipcRenderer.invoke("desktop:setup-cancel", request),

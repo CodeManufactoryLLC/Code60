@@ -4,6 +4,7 @@ import { menuAnchorMoved } from "./menu-anchor.js";
 import { menuTypeahead } from "./menu-typeahead.js";
 
 export function AnchoredMenu({
+  className,
   x,
   y,
   label,
@@ -15,10 +16,11 @@ export function AnchoredMenu({
   appearance,
   anchor,
 }: {
+  className?: string;
   x: number;
   y: number;
   label: string;
-  items: readonly { label: string; run(): void }[];
+  items: readonly { label: string; disabled?: boolean; reason?: string | undefined; run(): void }[];
   onClose(): void;
   id?: string;
   align?: "start" | "end";
@@ -83,7 +85,9 @@ export function AnchoredMenu({
     <div
       ref={menu}
       id={id}
-      className={appearance ? "actions-menu neo-dropdown-menu" : "actions-menu"}
+      className={["actions-menu", appearance && "neo-dropdown-menu", className]
+        .filter(Boolean)
+        .join(" ")}
       role="menu"
       aria-label={label}
       style={position}
@@ -117,7 +121,12 @@ export function AnchoredMenu({
           type="button"
           role="menuitem"
           key={item.label}
+          aria-disabled={item.disabled || undefined}
+          aria-description={item.reason}
+          title={item.reason}
+          data-tooltip={item.reason}
           onClick={() => {
+            if (item.disabled) return;
             onClose();
             item.run();
           }}

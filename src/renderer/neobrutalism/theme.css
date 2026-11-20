@@ -3,6 +3,7 @@
 @import "tailwindcss/utilities.css" layer(neobrutalism) prefix(nb) source(none);
 @source "./card.tsx";
 @source "./accordion.tsx";
+@source "./dialog.tsx";
 @source "./button.tsx";
 @source "./textarea.tsx";
 @source "./breadcrumb.tsx";
@@ -11,6 +12,10 @@
 
 /* Inline aliases resolve against each card's live application theme/preferences. */
 @theme inline {
+  --color-dialog: var(--surface);
+  --color-dialog-edge: var(--panel-border);
+  --radius-dialog: var(--dialog-radius);
+  --shadow-dialog: var(--card-shadow);
   --color-background: var(--nb-card-fill, var(--surface));
   --color-foreground: var(--text);
   --color-border: var(--nb-card-border, var(--panel-border));

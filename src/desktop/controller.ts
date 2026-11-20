@@ -30,6 +30,7 @@ import type {
   ProjectEntry,
   PromptId,
   PromptTemplates,
+  ProviderAction,
   RecoveryActionResult,
   RunConfiguration,
   RunSettings,
@@ -98,6 +99,7 @@ import {
   parseProjectSearchPage,
   parseProjectSearchQuery,
   parsePromptTemplateId,
+  parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
@@ -173,6 +175,7 @@ import {
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
 import { ApplicationAgents } from "./application-agents.js";
+import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
@@ -369,6 +372,7 @@ export class DesktopController {
   readonly rag: RagService;
   readonly memory: MemoryService;
   readonly modelDefaults: ModelDefaults;
+  private providerMutation = false;
   private readonly agentSetup: AgentSetup;
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
@@ -2185,7 +2189,7 @@ export class DesktopController {
   private requireEnabled(provider: string): void {
     if (!this.agentSetup.complete) throw new Error("Complete agent setup first");
     if (!this.agentSetup.enabled.includes(provider))
-      throw new Error(`Agent '${provider}' is not enabled. Connect it in Settings.`);
+      throw new Error(`Agent '${provider}' is not enabled. Connect it in Providers.`);
   }
 
   private async enabledConfig() {
@@ -2199,6 +2203,39 @@ export class DesktopController {
         Object.entries(config.agents).filter(([id]) => this.agentSetup.enabled.includes(id)),
       ),
     };
+  }
+
+  providerAction(value: ProviderAction): Promise<void> {
+    const request = parseProviderAction(value);
+    if (this.providerMutation)
+      return Promise.reject(new Error("Wait for the provider change to finish"));
+    this.providerMutation = true;
+    this.changed();
+    return this.exclusive(async () => {
+      const release = this.relay?.beginProviderChange();
+      try {
+        await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+        await this.cancelOrchestrationTest();
+        const record = await this.agentSetup.manage(request);
+        if (request.type === "set-primary") {
+          await this.stopMemoryExtraction();
+          await this.cancelSearchSummary();
+          this.chatKey = "";
+          this.orchestration = {
+            provider: record.primary,
+            allowAll: true,
+            connection: "idle",
+            error: null,
+          };
+        }
+        await this.syncOrchestrationChat();
+      } finally {
+        release?.();
+      }
+    }).finally(() => {
+      this.providerMutation = false;
+      this.changed();
+    });
   }
 
   beginAgentSetup(request: SetupBegin): Promise<void> {
@@ -2620,12 +2657,12 @@ export class DesktopController {
   private async mcpAgentServer(session: ChatSession): Promise<AgentMcpServer[]> {
     if (!session.mcpGateway) {
       const owner = this.projectHost.current;
-      session.mcpGateway = await createMcpGateway((name, args) =>
+      session.mcpGateway = await createMcpGateway((name, args, signal) =>
         this.projectHost.run(owner, async () => {
           this.projectHost.assertCurrent(owner);
           if (this.closing) throw new Error("Code60 is shutting down");
           if (session.revoked) throw new Error("This orchestration chat is no longer current");
-          const result = await this.callChatTool(name, args, session);
+          const result = await this.callChatTool(name, args, session, signal);
           this.projectHost.assertCurrent(owner);
           return result;
         }),
@@ -2645,8 +2682,28 @@ export class DesktopController {
     ];
   }
 
-  private async callChatTool(name: string, args: unknown, session: ChatSession): Promise<unknown> {
+  private async callChatTool(
+    name: string,
+    args: unknown,
+    session: ChatSession,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     this.conversations.assertCurrent(session);
+    if (name === "code60_browser") {
+      const run = session.chat?.runs()[0];
+      if (
+        !run ||
+        !session.browserTurn ||
+        session.browserTurn !== run.turns ||
+        run.stopping ||
+        !["running", "waiting"].includes(run.status)
+      )
+        throw new Error("Browser actions require an active chat request.");
+      if (!session.chatDirectory) throw new Error("This chat's browser workspace is unavailable.");
+      session.browser ??= new BrowserAutomation(session.chatDirectory, this.env);
+      session.browserChat = session.chat;
+      return session.browser.call(args, signal);
+    }
     if (isKnowledgeTool(name))
       return this.knowledge.call(name, args, this.knowledgeCaller(session));
     if (isActivityTool(name)) {
@@ -2675,9 +2732,17 @@ export class DesktopController {
   }
 
   private async closeMcpGateway(session: ChatSession): Promise<void> {
+    session.browserTurn = undefined;
     session.activity.invalidate();
     const gateway = session.mcpGateway;
-    await gateway?.close();
+    const browser = session.browser;
+    const results = await Promise.allSettled([gateway?.close(), browser?.shutdown()]);
+    if (results.some((result) => result.status === "rejected"))
+      throw new Error("This chat's browser or tool connection could not be stopped.");
+    if (session.browser === browser) {
+      session.browser = undefined;
+      session.browserChat = undefined;
+    }
     if (session.mcpGateway === gateway) session.mcpGateway = undefined;
   }
 
@@ -2921,7 +2986,7 @@ export class DesktopController {
         ? projectChatRoot(this.database.path, this.workspace.dir)
         : join(dirname(this.database.path), ".code60_workspace")
       : undefined;
-    if (this.chatStore?.root !== root) this.chatRegistryLoaded = false;
+    if ((this.relay && !restart) || this.chatStore?.root !== root) this.chatRegistryLoaded = false;
     const loadSaved = !restart && !!root && !this.chatRegistryLoaded;
     if (restart) {
       const previous = this.conversations.current;
@@ -3094,13 +3159,33 @@ export class DesktopController {
     const gateway = session.mcpGateway;
     void chat.done
       .then(async () => {
-        await gateway?.close();
+        const browser = session.browserChat === chat ? session.browser : undefined;
+        await Promise.all([gateway?.close(), browser?.shutdown()]);
+        if (session.browserChat === chat && session.browser === browser) {
+          session.browser = undefined;
+          session.browserChat = undefined;
+          session.browserTurn = undefined;
+        }
         if (session.mcpGateway === gateway) session.mcpGateway = undefined;
       })
       .catch(() => {});
     session.chatDisposers = [
       chat.onEvent(
         this.projectHost.bind((event) => {
+          if (session.chat === chat) {
+            if (event.type === "prompt") session.browserTurn = event.turn;
+            if (
+              event.type === "turnEnd" ||
+              (event.type === "status" && !ACTIVE_STATUSES.has(event.status))
+            ) {
+              session.browserTurn = undefined;
+              if (event.type !== "turnEnd" || event.stopReason !== "end_turn")
+                void session.browser?.cancel().catch(() => {
+                  session.chatError = "Browser cleanup requires retry.";
+                  this.changed();
+                });
+            }
+          }
           session.activity.event(event);
           session.replies.event(event);
           if (
@@ -3582,13 +3667,21 @@ export class DesktopController {
         }
       } else if (!session.chat || !run) throw new Error("No orchestration session is available");
       else if (request.type === "cancel") {
+        session.browserTurn = undefined;
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
         this.conversations.pause(session);
+        await session.browser?.cancel();
         await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
       } else {
+        session.browserTurn = undefined;
         this.conversations.pause(session);
         await this.pausePlan(session, "Conversation stopped.");
-        await session.chat.shutdown();
+        const results = await Promise.allSettled([
+          this.closeMcpGateway(session),
+          session.chat.shutdown(),
+        ]);
+        if (results.some((result) => result.status === "rejected"))
+          throw new Error("Some conversation processes could not be stopped. Retry cleanup.");
       }
       this.changed();
     });
@@ -4276,7 +4369,18 @@ export class DesktopController {
         ...(relayWorkers?.runs.map((run) => run.record.id) ?? []),
       ],
       orchestration: { ...this.orchestration },
-      agentSetup: this.agentSetup.snapshot(),
+      agentSetup: {
+        ...this.agentSetup.snapshot(),
+        management: {
+          blockedReason: this.providerMutation
+            ? "Wait for the provider change to finish"
+            : this.agentSetup.snapshot().session
+              ? "Finish or cancel provider setup first"
+              : this.hasActiveWork
+                ? "Finish or stop active agent work before changing providers"
+                : null,
+        },
+      },
       modelDefaults: this.modelDefaults.snapshot(),
       revision: this.revision,
       database: this.database?.path ?? null,
@@ -6098,6 +6202,7 @@ export class DesktopController {
       for (const session of this.conversations.sessions) this.conversations.pause(session);
       for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
       const stopped = await Promise.allSettled([
+        ...this.conversations.sessions.map((session) => this.closeMcpGateway(session)),
         ...this.conversations.sessions.map((session) => session.titleTask?.done),
         ...this.conversations.sessions.map((session) =>
           this.pausePlan(session, "Stopped. Inspect previous work before resuming."),

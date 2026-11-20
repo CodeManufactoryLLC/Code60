@@ -29,6 +29,8 @@ export class ApplicationAgents {
   private config: Parameters<RelayService["sync"]>[1];
   private knowledge: Parameters<RelayService["attachKnowledge"]>[0] | undefined;
   private closing = false;
+  private providerTransition = false;
+  private pendingSends = 0;
   private epoch = 0;
   error: string | undefined;
   constructor(
@@ -79,7 +81,15 @@ export class ApplicationAgents {
     return !!this.owner(id);
   }
   get active() {
-    return this.all().some((agent) => agent.active);
+    return this.pendingSends > 0 || this.all().some((agent) => agent.active);
+  }
+  beginProviderChange(): () => void {
+    if (this.providerTransition || this.active)
+      throw new Error("Finish or stop active agent work before changing providers");
+    this.providerTransition = true;
+    return () => {
+      this.providerTransition = false;
+    };
   }
   attachKnowledge(knowledge: NonNullable<typeof this.knowledge>) {
     this.knowledge = knowledge;
@@ -106,6 +116,8 @@ export class ApplicationAgents {
       );
   }
   manage(value: unknown): Promise<CustomAgentResponse> {
+    if (this.providerTransition)
+      return Promise.reject(new Error("Wait for the provider change to finish"));
     const request = parseCustomAgentRequest(value);
     const epoch = this.epoch;
     const result = this.tail.then(() => this.manageOne(request, epoch));
@@ -205,6 +217,8 @@ export class ApplicationAgents {
     };
   }
   action(request: Request<"action">) {
+    if (this.providerTransition && !["select", "history", "stop", "cancel"].includes(request.type))
+      throw new Error("Wait for the provider change to finish");
     const owner =
       request.type === "new"
         ? this.selected
@@ -213,7 +227,13 @@ export class ApplicationAgents {
           : this.require(request.id);
     if (this.suspended.has(owner) || this.closing) throw new Error("Agent is unavailable");
     if (request.type === "select") this.selected = owner;
-    return owner.action(request);
+    if (request.type !== "send") return owner.action(request);
+    this.pendingSends++;
+    this.notify();
+    return owner.action(request).finally(() => {
+      this.pendingSends--;
+      this.notify();
+    });
   }
   fileRoot(scope: DetailScope) {
     if (scope.kind === "project")

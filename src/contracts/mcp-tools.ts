@@ -1,4 +1,5 @@
 import type { ActivityTool } from "./activity.js";
+import { BROWSER_TOOL } from "./browser.js";
 import { MCP_KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
 
 export function mcpToolsForRole(role: "relay" | "project") {
@@ -18,6 +19,7 @@ export function mcpToolsForRole(role: "relay" | "project") {
     "code60_update_plan",
     "code60_get_activity_context",
     "code60_report_activity",
+    "code60_browser",
   ]);
   return MCP_TOOL_DEFINITIONS.filter((tool) => allowed.has(tool.name)).map((tool) => {
     if (tool.name === "code60_create_plan" || tool.name === "code60_update_plan") {
@@ -162,6 +164,7 @@ export interface McpActivityToolDefinition extends McpToolBase {
   name: ActivityTool;
 }
 export type McpToolDefinition =
+  | typeof BROWSER_TOOL
   | (typeof MCP_KNOWLEDGE_TOOL_DEFINITIONS)[number]
   | McpTableToolDefinition
   | McpControlToolDefinition
@@ -624,6 +627,7 @@ export const MCP_ACTIVITY_TOOL_DEFINITIONS: readonly McpActivityToolDefinition[]
 ];
 
 export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
+  BROWSER_TOOL,
   ...MCP_KNOWLEDGE_TOOL_DEFINITIONS,
   ...MCP_ACTIVITY_TOOL_DEFINITIONS,
   ...MCP_TABLE_TOOL_DEFINITIONS,

@@ -15,7 +15,7 @@ export interface McpGateway {
   close(): Promise<void>;
 }
 
-export type McpCallHandler = (name: string, args: unknown) => Promise<unknown>;
+export type McpCallHandler = (name: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
 
 function reply(response: ServerResponse, status: number, body: unknown): void {
   let text = JSON.stringify(body);
@@ -73,6 +73,12 @@ export async function createMcpGateway(handler: McpCallHandler): Promise<McpGate
       return;
     }
     inFlight++;
+    const cancellation = new AbortController();
+    const abort = () => cancellation.abort();
+    request.once("aborted", abort);
+    response.once("close", () => {
+      if (!response.writableEnded) abort();
+    });
     void (async () => {
       try {
         if (!request.headers["content-type"]?.startsWith("application/json")) {
@@ -91,7 +97,11 @@ export async function createMcpGateway(handler: McpCallHandler): Promise<McpGate
           return;
         }
         const { name, arguments: args } = body as { name: string; arguments?: unknown };
-        const result = await handler(name, args);
+        const result = await handler(
+          name,
+          args,
+          AbortSignal.any([cancellation.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
+        );
         reply(response, 200, { result });
       } catch (error) {
         // Only an Error's message crosses the boundary; never stringify arbitrary thrown values.
@@ -99,6 +109,7 @@ export async function createMcpGateway(handler: McpCallHandler): Promise<McpGate
           error: error instanceof Error ? diagnosticText(error.message) : "Tool request failed",
         });
       } finally {
+        request.off("aborted", abort);
         inFlight--;
       }
     })();

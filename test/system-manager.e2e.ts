@@ -229,7 +229,7 @@ test("workflow: Scheduling Service lifecycle uses verified native status and pre
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
-    await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     const openManager = async () => {
       await page.locator("#tab-apps").press("ArrowRight");

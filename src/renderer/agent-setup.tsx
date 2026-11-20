@@ -2,8 +2,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import type { DesktopApi, SetupBegin, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
-
-export { AgentLogo } from "./agent-logo.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 
 export function AgentSetupWizard({
   windowControls,
@@ -48,9 +47,9 @@ export function AgentSetupWizard({
   const choosing = !busy && !success && (!session || session.phase === "select");
   const heading = choosing
     ? setup?.complete || mode === "add"
-      ? "Connect another agent"
-      : "Select your Primary / Orchestrator"
-    : `Connect ${candidate?.name ?? "agent"}`;
+      ? "Connect another provider"
+      : "Select your Primary Provider"
+    : `Connect ${candidate?.name ?? "provider"}`;
   const finish = useCallback(async () => {
     if (!session?.id || !session.candidate || saveInFlight.current) return;
     saveInFlight.current = true;
@@ -130,7 +129,7 @@ export function AgentSetupWizard({
     setSaving(false);
   }
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog agent-setup-dialog"
       aria-labelledby={id}
@@ -147,7 +146,7 @@ export function AgentSetupWizard({
         <button
           type="button"
           className="icon-button"
-          aria-label="Close agent setup"
+          aria-label="Close provider setup"
           disabled={saving}
           onClick={() => void close()}
         >
@@ -226,7 +225,9 @@ export function AgentSetupWizard({
             </p>
             {busy && (
               <progress
-                aria-label={session?.phase === "detecting" ? "Detecting agent" : "Connecting agent"}
+                aria-label={
+                  session?.phase === "detecting" ? "Detecting provider" : "Connecting provider"
+                }
               />
             )}
             {!starting && session?.phase === "failed" && (
@@ -270,7 +271,7 @@ export function AgentSetupWizard({
               disabled={saving || providers.every((p) => setup?.enabled.includes(p.id))}
               onClick={() => void addAnother()}
             >
-              Add another agent
+              Add another provider
             </button>
           </>
         ) : session?.phase === "failed" || (session?.phase === "success" && error) ? (
@@ -287,7 +288,7 @@ export function AgentSetupWizard({
                   })
                 }
               >
-                Choose another agent
+                Choose another provider
               </button>
             )}
             <button
@@ -307,6 +308,6 @@ export function AgentSetupWizard({
           </button>
         )}
       </div>
-    </dialog>
+    </DialogContent>
   );
 }

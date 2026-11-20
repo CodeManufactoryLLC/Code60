@@ -25,6 +25,8 @@ import {
 } from "./navigation-tree.js";
 import { Card } from "./neobrutalism/card.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
+import type { ProviderManagement } from "./provider-management.js";
+import { ProvidersSidebar } from "./providers-sidebar.js";
 import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout.js";
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
 
@@ -37,6 +39,8 @@ export function PageTabBar({
   onConnectDatabase,
   projectDisabled,
   navigation,
+  providerSetup,
+  providerManagement,
   customAgents = [],
   chats,
   runs,
@@ -55,6 +59,8 @@ export function PageTabBar({
   onConnectDatabase?(): void;
   projectDisabled: boolean;
   navigation: NavigationActions;
+  providerSetup?: import("../bridge/index.js").AgentSetupSnapshot | undefined;
+  providerManagement?: ProviderManagement | undefined;
   customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -143,6 +149,7 @@ export function PageTabBar({
         />
         <div id="navigation-sidebar-content" className="sidebar-content">
           <PageTabList
+            sidebarOpen={open}
             onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
             projectDisabled={projectDisabled}
             tabs={tabs}
@@ -150,6 +157,8 @@ export function PageTabBar({
             onSelect={onSelect}
             onSettingsSectionSelect={onSettingsSectionSelect}
             navigation={navigation}
+            providerSetup={providerSetup}
+            providerManagement={providerManagement}
             customAgents={customAgents}
             chats={chats}
             runs={runs}
@@ -185,6 +194,7 @@ export function PageTabBar({
 }
 
 function PageTabList({
+  sidebarOpen,
   onOpenProject,
   projectDisabled,
   tabs,
@@ -192,6 +202,8 @@ function PageTabList({
   onSelect,
   onSettingsSectionSelect,
   navigation,
+  providerSetup,
+  providerManagement,
   customAgents = [],
   chats,
   runs,
@@ -202,6 +214,7 @@ function PageTabList({
   openProjects,
   selectedProjectId,
 }: {
+  sidebarOpen: boolean;
   onOpenProject(): void;
   projectDisabled: boolean;
   tabs: PageTabs;
@@ -209,6 +222,8 @@ function PageTabList({
   onSelect(id: PageId): void;
   onSettingsSectionSelect(id: SettingsSectionId | null): void;
   navigation: NavigationActions;
+  providerSetup?: import("../bridge/index.js").AgentSetupSnapshot | undefined;
+  providerManagement?: ProviderManagement | undefined;
   customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -219,6 +234,15 @@ function PageTabList({
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
 }) {
+  const [providersExpanded, setProvidersExpanded] = useState(
+    () => localStorage.getItem("code60.providersExpanded") !== "false",
+  );
+  useEffect(() => {
+    localStorage.setItem("code60.providersExpanded", String(providersExpanded));
+  }, [providersExpanded]);
+  useLayoutEffect(() => {
+    if (tabs.active === "provider" && tabs.providerId) setProvidersExpanded(true);
+  }, [tabs.active, tabs.providerId]);
   const { pending: chatPending, error: chatError, chatAction, projectAction } = navigation;
   const [homeExpanded, setHomeExpanded] = useState(
     () => localStorage.getItem("code60.homeExpanded") !== "false",
@@ -409,6 +433,7 @@ function PageTabList({
       ? [...(relay && !chatPending ? ["relay" as const] : []), "custom-agents" as const]
       : []),
     "chat",
+    "providers",
     "apps",
     ...(appsExpanded ? descendants("apps") : []),
     "settings",
@@ -480,6 +505,32 @@ function PageTabList({
     if (navigationFrame.current !== undefined) {
       cancelAnimationFrame(navigationFrame.current);
       navigationFrame.current = undefined;
+    }
+    const providerButtons = () => [
+      ...document.querySelectorAll<HTMLButtonElement>("#provider-pages button:enabled"),
+    ];
+    if (id === "providers" && ["ArrowLeft", "ArrowRight", "ArrowDown"].includes(event.key)) {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setProvidersExpanded(false);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (providersExpanded) providerButtons()[0]?.focus();
+        else setProvidersExpanded(true);
+        return;
+      }
+      if (providersExpanded && providerButtons()[0]) {
+        event.preventDefault();
+        providerButtons()[0]?.focus();
+        return;
+      }
+    }
+    if (id === "apps" && event.key === "ArrowUp" && providersExpanded && providerButtons().length) {
+      event.preventDefault();
+      providerButtons().at(-1)?.focus();
+      return;
     }
     if (id === "home" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
@@ -1074,6 +1125,22 @@ function PageTabList({
           )}
         </div>
       </Card>
+      <ProvidersSidebar
+        menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
+        sidebarOpen={sidebarOpen}
+        setup={providerSetup}
+        management={providerManagement}
+        selectedId={tabs.active === "provider" ? tabs.providerId : undefined}
+        active={tabs.active === "providers" || tabs.active === "provider"}
+        expanded={providersExpanded}
+        onExpanded={setProvidersExpanded}
+        onHome={() => onSelect("providers")}
+        onOpen={(id) => void navigation.open({ kind: "provider", id })}
+        onKeyDown={(event) => navigate(event, "providers")}
+        onNext={() => moveTo("apps")}
+        onFirst={() => moveTo(visible[0])}
+        onLast={() => moveTo(visible.at(-1))}
+      />
       <Card size="sm" className="sidebar-navigation-card">
         <div
           className="sidebar-card-header"

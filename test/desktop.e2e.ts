@@ -4,6 +4,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -496,11 +497,51 @@ async function expectIconAction(control: Locator) {
   } else await expect(control).toHaveCSS("color", resting);
 }
 
+async function expectModalSurface(dialog: Locator) {
+  await expect(dialog).toHaveAttribute("data-slot", "dialog-content");
+  await expect(dialog).toHaveCSS("border-radius", "10px");
+  await expect(dialog).toHaveCSS("border-width", "2px");
+  await expect(dialog).toHaveCSS("box-sizing", "border-box");
+  await expect(dialog).toHaveCSS("scrollbar-gutter", "auto");
+  const geometry = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const borders =
+      Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.borderRightWidth);
+    return {
+      width: element.getBoundingClientRect().width,
+      viewport: innerWidth,
+      paddingLeft: style.paddingLeft,
+      paddingRight: style.paddingRight,
+      overflow: element.scrollHeight > element.clientHeight,
+      reserved: (element as HTMLElement).offsetWidth - element.clientWidth - borders,
+      panes: [
+        ...element.querySelectorAll<HTMLElement>(
+          ".agent-setup-body, .table-settings-body, .project-list, [role=listbox]",
+        ),
+      ].map((pane) => {
+        const style = getComputedStyle(pane);
+        return {
+          overflow: pane.scrollHeight > pane.clientHeight,
+          reserved:
+            pane.offsetWidth -
+            pane.clientWidth -
+            Number.parseFloat(style.borderLeftWidth) -
+            Number.parseFloat(style.borderRightWidth),
+        };
+      }),
+    };
+  });
+  expect(geometry.width).toBeLessThanOrEqual(geometry.viewport - 32);
+  expect(geometry.paddingLeft).toBe(geometry.paddingRight);
+  if (!geometry.overflow) expect(geometry.reserved).toBe(0);
+  for (const pane of geometry.panes) if (!pane.overflow) expect(pane.reserved).toBe(0);
+}
+
 async function openPollingControls(page: Page) {
   await page.getByRole("button", { name: "Open polling controls", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Polling controls", exact: true });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveCSS("border-radius", "0px");
+  await expectModalSurface(dialog);
   const dimensions = await dialog.evaluate((element) => {
     const group = element.querySelector(".button-group");
     const buttons = [...element.querySelectorAll(".button-group > button")].map((button) =>
@@ -670,11 +711,13 @@ async function expectIndustrialSurfaces(page: Page) {
             expectedRadii: Array(4).fill(
               circle
                 ? 50
-                : element.matches(
-                      "[data-slot=card], .home-card, [data-slot=bubble-content], button[data-slot=button]:not([data-variant=quiet])",
-                    )
-                  ? 5
-                  : 0,
+                : element.matches("dialog:not(.splash), [role=dialog]")
+                  ? 10
+                  : element.matches(
+                        "[data-slot=card], .home-card, [data-slot=bubble-content], button[data-slot=button]:not([data-variant=quiet])",
+                      )
+                    ? 5
+                    : 0,
             ),
             radii: [
               style.borderTopLeftRadius,
@@ -761,10 +804,17 @@ async function expectIndustrialSurfaces(page: Page) {
         gutter: getComputedStyle(element).scrollbarGutter,
         scrollbarWidth: getComputedStyle(element).scrollbarWidth,
         sidebar: element.matches(".sidebar .page-tabs"),
+        modal:
+          element.matches("dialog.neo-dialog") ||
+          (!!element.closest("dialog.neo-dialog") &&
+            element.matches(
+              ".agent-setup-body, .table-settings-body, .project-list, [role=listbox], .git-setup-body, .git-setup-files, .git-setup-preview, .tactics-list, .tactic-content",
+            )),
       })),
   );
   for (const scroller of scrollers)
     if (scroller.sidebar) expect(scroller.scrollbarWidth, scroller.label).toBe("none");
+    else if (scroller.modal) expect(scroller.gutter, scroller.label).toBe("auto");
     else expect(scroller.gutter, scroller.label).toMatch(/^stable(?: both-edges)?$/);
 }
 
@@ -1242,7 +1292,7 @@ test("desktop: closed terminal pipes do not interrupt chats or navigation", asyn
     const setup = page.locator(".agent-setup-dialog");
     await setup.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(setup.getByRole("status")).toHaveText("Claude connected");
-    await setup.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await setup.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await composer.fill("Keep this draft after the launching terminal closes");
@@ -2322,11 +2372,12 @@ test("desktop: sidebar card chevrons own expansion independently of header navig
     application = await launch(directory, directory, join(directory, "code60.sqlite"));
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.locator(".sidebar-card-toggle")).toHaveCount(5);
+    await expect(page.locator(".sidebar-card-toggle")).toHaveCount(6);
     for (const [toggleId, panelId, headerId, destination] of [
       ["home-card-toggle", "home-pages", "tab-home", "home"],
       ["assistants-toggle", "assistants-pages", "tab-assistants", "assistants"],
       ["projects-card-toggle", "chat-pages", "tab-chat", "projects"],
+      ["providers-card-toggle", "provider-pages", "tab-providers", "providers"],
       ["apps-card-toggle", "app-pages", "tab-apps", "apps"],
       ["settings-card-toggle", "settings-pages", "tab-settings", "settings"],
     ] as const) {
@@ -2578,7 +2629,6 @@ test("desktop: Settings home cards open every page and preserve navigation and p
     const labels = [
       "About",
       "Advanced",
-      "Agents",
       "Appearance",
       "Memory",
       "Polling",
@@ -2611,7 +2661,6 @@ test("desktop: Settings home cards open every page and preserve navigation and p
     }
     for (const [id, label] of [
       ["about", "About"],
-      ["agents", "Agents"],
       ["appearance", "Appearance"],
       ["memory", "Memory"],
       ["polling-settings", "Polling"],
@@ -2892,7 +2941,6 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
     expect(order).toEqual([
       "About",
       "Advanced",
-      "Agents",
       "Appearance",
       "Memory",
       "Polling",
@@ -2919,7 +2967,6 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
     }
     for (const name of [
       "About",
-      "Agents",
       "Appearance",
       "Memory",
       "Polling",
@@ -3346,7 +3393,6 @@ test("desktop: square controls, compact cards and collapsible navigation", async
       }
       for (const label of [
         "About",
-        "Agents",
         "Appearance",
         "Memory",
         "Polling",
@@ -6621,6 +6667,9 @@ test("desktop: database connection gates splash and workspace controls", async (
     await page.keyboard.press("ArrowDown");
     await expect(chatTab).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("tab", { name: "Providers", exact: true })).toBeFocused();
+    await page.locator("#tab-providers").press("ArrowLeft");
+    await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("tab", { name: "Apps", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(page.locator("#tables-toggle")).toBeFocused();
@@ -6729,6 +6778,8 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
     await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+    await expectModalSurface(rename);
+    await page.screenshot({ path: test.info().outputPath("rename-dialog-neobrutalism.png") });
     await rename.getByRole("textbox", { name: "Chat name" }).fill("Parser work");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await expect(sidebar.getByRole("button", { name: "Parser work", exact: true })).toBeVisible();
@@ -7237,7 +7288,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
     await expect(
       page.locator(
-        ".sidebar svg:not(.navigation-icon):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon)",
+        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
       ),
     ).toHaveCount(0);
     await expect(
@@ -7275,7 +7326,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       ["tab-polling", "app-table"],
       ["tab-sessions", "app-table"],
       ["tab-worktrees", "app-table"],
-      ["tab-settings-agents", "app-helmet"],
+      ["tab-providers", "app-helmet"],
       ["tab-settings-memory", "app-bookshelf"],
       ["tab-settings-appearance", "app-color-palette"],
       ["tab-settings-table-defaults", "app-table"],
@@ -7426,7 +7477,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           );
         expect(geometry).toHaveLength(
           pageIcons.length +
-            (await sidebar.locator(".chat-sidebar-entry:visible").count()) +
+            (await sidebar
+              .locator(".chat-sidebar-row:not(.provider-sidebar-row) > .chat-sidebar-entry:visible")
+              .count()) +
             (await sidebar.locator(".project-chat-label > .navigation-icon:visible").count()) +
             (await sidebar
               .locator(
@@ -7460,14 +7513,16 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           icons.map((icon) => ({
             width: icon.getBoundingClientRect().width,
             height: icon.getBoundingClientRect().height,
-            fixedChevron: !!icon.closest(
-              ".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop",
-            ),
+            fixedSize: icon.closest(".provider-primary-compact")
+              ? 12
+              : icon.closest(".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop")
+                ? 16
+                : undefined,
           })),
         );
         expect(actionSizes.length).toBeGreaterThan(0);
         for (const action of actionSizes) {
-          const expectedSize = action.fixedChevron ? 16 : size;
+          const expectedSize = action.fixedSize ?? size;
           expect(action.width).toBe(expectedSize);
           expect(action.height).toBe(expectedSize);
         }
@@ -7863,7 +7918,7 @@ test("desktop: sidebar opacity works live without enabling transparent window ma
     );
     await expect(page.locator("body")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     const navigationCards = page.locator(".sidebar-navigation-card");
-    await expect(navigationCards).toHaveCount(5);
+    await expect(navigationCards).toHaveCount(6);
     for (const card of await navigationCards.all()) {
       await expect(card).toHaveAttribute("data-slot", "card");
       await expect(card).toHaveCSS("border-radius", "5px");
@@ -8439,7 +8494,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
     await expect(palette).toBeVisible();
-    await expect(palette).toHaveCSS("border-radius", "0px");
+    await expect(palette).toHaveCSS("border-radius", "10px");
     const searchCommands = palette.getByRole("combobox", { name: "Search commands" });
     await expect(searchCommands).toBeFocused();
     await searchCommands.fill("new agent");
@@ -8957,6 +9012,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Relay",
       "Custom Assistants",
       "Projects",
+      "Providers",
       "Apps",
       "Command Builder",
       "Data Viewer",
@@ -8978,7 +9034,6 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Experiments",
       "Episodic Memory",
       "RAG",
-      "Agents",
       "Appearance",
       "Memory",
       "Polling",
@@ -9033,8 +9088,9 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
                 },
               ),
       ).toBeFocused();
+      if (name === "Providers") await page.locator("#tab-providers").press("ArrowLeft");
       if (name === "Projects") {
-        // Projects now follows Search; collapse it here, before stepping to Apps.
+        // Skip project children while checking top-level keyboard order.
         const projects = page.getByRole("tab", { name: "Projects", exact: true });
         await projects.press("ArrowLeft");
         await expect(page.locator("#projects-card-toggle")).toHaveAttribute(
@@ -9081,15 +9137,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         ),
       ),
     ).toEqual(["none", "drag"]);
-    for (const name of [
-      "Agents",
-      "Appearance",
-      "Table defaults",
-      "Text",
-      "Polling",
-      "Updates",
-      "About",
-    ]) {
+    for (const name of ["Appearance", "Table defaults", "Text", "Polling", "Updates", "About"]) {
       await selectSettingsPage(page, name);
       await expect(
         page.locator(".workspace-breadcrumbs").getByRole("heading", { level: 1 }),
@@ -9703,13 +9751,20 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
   }
 });
 
-test("desktop: agent setup wizard gates legacy entry, connects three agents without a database and reconfigures Settings", async () => {
+test("desktop: agent setup wizard gates legacy entry, connects providers without a database and manages primary membership", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-onboarding-")));
   const database = join(directory, "projects.sqlite");
   const file = join(directory, "state/code60/desktop.json");
   const configFile = join(directory, "config/code60/config.json");
-  const command = [process.execPath, join(root, "test/fixtures/fake-agent.mjs")];
+  const processLog = join(directory, "provider-processes");
+  await mkdir(processLog);
+  const command = [
+    process.execPath,
+    join(root, "test/fixtures/fake-agent.mjs"),
+    "--process-log",
+    processLog,
+  ];
   await mkdir(dirname(configFile), { recursive: true });
   await writeFile(
     configFile,
@@ -9726,6 +9781,8 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
     const page = await application.firstWindow();
     const wizard = page.locator(".agent-setup-dialog");
     await expect(wizard).toBeVisible();
+    await expectModalSurface(wizard);
+    await page.screenshot({ path: test.info().outputPath("provider-dialog-neobrutalism.png") });
     await expect(wizard.locator(".agent-choice")).toHaveText([
       "Antigravity",
       "Claude",
@@ -9772,7 +9829,7 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
     await expect(wizard.getByText("Connected", { exact: true })).toBeVisible();
     expect(JSON.parse(await readFile(file, "utf8")).agentSetup.enabled).toEqual(["claude"]);
     for (const name of ["Codex", "Droid"]) {
-      await wizard.getByRole("button", { name: "Add another agent", exact: true }).click();
+      await wizard.getByRole("button", { name: "Add another provider", exact: true }).click();
       await expect(wizard.getByRole("button", { name, exact: true })).toBeEnabled();
       await expect(wizard).toHaveCount(1);
       await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveCount(0);
@@ -9791,53 +9848,207 @@ test("desktop: agent setup wizard gates legacy entry, connects three agents with
       enabled: ["claude", "codex", "droid"],
     });
     await page.screenshot({ path: "test-results/agent-setup-connected.png" });
-    await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await expect(wizard).toHaveCount(0);
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.evaluate(() =>
-      window.desktop
-        .snapshot()
-        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
+    await page.getByRole("tab", { name: "Providers", exact: true }).click();
+    const providers = page.locator("#panel-providers");
+    await expect(providers).toBeVisible();
+    await expect(providers.locator(".navigation-card:has(.home-card-create)")).toHaveCSS(
+      "border-style",
+      "dashed",
     );
+    await expect(page.locator("#tab-settings-agents")).toHaveCount(0);
+    await expect(providers.locator(".home-card-name")).toHaveText([
+      "Add Provider",
+      "Claude",
+      "Codex",
+      "Droid",
+    ]);
+    await expect(page.locator("#provider-pages .chat-sidebar-label")).toHaveText([
+      "Claude",
+      "Codex",
+      "Droid",
+    ]);
+    await providers.getByRole("button", { name: "More actions for Claude", exact: true }).click();
+    const menu = page.getByRole("menu", { name: "Claude actions", exact: true });
+    expect(await menu.evaluate((element) => element.closest(".app"))).toBeNull();
+    await expect(menu).toHaveCSS("border-radius", "5px");
+    await expect(menu).toHaveCSS("border-width", "2px");
+    await expect(menu.getByRole("menuitem", { name: "Disconnect", exact: true })).toBeDisabled();
+    await expect(menu.getByRole("menuitem", { name: "Disconnect", exact: true })).toHaveAttribute(
+      "aria-description",
+      "Set another provider as primary first",
+    );
+    await expect(
+      menu.getByRole("menuitem", { name: "Set as Primary", exact: true }),
+    ).toBeDisabled();
+    await expect(menu.getByRole("menuitem", { name: "Disconnect", exact: true })).toHaveCSS(
+      "background-color",
+      await menu.evaluate((element) => getComputedStyle(element).backgroundColor),
+    );
+    await page.screenshot({ path: test.info().outputPath("providers-primary-menu.png") });
+    await page.keyboard.press("Escape");
+    await expect(
+      providers.getByRole("button", { name: "More actions for Claude", exact: true }),
+    ).toBeFocused();
+    await providers.getByRole("button", { name: "Add Provider", exact: true }).click();
+    await wizard.getByRole("button", { name: "Kiro", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Kiro connected");
+    await wizard.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(wizard).toHaveCount(0);
+    // Active work blocks both actions even when its conversation is off-screen.
+    await selectSidebarPage(page, "Chat");
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill(JSON.stringify([{ hang: "cancellable" }]));
+    await composer.press("Enter");
+    await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Providers", exact: true }).click();
+    await providers.getByRole("button", { name: "More actions for Codex", exact: true }).click();
+    for (const name of ["Disconnect", "Set as Primary"]) {
+      await expect(page.getByRole("menuitem", { name, exact: true })).toBeDisabled();
+      await expect(page.getByRole("menuitem", { name, exact: true })).toHaveAttribute(
+        "aria-description",
+        "Finish or stop active agent work before changing providers",
+      );
+    }
+    expect(JSON.parse(await readFile(file, "utf8")).agentSetup.primary).toBe("claude");
+    await page.keyboard.press("Escape");
+    await selectSidebarPage(page, "Chat");
+    await chat.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(composer).toBeEnabled();
+    await page.getByRole("tab", { name: "Providers", exact: true }).click();
+    const primary = providers.getByRole("img", { name: "Primary Provider", exact: true });
+    await expect(primary).toHaveCSS("width", "36px");
+    await primary.focus();
+    await expect(page.getByRole("tooltip")).toHaveText("Primary Provider");
+    await providers.getByRole("button", { name: "More actions for Codex", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Set as Primary", exact: true }).click();
+    await expect
+      .poll(async () => JSON.parse(await readFile(file, "utf8")).agentSetup.primary)
+      .toBe("codex");
+    await expect(
+      providers.locator('.navigation-card:has([data-feature="codex"]) .provider-primary'),
+    ).toBeVisible();
     await expect
       .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.status)
       .toBe("idle");
-    const chatId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
-    await selectSidebarPage(page, "Settings");
-    await selectSettingsPage(page, "Agents");
-    await page.getByRole("button", { name: "Add agents", exact: true }).click();
-    await wizard.getByRole("button", { name: "Kiro", exact: true }).click();
-    await expect(wizard.getByRole("status")).toHaveText("Kiro connected");
-    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual([
-      "claude",
+    const processesBeforeDetails = await readdir(processLog);
+    await page.locator("#provider-claude").click();
+    await expect(page.locator("#panel-provider")).toBeVisible();
+    expect(await readdir(processLog)).toEqual(processesBeforeDetails);
+    await expect(
+      page
+        .locator(".workspace-breadcrumbs")
+        .getByRole("button", { name: "Providers", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("#panel-provider").getByText("Verified provider", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("#panel-provider").getByText("No saved model defaults."),
+    ).toBeVisible();
+    await page
+      .locator("#panel-provider")
+      .getByRole("button", { name: "More actions for Claude", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "Disconnect", exact: true }).click();
+    await expect(providers).toBeVisible();
+    await expect(page.locator("#provider-claude")).toHaveCount(0);
+    expect(JSON.parse(await readFile(file, "utf8")).agentSetup.enabled).toEqual([
       "codex",
       "droid",
       "kiro",
     ]);
+    // Sidebar Add remains usable while collapsed and reconnects the removed provider.
+    await page.getByRole("button", { name: "Collapse Providers", exact: true }).click();
+    await page
+      .locator(".providers-sidebar")
+      .getByRole("button", { name: "Add Provider", exact: true })
+      .click();
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(wizard).toHaveCount(0);
-    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(chatId);
-    await page.getByRole("button", { name: "Change primary", exact: true }).click();
-    await wizard.getByRole("button", { name: "Codex", exact: true }).click();
-    await expect(wizard.getByRole("status")).toHaveText("Codex connected");
-    await page.evaluate(() => (document.documentElement.dataset.colorScheme = "dark"));
+    await page.getByRole("button", { name: "Expand Providers", exact: true }).click();
+    // Sidebar menus use the same membership actions as the gallery and details.
+    for (const name of ["Claude", "Codex"]) {
+      await page
+        .locator(".providers-sidebar")
+        .getByRole("button", { name: `More actions for ${name}`, exact: true })
+        .click();
+      await page.getByRole("menuitem", { name: "Set as Primary", exact: true }).click();
+      await expect
+        .poll(async () => JSON.parse(await readFile(file, "utf8")).agentSetup.primary)
+        .toBe(name.toLowerCase());
+    }
+    await page.locator("#provider-codex").click();
+    await expect(page.locator("#provider-codex")).toHaveAttribute("aria-current", "page");
+    await page.getByRole("tab", { name: "Providers", exact: true }).click();
+    await expect(page.locator(".workspace-breadcrumbs .breadcrumb-exit")).toHaveCount(0);
+    for (const scheme of ["light", "dark"]) {
+      await page.evaluate((scheme) => {
+        document.documentElement.dataset.colorScheme = scheme;
+      }, scheme);
+      await page.screenshot({ path: test.info().outputPath(`providers-${scheme}.png`) });
+    }
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
-    await page.screenshot({ path: "test-results/agent-setup-dark.png" });
-    await page.keyboard.press("Escape");
-    await expect(wizard).toHaveCount(0);
-    await expect
-      .poll(
-        async () => (await page.evaluate(() => window.desktop.snapshot())).orchestration.provider,
-      )
-      .toBe("codex");
-    await page.reload();
-    await expect(page.locator(".splash")).toHaveCount(0);
-    expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
+    await page.evaluate(() => document.documentElement.style.setProperty("--card-size", "32px"));
+    await expect(
+      providers.getByRole("button", { name: "Add Provider", exact: true }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: test.info().outputPath("providers-narrow-large-text.png") });
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(providers.locator(".provider-primary")).toHaveCSS("box-shadow", "none");
+    await page.screenshot({ path: test.info().outputPath("providers-forced-colors.png") });
+    await page.emulateMedia({ forcedColors: "none" });
+    await application.close();
+    application = await launch(directory, directory, database, false);
+    const restarted = await application.firstWindow();
+    await restarted.getByRole("button", { name: "Start", exact: true }).click();
+    await restarted.getByRole("tab", { name: "Providers", exact: true }).click();
+    await expect(restarted.locator("#provider-pages .chat-sidebar-label")).toHaveText([
+      "Codex",
+      "Droid",
+      "Kiro",
+      "Claude",
+    ]);
+    expect(JSON.parse(await readFile(file, "utf8")).agentSetup.primary).toBe("codex");
+    expect((await restarted.evaluate(() => window.desktop.snapshot())).database).toBeNull();
   } finally {
     await application.close().catch(() => {});
-    await rm(directory, { recursive: true, force: true });
+    try {
+      const evidence = await Promise.all(
+        (await readdir(processLog)).map(
+          async (name) =>
+            JSON.parse(await readFile(join(processLog, name), "utf8")) as { pid: number },
+        ),
+      );
+      await expect
+        .poll(() =>
+          evidence.filter(({ pid }) => {
+            try {
+              process.kill(pid, 0);
+              return true;
+            } catch {
+              return false;
+            }
+          }),
+        )
+        .toEqual([]);
+      const info = test.info();
+      await info.attach("provider-process-cleanup", {
+        body: JSON.stringify({ processes: evidence.length, allExited: true }),
+        contentType: "application/json",
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 });
 
@@ -10479,6 +10690,8 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await appendRow(page, "configurations");
     const editor = page.getByRole("dialog", { name: "Run configuration", exact: true });
     await expect(editor.getByLabel("Task prompt")).toHaveCount(0);
+    await expect(editor.getByLabel("Configuration name")).toBeFocused();
+    await expectModalSurface(editor);
     await editor.getByLabel("Configuration name").fill("Team");
     await editor.getByRole("button", { name: "Add agent" }).click();
     await editor.getByLabel("Agent 2", { exact: true }).selectOption("fake2");
@@ -10522,6 +10735,7 @@ test("desktop: run configurations, launch selection, and post-launch saving", as
     await expect(page.getByLabel("Agent 2", { exact: true })).toHaveValue("fake2");
     await expect(page.getByLabel("Maximum active runs")).toHaveValue("1");
     await expect(page.getByLabel("Task prompt")).toHaveValue("");
+    await expect(page.getByLabel("Task prompt")).toBeFocused();
     await page.getByLabel("Task prompt").fill("one-time private task");
     await page.getByLabel("Maximum active runs").fill("2");
     await page.getByRole("button", { name: "Back", exact: true }).click();
@@ -12243,6 +12457,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Assistants",
       "Custom Assistants",
       "Projects",
+      "Providers",
       "Apps",
       "Command Builder",
       "Prompt Builder",
@@ -12258,6 +12473,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Assistants",
       "Custom Assistants",
       "Projects",
+      "Providers",
       "Apps",
       "Command Builder",
       "Configurations",
@@ -13494,6 +13710,8 @@ test("desktop: table settings modal previews drafts, applies, resets, and discar
     await expect.poll(controlsOverflow).toBe(false);
     await clickSettingsBottom();
     await expect(modal).toBeVisible();
+    await expectModalSurface(modal);
+    await expect(modal).toHaveCSS("padding", "0px");
     await page.screenshot({ path: "test-results/table-settings-initial.png" });
     expect(errors).toEqual([]);
     await expect(density).toBeFocused();
@@ -14146,6 +14364,7 @@ test("desktop: keyboard focus is visible and enhanced focus is persistent", asyn
       await expect(editor).toHaveCSS("box-shadow", enhanced ? /5px inset/ : /2px.*inset/);
       await page.keyboard.press("ControlOrMeta+k");
       const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
+      await expectModalSurface(palette);
       await expect(palette.locator(".palette-input")).toHaveCSS("outline-width", "2px");
       await page.keyboard.press("Escape");
       await expect(palette).toHaveCount(0);
@@ -14327,15 +14546,7 @@ test("desktop: Settings pages share one card layout", async () => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    const pages = [
-      "Agents",
-      "Appearance",
-      "Table defaults",
-      "Text",
-      "Polling",
-      "Updates",
-      "About",
-    ] as const;
+    const pages = ["Appearance", "Table defaults", "Text", "Polling", "Updates", "About"] as const;
     const capture = async (suffix: string) => {
       for (const name of pages) {
         await selectSettingsPage(page, name);
@@ -14362,8 +14573,6 @@ test("desktop: Settings pages share one card layout", async () => {
         });
       }
     };
-    await selectSettingsPage(page, "Agents");
-    await expect(page.getByRole("group", { name: "Permissions", exact: true })).toBeVisible();
     await selectSettingsPage(page, "Table defaults");
     const low = page.getByRole("radio", { name: "Low", exact: true });
     await low.check();
@@ -15278,6 +15487,7 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
     await card.focus();
     await card.press("Enter");
     await expect(modal).toBeVisible();
+    await expectModalSurface(modal);
     await expect(modal.getByText("No recent projects.")).toBeVisible();
     await expect(modal.locator(".modal-heading")).toHaveCSS("border-bottom-width", "0px");
     const folderAction = modal.getByRole("button", { name: "Open Folder", exact: true });
@@ -15469,14 +15679,14 @@ test("desktop: agent setup wizard handles missing agents, authentication, timeou
     };
     await connect("Antigravity");
     await expect(wizard.getByRole("alert")).toContainText("not found");
-    await wizard.getByRole("button", { name: "Choose another agent", exact: true }).click();
+    await wizard.getByRole("button", { name: "Choose another provider", exact: true }).click();
     await connect("Claude");
     await expect(wizard.getByRole("alert")).toContainText("log in");
     await expect(wizard.getByText("Detected", { exact: true })).toBeVisible();
     expect(
       (await page.evaluate(() => window.desktop.snapshot())).agentSetup?.session?.verified,
     ).toEqual([]);
-    await wizard.getByRole("button", { name: "Choose another agent", exact: true }).click();
+    await wizard.getByRole("button", { name: "Choose another provider", exact: true }).click();
     await connect("Codex");
     await expect(wizard.getByRole("status")).toHaveText("Connecting to Codex…");
     await wizard.getByRole("button", { name: "Cancel attempt", exact: true }).click();
@@ -15495,7 +15705,7 @@ test("desktop: agent setup wizard handles missing agents, authentication, timeou
     await wizard.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Codex connected");
     expect((await page.evaluate(() => window.desktop.snapshot())).agents).toEqual(["codex"]);
-    await wizard.getByRole("button", { name: "Add another agent", exact: true }).click();
+    await wizard.getByRole("button", { name: "Add another provider", exact: true }).click();
     await connect("Claude");
     await expect(wizard.getByRole("alert")).toContainText("log in");
     await wizard.getByRole("button", { name: "Close", exact: true }).click();

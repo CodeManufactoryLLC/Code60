@@ -100,7 +100,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
-    await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
     await page.getByRole("button", { name: "Actions", exact: true }).click();

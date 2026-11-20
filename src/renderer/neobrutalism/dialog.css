@@ -1,0 +1,35 @@
+/* Adapt the upstream Dialog surface to native showModal(), existing layouts and live themes. */
+dialog.neo-dialog {
+  border-radius: var(--dialog-radius);
+  scrollbar-gutter: auto;
+}
+
+dialog.neo-dialog::backdrop {
+  background: #0009;
+}
+
+/* Dialogs reserve room only for an actual scrollbar, including nested modal bodies. */
+dialog.neo-dialog
+  :is(
+    .agent-setup-body,
+    .table-settings-body,
+    .project-list,
+    [role="listbox"],
+    .git-setup-body,
+    .git-setup-files > fieldset,
+    .git-setup-files pre,
+    .table-column-settings,
+    .tactics-list,
+    .tactic-content
+  ) {
+  scrollbar-gutter: auto;
+}
+
+@media (forced-colors: active) {
+  dialog.neo-dialog {
+    border-color: ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+  }
+}

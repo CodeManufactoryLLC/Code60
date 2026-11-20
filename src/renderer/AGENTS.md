@@ -101,7 +101,7 @@
   More menu. Other folders continue; conversation More menus stay independent.
 - Show only Relay and project-bound conversations, not database-wide legacy chats.
   Put Home first in the sidebar’s page list, followed by Search, Assistants, Projects,
-  Apps and Settings. The Assistants heading opens a database-independent home with
+  Providers, Apps and Settings. The Assistants heading opens a database-independent home with
   exactly Relay and Custom Assistants cards, using the shared Home card layout,
   artwork, pending/error handling and existing destinations. Add no greeting there.
   Keep their Home cards and link assistant breadcrumbs through Assistants. Remember its
@@ -444,7 +444,7 @@
 
 - Display automatic worker prompts as labelled activity, never as user messages. Do not show a paused-updates banner or Resume updates control in Chat; sending a message resumes delivery. Label orchestrator-owned worker chats as allowing all actions. MCP contract descriptions must distinguish read-only tools from tools that change worker state.
 
-- Group Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees beneath Apps → Data Viewer. Give each child the Phosphor grid-nine icon, retaining the database icon on Data Viewer. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Nest Agents, Appearance, Table defaults, Text, Polling, Updates and About as individual pages beneath Settings. Build Settings pages from `SettingsHeader` (the specific page name as the sole main title at the standard upper-left inset, optional tip, page-wide actions; no extra Settings heading) and bordered `SettingsCard` rows or `settings-group` field cards, so no row or field sits outside a card; use the shared `segmented` control for short exclusive choices. Settings pages have no explanatory paragraphs: put explanations behind an `InfoTip` information button beside the setting or heading, keep them as the control's accessible description, and drop text that only restates the controls. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
+- Group Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees beneath Apps → Data Viewer. Give each child the Phosphor grid-nine icon, retaining the database icon on Data Viewer. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Nest Appearance, Table defaults, Text, Polling, Updates and About as individual pages beneath Settings. Build Settings pages from `SettingsHeader` (the specific page name as the sole main title at the standard upper-left inset, optional tip, page-wide actions; no extra Settings heading) and bordered `SettingsCard` rows or `settings-group` field cards, so no row or field sits outside a card; use the shared `segmented` control for short exclusive choices. Settings pages have no explanatory paragraphs: put explanations behind an `InfoTip` information button beside the setting or heading, keep them as the control's accessible description, and drop text that only restates the controls. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
 - Logs is app-wide and available without a database. Reuse DataTable settings and
   saved filters, applying search/conditions to retained history through validated
   requests, not only the visible page. Use bounded cursors and stale-response
@@ -615,7 +615,7 @@ and subagents use drone.gif with matching first-frame PNGs. Preserve the folder
 star while removing its exterior white background; the gear opening is transparent.
 Keep the shared 40px row height and existing label indents; position project icons
 independently of their text/activity so the artwork cannot enlarge the row.
-Worker page headings retain their 1em role icon. Settings → Agents uses the supplied setting.gif artwork.
+Worker page headings retain their 1em role icon. Providers uses the supplied setting.gif artwork.
 Reduced motion and forced
 colors use the still frame. Reset when the document hides and clean up listeners
 on disposal. Keep the icon decorative and retain the containing control's name,
@@ -708,7 +708,7 @@ with its upstream license and asset hashes. OCR-A is removed; stale saved OCR-A
 choices fall back through the existing validated role-default behavior without
 resetting other saved typography settings or migration markers.
 
-About, Advanced, Agents and Memory share the supplied info.gif, laptop.gif,
+About, Advanced, Providers and Memory share the supplied info.gif, laptop.gif,
 setting.gif and books.gif navigation animations respectively, with transparent
 exteriors and preserved enclosed white details. Use their still posters at rest,
 click-only sidebar/breadcrumb playback and hover/focus-once navigation cards.
@@ -809,7 +809,7 @@ reduced motion and forced colors. No new preference or capability is introduced.
 ## Neobrutalism surfaces and chat
 
 Use the local licensed Card primitives for shared main-content navigation,
-creation cards, all five sidebar navigation containers, primary content,
+creation cards, all six sidebar navigation containers, primary content,
 breadcrumbs, conversation, composer and inspector shells. Chat uses the local
 native Button, Textarea and human Bubble adapters; trails use Breadcrumb parts.
 Tailwind v4 is build-only, `nb:`-prefixed, without Preflight or
@@ -860,3 +860,23 @@ bridge contract, setting, schema, migration or appearance reset is required.
   font leading with text-box trim-end (cap/text), so the visible letters have
   the same 8px divider gap as the following bubble border. Keep source Copy, disclosure state, streaming and
   scroll behavior unchanged. Presentation only; no capability/catalog change.
+
+
+## Providers
+
+Follow the Providers navigation and management section of `ARCHITECTURE.md`.
+Providers replaces the Agents settings destination. Preserve v1 verified membership,
+model defaults, histories and external logins. Set-primary/disconnect are strict
+human-only bridge actions, guarded in main against active desktop work, setup and
+overlapping writes. The primary must be replaced before disconnecting. Publish
+main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
+
+## Modal dialog surfaces
+
+Use local Neobrutalism DialogContent for native in-app modal windows, with 10px
+corners, 2px outlines and a hard 4px shadow. Keep native focus/Escape/busy behavior
+and existing layouts. Equal compact side padding and border-box sizing must not
+add outer padding to zero-padding layouts. Modal shells and their body panes use
+auto scrollbar gutters rather than reserving empty right-side strips; other
+reading panes keep stable gutters. Full-screen splash is separate. Honor live
+themes and forced colors. This visual change adds no capability/catalog entry.

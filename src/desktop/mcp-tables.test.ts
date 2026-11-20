@@ -32,11 +32,12 @@ describe("Code60 table tools", () => {
       true,
     );
     expect(MCP_TOOL_DEFINITIONS).toHaveLength(
-      12 +
+      13 +
         MCP_CONTROL_TOOL_DEFINITIONS.length +
         MCP_ACTIVITY_TOOL_DEFINITIONS.length +
         MCP_TOOL_DEFINITIONS.filter((tool) => tool.kind === "knowledge").length,
     );
+    expect(MCP_TOOL_DEFINITIONS.filter((tool) => tool.kind === "browser")).toHaveLength(1);
     expect(new Set(MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).size).toBe(
       MCP_TOOL_DEFINITIONS.length,
     );

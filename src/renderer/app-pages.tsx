@@ -21,12 +21,12 @@ import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigat
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
 import { Card } from "./neobrutalism/card.js";
-import { OrchestrationSettings } from "./orchestration-settings.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
 import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
 import { PromptEditorPage } from "./prompt-editor.js";
+import { ProvidersPage } from "./providers-page.js";
 import { RagPage } from "./rag.js";
 import { SearchPage } from "./search-page.js";
 import { sessionRows } from "./session-presentation.js";
@@ -72,11 +72,13 @@ export function AppPages(props: AppPagesProps) {
     tabs.active,
     tabs.active === "settings"
       ? settingsSection
-      : tabs.active === "project"
-        ? tabs.projectId
-        : tabs.active === "chat"
-          ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
-          : undefined,
+      : tabs.active === "provider"
+        ? tabs.providerId
+        : tabs.active === "project"
+          ? tabs.projectId
+          : tabs.active === "chat"
+            ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
+            : undefined,
     !splash,
   );
   const titleNavigation = useMemo(
@@ -211,6 +213,25 @@ export function AppPages(props: AppPagesProps) {
         onOpen={(id) => navigation.open({ kind: "custom-agent", id })}
       />
     ),
+    providers: (
+      <ProvidersPage
+        api={api}
+        snapshot={snapshot}
+        management={props.providerManagement}
+        active={!splash && tabs.active === "providers"}
+        onOpen={(id) => void navigation.open({ kind: "provider", id })}
+      />
+    ),
+    provider: (
+      <ProvidersPage
+        api={api}
+        snapshot={snapshot}
+        management={props.providerManagement}
+        providerId={tabs.providerId}
+        active={!splash && tabs.active === "provider"}
+        onOpen={(id) => void navigation.open({ kind: "provider", id })}
+      />
+    ),
     projects: (
       <ProjectsHomePage
         projects={snapshot?.openProjects ?? []}
@@ -305,15 +326,6 @@ export function AppPages(props: AppPagesProps) {
           }
           updates={<UpdatesSection updates={updates} />}
           versions={snapshot?.versions}
-          orchestration={
-            snapshot && (
-              <OrchestrationSettings
-                snapshot={snapshot}
-                api={api}
-                active={!splash && tabs.active === "settings" && settingsSection === "agents"}
-              />
-            )
-          }
           pollingControls={
             snapshot && (
               <fieldset disabled={!database} className="database-dependent-controls">
@@ -679,7 +691,7 @@ export function AppPages(props: AppPagesProps) {
             aria-labelledby={
               id === "chat" && snapshot
                 ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-                : sidebarPageElementId(id, tabs.projectId)
+                : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
             }
             hidden={tabs.active !== id}
           >

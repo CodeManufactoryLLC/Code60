@@ -55,6 +55,7 @@ import {
   parseProjectAction,
   parseProjectPath,
   parsePromptTemplateId,
+  parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
@@ -612,6 +613,9 @@ async function ready(): Promise<void> {
   handle("desktop:visibility", (value) => controller.setVisibility(parsePollVisibility(value)));
   handle("desktop:orchestration-chat", (value) =>
     controller.orchestrationChatAction(parseOrchestrationChatAction(value)),
+  );
+  handle("desktop:provider-action", (value) =>
+    controller.providerAction(parseProviderAction(value)),
   );
   handle("desktop:setup-begin", (value) => controller.beginAgentSetup(parseSetupBegin(value)));
   handle("desktop:setup-attempt", (value) =>

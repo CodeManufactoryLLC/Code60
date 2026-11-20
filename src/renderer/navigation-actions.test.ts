@@ -219,3 +219,15 @@ it("opens custom assistants without a database and selects existing custom conve
     id: "custom-run",
   });
 });
+
+it("opens provider details locally without selecting a chat or probing a connection", async () => {
+  const { actions, context, reveal } = fixture();
+  context.database = null;
+  context.providers = ["codex"];
+  context.onProvider = vi.fn();
+  expect(await actions.open({ kind: "provider", id: "codex" })).toBe(true);
+  expect(context.onProvider).toHaveBeenCalledExactlyOnceWith("codex");
+  expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "provider", id: "codex" });
+  expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
+  expect(await actions.open({ kind: "provider", id: "missing" })).toBe(false);
+});

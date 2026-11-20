@@ -1,5 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
@@ -11,6 +20,240 @@ const root = resolve(import.meta.dirname, "..");
 // journal records; on Windows every write launches the native owner/ACL helper and
 // atomic replacement. Native ARM64 measured about 5 s for each step.
 const nativeJournalTimeout = 5_000;
+
+test("workflow: conversational browser modes, external errors, cancellation and restart", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-ui-")));
+  const config = join(directory, "config/code60");
+  const bin = join(directory, "bin");
+  const log = join(directory, "browser.jsonl");
+  const approval = join(directory, "extension-approved");
+  await mkdir(config, { recursive: true });
+  await mkdir(bin);
+  await copyFile(join(root, "test/fixtures/fake-browser.mjs"), join(bin, "npx"));
+  await chmod(join(bin, "npx"), 0o755);
+  await writeFile(log, "");
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--browser"],
+        },
+      },
+    }),
+  );
+  type BrowserEvidence = {
+    event: string;
+    mode: string;
+    pid: number;
+    child: number;
+    args: string[];
+    cwd: string;
+  };
+  const evidence = async () =>
+    (await readFile(log, "utf8"))
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as BrowserEvidence);
+  const starts = async () => (await evidence()).filter((entry) => entry.event === "start");
+  let application: ElectronApplication | undefined;
+  const environment = {
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    FAKE_BROWSER_LOG: log,
+    FAKE_BROWSER_APPROVAL: approval,
+  };
+  try {
+    application = await launchDesktop(
+      directory,
+      directory,
+      join(directory, "unused.sqlite"),
+      false,
+      environment,
+    );
+    let page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const send = async (text: string, expected?: string) => {
+      const chat = page.locator(".orchestration-chat-page:visible");
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            window.desktop.snapshot().then((snapshot) => snapshot.chat.run?.status),
+          ),
+        )
+        .toBe("idle");
+      const id = await page.evaluate(() =>
+        window.desktop.snapshot().then((snapshot) => snapshot.chat.run?.id),
+      );
+      if (!id) throw new Error("Missing selected conversation");
+      await expect(chat).toHaveAttribute("data-chat-id", id);
+      await expect(chat).not.toHaveAttribute("inert");
+      const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+      const before = await chat.locator(".event.message .chat-markdown").count();
+      await expect(composer).toBeEditable();
+      await composer.fill(text);
+      await composer.press("Enter");
+      if (expected) {
+        await expect
+          .poll(() => chat.locator(".event.message .chat-markdown").count())
+          .toBeGreaterThan(before);
+        await expect(chat.locator(".event.message .chat-markdown").last()).toContainText(expected);
+        await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+      }
+    };
+    await send("Report the browser mode.", '"mode":"headless","connected":false');
+    expect(await starts()).toEqual([]); // Setup, initial connection and status never launch Playwright.
+    await send("Open https://example.com/default.", "Fixture navigation in headless");
+    expect((await starts())[0]?.args).toEqual([
+      "-y",
+      "@playwright/mcp@0.0.84",
+      "--isolated",
+      "--headless",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
+    ]);
+    const first = (await starts())[0] as BrowserEvidence;
+    expect(alive(first.pid)).toBe(true);
+    expect(alive(first.child)).toBe(true);
+    await send(
+      "Use visible browser to open https://example.com/visible.",
+      "Fixture navigation in visible",
+    );
+    await expect.poll(() => alive(first.pid) || alive(first.child)).toBe(false);
+    const visible = (await starts())[1] as BrowserEvidence;
+    expect(visible.args).toEqual([
+      "-y",
+      "@playwright/mcp@0.0.84",
+      "--isolated",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
+    ]);
+    await send("Open https://example.com/still-visible.", "Fixture navigation in visible");
+    expect(await starts()).toHaveLength(2); // A later request retains this conversation's preference.
+    await page.getByRole("tab", { name: "Home", exact: true }).click();
+    await page.getByRole("button", { name: "Open Custom Assistants", exact: true }).click();
+    await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
+    await editor.getByLabel("Name", { exact: true }).fill("Browser helper");
+    await editor.getByLabel("Special instructions", { exact: true }).fill("Help with websites.");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Open Browser helper", exact: true }).click();
+    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.desktop.snapshot().then((snapshot) => snapshot.chat.customAgentId),
+        ),
+      )
+      .toBeTruthy();
+    await send("Report the browser mode.", '"mode":"headless","connected":false');
+    expect(alive(visible.pid)).toBe(true);
+    expect(await starts()).toHaveLength(2);
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.desktop.snapshot().then((snapshot) => snapshot.chat.customAgentId ?? null),
+        ),
+      )
+      .toBeNull();
+    await send("Report the browser mode.", '"mode":"visible","connected":true');
+    await send(
+      "Use existing browser to open https://example.com/existing.",
+      "Playwright extension unavailable",
+    );
+    await expect.poll(() => alive(visible.pid) || alive(visible.child)).toBe(false);
+    const existing = (await starts())[2] as BrowserEvidence;
+    expect(existing.args).toEqual([
+      "-y",
+      "@playwright/mcp@0.0.84",
+      "--extension",
+      "--no-webmcp",
+      "--output-max-size",
+      "33554432",
+      "--output-dir",
+      expect.any(String),
+    ]);
+    await send("Report the browser mode.", '"mode":"existing-browser"');
+    expect(await starts()).toHaveLength(3); // An upstream isError never silently selects another mode.
+    // Simulate the external extension becoming installed/approved, not an app mutation.
+    await writeFile(approval, "approved");
+    await send("Open https://example.com/approved.", "Fixture navigation in existing-browser");
+    expect(await starts()).toHaveLength(3);
+    await send("Close the browser.", '"connected":false');
+    await expect.poll(() => alive(existing.pid) || alive(existing.child)).toBe(false);
+    await send("Use visible browser to open https://example.com/slow.");
+    await expect
+      .poll(async () => (await evidence()).filter((entry) => entry.event === "call").length)
+      .toBe(6);
+    const slow = (await starts())[3] as BrowserEvidence;
+    await page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("button", { name: "Stop", exact: true })
+      .click();
+    await expect.poll(() => alive(slow.pid) || alive(slow.child)).toBe(false);
+    await page.screenshot({ path: test.info().outputPath("browser-cancelled.png") });
+    await application.close();
+    application = undefined;
+    for (const entry of await starts()) expect(alive(entry.pid) || alive(entry.child)).toBe(false);
+    const beforeRestart = (await starts()).length;
+    const saved = JSON.parse(await readFile(join(directory, "state/code60/desktop.json"), "utf8"));
+    expect(JSON.stringify(saved)).not.toContain("existing-browser");
+    expect(JSON.stringify(saved)).not.toContain("visible");
+    application = await launchDesktop(
+      directory,
+      directory,
+      join(directory, "unused.sqlite"),
+      false,
+      environment,
+    );
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await send("Report the browser mode.", '"mode":"headless","connected":false');
+    expect(await starts()).toHaveLength(beforeRestart); // Restart retains history, not mode or browser processes.
+    await send("Open https://example.com/after-restart.", "Fixture navigation in headless");
+    const restarted = (await starts()).at(-1) as BrowserEvidence;
+    expect(restarted.mode).toBe("headless");
+    expect(alive(restarted.pid)).toBe(true); // finally must release this idle connection on quit.
+  } finally {
+    if (application) await application.close();
+    for (const entry of await starts()) {
+      await expect.poll(() => alive(entry.pid) || alive(entry.child)).toBe(false);
+    }
+    const artifact = test.info().outputPath("browser-processes.json");
+    await writeFile(
+      artifact,
+      JSON.stringify(
+        {
+          events: await evidence(),
+          cleanup: (await starts()).map(({ pid, child }) => ({
+            pid,
+            child,
+            alive: alive(pid),
+            childAlive: alive(child),
+          })),
+        },
+        null,
+        2,
+      ),
+    );
+    await test
+      .info()
+      .attach("browser-process-cleanup", { path: artifact, contentType: "application/json" });
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
 type NativeDialog = {
   kind: "save" | "open" | "message";
   title?: string;
@@ -536,7 +779,7 @@ for (const custom of [false, true]) {
           await readFile(join(directory, "state/code60/desktop.json"), "utf8"),
         );
         expect(setup.agentSetup).toMatchObject({ primary: "claude", enabled: ["claude"] });
-        await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+        await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
         await page.getByRole("button", { name: "Connect to database", exact: true }).click();
         const selectDatabase = page.getByRole("dialog", { name: "Select database", exact: true });
         await selectDatabase.getByRole("button", { name: "Create database…", exact: true }).click();
@@ -682,10 +925,10 @@ for (const custom of [false, true]) {
         await modelMenu
           .getByRole("menuitem", { name: "Save as default for new worker sessions", exact: true })
           .click();
-        await page.locator("#tab-settings").press("ArrowRight");
-        await page.locator("#tab-settings-agents").click();
+        await page.locator("#tab-providers").press("ArrowRight");
+        await page.locator("#provider-claude").click();
         const defaults = page.getByRole("group", { name: "Default models", exact: true });
-        await expect(defaults).toContainText("orchestrator");
+        await expect(defaults).toContainText("Orchestrator");
         await defaults
           .getByRole("button", { name: "Clear claude worker model default", exact: true })
           .click();
@@ -1014,7 +1257,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     await expect(page.locator(".agent-setup-dialog").getByRole("status")).toHaveText(
       "Claude connected",
     );
-    await page.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await page.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await expect(wizard).toHaveCount(0);
     await page.getByRole("button", { name: "Connect to database", exact: true }).click();
     await page
@@ -1245,7 +1488,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
-    await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     for (const name of ["Reviewer", "Writer"]) {
       await page.getByRole("tab", { name: "Home", exact: true }).click();

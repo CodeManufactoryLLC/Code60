@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -459,6 +459,37 @@ export function createFakeAgent(options = {}) {
                     }),
                   },
                 ];
+      }
+      if (options.browserWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split(/--- (?:User request|New human request) ---\n/).at(-1);
+        const match = /^Use (headless|visible|existing) browser to open (https:\/\/\S+)\.$/.exec(
+          request,
+        );
+        const open = /^Open (https:\/\/\S+)\.$/.exec(request);
+        let result;
+        if (match) {
+          await tool("code60_browser", {
+            action: "set-mode",
+            mode: match[1] === "existing" ? "existing-browser" : match[1],
+          });
+          await tool("code60_browser", { action: "list-tools" });
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: match[2] },
+          });
+        } else if (open) {
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: open[1] },
+          });
+        } else if (request === "Report the browser mode.") {
+          result = await tool("code60_browser", { action: "status" });
+        } else if (request === "Close the browser.") {
+          result = await tool("code60_browser", { action: "close" });
+        }
+        if (result) steps = [{ message: `Browser fixture: ${JSON.stringify(result)}` }];
       }
       try {
         if (!steps) {

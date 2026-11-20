@@ -14,13 +14,14 @@ interface NavigationCard {
   icon?: NavigationIconName | undefined;
   available: boolean;
   reason?: string;
-  title?: string;
+  title?: string | undefined;
 }
 
 export interface NavigationCardAction {
   label: string;
   ariaLabel?: string;
-  title?: string;
+  title?: string | undefined;
+  disabled?: boolean;
   onClick(): void;
 }
 
@@ -29,6 +30,8 @@ export function NavigationCards<Card extends NavigationCard>({
   create,
   onOpen,
   renderActions,
+  renderArtwork,
+  renderStatus,
   intro,
   children,
   pending = false,
@@ -37,6 +40,8 @@ export function NavigationCards<Card extends NavigationCard>({
   create?: NavigationCardAction | undefined;
   onOpen(card: Card): void;
   renderActions?(card: Card): import("react").ReactNode;
+  renderArtwork?(card: Card): import("react").ReactNode;
+  renderStatus?(card: Card): import("react").ReactNode;
   intro?: import("react").ReactNode;
   children?: import("react").ReactNode;
   pending?: boolean;
@@ -51,7 +56,7 @@ export function NavigationCards<Card extends NavigationCard>({
               type="button"
               className="home-card home-card-create"
               aria-label={create.ariaLabel ?? create.label}
-              disabled={pending}
+              disabled={pending || create.disabled}
               title={pending ? "Wait for the current action to finish" : create.title}
               onClick={create.onClick}
             >
@@ -81,7 +86,9 @@ export function NavigationCards<Card extends NavigationCard>({
                 onClick={() => onOpen(card)}
               >
                 <CardHeader as="span" className="home-card-art" aria-hidden="true">
-                  {card.icon && <NavigationIcon name={card.icon} />}
+                  {renderArtwork
+                    ? renderArtwork(card)
+                    : card.icon && <NavigationIcon name={card.icon} />}
                 </CardHeader>
                 <CardContent as="span" className="home-card-copy">
                   <CardTitle as="span" className="home-card-name">
@@ -90,6 +97,7 @@ export function NavigationCards<Card extends NavigationCard>({
                 </CardContent>
                 <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
               </button>
+              {renderStatus?.(card)}
               {renderActions && (
                 <CardAction className="home-card-action">{renderActions(card)}</CardAction>
               )}

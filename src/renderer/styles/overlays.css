@@ -116,17 +116,15 @@
 }
 
 /* Dialogs: a 48px title bar and footer stay in place while the body scrolls. */
-.setup-dialog {
-  background: var(--surface);
-  color: var(--text);
-  border: var(--rule-strong) solid var(--panel-border);
-  border-radius: var(--dialog-radius);
+:where(.setup-dialog) {
   padding: 0 16px;
+}
+
+.setup-dialog {
   width: min(600px, calc(100vw - 32px));
   max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
-  scrollbar-gutter: stable;
-  box-shadow: var(--overlay-shadow);
+  scrollbar-gutter: auto;
 }
 
 .picker-dialog {
@@ -135,7 +133,6 @@
 
 .project-dialog {
   height: min(600px, calc(100dvh - 32px));
-  scrollbar-gutter: stable both-edges;
 }
 
 .project-dialog[open] {
@@ -604,13 +601,9 @@ label.check-label {
   width: min(640px, calc(100vw - 32px));
   max-height: 76vh;
   padding: 0;
-  color: var(--text);
-  background: var(--surface);
-  border: var(--rule-strong) solid var(--panel-border);
   overflow: hidden;
   scrollbar-gutter: auto;
   flex-direction: column;
-  box-shadow: var(--overlay-shadow);
 }
 
 .command-palette[open] {
@@ -947,7 +940,6 @@ label.check-label {
 
 .polling-dialog {
   min-height: min(200px, calc(100dvh - 32px));
-  scrollbar-gutter: stable both-edges;
 }
 
 .polling-dialog[open] {

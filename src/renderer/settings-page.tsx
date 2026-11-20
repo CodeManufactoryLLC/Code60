@@ -14,7 +14,6 @@ export function SettingsPage({
   section,
   updates,
   versions,
-  orchestration,
   memory,
   pollingControls,
   transparent,
@@ -45,7 +44,6 @@ export function SettingsPage({
   section: SettingsSectionId | null;
   updates: ReactNode;
   versions: Versions | undefined;
-  orchestration: ReactNode;
   memory?: ReactNode;
   pollingControls: ReactNode;
   focusHighlight: boolean;
@@ -90,7 +88,6 @@ export function SettingsPage({
       aria-label={section ? settingsLabels[section] : undefined}
       hidden={section === null}
     >
-      {settingsPanel("agents", orchestration)}
       {settingsPanel("memory", memory)}
       {settingsPanel(
         "appearance",

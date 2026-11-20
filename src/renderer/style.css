@@ -23,5 +23,6 @@
 @import "./styles/files.css" layer(components);
 @import "./styles/overlays.css" layer(components);
 @import "./styles/splash.css" layer(components);
+@import "./neobrutalism/dialog.css" layer(components);
 @import "./styles/utilities.css" layer(utilities);
 @import "./styles/accessibility.css" layer(accessibility);

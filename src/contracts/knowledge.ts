@@ -285,6 +285,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Project workers require Git isolation; idle workers consume capacity.",
   ),
   feature(
+    "browser",
+    "Browser automation",
+    "Use Headless, Visible or Existing Browser by stating a preference in chat.",
+    "Relay, Custom Assistant or project chat → ask for browser automation; code60_browser",
+    "provider",
+    "existing-tools",
+    "Default Headless. Each live conversation owns its mode and browser connection; no saved setting. status/set-mode never launch processes. list-tools/call lazily run pinned Playwright MCP through Node.js/npm; Chrome must be installed. Existing Browser requires the Playwright Chrome extension and connection approval. Switching modes closes the old connection and loses isolated state; errors never fall back. Calls are serialized, bounded to 100 seconds, and cancellation/Stop/Undo/provider replacement/shutdown close owned processes. External website changes are not undone by message Undo. Browser tools are unavailable to workers, setup probes, helpers and the scheduler. User-configured MCP servers stay independent. Only product-allowed browser tools; no host-code, install, upload or WebMCP tools. Private npm context; 32 MiB temporary automatic artifacts, explicit outputs directly in the owning conversation workspace. Only dispatched turns have browser authority. No native desktop control.",
+    "Existing Browser uses the extension's connection approval; Code60 does not bypass it or provide an extension token.",
+  ),
+  feature(
     "plans",
     "Plans",
     "Propose and track revisioned tasks.",
@@ -360,18 +370,18 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   ),
   feature(
     "providers",
-    "Agents",
+    "Providers",
     "Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.",
-    "Settings → Agents",
+    "Providers → provider details",
     "none",
     "read",
-    "Configured does not mean detected, verified, or connected. No automatic installation.",
+    "Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped desktop agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.",
   ),
   feature(
     "model-settings",
     "Model and reasoning",
     "Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.",
-    "Chat or worker composer → Model; Settings → Agents → Default models to clear",
+    "Chat or worker composer → Model; Providers → provider details → Default models to clear",
     "provider",
     "human-only",
     "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Assistants. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.",
@@ -522,6 +532,8 @@ export const PAGE_CAPABILITIES = {
   apps: "settings",
   projects: "projects",
   project: "projects",
+  providers: "providers",
+  provider: "providers",
   chat: "projects",
   tables: "data",
   advanced: "settings",
@@ -547,7 +559,6 @@ export const PAGE_CAPABILITIES = {
 } as const satisfies Record<(typeof pages)[number]["id"], string>;
 
 export const SETTINGS_CAPABILITIES = {
-  agents: "providers",
   memory: "memory",
   appearance: "settings",
   "table-defaults": "settings",
@@ -559,6 +570,7 @@ export const SETTINGS_CAPABILITIES = {
 
 /** Every agent-visible tool belongs to exactly one capability. */
 export const TOOL_CAPABILITIES: Record<string, string> = {
+  code60_browser: "browser",
   code60_get_capabilities: "knowledge",
   code60_get_app_state: "knowledge",
   code60_list_customizations: "knowledge",
