@@ -12553,6 +12553,42 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       .toBe(false);
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     await expect(chat.locator(".event.prompt")).toHaveCount(4);
+    const scrollProbe = await chat.locator(".transcript").evaluateHandle((element) => {
+      const events: {
+        reason: string;
+        top: number;
+        height: number;
+        width: number;
+        content: number;
+      }[] = [];
+      const sample = (reason: string) => {
+        events.push({
+          reason,
+          top: element.scrollTop,
+          height: element.clientHeight,
+          width: element.clientWidth,
+          content: element.scrollHeight,
+        });
+        if (events.length > 40) events.shift();
+      };
+      const observe = (event: Event) => sample(event.type);
+      for (const name of ["scroll", "wheel", "pointerdown", "keydown"])
+        element.addEventListener(name, observe);
+      const observer = new ResizeObserver(() => sample("resize"));
+      observer.observe(element);
+      sample("initial");
+      return {
+        measure: () => ({
+          atBottom: element.scrollHeight - element.scrollTop - element.clientHeight < 2,
+          events,
+        }),
+        dispose: () => {
+          observer.disconnect();
+          for (const name of ["scroll", "wheel", "pointerdown", "keydown"])
+            element.removeEventListener(name, observe);
+        },
+      };
+    });
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("light");
@@ -12566,12 +12602,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
     await expect
-      .poll(() =>
-        chat
-          .locator(".transcript")
-          .evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
-      )
-      .toBeLessThan(2);
+      .poll(() => scrollProbe.evaluate((probe) => probe.measure()))
+      .toMatchObject({ atBottom: true });
+    await scrollProbe.evaluate((probe) => probe.dispose());
+    await scrollProbe.dispose();
     await page.screenshot({ path: test.info().outputPath("agent-bubbles-dark-narrow.png") });
     await page.screenshot({ path: "test-results/orchestration-chat-dark-narrow.png" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
