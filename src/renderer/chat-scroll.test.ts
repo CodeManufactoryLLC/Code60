@@ -13,6 +13,7 @@ function setup(initialResponse = 75) {
   let animated = true;
   let response = initialResponse;
   let layoutMoving = false;
+  let visible = true;
   const frames = new Map<number, FrameRequestCallback>();
   const element = {
     scrollHeight: 1400,
@@ -39,6 +40,7 @@ function setup(initialResponse = 75) {
     () => animated,
     () => response,
     () => layoutMoving,
+    () => visible,
   );
   const advance = (elapsed = 16) => {
     now += elapsed;
@@ -66,6 +68,9 @@ function setup(initialResponse = 75) {
     },
     reduce: () => {
       animated = false;
+    },
+    hide: () => {
+      visible = false;
     },
   };
 }
@@ -265,6 +270,49 @@ describe("main-chat smooth following", () => {
     expect(position.following).toBe(true);
     expect(position.top).toBe(800);
     expect(element.scrollTop).toBe(800);
+  });
+
+  it.each([false, true])(
+    "keeps settlement pending across consecutive resizes (restored geometry: %s)",
+    (restored) => {
+      const { element, position, controller, advance, finish } = setup();
+      controller.update(true);
+      element.clientWidth = 450;
+      element.scrollHeight = 1600;
+      controller.update();
+      advance();
+      element.clientWidth = 400;
+      element.scrollHeight = 1800;
+      controller.update();
+      if (restored) {
+        element.clientWidth = 450;
+        element.scrollHeight = 1600;
+        controller.update();
+      }
+      advance();
+      element.scrollTop = 980;
+      controller.onScroll();
+      expect(position.following).toBe(true);
+      finish();
+      expect(element.scrollTop).toBe(restored ? 1200 : 1400);
+    },
+  );
+
+  it("writes the hidden document position immediately without requeueing settlement", () => {
+    const { element, position, controller, advance, frames, hide } = setup();
+    controller.update(true);
+    element.scrollHeight = 1600;
+    controller.update();
+    advance();
+    const queued = [...frames.values()];
+    hide();
+    controller.update(true);
+    expect(element.scrollTop).toBe(1200);
+    expect(position.following).toBe(true);
+    expect(frames.size).toBe(0);
+    for (const callback of queued) callback(32);
+    expect(frames.size).toBe(0);
+    expect(element.scrollTop).toBe(1200);
   });
 
   it("upward input cancels an in-flight animation even inside the bottom threshold", () => {

@@ -1984,7 +1984,10 @@ height only if the user is already following its bottom; reading older messages
 does not get pulled to the activity row. Preserve follow across resize-generated scroll
 events until the controller write settles in a later rendering step, including anchors
 delivered after the first write; upward input still cancels immediately. Cancel the
-settlement check on pause, hide, disposal and replacement.
+settlement check on pause, hide, disposal and replacement. Pin it to the measured
+layout revision and written offset so consecutive resizes, including restored
+geometry, cannot clear a newer guard. Hidden documents settle their position
+without queueing another check.
 This existing-behavior fix adds no capability or self-knowledge catalog change.
 Main Chat uses one frame-driven, retargetable
 scroll animation for incoming content, not repeated bottom jumps or restarted native

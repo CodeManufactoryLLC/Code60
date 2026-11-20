@@ -485,7 +485,9 @@
   follow across resize-generated scroll events until the written offset settles,
   including browser anchors delivered after the first write. Cancel settlement on
   pause, hide, disposal and replacement. Upward input or reading activity details
-  still cancels follow.
+  still cancels follow. Pin checks to their layout revision and written offset;
+  restored geometry cannot validate an older check. Hidden documents settle
+  immediately without queueing settlement.
   This fix adds no capability, setting or self-knowledge catalog change.
   Restore history/reading positions
   without animation. Fade/translate new visible assistant messages only once, never

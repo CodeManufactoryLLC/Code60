@@ -13,6 +13,7 @@ export function createChatScroll(
   animate: () => boolean,
   response: () => number = () => defaultTransitionTimes.scrollResponse,
   layoutMoving: () => boolean = () => false,
+  visible: () => boolean = () => true,
 ) {
   let frame: number | undefined;
   let revealFrame: number | undefined;
@@ -21,20 +22,32 @@ export function createChatScroll(
   let remainder = 0;
   let written = element.scrollTop;
   let layoutPending = false;
+  let layoutRevision = 0;
   const geometry = () => `${element.clientWidth}:${element.clientHeight}:${element.scrollHeight}`;
   let measured = geometry();
   const bottom = () => Math.max(0, element.scrollHeight - element.clientHeight);
   const settleLayout = (): void => {
-    if (!layoutPending || layoutFrame !== undefined) return;
+    if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
+    layoutFrame = undefined;
+    if (!visible()) layoutPending = false;
+    if (!layoutPending) return;
+    const revisionAtWrite = layoutRevision;
+    const offsetAtWrite = written;
     const scheduled = requestAnimationFrame(() => {
       if (layoutFrame !== scheduled) return;
       layoutFrame = undefined;
-      if (!position.following) return;
-      if (measured === geometry() && Math.abs(element.scrollTop - written) < 1) {
+      if (!visible()) layoutPending = false;
+      if (!position.following || !layoutPending) return;
+      if (
+        revisionAtWrite === layoutRevision &&
+        offsetAtWrite === written &&
+        measured === geometry() &&
+        Math.abs(element.scrollTop - written) < 1
+      ) {
         layoutPending = false;
       } else {
         update();
-        settleLayout();
+        if (layoutFrame === undefined) settleLayout();
       }
     });
     layoutFrame = scheduled;
@@ -79,7 +92,10 @@ export function createChatScroll(
   };
   const update = (immediate = false) => {
     const nextGeometry = geometry();
-    if (measured !== nextGeometry) layoutPending = true;
+    if (measured !== nextGeometry) {
+      layoutPending = true;
+      layoutRevision += 1;
+    }
     measured = nextGeometry;
     if (!position.following) {
       cancelFollow();
@@ -171,6 +187,7 @@ export function useChatScroll(active: boolean, key: string) {
       // Height already eases each frame. Applying a second easing would throw the status
       // below the viewport before scrolling caught up with it.
       () => content.current?.querySelector("[data-layout-animating='true']") != null,
+      () => document.visibilityState === "visible",
     );
     controller.current = current;
     // Initial history and returning to a conversation restore without replaying motion.
