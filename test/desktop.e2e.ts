@@ -2974,7 +2974,7 @@ test("desktop: sidebar reveal motion preserves drafts and remains borderless", a
       };
       const alignment = () => {
         const card = document.querySelector(".workspace-breadcrumbs")?.getBoundingClientRect();
-        const panel = document.querySelector("#panel-chat")?.getBoundingClientRect();
+        const panel = document.querySelector(".chat-conversations")?.getBoundingClientRect();
         if (!card || !panel) throw new Error("Missing breadcrumb/content cards");
         return Math.max(
           Math.abs(card.left - panel.left),
@@ -8123,8 +8123,10 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     // The full left sidebar area stays interactive, including its outer inset.
     await move(16, 200);
     await expect.poll(ignored).toBe(false);
-    // Passive page corners are square and remain clickable.
-    await move(width - 15, 31);
+    // The painted card stays clickable below the platform-specific header inset.
+    const contentCard = await page.locator("#panel-sessions").boundingBox();
+    if (!contentCard) throw new Error("Missing Sessions card");
+    await move(contentCard.x + contentCard.width - 8, contentCard.y + 8);
     await expect.poll(ignored).toBe(false);
     const firstTab = await page.getByRole("tab", { name: "Sessions", exact: true }).boundingBox();
     if (!firstTab) throw new Error("Missing sidebar tab");
@@ -12551,6 +12553,42 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       .toBe(false);
     await expect(chat.locator(".activity-display")).toHaveCount(0);
     await expect(chat.locator(".event.prompt")).toHaveCount(4);
+    const scrollProbe = await chat.locator(".transcript").evaluateHandle((element) => {
+      const events: {
+        reason: string;
+        top: number;
+        height: number;
+        width: number;
+        content: number;
+      }[] = [];
+      const sample = (reason: string) => {
+        events.push({
+          reason,
+          top: element.scrollTop,
+          height: element.clientHeight,
+          width: element.clientWidth,
+          content: element.scrollHeight,
+        });
+        if (events.length > 40) events.shift();
+      };
+      const observe = (event: Event) => sample(event.type);
+      for (const name of ["scroll", "wheel", "pointerdown", "keydown"])
+        element.addEventListener(name, observe);
+      const observer = new ResizeObserver(() => sample("resize"));
+      observer.observe(element);
+      sample("initial");
+      return {
+        measure: () => ({
+          atBottom: element.scrollHeight - element.scrollTop - element.clientHeight < 2,
+          events,
+        }),
+        dispose: () => {
+          observer.disconnect();
+          for (const name of ["scroll", "wheel", "pointerdown", "keydown"])
+            element.removeEventListener(name, observe);
+        },
+      };
+    });
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("light");
@@ -12564,12 +12602,10 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
     );
     await expect
-      .poll(() =>
-        chat
-          .locator(".transcript")
-          .evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
-      )
-      .toBeLessThan(2);
+      .poll(() => scrollProbe.evaluate((probe) => probe.measure()))
+      .toMatchObject({ atBottom: true });
+    await scrollProbe.evaluate((probe) => probe.dispose());
+    await scrollProbe.dispose();
     await page.screenshot({ path: test.info().outputPath("agent-bubbles-dark-narrow.png") });
     await page.screenshot({ path: "test-results/orchestration-chat-dark-narrow.png" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -17092,7 +17128,7 @@ test("desktop: safe Markdown replies, source Copy, confirmed links and streaming
     await page.mouse.click(rail.x + rail.width - 7, rail.y + rail.height - 20);
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await scroller.focus();
-    await page.keyboard.press("Control+Home");
+    await page.keyboard.press(process.platform === "darwin" ? "Home" : "Control+Home");
     await expect(scroller).toBeFocused();
     // Native key scrolling can round a fractional layout origin to one CSS pixel.
     await expect

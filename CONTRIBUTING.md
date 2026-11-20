@@ -58,7 +58,7 @@ support requires updating the architecture and adding validation.
 Use macOS or Linux with Node.js 22.12 or later and npm.
 
 Node.js 22.12 needs `NODE_OPTIONS=--experimental-sqlite` when running checks so
-database tests participate in coverage. CI enables this for its Node 22.12 job;
+database tests participate in coverage. CI and release validation enable this for Node 22.12;
 Node 24 exposes SQLite without the flag. Coverage floors remain the same.
 Memory tests additionally probe FTS5 in a private in-memory database; Node 22.12
 does not bundle FTS5, so those suites run on Node 24 and Electron instead.

@@ -477,8 +477,11 @@
   Forced colors retains native system scrollbars and independent keyboard focus.
   This presentation change adds no capability, API, setting, schema or migration,
   so the self-knowledge catalog and generated capabilities need no change.
-- Main Chat follows streamed growth with one retargetable scroll animation, cancelled
-  by upward input or reading activity details. Restore history/reading positions
+- Main Chat follows streamed growth with one retargetable scroll animation. Preserve
+  follow across resize-generated scroll events between measurement and the next
+  controller write. Upward input or reading activity details still cancels follow.
+  This fix adds no capability, setting or self-knowledge catalog change.
+  Restore history/reading positions
   without animation. Fade/translate new visible assistant messages only once, never
   each chunk or historical/background messages. Respect reduced motion and hidden
   documents; preserve exact source, Copy and Markdown behavior.

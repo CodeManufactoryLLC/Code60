@@ -19,6 +19,7 @@ export function createChatScroll(
   let previous = 0;
   let remainder = 0;
   let written = element.scrollTop;
+  let layoutPending = false;
   const geometry = () => `${element.clientWidth}:${element.clientHeight}:${element.scrollHeight}`;
   let measured = geometry();
   const bottom = () => Math.max(0, element.scrollHeight - element.clientHeight);
@@ -26,11 +27,13 @@ export function createChatScroll(
     element.scrollTop = top;
     written = element.scrollTop;
     position.top = written;
+    layoutPending = false;
   };
   const cancelFollow = () => {
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
     remainder = 0;
+    layoutPending = false;
   };
   const cancel = () => {
     cancelFollow();
@@ -55,7 +58,9 @@ export function createChatScroll(
     frame = requestAnimationFrame(tick);
   };
   const update = (immediate = false) => {
-    measured = geometry();
+    const nextGeometry = geometry();
+    if (measured !== nextGeometry) layoutPending = true;
+    measured = nextGeometry;
     if (!position.following) {
       cancelFollow();
       if (immediate) {
@@ -69,7 +74,7 @@ export function createChatScroll(
       previous = performance.now();
       remainder = 0;
       frame = requestAnimationFrame(tick);
-    }
+    } else if (frame === undefined) layoutPending = false;
   };
   return {
     update,
@@ -99,7 +104,9 @@ export function createChatScroll(
     },
     onScroll() {
       // Layout changes and our own frames are not user requests to stop following.
-      if (position.following && measured !== geometry()) {
+      // ResizeObserver can measure before the browser delivers its layout scroll.
+      // Preserve follow until our next write; explicit input calls pause() first.
+      if (position.following && (layoutPending || measured !== geometry())) {
         update();
         return;
       }
