@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BUILTIN_COMMANDS } from "./commands.js";
 import { pages, settingsSections } from "./navigation.js";
 
 z.config({ jitless: true });
@@ -335,11 +336,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "commands",
     "Commands",
-    "Use bundled or saved reusable prompts with a leading $name.",
+    `Use bundled or saved reusable prompts with a leading $name. Bundled commands: ${BUILTIN_COMMANDS.map((command) => `$${command.name}: ${command.description}`).join(" ")}`,
     "Apps → Command Builder; project composer $ command picker",
     "database",
     "existing-tools",
-    "Saved names override bundled names; /name is plain text, not a command. Relay has no command creation tool; reading never executes.",
+    "Saved names override bundled names; /name is plain text, not a command. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.",
   ),
   feature(
     "tactics",

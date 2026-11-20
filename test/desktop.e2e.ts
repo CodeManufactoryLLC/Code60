@@ -18,6 +18,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
 import type { MemoryGeneration, MemorySource, Snapshot, UpdateState } from "../src/bridge/index.js";
+import { BUILTIN_COMMANDS } from "../src/contracts/index.js";
 import { createRecordStore, DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import { ChatStore } from "../src/desktop/chat-store.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
@@ -17488,20 +17489,35 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-commands-ui-")));
   const repo = join(directory, "repo");
   await mkdir(repo);
+  await writeFile(join(repo, "context.txt"), "Synthetic conversation context.\n");
   try {
-    application = await launch(directory, repo, join(directory, "commands.sqlite"));
+    application = await launch(directory, repo, join(directory, "commands.sqlite"), false);
     const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     const tab = page.getByRole("tab", { name: "Command Builder", exact: true });
     await expect(tab).toBeDisabled();
-    await page.evaluate(async () => {
-      await window.desktop
-        .snapshot()
-        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch));
-      await window.desktop
-        .snapshot()
-        .then(({ databaseEpoch }) => window.desktop.chooseFolder(databaseEpoch));
-    });
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await expect(tab).toBeEnabled();
+    expect((await readFile(join(directory, "commands.sqlite"))).subarray(0, 16).toString()).toBe(
+      "SQLite format 3\0",
+    );
+    await selectSidebarPage(page, "Projects");
+    await page
+      .locator("#panel-projects")
+      .getByRole("button", { name: "New Project", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
     await selectProjectConversation(page);
     await tab.click();
     const editor = page.locator("#panel-commands");
@@ -17564,7 +17580,14 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await expect(composer).toBeEnabled();
-    for (const name of ["plan", "business-evaluation"]) {
+    for (const name of [
+      "plan",
+      "business-evaluation",
+      "catch-me-up",
+      "big-picture",
+      "pushback",
+      "simplify",
+    ]) {
       await composer.fill(`$${name}`);
       await expect(chat.getByRole("option")).toHaveCount(1);
       await expect(chat.getByRole("option")).toContainText(`$${name}`);
@@ -17580,7 +17603,7 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
     await expect(chat.locator(".event.prompt")).toHaveCount(0);
     await composer.fill("$");
     await expect(composer).toHaveAttribute("aria-expanded", "true");
-    await expect(chat.getByRole("option")).toHaveCount(5);
+    await expect(chat.getByRole("option")).toHaveCount(9);
     await composer.press("ArrowDown");
     await composer.press("ArrowUp");
     await composer.press("Tab");
@@ -17609,6 +17632,28 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
     await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText(
       "Received command:\nCommand $fixture-review: Fixture review\nInspect the selected files.",
     );
+    for (const name of ["catch-me-up", "big-picture", "pushback", "simplify"]) {
+      const builtin = BUILTIN_COMMANDS.find((entry) => entry.name === name);
+      if (!builtin) throw new Error(`Missing $${name}`);
+      for (const suffix of ["", " Focus on the current discussion."]) {
+        const text = `$${name}${suffix}`;
+        await composer.fill(text);
+        await composer.press("Escape");
+        await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+        await chat.getByRole("button", { name: "Send", exact: true }).click();
+        await expect(chat.locator(".event.message .chat-markdown").last()).toHaveText(
+          `Received command:\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${
+            suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""
+          }`,
+        );
+        await expect(chat.locator(".event.prompt pre").last()).toHaveText(text);
+        await expect(chat.locator(".event.prompt mark").last()).toHaveText(`$${name}`);
+      }
+    }
+    expect(await readFile(join(repo, "context.txt"), "utf8")).toBe(
+      "Synthetic conversation context.\n",
+    );
+    expect((await page.evaluate(() => window.desktop.snapshot())).commands).toHaveLength(2);
     await composer.fill("$unknown is full");
     await expect(
       chat.getByText("No matching command. This message will be sent as plain text."),

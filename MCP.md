@@ -207,18 +207,18 @@ under the existing transcript rules.
 
 ## Orchestrator commands
 
-Start a Chat message with the built-in `/create-command`, followed by instructions
-for the command you want. For example, `/create-command Make a review command that
+Start a project chat message with the built-in `$create-command`, followed by instructions
+for the command you want. For example, `$create-command Make a review command that
 checks changes for bugs.` The bundled prompt guides the agent to infer the fields,
 ask for missing details, and use the creation tool without executing the saved
-prompt. It is available in the slash picker without adding a database row; a saved
+prompt. It is available in the dollar-command picker without adding a database row; a saved
 command with the same name takes precedence.
 
-Ask the desktop orchestrator to create a reusable slash command. Its
-`code60_create_command` tool takes `name` (without `/`), `title`, optional
+Ask the desktop orchestrator to create a reusable command. Its
+`code60_create_command` tool takes `name` (without `$`), `title`, optional
 `description`, and `prompt`. It saves immediately in the connected database,
 shared across projects, and returns the saved command. It does not run the prompt.
-Use `/name` at the start of an orchestrator message to invoke it.
+Use `$name` at the start of a project orchestrator message to invoke it.
 
 Names use 1–64 lowercase letters, digits or hyphens, starting with a letter or
 digit. Titles are single-line and at most 120 characters, descriptions at most
