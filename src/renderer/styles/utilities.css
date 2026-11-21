@@ -91,6 +91,13 @@
   color: var(--accent);
 }
 
+/* Raster disclosure artwork needs a focus edge beyond the shared glyph-color highlight. */
+:root button.chat-workers-toggle-leading:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
+}
+
 .app .button-group > button:is(:disabled, [aria-disabled="true"]) {
   border-style: solid;
   border-color: var(--border);

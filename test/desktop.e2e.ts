@@ -5190,17 +5190,32 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
             const label = entry.querySelector(".chat-sidebar-label");
             const icon = entry.querySelector(".navigation-icon");
             const bounds = label?.getBoundingClientRect();
+            const button = entry.getBoundingClientRect();
+            const style = getComputedStyle(entry);
+            const innerLeft = button.left + Number.parseFloat(style.paddingLeft);
+            const innerRight = button.right - Number.parseFloat(style.paddingRight);
+            const indicator = entry
+              .querySelector(".chat-sidebar-indicators")
+              ?.getBoundingClientRect();
+            const leading = entry.parentElement?.querySelector(
+              ".chat-workers-toggle-leading .navigation-icon",
+            );
             return {
-              width: bounds?.width ?? 0,
+              width: bounds
+                ? Math.max(0, Math.min(bounds.right, innerRight) - Math.max(bounds.left, innerLeft))
+                : 0,
               left: bounds?.left ?? 0,
-              iconRight: icon?.getBoundingClientRect().right ?? 0,
+              iconRight: (icon ?? leading)?.getBoundingClientRect().right ?? 0,
+              indicatorsFit:
+                !indicator || (indicator.left >= innerLeft && indicator.right <= innerRight + 0.1),
             };
           }),
         );
       expect(readable.length).toBeGreaterThan(0);
       for (const label of readable) {
-        expect(label.width).toBeGreaterThanOrEqual(20);
-        expect(label.left).toBeGreaterThanOrEqual(label.iconRight + 7.9);
+        expect.soft(label.width).toBeGreaterThanOrEqual(20);
+        expect.soft(label.left).toBeGreaterThanOrEqual(label.iconRight + 7.9);
+        expect.soft(label.indicatorsFit).toBe(true);
       }
       expect.soft(positions.clipped).toBe(false);
       for (const row of positions.toggles) {
@@ -5373,6 +5388,25 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     expect(retained.runs.map((run) => run.record.id).sort()).toEqual(
       beforeClose.runs.map((run) => run.record.id).sort(),
     );
+    // Keep the worker-owning chat in the background with real unread and approval counts.
+    const autoApproval = page.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    if ((await autoApproval.getAttribute("aria-pressed")) === "true") await autoApproval.click();
+    await expect(autoApproval).toHaveAttribute("aria-pressed", "false");
+    const ownerId = (await ownerChat.getAttribute("id"))?.replace(/^conversation-/, "");
+    if (!ownerId) throw new Error("Missing worker owner");
+    await page.evaluate(
+      ({ id, text }) => window.desktop.orchestrationChatAction({ type: "send", id, text }),
+      {
+        id: ownerId,
+        text: JSON.stringify([
+          { message: "Background layout reply" },
+          { permission: { id: "layout-approval", title: "Layout permission", kind: "execute" } },
+        ]),
+      },
+    );
+    await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+    await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
+    await expect(aChat).toHaveAttribute("aria-current", "true");
     while (await dismiss.count()) await dismiss.first().click();
     for (const theme of ["light", "dark"]) {
       for (const [width, size] of [
@@ -5402,13 +5436,40 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
           theme,
         );
         await page.emulateMedia({ reducedMotion: "reduce" });
+        await workersToggle.focus();
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Shift+Tab");
+        await expect(workersToggle).toBeFocused();
+        const focus = await workersToggle.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            width: style.outlineWidth,
+            style: style.outlineStyle,
+            color: style.outlineColor,
+          };
+        });
+        expect.soft(focus.width).toBe("2px");
+        expect.soft(focus.style).toBe("solid");
+        expect.soft(focus.color).not.toBe("rgba(0, 0, 0, 0)");
+        if (width === 180 && size === 32)
+          await page.screenshot({ path: test.info().outputPath(`leading-focus-${theme}.png`) });
+        await workersToggle.press("Enter");
+        await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+        await workersToggle.press("Space");
+        await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+        await expect(aChat).toHaveAttribute("aria-current", "true");
+        await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+        await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
         await expectHierarchy(width < 300);
         const disclosureBounds = await workersToggle.boundingBox();
         const labelBounds = await ownerChat.locator(".chat-sidebar-label").boundingBox();
         expect(disclosureBounds).not.toBeNull();
         expect(labelBounds).not.toBeNull();
-        if (disclosureBounds && labelBounds)
+        if (disclosureBounds && labelBounds) {
           expect(disclosureBounds.x + disclosureBounds.width).toBeLessThanOrEqual(labelBounds.x);
+          if (width === 180) expect(disclosureBounds.width).toBe(24);
+          if (width === 180 && size === 32) expect(labelBounds.width).toBeGreaterThanOrEqual(32);
+        }
         await expect(page.locator(".project-sidebar-open")).toHaveAttribute(
           "aria-label",
           "Add Project",
@@ -5432,6 +5493,14 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
       }
     }
     await page.emulateMedia({ forcedColors: "active" });
+    await workersToggle.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(workersToggle).toBeFocused();
+    await expect.soft(workersToggle).toHaveCSS("outline-width", "2px");
+    await expect.soft(workersToggle).toHaveCSS("outline-style", "solid");
+    await expect.soft(workersToggle).not.toHaveCSS("outline-color", "rgba(0, 0, 0, 0)");
+    await page.screenshot({ path: test.info().outputPath("leading-focus-forced-colors.png") });
     await expect(circle).toHaveCSS("box-shadow", "none");
     await expect(circle).toHaveCSS("border-style", "solid");
   } finally {
@@ -10927,26 +10996,14 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(row(owner)).toHaveAttribute("aria-current", "true");
     await expect(row(owner)).toHaveAttribute("data-role", "orchestrator");
     await expect(row(a)).toHaveAttribute("data-role", "worker");
-    await expect(row(owner).locator('[data-icon="app-communication"]')).toHaveCount(1);
+    const ownerDisclosure = row(owner)
+      .locator("..")
+      .locator(":scope > .chat-workers-toggle-leading");
+    // These manually started workers acquire ownership only in the later projection.
+    await expect(row(owner).locator("..").locator('[data-icon="app-communication"]')).toHaveCount(
+      1,
+    );
     await expect(row(a).locator('[data-icon="app-down-right"]')).toHaveCount(1);
-    for (const [id, file] of [
-      [owner, "labour-day"],
-      [a, "drone"],
-      [b, "drone"],
-    ]) {
-      if (!id) throw new Error("Missing conversation identity");
-      const icon = row(id).locator("img.navigation-icon");
-      await expect(icon).toHaveAttribute(
-        "src",
-        new RegExp(`/${file}-[\\w-]+\\.(?:png|gif)(?:\\?play=[^ ]+)?$`),
-      );
-      await expect(icon).toHaveAttribute("alt", "");
-      await expect(icon).toHaveAttribute("aria-hidden", "true");
-      await expect(icon).toHaveJSProperty("complete", true);
-      expect(
-        await icon.evaluate((element) => (element as HTMLImageElement).naturalWidth),
-      ).toBeGreaterThan(0);
-    }
     await expect(page.locator(".chat-dock, .chat-popup")).toHaveCount(0);
 
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -11110,6 +11167,26 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     const toggle = page.getByRole("button", { name: "Workers for Chat 1", exact: true });
     await expect(children).toBeVisible();
     await expect(children.locator('[data-role="worker"]')).toHaveCount(2);
+    await expect(ownerDisclosure.locator('[data-icon="app-communication"]')).toHaveCount(1);
+    await expect(row(owner).locator("img.navigation-icon")).toHaveCount(0);
+    for (const [id, file] of [
+      [owner, "labour-day"],
+      [a, "drone"],
+      [b, "drone"],
+    ]) {
+      if (!id) throw new Error("Missing conversation identity");
+      const icon = (id === owner ? ownerDisclosure : row(id)).locator("img.navigation-icon");
+      await expect(icon).toHaveAttribute(
+        "src",
+        new RegExp(`/${file}-[\\w-]+\\.(?:png|gif)(?:\\?play=[^ ]+)?$`),
+      );
+      await expect(icon).toHaveAttribute("alt", "");
+      await expect(icon).toHaveAttribute("aria-hidden", "true");
+      await expect(icon).toHaveJSProperty("complete", true);
+      expect(
+        await icon.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      ).toBeGreaterThan(0);
+    }
     await children.locator(`#conversation-${a}`).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
