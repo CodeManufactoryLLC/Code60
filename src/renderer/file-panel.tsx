@@ -6,7 +6,7 @@ import { Icon } from "./icons.js";
 import { useKnowledgePanel } from "./knowledge-report.js";
 import { MemoryRecall, type RecallSource } from "./memory-recall.js";
 import type { PreviewViewState } from "./monaco-preview.js";
-import { PanelShell } from "./panel-shell.js";
+import { type PanelPage, PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
@@ -166,6 +166,11 @@ export function FilePanel({
         id: tab.id,
         label: fileTabLabel(tab, tabs.entries),
         title: tab.kind === "file" ? tab.path : fileTabLabel(tab, tabs.entries),
+        closeButton:
+          tab.kind === "file" ||
+          tab.kind === "plan" ||
+          tab.kind === "revision" ||
+          tab.kind === "application",
         icon:
           tab.kind === "changes"
             ? ("task--tools" as const)
@@ -182,6 +187,23 @@ export function FilePanel({
     onAction(action);
     return next.active;
   };
+  // Offer unopened destinations without mounting readers or changing stored tabs.
+  const pages: PanelPage[] = [];
+  for (const [kind, label, icon] of [
+    ["explorer", "File Explorer", "folder"],
+    ["changes", "Changes", "task--tools"],
+    ["recall", "Memory Recall", "document"],
+  ] as const) {
+    if (!tabs.entries.some((tab) => tab.kind === kind))
+      pages.push({
+        id: `page-${kind}`,
+        label,
+        icon,
+        select: () => {
+          act({ type: kind });
+        },
+      });
+  }
   return (
     <PanelShell
       disabled={disabled}
@@ -189,6 +211,7 @@ export function FilePanel({
       name="Files"
       emptyLabel="Open files"
       tabs={panelTabs}
+      pages={pages}
       selectedId={tabs.active}
       onAction={(action) => act(action.type === "add" ? { type: "blank" } : action)}
       open={open}

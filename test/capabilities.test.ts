@@ -25,11 +25,22 @@ describe("desktop capability catalog", () => {
       confirmation: "Human approval before installation and shutdown.",
     });
   });
-  it("classifies bounded human-only navigation history without database prerequisites", () => {
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+  it("describes the human-only current-page combobox and its bounded parent path", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      access: expect.stringContaining("Title bar"),
+      access: expect.stringContaining("Current page combobox"),
+      limitations: expect.stringContaining("only the current page and its parents"),
+    });
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations).toContain(
+      "No search field",
+    );
+  });
+  it("classifies bounded human-only navigation history without database prerequisites", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+      access: "Current-page header card → Back / Forward, to the left of the page selector",
+      prerequisite: "none",
+      agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),
     });
   });
@@ -112,6 +123,24 @@ describe("desktop capability catalog", () => {
       purpose: expect.stringContaining("left sidebar background opacity"),
       access: expect.stringContaining("Appearance → Left sidebar"),
       limitations: expect.stringContaining("dedicated top-right chevron"),
+    });
+  });
+  it("describes locally saved monochrome icons without database prerequisites", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      purpose: expect.stringContaining("Monochrome icons with a color selector"),
+      access: expect.stringContaining("Icons"),
+      limitations: expect.stringContaining("Icon contrast spreads its shades"),
+    });
+  });
+  it("locates the file panel toggle in the main content card corner", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "files")).toMatchObject({
+      access: "Chat → upper-right corner of main content card → Toggle files panel",
+      purpose: expect.stringContaining("File Explorer, Changes and Memory Recall"),
+      limitations: expect.stringContaining("Alt+Left/Right reorders"),
+      prerequisite: "runtime",
+      agentAccess: "read",
     });
   });
   it("keeps navigation disclosures human-only and independent from execution", () => {

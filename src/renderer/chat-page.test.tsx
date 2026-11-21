@@ -305,7 +305,9 @@ describe("orchestration activity presentation", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
       expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
-      expect(html.match(/<button[^>]*class="[^"]*chat-title"[^>]*>/)?.[0]).toContain("disabled");
+      expect(html.match(/<button[^>]*class="[^"]*page-selector-rename"[^>]*>/)?.[0]).toContain(
+        "disabled",
+      );
       const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
       expect(action).toContain("disabled");
       expect(html).toContain("Connect to database");

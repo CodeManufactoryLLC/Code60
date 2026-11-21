@@ -7,6 +7,7 @@ export function observeBreadcrumbRightInset(body: HTMLElement): () => void {
   if (!workspace || !conversations) return () => {};
   const property = "--breadcrumb-right-inset";
   const riseProperty = "--right-panel-rise";
+  const heightProperty = "--breadcrumb-card-height";
   const header = workspace.querySelector<HTMLElement>(".workspace-header");
   let disposed = false;
   const update = () => {
@@ -24,6 +25,9 @@ export function observeBreadcrumbRightInset(body: HTMLElement): () => void {
     if (workspace.style.getPropertyValue(property) !== value)
       workspace.style.setProperty(property, value);
     const card = workspace.querySelector<HTMLElement>(".workspace-breadcrumbs");
+    const heightValue = `${card?.getBoundingClientRect().height ?? 58}px`;
+    if (workspace.style.getPropertyValue(heightProperty) !== heightValue)
+      workspace.style.setProperty(heightProperty, heightValue);
     const rise = card
       ? Math.max(0, body.getBoundingClientRect().top - card.getBoundingClientRect().top)
       : 0;
@@ -41,6 +45,7 @@ export function observeBreadcrumbRightInset(body: HTMLElement): () => void {
     observer.disconnect();
     workspace.style.removeProperty(property);
     workspace.style.removeProperty(riseProperty);
+    workspace.style.removeProperty(heightProperty);
   };
 }
 

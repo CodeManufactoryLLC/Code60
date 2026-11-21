@@ -40,7 +40,7 @@ it("renders labelled fields and actions without treating a saved command's metad
   expect(html).toContain('aria-invalid="false"');
   expect(html).not.toContain('aria-invalid="true"');
   expect(html).toMatch(
-    /<h1[^>]*class="page-title table-title"[^>]*>.*data-icon="app-megaphone".*Command Builder<\/span><\/h1>/,
+    /<h1[^>]*class="page-title table-title"[^>]*>.*data-icon="app-megaphone".*Command Builder<\/span>.*<\/h1>/,
   );
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
   expect(header).toContain("New command");

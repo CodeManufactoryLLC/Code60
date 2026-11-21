@@ -3,7 +3,6 @@ import type { AgentSetupSnapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { Card } from "./neobrutalism/card.js";
 import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
@@ -40,7 +39,7 @@ export function ProvidersSidebar({
   onLast(): void;
 }) {
   return (
-    <Card size="sm" className="sidebar-navigation-card providers-sidebar">
+    <div className="sidebar-section providers-sidebar">
       <div
         className="sidebar-card-header"
         role="tablist"
@@ -167,6 +166,6 @@ export function ProvidersSidebar({
           );
         })}
       </div>
-    </Card>
+    </div>
   );
 }

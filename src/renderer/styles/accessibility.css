@@ -28,7 +28,7 @@
   }
 
   .sidebar-navigation-card,
-  .sidebar-navigation-card::before,
+  .sidebar-section::before,
   .file-panel-toolbar {
     background: Canvas;
   }
@@ -366,8 +366,7 @@
 
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
-  .chat-sidebar-row,
-  .file-tab {
+  :where(.chat-sidebar-row) {
     transition: none;
   }
 }
@@ -535,5 +534,18 @@
   }
   .automation-job-controls > button:focus-visible {
     outline: none;
+  }
+}
+
+/* Tint artwork only; leave labels, surfaces, code and content images untouched. */
+.icon-color-filter {
+  position: absolute;
+  pointer-events: none;
+}
+
+@media (forced-colors: none) {
+  :root[data-monochrome="on"]
+    :is(.navigation-icon, .carbon-icon, .agent-logo, .context-donut > svg) {
+    filter: var(--icon-base-filter, brightness(1)) url("#code60-icon-monochrome");
   }
 }

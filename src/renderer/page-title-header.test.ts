@@ -53,6 +53,7 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   );
   let conversationRight = 800;
   let headerPresent = true;
+  let cardHeight = 58;
   const values = new Map<string, string>();
   const conversations = { getBoundingClientRect: () => ({ right: conversationRight }) };
   const header = { getBoundingClientRect: () => ({ right: 1000, width: 900 }) };
@@ -60,7 +61,7 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
     querySelector: (selector: string) =>
       headerPresent
         ? selector === ".workspace-breadcrumbs"
-          ? { getBoundingClientRect: () => ({ top: 40 }) }
+          ? { getBoundingClientRect: () => ({ top: 40, height: cardHeight }) }
           : header
         : null,
     style: {
@@ -84,7 +85,11 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   ]);
   expect(values.get("--right-panel-rise")).toBe("130px");
   resized();
-  expect(workspace.style.setProperty).toHaveBeenCalledTimes(2);
+  expect(workspace.style.setProperty).toHaveBeenCalledTimes(3);
+  expect(values.get("--breadcrumb-card-height")).toBe("58px");
+  cardHeight = 72;
+  resized();
+  expect(values.get("--breadcrumb-card-height")).toBe("72px");
   bodyTop = 190;
   resized();
   expect(values.get("--right-panel-rise")).toBe("150px");
@@ -111,6 +116,7 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   resized();
   expect(values.has("--breadcrumb-right-inset")).toBe(false);
   expect(values.has("--right-panel-rise")).toBe(false);
+  expect(values.has("--breadcrumb-card-height")).toBe(false);
 });
 
 it.each(["workspace", "conversations"])(

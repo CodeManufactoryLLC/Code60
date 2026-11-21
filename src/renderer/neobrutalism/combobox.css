@@ -1,0 +1,198 @@
+/* Local Popover + Command presentation, with native popover ownership. */
+.neo-combobox-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 240px;
+  height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  background: var(--card-header-fill);
+  color: var(--card-header-text);
+  box-shadow: none;
+  font: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+.neo-combobox-trigger > .page-title-text {
+  flex: 1;
+  min-width: 0;
+  max-height: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.neo-combobox-trigger > .carbon-icon {
+  flex-shrink: 0;
+}
+
+.neo-combobox-trigger > .navigation-icon {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  max-width: 40px;
+  max-height: 40px;
+}
+
+.neo-combobox-trigger > .navigation-icon[data-icon="app-down-right"] {
+  --nav-icon-scale: 1;
+}
+
+.neo-combobox-trigger:active:not(:disabled) {
+  translate: 1px 1px;
+  box-shadow: none;
+}
+
+.page-breadcrumbs .page-title {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.page-breadcrumbs [aria-current="page"] .page-title-text {
+  text-decoration: none;
+}
+
+.page-selector-rename {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--card-header-muted);
+  box-shadow: none;
+  font-size: var(--button-size, 13px);
+  -webkit-app-region: no-drag;
+}
+
+.neo-combobox-popup {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(240px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  box-sizing: border-box;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: none;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity var(--motion) var(--ease),
+    transform var(--motion) var(--ease),
+    display var(--motion) allow-discrete,
+    overlay var(--motion) allow-discrete;
+  font-family: var(--button-font, var(--font));
+  font-size: var(--button-size, 13px);
+  font-weight: var(--button-weight, 600);
+  text-transform: var(--button-case, none);
+}
+
+.neo-combobox-popup:popover-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@starting-style {
+  .neo-combobox-popup:popover-open {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+.neo-combobox-list {
+  max-height: min(300px, 40vh);
+  padding: 4px 6px;
+  margin: 2px 0;
+  overflow: auto;
+}
+
+.neo-combobox-list:focus-visible {
+  outline: 2px solid var(--focus-line);
+  outline-offset: -4px;
+}
+
+.neo-combobox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.neo-combobox-option > span:not(.navigation-icon) {
+  flex: 1;
+  min-width: 0;
+}
+
+.neo-combobox-option > .navigation-icon {
+  position: static;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  transform: none;
+}
+
+.neo-combobox-option[data-active] {
+  border-color: var(--panel-border);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.neo-combobox-option[aria-disabled="true"] {
+  cursor: default;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .neo-combobox-trigger:active:not(:disabled) {
+    translate: none;
+  }
+
+  .neo-combobox-popup {
+    transition: none;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .neo-combobox-trigger,
+  .neo-combobox-popup {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .neo-combobox-option[data-active] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

@@ -4,12 +4,26 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
+## Current page selector
+
+- ID: `page-navigation`
+- Status: shipped
+- Purpose: Navigate from the displayed page to one of its parent pages.
+- Access: Workspace header → Current page combobox → choose a parent page
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: No confirmation; navigation only.
+- Limits: Lists only the current page and its parents, with the current page selected. No search field; arrows, Home/End and first-letter keys navigate the list. Selecting the current item closes the popup without navigation. Chat Rename remains a separate action. Pending selection disables the control. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Back and Forward
 
 - ID: `navigation-history`
 - Status: shipped
 - Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
-- Access: Title bar → Back / Forward, beside the navigation sidebar toggle
+- Access: Current-page header card → Back / Forward, to the left of the page selector
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
@@ -23,7 +37,7 @@ Schema version: 1
 - ID: `memory-recall`
 - Status: shipped
 - Purpose: Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.
-- Access: Relay, project or worker chat → right sidebar → New tab → Open Memory Recall
+- Access: Relay, project or worker chat → right sidebar → Files view dropdown → Memory Recall
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Read-only; no retrieval or provider dispatch.
@@ -162,12 +176,12 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session.
-- Access: Chat → Files panel
+- Purpose: Browse files and bounded read-only previews. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.
+- Access: Chat → upper-right corner of main content card → Toggle files panel
 - Prerequisite: runtime
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Inactive panels release file subscriptions. Archived reviews remain read-only in a reachable panel. Awareness can read only authorized open cached previews from the exact active file subscription, not arbitrary paths.
+- Limits: The Files view dropdown has no search field. Arrow keys/Home/End and first-letter navigation highlight choices; Enter/Space commits. Delete closes the selected view and Alt+Left/Right reorders it while the closed selector is focused. Tabs cannot be dragged. Closing the final tab leaves the panel open with the selector enabled for the main pages and + New Tab. Close appears only on file/document views, at the upper right below the header. Main-page choices do not load content until selected. Awareness can read only authorized open cached previews, not arbitrary paths.
 - Pages: `files`
 - Settings sections: none
 - Tools: none
@@ -344,12 +358,12 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include left sidebar background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
-- Access: Sidebar → Settings; Appearance → Left sidebar
+- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%), left sidebar background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
+- Access: Sidebar → Settings; Appearance → Left sidebar or Icons
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
+- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none

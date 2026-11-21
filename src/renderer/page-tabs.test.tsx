@@ -55,7 +55,8 @@ describe("database connection navigation", () => {
   it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
     const html = navigation(null);
     expect(html).toMatch(/class="[^"]*sidebar-navigation-card"/);
-    expect(html.match(/data-slot="card"/g)).toHaveLength(7);
+    expect(html.match(/data-slot="card"/g)).toHaveLength(2);
+    expect(html.match(/class="[^"]*sidebar-section[^"]*"/g)).toHaveLength(6);
     expect(html).toContain('id="assistants-toggle"');
     expect(html).toContain('aria-controls="assistants-pages"');
     expect(html).toContain('data-icon="app-assistants"');
@@ -95,9 +96,11 @@ describe("database connection navigation", () => {
       expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
         html.indexOf('<header class="workspace-header"'),
       );
-      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeLessThan(
+      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
         html.indexOf("</header>"),
       );
+      expect(html).toContain('<div class="workspace-panel-controls">');
+      expect(html).toContain('id="workspace-panel-actions"');
     },
   );
   it.each([true, false])(
@@ -351,9 +354,9 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(31);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(11);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(33);
+      expect(html.match(/<img/g)).toHaveLength(33);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(9);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(35);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],
@@ -432,5 +435,13 @@ describe("window navigation history", () => {
     expect(back).not.toContain("disabled");
     expect(forward).toContain("disabled");
     expect(html.indexOf('aria-label="Back"')).toBeGreaterThan(html.indexOf("</nav>"));
+    const cardStart = html.indexOf(
+      'class="nb:group/card',
+      html.indexOf('<header class="workspace-header"'),
+    );
+    expect(html.indexOf('aria-label="Navigation history"')).toBeGreaterThan(cardStart);
+    expect(html).toContain('data-icon="app-history-back"');
+    expect(html).toContain('data-icon="app-history-forward"');
+    expect(html).not.toContain('data-icon="arrow--left"');
   });
 });

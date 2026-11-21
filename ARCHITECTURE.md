@@ -1357,11 +1357,10 @@ One selected conversation fills the normal Chat workspace beside the shared file
 - **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
 - **Messages.** A permanent Messages tab lists every prompt, agent message, and thought from every run in the open project. Adjacent streamed message and thought updates are combined into one row. The table shows time, agent, session ID, type, and message text; tool calls, status events, permissions, and stderr are not message rows.
 - **Page tabs.** After the splash, the left navigation defaults to a 220px track,
-  resizable from 180px to 480px. Five opaque, outlined cards group Home/Search,
-  Assistants (Relay and Custom Assistants), Projects, Apps and Settings. Cards use
-  square corners and the shared hard shadow; rows use square corners. Keep 11px
-  between cards, 6px inner card padding, 2.5px between rows and an extra 3px above
-  the second row. Row height is fixed at 40px for default text and grows together
+  resizable from 180px to 480px. One opaque, outlined Card groups Home/Search,
+  Assistants (Relay and Custom Assistants), Projects, Providers, Apps and Settings.
+  Keep five thin section separators, a 6px combined horizontal inset, 4px section
+  vertical padding, 2.5px between rows and an extra 3px above the second row. Row height is fixed at 40px for default text and grows together
   with larger saved navigation text to fit 2.5em artwork. Use 2px vertical row
   padding, 15px extra internal left inset, 24px hierarchy steps and a 12px gutter
   beside the divider. Selection changes fill without adding a left border,
@@ -1399,12 +1398,11 @@ Pressing regular or primary buttons does not change their border color; retain
 their pressed fills and visible keyboard focus. Conversation rows retain their
 hover fill and text color on mouse down.
 
-Left-sidebar navigation fills and right-panel tab fills share a 20ms hover delay
-and 175ms background-color fade on both entry and exit. Reduced motion and forced
-colors make these changes instant; keyboard-focus indicators remain immediate.
-Each right-panel tab paints its selected or hovered fill under both its label and
-separate transparent Close button, without giving the icon action its own fill.
-Keep selection, closing, drag/reorder and keyboard semantics unchanged.
+Left-sidebar navigation fills use a 20ms hover delay and 175ms background-color
+fade on both entry and exit. Reduced motion and forced colors make these changes
+instant; keyboard-focus indicators remain immediate. Right-panel views use the
+shared combobox with separate transparent New and Close actions and keyboard-only
+reordering.
 
 Conversation navigation rows paint one shared background with square outer corners beneath the
 chat label, Rename and Archive actions and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
@@ -1444,7 +1442,7 @@ Standard controls show a subtle shadow on keyboard focus. Focus highlight border
 
 Chat has one right-side file panel, toggled by an accessible Carbon side-panel drawer icon at the right of its tab header. It starts fully closed at zero width with no divider or reserved rail. The same accessible toggle appears at the top-right of the chat area when closed, and inside the panel toolbar when open. Expanding/closing animates over 175ms and respects reduced motion. On narrow windows the closed panel also has zero height. Hidden panel contents are inert; toggling preserves focus, tabs, preview state and the last expanded width. It is an opaque card with a full 3px theme-aware border, square corners and a 12px gap from the chat/breadcrumb column. Above 1200px, the right card extends upward into the reserved space beside the breadcrumb row, aligning both card tops while keeping its bottom at the footer inset. The existing layout observer measures this extension on header/body resizing and clears it on hide/disposal; the chat itself stays below the header and clips its transcript. The gap moves above the card in stacked layouts, with no upward extension, and closes to zero with the panel. CSS and pointer/keyboard resize bounds include this gap to preserve the conversation minimum. Its tab-header row uses the same solid `--card-header-fill` as sidebar cards, with Canvas in forced colors and a transparent resize grip. Content shares the main app surface through the independent `--chat-neutral` token, including Monaco, with no container padding. It is hidden outside Chat. A single borderless keyboard/pointer divider resizes the panel, initially 20% of the Chat workspace (40% of its former half-width), with a 120px panel minimum and a 300px conversation minimum. At window widths of 1200px or below it stacks beneath Chat and the width divider is hidden.
 
-The empty panel shows a centered Open Files link button. A plus action immediately after the rightmost tab creates a closable New tab with the same empty view. Open Files replaces its blank tab with File Explorer, or creates an Explorer tab from an empty panel. Multiple Explorer tabs are allowed. Selecting a file opens and selects a read-only file tab, reusing an existing tab for that project-relative path. Only the selected tab's content is shown. Duplicate basenames use relative paths as tab labels. The tab strip scrolls horizontally while the adjacent plus and drawer toggle stay available. Every tab can be dragged to reorder or closed; Left/Right and Home/End select tabs, Delete closes, and Alt+Left/Right reorders. Closing the selected tab focuses its right neighbor, then its left neighbor, or plus when none remain. Closing the final tab keeps the panel open in its empty state.
+The empty panel shows a centered Open Files link button. The + New Tab dropdown item creates a closable New tab with the same empty view. Open Files replaces its blank tab with File Explorer, or creates an Explorer tab from an empty panel. Multiple Explorer tabs are allowed. Selecting a file opens and selects a read-only file tab, reusing an existing tab for that project-relative path. Only the selected tab's content is shown. Duplicate basenames use relative paths as tab labels. The Files view dropdown replaces the tab strip. The main pages and + New Tab remain in the dropdown; file/document views offer Close current tab below the header. Arrow keys and Home/End highlight dropdown options for explicit selection, Delete closes the current view, and Alt+Left/Right reorders from the closed selector. Closing the selected tab focuses its right neighbor, then its left neighbor, or the empty selector when none remain. Closing the final tab keeps the panel open in its empty state.
 
 Each individual chat or worker session owns its right-panel tabs, order, selection, Explorer state and Monaco scroll/selection state. Switching sessions within one project restores the selected session’s panel without changing another session’s tabs. Relay and its workers also have independent panels. Panel visibility remains shared layout; each mounted panel retains its resized width. Session panels remain in renderer memory across panel toggles, page switches and open-project navigation; closing the owning project, replacing the database or reloading the renderer clears project panels. Paths and contents are not persisted. Inactive Relay panels release their main-process file subscriptions while retaining renderer state. Awareness preview reads bind to the active panel’s exact subscription and current context, including its owned root. Read-only archived review evidence opens in the reachable selected panel without selecting or unarchiving the owner. Headless Tree retains keyboard navigation and lazy reads; Explorer tabs within a session share expansions, last selected file and the hidden-files preference. Show hidden files lives only in the native modal opened by the settings icon beside the Explorer title. Its checkbox applies immediately; Done, close and Escape dismiss the modal and restore trigger focus. Workspace/page/tab changes or hiding the panel dismiss it.
 
@@ -1546,7 +1544,7 @@ Reports never resolve human comments. Dispatch accepts optional reviewId and wor
 otherwise workers join the current human request. Explicit reconnection updates review delivery
 only and never restores worker ownership.
 
-The renderer's `PanelShell` owns panel geometry, tab navigation, keyboard controls, drag/reorder, and focus restoration. FilePanel owns file tab identities, browser content, and Monaco view-state retention. Project file reads retain their scope and behavior; Changes and saved revision files reuse the same shell.
+The renderer's `PanelShell` owns panel geometry, view selection, keyboard controls and reordering, and focus restoration. FilePanel owns file tab identities, browser content, and Monaco view-state retention. Project file reads retain their scope and behavior; Changes and saved revision files reuse the same shell.
 
 The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, worker ownership, dispatch deduplication, and coalesced worker-update delivery. It receives current workspace/run views, prompt delivery, template formatting, and change notification through narrow callbacks. DesktopController retains IPC, workspace selection, batch creation, and agent lifecycle. Human messages retain core readiness checks; automatic updates retain their existing paused, between-turn inbox. The coordinator persists no ownership or automatic-update inbox. ReviewStore owns the separate human feedback records; saved feedback never grants authority or triggers automatic recovery.
 
@@ -1631,22 +1629,20 @@ Left/Right keyboard disclosure remain available. Narrow rows reserve readable te
 and complete indicators before shrinking the leading artwork gutter. The disclosure
 keeps a visible focus edge in Light, Dark and forced colors.
 
-Assistants, Apps, Projects and Settings each sit inside a separate opaque sidebar card, enclosing the
-heading, row actions and any expanded descendants. Home and Search share a matching
-opaque card above those sections. All cards use the current theme
-surface through the local Neobrutalism Card primitive, a 2px outline, 5px corners
-and a hard offset shadow. A 4px inset preserves the previous combined 6px
-border-and-padding row offset. The top row
-uses the same surface fill as its descendants and the main navigation-card
-artwork through `--card-header-fill`; forced colors use Canvas.
-Cards trim
-the final row's 2.5px spacing, including nested and collapsed disclosures,
-to preserve equal top and bottom padding. Cards have 8px top and 3px bottom margins, giving
-11px between cards; the first card retains its 6px top margin for breadcrumb
-alignment. The gap before each card's second
-row is 5.5px; subsequent row gaps remain 2.5px, and collapsed groups add no space.
-They remain opaque
-at every sidebar background opacity/blur setting. Row heights remain unchanged. Each card has a dedicated top-right chevron button
+All sidebar items live in one opaque, scrollable Neobrutalism Card with a 1px
+outline, 5px corners and the main content Card shadow. Its six plain accordion sections are
+Home/Search, Assistants, Projects, Providers, Apps and Settings. Five 1px theme
+border lines separate adjacent sections without individual card outlines or gaps.
+The Light shell and headers use white #ffffff, separately from the #f4f8fe app
+background; Dark keeps a charcoal shell and blue section headers. Main navigation
+artwork retains its independent theme header fill. Forced colors uses system fills
+and edges. The shell keeps 4px horizontal padding plus its border, preserving the
+5px row inset, and starts 6px below the native-control strip. Each section has 4px
+vertical padding, trims its final row spacing and retains the 5.5px gap below its
+header and 2.5px subsequent row gaps. The shell alone scrolls, so its outline stays
+visible while every section retains its local header actions and independent
+saved disclosure state. Opacity/blur affect only the background behind the shell.
+Each section has a dedicated top-right chevron button
 with aria-expanded, aria-controls and Expand/Collapse labels. Clicking it changes
 only disclosure, without navigating or dispatching work. Home/Search can collapse
 Search and saves its expansion. Other header buttons navigate without toggling;
@@ -1740,19 +1736,26 @@ names. Breadcrumb chat labels are “Agent” for agent conversations and “Sub
 for workers, including an “Agent” parent breadcrumb for a worker. Relay keeps its
 name. Stored titles, sidebar names, rename dialogs and identity-bound navigation
 remain unchanged. Decorative icons do not change rename actions.
-Page titles form breadcrumb navigation in the workspace header from an icon-only
-Home root to the active page, with an accessible Home name, the navigation icon on every item and
-decorative Carbon chevrons sized at 1em. Home itself has one icon-only current
-heading with screen-reader text, not a duplicated parent. Relay uses plain title
-text rather than a disabled rename button, preserving shared title brightness. Orchestrator
-rename buttons have no padding or minimum control height, keeping their text at
-the same 8px icon gap as plain titles. Parent buttons use the
-existing navigation actions; only the active leaf is the heading and is marked
-current. Its text is underlined, including rename controls; the icon-only Home
-heading has an underline too. Breadcrumb items align on a shared horizontal line.
+Page titles use the local Neobrutalism Combobox in the workspace header. Its
+closed trigger shows the current page's icon and label; the popup
+contains only Home, its parent pages and the current page, in path order. The
+current page stays selected with a checkmark. Selecting it closes the popup
+without navigating; choosing a parent uses the existing captured navigation
+actions and destination guards. There are no visible breadcrumb chevrons or
+parent links, and Home is named rather than icon-only. The current page remains
+the sole heading. Chat labels stay Agent/Subagent/Relay; an independent sibling
+Rename button preserves the rendered chat's existing handler and identity.
+No new execution authority or persisted navigation state is introduced.
+The native top-layer popover and select-only ARIA listbox support arrows,
+Home/End, Enter, Escape, Tab, pointer selection and outside dismissal. Restore
+trigger focus on explicit dismissal, preserve outside-click focus, and close on
+hidden/inert owners, navigation, resize/anchor movement, window blur and document
+hiding. Keep bounds within the viewport, including enlarged text, and retain
+forced colors/reduced motion. The local adapter follows upstream Popover and
+Command presentation without Base UI, cmdk or new dependencies.
 The first breadcrumb row uses the sidebar's shared row height and 12px first-row
 inset so its icon centers align with the sidebar Home icon. An opaque theme-surface
-card with a 2px outline, 5px corners and a hard shadow spans the content column
+card with a 1px outline, 5px corners and a hard shadow spans the content column
 around the trail. Its background matches the sidebar cards' surface through
 `--card-header-fill`, without a tinted header band. Header outer spacing is 6px
 vertically; the card has 6px inner vertical padding, preserving alignment and
@@ -1839,7 +1842,7 @@ Each collapsed job header has independent run/cancel, delete and disclosure
 buttons in DOM and visual order. Use 24px transparent circles in 28px targets,
 black outlines, 2px hard shadows, 1px press offsets and contrasting glyphs over
 the blue fill. Paint hover on the full stationary header, without generic press
-scaling. Its 3px inner corners fit the outer 5px radius and 2px border; square
+scaling. Its 4px inner corners fit the outer 5px radius and 1px border; square
 lower corners while expanded. The noninteractive job heading labels the details
 panel; only the final chevron toggles it. Omit agent/runtime/next-run subtitles;
 append `(Paused)` beside disabled schedules, independently of manual execution.
@@ -1895,7 +1898,7 @@ reveal externally selected destinations. Collapsing a disclosure preserves the a
 
 ### Navigation history
 
-Back and Forward icon buttons sit in the title bar beside the navigation sidebar toggle, and remain available with the sidebar closed. They share one history of destinations: each page, each Settings page, each project/provider home by ID, and each specific orchestrator, Relay or worker chat, identified by its conversation ID. The renderer records the destination whenever it changes, so the sidebar, command palette, search results, reviews and other entry points all add to the same history, and switching between two chats creates separate steps even though Chat stays selected. Selecting the current destination again adds nothing; choosing a different destination after Back clears forward history; traversal never adds entries, and arriving at an entry updates it in place without discarding forward history. Orchestrator selection completes in the main process, so the renderer lists the destinations a selection passes through on its way and ignores only those until the requested chat appears, the request fails, or two seconds pass; a request already satisfied does not wait. Any other destination means the user moved on: it is recorded at once, and a slow restore that it superseded no longer changes the page or worker selection. Returning to a chat selects the existing conversation through the shared owner-aware navigation actions, preserving drafts and running work. Archived orchestrators, runs no longer in the snapshot, and pages unavailable without a database (the shared `pageAvailable` policy) are skipped. Each button is disabled when nothing is available in its direction, has an accessible name, and hands keyboard focus to its sibling, or to Chat, when the history it pressed through runs out. History holds up to 100 entries, lives only in renderer memory, and starts fresh on relaunch or renderer reload.
+Back and Forward icon buttons sit inside the breadcrumb containing Card, to the left of its centered page selector, and remain available with the sidebar closed. They share one history of destinations: each page, each Settings page, each project/provider home by ID, and each specific orchestrator, Relay or worker chat, identified by its conversation ID. The renderer records the destination whenever it changes, so the sidebar, command palette, search results, reviews and other entry points all add to the same history, and switching between two chats creates separate steps even though Chat stays selected. Selecting the current destination again adds nothing; choosing a different destination after Back clears forward history; traversal never adds entries, and arriving at an entry updates it in place without discarding forward history. Orchestrator selection completes in the main process, so the renderer lists the destinations a selection passes through on its way and ignores only those until the requested chat appears, the request fails, or two seconds pass; a request already satisfied does not wait. Any other destination means the user moved on: it is recorded at once, and a slow restore that it superseded no longer changes the page or worker selection. Returning to a chat selects the existing conversation through the shared owner-aware navigation actions, preserving drafts and running work. Archived orchestrators, runs no longer in the snapshot, and pages unavailable without a database (the shared `pageAvailable` policy) are skipped. Each button is disabled when nothing is available in its direction, has an accessible name, and hands keyboard focus to its sibling, or to Chat, when the history it pressed through runs out. History holds up to 100 entries, lives only in renderer memory, and starts fresh on relaunch or renderer reload.
 
 ### Database connection state
 
@@ -2197,7 +2200,7 @@ and footer placement remain unchanged.
 
 ## Neobrutalism surfaces and chat
 
-Main-content navigation/creation cards, the five sidebar navigation groups,
+Main-content navigation/creation cards, the single sidebar navigation shell,
 primary content, breadcrumb, conversation, composer and right-side inspector shells
 use locally adapted Neobrutalism Card primitives, with upstream source/license
 recorded beside them. Chat also uses native Button, Textarea and human Bubble
@@ -2208,7 +2211,7 @@ neobrutalism layer precedes application layout/components; accessibility stays l
 Tokens alias live Code60 colors, hard shadows and saved typography; the upstream
 layout inset is `--nb-card-spacing`, never the saved text `--card-spacing`.
 
-Card shells own 5px corners, 2px outlines and 4px shadows. Main-content cards
+Card shells own 5px corners, 1px outlines and 4px shadows. Main-content cards
 retain the 224px grid and contain native Open/create buttons; sidebar cards fill
 the existing resizable column. Span-rendered parts preserve valid button
 content and artwork playback. Assistant action menus remain outside Open, with
@@ -2223,9 +2226,8 @@ API, setting, schema or migration is added, so no self-knowledge catalog update
 or capabilities generation is needed for this presentation change.
 
 
-Primary/content and inspector adapters retain their former combined 3px edge
-with a 2px Card outline plus 1px inner padding; breadcrumb padding similarly
-compensates the thinner border. Keep the breadcrumb portal, motion ownership and
+Primary/content and inspector adapters use a 1px Card outline plus 1px inner
+padding; breadcrumb Cards also use a 1px outline with their existing padding. Keep the breadcrumb portal, motion ownership and
 right-edge/upward-extension observers unchanged. The outer Chat tabpanel stays
 transparent and unframed: only its conversation and inspector are surface Cards.
 All retained tabpanels, landmarks, refs, inert/hidden state and native controls
@@ -2344,13 +2346,29 @@ color, border, corner, shadow and weight descriptions. Layout and interaction
 contracts continue to apply. This is a visual replacement, with no new theme
 selector, bridge API, setting, prerequisite or execution capability.
 
-Light uses a flat pale-blue canvas (`#e8eefb`), white surfaces, near-black
+Light uses a flat pale blue app canvas (`#f4f8fe`), white surfaces, near-black
 text/outlines (`#111111`) and electric-blue actions (`#2563eb`) with white labels.
+Solid blue (`#5494fd`) bands with white, bold text and light focus outlines fill
+navigation-card artwork. The Light file-panel toolbar and selector use white
+reading surfaces with dark text and action icons. The Light page-selector
+header and its dropdown trigger use white #ffffff fill with dark text; Dark retains its
+plum header. Muted text (`#303848`) and focus/link accents (`#1e40af`) remain
+readable over the Light canvas.
+Light sidebar Card bodies and headers use white #ffffff over the #f4f8fe sidebar backdrop.
+Dark retains charcoal bodies and #5494fd headers. Header labels stay dark and
+the sidebar shell uses 5px corners and the shared main content shadow.
+Nested rows use normal reading-surface text and hover colors, with #93c5fd selection in Light.
+Header hover (`#b9bfff`), selection (`#93c5fd`) and dark-blue focus (`#1e40af`)
+remain distinct. Card outlines and 5px corners remain; circle glyphs retain
+contrast on their existing fills. Forced colors retains system fills and text.
+Header labels use Bold (700), including header buttons and breadcrumb titles.
+The requested white-on-blue Light header palette has approximately 3:1 text contrast;
+it is an explicit visual exception to the general text contrast target below.
 Dark and System dark use a near-black canvas (`#111111`), charcoal reading surfaces
 (`#202020`), darker inset fields/composers (`#161616`) and off-white text.
 Deep plum (`#2f1d37`) header bands with pale text define structure without bright
 fills. Black (`#050505`) panel edges and hard shadows replace white panel frames.
-Bright blue (`#2563eb`) is reserved for primary actions and focus/link accents.
+Primary actions retain bright blue (`#2563eb`).
 Control outlines remain distinct from decorative panel borders. Hover and
 selection retain separate neutral fills. Text maintains 4.5:1 contrast; controls and
 focus edges maintain 3:1. Semantic change colors and optional signal colors remain.
@@ -2358,10 +2376,10 @@ focus edges maintain 3:1. Semantic change colors and optional signal colors rema
 Controls use 2px outlines; unrelated controls retain square corners while migrated
 chat action buttons use 5px corners. Radio buttons retain circular markers;
 switches retain their On/Off labels with square tracks and thumbs. Neobrutalism
-Card shells (sidebar, navigation, breadcrumb, primary content, conversation and
-inspector) use 2px outlines, 5px corners and `--card-shadow`: a solid 4px right/down
+Card shells (navigation, breadcrumb, primary content, conversation and
+inspector) use 1px outlines, 5px corners and `--card-shadow`: a solid 4px right/down
 offset with no blur (near-black in Light, ink black in Dark). Nested Settings
-surfaces retain 3px square frames. Composer and approval Cards are quiet,
+surfaces use 1px square frames. Composer and approval Cards are quiet,
 without shadows. Menus/dialogs retain their existing hard outlined edges and
 offset shadows. Primary/destructive actions use a 2px hard shadow and
 move 1px when pressed, reducing the shadow to 1px. Navigation cards move 1px with
@@ -2379,7 +2397,7 @@ Keep the existing panel widths, row heights, card gaps, retained views, transcri
 scrolling and responsive inspector stacking. Account for panel borders inside
 existing padding; leave clearance for hard shadows. On Chat, frame the conversation
 and right inspector separately; the outer Chat layout remains transparent and
-shadowless. The 5px page top margin and 11px sidebar-card gaps remain.
+shadowless. Keep the 5px page top margin; sidebar sections share one shell with thin separators.
 
 Sidebar opacity/blur still affect only the full-height background, independently
 of restart-only transparent margins; never paint an opaque layer behind that
@@ -2519,3 +2537,131 @@ layout is unchanged. Forced colors uses system fills/outlines without decorative
 shadows. This supersedes earlier dialog corner and stable-modal-gutter guidance.
 No capability, permission, bridge or persisted preference changes are introduced;
 no self-knowledge catalog update is needed for this presentation-only change.
+
+## Current page selector
+
+The combobox above supersedes earlier references to visible breadcrumb parent
+links, icon-only Home, chevron separators and underlined current labels. Existing
+breadcrumb-named classes and observers remain internal geometry/motion adapters
+for a single current-page item. The current page and ancestor targets belong to
+the rendered view, including during pending selection; hidden retained views
+cannot publish controls or keep a popup. Header portal ownership, separate
+chat Rename, conversation-column alignment, inspector rise and normal-flow
+spacing remain unchanged. Self-knowledge classifies the selector as human-only,
+available without a database under existing destination guards.
+
+The page selector uses a 240px by 44px border-box trigger with 2px vertical margins, centered horizontally
+and vertically in its header card with either sidebar state. Symmetric side tracks
+keep the separate Rename action from shifting the selector. Narrow layouts shrink
+the trigger only when required to fit the card and Rename; height stays fixed.
+Long labels use ellipsis with their full text available to accessibility and the
+native title tooltip. Trigger artwork is capped at 40px. The popup is 240px wide
+within viewport bounds and grows vertically with its current path options.
+This presentation change adds no capability, setting or availability rule.
+
+The page selector has no search field. Its trigger and popup use 5px corners and 1px borders
+and no decorative shadow. Arrow/Home/End, first-letter navigation, Enter/Space,
+Escape and Tab operate the focused listbox. Opening and ordinary dismissal use
+the shared motion duration with a short fade/scale/translate; closed popovers
+remain inert and aria-hidden throughout their visual exit. Native display/overlay
+transitions retain the popup in the top layer during exit without JS timers.
+Skip motion for reduced motion and forced colors; retained hidden owners cannot
+keep an interactive popup. Navigation keeps existing captured-owner guards.
+
+Light sidebar, main-page/conversation and breadcrumb Card foreground surfaces
+share white #ffffff with dark text, over the #f4f8fe app canvas. Light chat
+composers use the same white at rest and focus, retaining their visible focus
+outline. Nested cards, other fields and inspectors keep their existing fills.
+Set reading-plane fill directly so it does not inherit into nested Cards.
+Dark retains its existing palette; forced colors uses system surfaces. This is
+presentation only; no capability, availability rule or catalog change is needed.
+
+The Light window and sidebar backdrops both use pale blue #f4f8fe; white Card
+foregrounds remain #ffffff. The sidebar shell uses a 1px outline, 5px corners and the same 4px
+hard shadow as main content, with bottom clearance for the shadow. The breadcrumb
+containing Card uses 5px corners with no decorative shadow.
+Its centered 240x44 selector with 2px vertical margins and separate Rename action retain their own geometry.
+Dark backdrops keep their palette; forced colors removes decorative shadows.
+This presentation change adds no capability, preference or catalog update.
+
+Back/Forward use the user-supplied circular arrow GIFs with transparent exteriors
+and static PNGs at rest. Back maps to arrows.gif; Forward maps to arrows (1).gif.
+Playback runs once per click, including Enter/Space activation; hover and focus
+alone stay still. Use still frames
+for reduced motion/forced colors. Preserve history handlers, disabled state,
+focus handoff and no-work navigation. Images remain decorative with labelled
+buttons and a visible keyboard focus ring. Keep the group inside the breadcrumb
+Card but outside the portalled/inert title owner. Symmetric reserved tracks keep
+the selector centered; compact containers reduce button size and selector padding
+to avoid overlapping Rename. The sidebar toggle stays in the main content Card’s upper-left corner.
+Update the catalog access path without changing authority or availability.
+
+Monochrome icons are an optional Settings → Appearance → Icons preference, off
+by default, with a native color selector defaulting to gray (#808080). Apply
+immediately and save locally without altering theme, migration markers or
+existing icon assets. Retain color when disabled, and surface failed persistence.
+Map icon luminance into dark/middle/light shades of the selected color, preserving
+alpha and animation timing. Cover shared navigation artwork, action glyphs,
+provider logos and context indicator; leave text, surfaces and content images
+unchanged. Forced colors bypasses the tint. This human-only, database-independent
+setting is described in the self-knowledge catalog.
+
+All Card shells now use a 1px border, including navigation/creation cards,
+conversation composers, approval and job-detail cards, Settings cards/groups,
+System Manager service cards and scheduled-job accordion items. Keep 1px
+internal accordion dividers and 4px inner header corners within 5px outer corners.
+Retain existing fills, shadows, focus indicators, padding and borderless retained
+wrappers. This presentation change adds no capability or availability rule.
+
+Panel toggles share a stationary row at the top of the main content Card: sidebar
+open/close at the upper left, Files open/close at the upper right when an active
+file-panel owner exists. The row overlays the Card's grid cell and follows the
+measured conversation inset through sidebar and inspector resizing. Reserve 44px
+above scrolling content; keep the native window strip and breadcrumb Card free of
+panel toggles. The active PanelShell portals its existing action into the shared
+right slot in both open/closed states, preserving labels, disabled state, tab
+order, focus, draft/scroll state and read ownership. Inactive retained panels
+never publish a toggle. Closing panels leaves both corner actions reachable;
+stacked inspectors keep their action at the main conversation Card's corner.
+
+Icon contrast in Appearance → Icons is a 0–200% slider, enabled with Monochrome,
+applying and saving immediately alongside its color. Default/missing/invalid
+contrast is 100%, preserving the existing palette; bound finite numbers to the
+range and round to whole percentages without resetting other saved choices.
+At 0%, all luminance maps to the selected color. At 100%, retain the existing
+65% shadow/highlight spread. At 200%, endpoints reach black/white; the midpoint
+always stays the selected color. Preserve alpha, playback and forced-color
+bypass. Retain contrast when Monochrome is disabled and describe the control in
+the self-knowledge catalog without changing authority or availability.
+
+The breadcrumb selector keeps its 240px width and centered 48px outer vertical
+footprint using a 44px trigger plus 2px top/bottom margins. Trigger and popup
+corners are 5px and borders 1px, including the selected option outline. The
+popup list trades 2px of vertical padding (6px to 4px) for 2px vertical margins;
+horizontal padding remains 6px. Preserve popup anchoring, viewport bounds,
+parent-only choices, focus, keyboard/typeahead and open/close animation.
+
+The right Files panel uses a no-search Files view combobox listing all open views
+in existing order, with icons and a current-selection checkmark. A final selectable
+“+ New Tab” item creates and selects a blank view; it is an action, never a saved tab.
+File Explorer, Changes and Memory Recall are always offered, including before
+opening their views; selecting a missing destination creates it through existing
+actions, without eager reads or cached fake tabs. Close appears only for file, plan,
+revision and application document views, at the upper right below the header.
+Blank and main views have no close symbol. The
+header follows the measured breadcrumb Card height, including text/window changes.
+The selector stays centered and fills the header, including narrow panels. It fills
+available width at 36px height with 5px corners/1px borders; long labels ellipsize,
+with full titles in tooltips.
+Native popover keyboard/highlight/commit/dismiss behavior matches breadcrumbs.
+Delete closes the selected view; Alt+Left/Right reorders it from the closed
+selector, prevents browser navigation and announces the new position. Drag
+reordering and the horizontal strip are removed. Adding focuses the selector;
+closing selects the next neighbor, otherwise previous, and focuses the selector.
+The final close keeps the empty panel open and focuses the enabled No open tabs
+selector, which still offers the main pages and + New Tab. Content uses a named region rather than
+obsolete tabpanel semantics. Keep all IDs, state, cached previews, reader and
+conversation ownership, panel sizing and main-card corner toggle unchanged.
+The shared combobox accepts optional trigger ref/keyboard handler, list label
+and empty placeholder; existing breadcrumb defaults stay intact. The Files
+catalog describes this UI without granting any new execution or read authority.

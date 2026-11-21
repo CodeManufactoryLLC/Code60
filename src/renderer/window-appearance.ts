@@ -32,7 +32,7 @@ export function useWindowAppearance(api: DesktopApi, setError: (message: string)
             event.clientY < background.bottom;
           const element = document.elementFromPoint(event.clientX, event.clientY);
           const content = element?.closest(
-            ".app-footer, .sidebar-toggle, .workspace-breadcrumbs, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .database-notice, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
+            ".app-footer, .workspace-panel-controls, .sidebar-toggle, .workspace-breadcrumbs, .sidebar, .chat-sidebar, .file-inspector, .page-panel, .page-tab, .database-notice, .splash, dialog[open], .actions-menu, .app-toast, .command-palette",
           );
           const next =
             !nativeControls &&

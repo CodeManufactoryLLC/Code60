@@ -142,3 +142,18 @@ it("nests all revisions under their task without a review dropdown or diff", () 
   expect(html).toContain('d="M29,30h-8v-2h8v2');
   expect(html).not.toMatch(/<select|review-panel|monaco/);
 });
+
+it.each(["blank", "recall", "changes"] as const)("omits Close from the %s page", (kind) => {
+  const html = renderToStaticMarkup(
+    <FilePanel
+      tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active={false}
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+    />,
+  );
+  expect(html).not.toContain('aria-label="Close current tab"');
+});

@@ -12,6 +12,7 @@
   --sidebar-reveal: 1;
   --sidebar-track-width: calc(var(--sidebar-expanded-width) * var(--sidebar-reveal));
   --sidebar-toggle-width: 28px;
+  --panel-controls-height: 44px;
   transition: --sidebar-reveal var(--motion) var(--ease);
   height: 100dvh;
   display: flex;
@@ -47,7 +48,7 @@
   inset: 0 auto 0 0;
   width: calc(var(--sidebar-left-inset) + var(--sidebar-track-width));
   z-index: 0;
-  background: var(--workspace-background);
+  background: var(--sidebar-background);
   background-size: 100vw 100dvh;
   opacity: var(--sidebar-background-opacity);
   pointer-events: none;
@@ -124,7 +125,7 @@ body:has(.app .sidebar) {
   grid-column: 1;
   min-width: 0;
   margin-right: var(--breadcrumb-right-inset, 0px);
-  /* Large title preferences may wrap; keep the content area usable. */
+  /* Keep the centered selector and its focus outline within the header surface. */
   max-height: 40vh;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
@@ -133,23 +134,45 @@ body:has(.app .sidebar) {
   padding: 4px calc(var(--page-padding) - 1px);
   gap: 0;
   --nb-card-fill: var(--card-header-fill);
+  --nb-card-shadow: none;
+  border-radius: 5px;
+  container: page-header / inline-size;
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
 }
 
-.workspace-breadcrumbs .page-breadcrumbs li {
-  min-height: var(--nav-row-height);
-}
-
-.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
-  /* Keep the card on the content track throughout the shared reveal transition. */
+/* A stable overlay row follows the main card without entering hidden page owners. */
+.workspace-panel-controls {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  position: relative;
+  z-index: 4;
+  box-sizing: border-box;
+  height: var(--panel-controls-height);
+  margin: 5px var(--breadcrumb-right-inset, 0px) 0 0;
+  padding: 3px 7px;
+  border: 1px solid var(--panel-border);
+  border-bottom-color: transparent;
+  border-radius: var(--navigation-card-radius) var(--navigation-card-radius) 0 0;
+  background: var(--content-background);
   display: flex;
-  justify-content: safe center;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: auto;
 }
 
-.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs ol {
-  justify-content: safe center;
+.workspace-panel-controls > #workspace-panel-actions {
+  margin-left: auto;
+}
+
+/* Workspace shell cards share the sidebar's thin outline. */
+.workspace-breadcrumbs,
+.page-panel[data-slot="card"],
+.chat-conversations,
+.file-panel {
+  border-width: 1px;
 }
 
 /* Primary content is a surface card beside the navigation. */
@@ -163,10 +186,18 @@ body:has(.app .sidebar) {
   min-height: 0;
   min-width: 0;
   position: relative;
-  /* Retain the former 3px combined edge without duplicating Card chrome. */
-  padding: 1px;
+  /* Reserve the stationary panel controls above scrolling page content. */
+  padding: calc(1px + var(--panel-controls-height)) 1px 1px;
   gap: 0;
   overflow: hidden;
+}
+
+/* Paint only the main reading plane; nested controls and Cards retain their fills. */
+@media (forced-colors: none) {
+  .page-panel[data-slot="card"],
+  .chat-conversations {
+    background-color: var(--content-background);
+  }
 }
 
 .page-panel > :is(.error-banner, .warning-banner) {
@@ -245,8 +276,21 @@ dialog::backdrop {
   color: var(--on-destructive);
 }
 
-/* Dark plum bands separate compact headers from near-black reading surfaces. */
-:root[data-color-scheme="dark"] .workspace-breadcrumbs {
+/* Light navigation and reading cards share the white foreground fill. */
+@media (forced-colors: none) {
+  :root:not([data-color-scheme="dark"]) .workspace-breadcrumbs {
+    --card-header-fill: var(--content-background);
+    --card-header-text: #111111;
+    --card-header-muted: #303848;
+    --card-header-hover: #e8eefb;
+  }
+}
+
+/* Header controls inherit contrasting colors for their own card surface. */
+:root .workspace-breadcrumbs {
+  --button-weight: 700;
+  --title-weight: 700;
+  font-weight: 700;
   --text: var(--card-header-text);
   --muted: var(--card-header-muted);
   --focus-line: var(--card-header-text);

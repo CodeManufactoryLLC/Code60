@@ -107,7 +107,7 @@
   min-width: 0;
   margin: 0 0 12px;
   padding: 0;
-  border: var(--rule-strong) solid var(--panel-border);
+  border: 1px solid var(--panel-border);
   background: var(--surface);
 
   border-radius: var(--settings-card-radius);
@@ -272,7 +272,7 @@ button.info-tip {
   min-width: 0;
   margin: 0 0 12px;
   padding: 14px 16px 16px;
-  border: var(--rule-strong) solid var(--panel-border);
+  border: 1px solid var(--panel-border);
   background: var(--surface);
 
   border-radius: var(--settings-card-radius);
@@ -587,6 +587,7 @@ button.settings-group-reset {
 }
 
 .agent-logo-droid {
+  --icon-base-filter: invert(1);
   filter: invert(1);
 }
 
@@ -640,10 +641,12 @@ button.settings-group-reset {
 }
 
 :root[data-color-scheme="dark"] :is(.agent-logo-codex, .agent-logo-copilot, .agent-logo-opencode) {
+  --icon-base-filter: invert(1);
   filter: invert(1);
 }
 
 :root[data-color-scheme="dark"] .agent-logo-droid {
+  --icon-base-filter: brightness(1);
   filter: none;
 }
 
@@ -656,4 +659,30 @@ button.settings-group-reset {
   text-transform: var(--title-case, none);
   white-space: normal;
   padding-block: 10px;
+}
+
+.settings-row input[type="color"] {
+  box-sizing: border-box;
+  width: 64px;
+  height: 36px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.icon-contrast-setting {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.icon-contrast-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.icon-contrast-heading output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }

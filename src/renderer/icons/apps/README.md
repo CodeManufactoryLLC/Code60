@@ -112,3 +112,12 @@ Updates uses `download.gif`/`download.png`, supplied as `download (3).gif`
 (37 frames, 1.5 seconds, 640x640). Exterior white is transparent; all frames and
 exact per-frame delays are retained. Playback runs once through shared controls.
 `cloud-computing.svg` remains its original source/geometry reference.
+
+- `history-back.gif` / `history-back.png`: Back, supplied as `arrows.gif`
+  (45 frames, 2 seconds, 640x640).
+- `history-forward.gif` / `history-forward.png`: Forward, supplied as `arrows (1).gif`
+  (46 frames, 2 seconds, 640x640).
+  Exterior white is transparent; foreground colors, canvas, frames and exact
+  per-frame delays are retained. Looping is disabled for one playback per click,
+  including Enter/Space activation. Hover and focus alone stay still; reduced
+  motion/forced colors retain the poster.

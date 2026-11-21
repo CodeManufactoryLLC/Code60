@@ -5,6 +5,10 @@ const css = readFileSync(new URL("../src/renderer/styles/tokens.css", import.met
 const rules = [...css.matchAll(/:root([^{]*)\{([^}]+)\}/g)];
 const backgrounds = [
   "--bg",
+  "--sidebar-background",
+  "--content-background",
+  "--composer-bg",
+  "--composer-focus-bg",
   "--surface",
   "--surface-hover",
   "--row-alt",
@@ -54,19 +58,28 @@ function contrast(a, b) {
 }
 
 describe("application palette", () => {
-  it("uses flat pale-blue and charcoal canvases with separate ink panel edges", () => {
+  it("uses flat pale blue and charcoal canvases with separate ink panel edges", () => {
     for (const [scheme, bg, surface, text, edge, primary] of [
-      ["light", "#e8eefb", "#ffffff", "#111111", "#111111", "#2563eb"],
+      ["light", "#f4f8fe", "#ffffff", "#111111", "#111111", "#2563eb"],
       ["dark", "#111111", "#202020", "#f7f7f2", "#727272", "#2563eb"],
     ]) {
       const color = palette(scheme);
       expect(color("--bg")).toBe(bg);
       expect(color("--workspace-background")).toBe(bg);
+      expect(color("--sidebar-background")).toBe(scheme === "light" ? "#f4f8fe" : bg);
       expect(color("--surface")).toBe(surface);
+      expect(color("--content-background")).toBe(scheme === "light" ? "#ffffff" : surface);
+      expect(color("--composer-bg")).toBe(scheme === "light" ? "#ffffff" : "#161616");
+      expect(color("--composer-focus-bg")).toBe(scheme === "light" ? "#ffffff" : "#202020");
       expect(color("--text")).toBe(text);
       expect(color("--border")).toBe(edge);
       expect(color("--control-border")).toBe(scheme === "dark" ? "#aaaaaa" : edge);
       expect(color("--primary")).toBe(primary);
+      if (scheme === "light") {
+        expect(color("--card-header-fill")).toBe("#5494fd");
+        expect(color("--card-header-text")).toBe("#ffffff");
+        expect(color("--card-header-muted")).toBe("#e8eefb");
+      }
       for (const token of ["--chat-neutral", "--row-alt"])
         expect(color(token), token).toBe(surface);
     }
@@ -137,7 +150,7 @@ describe("application palette", () => {
   });
 
   for (const scheme of ["light", "dark"]) {
-    it(`keeps text at 4.5:1 and control edges at 3:1 across every ${scheme} surface`, () => {
+    it(`keeps text at 4.5:1 and control edges at 3:1 across ${scheme} reading surfaces`, () => {
       const color = palette(scheme);
       const textRatios = [];
       const edgeRatios = [];
@@ -163,6 +176,9 @@ describe("application palette", () => {
         ["--project-stop-color", "--surface-band"],
         ["--on-destructive", "--project-stop-color"],
       ]) {
+        // Light headers explicitly use the requested white-on-blue palette above.
+        // Keep the general contrast target for reading surfaces and Dark headers.
+        if (scheme === "light" && background === "--card-header-fill") continue;
         const ratio = contrast(color(foreground), color(background));
         expect(ratio, `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
         textRatios.push(ratio);

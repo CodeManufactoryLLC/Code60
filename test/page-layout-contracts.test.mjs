@@ -101,7 +101,9 @@ it("keeps unrelated controls square while Card primitives own migrated surfaces"
   expect(rule("files", "#panel-chat")).toContain("border-radius: 0");
   expect(rule("files", "#panel-chat")).toContain("border: 0");
   expect(rule("layout", ".page-panel")).not.toContain("border-radius:");
-  expect(rule("layout", ".page-panel")).toContain("padding: 1px");
+  expect(rule("layout", ".page-panel")).toContain(
+    "padding: calc(1px + var(--panel-controls-height)) 1px 1px",
+  );
   expect(sheet("base")).toContain('input[type="radio"] { border-radius: 50%; }');
   expect(rule("base", 'input[type="checkbox"][role="switch"]')).toContain(
     "border-radius: var(--ui-radius)",
@@ -160,15 +162,16 @@ it("preserves the content header clearance with the persistent toggle in the nat
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
     "padding: 4px calc(var(--page-padding) - 1px)",
   );
-  expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("border-radius:");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("border-radius: 5px");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("--nb-card-shadow: none");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
     "--nb-card-fill: var(--card-header-fill)",
   );
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
     "margin-right: var(--breadcrumb-right-inset, 0px)",
   );
-  expect(rule("layout", ".workspace-breadcrumbs .page-breadcrumbs li")).toContain(
-    "min-height: var(--nav-row-height)",
+  expect(rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs li")).toContain(
+    "display: grid",
   );
   expect(rule("navigation", ".sidebar")).toContain("grid-row: 1 / -1");
   expect(rule("navigation", ".sidebar")).toContain(
@@ -181,14 +184,15 @@ it("preserves the content header clearance with the persistent toggle in the nat
   );
 });
 
-it("centers the non-draggable toggle in the native title bar without occupying page layout space", () => {
+it("anchors panel toggles to a stationary main-card row with content clearance", () => {
   const toggle = rule("navigation", ".sidebar-toggle");
-  expect(toggle).toContain("position: fixed");
-  expect(toggle).toContain(
-    "top: calc((var(--app-titlebar-height) - var(--sidebar-toggle-width)) / 2)",
-  );
-  expect(toggle).toContain("left: max(80px, calc(var(--titlebar-left) + 8px))");
+  expect(toggle).toContain("position: relative");
+  expect(toggle).toContain("pointer-events: auto");
   expect(toggle).toContain("-webkit-app-region: no-drag");
+  expect(rule("layout", ".workspace-panel-controls")).toContain("grid-row: 2");
+  expect(rule("layout", ".workspace-panel-controls")).toContain(
+    "var(--breadcrumb-right-inset, 0px)",
+  );
 });
 
 it("matches the toggle to footer glyphs and keeps project/chat label colors stable", () => {
@@ -254,18 +258,19 @@ it("moves the visible trail into the header without reserving the original title
   );
 });
 
-it("centers the closed-sidebar trail inside the same animated content track", () => {
-  const selector = '.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs';
-  const centered = rule("layout", selector);
+it("centers the page selector in both sidebar states without changing the content track", () => {
   expect(rule("layout", ".workspace-header")).toContain("grid-column: 2");
-  expect(centered).not.toContain("grid-column:");
-  expect(centered).toContain("display: flex");
-  expect(centered).toContain("justify-content: safe center");
-  expect(centered).not.toContain("margin-left:");
-  expect(rule("layout", `${selector} ol`)).toContain("justify-content: safe center");
-  expect(rule("navigation", ".page-breadcrumbs ol")).toContain("flex-wrap: wrap");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 1");
-  expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("justify-content: center");
+  const item = rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs li");
+  expect(item.match(/var\(--history-reserve\)/g)).toHaveLength(2);
+  expect(item).toContain("minmax(0, 240px)");
+  const heading = rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs .page-title");
+  expect(heading).toContain("grid-column: 2");
+  expect(heading).toContain("justify-self: center");
+  expect(rule("navigation", ".workspace-breadcrumbs .page-selector-rename")).toContain(
+    "grid-column: 3",
+  );
+  expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("margin-left:");
 });
 
 it("shares outlined card geometry with creation cards and a centered label", () => {

@@ -6,14 +6,23 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./icons.js";
 import { Card } from "./neobrutalism/card.js";
+import { Combobox } from "./neobrutalism/combobox.js";
 
 export interface PanelTab {
   id: number;
   label: string;
   title: string;
   icon: IconName;
+  closeButton?: boolean;
+}
+export interface PanelPage {
+  id: string;
+  label: string;
+  icon: IconName;
+  select(): void;
 }
 export type PanelAction =
   | { type: "add" }
@@ -23,6 +32,7 @@ export type PanelAction =
 /** Layout and tab interactions only; callers own tab identity, content, and external reads. */
 export function PanelShell({
   tabs,
+  pages = [],
   selectedId,
   onAction,
   open,
@@ -35,6 +45,7 @@ export function PanelShell({
   disabled = false,
 }: {
   tabs: readonly PanelTab[];
+  pages?: readonly PanelPage[];
   selectedId: number | null;
   onAction(action: PanelAction): number | null;
   open: boolean;
@@ -49,36 +60,27 @@ export function PanelShell({
   const prefix = useId();
   const panel = useRef<HTMLElement>(null);
   const toggleButton = useRef<HTMLButtonElement>(null);
-  const restoreToggle = useRef(false);
+  const [toggleTarget, setToggleTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setToggleTarget(active ? document.getElementById("workspace-panel-actions") : null);
+  }, [active]);
   const [resizing, setResizing] = useState(false);
   const [width, setWidth] = useState<number>();
   const [announcement, setAnnouncement] = useState("");
-  const buttons = useRef(new Map<number, HTMLButtonElement>());
-  const add = useRef<HTMLButtonElement>(null);
-  const focus = useRef<number | "add" | "active" | null>(null);
-  const drag = useRef<number | null>(null);
+  const selector = useRef<HTMLButtonElement>(null);
+  const focus = useRef(false);
   const selected = tabs.find((tab) => tab.id === selectedId);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Reordering tabs must restore focus even when the selected ID is unchanged.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Tab/selection updates settle pending keyboard focus after an action.
   useLayoutEffect(() => {
     if (!active || !open) return;
-    if (focus.current === "add") add.current?.focus();
-    else if (focus.current !== null)
-      buttons.current.get(focus.current === "active" ? (selectedId ?? -1) : focus.current)?.focus();
-    focus.current = null;
-    buttons.current.get(selectedId ?? -1)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (focus.current) selector.current?.focus();
+    focus.current = false;
   }, [tabs, selectedId, active, open]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Opening/closing moves the toggle between containers, so restore focus to its replacement.
-  useLayoutEffect(() => {
-    if (active && restoreToggle.current) {
-      toggleButton.current?.focus();
-      restoreToggle.current = false;
-    }
-  }, [open, active]);
 
   const act = (action: PanelAction) => {
     if (disabled) return;
-    focus.current = onAction(action) ?? "add";
+    onAction(action);
+    focus.current = true;
   };
   const resize = (value: number) => {
     let container = panel.current?.parentElement;
@@ -102,7 +104,6 @@ export function PanelShell({
       aria-controls={id}
       disabled={disabled}
       onClick={() => {
-        restoreToggle.current = true;
         onToggle();
       }}
     >
@@ -159,126 +160,92 @@ export function PanelShell({
         />
         <div className="file-panel-toolbar">
           <div className="file-tab-actions" inert={!open} aria-hidden={!open}>
-            <div
-              role="tablist"
-              aria-label={`${name === "Files" ? "File" : name} tabs`}
-              className="file-tabs"
-            >
-              {tabs.map((tab, index) => {
-                const label = tab.label;
-                return (
-                  // biome-ignore lint/a11y/noStaticElementInteractions: Child tabs provide equivalent keyboard reordering for this drag target.
-                  <div
-                    role="presentation"
-                    key={tab.id}
-                    className="file-tab"
-                    data-selected={tab.id === selectedId}
-                    draggable={!disabled}
-                    onDragStart={(event) => {
-                      drag.current = tab.id;
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", String(tab.id));
-                    }}
-                    onDragOver={(event) => {
-                      if (drag.current !== null) event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (drag.current === null) return;
-                      const id = drag.current;
-                      drag.current = null;
-                      act({ type: "move", id, to: index });
-                      setAnnouncement("Tab moved.");
-                    }}
-                    onDragEnd={() => {
-                      drag.current = null;
-                    }}
-                  >
-                    <button
-                      ref={(element) => {
-                        if (element) buttons.current.set(tab.id, element);
-                        else buttons.current.delete(tab.id);
-                      }}
-                      type="button"
-                      role="tab"
-                      disabled={disabled}
-                      id={`${prefix}-tab-${tab.id}`}
-                      aria-selected={tab.id === selectedId}
-                      aria-controls={`${prefix}-content`}
-                      tabIndex={tab.id === selectedId ? 0 : -1}
-                      title={`${tab.title} (Delete to close; Alt+Left/Right to reorder)`}
-                      onClick={() => onAction({ type: "select", id: tab.id })}
-                      onKeyDown={(event) => {
-                        const arrow =
-                          event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
-                        if (arrow && event.altKey) {
-                          event.preventDefault();
-                          act({ type: "move", id: tab.id, to: index + arrow });
-                          setAnnouncement("Tab moved.");
-                        } else if (arrow || event.key === "Home" || event.key === "End") {
-                          event.preventDefault();
-                          const target =
-                            event.key === "Home"
-                              ? 0
-                              : event.key === "End"
-                                ? tabs.length - 1
-                                : (index + arrow + tabs.length) % tabs.length;
-                          const next = tabs[target];
-                          if (next) act({ type: "select", id: next.id });
-                        } else if (event.key === "Delete") {
-                          event.preventDefault();
-                          act({ type: "close", id: tab.id });
-                        }
-                      }}
-                    >
-                      <Icon name={tab.icon} />
-                      <span>{label}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button file-tab-close"
-                      disabled={disabled}
-                      aria-label={`Close ${label}`}
-                      onClick={() => act({ type: "close", id: tab.id })}
-                    >
-                      <Icon name="close" />
-                    </button>
-                  </div>
-                );
-              })}
+            <div className="file-tab-selector">
+              <Combobox
+                label={`${name} view`}
+                listLabel={`Open ${name} tabs`}
+                placeholder="No open tabs"
+                value={selectedId === null ? "" : String(selectedId)}
+                options={[
+                  ...tabs.map((tab) => ({
+                    id: String(tab.id),
+                    label: tab.label,
+                    title: `${tab.title} (Delete to close; Alt+Left/Right to reorder)`,
+                    icon: <Icon name={tab.icon} />,
+                  })),
+                  ...pages.map((page) => ({
+                    id: page.id,
+                    label: page.label,
+                    title: `Open ${page.label}`,
+                    icon: <Icon name={page.icon} />,
+                  })),
+                  { id: "new-tab", label: "+ New Tab" },
+                ]}
+                triggerRef={selector}
+                disabled={disabled || !active || !open}
+                onSelect={(id) => {
+                  if (id === "new-tab") {
+                    act({ type: "add" });
+                    return;
+                  }
+                  const tab = tabs.find((entry) => String(entry.id) === id);
+                  if (tab) onAction({ type: "select", id: tab.id });
+                  else pages.find((page) => page.id === id)?.select();
+                }}
+                onTriggerKeyDown={(event) => {
+                  if (event.currentTarget.getAttribute("aria-expanded") === "true" || !selected)
+                    return;
+                  if (event.key === "Delete") {
+                    event.preventDefault();
+                    act({ type: "close", id: selected.id });
+                  } else if (
+                    event.altKey &&
+                    (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                  ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const index = tabs.findIndex((tab) => tab.id === selected.id);
+                    const to = index + (event.key === "ArrowLeft" ? -1 : 1);
+                    if (to >= 0 && to < tabs.length) {
+                      act({ type: "move", id: selected.id, to });
+                      setAnnouncement(`Tab moved to position ${to + 1} of ${tabs.length}.`);
+                    }
+                  }
+                }}
+              />
             </div>
-            <button
-              ref={add}
-              type="button"
-              className="icon-button"
-              aria-label={`New ${name === "Files" ? "file" : name.toLowerCase()} tab`}
-              disabled={disabled}
-              title="New tab"
-              onClick={() => act({ type: "add" })}
-            >
-              <Icon name="add" />
-            </button>
           </div>
-          {active && open && toggle}
         </div>
-        <div
+        <section
           className="file-panel-content"
           inert={!open}
           aria-hidden={!open}
-          role="tabpanel"
           id={`${prefix}-content`}
-          aria-labelledby={selected ? `${prefix}-tab-${selected.id}` : undefined}
-          aria-label={selected ? undefined : emptyLabel}
+          aria-label={selected ? `${name}: ${selected.title}` : emptyLabel}
         >
+          {selected && selected.closeButton !== false && (
+            <div className="file-panel-view-actions">
+              <button
+                type="button"
+                className="icon-button file-tab-close"
+                aria-label="Close current tab"
+                title={`Close ${selected.title}`}
+                disabled={disabled}
+                onClick={() => act({ type: "close", id: selected.id })}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+          )}
           {children(() => {
-            focus.current = "active";
+            focus.current = true;
           })}
-        </div>
+        </section>
         <span className="sr-only" role="status">
           {announcement}
         </span>
       </Card>
-      {active && !open && toggle}
+      {active && (toggleTarget ? createPortal(toggle, toggleTarget) : toggle)}
     </>
   );
 }

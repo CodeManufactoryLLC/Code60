@@ -38,8 +38,8 @@ it("ports the sole interactive heading to the header and leaves an inert, ID-fre
   expect(html.match(/id="conversation-title"/g)).toHaveLength(1);
   expect(html).not.toContain("Rename this chat");
   expect(placeholder).toContain(">Agent</span>");
-  expect(html).toContain('<button type="button">Agent</button>');
-  expect(html.match(/aria-label="Breadcrumb"/g)).toHaveLength(1);
+  expect(html).toContain('<button type="button" class="page-selector-rename">Rename</button>');
+  expect(html.match(/aria-label="Page navigation"/g)).toHaveLength(1);
   expect(createPortal).toHaveBeenCalledWith(expect.anything(), header);
 });
 

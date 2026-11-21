@@ -28,10 +28,10 @@
   --card-radius: 0px;
   --navigation-card-radius: 5px;
   --settings-card-radius: 0px;
-  --card-header-fill: var(--surface);
-  --card-header-text: var(--text);
-  --card-header-muted: var(--muted);
-  --card-header-hover: var(--hover-bg);
+  --card-header-fill: #5494fd;
+  --card-header-text: #ffffff;
+  --card-header-muted: #e8eefb;
+  --card-header-hover: #73a7fd;
   --panel-border: var(--border);
   --card-shadow: 4px 4px 0 var(--shadow-color);
   --shadow-color: #111111;
@@ -85,16 +85,18 @@
   --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
   --overlay-shadow: 4px 4px 0 var(--shadow-color);
   color-scheme: light;
-  --bg: #e8eefb;
-  --workspace-background: #e8eefb;
+  --bg: #f4f8fe;
+  --workspace-background: #f4f8fe;
+  --sidebar-background: #f4f8fe;
+  --content-background: #ffffff;
   --surface: #ffffff;
   --surface-hover: #ffffff;
   --row-alt: #ffffff;
   --text: #111111;
-  --muted: #4b5563;
+  --muted: #303848;
   --border: #111111;
   --control-border: #111111;
-  --accent: #1d4ed8;
+  --accent: #1e40af;
   --accent-bg: #dbeafe;
   --hover-bg: #e8eefb;
   --primary: #2563eb;
@@ -111,8 +113,8 @@
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
   --chat-neutral: var(--surface);
-  --composer-bg: #ffffff;
-  --composer-focus-bg: #ffffff;
+  --composer-bg: var(--content-background);
+  --composer-focus-bg: var(--content-background);
   --user-bubble: #dbeafe;
   --on-user-bubble: #111111;
   --agent-bubble: #f1f0e8;
@@ -122,7 +124,7 @@
   --destructive: #a03d31;
   --destructive-hover: #873327;
   --on-destructive: #ffffff;
-  --focus-line: #1d4ed8;
+  --focus-line: #1e40af;
   --focus-band: #dbeafe;
 }
 
@@ -148,6 +150,8 @@
   --group-fill: #282828;
   --bg: #111111;
   --workspace-background: #111111;
+  --sidebar-background: var(--workspace-background);
+  --content-background: var(--surface);
   --surface: #202020;
   --surface-hover: #242424;
   --row-alt: #202020;

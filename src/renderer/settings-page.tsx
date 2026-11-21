@@ -2,6 +2,7 @@ import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
 import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
+import type { IconAppearance } from "./icon-appearance.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
@@ -21,6 +22,9 @@ export function SettingsPage({
   onTransparent,
   theme,
   onTheme,
+  iconAppearance,
+  iconAppearanceSaved,
+  onIconAppearance,
   sidebarAppearance,
   sidebarAppearanceSaved,
   sidebarBlurSupported,
@@ -57,6 +61,9 @@ export function SettingsPage({
   onTransparent(enabled: boolean): void;
   theme: Theme;
   onTheme(theme: Theme): void;
+  iconAppearance: IconAppearance;
+  iconAppearanceSaved: boolean;
+  onIconAppearance(appearance: IconAppearance): void;
   sidebarAppearance: SidebarAppearance;
   sidebarAppearanceSaved: boolean;
   sidebarBlurSupported: boolean | undefined;
@@ -100,6 +107,65 @@ export function SettingsPage({
             nativeError={sidebarBlurError}
             onChange={onSidebarAppearance}
           />
+          <SettingsCard title="Icons">
+            <label className="settings-row">
+              Monochrome
+              <input
+                type="checkbox"
+                role="switch"
+                checked={iconAppearance.monochrome}
+                aria-checked={iconAppearance.monochrome}
+                onChange={(event) =>
+                  onIconAppearance({ ...iconAppearance, monochrome: event.target.checked })
+                }
+              />
+            </label>
+            <label className="settings-row">
+              Icon color
+              <input
+                type="color"
+                value={iconAppearance.color}
+                disabled={!iconAppearance.monochrome}
+                onChange={(event) =>
+                  onIconAppearance({ ...iconAppearance, color: event.target.value })
+                }
+              />
+            </label>
+            <div className="icon-contrast-setting">
+              <div className="icon-contrast-heading">
+                <span className="settings-label">
+                  <label htmlFor={`${id}-icon-contrast`}>Icon contrast</label>
+                  <InfoTip label="Icon contrast" id={`${id}-icon-contrast-tip`}>
+                    Spreads the selected color into darker shadows and lighter highlights. Zero uses
+                    one flat color; 100% keeps the standard shades; 200% reaches black and white.
+                    Applies immediately while Monochrome is on.
+                  </InfoTip>
+                </span>
+                <output htmlFor={`${id}-icon-contrast`}>{iconAppearance.contrast}%</output>
+              </div>
+              <div className="transition-range">
+                <input
+                  id={`${id}-icon-contrast`}
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={1}
+                  value={iconAppearance.contrast}
+                  disabled={!iconAppearance.monochrome}
+                  aria-valuetext={`${iconAppearance.contrast}%`}
+                  aria-describedby={`${id}-icon-contrast-tip`}
+                  onChange={(event) =>
+                    onIconAppearance({ ...iconAppearance, contrast: event.target.valueAsNumber })
+                  }
+                />
+              </div>
+            </div>
+            {!iconAppearanceSaved && (
+              <p className="error" role="alert">
+                Icon appearance could not be saved. Changes apply for this window only.
+              </p>
+            )}
+          </SettingsCard>
           <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">

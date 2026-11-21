@@ -9,7 +9,7 @@ it("labels Scheduling Service and waits for verified status before offering life
       active={false}
     />,
   );
-  expect(markup).toContain('<span class="page-title-text">System Manager</span></h1>');
+  expect(markup).toContain('<span class="page-title-text">System Manager</span>');
   expect(markup).toContain("Scheduling Service");
   expect(markup).toContain('aria-label="Refresh Scheduling Service"');
   expect(markup).toContain('data-state="checking"');

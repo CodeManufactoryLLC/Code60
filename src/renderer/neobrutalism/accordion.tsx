@@ -10,7 +10,7 @@ export function Accordion({ className = "", ...props }: ComponentProps<"div">) {
 export function AccordionItem({ className = "", ...props }: ComponentProps<"section">) {
   return (
     <section
-      className={`neo-accordion-item nb:rounded-base nb:border-2 nb:border-solid nb:border-border nb:shadow-shadow ${className}`}
+      className={`neo-accordion-item nb:rounded-base nb:border nb:border-solid nb:border-border nb:shadow-shadow ${className}`}
       {...props}
     />
   );

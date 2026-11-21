@@ -41,7 +41,8 @@ it("keeps the full left background interactive even where there is no navigation
 });
 
 it.each([
-  { control: "title-bar toggle", selector: ".sidebar-toggle", x: 94, y: 14 },
+  { control: "main-card toggle", selector: ".sidebar-toggle", x: 270, y: 120 },
+  { control: "main-card panel controls", selector: ".workspace-panel-controls", x: 900, y: 120 },
   { control: "header breadcrumbs", selector: ".workspace-breadcrumbs", x: 300, y: 36 },
 ])(
   "keeps $control clickable after entering transparent margins and restores hit testing on disposal",

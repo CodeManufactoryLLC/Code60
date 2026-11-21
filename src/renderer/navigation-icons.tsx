@@ -16,6 +16,10 @@ import gearWheelAnimation from "./icons/apps/gear-wheel.gif?no-inline";
 import gearWheelStill from "./icons/apps/gear-wheel.png?no-inline";
 import heartbeatAnimation from "./icons/apps/heartbeat.gif?no-inline";
 import heartbeatStill from "./icons/apps/heartbeat.png?no-inline";
+import historyBackAnimation from "./icons/apps/history-back.gif?no-inline";
+import historyBackStill from "./icons/apps/history-back.png?no-inline";
+import historyForwardAnimation from "./icons/apps/history-forward.gif?no-inline";
+import historyForwardStill from "./icons/apps/history-forward.png?no-inline";
 import homeAnimation from "./icons/apps/home.gif?no-inline";
 import homeStill from "./icons/apps/home.png?no-inline";
 import infoAnimation from "./icons/apps/info.gif?no-inline";
@@ -59,6 +63,8 @@ const artwork = {
 } as const;
 
 const animatedArtwork = {
+  "app-history-back": { animation: historyBackAnimation, still: historyBackStill },
+  "app-history-forward": { animation: historyForwardAnimation, still: historyForwardStill },
   "app-cloud-computing": { animation: downloadAnimation, still: downloadStill },
   "app-heart-rate": { animation: heartbeatAnimation, still: heartbeatStill },
   "app-color-palette": { animation: paintingAnimation, still: paintingStill },
@@ -223,7 +229,7 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
     if (!element) return;
     const target =
       element.closest("button, a, [role='tab'], [role='button']") ??
-      element.closest(".sidebar-navigation-card")?.querySelector(".sidebar-card-toggle");
+      element.closest(".sidebar-section")?.querySelector(".sidebar-card-toggle");
     if (!target) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
     const reset = () => setPlayback(0);
@@ -239,18 +245,18 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
     const visibility = () => {
       if (document.hidden) reset();
     };
-    const hoverCard = target.matches(".home-card");
-    const trigger = hoverCard ? "pointerenter" : "click";
+    const hoverControl = target.matches(".home-card");
+    const trigger = hoverControl ? "pointerenter" : "click";
     const focus = () => {
       if (target.matches(":focus-visible")) play();
     };
     target.addEventListener(trigger, play);
-    if (hoverCard) target.addEventListener("focus", focus);
+    if (hoverControl) target.addEventListener("focus", focus);
     motion.addEventListener("change", reset);
     document.addEventListener("visibilitychange", visibility);
     return () => {
       target.removeEventListener(trigger, play);
-      if (hoverCard) target.removeEventListener("focus", focus);
+      if (hoverControl) target.removeEventListener("focus", focus);
       motion.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", visibility);
     };

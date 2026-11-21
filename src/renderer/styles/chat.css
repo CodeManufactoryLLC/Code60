@@ -1226,7 +1226,7 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 .chat-conversations {
   box-sizing: border-box;
   flex: 1;
-  padding: 1px;
+  padding: calc(1px + var(--panel-controls-height)) 1px 1px;
   gap: 0;
   min-width: 300px;
   min-height: 0;

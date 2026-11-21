@@ -180,6 +180,16 @@ export function PageTabBar({
         </div>
       </nav>
       <header className="workspace-header">
+        <Card className="workspace-breadcrumbs" ref={breadcrumbCard}>
+          <HistoryControls
+            canGoBack={canGoBack}
+            canGoForward={canGoForward}
+            onBack={onBack}
+            onForward={onForward}
+          />
+        </Card>
+      </header>
+      <div className="workspace-panel-controls">
         <button
           ref={toggle}
           type="button"
@@ -195,14 +205,8 @@ export function PageTabBar({
         >
           <Icon name={open ? "side-panel--close" : "side-panel--open"} />
         </button>
-        <HistoryControls
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          onBack={onBack}
-          onForward={onForward}
-        />
-        <Card className="workspace-breadcrumbs" ref={breadcrumbCard} />
-      </header>
+        <div id="workspace-panel-actions" />
+      </div>
     </>
   );
 }
@@ -253,7 +257,7 @@ function HistoryControls({
         disabled={!canGoBack}
         onClick={press("back", onBack)}
       >
-        <Icon name="arrow--left" />
+        <NavigationIcon name="app-history-back" />
       </button>
       <button
         ref={forward}
@@ -264,7 +268,7 @@ function HistoryControls({
         disabled={!canGoForward}
         onClick={press("forward", onForward)}
       >
-        <Icon name="arrow--right" />
+        <NavigationIcon name="app-history-forward" />
       </button>
     </div>
   );
@@ -900,8 +904,8 @@ function PageTabList({
     );
   }
   return (
-    <div className="page-tabs">
-      <Card size="sm" className="sidebar-navigation-card">
+    <Card size="sm" className="page-tabs sidebar-navigation-card">
+      <div className="sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -930,8 +934,8 @@ function PageTabList({
         >
           {page("search", false)}
         </div>
-      </Card>
-      <Card size="sm" className="sidebar-navigation-card">
+      </div>
+      <div className="sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -1063,8 +1067,8 @@ function PageTabList({
               })}
           </div>
         </div>
-      </Card>
-      <Card size="sm" className="sidebar-navigation-card">
+      </div>
+      <div className="sidebar-section">
         <div
           className="chat-page-heading sidebar-card-header"
           data-nav-active={
@@ -1201,7 +1205,7 @@ function PageTabList({
             />
           )}
         </div>
-      </Card>
+      </div>
       <ProvidersSidebar
         menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
         sidebarOpen={sidebarOpen}
@@ -1218,7 +1222,7 @@ function PageTabList({
         onFirst={() => moveTo(visible[0])}
         onLast={() => moveTo(visible.at(-1))}
       />
-      <Card size="sm" className="sidebar-navigation-card">
+      <div className="sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -1236,8 +1240,8 @@ function PageTabList({
           "apps",
         )}
         {staticChildrenPanel("apps")}
-      </Card>
-      <Card size="sm" className="page-tab-list sidebar-settings sidebar-navigation-card">
+      </div>
+      <div className="page-tab-list sidebar-settings sidebar-section">
         <div
           className="sidebar-settings-heading sidebar-card-header"
           data-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
@@ -1261,7 +1265,7 @@ function PageTabList({
           "settings",
         )}
         {staticChildrenPanel("settings")}
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }

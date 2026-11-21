@@ -127,6 +127,9 @@ export function AppPages(props: AppPagesProps) {
   const {
     theme,
     setTheme,
+    iconAppearance,
+    setIconAppearance,
+    iconAppearanceSaved,
     sidebarAppearance,
     setSidebarAppearance,
     sidebarAppearanceSaved,
@@ -349,6 +352,9 @@ export function AppPages(props: AppPagesProps) {
           onTransparent={(enabled) => void saveTransparent(enabled)}
           theme={theme}
           onTheme={setTheme}
+          iconAppearance={iconAppearance}
+          iconAppearanceSaved={iconAppearanceSaved}
+          onIconAppearance={setIconAppearance}
           sidebarAppearance={sidebarAppearance}
           sidebarAppearanceSaved={sidebarAppearanceSaved}
           sidebarBlurSupported={sidebarBlurSupported}

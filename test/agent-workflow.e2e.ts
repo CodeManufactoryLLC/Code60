@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { fileViewLabels } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -471,10 +472,28 @@ async function checkSidebarIconSpacing(entry: Locator) {
 
 async function checkHeaderBreadcrumbs(page: Page) {
   const header = page.locator(".workspace-breadcrumbs");
-  await expect(header.getByRole("navigation", { name: "Breadcrumb", exact: true })).toHaveCount(1);
+  await expect(
+    header.getByRole("navigation", { name: "Page navigation", exact: true }),
+  ).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCount(1);
   await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
   await expect(header.getByRole("heading")).toHaveCSS("font-weight", "700");
+  await expect(header).toHaveCSS("box-shadow", "none");
+  await expect(header).toHaveCSS("border-radius", "5px");
+  const selector = header.getByRole("combobox", { name: "Current page", exact: true });
+  await expect(selector).toHaveCSS("width", "240px");
+  await expect(selector).toHaveCSS("height", "44px");
+  await expect
+    .poll(() =>
+      selector.evaluate((element) => {
+        const control = element.getBoundingClientRect();
+        const card = element.closest(".workspace-breadcrumbs")?.getBoundingClientRect();
+        return card
+          ? Math.abs(control.left + control.width / 2 - card.left - card.width / 2)
+          : Infinity;
+      }),
+    )
+    .toBeLessThan(1);
   const slot = page.locator(".page-title-placeholder");
   await expect(slot).toHaveCount(1);
   await expect(slot).toHaveAttribute("aria-hidden", "true");
@@ -572,22 +591,68 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
-    const gray = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
+    const composerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
+    const headerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(47, 29, 55)";
+    await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("background-color", headerFill);
+    await expect(
+      page
+        .locator(".workspace-breadcrumbs")
+        .getByRole("combobox", { name: "Current page", exact: true }),
+    ).toHaveCSS("background-color", headerFill);
+    await expect(page.locator("#panel-settings")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
+    );
     await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px");
     await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".sidebar-navigation-card").first()).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
     );
+    const mainShadow = await page
+      .locator("#panel-settings")
+      .evaluate((element) => getComputedStyle(element).boxShadow);
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", mainShadow);
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("border-radius", "5px");
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCount(1);
+    await expect(page.locator(".sidebar-navigation-card > .sidebar-section")).toHaveCount(6);
+    for (const section of await page.locator(".sidebar-section + .sidebar-section").all())
+      await expect(section).toHaveCSS("border-top-width", "1px");
+    const canvas = theme === "light" ? "rgb(244, 248, 254)" : "rgb(17, 17, 17)";
+    await expect(page.locator(".sidebar-background")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(244, 248, 254)" : canvas,
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".app")
+          .evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
+      )
+      .toBe(canvas);
+    await page.mouse.move(1000, 500);
+    await expect(page.locator("#tab-settings-appearance")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(147, 197, 253)" : "rgb(70, 70, 70)",
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".sidebar-section")
+          .first()
+          .evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
+      )
+      .toBe(theme === "light" ? "rgb(255, 255, 255)" : "rgb(84, 148, 253)");
     await expect(page.locator("body")).toHaveCSS("font-weight", "400");
     await page.locator("#tab-home").scrollIntoViewIfNeeded();
     await page.mouse.move(1000, 500);
     const geometry = await page.evaluate(() => {
       const toggle = document.querySelector(".sidebar-toggle");
-      const home = document.querySelector("#tab-home .navigation-icon");
+      const active = document.querySelector(".page-panel:not([hidden])");
+      const card = active?.querySelector(".chat-conversations") ?? active;
       const strip = document.querySelector(".app > .window-drag-strip");
       const footer = document.querySelectorAll(".footer-sidebar > .icon-button");
-      if (!toggle || !home || !strip || footer.length !== 2)
+      if (!toggle || !card || !strip || footer.length !== 2)
         throw new Error("Missing sidebar controls");
       const style = (element: Element) => ({
         color: getComputedStyle(element).color,
@@ -595,18 +660,16 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         glyphOpacity: getComputedStyle(element.querySelector("svg") ?? element).opacity,
       });
       const a = toggle.getBoundingClientRect();
-      const b = home.getBoundingClientRect();
-      const nativeRow = strip.getBoundingClientRect();
+      const b = card.getBoundingClientRect();
+
       return {
-        above: a.bottom <= b.top,
-        nativeClearance: a.left >= 80,
-        centered: Math.abs((a.top + a.bottom - nativeRow.top - nativeRow.bottom) / 2) < 1,
+        inside: a.left >= b.left && a.right <= b.right && a.top >= b.top && a.bottom <= b.bottom,
+        upperLeft: Math.abs(a.left - b.left - 8) <= 1 && Math.abs(a.top - b.top - 8) <= 1,
         styles: [toggle, ...footer].map(style),
       };
     });
-    expect(geometry.above).toBe(true);
-    expect(geometry.nativeClearance).toBe(true);
-    expect(geometry.centered).toBe(true);
+    expect(geometry.inside).toBe(true);
+    expect(geometry.upperLeft).toBe(true);
     expect(geometry.styles[0]).toEqual(geometry.styles[1]);
     expect(geometry.styles[0]).toEqual(geometry.styles[2]);
 
@@ -660,6 +723,10 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         // Selection finishes through the real main-process path.
         await expect(control).toHaveAttribute("aria-current", /^(page|true)$/);
       }
+      await expect(page.locator(".chat-conversations:visible")).toHaveCSS(
+        "background-color",
+        theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
+      );
       await expect(composer).toHaveValue("Second sidebar draft");
       await checkHeaderBreadcrumbs(page);
       // Different chat IDs have identical visible trails. Watch the real async
@@ -716,7 +783,9 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         await entry.click();
         await expect(entry).toHaveAttribute("aria-current", "true");
         await expect(composer).toHaveValue(draft);
-        await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveAccessibleName(
+        await expect(
+          page.locator(".workspace-breadcrumbs .page-selector-rename"),
+        ).toHaveAccessibleName(
           `Rename chat: ${await entry.locator(".chat-sidebar-label").textContent()}`,
         );
         await page.waitForFunction(() =>
@@ -747,17 +816,18 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         ).toBeLessThan(1);
       }
       await page.screenshot({ path: test.info().outputPath(`chat-breadcrumbs-${theme}.png`) });
-      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toBeVisible();
-      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveCSS(
+      await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toBeVisible();
+      await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveCSS(
         "text-decoration-line",
-        "underline",
+        "none",
       );
       await expect(page.locator(".sidebar .chat-sidebar-status")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
       const box = composer.locator("..");
       await page.locator(".sidebar-toggle").focus();
-      await expect(box).toHaveCSS("border-width", "2px");
-      await expect(box).toHaveCSS("background-color", gray);
+      await expect(box).toHaveCSS("border-width", "1px");
+      await expect(box).toHaveCSS("background-color", composerFill);
+      await expect(composer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       const bounds = await box.boundingBox();
       await composer.focus();
       await expect(box).toHaveCSS(
@@ -817,6 +887,9 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await expect(page.locator("#tables-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.locator("#tab-apps").press("ArrowRight");
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
+    await page.locator("#tab-apps").click();
+    await page.mouse.move(1000, 500);
+    await expect(page.locator("#tab-apps")).toHaveCSS("background-color", "rgb(147, 197, 253)");
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
     await project.locator(".project-chat-toggle").press("ArrowRight");
     const row = entries.last().locator("..");
@@ -1416,9 +1489,7 @@ for (const custom of [false, true]) {
         const existingPlans = (await page.evaluate(() => window.desktop.snapshot())).chat.plans;
         const documentText =
           (await plan.getByRole("article", { name: "Plan document" }).textContent()) ?? "";
-        await planPanel
-          .getByRole("tab", { name: "Plan · Relay target plan", exact: true })
-          .press("Delete");
+        await planPanel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
         await expect(plan).toHaveCount(0);
         await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
         const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
@@ -1426,13 +1497,16 @@ for (const custom of [false, true]) {
         await viewPlan.press("Enter");
         await expect(plan.getByRole("article", { name: "Plan document" })).toHaveText(documentText);
         await expect(
-          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
         ).toBeFocused();
         await viewPlan.focus();
         await viewPlan.press("Space");
         await expect(
-          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
-        ).toHaveCount(1);
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
+        ).toHaveText("Plan · Relay target plan");
+        expect(
+          (await fileViewLabels(page)).filter((label) => label === "Plan · Relay target plan"),
+        ).toHaveLength(1);
         expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans).toEqual(
           existingPlans,
         );
@@ -2715,9 +2789,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
       await expect
         .poll(() => panel.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
         .toBe(120);
-      await panel
-        .getByRole("tab", { name: "Plan · Second planned change", exact: true })
-        .press("Delete");
+      await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
       const view = panel.getByRole("button", { name: "View Plan", exact: true });
       await expect(view).toHaveCSS("font-size", `${size}px`);
       const bounds = await view.evaluate((button) => {
@@ -2760,9 +2832,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
       .getByLabel("Font size")
       .fill("14");
     await page.locator(`[id="conversation-${chatId}"]`).click();
-    await panel
-      .getByRole("tab", { name: "Plan · Second planned change", exact: true })
-      .press("Delete");
+    await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
     const previousPids = new Set((await processes()).map((entry) => entry.pid));
     const workerDirectories = (await page.evaluate(() => window.desktop.snapshot())).runs.map(
       (run) => run.record.worktree,

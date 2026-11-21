@@ -666,8 +666,8 @@ describe("embedded worker chat", () => {
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
   it("uses the generic Subagent breadcrumb independently of its saved role label", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span><\/h2>/);
-    expect(render(run("one"))).toMatch(/Subagent<\/span><\/h2>/);
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span>.*<\/h2>/);
+    expect(render(run("one"))).toMatch(/Subagent<\/span>.*<\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

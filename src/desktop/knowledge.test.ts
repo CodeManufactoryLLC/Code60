@@ -368,11 +368,17 @@ describe("DesktopKnowledge", () => {
     const capabilities = result(
       await knowledge.call("code60_get_capabilities", { query: "Memory Recall" }, relay),
     );
+    // Files now also describes the persistent Memory Recall destination.
     expect(capabilities.entries).toEqual([
       expect.objectContaining({
         id: "memory-recall",
         agentAccess: "human-only",
         availability: expect.objectContaining({ status: "available" }),
+      }),
+      expect.objectContaining({
+        id: "files",
+        agentAccess: "read",
+        availability: expect.objectContaining({ status: "unknown" }),
       }),
     ]);
     const id = randomUUID();

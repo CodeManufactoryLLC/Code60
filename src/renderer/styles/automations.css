@@ -51,8 +51,8 @@
   align-items: stretch;
   background: var(--primary);
   color: var(--primary-text);
-  /* The fill sits inside the 2px outline, so its concentric radius is smaller. */
-  border-radius: max(0px, calc(var(--navigation-card-radius) - 2px));
+  /* The fill sits inside the 1px outline, so its concentric radius is smaller. */
+  border-radius: max(0px, calc(var(--navigation-card-radius) - 1px));
 }
 .automation-job:has(> .neo-accordion-content:not([hidden])) > .automation-job-header {
   border-end-start-radius: 0;
@@ -185,7 +185,7 @@
 }
 .neo-accordion-content:not([hidden]) {
   padding: 20px;
-  border-top: 2px solid var(--panel-border);
+  border-top: 1px solid var(--panel-border);
 }
 .neo-accordion-content[hidden] {
   display: none;
@@ -338,7 +338,7 @@
   align-content: start;
   gap: 16px;
   border: 0;
-  border-top: 2px solid var(--panel-border);
+  border-top: 1px solid var(--panel-border);
   margin: 0;
   padding: 16px 0 0;
   min-width: 0;

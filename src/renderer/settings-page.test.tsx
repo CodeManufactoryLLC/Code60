@@ -19,6 +19,9 @@ const props: ComponentProps<typeof SettingsPage> = {
   onTransparent: unchanged,
   theme: "dark",
   onTheme: unchanged,
+  iconAppearance: { monochrome: false, color: "#808080", contrast: 100 },
+  iconAppearanceSaved: true,
+  onIconAppearance: unchanged,
   sidebarAppearance: { opacity: 100, blur: 0 },
   sidebarAppearanceSaved: true,
   sidebarBlurSupported: true,
@@ -41,6 +44,26 @@ const props: ComponentProps<typeof SettingsPage> = {
 };
 
 describe("Settings page titles", () => {
+  it("offers a named monochrome switch, gray color selector and save failure feedback", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage {...props} section="appearance" iconAppearanceSaved={false} />,
+    );
+    expect(html).toContain('Monochrome<input type="checkbox" role="switch" aria-checked="false"');
+    expect(html).toContain('Icon color<input type="color" disabled="" value="#808080"');
+    expect(html).toContain("Icon appearance could not be saved.");
+    expect(html).toContain(
+      'type="range" min="0" max="200" step="1" disabled="" aria-valuetext="100%"',
+    );
+    const enabled = renderToStaticMarkup(
+      <SettingsPage
+        {...props}
+        section="appearance"
+        iconAppearance={{ monochrome: true, color: "#348a56", contrast: 150 }}
+      />,
+    );
+    expect(enabled).toContain('Icon color<input type="color" value="#348a56"');
+    expect(enabled).toContain('aria-valuetext="150%"');
+  });
   it("labels sidebar ranges, shows live units and reports unsaved appearance values", () => {
     const html = renderToStaticMarkup(
       <SettingsPage

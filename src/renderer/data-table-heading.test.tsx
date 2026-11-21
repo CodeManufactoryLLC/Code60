@@ -12,8 +12,8 @@ it.each([
 
 it("retains page breadcrumbs and icons on ordinary tables", () => {
   const html = renderToStaticMarkup(<TableHeading tableId="polling" />);
-  expect(html).toContain('aria-label="Breadcrumb"');
-  expect(html).toContain('<h1 class="page-title table-title">');
+  expect(html).toContain('aria-label="Page navigation"');
+  expect(html).toContain('<h1 class="page-title table-title"');
   expect(html).toContain('data-icon="app-table"');
   expect(html).toContain('<span class="page-title-text">Polling</span>');
 });

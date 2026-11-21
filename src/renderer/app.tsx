@@ -13,6 +13,7 @@ import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { useHistoryNavigation } from "./history-navigation.js";
+import { IconColorFilter } from "./icon-appearance.js";
 import { useKnowledgeNavigation } from "./knowledge-report.js";
 import { pageAvailable } from "./navigation.js";
 import { useNavigationActions } from "./navigation-actions.js";
@@ -318,6 +319,10 @@ export function App({ api: transport }: { api: DesktopApi }) {
   });
   return (
     <div className="app">
+      <IconColorFilter
+        color={preferences.iconAppearance.color}
+        contrast={preferences.iconAppearance.contrast}
+      />
       {!splash && <div className="sidebar-background" aria-hidden="true" />}
       <Tooltips />
       <Toasts messages={notifications} onDismiss={dismissNotification} />

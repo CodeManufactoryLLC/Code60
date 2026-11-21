@@ -14,7 +14,7 @@ export function Card<Element extends "div" | "section" | "aside" = "div">({
     "data-slot": "card",
     "data-size": size,
     className: classes(
-      "nb:group/card nb:box-border nb:rounded-base nb:flex nb:flex-col nb:shadow-shadow nb:border-2 nb:border-solid nb:gap-(--nb-card-spacing) nb:py-(--nb-card-spacing) nb:border-border nb:bg-background nb:text-foreground nb:font-base nb:[--nb-card-spacing:24px] nb:data-[size=sm]:[--nb-card-spacing:16px]",
+      "nb:group/card nb:box-border nb:rounded-base nb:flex nb:flex-col nb:shadow-shadow nb:border nb:border-solid nb:gap-(--nb-card-spacing) nb:py-(--nb-card-spacing) nb:border-border nb:bg-background nb:text-foreground nb:font-base nb:[--nb-card-spacing:24px] nb:data-[size=sm]:[--nb-card-spacing:16px]",
       className,
     ),
     ...props,
