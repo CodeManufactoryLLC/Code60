@@ -88,7 +88,6 @@ export function ProjectChatSidebar({
                   <NavigationIcon name="app-folder" />
                   <span className="project-chat-title">{name}</span>
                 </span>
-                {project.active && <span className="project-chat-activity">Active</span>}
               </button>
               <button
                 type="button"
