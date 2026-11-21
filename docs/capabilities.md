@@ -277,12 +277,12 @@ Schema version: 1
 - Purpose: Learn and recall scoped evidence when enabled.
 - Access: Settings → Memory; Apps → Data Viewer → Memories
 - Prerequisite: none
-- Agent access: human-only
+- Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Memory Off disables learning/recall, not session-local continuity. No memory records exposed through awareness.
+- Limits: Live Relay/custom assistant/project memory tools create, revision-check modifications and retrieve scoped cited records. Memory Off disables tools and learning/recall, not session-local continuity. Global promotion, protected human edits and forgetting remain human-only. Awareness exposes metadata only.
 - Pages: `memories`
 - Settings sections: `memory`
-- Tools: none
+- Tools: `code60_create_memory`, `code60_modify_memory`, `code60_retrieve_memories`
 
 ## Context handoff
 
@@ -335,7 +335,7 @@ Schema version: 1
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Existing table tools retain their scopes. Diagnostic logs and memory records are not agent-readable.
+- Limits: Existing table tools retain their scopes. Diagnostic logs are not agent-readable. Memory records use separate scoped memory tools.
 - Pages: `tables`, `sessions`, `messages`, `events`, `worktrees`, `polling`
 - Settings sections: none
 - Tools: `code60_read_sessions`, `code60_search_sessions`, `code60_read_messages`, `code60_search_messages`, `code60_read_events`, `code60_search_events`, `code60_read_worktrees`, `code60_search_worktrees`, `code60_read_polling`, `code60_search_polling`

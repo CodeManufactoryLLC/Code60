@@ -488,3 +488,158 @@ describe.skipIf(!sqliteFtsAvailable())("private application memory", () => {
     await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
   });
 });
+
+describe.skipIf(!sqliteFtsAvailable())("explicit agent memory writes", () => {
+  function saved(result: ReturnType<MemoryStore["agentWrite"]>) {
+    if (result.status !== "ok") throw new Error(`Unexpected memory status: ${result.status}`);
+    return result.record;
+  }
+  function setup(project: string | null = null) {
+    const c = store.register(`agent:${randomUUID()}`, "Agent", project);
+    const s = source(c.id);
+    store.append(c.id, "1", [s], true);
+    return { c, s, memory: must(generation(s).memories[0]) };
+  }
+  it("persists stable IDs, evidence, modifications and revision history across reopen", () => {
+    const { c, memory } = setup();
+    const created = store.agentWrite(c.id, "code60_create_memory", { memory });
+    expect(created.status).toBe("ok");
+    const record = saved(created);
+    expect(saved(store.agentWrite(c.id, "code60_create_memory", { memory })).id).toBe(record.id);
+    const changed = store.agentWrite(c.id, "code60_modify_memory", {
+      id: record.id,
+      revision: record.revision,
+      memory: { ...memory, text: "Redis is the cache." },
+    });
+    expect(changed).toMatchObject({
+      status: "ok",
+      record: { id: record.id, revision: 2, evidence: "agent-reported" },
+    });
+    store.close();
+    store = new MemoryStore(join(dir, "memory"));
+    expect(store.eligible(c.id)).toEqual([saved(changed)]);
+    expect(store.detail(record.id).revisions.map((r) => r.revision)).toEqual([2, 1]);
+    expect(store.detail(record.id).sources).toHaveLength(1);
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: record.id, revision: 1, memory }),
+    ).toEqual({ status: "conflict" });
+    expect(store.detail(record.id).record.text).toBe("Redis is the cache.");
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: randomUUID(), revision: 1, memory }),
+    ).toEqual({ status: "not-found" });
+  });
+  it("rejects uncommitted, foreign, suppressed and invalid evidence and unknown scope fields", () => {
+    const { c, s, memory } = setup();
+    const other = store.register("other", "Other", null);
+    expect(() => store.agentWrite(other.id, "code60_create_memory", { memory })).toThrow(
+      /evidence/,
+    );
+    expect(() =>
+      store.agentWrite(c.id, "code60_create_memory", { memory, projectId: randomUUID() }),
+    ).toThrow();
+    for (const patch of [
+      { text: " " },
+      { subject: " " },
+      { type: "lesson" },
+      { citations: [] },
+      { citations: [{ ...memory.citations[0], quote: "invented" }] },
+    ])
+      expect(() =>
+        store.agentWrite(c.id, "code60_create_memory", { memory: { ...memory, ...patch } }),
+      ).toThrow();
+    const pending = source(c.id, "Pending evidence");
+    store.append(c.id, "pending", [pending], false);
+    expect(() =>
+      store.agentWrite(c.id, "code60_create_memory", {
+        memory: must(generation(pending).memories[0]),
+      }),
+    ).toThrow(/evidence/);
+    const record = saved(store.agentWrite(c.id, "code60_create_memory", { memory }));
+    store.action({ type: "forget", id: record.id, revision: record.revision });
+    expect(store.tail(c.id).map((item) => item.id)).not.toContain(s.id);
+    expect(() => store.agentWrite(c.id, "code60_create_memory", { memory })).toThrow(/evidence/);
+    expect(store.browse({}).records).toHaveLength(0);
+  });
+  it("isolates conversations/projects and protects human and global records", async () => {
+    const { c, memory } = setup(dir);
+    const record = saved(store.agentWrite(c.id, "code60_create_memory", { memory }));
+    const otherDir = join(dir, "other-project");
+    await mkdir(otherDir);
+    const foreign = setup(otherDir);
+    expect(store.eligible(foreign.c.id)).toEqual([]);
+    expect(
+      store.agentWrite(foreign.c.id, "code60_modify_memory", {
+        id: record.id,
+        revision: 1,
+        memory: foreign.memory,
+      }),
+    ).toEqual({ status: "not-found" });
+    const peer = setup(dir);
+    expect(store.eligible(peer.c.id).map((r) => r.id)).toContain(record.id);
+    expect(
+      store.agentWrite(peer.c.id, "code60_modify_memory", {
+        id: record.id,
+        revision: 1,
+        memory: { ...peer.memory, text: "Peer evidence" },
+      }).status,
+    ).toBe("ok");
+    store.action({ type: "edit", id: record.id, revision: 2, text: "Human choice", pinned: false });
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: record.id, revision: 3, memory }).status,
+    ).toBe("protected");
+    store.action({ type: "promote", id: record.id, revision: 3 });
+    expect(store.eligible(foreign.c.id).map((r) => r.id)).toContain(record.id);
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: record.id, revision: 4, memory }).status,
+    ).toBe("not-found");
+    const local = setup();
+    const localRecord = saved(
+      store.agentWrite(local.c.id, "code60_create_memory", { memory: local.memory }),
+    );
+    expect(store.eligible(c.id).map((r) => r.id)).not.toContain(localRecord.id);
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: localRecord.id, revision: 1, memory })
+        .status,
+    ).toBe("not-found");
+  });
+  it("keeps disputed creates inspectable without recalling them automatically", () => {
+    const { c, memory } = setup();
+    store.agentWrite(c.id, "code60_create_memory", { memory });
+    const result = store.agentWrite(c.id, "code60_create_memory", {
+      memory: { ...memory, text: "Cache choice is uncertain." },
+    });
+    const record = saved(result);
+    expect(record.state).toBe("disputed");
+    expect(store.eligible(c.id)).toEqual([]);
+    expect(store.eligible(c.id, "", 20, [], true).map((r) => r.id)).toContain(record.id);
+    expect(store.lexical(c.id, "uncertain", [], true)).toContain(record.id);
+  });
+  it("keeps discarded project evidence inaccessible to explicit modifications", () => {
+    const { c, memory } = setup(dir);
+    const record = saved(store.agentWrite(c.id, "code60_create_memory", { memory }));
+    store.rewind(JSON.parse(String(store.conversation(c.id).key))[0], 1);
+    const peer = setup(dir);
+    expect(store.eligible(peer.c.id)).toEqual([]);
+    expect(
+      store.agentWrite(peer.c.id, "code60_modify_memory", {
+        id: record.id,
+        revision: record.revision,
+        memory: peer.memory,
+      }),
+    ).toEqual({ status: "not-found" });
+    expect(store.detail(record.id).record.revision).toBe(1);
+  });
+  it("blocks writes while Off and preserves existing records", () => {
+    const { c, memory } = setup();
+    const record = saved(store.agentWrite(c.id, "code60_create_memory", { memory }));
+    store.configure({ ...DEFAULT_MEMORY_SETTINGS, enabled: false });
+    expect(store.agentWrite(c.id, "code60_create_memory", { memory })).toEqual({
+      status: "disabled",
+    });
+    expect(
+      store.agentWrite(c.id, "code60_modify_memory", { id: record.id, revision: 1, memory }),
+    ).toEqual({ status: "disabled" });
+    expect(store.eligible(c.id)).toEqual([]);
+    expect(store.detail(record.id).record.revision).toBe(1);
+  });
+});

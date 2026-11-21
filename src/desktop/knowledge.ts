@@ -46,6 +46,7 @@ export interface KnowledgeRuntime {
   liveWorkers: number;
   gitReady: boolean | null;
   projectOpen: boolean;
+  memoryEnabled?: boolean;
   customizations: Customization[];
 }
 interface Sources {
@@ -224,7 +225,19 @@ export class DesktopKnowledge {
         "Home → Custom Assistants or Sidebar → Assistants → Custom Assistants; New Assistant; stop work before Edit; Archived → Restore.";
     } else if (cap.id === "memory-recall") {
       reason =
-        "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+        "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Awareness exposes metadata only; explicit memory tools have their own scope checks.";
+    } else if (cap.id === "memory") {
+      status =
+        state.memoryEnabled === false
+          ? "blocked"
+          : state.memoryEnabled === true
+            ? "available"
+            : "unknown";
+      reason =
+        state.memoryEnabled === false
+          ? "Memory is Off. Explicit memory tools and automatic learning/recall are disabled."
+          : "Explicit memory tools require a live conversation and available private storage; scope and evidence are checked on every call.";
+      action = state.memoryEnabled === false ? "Enable Memory in Settings → Memory." : null;
     } else if (cap.id === "reviews") {
       status = "unknown";
       reason =

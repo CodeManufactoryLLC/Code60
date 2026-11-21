@@ -16,6 +16,7 @@ import {
   memoryRecordSchema,
   memorySettingsSchema,
   memorySourceSchema,
+  memoryToolSchemas,
   parseValue,
 } from "../bridge/index.js";
 import { checkpointText, validateMemoryGeneration } from "../core/index.js";
@@ -378,7 +379,7 @@ export class MemoryStore {
         candidate.subject,
         eventAt,
       );
-    if (duplicate) return;
+    if (duplicate) return this.detail(String(duplicate.id)).record;
     if (Number(this.db.prepare("SELECT count(*) AS n FROM memories").get()?.n) >= 100000)
       throw new Error("Memory record limit reached");
     const previous = this.db
@@ -424,6 +425,80 @@ export class MemoryStore {
       }
     }
     this.write(record);
+    return record;
+  }
+  /** Runs in the sidecar queue: scope, evidence and revision checks share the write transaction. */
+  agentWrite(cid: string, name: "code60_create_memory" | "code60_modify_memory", args: unknown) {
+    const request = parseValue(memoryToolSchemas[name], args);
+    if (!this.settings().enabled) return { status: "disabled" as const };
+    const conversation = this.conversation(cid);
+    const sources = this.tail(cid);
+    const candidate = request.memory;
+    if (![candidate.text, candidate.subject].every((value) => value.trim()))
+      throw new Error("Memory text and subject must not be blank");
+    validateMemoryGeneration(
+      {
+        goal: "",
+        constraints: [],
+        decisions: [],
+        attempts: [],
+        questions: [],
+        next: "",
+        citations: candidate.citations,
+        memories: [candidate],
+      },
+      sources,
+    );
+    if (this.bytes() > 512 * 1_048_576) throw new Error("Memory storage limit reached");
+    return this.transaction(() => {
+      if (!("id" in request)) {
+        const record = this.saveCandidate(
+          cid,
+          conversation.project == null ? null : String(conversation.project),
+          candidate,
+          sources,
+          "agent-tool",
+        );
+        if (record.state !== "active" && record.state !== "disputed")
+          return { status: "protected" as const };
+        return { status: "ok" as const, record };
+      }
+      const row = this.db.prepare("SELECT value FROM memories WHERE id=?").get(request.id);
+      if (!row) return { status: "not-found" as const };
+      const record = parseValue(memoryRecordSchema, decode(row.value));
+      const authorized =
+        record.scope === "conversation"
+          ? record.conversationId === cid
+          : record.scope === "project" && record.projectId === conversation.project;
+      const suppressed = record.citations.some((citation) =>
+        this.db.prepare("SELECT 1 FROM suppressed WHERE source=?").get(citation.sourceId),
+      );
+      if (
+        !authorized ||
+        suppressed ||
+        (!record.pinned && record.createdAt <= this.retentionCutoff())
+      )
+        return { status: "not-found" as const };
+      if (record.pinned || record.evidence === "human-edited" || record.state !== "active")
+        return { status: "protected" as const };
+      if (record.revision !== request.revision) return { status: "conflict" as const };
+      const next: MemoryRecord = {
+        ...record,
+        ...candidate,
+        revision: record.revision + 1,
+        updatedAt: now(),
+        evidence: "agent-reported",
+        provider: "agent-tool",
+      };
+      // Keep original evidence as well: Undo and forgetting must still invalidate this record.
+      next.citations = [...record.citations, ...candidate.citations].filter(
+        (citation, index, all) =>
+          all.findIndex((other) => json(other) === json(citation)) === index,
+      );
+      if (next.citations.length > 8) throw new Error("Memory evidence limit reached");
+      this.write(next);
+      return { status: "ok" as const, record: next };
+    });
   }
   private deriveState(
     cause: string,
@@ -595,17 +670,24 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM vectors WHERE id=?").run(id);
     this.db.prepare("DELETE FROM memory_fts WHERE id=?").run(id);
   }
-  eligible(cid: string, after = "", limit = 256, projects: readonly string[] = []): MemoryRecord[] {
+  eligible(
+    cid: string,
+    after = "",
+    limit = 256,
+    projects: readonly string[] = [],
+    includeDisputed = false,
+  ): MemoryRecord[] {
     if (!this.settings().enabled) return [];
     const conversation = this.conversation(cid);
     return this.db
-      .prepare(`SELECT id,value FROM memories m WHERE id>? AND state='active' AND
+      .prepare(`SELECT id,value FROM memories m WHERE id>? AND (state='active' OR (? AND state='disputed')) AND
       (json_extract(value,'$.pinned')=1 OR created>?) AND
       NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) AND
       (scope='global' OR (scope='conversation' AND cid=?) OR (scope='project' AND (project=? OR project IN (SELECT value FROM json_each(?)))))
       ORDER BY id LIMIT ?`)
       .all(
         after,
+        Number(includeDisputed),
         this.retentionCutoff(),
         cid,
         conversation.project == null ? null : String(conversation.project),
@@ -614,7 +696,12 @@ export class MemoryStore {
       )
       .map((row) => parseValue(memoryRecordSchema, decode(row.value)));
   }
-  lexical(cid: string, query: string, projects: readonly string[] = []): string[] {
+  lexical(
+    cid: string,
+    query: string,
+    projects: readonly string[] = [],
+    includeDisputed = false,
+  ): string[] {
     if (!this.settings().enabled) return [];
     const terms = query.match(/[\p{L}\p{N}_]{2,}/gu)?.slice(0, 32);
     if (!terms?.length) return [];
@@ -622,13 +709,14 @@ export class MemoryStore {
     const conversation = this.conversation(cid);
     return this.db
       .prepare(`SELECT m.id FROM memory_fts JOIN memories m ON m.id=memory_fts.id
-      WHERE memory_fts MATCH ? AND m.state='active' AND
+      WHERE memory_fts MATCH ? AND (m.state='active' OR (? AND m.state='disputed')) AND
       (json_extract(m.value,'$.pinned')=1 OR m.created>?) AND
       NOT EXISTS (SELECT 1 FROM json_each(m.value,'$.citations') c JOIN suppressed s ON s.source=json_extract(c.value,'$.sourceId')) AND
       (m.scope='global' OR (m.scope='conversation' AND m.cid=?) OR (m.scope='project' AND (m.project=? OR m.project IN (SELECT value FROM json_each(?)))))
       ORDER BY rank,m.id LIMIT 100`)
       .all(
         match,
+        Number(includeDisputed),
         this.retentionCutoff(),
         cid,
         conversation.project == null ? null : String(conversation.project),

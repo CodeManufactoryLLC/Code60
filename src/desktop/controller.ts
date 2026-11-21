@@ -65,6 +65,7 @@ import {
   isActivityTool,
   isKnowledgeTool,
   isMcpControlTool,
+  isMemoryTool,
   type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
@@ -4199,6 +4200,7 @@ export class DesktopController {
             : 0,
       gitReady: state?.gitState ? state.gitState.status === "ready" : null,
       projectOpen: !!state?.workspace,
+      memoryEnabled: this.memory.settings.enabled,
       customizations,
     };
   }
@@ -5836,6 +5838,17 @@ export class DesktopController {
   }
 
   private controlTool(name: McpControlTool, args: unknown, session: ChatSession): Promise<unknown> {
+    if (isMemoryTool(name)) {
+      const request = parseControlArgs(name, args);
+      return this.chatExclusive(session, async () => {
+        const run = session.chat?.runs()[0];
+        if (!run || !["running", "waiting"].includes(run.status) || run.stopping)
+          throw new Error("Memory tools require a live conversation turn");
+        return this.memory.agentTool(run.id, name, request, () =>
+          this.conversations.assertCurrent(session),
+        );
+      });
+    }
     switch (name) {
       case "code60_create_command": {
         const request = parseControlArgs(name, args);
@@ -6119,6 +6132,9 @@ export class DesktopController {
     name: Exclude<
       McpControlTool,
       | "code60_create_command"
+      | "code60_create_memory"
+      | "code60_modify_memory"
+      | "code60_retrieve_memories"
       | "code60_create_plan"
       | "code60_read_plan"
       | "code60_update_plan"

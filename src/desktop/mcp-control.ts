@@ -3,6 +3,7 @@ import {
   commandFieldsSchema,
   MCP_CONTROL_LIMITS,
   type McpControlTool,
+  memoryToolSchemas,
   planCreateSchema,
   planUpdateSchema,
 } from "../bridge/index.js";
@@ -27,6 +28,7 @@ const name = z
 const target = z.strictObject({ scope, runId });
 
 const controlSchemas = {
+  ...memoryToolSchemas,
   code60_create_command: commandFieldsSchema,
   code60_create_plan: planCreateSchema,
   code60_read_plan: z.strictObject({ planId: z.string().uuid() }),

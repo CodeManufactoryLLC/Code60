@@ -180,7 +180,51 @@ export function createFakeAgent(options = {}) {
           /^Plan a change in (.+)\nCreate result\.txt containing "human accepted target" followed by a newline\. Use an isolated worktree and wait for my approval\.$/.exec(
             request,
           );
-        if (request.startsWith("Relay plan: ") || readable) {
+        if (request === "Create and revise a memory from the previous exchange.") {
+          const retrieved = await tool("code60_retrieve_memories", { query: "" });
+          const source = retrieved.sources.find(
+            (s) => s.role === "human" && s.text.includes("factory cache"),
+          );
+          if (!source) throw new Error("Committed factory evidence unavailable");
+          const quote = source.text.slice(0, 200);
+          const memory = {
+            type: "semantic",
+            text: "Factory cache uses Redis.",
+            subject: "factory-cache-explicit",
+            condition: "",
+            correction: false,
+            citations: [{ sourceId: source.id, start: 0, end: quote.length, quote }],
+          };
+          const created = await tool("code60_create_memory", { memory });
+          if (created.status !== "ok") throw new Error("Memory creation failed");
+          const revised = { ...memory, text: "Factory cache uses Redis for local tests." };
+          const modified = await tool("code60_modify_memory", {
+            id: created.record.id,
+            revision: created.record.revision,
+            memory: revised,
+          });
+          const conflict = await tool("code60_modify_memory", {
+            id: created.record.id,
+            revision: created.record.revision,
+            memory,
+          });
+          const found = await tool("code60_retrieve_memories", {
+            query: "Factory cache",
+            limit: 20,
+          });
+          if (
+            modified.status !== "ok" ||
+            conflict.status !== "conflict" ||
+            !found.records.some((r) => r.id === created.record.id && r.revision === 2)
+          )
+            throw new Error("Memory modification/retrieval invariants failed");
+          steps = [
+            { message: `Memory workflow ok; conflict=${conflict.status}; id=${created.record.id}` },
+          ];
+        } else if (request === "Retrieve memories while disabled.") {
+          const result = await tool("code60_retrieve_memories", { query: "" });
+          steps = [{ message: `Explicit memory status: ${result.status}` }];
+        } else if (request.startsWith("Relay plan: ") || readable) {
           const target = readable
             ? { cwd: readable[1], workspaceMode: "worktree" }
             : JSON.parse(request.slice("Relay plan: ".length));

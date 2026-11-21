@@ -487,6 +487,16 @@ receive scoped historical evidence and between-turn checkpoints. A separate,
 private application `memory.sqlite` stores generated knowledge and learning checkpoints;
 it never changes project schemas or grants persisted execution authority.
 Automatic extraction uses the verified orchestration provider with tools denied.
+The authenticated live Relay, custom assistant and project gateways expose `code60_create_memory`,
+`code60_modify_memory` and `code60_retrieve_memories`. Scope is bound to the
+run's memory runtime; inputs cannot name projects, conversations or targets.
+Retrieval returns bounded active or disputed records and recent committed local sources.
+Writes require exact citations from those sources and use the same store,
+revision history, suppression and notices as automatic learning. Modification
+requires an explicit ID/current revision and preserves original citations;
+global, pinned, human-edited and inactive records are protected. Workers and
+scheduled automations receive no gateway. Memory Off disables these tools. Saved
+records remain evidence, never permissions or execution authority.
 Global promotion is human-only. Memory settings, source provenance, corrections,
 suppression and bounded retrieval are owned by desktop; core receives optional
 injected lifecycle hooks. Scheduler defaults and the manual RAG experiment stay unchanged.
