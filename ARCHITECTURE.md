@@ -2195,6 +2195,12 @@ and tables. Light agent fill is warm neutral (#f1f0e8); Dark is olive-charcoal
 Both use 5px corners/2px edges without shadows. Timestamp/Copy/Undo remain outside
 bubbles; agent metadata aligns with the text inset. Automatic updates and tool
 activity are not message bubbles. Forced colors uses Canvas/CanvasText.
+Human messages retain 21px trailing margins (75% of the former 28px). Agent
+replies retain 6px trailing margins plus 12px outer bottom padding (75% of the
+former 8px plus 16px). This reduces only inter-message spacing in Relay, custom
+assistants, project chats and workers; bubble content padding, typography,
+metadata controls, activity disclosures, dividers, composers and footer keep
+their existing dimensions.
 Native chat buttons use saved control typography, stationary hover, 1px pressed
 offset and independent focus. Quiet transcript/inline actions remain shadowless;
 reduced motion removes movement and forced colors uses system fills/edges with

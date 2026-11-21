@@ -282,6 +282,115 @@ type BreadcrumbFrameSample = {
   safePending: boolean;
 };
 
+/** Compare the same rendered conversation with the three original spacing values. */
+async function checkMessageSpacing(page: Page, chat: Locator, name: string) {
+  await expect(chat.locator(".event.message").first()).toBeVisible();
+  const measure = () =>
+    chat.evaluate((element) => {
+      const geometry = (node: Element) => {
+        const bounds = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+          // Coordinate subtraction can add float noise when content moves.
+          // 0.001px is finer than Chromium's 1/64px layout resolution.
+          width: Number(bounds.width.toFixed(3)),
+          height: Number(bounds.height.toFixed(3)),
+          fontSize: style.fontSize,
+          lineHeight: style.lineHeight,
+          padding: style.padding,
+          margin: style.margin,
+        };
+      };
+      return {
+        viewport: [window.innerWidth, window.innerHeight, window.devicePixelRatio],
+        messages: [
+          ...element.querySelectorAll(".event.message, .event.prompt:not(.automatic)"),
+        ].map((message) => {
+          const style = getComputedStyle(message);
+          const controls = message.querySelector(".message-copy");
+          const bubble = message.querySelector('[data-slot="bubble-content"]');
+          if (!controls || !bubble) throw new Error("Missing message bubble or controls");
+          const wrapper = message.closest(".chat-message-layout");
+          // Animated wrappers contain their child's margin; worker articles
+          // participate directly in flow, so include their external margin.
+          const trailing =
+            (wrapper ?? message).getBoundingClientRect().bottom +
+            (wrapper ? 0 : Number.parseFloat(style.marginBottom)) -
+            controls.getBoundingClientRect().bottom;
+          return {
+            type: message.classList.contains("message") ? "agent" : "human",
+            trailing: Number(trailing.toFixed(3)),
+            bubble: geometry(bubble),
+            controls: geometry(controls),
+            content: [...bubble.children].map(geometry),
+          };
+        }),
+        composer: geometry(element.querySelector(".composer") as Element),
+        footer: geometry(document.querySelector(".app-footer") as Element),
+      };
+    });
+  // A presentation-only override restores the exact pre-#247 values. No state,
+  // transcript, viewport or display preference changes between the two captures.
+  const messages = chat.locator(".event.message, .event.prompt:not(.automatic)");
+  const baseline = await messages.evaluateAll((elements) =>
+    elements.map((element) => {
+      const original = element.getAttribute("style");
+      const message = element as HTMLElement;
+      message.style.marginBottom = message.classList.contains("message") ? "8px" : "28px";
+      if (message.classList.contains("message")) message.style.paddingBottom = "16px";
+      return original;
+    }),
+  );
+  const restore = () =>
+    messages.evaluateAll((elements, saved) => {
+      elements.forEach((element, index) => {
+        const style = saved[index];
+        if (style == null) element.removeAttribute("style");
+        else element.setAttribute("style", style);
+      });
+    }, baseline);
+  try {
+    // Height wrappers observe content asynchronously; wait for geometry to settle.
+    await expect
+      .poll(async () => (await measure()).messages.map((m) => m.trailing))
+      .toEqual(
+        await chat
+          .locator(".event.message, .event.prompt:not(.automatic)")
+          .evaluateAll((messages) =>
+            messages.map((m) => (m.classList.contains("message") ? 24 : 28)),
+          ),
+      );
+    const before = await measure();
+    await page.screenshot({ path: test.info().outputPath(`${name}-spacing-before.png`) });
+    await restore();
+    await expect
+      .poll(async () => (await measure()).messages.map((m) => m.trailing))
+      .toEqual(before.messages.map((m) => m.trailing * 0.75));
+    const after = await measure();
+    expect(after.viewport).toEqual(before.viewport);
+    expect(after.messages.map(({ trailing, ...rest }) => rest)).toEqual(
+      before.messages.map(({ trailing, ...rest }) => rest),
+    );
+    expect(after.composer).toEqual(before.composer);
+    expect(after.footer).toEqual(before.footer);
+    await test.info().attach(`${name}-spacing-measurements`, {
+      body: JSON.stringify({ before, after }, null, 2),
+      contentType: "application/json",
+    });
+    await page.screenshot({ path: test.info().outputPath(`${name}-spacing-after.png`) });
+    const copy = chat
+      .locator(".event.message")
+      .first()
+      .getByRole("button", { name: "Copy message" });
+    await copy.focus();
+    await expect(copy).toBeFocused();
+    await expect(copy).toBeVisible();
+    expect((await copy.boundingBox())?.height).toBeGreaterThanOrEqual(24);
+  } finally {
+    await restore();
+  }
+}
+
 function alive(pid: number) {
   try {
     process.kill(pid, 0);
@@ -1069,6 +1178,7 @@ for (const custom of [false, true]) {
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
+        await checkMessageSpacing(page, page.locator(`#chat-${worker.record.id}`), "worker");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -1133,6 +1243,11 @@ for (const custom of [false, true]) {
           });
         await checkCheckout("human accepted target\n");
         expect((await dialogs())?.observed).toHaveLength(3);
+        await checkMessageSpacing(
+          page,
+          page.locator(".orchestration-chat-page:visible"),
+          custom ? "custom" : "relay",
+        );
         checks.push(
           "An accepted isolated worker integrated automatically without another approval, preserving staging and HEAD.",
         );
