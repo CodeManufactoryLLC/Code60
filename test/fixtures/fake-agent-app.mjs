@@ -191,7 +191,13 @@ export function createFakeAgent(options = {}) {
             tasks: [{ text: "Create a target result", target }],
           });
           planId = plan.id;
-          steps = [{ message: "Relay plan awaits human acceptance." }];
+          steps = readable
+            ? [
+                { message: "Relay plan awaits human acceptance." },
+                { thought: "Verify the target and wait for human acceptance." },
+                { message: "Review the displayed target before accepting." },
+              ]
+            : [{ message: "Relay plan awaits human acceptance." }];
         } else if (planId && text.includes("Human accepted plan ")) {
           const plan = await tool("code60_read_plan", { planId });
           const context = await tool("code60_get_context");
@@ -204,6 +210,8 @@ export function createFakeAgent(options = {}) {
             cwd: task.target.cwd,
             workspaceMode: task.target.workspaceMode,
             prompt: JSON.stringify([
+              { message: "Preparing target result." },
+              { thought: "Write the accepted file in this isolated worktree." },
               { write: { path: "result.txt", content: "human accepted target\n" } },
               { message: "Target result created." },
             ]),

@@ -292,6 +292,158 @@ function alive(pid: number) {
   }
 }
 
+async function checkAgentMessageSpacing(
+  app: ElectronApplication,
+  page: Page,
+  chat: Locator,
+  name: string,
+  fontSize: number,
+) {
+  const messages = chat.locator(".event.message");
+  await expect.poll(() => messages.count()).toBeGreaterThanOrEqual(2);
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const settled = async () => {
+    await expect(chat.locator('[data-layout-animating="true"]')).toHaveCount(0);
+    await expect
+      .poll(() =>
+        messages.evaluateAll((elements) =>
+          elements.every((element) => {
+            const outer = element.closest(".chat-message-layout");
+            if (!outer) return true; // Worker messages are direct transcript children.
+            const inner = outer.querySelector(".chat-message-layout-content");
+            return (
+              inner &&
+              Math.abs(
+                outer.getBoundingClientRect().height - inner.getBoundingClientRect().height,
+              ) < 0.05
+            );
+          }),
+        ),
+      )
+      .toBe(true);
+  };
+  const measure = () =>
+    messages.evaluateAll((elements) =>
+      elements.map((element) => {
+        const markdown = element.querySelector(".chat-markdown");
+        const bubble = element.querySelector(".agent-message-bubble");
+        const controls = element.querySelector(".message-copy");
+        const copy = controls?.querySelector("button");
+        const outer = element.closest(".chat-message-layout");
+        if (!markdown || !bubble || !controls || !copy)
+          throw new Error("Missing message layout or Copy");
+        const style = getComputedStyle(markdown);
+        const bounds = markdown.getBoundingClientRect();
+        const target = copy.getBoundingClientRect();
+        // Parent items use display:contents turn containers, some empty after
+        // activity is folded into its disclosure. Workers are direct children.
+        let nextItem = outer ? outer.parentElement?.nextElementSibling : element.nextElementSibling;
+        while (nextItem?.matches(".chat-turn-content") && !nextItem.firstElementChild)
+          nextItem = nextItem.nextElementSibling;
+        const candidate = nextItem?.matches(".chat-turn-content")
+          ? nextItem.firstElementChild
+          : nextItem;
+        const next = candidate?.matches(".chat-message-layout, .event.message, .chat-activity")
+          ? candidate
+          : null;
+        return {
+          text: markdown.textContent,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight,
+          letterSpacing: style.letterSpacing,
+          bubblePadding: getComputedStyle(bubble).padding,
+          outerPadding: getComputedStyle(element).padding,
+          width: bounds.width,
+          height: bounds.height,
+          copyWidth: target.width,
+          copyHeight: target.height,
+          trailingGap:
+            (outer ?? element).getBoundingClientRect().bottom -
+            controls.getBoundingClientRect().bottom +
+            (outer ? 0 : Number.parseFloat(getComputedStyle(element).marginBottom)),
+          adjacentGap: next
+            ? next.getBoundingClientRect().top - controls.getBoundingClientRect().bottom
+            : null,
+        };
+      }),
+    );
+  // Recreate the pre-PR margin on the same replies. Bubble and outer padding,
+  // typography, viewport and display settings remain identical in both samples.
+  await messages.evaluateAll((elements) => {
+    for (const element of elements)
+      if (element instanceof HTMLElement) element.style.marginBottom = "8px";
+  });
+  let before: Awaited<ReturnType<typeof measure>>;
+  try {
+    await settled();
+    before = await measure();
+    await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-before.png`) });
+  } finally {
+    await messages.evaluateAll((elements) => {
+      for (const element of elements)
+        if (element instanceof HTMLElement) element.style.removeProperty("margin-bottom");
+    });
+  }
+  await settled();
+  const after = await measure();
+  await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-after.png`) });
+  await test.info().attach(`${name}-message-spacing`, {
+    body: JSON.stringify({ before, after }, null, 2),
+    contentType: "application/json",
+  });
+  expect(after).toHaveLength(before.length);
+  expect(before.filter((message) => message.adjacentGap !== null).length).toBeGreaterThan(0);
+  for (const [index, message] of after.entries()) {
+    const previous = before[index];
+    if (!previous) throw new Error("Message set changed during spacing measurement");
+    const { width, height, copyWidth, copyHeight, trailingGap, adjacentGap, ...content } = message;
+    const {
+      width: oldWidth,
+      height: oldHeight,
+      copyWidth: oldCopyWidth,
+      copyHeight: oldCopyHeight,
+      trailingGap: oldTrailingGap,
+      adjacentGap: oldAdjacentGap,
+      ...oldContent
+    } = previous;
+    expect(content).toEqual(oldContent);
+    expect(message.fontSize).toBe(`${fontSize}px`);
+    expect(message.bubblePadding).toBe("12px 18px");
+    expect(message.outerPadding).toBe("0px 0px 16px");
+    // 0.05 CSS px permits subpixel transform noise, not a visible size change.
+    for (const [actual, expected] of [
+      [width, oldWidth],
+      [height, oldHeight],
+      [copyWidth, oldCopyWidth],
+      [copyHeight, oldCopyHeight],
+      [oldTrailingGap, 24],
+      [trailingGap, oldTrailingGap * 0.75],
+    ] as const) {
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(0.05);
+    }
+    if (oldAdjacentGap !== null) {
+      expect(adjacentGap).not.toBeNull();
+      expect(Math.abs((adjacentGap as number) - oldAdjacentGap * 0.75)).toBeLessThanOrEqual(0.05);
+    }
+    expect(copyWidth).toBeGreaterThanOrEqual(24 - 0.05);
+    expect(copyHeight).toBeGreaterThanOrEqual(24 - 0.05);
+    // An earlier toast or copied reply cannot satisfy this activation.
+    await app.evaluate(
+      ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+      `${name}-${index}-not-copied`,
+    );
+    const copy = messages.nth(index).getByRole("button", { name: "Copy message", exact: true });
+    await copy.focus();
+    await expect(copy).toBeVisible();
+    await copy.press("Enter");
+    await expect
+      .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toBe(message.text);
+  }
+}
+
 async function checkSidebarIconSpacing(entry: Locator) {
   // Opening lazily replaces the placeholder row. Sample all boxes in the same frame.
   await expect(async () => {
@@ -954,6 +1106,20 @@ for (const custom of [false, true]) {
           "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
         );
 
+        if (custom) {
+          const disclosure = page.locator("#settings-card-toggle");
+          if ((await disclosure.getAttribute("aria-expanded")) === "false")
+            await disclosure.click();
+          await page
+            .locator("#settings-pages")
+            .getByRole("tab", { name: "Text", exact: true })
+            .click();
+          await page
+            .getByRole("group", { name: "Agent Chat Messages", exact: true })
+            .getByLabel("Font size")
+            .fill("32");
+        }
+
         // Exercise the same production execution path for Relay and a custom owner.
         if (custom) {
           await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
@@ -1065,6 +1231,13 @@ for (const custom of [false, true]) {
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await checkAgentMessageSpacing(
+          application,
+          page,
+          page.locator(`#chat-${worker.record.id}`),
+          "worker",
+          custom ? 32 : 14,
+        );
         const workerModel = page
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
@@ -1105,6 +1278,20 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        const parentChat = page.locator(".orchestration-chat-page:visible");
+        // Worker completion queues a separate autonomous parent turn. Wait for
+        // its known reply and idle UI before capturing either layout sample.
+        await expect(
+          parentChat.locator(".chat-markdown").filter({ hasText: /^ok$/ }),
+        ).toBeVisible();
+        await expect(parentChat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+        await checkAgentMessageSpacing(
+          application,
+          page,
+          parentChat,
+          custom ? "assistant" : "relay",
+          custom ? 32 : 14,
+        );
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
         );

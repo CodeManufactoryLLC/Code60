@@ -1400,7 +1400,8 @@ Human prompt bubbles use the local Neobrutalism Bubble content with 5px corners,
 2px theme-aware outlines, pale-blue Light and dark-plum Dark/System-dark fills
 and contrasting text.
 Automatic worker prompts and agent code blocks remain square. Agent responses
-use 8px bottom margins. Human and agent bubbles share 12px vertical and 18px
+use 2px bottom margins after their unchanged 16px outer bottom padding, giving
+18px of trailing space below Copy (75% of the previous 24px). Human and agent bubbles share 12px vertical and 18px
 horizontal padding. Timing notices leave visually equal 8px gaps above and below their separator;
 the following agent bubble starts 8px below the line. Its content starts 22px
 below the line after border and padding, matching human bubble insets.
@@ -1570,6 +1571,11 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - Whether `diff` should also offer a summary view (`--stat`) or open the user's configured Git difftool.
 
 ### Shared chat timing and Copy
+
+Agent replies in main and worker chats have a 2px outer bottom margin and retain
+16px outer bottom padding. The rendered trailing gap below Copy is 18px, 75% of
+the previous 24px (16px padding plus 8px margin). Bubble content padding and
+typography are unchanged; completed-turn separator gaps remain 8px.
 
 Orchestrator and worker chats use 5px composer and message-bubble corners. Human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar orchestrator rows show numeric badges for unread replies, separate from their decorative role icons. Worker rows omit unread reply counts across transcript and compact summary updates; notification delivery and reply tracking remain unchanged. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
 
