@@ -130,6 +130,7 @@ export function FilePanel({
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
   const selected = tabs.entries.find((tab) => tab.id === tabs.active);
+  const currentPlan = plans.filter((plan) => plan.chatId === currentChat).at(-1);
   const selectedReview =
     selected?.kind === "revision"
       ? reviews.find((review) => review.id === selected.reviewId)
@@ -187,6 +188,18 @@ export function FilePanel({
     >
       {(focusActiveTab) => (
         <>
+          {!disabled && currentPlan && (
+            <button
+              type="button"
+              className="file-open-link file-panel-view-plan"
+              onClick={() => {
+                focusActiveTab();
+                act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
+              }}
+            >
+              View Plan
+            </button>
+          )}
           {changesContent && (
             <div className="file-panel-changes" hidden={selected?.kind !== "changes"}>
               {changesContent}

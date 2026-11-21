@@ -877,6 +877,7 @@ for (const custom of [false, true]) {
             exact: true,
           }),
         );
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await composer.fill(requestText);
         await composer.press("Enter");
         const plan = page.getByRole("region", { name: "Plan", exact: true });
@@ -897,6 +898,36 @@ for (const custom of [false, true]) {
         checks.push(
           "Draft plan has no worker, worktree or checkout mutation before human acceptance.",
         );
+        const planPanel = page.locator(custom ? '[id^="relay-plan-panel-"]' : "#relay-plan-panel");
+        const existingPlans = (await page.evaluate(() => window.desktop.snapshot())).chat.plans;
+        const documentText =
+          (await plan.getByRole("article", { name: "Plan document" }).textContent()) ?? "";
+        await planPanel
+          .getByRole("tab", { name: "Plan · Relay target plan", exact: true })
+          .press("Delete");
+        await expect(plan).toHaveCount(0);
+        await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
+        await viewPlan.focus();
+        await viewPlan.press("Enter");
+        await expect(plan.getByRole("article", { name: "Plan document" })).toHaveText(documentText);
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toBeFocused();
+        await viewPlan.focus();
+        await viewPlan.press("Space");
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toHaveCount(1);
+        expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans).toEqual(
+          existingPlans,
+        );
+        expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        await checkCheckout("original\n");
+        checks.push(
+          "Keyboard View Plan reopened the same closed Relay plan from another tab without generating, accepting or dispatching work.",
+        );
         await plan.getByRole("button", { name: "Accept", exact: true }).click();
         await expect
           .poll(
@@ -913,6 +944,7 @@ for (const custom of [false, true]) {
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         const workerModel = page
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });

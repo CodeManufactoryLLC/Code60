@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi, ReviewSummary } from "../bridge/index.js";
+import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { FilePanel, RevisionList } from "./file-panel.js";
 import { emptyFileTabs, updateFileTabs } from "./file-tabs.js";
 import type { FileBrowser } from "./files.js";
@@ -19,6 +19,48 @@ const review = (id: string, title: string, chatId: string | null): ReviewSummary
     { id: `${id}-two`, at: "2026-11-08T00:00:00Z" },
   ],
   submissions: [],
+});
+
+it("offers View Plan only for the displayed session, including saved plans and other selected tabs", () => {
+  const plan: PlanSummary = {
+    id: "saved-plan",
+    chatId: "current-chat",
+    project: "/project",
+    title: "Saved plan",
+    revision: 3,
+    proposalRevision: 1,
+    state: "completed",
+    completed: 1,
+    total: 1,
+  };
+  const render = (
+    plans: PlanSummary[],
+    currentChat: string | undefined,
+    kind: "changes" | "blank" = "blank",
+    disabled = false,
+  ) =>
+    renderToStaticMarkup(
+      <FilePanel
+        tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+        onAction={() => {}}
+        browser={{} as FileBrowser}
+        open
+        active
+        disabled={disabled}
+        plans={plans}
+        currentChat={currentChat}
+        onOpenProject={() => {}}
+        onToggle={() => {}}
+      />,
+    );
+  for (const state of ["draft", "running", "completed", "paused", "dismissed"] as const) {
+    for (const kind of ["blank", "changes"] as const)
+      expect(render([{ ...plan, state }], "current-chat", kind)).toContain(">View Plan</button>");
+  }
+  expect(render([], "current-chat")).not.toContain("View Plan");
+  expect(render([plan], "other-chat")).not.toContain("View Plan");
+  expect(render([plan], undefined)).not.toContain("View Plan");
+  expect(render([plan], "current-chat", "blank", true)).not.toContain("View Plan");
 });
 
 it("offers recall beside Files without opening it automatically and never mounts hidden recall content", () => {

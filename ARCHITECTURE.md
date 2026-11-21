@@ -605,6 +605,10 @@ an equally weighted completed/total progress bar and “X out of Y” outside th
 Each task row shows a read-only completion checkbox centred on its first line of text, a
 written status (Pending, In progress, Blocked, Completed) and its evidence note aligned
 with the task text.
+The right sidebar offers View Plan for the displayed orchestration session's
+latest existing plan, including after its tab is closed. It selects or reopens
+that plan's tab without generating a plan or granting execution authority.
+Other conversations' plans do not supply this action, including in worker views.
 
 
 Exception for Chat review: desktop-only review records, immutable bounded file snapshots,
