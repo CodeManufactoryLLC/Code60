@@ -2452,3 +2452,15 @@ layout is unchanged. Forced colors uses system fills/outlines without decorative
 shadows. This supersedes earlier dialog corner and stable-modal-gutter guidance.
 No capability, permission, bridge or persisted preference changes are introduced;
 no self-knowledge catalog update is needed for this presentation-only change.
+
+
+Project File Explorer bookmarks are local renderer preferences, keyed by the canonical
+project root, separate from temporary tabs and runtime identities. Up to 100 regular
+file/folder relative paths per project survive restarts and project switches. The
+Explorer offers keyboard-native save/remove controls and a Bookmarks list. Selection
+expands bounded ancestors and validates their regular-directory/target kinds through
+the existing owner-scoped file context before navigating. Missing, moved, unsupported
+or unreadable targets show Unavailable and remain removable; no target is guessed
+or followed into another project. Relay roots have no bookmarks. Storage failures
+are visible and never reported as successful saves. Bookmarks grant no new IPC,
+filesystem, agent or CLI authority.

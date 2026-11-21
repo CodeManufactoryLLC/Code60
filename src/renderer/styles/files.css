@@ -1146,3 +1146,47 @@ button.file-open-link {
 :root[data-color-scheme="dark"] .file-panel-toolbar .icon-button {
   color: var(--muted);
 }
+
+.file-bookmarks {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 8px 16px;
+  overflow-wrap: anywhere;
+}
+
+.file-bookmarks summary {
+  cursor: pointer;
+  padding-block: 8px;
+}
+
+.file-bookmarks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-bookmarks li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.file-bookmarks li > span {
+  grid-column: 1 / -1;
+  padding: 0 8px 8px;
+}
+
+.file-bookmarks li > button:first-child {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  background: transparent;
+  border: 0;
+}

@@ -162,13 +162,27 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews.
-- Access: Chat → Files panel
+- Purpose: Browse files and bounded read-only previews; save persistent project file and folder bookmarks.
+- Access: Chat → Files panel → File Explorer → Bookmarks
 - Prerequisite: runtime
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Awareness can read only authorized open cached previews, not arbitrary paths.
+- Limits: Project bookmarks are human-only navigation preferences stored locally per canonical project root (100 per project). They survive restart and project switches; unavailable targets remain removable. Relay roots have no bookmarks. Awareness can read only authorized open cached previews, not arbitrary paths.
 - Pages: `files`
+- Settings sections: none
+- Tools: none
+
+## Project bookmarks
+
+- ID: `file-bookmarks`
+- Status: shipped
+- Purpose: Save, open and remove persistent project file and folder bookmarks.
+- Access: Project chat → Files panel → File Explorer → Bookmarks
+- Prerequisite: project
+- Agent access: human-only
+- Confirmation: Existing permissions apply.
+- Limits: Stored locally per canonical project root, with at most 100 targets per project. Unavailable targets remain removable. Relay roots have no bookmark controls; no agent navigation or filesystem authority is granted.
+- Pages: none
 - Settings sections: none
 - Tools: none
 

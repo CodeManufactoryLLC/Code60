@@ -113,6 +113,26 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("discovers human-only project bookmarks and requires a bound open project", async () => {
+    for (const projectOpen of [false, true]) {
+      const { knowledge } = setup({ projectOpen });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "Project bookmarks" }, project),
+      );
+      expect(capabilities.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "file-bookmarks",
+            agentAccess: "human-only",
+            availability: expect.objectContaining({
+              status: projectOpen ? "available" : "blocked",
+            }),
+          }),
+        ]),
+      );
+    }
+  });
+
   it("does not claim browser prerequisites or extension approval have been verified", async () => {
     const { knowledge, reads } = setup({ database: null });
     const capabilities = result(
