@@ -378,6 +378,31 @@ describe("turn timeouts and cancellation", () => {
     expect(status("r1")).toBe("timed_out");
   });
 
+  it("publishes cancellation only for the live turn without marking the process as stopping", async () => {
+    const { orch, agents, store } = await setup({ mode: "interactive", script: () => "hang" });
+    orch.start();
+    await flush();
+    const session = agents.sessions[0];
+    if (!session) throw new Error("Missing session");
+    session.onCancel = "ignore";
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    expect(orch.cancelTurn("r1")).toBe(true);
+    expect(orch.runs()[0]).toMatchObject({ status: "running", stopping: false, cancelling: true });
+    expect(await store.read("r1")).not.toHaveProperty("cancelling");
+    session.endTurn("cancelled");
+    await flush();
+    expect(orch.runs()[0]).toMatchObject({ status: "idle", stopping: false });
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    orch.reply("r1", "Next request");
+    await flush();
+    expect(orch.runs()[0]).toMatchObject({ status: "running", stopping: false });
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    session.endTurn("end_turn");
+    await flush();
+    orch.finish("r1");
+    await orch.done;
+  });
+
   it("escalates to stopping the agent when a cancelled turn does not end within 10 s", async () => {
     const { orch, agents, clock } = await setup({ mode: "interactive", script: () => "hang" });
     orch.start();

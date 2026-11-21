@@ -136,8 +136,8 @@ it("lets the Bubble primitive own human chrome without rounding automatic prompt
   );
 });
 
-it("compacts response-to-timing spacing while retaining separation before the next turn", () => {
-  expect(rule("chat", ".orchestration-chat-body .event.message")).toContain("margin-bottom: 6px");
+it("reduces the trailing reply gap from 24px to 18px while preserving content and separator insets", () => {
+  expect(rule("chat", ".orchestration-chat-body .event.message")).toContain("margin-bottom: 2px");
   expect(rule("chat", ".orchestration-chat-body .event.message")).toContain("padding: 0 0 16px");
   expect(rule("chat", ".turn-timer")).toContain("margin: 4px 0 0");
   expect(rule("chat", ".turn-separator")).toContain("margin: calc(8px - 0.15em) 0 8px");

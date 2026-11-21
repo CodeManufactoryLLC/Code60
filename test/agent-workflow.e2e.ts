@@ -292,45 +292,92 @@ function alive(pid: number) {
   }
 }
 
-async function checkAgentMessageSpacing(page: Page, chat: Locator, name: string) {
+async function checkAgentMessageSpacing(
+  app: ElectronApplication,
+  page: Page,
+  chat: Locator,
+  name: string,
+  fontSize: number,
+) {
   const messages = chat.locator(".event.message");
-  await expect(messages.last()).toBeVisible();
+  await expect.poll(() => messages.count()).toBeGreaterThanOrEqual(2);
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const settled = async () => {
+    await expect(chat.locator('[data-layout-animating="true"]')).toHaveCount(0);
+    await expect
+      .poll(() =>
+        messages.evaluateAll((elements) =>
+          elements.every((element) => {
+            const outer = element.closest(".chat-message-layout");
+            if (!outer) return true; // Worker messages are direct transcript children.
+            const inner = outer.querySelector(".chat-message-layout-content");
+            return (
+              inner &&
+              Math.abs(
+                outer.getBoundingClientRect().height - inner.getBoundingClientRect().height,
+              ) < 0.05
+            );
+          }),
+        ),
+      )
+      .toBe(true);
+  };
   const measure = () =>
     messages.evaluateAll((elements) =>
       elements.map((element) => {
         const markdown = element.querySelector(".chat-markdown");
-        const copy = element.querySelector(".message-copy button");
-        if (!markdown || !copy) throw new Error("Missing message content or Copy");
+        const bubble = element.querySelector(".agent-message-bubble");
+        const controls = element.querySelector(".message-copy");
+        const copy = controls?.querySelector("button");
+        const outer = element.closest(".chat-message-layout");
+        if (!markdown || !bubble || !controls || !copy)
+          throw new Error("Missing message layout or Copy");
         const style = getComputedStyle(markdown);
         const bounds = markdown.getBoundingClientRect();
         const target = copy.getBoundingClientRect();
+        // Parent items use display:contents turn containers, some empty after
+        // activity is folded into its disclosure. Workers are direct children.
+        let nextItem = outer ? outer.parentElement?.nextElementSibling : element.nextElementSibling;
+        while (nextItem?.matches(".chat-turn-content") && !nextItem.firstElementChild)
+          nextItem = nextItem.nextElementSibling;
+        const candidate = nextItem?.matches(".chat-turn-content")
+          ? nextItem.firstElementChild
+          : nextItem;
+        const next = candidate?.matches(".chat-message-layout, .event.message, .chat-activity")
+          ? candidate
+          : null;
         return {
-          margin: Number.parseFloat(getComputedStyle(element).marginBottom),
-          padding: getComputedStyle(element).padding,
           text: markdown.textContent,
           fontFamily: style.fontFamily,
           fontSize: style.fontSize,
           fontWeight: style.fontWeight,
           lineHeight: style.lineHeight,
           letterSpacing: style.letterSpacing,
-          // Ignore floating-point noise from transformed ancestor coordinates.
-          width: Math.round(bounds.width * 1000) / 1000,
-          height: Math.round(bounds.height * 1000) / 1000,
+          bubblePadding: getComputedStyle(bubble).padding,
+          outerPadding: getComputedStyle(element).padding,
+          width: bounds.width,
+          height: bounds.height,
           copyWidth: target.width,
           copyHeight: target.height,
+          trailingGap:
+            (outer ?? element).getBoundingClientRect().bottom -
+            controls.getBoundingClientRect().bottom +
+            (outer ? 0 : Number.parseFloat(getComputedStyle(element).marginBottom)),
+          adjacentGap: next
+            ? next.getBoundingClientRect().top - controls.getBoundingClientRect().bottom
+            : null,
         };
       }),
     );
-  // Recreate only the pre-change outer margin on this same live conversation.
-  // Content, viewport, theme, font settings and device scale remain identical.
+  // Recreate the pre-PR margin on the same replies. Bubble and outer padding,
+  // typography, viewport and display settings remain identical in both samples.
   await messages.evaluateAll((elements) => {
     for (const element of elements)
       if (element instanceof HTMLElement) element.style.marginBottom = "8px";
   });
   let before: Awaited<ReturnType<typeof measure>>;
   try {
-    await expect(messages.last()).toHaveCSS("margin-bottom", "8px");
+    await settled();
     before = await measure();
     await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-before.png`) });
   } finally {
@@ -339,23 +386,62 @@ async function checkAgentMessageSpacing(page: Page, chat: Locator, name: string)
         if (element instanceof HTMLElement) element.style.removeProperty("margin-bottom");
     });
   }
-  await expect(messages.last()).toHaveCSS("margin-bottom", "6px");
+  await settled();
   const after = await measure();
-  expect(after).toEqual(before.map((message) => ({ ...message, margin: message.margin * 0.75 })));
-  for (const message of after) {
-    expect(message.copyWidth).toBeGreaterThanOrEqual(24);
-    expect(message.copyHeight).toBeGreaterThanOrEqual(24);
-  }
-  const copy = messages.last().getByRole("button", { name: "Copy message", exact: true });
-  await copy.focus();
-  await expect(copy).toBeVisible();
-  await copy.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Copied." }).first()).toBeVisible();
   await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-after.png`) });
   await test.info().attach(`${name}-message-spacing`, {
     body: JSON.stringify({ before, after }, null, 2),
     contentType: "application/json",
   });
+  expect(after).toHaveLength(before.length);
+  expect(before.filter((message) => message.adjacentGap !== null).length).toBeGreaterThan(0);
+  for (const [index, message] of after.entries()) {
+    const previous = before[index];
+    if (!previous) throw new Error("Message set changed during spacing measurement");
+    const { width, height, copyWidth, copyHeight, trailingGap, adjacentGap, ...content } = message;
+    const {
+      width: oldWidth,
+      height: oldHeight,
+      copyWidth: oldCopyWidth,
+      copyHeight: oldCopyHeight,
+      trailingGap: oldTrailingGap,
+      adjacentGap: oldAdjacentGap,
+      ...oldContent
+    } = previous;
+    expect(content).toEqual(oldContent);
+    expect(message.fontSize).toBe(`${fontSize}px`);
+    expect(message.bubblePadding).toBe("12px 18px");
+    expect(message.outerPadding).toBe("0px 0px 16px");
+    // 0.05 CSS px permits subpixel transform noise, not a visible size change.
+    for (const [actual, expected] of [
+      [width, oldWidth],
+      [height, oldHeight],
+      [copyWidth, oldCopyWidth],
+      [copyHeight, oldCopyHeight],
+      [oldTrailingGap, 24],
+      [trailingGap, oldTrailingGap * 0.75],
+    ] as const) {
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(0.05);
+    }
+    if (oldAdjacentGap !== null) {
+      expect(adjacentGap).not.toBeNull();
+      expect(Math.abs((adjacentGap as number) - oldAdjacentGap * 0.75)).toBeLessThanOrEqual(0.05);
+    }
+    expect(copyWidth).toBeGreaterThanOrEqual(24 - 0.05);
+    expect(copyHeight).toBeGreaterThanOrEqual(24 - 0.05);
+    // An earlier toast or copied reply cannot satisfy this activation.
+    await app.evaluate(
+      ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+      `${name}-${index}-not-copied`,
+    );
+    const copy = messages.nth(index).getByRole("button", { name: "Copy message", exact: true });
+    await copy.focus();
+    await expect(copy).toBeVisible();
+    await copy.press("Enter");
+    await expect
+      .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toBe(message.text);
+  }
 }
 
 async function checkSidebarIconSpacing(entry: Locator) {
@@ -680,6 +766,153 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
 }
 
+async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) {
+  const relay = page.getByRole("button", { name: "Relay", exact: true, includeHidden: true });
+  const relayName = relay.locator(".chat-sidebar-label");
+  const project = page.getByRole("region", {
+    name: `Project ${repo}`,
+    exact: true,
+    includeHidden: true,
+  });
+  const chat = () => page.locator(".orchestration-chat-page:visible");
+  const composer = () =>
+    chat().getByRole("combobox", { name: "Message to orchestrator", exact: true });
+  const send = async (text: string) => {
+    await expect(composer()).toBeEditable();
+    await composer().fill(text);
+    await expect(chat().getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    await composer().press("Enter");
+  };
+  const hang = JSON.stringify([{ message: "Working until cancelled." }, { hang: "cancellable" }]);
+  const ownerCancelGate = join(repo, "..", "spotlight-owner-cancel-release");
+  const workerCancelGate = join(repo, "..", "spotlight-worker-cancel-release");
+  const gatedHang = (cancelWaitForFile: string) =>
+    JSON.stringify([
+      { message: "Working until cancelled." },
+      { hang: "cancellable", cancelWaitForFile },
+    ]);
+  await relay.click();
+  await expect(relay).toHaveAttribute("aria-current", "true");
+  const relayId = (await relay.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!relayId) throw new Error("Missing Relay identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await send(
+    `Relay target: ${JSON.stringify({ cwd: repo, workspaceMode: "worktree", label: "Spotlight worker", prompt: gatedHang(workerCancelGate) })}`,
+  );
+  const worker = page.getByRole("button", { name: /^Spotlight worker \[/, includeHidden: true });
+  const workerName = worker.locator(".chat-sidebar-label");
+  await expect(workerName).toHaveAttribute("data-working", "true");
+  await expect(composer()).toBeEditable();
+  // Relay continues monitoring its owned worker after its own turn becomes idle.
+  await expect(relayName).toHaveAttribute("data-working", "true");
+  await expect(relay).toHaveAttribute("aria-description", /Monitoring subagents/);
+  await expect(relay).toHaveAttribute("title", /Monitoring subagents/);
+  await send(hang);
+  let assistant = project.locator(".chat-sidebar-entry").last();
+  if (custom) {
+    assistant = page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Workflow Agent", exact: true, includeHidden: true });
+    await assistant.click();
+  } else {
+    const chatCount = await project.locator(".chat-sidebar-entry").count();
+    await project.getByRole("button", { name: /^New Session in / }).click();
+    await expect(project.locator(".chat-sidebar-entry")).toHaveCount(chatCount + 1);
+    assistant = project.locator(".chat-sidebar-entry").last();
+  }
+  const assistantName = assistant.locator(".chat-sidebar-label");
+  await expect(assistant).toHaveAttribute("aria-current", "true");
+  const assistantId = (await assistant.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!assistantId) throw new Error("Missing assistant identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", assistantId);
+  await send(gatedHang(ownerCancelGate));
+  await expect(assistantName).toHaveAttribute("data-working", "true");
+  const names = [relayName, workerName, assistantName];
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(name).toHaveCSS("animation-duration", "2.8s");
+  }
+  const activityName = chat().locator(".activity-display .activity-name");
+  await expect(activityName).toHaveCSS("animation-name", "activity-spotlight");
+  const spotlightStyle = (element: Element) => {
+    const style = getComputedStyle(element);
+    return [
+      style.backgroundImage,
+      style.backgroundSize,
+      style.backgroundClip,
+      style.color,
+      style.animationName,
+      style.animationDuration,
+      style.animationTimingFunction,
+      style.animationIterationCount,
+    ];
+  };
+  const reference = await activityName.evaluate(spotlightStyle);
+  for (const name of names) expect(await name.evaluate(spotlightStyle)).toEqual(reference);
+  await page.screenshot({ path: test.info().outputPath("sidebar-spotlight.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "none");
+    await expect(name).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
+  }
+  await page.emulateMedia({ forcedColors: "none" });
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+  // Cancelling one owner never removes another owner's spotlight, even off selection.
+  try {
+    await chat().getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(assistantName).toHaveAttribute("data-working", "false");
+    await expect(assistant).toHaveAttribute("aria-description", /Stopping/);
+    await expect(assistantName).toHaveCSS("animation-name", "none");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+      (entry) => entry.run?.id === assistantId,
+    );
+    if (!cancelling) throw new Error("Missing cancelling assistant");
+    expect(cancelling.activity?.state).toBe("stopping");
+    expect(cancelling.run).toMatchObject({ status: "running", stopping: false, cancelling: true });
+    await expect(relayName).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  } finally {
+    await writeFile(ownerCancelGate, "release\n");
+  }
+  await relay.click();
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await chat().getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  await worker.click();
+  try {
+    await page
+      .locator(".worker-chat-page:visible")
+      .getByRole("button", { name: "Stop", exact: true })
+      .click();
+    await expect(workerName).toHaveAttribute("data-working", "false");
+    await expect(worker).toHaveAttribute("aria-description", /Stopping/);
+    const workerId = (await worker.getAttribute("id"))?.replace(/^conversation-/, "");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+      ({ record }) => record.id === workerId,
+    );
+    expect(cancelling?.view).toMatchObject({
+      status: "running",
+      stopping: false,
+      cancelling: true,
+    });
+  } finally {
+    await writeFile(workerCancelGate, "release\n");
+  }
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await expect
+    .poll(async () =>
+      (await page.evaluate(() => window.desktop.snapshot())).runs.filter(
+        (run) => run.view?.status === "running",
+      ),
+    )
+    .toEqual([]);
+}
+
 for (const custom of [false, true]) {
   test(
     custom
@@ -873,6 +1106,20 @@ for (const custom of [false, true]) {
           "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
         );
 
+        if (custom) {
+          const disclosure = page.locator("#settings-card-toggle");
+          if ((await disclosure.getAttribute("aria-expanded")) === "false")
+            await disclosure.click();
+          await page
+            .locator("#settings-pages")
+            .getByRole("tab", { name: "Text", exact: true })
+            .click();
+          await page
+            .getByRole("group", { name: "Agent Chat Messages", exact: true })
+            .getByLabel("Font size")
+            .fill("32");
+        }
+
         // Exercise the same production execution path for Relay and a custom owner.
         if (custom) {
           await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
@@ -976,10 +1223,21 @@ for (const custom of [false, true]) {
         const completed = await page.evaluate(() => window.desktop.snapshot());
         const worker = completed.runs.find((run) => run.relay);
         if (!worker) throw new Error("Accepted plan did not create a worker");
+        const workerRow = page.locator(`[id="conversation-${worker.record.id}"]`);
+        await expect(workerRow).toBeVisible();
+        await expect(workerRow).toHaveAttribute("data-role", "worker");
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
+        await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
-        await checkAgentMessageSpacing(page, page.locator(`#chat-${worker.record.id}`), "worker");
+        await checkAgentMessageSpacing(
+          application,
+          page,
+          page.locator(`#chat-${worker.record.id}`),
+          "worker",
+          custom ? 32 : 14,
+        );
         const workerModel = page
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
@@ -1020,10 +1278,19 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        const parentChat = page.locator(".orchestration-chat-page:visible");
+        // Worker completion queues a separate autonomous parent turn. Wait for
+        // its known reply and idle UI before capturing either layout sample.
+        await expect(
+          parentChat.locator(".chat-markdown").filter({ hasText: /^ok$/ }),
+        ).toBeVisible();
+        await expect(parentChat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
         await checkAgentMessageSpacing(
+          application,
           page,
-          page.locator(".orchestration-chat-page:visible"),
+          parentChat,
           custom ? "assistant" : "relay",
+          custom ? 32 : 14,
         );
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
@@ -1105,6 +1372,7 @@ for (const custom of [false, true]) {
         await expect(composer).toBeEditable();
         const restored = await page.evaluate(() => window.desktop.snapshot());
         expect(restored.runs.map((run) => run.record.id)).toEqual([worker.record.id]);
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
         expect(restored.chat.conversationId).toBe(completed.chat.conversationId);
         await expect(composer).toHaveValue(draft);
         await expect(page.getByRole("list", { name: "Attached code references" })).toContainText(
@@ -1183,6 +1451,12 @@ for (const custom of [false, true]) {
         expect(native?.observed).toHaveLength(5);
         checks.push(
           "Confirmed message Undo restores code and conversation, returns the unsent request, stops owned workers and preserves private evidence, unrelated edits, index bytes and HEAD.",
+        );
+        await checkSidebarSpotlight(page, repo, custom);
+        await checkCheckout("original\n");
+        expect(errors).toEqual([]);
+        checks.push(
+          "Concurrent Relay, assistant and worker names share the exact chat spotlight; accessibility, hidden navigation and independent cancellation preserve live ownership and checkout bytes.",
         );
         await info.attach("workflow-checkpoints", {
           body: JSON.stringify(
@@ -1459,6 +1733,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     }
     await expect.poll(() => [...owned].filter(alive)).toEqual([]);
 
+    // Reproduce retained running history whose recorded owner PID is still alive.
+    const historical = chats[0];
+    if (!historical) throw new Error("Missing saved project conversation");
+    const historicalFile = join(historical.directory, ".code60/runs", historical.id, "run.json");
+    const historicalRecord = JSON.parse(await readFile(historicalFile, "utf8"));
+    await writeFile(
+      historicalFile,
+      JSON.stringify({ ...historicalRecord, status: "running", ownerPid: process.pid }),
+    );
+
     page = await launch();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
@@ -1475,6 +1759,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
     ).toBeVisible();
     const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.chats.find((entry) => entry.run?.id === historical.id)).toMatchObject({
+      restored: true,
+      run: { status: "running" },
+      activity: { state: "idle", active: false },
+    });
+    for (const saved of chats.slice(0, 2)) {
+      const name = page.locator(`[id="conversation-${saved.id}"] .chat-sidebar-label`);
+      await expect(name).toHaveAttribute("data-working", "false");
+      await expect(name).toHaveCSS("animation-name", "none");
+    }
     expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects);
     expect(
       restored.openProjects?.some((entry) =>
