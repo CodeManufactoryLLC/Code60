@@ -300,7 +300,15 @@ export function ChatSidebar({
                 document.getElementById(`conversation-${entry.id}`)?.focus();
               }}
             >
-              <Icon name="ai-agent" />
+              <Icon
+                name={
+                  chat?.kind === "relay"
+                    ? "ai-agent"
+                    : expanded
+                      ? "chevron--down"
+                      : "chevron--right"
+                }
+              />
             </button>
           )}
         </div>

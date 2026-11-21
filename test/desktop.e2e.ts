@@ -5297,12 +5297,25 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     const workersToggle = group.locator(".chat-workers-toggle");
     const workerRows = group.locator("[data-role='worker']");
     await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await workersToggle.screenshot({
+      path: join(root, "test-results", "project-worker-disclosure-collapsed.png"),
+    });
+    await expect(workersToggle.locator("svg")).toHaveCount(1);
+    await expect(workersToggle.locator("svg")).toHaveAttribute("viewBox", "0 0 16 16");
+    await expect(workersToggle.locator("path")).toHaveAttribute(
+      "d",
+      "M11 8 6 13 5.3 12.3 9.6 8 5.3 3.7 6 3z",
+    );
     await expect(workerRows).toHaveCount(2);
     for (const worker of await workerRows.all()) await expect(worker).toBeHidden();
     // Reopening a project intentionally keeps its descendants closed. Reveal workers
     // explicitly before measuring their indentation at each width and text size.
     await workersToggle.press("ArrowRight");
     await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(workersToggle.locator("path")).toHaveAttribute(
+      "d",
+      "M8 11 3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z",
+    );
     for (const worker of await workerRows.all()) await expect(worker).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(selected);
     await aChat.click();
