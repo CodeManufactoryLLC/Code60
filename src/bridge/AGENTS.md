@@ -143,3 +143,7 @@ model defaults, histories and external logins. Set-primary/disconnect are strict
 human-only bridge actions, guarded in main against active desktop work, setup and
 overlapping writes. The primary must be replaced before disconnecting. Publish
 main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
+
+Prompt save/reset requests may include strict expected text/source metadata; the desktop
+editor always supplies it. Preserve legacy callers and database-epoch binding. The
+setPromptDraftsPending method accepts only a boolean, never draft text or arbitrary state.

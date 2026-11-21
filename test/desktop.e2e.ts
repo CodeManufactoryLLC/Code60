@@ -10430,7 +10430,7 @@ test("desktop: prompt template editing and persistence", async () => {
     await page.getByRole("button", { name: "Create database…" }).click();
     await tab.click();
     const panel = page.locator("#panel-prompts");
-    const template = panel.getByLabel("Template", { exact: true });
+    const template = panel.getByRole("textbox", { name: "Template", exact: true });
     const role = panel.getByRole("textbox", { name: "Role", exact: true });
     const planning = panel.getByRole("textbox", { name: "Planning", exact: true });
     const originalContract = (
@@ -10441,9 +10441,9 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(template).toHaveCount(0);
     const save = panel.getByRole("button", { name: "Save", exact: true });
     const fields = panel.getByRole("combobox", { name: "Insert merge field" });
-    const preview = panel.locator(".prompt-editor-main .prompt-editor-preview");
-    const showPreview = panel.getByRole("button", { name: "Preview", exact: true });
-    const editTemplate = panel.getByRole("button", { name: "Edit template", exact: true });
+    const preview = panel.locator(".prompt-editor-preview-view:visible .prompt-editor-preview");
+    const showPreview = panel.getByRole("tab", { name: "Preview", exact: true });
+    const editTemplate = panel.getByRole("tab", { name: "Edit template", exact: true });
     await expect(role).toBeVisible();
     await expect(showPreview).toBeVisible();
     await expect(preview).toHaveCount(0);
@@ -10556,7 +10556,9 @@ test("desktop: prompt template editing and persistence", async () => {
     // Save all clauses while viewing their combined, read-only body.
     await showPreview.click();
     await save.click();
-    await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
+    await expect(panel.getByRole("status")).toHaveText(
+      "Source: Saved edit. Reset destination: Built-in.",
+    );
     await expect(preview).toHaveText(editedContract.join("\n"));
     await editTemplate.click();
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
@@ -10610,7 +10612,9 @@ test("desktop: prompt template editing and persistence", async () => {
     await tab.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
     await save.click();
-    await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
+    await expect(panel.getByRole("status")).toHaveText(
+      "Source: Saved edit. Reset destination: Built-in.",
+    );
     await page.reload();
     await tab.click();
     await expect(role).toHaveValue("You are controlled by Code60.");
@@ -10631,23 +10635,238 @@ test("desktop: prompt template editing and persistence", async () => {
     await editTemplate.click();
     await panel.getByRole("button", { name: /^Handoff summary/ }).click();
     await expect(template).toHaveValue("Agent: {{agent}}");
-    await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
+    await expect(panel.getByRole("status")).toHaveText(
+      "Source: Saved edit. Reset destination: Built-in.",
+    );
     await template.fill("{{unknown}}");
     await expect(template).toHaveAttribute("aria-invalid", "true");
     await expect(save).toBeDisabled();
     await showPreview.click();
     await expect(preview).toHaveText("Fix the template to see a preview.");
-    await expect(panel.getByRole("status")).toContainText([
-      "Unsaved changes.",
-      "This template unknown merge field 'unknown'.",
-    ]);
+    await expect(panel.getByRole("status")).toContainText("Unsaved changes.");
+    await expect(panel.locator(".prompt-editor-problem")).toContainText(
+      "unknown merge field 'unknown'",
+    );
     await expect(save).toBeDisabled();
     await panel.getByRole("button", { name: "Discard changes", exact: true }).click();
     await expect(preview).toHaveText("Agent: claude");
     await editTemplate.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
     await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
-    await expect(panel.getByRole("status")).toBeEmpty();
+    await expect(panel.getByRole("status")).toHaveText(
+      "Source: Built-in. Reset destination: Built-in.",
+    );
+  } finally {
+    await application.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("desktop: prompt workspace tools, conflicts, failure recovery and database drafts", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-prompt-workspace-")));
+  const databasePath = join(directory, "first.sqlite");
+  const secondPath = join(directory, "second.sqlite");
+  application = await launch(directory, directory, databasePath);
+  try {
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page.getByRole("button", { name: "Create database…", exact: true }).click();
+    await selectSidebarPage(page, "Prompt Builder");
+    const panel = page.locator("#panel-prompts");
+    const search = panel.getByRole("searchbox", { name: "Search templates" });
+    await search.fill("ACP session");
+    await expect(panel.locator(".prompt-system-list button")).toHaveCount(1);
+    await panel.getByRole("button", { name: "Handoff summary", exact: true }).click();
+    await search.fill("");
+    const template = panel.getByRole("textbox", { name: "Template", exact: true });
+    const save = panel.getByRole("button", { name: "Save", exact: true });
+    const discard = panel.getByRole("button", { name: "Discard changes", exact: true });
+    const savedText = () => {
+      const db = openProjectDatabase(databasePath, false);
+      try {
+        return db.promptTemplates().templates.handoffSummary;
+      } finally {
+        db.close();
+      }
+    };
+    await template.fill("Agent: old");
+    await template.press("ControlOrMeta+f");
+    await expect(panel.getByLabel("Find in active field")).toBeFocused();
+    await panel.getByLabel("Find in active field").fill("old");
+    await panel.getByLabel("Replace with", { exact: true }).fill("new");
+    await panel.getByRole("button", { name: "Find next", exact: true }).click();
+    await expect(template).toBeFocused();
+    await panel.getByRole("button", { name: "Replace selection", exact: true }).click();
+    await expect(template).toHaveValue("Agent: new");
+    await template.press("ControlOrMeta+z");
+    await expect(template).toHaveValue("Agent: old");
+    await template.press("ControlOrMeta+Shift+z");
+    await expect(template).toHaveValue("Agent: new");
+    await template.fill("Agent: ");
+    await panel.getByRole("combobox", { name: "Insert merge field" }).selectOption("agent");
+    await expect(template).toHaveValue("Agent: {{agent}}");
+    await expect(template).toBeFocused();
+    await template.press("Tab");
+    await expect(template).not.toBeFocused();
+    await panel.getByText("Merge field descriptions and sample values", { exact: true }).click();
+    await expect(panel.locator(".prompt-editor-fields")).toContainText("Provider identifier");
+    await expect(panel.locator(".prompt-editor-fields")).toContainText("claude");
+    await panel.getByRole("checkbox", { name: "Line numbers", exact: true }).check();
+    await expect(panel.locator(".prompt-line-gutter")).toBeVisible();
+    await panel.getByRole("checkbox", { name: "Word wrap", exact: true }).uncheck();
+    await expect(template).toHaveAttribute("wrap", "off");
+    await panel.getByRole("checkbox", { name: "Word wrap", exact: true }).check();
+    await panel.getByRole("checkbox", { name: "Side-by-side preview", exact: true }).check();
+    await expect(panel.getByRole("tabpanel", { name: "Edit template", exact: true })).toBeVisible();
+    await expect(panel.getByRole("tabpanel", { name: "Preview", exact: true })).toContainText(
+      "Sample data only",
+    );
+    await expect(panel.locator(".prompt-editor-preview-view pre")).toHaveText("Agent: claude");
+    await panel.getByText("Merge field descriptions and sample values", { exact: true }).click();
+    await panel.locator(".prompt-editor").evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.screenshot({ path: "test-results/prompt-workspace-wide.png" });
+    await template.fill("Agent: {{unknown}}");
+    await expect(save).toBeDisabled();
+    await panel.getByRole("button", { name: /line 1, column 8: Go to problem/ }).click();
+    await expect(template).toBeFocused();
+    expect(
+      await template.evaluate((element: HTMLTextAreaElement) =>
+        element.value.slice(element.selectionStart, element.selectionEnd),
+      ),
+    ).toBe("{{unknown}}");
+    await template.fill("Agent: {{agent}}");
+    await panel.getByRole("button", { name: "Compare with saved", exact: true }).click();
+    await expect(panel.getByRole("region", { name: "Draft comparison" })).toContainText(
+      "Agent: {{agent}}",
+    );
+    await save.click();
+    await expect(save).toBeDisabled();
+    await expect.poll(savedText).toBe("Agent: {{agent}}");
+    await template.fill("My draft {{agent}}");
+    await expect(save).toBeEnabled();
+    const external = openProjectDatabase(databasePath, false);
+    external.savePromptTemplate("handoffSummary", "External {{agent}}", "2026-01-01");
+    external.close();
+    // Either a snapshot detects the outside edit or the guarded save rejects it.
+    if (await save.isEnabled()) await save.click();
+    await expect(panel.locator(".prompt-editor-conflict")).toBeVisible();
+    await expect(template).toHaveValue("My draft {{agent}}");
+    expect(savedText()).toBe("External {{agent}}");
+    await expect(panel.getByRole("region", { name: "Draft comparison" })).toContainText(
+      "External {{agent}}",
+    );
+    await panel
+      .getByRole("button", { name: "Keep draft against latest saved version", exact: true })
+      .click();
+    await save.click();
+    await expect(save).toBeDisabled();
+    await expect.poll(savedText).toBe("My draft {{agent}}");
+    await template.fill("Preserve on failure {{agent}}");
+    const sqlite = process.getBuiltinModule("node:sqlite");
+    const lock = new sqlite.DatabaseSync(databasePath);
+    lock.exec("BEGIN IMMEDIATE");
+    try {
+      await save.click();
+      await expect(
+        panel.getByText("Save failed. Your draft is preserved; resolve the error and try again.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    } finally {
+      lock.exec("ROLLBACK");
+      lock.close();
+    }
+    await expect.poll(savedText).toBe("My draft {{agent}}");
+    await panel.getByRole("button", { name: /^Worker updates/ }).click();
+    await panel.getByRole("button", { name: /^Handoff summary/ }).click();
+    await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    const switchDatabase = async (path: string, create: boolean) => {
+      await application.evaluate(({ dialog }, path) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+      }, path);
+      await page.getByRole("button", { name: "Select or create database", exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: create ? "Create database…" : "Open existing database…",
+          exact: true,
+        })
+        .click();
+      await selectSidebarPage(page, "Prompt Builder");
+    };
+    await switchDatabase(secondPath, true);
+    await expect(panel).toContainText("Unsaved prompt drafts are retained in another database");
+    const second = openProjectDatabase(secondPath, false);
+    expect(second.promptTemplates().templates).toEqual({});
+    second.close();
+    await switchDatabase(databasePath, false);
+    await panel.getByRole("button", { name: /^Handoff summary/ }).click();
+    await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.reload(),
+    );
+    await expect(panel.getByRole("alert")).toContainText("Reload blocked");
+    await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    await application.evaluate(({ dialog, BrowserWindow }) => {
+      dialog.showMessageBox = async (...args: unknown[]) => {
+        const value = (args[1] ?? args[0]) as { message?: string };
+        (globalThis as typeof globalThis & { promptCloseQuestion?: string }).promptCloseQuestion =
+          value.message ?? "";
+        return { response: 0, checkboxChecked: false };
+      };
+      BrowserWindow.getAllWindows()[0]?.close();
+    });
+    await expect
+      .poll(() =>
+        application.evaluate(
+          () =>
+            (globalThis as typeof globalThis & { promptCloseQuestion?: string })
+              .promptCloseQuestion,
+        ),
+      )
+      .toBe("Discard unsaved prompt templates and quit?");
+    await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
+    await expect(template).toHaveValue("Preserve on failure {{agent}}");
+    await expect.poll(savedText).toBe("My draft {{agent}}");
+    await discard.click();
+    await expect(template).toHaveValue("My draft {{agent}}");
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+    });
+    await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
+    await expect(save).toBeDisabled();
+    await expect.poll(savedText).toBeUndefined();
+    await application.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      win?.setMinimumSize(0, 0);
+      win?.setSize(600, 700);
+    });
+    await expect(
+      panel.getByRole("checkbox", { name: "Side-by-side preview", exact: true }),
+    ).toBeDisabled();
+    await panel.getByRole("tab", { name: "Edit template", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(panel.getByRole("tab", { name: "Preview", exact: true })).toBeFocused();
+    await expect(panel.getByRole("tabpanel", { name: "Preview", exact: true })).toBeVisible();
+    await expect(panel.getByRole("tabpanel", { name: "Edit template", exact: true })).toBeHidden();
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: "test-results/prompt-workspace-narrow.png" });
+    expect(
+      (await page.evaluate(() => window.desktop.snapshot())).chat.events.filter(
+        ({ event }) => event.type === "prompt",
+      ),
+    ).toEqual([]);
+    await page.reload();
+    await selectSidebarPage(page, "Prompt Builder");
+    await expect(panel.getByRole("textbox", { name: "Role", exact: true })).toBeVisible();
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

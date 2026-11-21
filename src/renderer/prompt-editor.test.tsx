@@ -16,7 +16,7 @@ const prompt: PromptTemplateState = {
   fallbackSource: "built-in",
 };
 
-it("starts in the editor with preview behind a toggle and no tool-call section", () => {
+it("exposes editing tools, source context and a labelled sample-only tab panel", () => {
   const html = renderToStaticMarkup(
     <PromptEditorPage
       prompts={[prompt]}
@@ -31,7 +31,16 @@ it("starts in the editor with preview behind a toggle and no tool-call section",
   expect(html.match(/<textarea/g)).toHaveLength(13);
   for (const label of Object.values(OPERATING_CONTRACT_CLAUSES))
     expect(html).toContain(`>${label}</label>`);
-  expect(html).not.toContain("Assembled Operating Contract");
+  expect(html).toContain("Assembled Operating Contract");
+  expect(html).toContain("Sample data only");
+  expect(html).toContain("Search templates");
+  expect(html).toContain("Compare with saved");
+  expect(html).toContain("Word wrap");
+  expect(html).toContain("Line numbers");
+  expect(html).toContain("Source: Built-in");
+  expect(html).toContain("Reset destination");
+  expect(html).toContain('role="tablist"');
+  expect(html).toContain('aria-selected="true"');
   expect(html).not.toContain("Preview with sample values");
   expect(html).not.toContain("MCP tool descriptions");
   expect(html).not.toContain("Input contract");

@@ -25,6 +25,7 @@ import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
 import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
+import { usePromptDraftSessions } from "./prompt-draft-sessions.js";
 import { PromptEditorPage } from "./prompt-editor.js";
 import { ProvidersPage } from "./providers-page.js";
 import { RagPage } from "./rag.js";
@@ -120,6 +121,7 @@ export function AppPages(props: AppPagesProps) {
     setMenu,
   } = project;
   const database = scope.database;
+  const promptDrafts = usePromptDraftSessions(database, api, setError);
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
@@ -417,6 +419,12 @@ export function AppPages(props: AppPagesProps) {
     ),
     prompts: (
       <>
+        {promptDrafts.elsewhere && (
+          <p role="status">
+            Unsaved prompt drafts are retained in another database. Reconnect to that database to
+            save or discard them before reloading or closing.
+          </p>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             {error}
@@ -425,17 +433,28 @@ export function AppPages(props: AppPagesProps) {
         {database && snapshot ? (
           <PromptEditorPage
             key={databaseKey}
+            session={promptDrafts.session}
+            onDraftsChanged={promptDrafts.changed}
             prompts={snapshot.prompts}
             busy={busy}
-            onSave={async (id, template) => {
-              const saved = await attempt(() => api.savePromptTemplate({ id, template }));
+            onSave={async (id, template, expected) => {
+              const saved = await attempt(() =>
+                api.savePromptTemplate({
+                  id,
+                  template,
+                  expected: { template: expected.template, source: expected.source },
+                }),
+              );
               if (saved) notify("Prompt template saved.");
               return saved;
             }}
-            onReset={async (id) => {
+            onReset={async (id, expected) => {
               let reset = false;
               const ok = await attempt(async () => {
-                reset = await api.resetPromptTemplate(id);
+                reset = await api.resetPromptTemplate({
+                  id,
+                  expected: { template: expected.template, source: expected.source },
+                });
               });
               if (ok && reset) notify("Prompt template reset.");
               return ok && reset;

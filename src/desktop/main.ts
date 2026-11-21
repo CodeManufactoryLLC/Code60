@@ -54,11 +54,12 @@ import {
   parsePollVisibility,
   parseProjectAction,
   parseProjectPath,
-  parsePromptTemplateId,
+  parsePromptDraftsPending,
   parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
+  parseResetPromptTemplate,
   parseReviewAction,
   parseReviewFileRead,
   parseReviewRead,
@@ -226,10 +227,24 @@ function shutdownDesktop(force = false): Promise<void> {
   return shutdownTask;
 }
 
+let promptDraftsPending = false;
+
 async function quit(confirm: boolean): Promise<void> {
   if (quitPending) return;
   quitPending = true;
   try {
+    if (confirm && promptDraftsPending) {
+      const result = await dialog.showMessageBox({
+        type: "warning",
+        message: "Discard unsaved prompt templates and quit?",
+        detail:
+          "Prompt Builder has unsaved drafts, possibly in another database. Keep working to save or compare them.",
+        buttons: ["Keep working", "Discard drafts and quit"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (result.response !== 1) return;
+    }
     const background = confirm
       ? await automationClient(process.env)({ action: "status" }).catch(() => null)
       : null;
@@ -708,6 +723,9 @@ async function ready(): Promise<void> {
     const { request, databaseEpoch } = parseDatabaseWrite(value);
     return controller.deleteConfiguration(parseConfigurationId(request), databaseEpoch);
   });
+  handle("desktop:prompt-drafts", (value) => {
+    promptDraftsPending = parsePromptDraftsPending(value);
+  });
   handle("desktop:prompt-save", (value) => {
     const { request, databaseEpoch } = parseDatabaseWrite(value);
     return controller.savePromptTemplate(parseSavePromptTemplate(request), databaseEpoch);
@@ -722,7 +740,7 @@ async function ready(): Promise<void> {
   });
   handle("desktop:prompt-reset", (value) => {
     const { request, databaseEpoch } = parseDatabaseWrite(value);
-    return controller.resetPromptTemplate(parsePromptTemplateId(request), databaseEpoch);
+    return controller.resetPromptTemplate(parseResetPromptTemplate(request), databaseEpoch);
   });
   handle("desktop:git-check", (value) => controller.checkGit(parseGitProject(value)));
   handle("desktop:git-begin", (value) => controller.beginGitSetup(parseGitProject(value)));
@@ -798,6 +816,11 @@ async function ready(): Promise<void> {
   }
   window.on("page-title-updated", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-prevent-unload", (event) => {
+    // Only the native, confirmed quit may discard drafts; ordinary reload stays blocked.
+    if (exiting) event.preventDefault();
+    else window?.webContents.stop();
+  });
   window.webContents.on("will-navigate", (event) => {
     if (event.url !== page) event.preventDefault();
   });

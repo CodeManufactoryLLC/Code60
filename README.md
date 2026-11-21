@@ -312,3 +312,25 @@ before disconnecting it. Primary changes preserve other memberships. Both menu
 actions require stopped desktop agent work and no setup transaction. Disconnect
 removes Code60 membership only; histories, model defaults and external logins remain.
 Verified membership does not indicate a live connection.
+
+### Editing prompt templates
+
+Open **Apps → Prompt Builder** with a database connected. Search by template name or
+description; unsaved templates stay marked in the list. The selected template shows when
+it is used, its effective source and what Reset restores. Database overrides take precedence
+over config.json and built-ins; edits affect future uses only and do not change Relay instructions.
+
+Use Undo/Redo (Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z), Find / replace (Ctrl/Cmd+F),
+Word wrap and Line numbers. Find/replace matches literal, case-sensitive text in the last
+focused field. Merge fields replace the cursor selection; their help includes descriptions
+and fixed sample values. Validation's Go to problem selects the offending token or location.
+Tab leaves the editor. Preview and Edit template tabs support arrow keys, Home and End.
+Wide windows optionally show them side by side; preview uses synthetic samples and sends nothing.
+
+Compare with saved shows both versions before Save or Discard. Failed saves retain drafts.
+External changes block Save/Reset until you compare and explicitly keep the draft against
+the latest version or reload the saved version. Drafts remain in this window across template,
+page and database switches. Reconnect to the original database to resolve its drafts. Reload
+is blocked until all drafts are saved or discarded; closing asks before discarding. Drafts
+are in memory only and cannot survive a crash or forced shutdown. Reset confirms removal
+of the database override and any draft for that template.

@@ -1075,6 +1075,35 @@ legacy string overrides reset to built-in clauses instead of being migrated.
 - Automatic orchestration turns also receive the Operating Contract, with an explicit automatic-update heading. Their prompt events carry `origin: "automatic"`; older/user prompt events omit it. The saved clause set is assembled immediately before delivery; edits never affect a turn already in progress.
 - Scheduled execution uses exactly the saved prompt text without a chat template.
 
+Prompt Builder searches template names and descriptions and keeps per-template drafts in
+renderer memory, separately for each database path. Each draft pins its original effective
+text and source. Template/page/database switches retain drafts without writing them; reopening
+the same database requires resolution if its saved template changed. Save failures preserve
+the draft. Compare shows the current saved version and draft as plain text. Explicit keep
+rebases a draft onto the current saved version; explicit reload discards it.
+
+Save and reset carry optional strict expected text/source metadata for compatible callers.
+The desktop editor always supplies it. Main rechecks the effective source inside the captured
+database-epoch action queue, including after reset confirmation. SQLite uses an immediate
+transaction to compare the stored override (or its absence) and write/delete atomically, so
+another process cannot overwrite a newer version between the check and mutation. Existing
+schemas, storage formats, precedence and template rendering stay unchanged.
+
+Native text fields support bounded 100-entry undo/redo history per template, literal
+case-sensitive find/replace in the active field, wrapping and optional wrapped-line gutters.
+Merge-field choices include descriptions and synthetic examples and replace the selection.
+Located validation supplements the shared authoritative validator and focuses the offending
+clause/token or insertion location. Tab always leaves a text field. Editor and sample-only
+preview use arrow/Home/End navigable tabs, with optional side-by-side display above 1000px.
+Preview never executes a request and uses the shared renderer; valid summary drafts feed
+handoff previews. Invalid summary drafts use the effective saved summary.
+
+A boolean-only bridge message reports whether any database has unsaved prompt drafts.
+Normal quit asks natively before discarding these drafts, before stopping application work.
+Renderer beforeunload blocks ordinary reload with save/discard guidance. Confirmed quit
+alone may bypass that guard; crashes and forced shutdown cannot preserve in-memory drafts.
+No draft contents are persisted, logged or sent through the close-state message.
+
 ### Commands
 
 Commands are reusable user-authored prompts, separate from system prompt templates.

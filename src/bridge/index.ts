@@ -366,6 +366,9 @@ export interface RunConfiguration {
 }
 
 export type SaveConfiguration = z.infer<typeof saveConfigurationSchema>;
+export type ResetPromptTemplate = PromptId | { id: PromptId; expected: PromptExpectation };
+export type PromptExpectation = { template: PromptTemplate; source: PromptSource };
+
 export type SavePromptTemplate = z.infer<typeof savePromptTemplateSchema>;
 export type Action = z.infer<typeof actionSchema>;
 
@@ -500,6 +503,7 @@ export interface DesktopApi {
   ): Promise<void>;
   setPollSettings(settings: PollSettingsPatch): Promise<void>;
   setPollingPaused(paused: boolean): Promise<void>;
+  setPromptDraftsPending(pending: boolean): Promise<void>;
   setVisibility(visibility: PollVisibility): Promise<void>;
   setOrchestrationAutoApproval(enabled: boolean): Promise<void>;
   setOrchestrationProvider(provider: string | null): Promise<void>;
@@ -515,7 +519,7 @@ export interface DesktopApi {
   /** Saves an edited template in the connected database. */
   savePromptTemplate(request: SavePromptTemplate, databaseEpoch?: number): Promise<void>;
   /** Asks for confirmation, then removes the saved edit; resolves false when declined. */
-  resetPromptTemplate(id: PromptId, databaseEpoch?: number): Promise<boolean>;
+  resetPromptTemplate(id: ResetPromptTemplate, databaseEpoch?: number): Promise<boolean>;
   action(action: Action): Promise<ActionResult>;
   stopAll(): Promise<void>;
   subscribe(listener: (update: Snapshot) => void): () => void;
@@ -796,10 +800,23 @@ const saveConfigurationSchema = z
 const promptIdSchema = z.enum(PROMPT_IDS as [PromptId, ...PromptId[]], {
   error: "Unknown prompt template",
 });
+const promptExpectationSchema = z.strictObject({
+  template: z.union([
+    boundedString("prompt template", PROMPT_TEMPLATE_LIMIT),
+    operatingContractSchema,
+  ]),
+  source: z.enum(["database", "config", "built-in"]),
+});
+const resetPromptTemplateSchema = z.union([
+  promptIdSchema,
+  z.strictObject({ id: promptIdSchema, expected: promptExpectationSchema }),
+]);
+
 const savePromptTemplateSchema = z
   .strictObject(
     {
       id: promptIdSchema,
+      expected: promptExpectationSchema.optional(),
       template: z.union([
         boundedString("prompt template", PROMPT_TEMPLATE_LIMIT),
         operatingContractSchema,
@@ -960,6 +977,9 @@ export const parseSaveConfiguration = (value: unknown) =>
   parseValue(saveConfigurationSchema, value);
 export const parseSaveCommand = (value: unknown) => parseValue(saveCommandSchema, value);
 export const parseDeleteCommand = (value: unknown) => parseValue(deleteCommandSchema, value);
+export const parsePromptDraftsPending = (value: unknown) => parseValue(z.boolean(), value);
+export const parseResetPromptTemplate = (value: unknown): ResetPromptTemplate =>
+  parseValue(resetPromptTemplateSchema, value);
 export const parsePromptTemplateId = (value: unknown) => parseValue(promptIdSchema, value);
 export const parseSavePromptTemplate = (value: unknown) =>
   parseValue(savePromptTemplateSchema, value);

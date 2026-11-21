@@ -285,3 +285,9 @@ main-owned blocking reasons; keep sidebar/gallery/details state and actions alig
 Reserve provider transitions across Relay/Custom Assistant sends, including
 pending request preparation. Reload saved project chats on primary changes;
 recovering an invalid primary retains all unaffected verified memberships.
+
+Prompt template writes compare the editor's expected effective text/source in the captured
+database action queue and use SQLite atomic override checks. Revalidate reset after native
+confirmation. The boolean-only prompt-draft close state has no content or database authority;
+normal quit confirms before discarding drafts or stopping work. Only confirmed quit bypasses
+renderer beforeunload; reload remains guarded. Keep legacy save/reset callers compatible.

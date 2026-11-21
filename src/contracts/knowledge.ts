@@ -364,11 +364,12 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "prompts",
     "Prompt templates",
-    "Customize project orchestration and handoff templates.",
+    "Search and edit project orchestration and handoff templates with undo/redo, find/replace, wrapping, line numbers, merge-field help, located validation, sample preview and saved-version comparison.",
     "Apps → Prompt Builder",
     "database",
     "read",
-    "Database overrides precede config and built-ins; Relay uses its fixed application instructions.",
+    "Database overrides precede config and built-ins; Relay uses its fixed application instructions. Preview uses sample data only and never sends requests. Drafts remain in this window across template, page and database switches; reload is blocked until all drafts are saved or discarded. External changes require explicit conflict resolution before saving or resetting.",
+    "Reset confirms removal of the saved override and its draft. Closing with unsaved prompt drafts asks before discarding them.",
   ),
   feature(
     "configurations",

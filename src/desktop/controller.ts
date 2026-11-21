@@ -68,11 +68,13 @@ import {
   type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
+  OPERATING_CONTRACT_CLAUSE_IDS,
   type Plan,
   type PlanAction,
   type PlanRead,
   type ProjectAction,
   type ProjectRequestIdentity,
+  type PromptExpectation,
   parseActivityContextArgs,
   parseDeleteCommand,
   parseDetailIdentity,
@@ -98,7 +100,6 @@ import {
   parseProjectSearchOpen,
   parseProjectSearchPage,
   parseProjectSearchQuery,
-  parsePromptTemplateId,
   parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
@@ -106,6 +107,7 @@ import {
   parseRelayFileContext,
   parseRelayMessageRead,
   parseRelayReview,
+  parseResetPromptTemplate,
   parseReviewAction,
   parseReviewFileRead,
   parseReviewRead,
@@ -119,6 +121,7 @@ import {
   planMarkdown,
   type RagIdentity,
   type RagQuery,
+  type ResetPromptTemplate,
   type Review,
   type ReviewAction,
   type ReviewContent,
@@ -5146,15 +5149,44 @@ export class DesktopController {
     });
   }
 
+  private checkPromptExpectation(id: PromptId, expected: PromptExpectation | undefined): void {
+    if (!expected) return;
+    const state = promptStates(
+      this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES,
+      this.readPrompts(this.requireDatabase()),
+    ).find((entry) => entry.id === id);
+    const template = state?.template;
+    const matches =
+      typeof template === "string" || typeof expected.template === "string"
+        ? template === expected.template
+        : template !== undefined &&
+          OPERATING_CONTRACT_CLAUSE_IDS.every(
+            (key) => template[key] === (expected.template as typeof template)[key],
+          );
+    if (!matches || state?.source !== expected.source) {
+      this.savedPrompts = this.readPrompts(this.requireDatabase());
+      this.changed();
+      throw new Error(
+        "This prompt template changed externally. Your draft is preserved. Compare and reload the saved version before saving or resetting.",
+      );
+    }
+  }
+
   /** Saves a template edit for future orchestration turns or handoffs. */
   async savePromptTemplate(request: SavePromptTemplate, databaseEpoch?: number): Promise<void> {
     request = parseSavePromptTemplate(request);
     return this.databaseWrite(databaseEpoch, async () => {
       const database = this.requireDatabase();
+      this.checkPromptExpectation(request.id, request.expected);
       database.savePromptTemplate(
         request.id,
         request.template,
         this.deps.clock.now().toISOString(),
+        request.expected
+          ? request.expected.source === "database"
+            ? request.expected.template
+            : null
+          : undefined,
       );
       this.savedPrompts = this.readPrompts(database);
       this.changed();
@@ -5162,10 +5194,14 @@ export class DesktopController {
   }
 
   /** Removes a saved template edit after confirmation. Resolves false when declined. */
-  async resetPromptTemplate(id: PromptId, databaseEpoch?: number): Promise<boolean> {
-    id = parsePromptTemplateId(id);
+  async resetPromptTemplate(value: ResetPromptTemplate, databaseEpoch?: number): Promise<boolean> {
+    const request = parseResetPromptTemplate(value);
+    const id = typeof request === "string" ? request : request.id;
+    const expected = typeof request === "string" ? undefined : request.expected;
     return this.databaseWrite(databaseEpoch, async () => {
       const database = this.requireDatabase();
+      this.checkPromptExpectation(id, expected);
+      this.savedPrompts = this.readPrompts(database);
       if (this.savedPrompts[id] === undefined) return true;
       const restores =
         promptStates(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, {}).find(
@@ -5176,11 +5212,15 @@ export class DesktopController {
       if (
         !(await this.dialogs.confirm(
           "Reset prompt template?",
-          `Remove the saved ${id} edit from ${database.path}? Future uses of this template use ${restores}. Turns already in progress are not affected.`,
+          `Remove the saved ${id} edit from ${database.path}? Future uses of this template use ${restores}. Any unsaved draft for this template will also be discarded. Turns already in progress are not affected.`,
         ))
       )
         return false;
-      database.deletePromptTemplate(id);
+      this.checkPromptExpectation(id, expected);
+      database.deletePromptTemplate(
+        id,
+        expected ? (expected.source === "database" ? expected.template : null) : undefined,
+      );
       this.savedPrompts = this.readPrompts(database);
       this.changed();
       return true;
