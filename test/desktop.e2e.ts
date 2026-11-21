@@ -5296,14 +5296,32 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     await expect(aChat).toBeVisible();
     const workersToggle = group.locator(".chat-workers-toggle");
     const workerRows = group.locator("[data-role='worker']");
+    const ownerRow = workersToggle.locator("..");
+    const ownerChat = ownerRow.locator(".chat-sidebar-entry");
+    await expect(ownerRow.locator('[data-icon="ai-agent"]')).toHaveCount(0);
+    await expect(workersToggle.locator('[data-icon="app-communication"]')).toHaveCount(1);
+    // Only More reserves trailing row space; disclosure reuses the leading artwork.
+    await expect(
+      ownerRow.locator(":scope > .icon-button:not(.chat-workers-toggle-leading)"),
+    ).toHaveCount(1);
+    await ownerChat.click();
+    await expect(ownerChat).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
     await expect(workerRows).toHaveCount(2);
     for (const worker of await workerRows.all()) await expect(worker).toBeHidden();
     // Reopening a project intentionally keeps its descendants closed. Reveal workers
     // explicitly before measuring their indentation at each width and text size.
-    await workersToggle.press("ArrowRight");
+    await workersToggle.click();
     await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
     for (const worker of await workerRows.all()) await expect(worker).toBeVisible();
+    await expect(ownerChat).toHaveAttribute("aria-current", "true");
+    await workersToggle.press("ArrowLeft");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await ownerChat.press("ArrowRight");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+    await aChat.click();
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(selected);
     await aChat.click();
     await expect(composer()).toHaveValue("project-a draft 1");
@@ -5385,6 +5403,12 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
         );
         await page.emulateMedia({ reducedMotion: "reduce" });
         await expectHierarchy(width < 300);
+        const disclosureBounds = await workersToggle.boundingBox();
+        const labelBounds = await ownerChat.locator(".chat-sidebar-label").boundingBox();
+        expect(disclosureBounds).not.toBeNull();
+        expect(labelBounds).not.toBeNull();
+        if (disclosureBounds && labelBounds)
+          expect(disclosureBounds.x + disclosureBounds.width).toBeLessThanOrEqual(labelBounds.x);
         await expect(page.locator(".project-sidebar-open")).toHaveAttribute(
           "aria-label",
           "Add Project",
