@@ -47,16 +47,20 @@ export async function generateChatTitle(
         }),
       ]);
       combined.throwIfAborted();
-      const title = response.trim().replace(/^["']|["']$/g, "");
+      const title = response
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .trim();
+      const shortened = [...title].slice(0, 19).join("").trimEnd();
       if (
         reason !== "end_turn" ||
-        !title ||
+        !shortened ||
         [...title].some(
           (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
         )
       )
         throw new Error("Invalid chat title");
-      return [...title].slice(0, 19).join("").trimEnd();
+      return shortened;
     } finally {
       dispose();
       combined.removeEventListener("abort", onAbort);

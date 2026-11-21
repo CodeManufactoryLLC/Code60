@@ -6777,6 +6777,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
         .locator(".workspace-breadcrumbs")
         .getByRole("button", { name: "Rename chat: ok", exact: true }),
     ).toBeVisible();
+    const manualTitle = "Manual parser title longer than nineteen";
     const sidebar = page.locator("nav.chat-sidebar");
     await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
     const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
@@ -6792,24 +6793,50 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       .locator(".workspace-breadcrumbs")
       .getByRole("button", { name: "Rename chat: Parser work", exact: true })
       .click();
-    await rename.getByRole("textbox", { name: "Chat name" }).fill("Header name");
+    await rename.getByRole("textbox", { name: "Chat name" }).fill(manualTitle);
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await sidebar
-      .getByRole("button", { name: "Header name", exact: true })
+      .getByRole("button", { name: manualTitle, exact: true })
       .click({ button: "right" });
     await expect(menu).toBeVisible();
     await menu.press("Escape");
-    await sidebar.getByRole("button", { name: "Header name", exact: true }).press("Shift+F10");
+    await sidebar.getByRole("button", { name: manualTitle, exact: true }).press("Shift+F10");
     await menu.getByRole("menuitem", { name: "Open", exact: true }).click();
     await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: Header name", exact: true }),
+      page.locator(".workspace-breadcrumbs").getByRole("button", {
+        name: `Rename chat: ${manualTitle}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    // Generated-title limits never shorten an explicit human name on later turns/reload.
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Continue after manual rename");
+    await composer.press("Enter");
+    await expect(chat.locator(".event.prompt").last()).toContainText(
+      "Continue after manual rename",
+    );
+    await expect(chat.locator(".event.message")).toHaveCount(2);
+    await page.reload();
+    await expect(
+      page.locator(".workspace-breadcrumbs").getByRole("button", {
+        name: `Rename chat: ${manualTitle}`,
+        exact: true,
+      }),
     ).toBeVisible();
     const before = await page.evaluate(() => window.desktop.snapshot());
-    await sidebar.getByRole("button", { name: "Actions for Header name", exact: true }).click();
+    await sidebar
+      .getByRole("button", {
+        name: `Actions for ${manualTitle}`,
+        exact: true,
+      })
+      .click();
     await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
-    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("button", {
+        name: manualTitle,
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Done notification", exact: true })).toContainText(
       "Chat archived.",
     );
@@ -6865,7 +6892,12 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       0,
     );
     await page.reload();
-    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("button", {
+        name: manualTitle,
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     const advanced = page.locator("#advanced-toggle");
     if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")

@@ -33,6 +33,9 @@ describe("chat titles", () => {
     ["x".repeat(500), "x".repeat(19)],
     ["Parser work", "Parser work"],
     ['"Parser validation"', "Parser validation"],
+    [`"${" ".repeat(19)}Fix parser   "`, "Fix parser"],
+    ["  '   Fix parser   '  ", "Fix parser"],
+    [`"  ${"x".repeat(20)}  "`, "x".repeat(19)],
     [`${"x".repeat(18)} extra`, "x".repeat(18)],
     [`${"x".repeat(18)}😀extra`, `${"x".repeat(18)}😀`],
   ])("cuts off generated title %j to %j", async (text, expected) => {
@@ -52,7 +55,7 @@ describe("chat titles", () => {
     expect([...title].length).toBeLessThanOrEqual(19);
     expect(agents.sessions[0]?.stops).toEqual([1_000]);
   });
-  it.each(["", "two\nlines", `${"x".repeat(20)}\ninvalid`])(
+  it.each(["", "   ", '"   "', "'   '", "two\nlines", `${"x".repeat(20)}\ninvalid`])(
     "rejects an invalid title",
     async (text) => {
       const agents = new FakeAgents((_, session) => {
