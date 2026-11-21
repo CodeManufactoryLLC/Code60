@@ -91,6 +91,8 @@ export function FilePanel({
   plans = [],
   project = "",
   currentChat,
+  viewPlan,
+  onViewPlan,
   panelId = "chat-file-panel",
   targetLabel,
   emptyContent,
@@ -111,6 +113,8 @@ export function FilePanel({
   plans?: PlanSummary[];
   project?: string;
   currentChat?: string | undefined;
+  viewPlan?: PlanSummary | undefined;
+  onViewPlan?: (() => void) | undefined;
   panelId?: string;
   targetLabel?: string | undefined;
   emptyContent?: ReactNode;
@@ -130,7 +134,7 @@ export function FilePanel({
   const [hiddenFiles, setHiddenFiles] = useState(false);
   const views = useRef(new Map<number, { current: PreviewViewState | null }>());
   const selected = tabs.entries.find((tab) => tab.id === tabs.active);
-  const currentPlan = plans.filter((plan) => plan.chatId === currentChat).at(-1);
+  const currentPlan = viewPlan ?? plans.filter((plan) => plan.chatId === currentChat).at(-1);
   const selectedReview =
     selected?.kind === "revision"
       ? reviews.find((review) => review.id === selected.reviewId)
@@ -193,8 +197,11 @@ export function FilePanel({
               type="button"
               className="file-open-link file-panel-view-plan"
               onClick={() => {
-                focusActiveTab();
-                act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
+                if (onViewPlan) onViewPlan();
+                else {
+                  focusActiveTab();
+                  act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
+                }
               }}
             >
               View Plan

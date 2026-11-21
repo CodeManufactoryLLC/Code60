@@ -197,6 +197,11 @@
 }
 
 .file-panel-view-plan {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
   flex-shrink: 0;
   align-self: flex-start;
 }

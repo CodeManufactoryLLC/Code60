@@ -62,6 +62,7 @@ export function ChatWorkspace({
     snapshot?.chat.conversationId ??
     "";
   const relayPanelOpen = panelOpen[panelKey] ?? false;
+  const [planRequest, setPlanRequest] = useState<{ conversationId: string; serial: number }>();
   const [revisionPreview, setRevisionPreview] = useState<{ id: number; preview: ReviewPreview }>();
   const {
     scope,
@@ -111,6 +112,7 @@ export function ChatWorkspace({
         : chat.conversationId === snapshot?.chat.conversationId),
   );
   const relayActive = snapshot?.chat.kind === "relay" && !workerId;
+  const displayedRelayPlan = relayActive ? relay?.plans?.at(-1) : undefined;
   const relayWorkerActive = !!snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
   const recallSource = selectedRecallSource(state, workerId, transcripts, scope.viewKey);
   const reviewSummaries = snapshot?.reviews ?? [];
@@ -260,6 +262,18 @@ export function ChatWorkspace({
           <FilePanel
             disabled={!database}
             plans={plans}
+            viewPlan={displayedRelayPlan}
+            onViewPlan={
+              displayedRelayPlan && relay?.conversationId
+                ? () => {
+                    project.showConversationFiles?.();
+                    setPlanRequest((previous) => ({
+                      conversationId: relay.conversationId as string,
+                      serial: (previous?.serial ?? 0) + 1,
+                    }));
+                  }
+                : undefined
+            }
             api={api}
             recallSource={recallSource}
             reviews={reviewSummaries}
@@ -311,6 +325,7 @@ export function ChatWorkspace({
             recallSource={recallSource}
             open={panelOpen[owner.conversationId ?? ""] ?? false}
             onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
+            planRequest={planRequest}
             revisionPreview={revisionPreview}
           />
         ))}

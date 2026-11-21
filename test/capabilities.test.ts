@@ -208,7 +208,9 @@ describe("desktop capability catalog", () => {
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
-      limitations: expect.stringContaining("never initializes Git"),
+      limitations: expect.stringContaining(
+        "Archiving the last displayed project chat returns to its home without a replacement",
+      ),
     });
     expect(projects?.access).toContain("project home → New Session");
     expect(projects?.access).toContain("red × (Close Project)");
@@ -216,6 +218,7 @@ describe("desktop capability catalog", () => {
     expect(projects?.limitations).toContain("keeps the project open");
     expect(projects?.confirmation).toContain("Stop folder confirmation");
     expect(projects?.limitations).toContain("only the project chevron");
+    expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",
@@ -233,5 +236,14 @@ describe("desktop capability catalog", () => {
 
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
+  });
+
+  it("describes sidebar activity as runtime-dependent presentation", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
+      prerequisite: "runtime",
+      access: expect.stringContaining("left navigation names"),
+      purpose: expect.stringContaining("custom assistants and Relay"),
+      limitations: expect.stringContaining("reduced motion and forced colors"),
+    });
   });
 });

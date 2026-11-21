@@ -49,7 +49,7 @@ features, resource bounds and remaining native-platform validation.
   Relay uses the locally bundled pet animation. Projects uses the supplied project-initiation animation and contains the
   open project headings. Project chats
   indent one 24px step beneath their project; owned workers indent one more step
-  beneath their conversation. Project labels navigate without toggling their disclosure. Conversations retain More actions;
+  beneath their conversation. Project labels navigate without toggling their disclosure. Project conversations expose separate Rename and Archive buttons and retain a context menu;
   project rows use a red circular × with the “Close Project” tooltip. That icon
   invokes the existing confirmed Stop Folder operation, keeping the project open
   while stopping its project-owned work and Relay workers in the same folder. Each project row puts a circular + before the red × and a circular disclosure
@@ -608,6 +608,13 @@ with the task text.
 The right sidebar offers View Plan for the displayed orchestration session's
 latest existing plan, including after its tab is closed. It selects or reopens
 that plan's tab without generating a plan or granting execution authority.
+Plan records persist an immutable, conversation-local creation sequence, including
+rewound records when allocating the next sequence. Summaries sort by this sequence,
+so restart, atomic file replacement and edits to older plans never change which
+plan is latest. This prerelease schema requires that sequence on saved records.
+While Relay or a custom assistant browses project files, View Plan returns to
+that conversation's own panel without putting its plan into the project file scope.
+The action wraps within the 120px panel minimum with enlarged Button Text.
 Other conversations' plans do not supply this action, including in worker views.
 
 
@@ -1229,7 +1236,7 @@ External navigation reveals only the destination's ancestors. Selecting Relay
 never reveals project chats. Selection retains the single-flight action guard
 without temporarily disabling or dimming unrelated navigation rows. Project and
 chat labels keep their text color through pointer presses and selection.
-Existing disclosure storage keys and independent plus/conversation More actions
+Existing disclosure storage keys and independent project plus/conversation actions
 are preserved. Project rows replace the former More menu with the circular red ×
 Stop Folder action described above.
 Settings also opens home from the palette and Cmd+, / Ctrl+,. Its section panels
@@ -1335,7 +1342,7 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 
 - **Sessions table and chat.** A Glide Data Grid table fills the window. There is no app header. Stop leftover agent and Stop all runs (while a batch is active) join the shared table toolbar as stop icons; refresh is in the application footer polling widget. Rows are numbered on the left, with white backgrounds in Light and black backgrounds in Dark; clicking a row number opens that session's chat like any other cell. Sortable, resizable columns show Agent, Actions, Status (including discarded runs), Turns, Approvals (blank at zero), ID (last six characters), PID (the agent's process group, blank before the agent starts), Branch (`none` without a worktree), and Started (local time). Clicking a session's Actions cell, or pressing Enter on it, opens the actions menu described under Overlays instead of the chat. Sorted columns show a Carbon arrow in the heading. Newest sessions appear first by default. Status is text, not only color: the Status column draws each state's 16px Carbon icon and 12px label in a 128px slot, following the emphasis rules under Visual system. With Inline charts on (the default), three more columns draw on the canvas from the run's recorded events: Turn time (a line of the last six completed turns, prompt to turn end, with the latest duration), Events, 5 min (bars for ten 30-second buckets of non-status events, with the total), and Last 2 min (a strip of state spans, solid while working and hatched while awaiting approval). Each column shares one scale across rows (at least 0 to 20 seconds and 0 to 8 events); a run without samples shows Unavailable rather than zero, and the cells' text gives the same values in words. The charts redraw on the chart ticker, every five seconds by default (see [Polling](#polling)), and only while the Sessions tab and window are visible. Context usage, ratings, tags, and owners are not shown, since Code60 does not record them. The application footer polling widget shows an eye icon and scoped agent-message age above its Pause/Start and Refresh buttons. Search, column filters, and table settings work as described under Tables. Click a row, or press Enter on the focused cell, to select the session and open its chat.
 
-Current-project sessions, including history, appear beneath Chat in the primary sidebar. Orchestrator-owned workers nest beneath their controlling chat, using the current snapshot's ownership IDs; manual sessions and history without a known owner appear directly under Chat, except that finished sessions are hidden unless a current (unarchived) orchestrator owns them. They stay available in the Sessions table. Ownership is not inferred or persisted across app restarts. Workers are named by the `label` the orchestrator gave `code60_dispatch_agent` (held in memory with ownership and published as `workerLabels`), in both the sidebar row and the worker chat heading; without one they show the provider and short run ID. Conversation names have decorative Phosphor chat-circle icons for project orchestrators and arrow-elbow-down-right icons for workers, with role and status in accessible descriptions and tooltips, plus independent unread and approval counts. Conversation rows do not display activity, completion or error labels. A separate labelled chevron disclosure controls each orchestrator's workers. New children expand their parent without selecting a conversation or stealing focus; otherwise manual collapse is retained. External worker navigation reveals Chat and its parent. Up/Down traverse visible controls, Right expands or enters workers, and Left collapses or returns to the parent. Collapse never changes selection.
+Current-project sessions, including history, appear beneath Chat in the primary sidebar. Orchestrator-owned workers nest beneath their controlling chat, using the current snapshot's ownership IDs; manual sessions and history without a known owner appear directly under Chat, except that finished sessions are hidden unless a current (unarchived) orchestrator owns them. They stay available in the Sessions table. Ownership is not inferred or persisted across app restarts. Workers are named by the `label` the orchestrator gave `code60_dispatch_agent` (held in memory with ownership and published as `workerLabels`), in both the sidebar row and the worker chat heading; without one they show the provider and short run ID. Conversation rows use leading chat artwork for project orchestrators and decorative worker artwork for workers, with role and status in accessible descriptions and tooltips, plus approval counts. Unread reply counts appear only for orchestrators; worker rows omit them, including in tooltips and accessible descriptions. Conversation rows do not display activity, completion or error labels. Project orchestrators with owned workers use their leading chat artwork as a separately labelled disclosure; other orchestrators retain their separate trailing worker disclosure. The conversation label selects independently. New children expand their parent without selecting a conversation or stealing focus; otherwise manual collapse is retained. External worker navigation reveals Chat and its parent. Up/Down traverse visible controls, Right expands or enters workers, and Left collapses or returns to the parent. Collapse never changes selection.
 
 One selected conversation fills the normal Chat workspace beside the shared file panel. Sessions, Events, Search, Open chat and Resume all navigate there, never into a popup. Worker selection does not change backend orchestrator selection, ownership, automatic updates, sendability or Stop semantics. The footer retains polling, updates and an actionable approval count, but no chat dock. Opening a session preserves other conversations' drafts and scroll positions. New or discovered sessions never replace the selected conversation. Worker drafts survive renderer reload for the same run; reload otherwise starts on the selected orchestrator. Workspace changes clear worker selection and view state. Historical transcripts are loaded on demand through the existing bounded, project-scoped cache, with retryable failures. Agent output remains plain text; thoughts, tools, permissions and recovery notes are in expandable Activity. Copy and turn timing use the shared components.
 - **Controls.** Worker composers send follow-ups to idle runs or explicitly continue ended runs using existing ACP restoration/handoff safeguards. Enter sends and Shift+Enter adds a line. Stop cancels the selected worker's active turn; Finish run, leftover stop and worktree deletion remain in session actions. Deleted worktrees show an inactive message; other blockers explain why sending is unavailable. Approvals retain Allow once and Deny, with other runs continuing independently. Chat no longer has window, minimize, close, fullscreen or dock-reordering controls.
@@ -1395,7 +1402,7 @@ separate transparent Close button, without giving the icon action its own fill.
 Keep selection, closing, drag/reorder and keyboard semantics unchanged.
 
 Conversation navigation rows paint one shared background with square outer corners beneath the
-chat label, ellipsis action and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
+chat label, Rename and Archive actions and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
 enabled, keyboard reachable and visibly focused; retain disabled cues.
 New or revised draft plans still open their existing side-panel tabs, without
 adding duplicate Plan buttons above the conversation.
@@ -1404,7 +1411,8 @@ Human prompt bubbles use the local Neobrutalism Bubble content with 5px corners,
 2px theme-aware outlines, pale-blue Light and dark-plum Dark/System-dark fills
 and contrasting text.
 Automatic worker prompts and agent code blocks remain square. Agent responses
-use 8px bottom margins. Human and agent bubbles share 12px vertical and 18px
+use 2px bottom margins after their unchanged 16px outer bottom padding, giving
+18px of trailing space below Copy (75% of the previous 24px). Human and agent bubbles share 12px vertical and 18px
 horizontal padding. Timing notices leave visually equal 8px gaps above and below their separator;
 the following agent bubble starts 8px below the line. Its content starts 22px
 below the line after border and padding, matching human bubble insets.
@@ -1575,7 +1583,12 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 
 ### Shared chat timing and Copy
 
-Orchestrator and worker chats use 5px composer and message-bubble corners. Human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies, separate from their decorative role icons. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
+Agent replies in main and worker chats have a 2px outer bottom margin and retain
+16px outer bottom padding. The rendered trailing gap below Copy is 18px, 75% of
+the previous 24px (16px padding plus 8px margin). Bubble content padding and
+typography are unchanged; completed-turn separator gaps remain 8px.
+
+Orchestrator and worker chats use 5px composer and message-bubble corners. Human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar orchestrator rows show numeric badges for unread replies, separate from their decorative role icons. Worker rows omit unread reply counts across transcript and compact summary updates; notification delivery and reply tracking remain unchanged. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
 
 Both chat interfaces group response/activity by prompt turns. The orchestrator uses its live animation, status and activity timer instead of a separate Working for line. Worker chats retain the local Working for timer after the prompt, above the agent turn. Completed turns freeze as Worked for with their recorded outcome, not a success claim. Prompt dispatch and completion timestamps exclude queue, startup and idle time but include permission waits. Optional turnEnd outcome/completedAt metadata distinguishes cancellation from timeout; terminal status events may carry turn/completedAt for transport failures before process cleanup. Older records remain readable. Missing crash/history boundaries and clock anomalies show timing unavailable/incomplete, never invented duration. Small display components use the existing visibility-aware local ticker, with no backend polling, per-tick live announcements, focus changes or transcript scroll resets.
 
@@ -1605,6 +1618,13 @@ and new windows remain blocked. Relative paths and unsupported links are inert.
 The bottom-right application footer persistently shows full runtime snapshot.versions.code60, retaining prerelease/build suffixes and Settings About/Copy version info. No product version is bumped for this change.
 
 ### Sidebar table navigation
+
+Project chats with owned workers use their leading chat artwork as the independent
+worker disclosure. They have no trailing legacy agent icon or reserved slot for
+it. The label still selects the chat, More retains its menu, and Enter/Space and
+Left/Right keyboard disclosure remain available. Narrow rows reserve readable text
+and complete indicators before shrinking the leading artwork gutter. The disclosure
+keeps a visible focus edge in Light, Dark and forced colors.
 
 Assistants, Apps, Projects and Settings each sit inside a separate opaque sidebar card, enclosing the
 heading, row actions and any expanded descendants. Home and Search share a matching
@@ -1908,21 +1928,34 @@ fixed 48px heights at the default text size, independent of selection and animat
 
 After the first completed human/agent exchange, a separate presentation-only ACP
 turn asks the configured orchestration provider for a short descriptive title.
+The prompt requests under 20 characters; valid generated titles are deterministically
+cut off at 19 Unicode characters, preserving complete code points. Existing titles
+and manual renames retain their existing limits.
 It runs in a private temporary directory, without MCP servers, denies permissions,
 bounds input/output and times out after 30 seconds. Replacement, manual rename,
 Stop all and shutdown cancel generation; cleanup stops the process before removing
 its directory. Failure retains the numbered fallback. It never adds transcript
 messages or overwrites a human title.
 
-Orchestrator sidebar rows expose Open, Rename and Archive through both their
-labelled More icon button and context menu, including Shift+F10. The main header displays
+Project orchestrator sidebar rows open through their label and expose Rename and
+Archive as separate named circular icon controls, matching the project-row controls.
+Their glyphs reveal on row hover or keyboard focus and follow the active theme,
+reduced motion and forced colors. Open, Rename and Archive also remain available
+in the context menu, including Shift+F10. The main header displays
 the same title and opens the same rename dialog. Titles are bounded single-line
 plain text and actions target validated existing chat IDs.
+
+At narrow sidebar widths, simultaneous project chat counts stack within their
+reserved indicator column. Preserve label room, both unread/approval badges, leading
+worker artwork disclosure and independent Rename/Archive targets without clipping.
 
 Archive only hides the orchestrator from sidebar navigation. It retains session
 records, transcripts, worker ownership and running work. Workers remain accessible.
 After successfully archiving the currently displayed chat, the renderer shows a
-“Chat archived.” success toast and selects Relay. Archiving another chat does not
+“Chat archived.” success toast. Closing the last unarchived chat for its project
+opens that project’s home with the New Session creation card, without creating or
+opening a replacement conversation. New Session explicitly creates a new chat.
+If another project chat remains, the existing Relay fallback applies. Archiving another chat does not
 change the displayed page or conversation. Failed archives keep inline feedback.
 Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped
@@ -2103,6 +2136,19 @@ and non-idle terminal states interrupt immediately. Hidden views and reduced mot
 skip transitions. Final artwork is independent of MCP.
 Display failure never fails an agent task; operating instructions request meaningful
 phase reports, not heartbeats. Persisted records and worker access are unchanged.
+
+Live conversation and worker names in the left navigation, including custom
+assistants and Relay, reuse the transcript activity spotlight's gradient and
+2.8-second linear animation. Connecting, working and monitoring owned workers
+qualify; approval, stopping, idle and saved entries remain static. Each name
+follows its own live snapshot independently of chat selection. Hidden documents,
+collapsed/inert navigation, reduced motion and forced colors disable the effect.
+Existing readable role/status descriptions and indicators remain available.
+Owner names follow ephemeral conversation activity rather than retained run statuses.
+Worker run views expose a current-turn cancellation hint so their names stop animating
+before provider completion; this hint neither marks process shutdown nor enters saved records.
+Monitoring owners use the same “Monitoring subagents” wording in their accessible
+descriptions and tooltips as the transcript activity display.
 
 Settings → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a

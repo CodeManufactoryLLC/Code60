@@ -627,7 +627,7 @@
 }
 
 .orchestration-chat-body .event.message {
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   padding: 0 0 16px;
   border: 0;
 }

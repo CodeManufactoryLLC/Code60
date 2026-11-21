@@ -116,7 +116,7 @@ describe("DesktopKnowledge", () => {
   it("discovers View Plan without treating saved plan viewing as provider or execution authority", async () => {
     const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
     const capabilities = result(
-      await knowledge.call("code60_get_capabilities", { query: "Plans" }, relay),
+      await knowledge.call("code60_get_capabilities", { query: "View Plan" }, relay),
     );
     expect(capabilities.entries).toEqual([
       expect.objectContaining({
@@ -130,6 +130,24 @@ describe("DesktopKnowledge", () => {
       }),
     ]);
   });
+  it.each([false, true])(
+    "discovers the auto-name limit with database availability %s",
+    async (connected) => {
+      const { knowledge, reads } = setup(connected ? {} : { database: null });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "auto-names" }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "projects",
+          limitations: expect.stringContaining("limited to 19 characters"),
+          availability: expect.objectContaining({ status: connected ? "available" : "blocked" }),
+        }),
+      ]);
+      expect(reads).toEqual([]);
+    },
+  );
+
   it("does not claim browser prerequisites or extension approval have been verified", async () => {
     const { knowledge, reads } = setup({ database: null });
     const capabilities = result(
@@ -379,6 +397,22 @@ describe("DesktopKnowledge", () => {
     expect(value.available).toBe(false);
     expect(reads).toEqual([]);
   });
+  it("keeps project homes available without a chat and gates session creation on a database", async () => {
+    const { knowledge, runtime } = setup({ conversations: [], selectedConversationId: null });
+    const entry = async () =>
+      (
+        result(await knowledge.call("code60_get_capabilities", { query: "Projects" }, project))
+          .entries as { id: string; availability: { status: string; action: string } }[]
+      ).find((cap) => cap.id === "projects");
+    expect(await entry()).toMatchObject({
+      availability: { status: "available", action: expect.stringContaining("New Session") },
+    });
+    runtime.database = null;
+    expect(await entry()).toMatchObject({
+      availability: { status: "blocked", action: "Connect to database." },
+    });
+  });
+
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(

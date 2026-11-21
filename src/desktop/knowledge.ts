@@ -250,6 +250,10 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No connected database.";
       action = "Connect to database.";
+    } else if (cap.id === "projects") {
+      reason =
+        "Project homes remain available without an open chat; closing the last chat creates no replacement.";
+      action = "Use New Session on the project home to explicitly create a chat.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";

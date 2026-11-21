@@ -354,7 +354,11 @@ export function useProjectWorkspace({
   };
   useDesktopVisibility(api, tabs.active, splash, filesActive, setError);
   return {
-    project: { ...project, explicitProjectFiles },
+    project: {
+      ...project,
+      explicitProjectFiles,
+      showConversationFiles: () => setExplicitFileScope(undefined),
+    },
     workerId,
     fileBrowser,
     transcripts,

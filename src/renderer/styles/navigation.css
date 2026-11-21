@@ -147,7 +147,7 @@
 }
 
 /* Reserve action space, revealing only the row under the pointer or keyboard focus. */
-.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action) {
   opacity: 0;
 }
 
@@ -163,13 +163,15 @@
   > :is(.sidebar-card-chevron, .sidebar-card-add),
 .project-chat-heading:is(:hover, :has(:focus-visible))
   > .icon-button
-  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop),
+.chat-sidebar-row:is(:hover, :has(:focus-visible)) > .chat-sidebar-action > .sidebar-card-action {
   opacity: 1;
 }
 
 .sidebar-card-chevron,
 .sidebar-card-add,
-.sidebar-card-stop {
+.sidebar-card-stop,
+.sidebar-card-action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,7 +205,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):is(:hover, :focus-visible, :active):not(:disabled)
   .sidebar-card-add,
 .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
-.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+.chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
   background: var(--primary);
   color: var(--primary-text);
 }
@@ -217,7 +220,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):active:not(:disabled) .sidebar-card-add,
 .project-folder-stop:active:not(:disabled) .sidebar-card-stop,
 .project-session-add:active:not(:disabled) .sidebar-card-add,
-.project-chat-toggle:active .sidebar-card-chevron {
+.project-chat-toggle:active .sidebar-card-chevron,
+.chat-sidebar-action:active:not(:disabled) .sidebar-card-action {
   translate: 1px 1px;
   box-shadow: 1px 1px 0 #000000;
 }
@@ -226,7 +230,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):focus-visible .sidebar-card-add,
 .project-folder-stop:focus-visible .sidebar-card-stop,
 .project-session-add:focus-visible .sidebar-card-add,
-.project-chat-toggle:focus-visible .sidebar-card-chevron {
+.project-chat-toggle:focus-visible .sidebar-card-chevron,
+.chat-sidebar-action:focus-visible .sidebar-card-action {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
@@ -357,7 +362,8 @@
 }
 
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-communication"]),
-.chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]) {
+.chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]),
+.chat-sidebar-row > .chat-workers-toggle-leading {
   --nav-label-inset: calc(
     var(--nav-item-padding) +
     max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
@@ -815,7 +821,8 @@
   white-space: nowrap;
 }
 
-.project-chat-heading > .icon-button {
+.project-chat-heading > .icon-button,
+.chat-sidebar-row > .chat-sidebar-action {
   flex: 0 0 28px;
   padding: 0;
   align-self: center;
@@ -879,7 +886,8 @@
   justify-content: center;
 }
 
-.sidebar-card-add > .carbon-icon {
+.sidebar-card-add > .carbon-icon,
+.sidebar-card-action > .carbon-icon {
   --icon-size: 16px;
 }
 
@@ -992,13 +1000,30 @@
   height: calc(1em * var(--nav-icon-scale, 1));
   margin-right: 8px;
 }
-.chat-sidebar-artwork > .navigation-icon {
+.chat-sidebar-artwork > .navigation-icon,
+.chat-workers-toggle-leading > .navigation-icon {
   height: auto;
   aspect-ratio: 1;
   left: auto;
   right: 0;
   max-width: 100%;
   max-height: 100%;
+}
+
+/* Project workers disclose from the leading artwork, without a trailing icon slot. */
+.chat-sidebar-row > .chat-workers-toggle-leading {
+  position: relative;
+  flex: 0 1 calc(var(--nav-label-inset) - 8px);
+  min-width: 16px;
+  margin-right: 8px;
+  background: transparent;
+}
+
+/* Reserve visible text and intrinsic indicator space before the artwork gutter shrinks. */
+.chat-sidebar-row:has(> .chat-workers-toggle-leading) > .chat-sidebar-entry {
+  display: grid;
+  grid-template-columns: minmax(20px, 1fr) auto;
+  min-width: min-content;
 }
 
 .chat-sidebar-entry > .chat-sidebar-label {
@@ -1011,6 +1036,10 @@
 }
 
 @container (width < 180px) {
+  .chat-sidebar-row > .chat-workers-toggle-leading {
+    flex: 0 0 24px;
+    min-width: 24px;
+  }
   .chat-sidebar-entry > .chat-sidebar-indicators {
     font-size: 11px;
     margin-left: 4px;
@@ -1018,6 +1047,24 @@
   .chat-sidebar-entry > .chat-sidebar-label {
     flex-basis: 20px;
     min-width: 20px;
+  }
+
+  /* Stack simultaneous counts in their reserved column before crowding the name. */
+  .chat-sidebar-row:has(> .chat-sidebar-action)
+    > .chat-sidebar-entry:has(.chat-unread):has(.chat-approval-count) {
+    grid-template-columns: minmax(32px, 1fr) auto;
+  }
+  .chat-sidebar-row:has(> .chat-sidebar-action)
+    > .chat-sidebar-entry:has(.chat-unread):has(.chat-approval-count)
+    > .chat-sidebar-label {
+    flex-basis: 32px;
+    min-width: 32px;
+  }
+  .chat-sidebar-row:has(> .chat-sidebar-action)
+    > .chat-sidebar-entry
+    > .chat-sidebar-indicators:has(.chat-unread):has(.chat-approval-count) {
+    flex-direction: column;
+    gap: 0;
   }
 }
 
