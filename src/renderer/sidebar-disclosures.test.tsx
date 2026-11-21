@@ -403,6 +403,24 @@ it("keeps approval counts without a visible sidebar status label", () => {
   ).toThrow("Missing navigation element");
 });
 
+it("keeps project worker disclosure independent from chat selection on the leading icon", () => {
+  const onSelect = vi.fn();
+  const view = mount(ChatSidebar, { ...chatProps, onSelect });
+  const toggle = () =>
+    find(view.tree(), (element) => element.props["aria-controls"] === "workers-chat");
+  expect(toggle().props.className).toContain("chat-workers-toggle-leading");
+  expect(find(toggle(), (element) => element.props.name === "app-communication")).toBeDefined();
+  (toggle().props.onClick as () => void)();
+  view.render();
+  expect(toggle().props["aria-expanded"]).toBe(false);
+  expect(byId(view.tree(), "workers-chat").props.hidden).toBe(true);
+  expect(onSelect).not.toHaveBeenCalled();
+  click(view.tree(), "conversation-chat");
+  expect(onSelect).toHaveBeenCalledWith("chat");
+  view.render({ pending: true });
+  expect(toggle().props.disabled).toBe(true);
+});
+
 it.each(["click", "ArrowLeft"] as const)(
   "recursively closes Settings descendants via %s without changing the page",
   (method) => {

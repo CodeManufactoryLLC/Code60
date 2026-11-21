@@ -357,7 +357,8 @@
 }
 
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-communication"]),
-.chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]) {
+.chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]),
+.chat-sidebar-row > .chat-workers-toggle-leading {
   --nav-label-inset: calc(
     var(--nav-item-padding) +
     max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
@@ -992,13 +993,30 @@
   height: calc(1em * var(--nav-icon-scale, 1));
   margin-right: 8px;
 }
-.chat-sidebar-artwork > .navigation-icon {
+.chat-sidebar-artwork > .navigation-icon,
+.chat-workers-toggle-leading > .navigation-icon {
   height: auto;
   aspect-ratio: 1;
   left: auto;
   right: 0;
   max-width: 100%;
   max-height: 100%;
+}
+
+/* Project workers disclose from the leading artwork, without a trailing icon slot. */
+.chat-sidebar-row > .chat-workers-toggle-leading {
+  position: relative;
+  flex: 0 1 calc(var(--nav-label-inset) - 8px);
+  min-width: 16px;
+  margin-right: 8px;
+  background: transparent;
+}
+
+/* Reserve visible text and intrinsic indicator space before the artwork gutter shrinks. */
+.chat-sidebar-row:has(> .chat-workers-toggle-leading) > .chat-sidebar-entry {
+  display: grid;
+  grid-template-columns: minmax(20px, 1fr) auto;
+  min-width: min-content;
 }
 
 .chat-sidebar-entry > .chat-sidebar-label {
@@ -1011,6 +1029,10 @@
 }
 
 @container (width < 180px) {
+  .chat-sidebar-row > .chat-workers-toggle-leading {
+    flex: 0 0 24px;
+    min-width: 24px;
+  }
   .chat-sidebar-entry > .chat-sidebar-indicators {
     font-size: 11px;
     margin-left: 4px;

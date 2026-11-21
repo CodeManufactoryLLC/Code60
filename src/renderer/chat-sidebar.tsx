@@ -207,10 +207,44 @@ export function ChatSidebar({
       .filter(Boolean)
       .join(". ");
     const children = childrenById.get(entry.id) ?? [];
+    const projectWorkers = chat?.kind === "project" && children.length > 0;
     const expanded = !collapsed.has(entry.id);
+    const workerToggle = children.length > 0 && (
+      <button
+        type="button"
+        className={`icon-button chat-workers-toggle${projectWorkers ? " chat-workers-toggle-leading" : ""}`}
+        aria-label={`Workers for ${entry.label}`}
+        aria-expanded={expanded}
+        aria-controls={`workers-${entry.id}`}
+        disabled={disabled}
+        onClick={() =>
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (next.has(entry.id)) next.delete(entry.id);
+            else next.add(entry.id);
+            return next;
+          })
+        }
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          event.stopPropagation();
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (event.key === "ArrowLeft") next.add(entry.id);
+            else next.delete(entry.id);
+            return next;
+          });
+          document.getElementById(`conversation-${entry.id}`)?.focus();
+        }}
+      >
+        {projectWorkers ? <NavigationIcon name="app-communication" /> : <Icon name="ai-agent" />}
+      </button>
+    );
     return (
       <div className="chat-sidebar-group" key={entry.id} data-conversation-id={entry.id}>
         <div className="chat-sidebar-row" data-nav-active={open && entry.id === selectedId}>
+          {projectWorkers && workerToggle}
           <button
             type="button"
             id={`conversation-${entry.id}`}
@@ -257,17 +291,19 @@ export function ChatSidebar({
               }
             }}
           >
-            <span className="chat-sidebar-artwork" aria-hidden="true">
-              {relayHeading && (
-                <NavigationIcon
-                  name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
-                />
-              )}
-              {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-                <NavigationIcon name="app-communication" />
-              )}
-              {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
-            </span>
+            {!projectWorkers && (
+              <span className="chat-sidebar-artwork" aria-hidden="true">
+                {relayHeading && (
+                  <NavigationIcon
+                    name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
+                  />
+                )}
+                {entry.role === "orchestrator" && chat?.kind !== "relay" && (
+                  <NavigationIcon name="app-communication" />
+                )}
+                {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
+              </span>
+            )}
             <span className="chat-sidebar-label" data-working={working && documentVisible}>
               {entry.label}
             </span>
@@ -299,37 +335,7 @@ export function ChatSidebar({
               <Icon name="overflow-menu--horizontal" />
             </button>
           )}
-          {children.length > 0 && (
-            <button
-              type="button"
-              className="icon-button chat-workers-toggle"
-              aria-label={`Workers for ${entry.label}`}
-              aria-expanded={expanded}
-              aria-controls={`workers-${entry.id}`}
-              onClick={() =>
-                setCollapsed((current) => {
-                  const next = new Set(current);
-                  if (next.has(entry.id)) next.delete(entry.id);
-                  else next.add(entry.id);
-                  return next;
-                })
-              }
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                setCollapsed((current) => {
-                  const next = new Set(current);
-                  if (event.key === "ArrowLeft") next.add(entry.id);
-                  else next.delete(entry.id);
-                  return next;
-                });
-                document.getElementById(`conversation-${entry.id}`)?.focus();
-              }}
-            >
-              <Icon name="ai-agent" />
-            </button>
-          )}
+          {!projectWorkers && workerToggle}
         </div>
         {children.length > 0 && (
           // biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset.
