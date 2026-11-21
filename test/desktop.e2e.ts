@@ -10969,14 +10969,11 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
         }),
       a,
     );
-    await expect
-      .poll(
-        async () =>
-          (await page.evaluate(() => window.desktop.snapshot())).runs.find(
-            ({ record }) => record.id === a,
-          )?.replies?.count,
-      )
-      .toBe(1);
+    // Wait for the background reply in the renderer without selecting its worker.
+    await expect(worker(a).locator(".event.message").last()).toContainText("more text");
+    await expect(row(b)).toHaveAttribute("aria-current", "true");
+    await expect(worker(b)).toBeVisible();
+    await expect(worker(a)).toBeHidden();
     await expect(row(a).locator(".chat-unread")).toHaveCount(0);
     await row(a).click();
     await expect(worker(a).locator(".event.message").last()).toContainText("more text");
