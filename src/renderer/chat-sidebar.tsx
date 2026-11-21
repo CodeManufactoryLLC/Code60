@@ -15,6 +15,7 @@ import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
+import { useDocumentVisible } from "./use-document-visible.js";
 
 export function ChatSidebar({
   chats,
@@ -49,6 +50,7 @@ export function ChatSidebar({
   entries?: readonly Conversation[];
   ancestorsExpanded?: boolean;
 }) {
+  const documentVisible = useDocumentVisible();
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
   );
@@ -160,6 +162,23 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
+    const activity = chat?.activity;
+    // Match the chat activity spotlight, including an idle owner monitoring workers.
+    // Worker records alone are history; only a live view can indicate current work.
+    const working = activity
+      ? activity.state !== "idle" &&
+        activity.state !== "stopping" &&
+        (activity.active ||
+          activity.state === "waiting_for_workers" ||
+          activity.state === "connecting")
+      : !!view && (view.status === "running" || view.status === "queued");
+    const animate =
+      working &&
+      !error &&
+      !view?.stopping &&
+      documentVisible &&
+      ancestorsExpanded &&
+      (!entry.parentId || !collapsed.has(entry.parentId));
     const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
@@ -243,7 +262,9 @@ export function ChatSidebar({
               )}
               {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
             </span>
-            <span className="chat-sidebar-label">{entry.label}</span>
+            <span className="chat-sidebar-label" data-animate={animate}>
+              {entry.label}
+            </span>
             {(unread > 0 || approvals > 0) && (
               <span className="chat-sidebar-indicators">
                 {unread > 0 && (
