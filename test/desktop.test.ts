@@ -4214,6 +4214,28 @@ describe("app-wide orchestration chat", {
     await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Public work"));
   });
 
+  it.each([19, 20, 500])(
+    "limits a generated %i-character project title and preserves a longer manual name",
+    async (length) => {
+      agents.script = (text, session) => {
+        session.update({
+          type: "message",
+          text: text.startsWith("Write a descriptive chat title") ? "x".repeat(length) : "Done",
+        });
+        return "end_turn";
+      };
+      const id = await ready();
+      await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
+      await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("x".repeat(19)));
+      await controller.orchestrationChatAction({
+        type: "rename",
+        id,
+        title: "My longer manual project name",
+      });
+      expect(controller.snapshot().chat.title).toBe("My longer manual project name");
+    },
+  );
+
   it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
     agents.script = (_text, session) => {
       session.update({ type: "message", text: "Parser validation" });
