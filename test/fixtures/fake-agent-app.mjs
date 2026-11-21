@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, chatTitle?: string, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -145,6 +145,8 @@ export function createFakeAgent(options = {}) {
             .trimStart()
         : delivered;
       let steps;
+      if (options.chatTitle && text.startsWith("Write a descriptive chat title"))
+        steps = [{ message: options.chatTitle }];
       if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];

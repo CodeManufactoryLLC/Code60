@@ -83,7 +83,7 @@ Schema version: 1
 - Prerequisite: database
 - Agent access: read
 - Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
-- Limits: Opening or selecting a project is a human action; opening never initializes Git. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git. Project agent auto-names request under 20 characters and are deterministically cut off at 19 Unicode characters after the first completed exchange. Compliant generated names, manually supplied names and existing session titles are preserved. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none

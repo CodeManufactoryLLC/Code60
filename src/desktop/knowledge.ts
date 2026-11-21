@@ -248,6 +248,9 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No verified enabled provider.";
       action = "Providers → Add Provider.";
+    } else if (cap.id === "projects") {
+      reason =
+        "Project navigation is available. Auto-naming requires a configured orchestration provider and a first completed exchange; generated names are capped at 19 Unicode characters. Manual names and existing session titles are preserved.";
     } else if (cap.id === "model-settings") {
       status = "unknown";
       reason =

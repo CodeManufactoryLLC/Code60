@@ -17,6 +17,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes the generated project agent name limit without restricting manual or existing names", () => {
+    const projects = DESKTOP_CAPABILITIES.find((cap) => cap.id === "projects");
+    expect(projects?.limitations).toContain("under 20 characters");
+    expect(projects?.limitations).toContain("cut off at 19 Unicode characters");
+    expect(projects?.limitations).toContain(
+      "manually supplied names and existing session titles are preserved",
+    );
+  });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       prerequisite: "none",
