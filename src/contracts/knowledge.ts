@@ -337,11 +337,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "files",
     "Files",
-    "Browse files and bounded read-only previews.",
+    "Browse files and bounded read-only previews in tabs owned by the individual chat or worker session.",
     "Chat → Files panel",
     "runtime",
     "read",
-    "Awareness can read only authorized open cached previews, not arbitrary paths.",
+    "Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Awareness can read only authorized open cached previews, not arbitrary paths.",
   ),
   feature(
     "commands",

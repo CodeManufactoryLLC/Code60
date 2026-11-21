@@ -162,12 +162,12 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews.
+- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session.
 - Access: Chat → Files panel
 - Prerequisite: runtime
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Awareness can read only authorized open cached previews, not arbitrary paths.
+- Limits: Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Awareness can read only authorized open cached previews, not arbitrary paths.
 - Pages: `files`
 - Settings sections: none
 - Tools: none

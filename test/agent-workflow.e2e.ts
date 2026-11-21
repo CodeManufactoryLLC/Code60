@@ -353,6 +353,49 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await composer.fill(name);
   }
 
+  // Two sessions in the SAME project must retain separate tab sets and selections.
+  const panel = page.locator("#chat-file-panel");
+  const tabs = panel.getByRole("tablist", { name: "File tabs", exact: true });
+  const first = entries.nth(count - 2);
+  const second = entries.nth(count - 1);
+  await first.click();
+  await expect(first).toHaveAttribute("aria-current", "true");
+  await expect(composer).toHaveValue("First sidebar draft");
+  const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "notes.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await tabs.getByRole("button", { name: "Close File Explorer", exact: true }).click();
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
+  await first.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["File Explorer", "result.txt", "Memory Recall"]);
+  await expect(tabs.getByRole("tab", { name: "result.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await tabs.getByRole("button", { name: "Close Memory Recall", exact: true }).click();
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["notes.txt", "New tab"]);
+  await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await page.screenshot({ path: test.info().outputPath("session-panel-isolation.png") });
+  await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
+
   for (const theme of ["light", "dark"]) {
     await page.locator("#tab-settings").click();
     if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
@@ -802,6 +845,9 @@ for (const custom of [false, true]) {
         checks.push(
           "Fresh setup, database creation and project opening completed through visible controls.",
         );
+        await application.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]?.setSize(1500, 1000),
+        );
         await checkSidebarNavigation(page, repo);
         checks.push(
           "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
@@ -917,6 +963,13 @@ for (const custom of [false, true]) {
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
+        const workerTabs = page.getByRole("tablist", { name: "File tabs", exact: true });
+        await expect(workerTabs.getByRole("tab")).toHaveCount(0);
+        await page.getByRole("button", { name: "New file tab", exact: true }).click();
+        await page.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -941,6 +994,9 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         // Cached worker text can show before selection settles; a click meanwhile is ignored.
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
@@ -953,6 +1009,9 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveCount(0);
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
         );

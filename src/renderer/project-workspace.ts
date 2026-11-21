@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
 import { useDesktopVisibility } from "./desktop-visibility.js";
 import { prepareFileNavigation, showsProjectFiles } from "./file-navigation.js";
-import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
+import type { FileTabAction } from "./file-tabs.js";
 import { useFiles } from "./files.js";
 import type { ChatNavigation } from "./history-navigation.js";
 import { isNavigationHome } from "./navigation-tree.js";
 import { useProjectScope } from "./project-scope.js";
+import { sessionPanelId } from "./session-panel.js";
 import { updateTabs } from "./tabs.js";
 import { useTranscripts } from "./transcripts.js";
 
@@ -67,8 +68,6 @@ export function useProjectWorkspace({
     setWorkerSelection,
     setVisitedWorkers,
     setChatRequest,
-    fileTabs,
-    setFileTabs,
   } = project;
   const workspace = scope.workspace;
   const workerScope = workspace;
@@ -172,15 +171,20 @@ export function useProjectWorkspace({
       ...(eventIndex === undefined ? {} : { eventIndex }),
     }));
   };
-  const currentFileTabs = fileTabs.workspace === workspace ? fileTabs : emptyFileTabs(workspace);
+  const filePanel = scope.panel(
+    sessionPanelId(workerId, snapshot?.chat.run?.id, snapshot?.chat.directory),
+  );
+  const currentFileTabs = useSyncExternalStore(
+    filePanel.subscribe,
+    filePanel.snapshot,
+    filePanel.snapshot,
+  );
   const fileAction = (action: FileTabAction) => {
     if (directory && ["browse", "file", "explorer", "revision", "changes"].includes(action.type))
-      setExplicitFileScope(scope.viewKey);
-    setFileTabs((current) =>
-      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), action),
-    );
+      setExplicitFileScope(filePanel.key);
+    filePanel.act(action);
   };
-  const explicitProjectFiles = explicitFileScope === scope.viewKey;
+  const explicitProjectFiles = explicitFileScope === filePanel.key;
   const activeFileTab = currentFileTabs.entries.find((tab) => tab.id === currentFileTabs.active);
   const readsActive = !splash && !navigationPending && !isNavigationHome(tabs.active);
   const filesActive =
@@ -195,8 +199,8 @@ export function useProjectWorkspace({
     snapshot,
     filesActive,
     activeFileTab?.kind === "file" && !activeFileTab.source ? activeFileTab.path : null,
-    scope.viewKey,
-    snapshot?.openProjects ? scope.files() : undefined,
+    filePanel.key,
+    filePanel.files,
   );
   const relayIds = new Set(snapshot?.runs.filter((run) => run.relay).map((run) => run.record.id));
   const projectTranscripts = useTranscripts(
@@ -245,10 +249,11 @@ export function useProjectWorkspace({
   const browseFiles = async () => {
     if (!snapshot) return;
     const current = scope.capture();
+    const panelCurrent = filePanel.capture();
     setBusy(true);
     try {
       const latest = await prepareFileNavigation(api, snapshot);
-      if (!latest || !current()) return;
+      if (!latest || !current() || !panelCurrent()) return;
       fileAction({ type: "browse" });
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
@@ -267,28 +272,18 @@ export function useProjectWorkspace({
   const reviewSummaries = snapshot?.reviews ?? [];
   useEffect(() => {
     const latest = reviewSummaries.at(-1);
-    if (!latest || scope.ensuredChangesReview.get(workspace) === latest.id) return;
-    scope.ensuredChangesReview.set(workspace, latest.id);
-    setFileTabs((current) =>
-      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
-        type: "ensure-changes",
-      }),
-    );
-  }, [reviewSummaries, workspace, scope, setFileTabs]);
+    if (!latest || filePanel.ensuredChangesReview === latest.id) return;
+    filePanel.ensuredChangesReview = latest.id;
+    filePanel.act({ type: "ensure-changes" });
+  }, [reviewSummaries, filePanel]);
   useEffect(() => {
     if (!readsActive || tabs.active !== "chat" || workerId || snapshot?.chat.kind === "relay")
       return;
     for (const plan of snapshot?.chat.plans ?? []) {
-      if (plan.state !== "draft" || scope.openedPlans.get(plan.id) === plan.proposalRevision)
+      if (plan.state !== "draft" || filePanel.openedPlans.get(plan.id) === plan.proposalRevision)
         continue;
-      scope.openedPlans.set(plan.id, plan.proposalRevision);
-      setFileTabs((current) =>
-        updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
-          type: "plan",
-          planId: plan.id,
-          title: plan.title,
-        }),
-      );
+      filePanel.openedPlans.set(plan.id, plan.proposalRevision);
+      filePanel.act({ type: "plan", planId: plan.id, title: plan.title });
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     }
@@ -298,9 +293,7 @@ export function useProjectWorkspace({
     snapshot?.chat.kind,
     readsActive,
     workerId,
-    workspace,
-    scope,
-    setFileTabs,
+    filePanel,
     setTabs,
   ]);
   const openReview = (id: string) => {
@@ -310,7 +303,13 @@ export function useProjectWorkspace({
     const navigation = switchChat ? onChatNavigation?.({ type: "select", id: chatId }) : undefined;
     selectWorker(undefined);
     const revision = review?.revisions.at(-1);
-    fileAction(
+    const destinationChat = switchChat
+      ? snapshot?.chats.find((chat) => chat.run?.id === chatId)
+      : snapshot?.chat;
+    const destination = scope.panel(
+      sessionPanelId(undefined, destinationChat?.run?.id, destinationChat?.directory),
+    );
+    destination.act(
       review && revision
         ? {
             type: "revision",
@@ -320,6 +319,7 @@ export function useProjectWorkspace({
           }
         : { type: "changes" },
     );
+    setExplicitFileScope(destination.key);
     setExplorerOpen(true);
     setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     const current = scope.capture();
@@ -354,7 +354,7 @@ export function useProjectWorkspace({
   };
   useDesktopVisibility(api, tabs.active, splash, filesActive, setError);
   return {
-    project: { ...project, explicitProjectFiles },
+    project: { ...project, filePanel, fileTabs: currentFileTabs, explicitProjectFiles },
     workerId,
     fileBrowser,
     transcripts,

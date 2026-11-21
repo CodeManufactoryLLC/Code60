@@ -234,4 +234,14 @@ describe("desktop capability catalog", () => {
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
   });
+
+  it("describes session-owned file tabs without changing their runtime prerequisite", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "files")).toMatchObject({
+      prerequisite: "runtime",
+      purpose: expect.stringContaining("individual chat or worker session"),
+      limitations: expect.stringContaining(
+        "Tab sets, order and selection are independent per session",
+      ),
+    });
+  });
 });
