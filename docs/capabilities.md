@@ -274,12 +274,12 @@ Schema version: 1
 
 - ID: `memory`
 - Status: shipped
-- Purpose: Learn and recall scoped evidence when enabled.
+- Purpose: Learn and recall scoped evidence when enabled; browse and inspect saved memories.
 - Access: Settings → Memory; Apps → Data Viewer → Memories
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Memory Off disables learning/recall, not session-local continuity. No memory records exposed through awareness.
+- Limits: The database-independent browser has project/type/status library filters, page-local search and saved filters, readable attributes and source evidence. Inspecting and closing details preserves the page and filters. Editing is revision-checked; sharing and forgetting require native confirmation. Memory Off disables learning/recall, not browsing or session-local continuity. No memory records exposed through awareness.
 - Pages: `memories`
 - Settings sections: `memory`
 - Tools: none

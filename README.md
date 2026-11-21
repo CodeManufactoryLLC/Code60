@@ -83,6 +83,13 @@ pin, delete or explicitly share a memory across projects. Retention can delete
 unpinned memories after 30 days, 90 days or one year; the default is Never.
 Shortening retention requires confirmation.
 
+In Memories, the labelled Project, Type and Status selectors narrow the saved
+library. Search, saved filters and column filters apply to the current page.
+Rows show a single-line memory preview, subject, applicability and record
+attributes. Select a row or press Enter for full text, source evidence and
+revision history; Escape returns to the same page, filters and table focus.
+The browser remains available without a database and while Memory is Off.
+
 In Relay, project chats and worker chats, open the right sidebar and choose
 **New tab → Open Memory Recall** (also available in an empty sidebar). The
 closable, reorderable tab shows recorded recalls by turn, newest first, and

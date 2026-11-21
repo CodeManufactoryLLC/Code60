@@ -5,6 +5,7 @@ interface State {
   page: MemoryPage;
   metadata: MemorySnapshot | undefined;
   pending: boolean;
+  loaded: boolean;
   error: string;
   pageNumber: number;
 }
@@ -13,6 +14,7 @@ export class MemoriesModel {
     page: { records: [], next: null },
     metadata: undefined,
     pending: false,
+    loaded: false,
     error: "",
     pageNumber: 1,
   };
@@ -85,7 +87,7 @@ export class MemoriesModel {
           if (metadata.status === "rejected" || page.status === "rejected")
             throw new Error("Memory read failed");
           if (this.active && generation === this.generation)
-            this.update({ metadata: metadata.value, page: page.value, error: "" });
+            this.update({ metadata: metadata.value, page: page.value, loaded: true, error: "" });
         } catch {
           if (this.active && generation === this.generation)
             this.update({ error: "Memories are unavailable. Retry Refresh memories." });

@@ -467,8 +467,14 @@ Apps → Data Viewer → Memories is a database-independent, application-wide ta
 of persistent memory records. It uses the shared Glide table, saved filters and
 presentation settings, with bounded cursor pages rather than loading the store.
 Compact project/type/status selectors beside the title filter saved records;
-table search, column filters and sorting apply to the current page. A compact
-pager reports the page's record count. Pushed memory notices refresh the current
+table search, column filters and sorting apply to the current page. Visible
+labels identify each library selector; search and saved-filter controls name
+their page scope. Rows normalize whitespace for a single-line preview and expose
+subject, applicability and named project/conversation attributes. Empty libraries,
+unmatched library/page filters and failed reads have distinct feedback.
+Detail reads open the dialog immediately with loading, error and retry states;
+closing it restores table focus without remounting the grid or resetting filters.
+A compact pager reports the page's record count. Pushed memory notices refresh the current
 page without timers. Hidden pages retain filters and paging but defer reads;
 stale replies cannot replace the current view. Selecting a row or pressing Enter
 opens a compact Memory details dialog with readable attributes, editable text,

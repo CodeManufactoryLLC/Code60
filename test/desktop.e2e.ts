@@ -13112,9 +13112,9 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
         citations,
         memories: Array.from({ length: 28 }, (_, index) => ({
           type: index % 2 ? "semantic" : "episodic",
-          text: `Table memory ${index}`,
+          text: `Table memory ${index}\n\nUse staging before production.`,
           subject: `table-event-${index}`,
-          condition: "",
+          condition: "During staging deployments",
           correction: false,
           citations,
         })),
@@ -13149,6 +13149,12 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
         .getByRole("heading", { name: "Memories", exact: true }),
     ).toBeVisible();
     await expect(panel.getByText("25 memories", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Search memories on this page", exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Filters on this page", exact: true }),
+    ).toBeVisible();
     await panel.getByRole("button", { name: "Next page", exact: true }).click();
     await expect(rows).toHaveCount(3);
     await expect(panel.getByRole("button", { name: "Next page", exact: true })).toBeDisabled();
@@ -13157,6 +13163,11 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
     await expect(panel.getByText("Page 2", { exact: true })).toBeVisible();
     await expect(rows).toHaveCount(3);
     const canvas = panel.getByTestId("data-grid-canvas");
+    const scroller = panel.locator(".dvn-scroller");
+    const position = await scroller.evaluate((element) => ({
+      top: element.scrollTop,
+      left: element.scrollLeft,
+    }));
     await canvas.focus();
     await canvas.press("ArrowDown");
     await canvas.press("Enter");
@@ -13166,6 +13177,8 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
     );
     await expect(detail.getByText("User stated", { exact: true })).toBeVisible();
     await expect(detail.getByText("memory-project", { exact: true })).toBeVisible();
+    await expect(detail.locator(".memory-condition")).toContainText("During staging deployments");
+    await expect(detail.getByText("Memory table fixture", { exact: true })).toBeVisible();
     await expect(detail.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
     expect((await detail.boundingBox())?.width).toBe(720);
     const originalScheme = await page.locator("html").getAttribute("data-color-scheme");
@@ -13188,6 +13201,7 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
       height: innerHeight,
     }));
     await page.setViewportSize({ width: 520, height: 600 });
+    await page.evaluate(() => document.documentElement.style.setProperty("--text-size", "24px"));
     expect(await detail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true,
     );
@@ -13195,7 +13209,16 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
       detail.getByRole("button", { name: "Save changes", exact: true }),
     ).toBeInViewport();
     await detail.screenshot({ path: test.info().outputPath("memory-details-narrow.png") });
+    await page.evaluate(() => document.documentElement.style.removeProperty("--text-size"));
     await page.setViewportSize(originalViewport);
+    await page.keyboard.press("Escape");
+    await expect(detail).toHaveCount(0);
+    await expect(canvas).toBeFocused();
+    await expect(panel.getByText("Page 2", { exact: true })).toBeVisible();
+    expect(
+      await scroller.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft })),
+    ).toEqual(position);
+    await canvas.press("Enter");
     await expect(
       detail.getByText("User-stated table evidence.", { exact: true }).first(),
     ).toBeVisible();
@@ -13211,6 +13234,17 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
       edited,
     );
     await expect(detail.locator("script")).toHaveCount(0);
+    // The edited row is on page two; find it with the existing opaque cursor.
+    const firstPage = await page.evaluate(() => window.desktop.browseMemories({}));
+    const persistedEdit =
+      firstPage.records.find((record) => record.text === edited) ??
+      (
+        await page.evaluate(
+          (cursor) => window.desktop.browseMemories({ cursor: cursor ?? undefined }),
+          firstPage.next,
+        )
+      ).records.find((record) => record.text === edited);
+    expect(persistedEdit).toMatchObject({ text: edited, pinned: true, revision: 2 });
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
@@ -13233,21 +13267,49 @@ test("desktop: Memories data viewer is database-independent, paged and supports 
     // rows to the visible height, so count the page's records instead of rendered rows.
     await expect(panel.getByText(/^1[34] memories$/)).toBeVisible();
     await panel.getByLabel("Memory status", { exact: true }).selectOption("stale");
-    await expect(panel.getByText("No memories in this view.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("No memories match the selected library filters.", { exact: true }),
+    ).toBeVisible();
     await panel.getByLabel("Memory status", { exact: true }).selectOption("active");
     await expect(panel.getByText(/^1[34] memories$/)).toBeVisible();
     await panel.getByRole("button", { name: "Settings", exact: true }).click();
     const settings = page.getByRole("dialog", { name: "Memories table settings", exact: true });
     await expect(settings.locator(".table-preview-grid")).toBeVisible();
     await settings.getByRole("button", { name: "Cancel", exact: true }).click();
-    await panel.getByRole("button", { name: "Filters", exact: true }).click();
+    await panel.getByRole("button", { name: "Filters on this page", exact: true }).click();
     const filters = page.getByRole("dialog", { name: "Filters", exact: true });
     await expect(filters).toBeVisible();
     await filters.getByRole("button", { name: "Close", exact: true }).click();
     await expect(filters).toBeHidden();
+    await panel.getByLabel("Column menu").selectOption("subject");
+    const column = page.getByRole("dialog", { name: "Subject", exact: true });
+    await column.getByLabel("Value", { exact: true }).fill("missing-subject");
+    await column.getByRole("button", { name: "Apply filter", exact: true }).click();
+    await expect(
+      panel.getByText("No memories match the filters on this page.", { exact: true }),
+    ).toBeVisible();
+    await panel.getByRole("button", { name: "Clear Subject filter", exact: true }).click();
+    await expect(panel.locator(".table-pager-summary")).toHaveText(/^1[34] memories$/);
+    await expect(rows.first()).toContainText("Table memory");
+    await expect(
+      panel.getByText("No memories match the filters on this page.", { exact: true }),
+    ).toHaveCount(0);
+    await panel.getByRole("button", { name: "Clear memory filters", exact: true }).click();
+    await expect(panel.getByLabel("Memory project", { exact: true })).toHaveValue("");
+    await expect(panel.getByLabel("Memory type", { exact: true })).toHaveValue("");
+    await expect(panel.getByLabel("Memory status", { exact: true })).toHaveValue("");
+    await expect(panel.getByText("25 memories", { exact: true })).toBeVisible();
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
     await page.screenshot({ path: test.info().outputPath("memories-table.png") });
     expect(errors).toEqual([]);
+    await application.close();
+    const saved = new MemoryStore(join(directory, "state", "code60", "memory"));
+    try {
+      expect(saved.snapshot().count).toBe(27);
+      expect(() => saved.detail(persistedEdit?.id ?? "missing")).toThrow();
+    } finally {
+      saved.close();
+    }
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

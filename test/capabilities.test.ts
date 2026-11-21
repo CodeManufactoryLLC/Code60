@@ -244,4 +244,12 @@ describe("desktop capability catalog", () => {
       limitations: expect.stringContaining("reduced motion and forced colors"),
     });
   });
+
+  it("keeps saved-memory browsing available without a database or enabled learning", () => {
+    expect(PAGE_CAPABILITIES.memories).toBe("memory");
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "memory")).toMatchObject({
+      prerequisite: "none",
+      limitations: expect.stringContaining("Memory Off disables learning/recall, not browsing"),
+    });
+  });
 });

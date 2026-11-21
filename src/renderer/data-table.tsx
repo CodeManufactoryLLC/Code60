@@ -131,6 +131,8 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   actions: toolbarActions,
   scope,
   onRetainedQuery,
+  pageLocal = false,
+  emptyMessage,
 }: {
   rows: Row[];
   columns: { key: Key; title: string; width: number; filter?: FilterKind }[];
@@ -156,6 +158,8 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   scope?: ReactNode;
   /** Server-backed tables apply search and filters to retained history, not this page. */
   onRetainedQuery?(query: RetainedTableQuery): void;
+  pageLocal?: boolean;
+  emptyMessage?: string;
 } & TableOptions) {
   const ownView = useTableView(
     tableId,
@@ -483,8 +487,8 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
             type="button"
             className="icon-button"
             onClick={() => setShowSearch(true)}
-            aria-label={`Search ${tableId}`}
-            data-tooltip="Search"
+            aria-label={`Search ${tableId}${pageLocal ? " on this page" : ""}`}
+            data-tooltip={pageLocal ? "Search this page" : "Search"}
             data-tooltip-keys={findShortcut}
           >
             <Icon name="search" />
@@ -501,6 +505,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
               ).length
             }
             retained={!!onRetainedQuery}
+            pageLocal={pageLocal}
           />
           <span className="icon-select">
             <Icon name="column" />
@@ -796,6 +801,11 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
           maxColumnWidth={fit ? 4000 : 500}
         />
       </div>
+      {emptyMessage && rows.length > 0 && sorted.length === 0 && (
+        <p className="table-empty" role="status">
+          {emptyMessage}
+        </p>
+      )}
     </div>
   );
 }

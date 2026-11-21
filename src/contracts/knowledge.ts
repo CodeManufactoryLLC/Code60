@@ -411,11 +411,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "memory",
     "Memory",
-    "Learn and recall scoped evidence when enabled.",
+    "Learn and recall scoped evidence when enabled; browse and inspect saved memories.",
     "Settings → Memory; Apps → Data Viewer → Memories",
     "none",
     "human-only",
-    "Memory Off disables learning/recall, not session-local continuity. No memory records exposed through awareness.",
+    "The database-independent browser has project/type/status library filters, page-local search and saved filters, readable attributes and source evidence. Inspecting and closing details preserves the page and filters. Editing is revision-checked; sharing and forgetting require native confirmation. Memory Off disables learning/recall, not browsing or session-local continuity. No memory records exposed through awareness.",
   ),
   feature(
     "continuity",
