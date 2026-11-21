@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type {
+  ActivitySnapshot,
+  DesktopApi,
+  DesktopRun,
+  OrchestrationChat,
+} from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
@@ -33,6 +38,167 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  const activity = (state: ActivitySnapshot["state"]): ActivitySnapshot => ({
+    state,
+    label: state,
+    source: "host",
+    active: state === "working",
+    urgent: false,
+    declaration: null,
+    workerCount: state === "waiting_for_workers" ? 1 : 0,
+    otherOperations: 0,
+  });
+  const activityChat = (
+    kind: "project" | "relay" | "custom",
+    status: RunStatus,
+    state: ActivitySnapshot["state"],
+  ): OrchestrationChat => ({
+    ...chat("owner"),
+    kind: kind === "project" ? "project" : "relay",
+    ...(kind === "custom" ? { customAgentId: "assistant-id" } : {}),
+    run: view("owner", status),
+    activity: activity(state),
+  });
+  const renderOwner = (owner: OrchestrationChat) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    return renderToStaticMarkup(
+      <ChatSidebar
+        chats={[owner]}
+        runs={[]}
+        selectedId={undefined}
+        navigationSerial={undefined}
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+  };
+
+  it.each(["project", "relay", "custom"] as const)(
+    "keeps restored queued/running %s history static despite a retained run view",
+    (kind) => {
+      for (const status of ["queued", "running"] as const) {
+        const owner = { ...activityChat(kind, status, "idle"), restored: true };
+        expect(renderOwner(owner)).not.toContain('data-working="true"');
+      }
+    },
+  );
+
+  it.each(["project", "relay", "custom"] as const)(
+    "stops %s spotlight and exposes stopping before its provider finishes",
+    (kind) => {
+      const owner = activityChat(kind, "running", "stopping");
+      expect(owner.run?.stopping).toBe(false);
+      const html = renderOwner(owner);
+      expect(html).not.toContain('data-working="true"');
+      expect(html).toContain('aria-description="Orchestrator. Stopping"');
+    },
+  );
+
+  it.each(["project", "relay", "custom"] as const)(
+    "exposes %s worker monitoring through its description and tooltip",
+    (kind) => {
+      const html = renderOwner(activityChat(kind, "idle", "waiting_for_workers"));
+      expect(html).toContain('data-working="true"');
+      expect(html).toContain('aria-description="Orchestrator. Monitoring subagents"');
+      expect(html).toMatch(/title="[^"]*Monitoring subagents"/);
+      expect(html).not.toContain("Awaiting input");
+    },
+  );
+
+  it.each<RunStatus>([
+    "queued",
+    "running",
+    "waiting",
+    "idle",
+    "finished",
+    "failed",
+    "cancelled",
+    "timed_out",
+    "interrupted",
+  ])("spotlights only live active sidebar entries (%s)", (status) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const ownerRun = view("owner", status);
+    const owner: OrchestrationChat = {
+      ...chat("owner", ["worker"]),
+      title: "Custom assistant",
+      kind: "relay",
+      customAgentId: "assistant-id",
+      run: ownerRun,
+      activity: activity(
+        status === "queued"
+          ? "connecting"
+          : status === "running"
+            ? "working"
+            : status === "waiting"
+              ? "waiting_for_approval"
+              : status,
+      ),
+    };
+    const relay: OrchestrationChat = {
+      ...chat("relay"),
+      kind: "relay",
+      run: view("relay", status),
+      activity: owner.activity,
+    };
+    const worker = run("worker", status);
+    const render = () =>
+      renderToStaticMarkup(
+        <ChatSidebar
+          chats={[owner, relay]}
+          runs={[worker]}
+          selectedId="relay"
+          navigationSerial={undefined}
+          database="/db"
+          eventsByRun={{}}
+          open
+          pending={false}
+          onSelect={() => {}}
+        />,
+      );
+    const working = () => (render().match(/data-working="true"/g) ?? []).length;
+    expect(working()).toBe(status === "running" || status === "queued" ? 3 : 0);
+    if (status !== "running") return;
+    ownerRun.stopping = true;
+    expect(working()).toBe(2);
+    relay.error = "Connection failed";
+    expect(working()).toBe(1);
+    if (worker.view) worker.view.pending = [{ id: "approval" } as RunView["pending"][number]];
+    expect(working()).toBe(0);
+    ownerRun.stopping = false;
+    ownerRun.status = "idle";
+    owner.activity = { state: "waiting_for_workers" } as NonNullable<OrchestrationChat["activity"]>;
+    expect(working()).toBe(1);
+    delete worker.view;
+    expect(working()).toBe(1); // A running saved record without a live view is static.
+    owner.run = null;
+    expect(working()).toBe(0);
+  });
+
+  it("keeps a cancelling worker static before its provider finishes", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const worker = run("worker", "running");
+    if (!worker.view) throw new Error("Missing worker view");
+    worker.view.cancelling = true;
+    const html = renderToStaticMarkup(
+      <ChatSidebar
+        chats={[]}
+        runs={[worker]}
+        selectedId={undefined}
+        navigationSerial={undefined}
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-working="true"');
+    expect(html).toContain('aria-description="Worker. Stopping"');
+  });
+
   it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
     const worker = run("old-worker", "interrupted");
     worker.record.reason = "the owning process (PID 12345) is gone";

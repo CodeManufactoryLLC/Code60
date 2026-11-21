@@ -100,6 +100,7 @@
 @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
   .activity-display[data-animate="true"] .activity-name,
   .chat-connecting[data-animate="true"] .activity-name,
+  .chat-sidebar-label[data-working="true"]:not([inert] *, [hidden] *, [aria-hidden="true"] *),
   .search-loading-label {
     background-image: linear-gradient(
       100deg,

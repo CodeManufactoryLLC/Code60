@@ -530,11 +530,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "activity",
     "Activity display",
-    "Show the orchestrator's current step beside the transcript.",
-    "Chat transcript activity line",
+    "Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.",
+    "Chat transcript activity line and left navigation names",
     "runtime",
     "existing-tools",
-    "Presentation only; reports never change work or permissions.",
+    "Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.",
   ),
   feature(
     "knowledge",
