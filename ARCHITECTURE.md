@@ -2100,6 +2100,14 @@ skip transitions. Final artwork is independent of MCP.
 Display failure never fails an agent task; operating instructions request meaningful
 phase reports, not heartbeats. Persisted records and worker access are unchanged.
 
+Live conversation and worker names in the left navigation, including custom
+assistants and Relay, reuse the transcript activity spotlight's gradient and
+2.8-second linear animation. Connecting, working and monitoring owned workers
+qualify; approval, stopping, idle and saved entries remain static. Each name
+follows its own live snapshot independently of chat selection. Hidden documents,
+collapsed/inert navigation, reduced motion and forced colors disable the effect.
+Existing readable role/status descriptions and indicators remain available.
+
 Settings → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a
 nonlinear slider for fine short-duration control, exact millisecond input, current
