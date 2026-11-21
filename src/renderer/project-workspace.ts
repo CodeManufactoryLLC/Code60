@@ -220,9 +220,9 @@ export function useProjectWorkspace({
     events: { ...projectTranscripts.events, ...relayTranscripts.events },
     errors: { ...projectTranscripts.errors, ...relayTranscripts.errors },
     pending: projectTranscripts.pending + relayTranscripts.pending,
-    read: async () => ({
-      ...(await projectTranscripts.read()),
-      ...(await relayTranscripts.read()),
+    read: async (retry = false) => ({
+      ...(await projectTranscripts.read(retry)),
+      ...(await relayTranscripts.read(retry)),
     }),
     retry: () => {
       projectTranscripts.retry();

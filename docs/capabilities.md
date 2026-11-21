@@ -330,12 +330,12 @@ Schema version: 1
 
 - ID: `search`
 - Status: shipped
-- Purpose: Search saved project evidence, with an optional cited overview.
+- Purpose: Search saved project evidence with labelled query, type and sort controls, source context and an optional cited overview.
 - Access: Sidebar → Search
 - Prerequisite: database
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Overview helpers run with denied permissions and no gateway; agents cannot request them.
+- Limits: Search retains submitted results through source navigation. Retry reads refreshes those results using submitted criteria; overview failures keep literal matches usable. Overview helpers run with denied permissions and no gateway; agents cannot request them.
 - Pages: `search`
 - Settings sections: none
 - Tools: none

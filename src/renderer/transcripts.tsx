@@ -150,8 +150,8 @@ export function useTranscripts(
   return {
     ...state,
     events,
-    read: async () => {
-      await cache.load(JSON.parse(manifest));
+    read: async (retry = false) => {
+      await cache.load(JSON.parse(manifest), retry);
       return {
         ...streamed,
         ...cache.snapshot().events,
@@ -165,7 +165,7 @@ export function useTranscripts(
 }
 export type Transcripts = ReturnType<typeof useTranscripts>;
 
-export function TranscriptNotice({ data }: { data: Transcripts }) {
+export function TranscriptNotice({ data, onRetry }: { data: Transcripts; onRetry?: () => void }) {
   const failures = Object.entries(data.errors);
   return (
     <>
@@ -182,7 +182,7 @@ export function TranscriptNotice({ data }: { data: Transcripts }) {
               ))}
             </ul>
           </details>
-          <button type="button" onClick={data.retry}>
+          <button type="button" onClick={onRetry ?? data.retry}>
             Retry reads
           </button>
         </div>

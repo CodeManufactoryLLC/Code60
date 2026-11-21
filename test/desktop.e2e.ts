@@ -9494,8 +9494,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     expect(typeBox.x).toBeGreaterThan(buttonBox.x + buttonBox.width);
     expect(sortBox.x).toBeGreaterThan(typeBox.x + typeBox.width);
     expect(typeBox.y).toBeLessThan(buttonBox.y + buttonBox.height);
-    await expect(search.getByText("Type", { exact: true })).toHaveCount(0);
-    await expect(search.getByText("Sort", { exact: true })).toHaveCount(0);
+    await expect(search.getByText("Type", { exact: true })).toBeVisible();
+    await expect(search.getByText("Sort", { exact: true })).toBeVisible();
     await expect(search.getByText("Code60", { exact: true })).toHaveCount(0);
     const entryBox = await search.locator(".search-entry").boundingBox();
     const pageBox = await search.boundingBox();
@@ -9771,6 +9771,13 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await selectSidebarPage(page, "Search");
     await query.focus();
     await query.press("ArrowDown");
+    await expect(search.locator(".search-result-title").first()).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(query).toBeFocused();
+    await query.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    await expect(query).toBeFocused();
+    await query.press("ArrowDown");
     await page.keyboard.press("End");
     await expect(search.locator(".search-result-title").last()).toBeFocused();
     await page.keyboard.press("Enter");
@@ -9957,10 +9964,22 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await expect(
       search.getByText("2 transcripts unavailable. Results are incomplete."),
     ).toBeVisible();
-    await writeFile(join(records, "corrupt", "events.jsonl"), "");
+    await query.fill("unsubmitted draft");
+    await writeFile(
+      join(records, "corrupt", "events.jsonl"),
+      `${JSON.stringify({
+        runId: "corrupt",
+        type: "message",
+        text: "Parser recovered evidence",
+        at: "2026-11-04T12:00:00Z",
+      })}\n`,
+    );
     await writeFile(join(records, "missing", "events.jsonl"), "");
     await search.getByRole("button", { name: "Retry reads" }).click();
-    await expect(search.getByRole("alert")).toHaveCount(0);
+    await expect(search.getByRole("alert")).toHaveText([]);
+    await expect(search.locator(".search-results")).toContainText("Parser recovered evidence");
+    await expect(query).toHaveValue("unsubmitted draft");
+    await expect(pending).toBeVisible();
     await page.screenshot({
       animations: "disabled",
       path: join(root, "test-results", "theme-search.png"),

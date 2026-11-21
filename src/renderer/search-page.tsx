@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   type DesktopApi,
   type DesktopRun,
@@ -7,6 +7,7 @@ import {
 } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
+import { pathLabel } from "./path-label.js";
 import {
   highlights,
   type SearchKind,
@@ -72,10 +73,13 @@ export function SearchPage({
   data: Transcripts;
   onOpen(result: SearchResult): void;
 }) {
+  const queryId = useId();
+  const [sourceError, setSourceError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<SearchCriteria["kind"]>("all");
   const [sort, setSort] = useState<SearchCriteria["sort"]>("relevance");
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const active = useRef<string | undefined>(undefined);
   const list = useRef<HTMLUListElement>(null);
@@ -140,17 +144,30 @@ export function SearchPage({
     }
   }
 
-  async function submit() {
-    const criteria = { query: query.trim(), kind, sort };
+  function openResult(result: SearchResult) {
+    if (result.runId && !runs.some((run) => run.record.id === result.runId)) {
+      setSourceError("This session is no longer available. Search again to refresh the results.");
+      return;
+    }
+    setSourceError(null);
+    onOpen(result);
+  }
+
+  async function submit(
+    criteria: SearchCriteria = { query: query.trim(), kind, sort },
+    retryReads = false,
+  ) {
     if (!directory || !criteria.query) return;
     cancel();
     const id = crypto.randomUUID();
     active.current = id;
     setSubmitted({ ...criteria, results: null, evidence: [] });
     setOverview(null);
+    setSearchError(null);
+    setSourceError(null);
     content.current?.scrollTo({ top: 0, behavior: "instant" });
     try {
-      const events = await data.read();
+      const events = await data.read(retryReads);
       if (active.current !== id) return;
       const index = searchIndex(directory, runs, events);
       const results = searchResults(index, criteria.query, criteria.kind, criteria.sort);
@@ -164,10 +181,7 @@ export function SearchPage({
     } catch (error) {
       if (active.current === id) {
         setSubmitted({ ...criteria, results: [], evidence: [] });
-        setOverview({
-          status: "error",
-          error: error instanceof Error ? error.message : String(error),
-        });
+        setSearchError(error instanceof Error ? error.message : String(error));
         active.current = undefined;
       }
     }
@@ -192,9 +206,14 @@ export function SearchPage({
             void submit();
           }}
         >
+          <p className="search-scope">{directory ? pathLabel(directory) : "No project selected"}</p>
+          <label className="search-query-label" htmlFor={queryId}>
+            Query
+          </label>
           <div className="search-query-row">
             <div className="search-query-action">
               <input
+                id={queryId}
                 className="search-query"
                 aria-label="Query"
                 type="search"
@@ -208,6 +227,8 @@ export function SearchPage({
                     cancel();
                     setSubmitted(null);
                     setOverview(null);
+                    setSearchError(null);
+                    setSourceError(null);
                   }
                 }}
                 onKeyDown={(event) => {
@@ -227,28 +248,34 @@ export function SearchPage({
               </button>
             </div>
             <div className="search-controls">
-              <select
-                aria-label="Type"
-                value={kind}
-                onChange={(event) => setKind(event.target.value as SearchCriteria["kind"])}
-              >
-                {Object.entries(typeLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Sort"
-                value={sort}
-                onChange={(event) => setSort(event.target.value as SearchCriteria["sort"])}
-              >
-                {Object.entries(sortLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <label>
+                <span>Type</span>
+                <select
+                  aria-label="Type"
+                  value={kind}
+                  onChange={(event) => setKind(event.target.value as SearchCriteria["kind"])}
+                >
+                  {Object.entries(typeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Sort</span>
+                <select
+                  aria-label="Sort"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value as SearchCriteria["sort"])}
+                >
+                  {Object.entries(sortLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {unapplied && (
                 <span
                   className="search-unapplied"
@@ -280,7 +307,28 @@ export function SearchPage({
             </div>
           </div>
         )}
-        {expanded && <TranscriptNotice data={data} />}
+        {expanded && (
+          <TranscriptNotice
+            data={data}
+            onRetry={() => {
+              if (submitted) void submit(submitted, true);
+            }}
+          />
+        )}
+        {sourceError && <p role="alert">{sourceError}</p>}
+        {searchError && (
+          <div className="search-read-error" role="alert">
+            <p>Search unavailable: {searchError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (submitted) void submit(submitted, true);
+              }}
+            >
+              Retry search
+            </button>
+          </div>
+        )}
         {expanded && (
           <div className="search-pending search-placeholders" hidden={!loading} aria-hidden="true">
             <div className="search-overview search-summary-skeleton">
@@ -308,7 +356,7 @@ export function SearchPage({
         )}
         {submitted?.results && (
           <div className="search-body">
-            {!loading && (
+            {!loading && !searchError && (
               <section className="search-overview" aria-labelledby="search-overview-heading">
                 <div className="search-overview-heading">
                   <h2 id="search-overview-heading">AI overview</h2>
@@ -331,7 +379,7 @@ export function SearchPage({
                           aria-label={`Source ${part.source + 1}: ${overview.sources[part.source]?.title}`}
                           onClick={() => {
                             const source = overview.sources[part.source as number];
-                            if (source) onOpen(sourceResult(source));
+                            if (source) openResult(sourceResult(source));
                           }}
                         >
                           {part.text}
@@ -346,7 +394,9 @@ export function SearchPage({
                 )}
               </section>
             )}
-            {!submitted.results.length && !loading && <p role="status">No matching results.</p>}
+            {!submitted.results.length && !loading && !searchError && (
+              <p role="status">No matching results. Change the query or Type and search again.</p>
+            )}
             <ul
               className="search-results"
               aria-label="Search results"
@@ -358,6 +408,11 @@ export function SearchPage({
                   ) ?? []),
                 ];
                 const index = buttons.indexOf(event.target as HTMLButtonElement);
+                if (event.key === "Escape" || (event.key === "ArrowUp" && index === 0)) {
+                  event.preventDefault();
+                  document.getElementById(queryId)?.focus();
+                  return;
+                }
                 const next =
                   event.key === "ArrowDown"
                     ? Math.min(buttons.length - 1, index + 1)
@@ -379,9 +434,16 @@ export function SearchPage({
                 const showType = !result.title.startsWith(`${type} / `);
                 return (
                   <li key={result.id}>
-                    {(showType || result.at) && (
+                    {(showType || result.at || directory) && (
                       <div className="search-result-meta">
+                        {directory && <span>{pathLabel(directory)}</span>}
+                        <span>
+                          {searchResults([result], submitted.query, submitted.kind).length
+                            ? "Match"
+                            : "Overview source"}
+                        </span>
                         {showType && <span>{type}</span>}
+                        {result.runId && <span>Session {result.runId}</span>}
                         {result.at && (
                           <time dateTime={result.at}>{new Date(result.at).toLocaleString()}</time>
                         )}
@@ -392,7 +454,7 @@ export function SearchPage({
                         type="button"
                         className="search-result-title"
                         data-result-index={i}
-                        onClick={() => onOpen(result)}
+                        onClick={() => openResult(result)}
                       >
                         <Highlight text={result.title} query={submitted.query} />
                       </button>

@@ -48,6 +48,7 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof useProjectScope>);
 });
 
+let renderedWorkspace: ReturnType<typeof useProjectWorkspace>;
 function Probe({ active, pending, splash }: { active: PageId; pending: boolean; splash: boolean }) {
   const workspace = useProjectWorkspace({
     api,
@@ -61,6 +62,7 @@ function Probe({ active, pending, splash }: { active: PageId; pending: boolean; 
     setBusy: vi.fn(),
     onWorkerSelection: vi.fn(),
   });
+  renderedWorkspace = workspace;
   if (!workspace.project.explorerOpen) workspace.project.setExplorerOpen(true);
   return null;
 }
@@ -99,3 +101,17 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
     expect(scope.snapshot().fileTabs.entries).toHaveLength(1);
   },
 );
+
+it("forwards retry reads through the combined transcript view", async () => {
+  const read = vi.fn().mockResolvedValue({});
+  vi.mocked(useTranscripts).mockReturnValue({
+    events: {},
+    errors: {},
+    pending: 0,
+    read,
+    retry: vi.fn(),
+  });
+  renderToStaticMarkup(<Probe active="search" pending={false} splash={false} />);
+  await renderedWorkspace.transcripts.read(true);
+  expect(read.mock.calls).toEqual([[true], [true]]);
+});

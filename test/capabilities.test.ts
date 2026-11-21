@@ -76,6 +76,15 @@ describe("desktop capability catalog", () => {
     });
   });
 
+  it("describes Search recovery without expanding availability or agent access", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "search")).toMatchObject({
+      prerequisite: "database",
+      agentAccess: "human-only",
+      purpose: expect.stringContaining("labelled query"),
+      limitations: expect.stringContaining("Retry reads refreshes"),
+    });
+  });
+
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
   });

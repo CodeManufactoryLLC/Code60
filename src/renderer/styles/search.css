@@ -550,3 +550,47 @@
 :root[data-color-scheme="dark"] .memory-cloud-dark {
   display: inline;
 }
+
+.search-query-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.search-scope {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+
+.search-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.search-controls select {
+  max-width: 100%;
+}
+
+.search-result-meta span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.search-overview-heading {
+  flex-wrap: wrap;
+}
+
+.search-page .transcript-errors {
+  flex-wrap: wrap;
+}
+
+.search-page .transcript-errors details {
+  min-width: 0;
+}
+
+.search-page .transcript-errors summary {
+  font-size: inherit;
+  line-height: 1.5;
+}

@@ -450,11 +450,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "search",
     "Search",
-    "Search saved project evidence, with an optional cited overview.",
+    "Search saved project evidence with labelled query, type and sort controls, source context and an optional cited overview.",
     "Sidebar → Search",
     "database",
     "human-only",
-    "Overview helpers run with denied permissions and no gateway; agents cannot request them.",
+    "Search retains submitted results through source navigation. Retry reads refreshes those results using submitted criteria; overview failures keep literal matches usable. Overview helpers run with denied permissions and no gateway; agents cannot request them.",
   ),
   feature(
     "logs",
