@@ -5329,15 +5329,11 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await expect(page.getByRole("group", { name: "Done notification", exact: true })).toContainText(
       "Chat archived.",
     );
-    await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-    await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("relay");
-    await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeFocused();
+    const projectHome = page.locator("#panel-project .home-page:visible");
+    await expect(projectHome).toContainText("New Session");
+    await expect(page.locator(".orchestration-chat-page:visible")).toHaveCount(0);
     const archived = await page.evaluate(() => window.desktop.snapshot());
+    expect(archived.chats).toHaveLength(before.chats.length);
     expect(archived.chats.find((item) => item.run?.id === before.chat.run?.id)?.archived).toBe(
       true,
     );
@@ -5359,9 +5355,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     const background = await page.evaluate(() => window.desktop.snapshot());
     const backgroundId = background.chat.run?.id;
     await page.getByRole("button", { name: "Relay", exact: true }).click();
-    const relayChat = page.locator(
-      `.orchestration-chat-page[data-chat-id="${archived.chat.run?.id}"]`,
-    );
+    const relayChat = page.locator(".orchestration-chat-page:visible");
     await expect(relayChat).toBeVisible();
     const relayComposer = relayChat.getByRole("combobox", {
       name: "Message to orchestrator",
@@ -8459,12 +8453,15 @@ test("desktop: parent project cards preserve conversations, unread state, worker
     const countBefore = (await page.evaluate(() => window.desktop.snapshot())).chats.length;
     await home.getByRole("button", { name: "Open project-a", exact: true }).click();
     await expect(projectHome).toContainText("No conversations");
-    const newChat = projectHome.getByRole("button", { name: "New chat in project-a", exact: true });
+    const newChat = projectHome.getByRole("button", {
+      name: "New session in project-a",
+      exact: true,
+    });
     await expect(projectHome.locator(".table-controls > button")).toHaveCount(0);
     await expect(projectHome.locator(".home-cards > button").first()).toHaveAccessibleName(
-      "New chat in project-a",
+      "New session in project-a",
     );
-    await expect(newChat).toContainText("New Chat");
+    await expect(newChat).toContainText("New Session");
     await expect(newChat).toHaveCSS("border-top-style", "dashed");
     await expect(newChat).toHaveCSS("border-top-width", "3px");
     await expect(newChat).toHaveCSS("background-image", "none");

@@ -1568,7 +1568,7 @@ Automation Studio's Schedules and Execution history are bordered table cards wit
 one icon-free heading each, using the independent Card Titles role. Only the
 outer Automation Studio heading is a page breadcrumb. Navigation cards keep their
 224px width and 32px gaps when rows wrap rather than stretching remaining columns.
-Projects and individual project homes prepend New Project and New Chat creation
+Projects and individual project homes prepend New Project and New Session creation
 cards instead of page-header plus buttons. Each is a keyboard-native card with
 the same width and corners as normal cards, a thick dashed border, no gradient
 artwork or corner arrow, and a centered Carbon plus and label. Keep creation
@@ -1646,7 +1646,10 @@ plain text and actions target validated existing chat IDs.
 Archive only hides the orchestrator from sidebar navigation. It retains session
 records, transcripts, worker ownership and running work. Workers remain accessible.
 After successfully archiving the currently displayed chat, the renderer shows a
-“Chat archived.” success toast and selects Relay. Archiving another chat does not
+“Chat archived.” success toast. Closing the last unarchived chat for its project
+opens that project’s home with the New Session creation card, without creating or
+opening a replacement conversation. New Session explicitly creates a new chat.
+If another project chat remains, the existing Relay fallback applies. Archiving another chat does not
 change the displayed page or conversation. Failed archives keep inline feedback.
 Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped

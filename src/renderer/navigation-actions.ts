@@ -84,18 +84,36 @@ export function createNavigationActions(
       return Promise.resolve(false);
     const archiveCurrent =
       request.type === "archive" && id === before.selectedId && before.tabs.active === "chat";
+    const archivedProjectId = archiveCurrent
+      ? before.chats.find((chat) => conversationId(chat) === id)?.projectId
+      : undefined;
+    const archiveToProject =
+      archivedProjectId &&
+      !before.chats.some(
+        (chat) =>
+          chat.projectId === archivedProjectId && !chat.archived && conversationId(chat) !== id,
+      )
+        ? archivedProjectId
+        : undefined;
     return run(
       async (current) => {
         await before.api.orchestrationChatAction(request);
-        if (archiveCurrent && relayId && current())
+        if (archiveToProject && current())
+          await before.api.projectAction({ type: "select", projectId: archiveToProject });
+        else if (archiveCurrent && relayId && current())
           await before.api.orchestrationChatAction({ type: "select", id: relayId });
       },
       () => {
         if (archiveCurrent) {
           read().onArchived();
-          read().selectWorker(undefined, null);
-          if (relayId) reveal({ kind: "conversation", id: relayId });
-          read().onPage("chat");
+          read().selectWorker(undefined, archiveToProject ?? null);
+          if (archiveToProject) {
+            reveal({ kind: "project", id: archiveToProject });
+            read().onProject(archiveToProject);
+          } else {
+            if (relayId) reveal({ kind: "conversation", id: relayId });
+            read().onPage("chat");
+          }
         } else if (request.type === "select" || request.type === "new") {
           const projectId =
             request.type === "new"
@@ -107,8 +125,10 @@ export function createNavigationActions(
           read().onPage("chat");
         }
       },
-      false,
+      !!archiveToProject,
       () => {
+        if (archiveToProject)
+          return read().projects.some((project) => project.id === archiveToProject);
         if (request.type === "select")
           return read().chats.some((chat) => conversationId(chat) === request.id && !chat.archived);
         if (request.type === "new" && request.projectId)

@@ -62,9 +62,11 @@ describe("desktop capability catalog", () => {
     const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({
       prerequisite: "database",
-      access: expect.stringContaining("Projects → New Project; project home → New Chat"),
+      access: expect.stringContaining("Projects → New Project; project home → New Session"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
-      limitations: expect.stringContaining("never initializes Git"),
+      limitations: expect.stringContaining(
+        "Closing the last project chat returns to its home without a replacement",
+      ),
     });
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({

@@ -171,8 +171,12 @@ describe("shared navigation actions", () => {
     expect(await pending).toBe(false);
     expect(context.onPage).not.toHaveBeenCalled();
   });
-  it("archives the displayed conversation through Relay without changing another page", async () => {
+  it("archives the displayed conversation through Relay when another project chat remains", async () => {
     const { actions, context } = fixture();
+    context.chats = [
+      ...context.chats,
+      { ...context.chats[1], run: { id: "other" } } as OrchestrationChat,
+    ];
     await actions.chatAction({ type: "archive", id: "chat" });
     expect(context.onPage).not.toHaveBeenCalled();
     context.tabs = initialTabs;
@@ -184,4 +188,58 @@ describe("shared navigation actions", () => {
     expect(context.onArchived).toHaveBeenCalledOnce();
     expect(context.onPage).toHaveBeenCalledWith("chat");
   });
+  it("returns the last displayed project chat to its home without opening or creating a chat", async () => {
+    const { actions, context, reveal } = fixture();
+    context.tabs = initialTabs;
+    context.chats = [
+      ...context.chats,
+      { ...context.chats[1], run: { id: "old" }, archived: true } as OrchestrationChat,
+    ];
+    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
+    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
+      type: "archive",
+      id: "chat",
+    });
+    expect(context.api.projectAction).toHaveBeenCalledExactlyOnceWith({
+      type: "select",
+      projectId: "a",
+    });
+    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
+    expect(context.selectWorker).toHaveBeenCalledExactlyOnceWith(undefined, "a");
+    expect(context.onPage).not.toHaveBeenCalled();
+    expect(context.onArchived).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "project", id: "a" });
+    await actions.chatAction({ type: "new", projectId: "a" });
+    expect(context.api.orchestrationChatAction).toHaveBeenLastCalledWith({
+      type: "new",
+      projectId: "a",
+    });
+    expect(context.onPage).toHaveBeenCalledExactlyOnceWith("chat");
+  });
+  it.each(["page", "epoch", "close", "failure"] as const)(
+    "does not navigate a last-chat archive after %s",
+    async (change) => {
+      const { actions, context, status } = fixture(),
+        gate = deferred();
+      context.tabs = initialTabs;
+      vi.mocked(context.api.orchestrationChatAction).mockImplementation(() =>
+        gate.promise.then(() => undefined),
+      );
+      if (change === "failure")
+        vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(
+          new Error("Archive failed"),
+        );
+      const pending = actions.chatAction({ type: "archive", id: "chat" });
+      if (change === "page") await actions.open({ kind: "page", id: "apps" });
+      if (change === "epoch") context.databaseEpoch = 2;
+      if (change === "close") context.projects = [];
+      gate.resolve();
+      expect(await pending).toBe(false);
+      expect(context.api.projectAction).not.toHaveBeenCalled();
+      expect(context.onProject).not.toHaveBeenCalled();
+      expect(context.onArchived).not.toHaveBeenCalled();
+      if (change === "failure")
+        expect(status).toHaveBeenCalledWith(true, "Archive failed", true, true);
+    },
+  );
 });

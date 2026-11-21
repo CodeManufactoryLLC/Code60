@@ -102,12 +102,12 @@
   in the project groups and content, not in that action's label.
 
 - Projects and individual project homes use a first-position creation card,
-  labelled New Project or New Chat with a decorative Carbon plus, instead of a
+  labelled New Project or New Session with a decorative Carbon plus, instead of a
   page-header plus button. Match normal card width/corners, use a thick 3px dashed
   border without gradient artwork or a corner arrow, and center the label.
   Keep these cards present for empty lists, keyboard-native and disabled while
   navigation is pending. New Project uses the existing database/project picker;
-  New Chat captures its rendered project ID. Preserve sidebar add controls,
+  New Session captures its rendered project ID. Preserve sidebar add controls,
   retained view state, errors, database gates and main-process ownership.
 
 ## Visual restraint
@@ -427,5 +427,7 @@
   Apply in both themes and forced colors.
 
 - After successfully archiving the currently displayed chat, show “Chat archived.”
-  through the shared success toast and select Relay. Archiving other chats leaves
+  through the shared success toast. For the last unarchived project chat, open its
+  project home with New Session; otherwise select Relay. Never create a replacement
+  on archive. Archiving other chats leaves
   the current page and conversation unchanged; failures retain inline feedback.

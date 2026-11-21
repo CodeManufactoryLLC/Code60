@@ -3319,7 +3319,6 @@ export class DesktopController {
         if (this.conversations.current === session) {
           const next = this.conversations.sessions.find((entry) => !entry.archived);
           if (next) this.conversations.current = next;
-          else await this.startChat(this.conversations.create());
         }
       } else if (request.type === "resume-updates") {
         if (session.restored || !session.chat)

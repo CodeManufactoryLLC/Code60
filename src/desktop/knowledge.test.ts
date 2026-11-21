@@ -208,6 +208,22 @@ describe("DesktopKnowledge", () => {
     expect(value.available).toBe(false);
     expect(reads).toEqual([]);
   });
+  it("keeps project homes available without a chat and gates session creation on a database", async () => {
+    const { knowledge, runtime } = setup({ conversations: [], selectedConversationId: null });
+    const entry = async () =>
+      (
+        result(await knowledge.call("code60_get_capabilities", { query: "Projects" }, project))
+          .entries as { id: string; availability: { status: string; action: string } }[]
+      ).find((cap) => cap.id === "projects");
+    expect(await entry()).toMatchObject({
+      availability: { status: "available", action: expect.stringContaining("New Session") },
+    });
+    runtime.database = null;
+    expect(await entry()).toMatchObject({
+      availability: { status: "blocked", action: "Connect to database." },
+    });
+  });
+
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(

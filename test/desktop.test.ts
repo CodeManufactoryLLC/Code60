@@ -4050,15 +4050,18 @@ describe("app-wide orchestration chat", () => {
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions).toHaveLength(count);
     const directory = controller.snapshot().chat.directory as string;
+    const chats = controller.snapshot().chats.length;
+    const record = await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8");
     await controller.orchestrationChatAction({ type: "archive", id });
-    expect(controller.snapshot().chat.run?.id).not.toBe(id);
+    expect(controller.snapshot().chats).toHaveLength(chats);
+    expect(agents.sessions).toHaveLength(count);
     expect(controller.snapshot().chats.find((chat) => chat.run?.id === id)).toMatchObject({
       title: "My parser work",
       archived: true,
       directory,
     });
-    expect(await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8")).toContain(
-      id,
+    expect(await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8")).toBe(
+      record,
     );
     await expect(controller.orchestrationChatAction({ type: "select", id })).rejects.toThrow(
       "archived",

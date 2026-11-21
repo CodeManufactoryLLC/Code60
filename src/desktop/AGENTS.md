@@ -197,7 +197,7 @@
   review capture and review-file reads with that owner. Project close/stop/reset
   and discard cancel only its reads; reload and shutdown still cancel all owners.
 - ConversationCoordinator owns in-memory conversation authority, dispatch deduplication and between-turn delivery. Keep process creation/shutdown and IPC in DesktopController; preserve scope checks and pause semantics through coordinator calls.
-- Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Persist title/archive state with private chat metadata; archive only hides navigation and never deletes records or stops work.
+- Generate chat titles after the first completed exchange through an isolated, bounded, permission-denied ACP helper with no MCP servers or run records. Cancel on manual rename, replacement, Stop all and shutdown. Persist title/archive state with private chat metadata; archive only hides navigation and never deletes records or stops work. Archiving the last chat never creates a replacement session; creation requires an explicit New chat action.
 
 - DesktopKnowledge is a read model, not authority or storage. Derive facts on demand
   from existing owners; validate renderer reports by generation, sequence and owner,

@@ -250,10 +250,10 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "projects",
     "Projects",
     "Retain independent project workspaces and conversations.",
-    "Projects → New Project; project home → New Chat; sidebar add controls remain available",
+    "Projects → New Project; project home → New Session; sidebar add controls remain available",
     "database",
     "read",
-    "Opening or selecting a project is a human action; opening never initializes Git.",
+    "Opening or selecting a project is a human action; opening never initializes Git. Closing the last project chat returns to its home without a replacement. New Session explicitly creates a chat.",
     "The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.",
   ),
   feature(

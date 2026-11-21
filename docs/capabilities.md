@@ -37,11 +37,11 @@ Schema version: 1
 - ID: `projects`
 - Status: shipped
 - Purpose: Retain independent project workspaces and conversations.
-- Access: Projects → New Project; project home → New Chat; sidebar add controls remain available
+- Access: Projects → New Project; project home → New Session; sidebar add controls remain available
 - Prerequisite: database
 - Agent access: read
 - Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.
-- Limits: Opening or selecting a project is a human action; opening never initializes Git.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git. Closing the last project chat returns to its home without a replacement. New Session explicitly creates a chat.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none
