@@ -292,6 +292,72 @@ function alive(pid: number) {
   }
 }
 
+async function checkAgentMessageSpacing(page: Page, chat: Locator, name: string) {
+  const messages = chat.locator(".event.message");
+  await expect(messages.last()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const measure = () =>
+    messages.evaluateAll((elements) =>
+      elements.map((element) => {
+        const markdown = element.querySelector(".chat-markdown");
+        const copy = element.querySelector(".message-copy button");
+        if (!markdown || !copy) throw new Error("Missing message content or Copy");
+        const style = getComputedStyle(markdown);
+        const bounds = markdown.getBoundingClientRect();
+        const target = copy.getBoundingClientRect();
+        return {
+          margin: Number.parseFloat(getComputedStyle(element).marginBottom),
+          padding: getComputedStyle(element).padding,
+          text: markdown.textContent,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight,
+          letterSpacing: style.letterSpacing,
+          // Ignore floating-point noise from transformed ancestor coordinates.
+          width: Math.round(bounds.width * 1000) / 1000,
+          height: Math.round(bounds.height * 1000) / 1000,
+          copyWidth: target.width,
+          copyHeight: target.height,
+        };
+      }),
+    );
+  // Recreate only the pre-change outer margin on this same live conversation.
+  // Content, viewport, theme, font settings and device scale remain identical.
+  await messages.evaluateAll((elements) => {
+    for (const element of elements)
+      if (element instanceof HTMLElement) element.style.marginBottom = "8px";
+  });
+  let before: Awaited<ReturnType<typeof measure>>;
+  try {
+    await expect(messages.last()).toHaveCSS("margin-bottom", "8px");
+    before = await measure();
+    await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-before.png`) });
+  } finally {
+    await messages.evaluateAll((elements) => {
+      for (const element of elements)
+        if (element instanceof HTMLElement) element.style.removeProperty("margin-bottom");
+    });
+  }
+  await expect(messages.last()).toHaveCSS("margin-bottom", "6px");
+  const after = await measure();
+  expect(after).toEqual(before.map((message) => ({ ...message, margin: message.margin * 0.75 })));
+  for (const message of after) {
+    expect(message.copyWidth).toBeGreaterThanOrEqual(24);
+    expect(message.copyHeight).toBeGreaterThanOrEqual(24);
+  }
+  const copy = messages.last().getByRole("button", { name: "Copy message", exact: true });
+  await copy.focus();
+  await expect(copy).toBeVisible();
+  await copy.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Copied." }).first()).toBeVisible();
+  await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-after.png`) });
+  await test.info().attach(`${name}-message-spacing`, {
+    body: JSON.stringify({ before, after }, null, 2),
+    contentType: "application/json",
+  });
+}
+
 async function checkSidebarIconSpacing(entry: Locator) {
   // Opening lazily replaces the placeholder row. Sample all boxes in the same frame.
   await expect(async () => {
@@ -913,6 +979,7 @@ for (const custom of [false, true]) {
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await checkAgentMessageSpacing(page, page.locator(`#chat-${worker.record.id}`), "worker");
         const workerModel = page
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
@@ -953,6 +1020,11 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        await checkAgentMessageSpacing(
+          page,
+          page.locator(".orchestration-chat-page:visible"),
+          custom ? "assistant" : "relay",
+        );
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
         );
