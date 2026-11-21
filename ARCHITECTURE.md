@@ -1904,6 +1904,9 @@ fixed 48px heights at the default text size, independent of selection and animat
 
 After the first completed human/agent exchange, a separate presentation-only ACP
 turn asks the configured orchestration provider for a short descriptive title.
+The prompt requests under 20 characters; valid generated titles are deterministically
+cut off at 19 Unicode characters, preserving complete code points. Existing titles
+and manual renames retain their existing limits.
 It runs in a private temporary directory, without MCP servers, denies permissions,
 bounds input/output and times out after 30 seconds. Replacement, manual rename,
 Stop all and shutdown cancel generation; cleanup stops the process before removing
