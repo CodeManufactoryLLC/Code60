@@ -49,7 +49,7 @@ features, resource bounds and remaining native-platform validation.
   Relay uses the locally bundled pet animation. Projects uses the supplied project-initiation animation and contains the
   open project headings. Project chats
   indent one 24px step beneath their project; owned workers indent one more step
-  beneath their conversation. Project labels navigate without toggling their disclosure. Conversations retain More actions;
+  beneath their conversation. Project labels navigate without toggling their disclosure. Project conversations expose separate Rename and Archive buttons and retain a context menu;
   project rows use a red circular × with the “Close Project” tooltip. That icon
   invokes the existing confirmed Stop Folder operation, keeping the project open
   while stopping its project-owned work and Relay workers in the same folder. Each project row puts a circular + before the red × and a circular disclosure
@@ -1225,7 +1225,7 @@ External navigation reveals only the destination's ancestors. Selecting Relay
 never reveals project chats. Selection retains the single-flight action guard
 without temporarily disabling or dimming unrelated navigation rows. Project and
 chat labels keep their text color through pointer presses and selection.
-Existing disclosure storage keys and independent plus/conversation More actions
+Existing disclosure storage keys and independent project plus/conversation actions
 are preserved. Project rows replace the former More menu with the circular red ×
 Stop Folder action described above.
 Settings also opens home from the palette and Cmd+, / Ctrl+,. Its section panels
@@ -1391,7 +1391,7 @@ separate transparent Close button, without giving the icon action its own fill.
 Keep selection, closing, drag/reorder and keyboard semantics unchanged.
 
 Conversation navigation rows paint one shared background with square outer corners beneath the
-chat label, ellipsis action and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
+chat label, Rename and Archive actions and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
 enabled, keyboard reachable and visibly focused; retain disabled cues.
 New or revised draft plans still open their existing side-panel tabs, without
 adding duplicate Plan buttons above the conversation.
@@ -1926,10 +1926,17 @@ Stop all and shutdown cancel generation; cleanup stops the process before removi
 its directory. Failure retains the numbered fallback. It never adds transcript
 messages or overwrites a human title.
 
-Orchestrator sidebar rows expose Open, Rename and Archive through both their
-labelled More icon button and context menu, including Shift+F10. The main header displays
+Project orchestrator sidebar rows open through their label and expose Rename and
+Archive as separate named circular icon controls, matching the project-row controls.
+Their glyphs reveal on row hover or keyboard focus and follow the active theme,
+reduced motion and forced colors. Open, Rename and Archive also remain available
+in the context menu, including Shift+F10. The main header displays
 the same title and opens the same rename dialog. Titles are bounded single-line
 plain text and actions target validated existing chat IDs.
+
+At narrow sidebar widths, simultaneous project chat counts stack within their
+reserved indicator column. Preserve label room, both unread/approval badges, leading
+worker artwork disclosure and independent Rename/Archive targets without clipping.
 
 Archive only hides the orchestrator from sidebar navigation. It retains session
 records, transcripts, worker ownership and running work. Workers remain accessible.

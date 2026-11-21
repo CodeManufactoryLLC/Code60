@@ -2,6 +2,22 @@ import type { SVGProps } from "react";
 
 /** IBM Carbon icon geometry (Apache-2.0; see icons/carbon/LICENSE). Coordinates are retained. */
 const carbonIcons = {
+  edit: {
+    size: 32,
+    paths: [
+      { d: "M2 26H30V28H2z" },
+      {
+        d: "M25.4,9c0.8-0.8,0.8-2,0-2.8c0,0,0,0,0,0l-3.6-3.6c-0.8-0.8-2-0.8-2.8,0c0,0,0,0,0,0l-15,15V24h6.4L25.4,9z M20.4,4L24,7.6 l-3,3L17.4,7L20.4,4z M6,22v-3.6l10-10l3.6,3.6l-10,10H6z",
+      },
+    ],
+  },
+  archive: {
+    size: 32,
+    paths: [
+      { d: "M14 19H18V21H14z" },
+      { d: "M6,2V28a2,2,0,0,0,2,2H24a2,2,0,0,0,2-2V2ZM24,28H8V16H24Zm0-14H8V10H24ZM8,8V4H24V8Z" },
+    ],
+  },
   "overflow-menu--horizontal": {
     size: 16,
     paths: [

@@ -759,7 +759,76 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
     await project.locator(".project-chat-toggle").press("ArrowRight");
+    const row = entries.last().locator("..");
+    const actions = row.locator(".chat-sidebar-action");
+    await expect(actions).toHaveCount(2);
+    await expect(row.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+    await page.locator(".sidebar-toggle").focus();
+    await page.mouse.move(1000, 500);
+    await expect(actions.first().locator(".sidebar-card-action")).toHaveCSS("opacity", "0");
+    await row.hover();
+    const reference = await project.locator(".sidebar-card-add").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return Object.fromEntries(
+        ["width", "height", "borderRadius", "backgroundColor", "border", "boxShadow"].map((key) => [
+          key,
+          style[key as keyof CSSStyleDeclaration],
+        ]),
+      );
+    });
+    for (const action of await actions.all()) {
+      const circle = action.locator(".sidebar-card-action");
+      await expect(circle).toHaveCSS("opacity", "1");
+      expect(
+        await circle.evaluate((element, keys) => {
+          const style = getComputedStyle(element);
+          return Object.fromEntries(
+            keys.map((key) => [key, style[key as keyof CSSStyleDeclaration]]),
+          );
+        }, Object.keys(reference)),
+      ).toEqual(reference);
+    }
+    await page.screenshot({ path: test.info().outputPath(`project-chat-actions-${theme}.png`) });
   }
+  const row = entries.last().locator("..");
+  const selected = entries.last();
+  const id = (await selected.getAttribute("id"))?.replace("conversation-", "");
+  await row.getByRole("button", { name: /^Rename chat: / }).focus();
+  await expect(row.locator(".sidebar-card-action").first()).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Enter");
+  const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+  await rename.getByRole("textbox", { name: "Chat name" }).fill("Sidebar control check");
+  await rename.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(selected).toHaveAccessibleName("Sidebar control check");
+  await selected.press("Enter");
+  await expect(composer).toHaveValue("Second sidebar draft");
+  await selected.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
+  await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
+  await menu.press("Escape");
+  await expect(selected).toBeFocused();
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  const archive = row.getByRole("button", {
+    name: "Archive chat: Sidebar control check",
+    exact: true,
+  });
+  await archive.focus();
+  await expect(archive.locator(".sidebar-card-action")).toHaveCSS("box-shadow", "none");
+  await expect(archive.locator(".sidebar-card-action")).toHaveCSS("transition-duration", "0s");
+  await page.screenshot({ path: test.info().outputPath("project-chat-actions-forced-colors.png") });
+  await archive.press("Space");
+  await expect(
+    project.getByRole("button", { name: "Sidebar control check", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  const snapshot = await page.evaluate(() => window.desktop.snapshot());
+  expect(
+    snapshot.chats.find((chat) => chat.conversationId === id || chat.run?.id === id)?.archived,
+  ).toBe(true);
+  await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
   await page.locator(".sidebar-toggle").click();
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("inert", "");
   await page.locator(".sidebar-toggle").press("Enter");
@@ -1703,9 +1772,8 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await firstGroup
-      .getByRole("button", { name: "Actions for Hidden saved chat", exact: true })
+      .getByRole("button", { name: "Archive chat: Hidden saved chat", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(
       firstGroup.getByRole("button", { name: "Hidden saved chat", exact: true }),
     ).toHaveCount(0);

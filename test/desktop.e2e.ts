@@ -5315,10 +5315,27 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     const ownerChat = ownerRow.locator(".chat-sidebar-entry");
     await expect(ownerRow.locator('[data-icon="ai-agent"]')).toHaveCount(0);
     await expect(workersToggle.locator('[data-icon="app-communication"]')).toHaveCount(1);
-    // Only More reserves trailing row space; disclosure reuses the leading artwork.
+    // Rename and Archive reserve trailing row space; disclosure reuses the leading artwork.
     await expect(
       ownerRow.locator(":scope > .icon-button:not(.chat-workers-toggle-leading)"),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
+    await aChat.click();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+    const renameOwner = ownerRow.getByRole("button", { name: /^Rename chat:/ });
+    await renameOwner.press("Space");
+    const renameOwnerDialog = page.getByRole("dialog", { name: "Rename chat", exact: true });
+    await expect(renameOwnerDialog).toBeVisible();
+    await renameOwnerDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await ownerChat.press("Shift+F10");
+    const ownerMenu = page.getByRole("menu", { name: "Chat actions", exact: true });
+    await expect(ownerMenu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
+    await ownerMenu.press("Escape");
+    await expect(ownerChat).toBeFocused();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
     await ownerChat.click();
     await expect(ownerChat).toHaveAttribute("aria-current", "true");
     await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
@@ -5408,6 +5425,35 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
     await expect(aChat).toHaveAttribute("aria-current", "true");
     while (await dismiss.count()) await dismiss.first().click();
+    const expectBadgesUnclipped = async (context: string) => {
+      for (const badge of await ownerChat.locator(".chat-unread, .chat-approval-count").all()) {
+        expect
+          .soft(
+            await badge.evaluate((element) => {
+              const bounds = element.getBoundingClientRect();
+              let parent = element.parentElement;
+              while (parent) {
+                const style = getComputedStyle(parent);
+                const clip = parent.getBoundingClientRect();
+                if (
+                  /(hidden|clip|auto|scroll)/.test(style.overflowX) &&
+                  (bounds.left < clip.left - 0.1 || bounds.right > clip.right + 0.1)
+                )
+                  return false;
+                if (
+                  /(hidden|clip|auto|scroll)/.test(style.overflowY) &&
+                  (bounds.top < clip.top - 0.1 || bounds.bottom > clip.bottom + 0.1)
+                )
+                  return false;
+                parent = parent.parentElement;
+              }
+              return true;
+            }),
+            `badge clipped at ${context}`,
+          )
+          .toBe(true);
+      }
+    };
     for (const theme of ["light", "dark"]) {
       for (const [width, size] of [
         [180, 15],
@@ -5461,6 +5507,7 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
         await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
         await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
         await expectHierarchy(width < 300);
+        await expectBadgesUnclipped(`${theme}/${width}/${size}`);
         const disclosureBounds = await workersToggle.boundingBox();
         const labelBounds = await ownerChat.locator(".chat-sidebar-label").boundingBox();
         expect(disclosureBounds).not.toBeNull();
@@ -5492,8 +5539,19 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
         });
       }
     }
+    const resizer = page.getByRole("button", { name: "Resize navigation sidebar", exact: true });
+    for (let width = 480; width > 180; width -= 20) await resizer.press("ArrowLeft");
+    await page.evaluate(() => {
+      const style = document.querySelector<HTMLElement>(".app-workspace")?.style;
+      style?.setProperty("--nav-font-size", "32px");
+      style?.setProperty("--button-size", "32px");
+    });
     await page.emulateMedia({ forcedColors: "active" });
     await workersToggle.focus();
+    await expectHierarchy(true);
+    await expectBadgesUnclipped("forced-colors/180/32");
+    await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+    await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
     await page.keyboard.press("Tab");
     await page.keyboard.press("Shift+Tab");
     await expect(workersToggle).toBeFocused();
@@ -6872,10 +6930,9 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     ).toBeVisible();
     const manualTitle = "Manual parser title longer than nineteen";
     const sidebar = page.locator("nav.chat-sidebar");
-    await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
+    await sidebar.getByRole("button", { name: "Rename chat: ok", exact: true }).press("Enter");
     const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
-    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
-    await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await expect(menu).toHaveCount(0);
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await expectModalSurface(rename);
     await page.screenshot({ path: test.info().outputPath("rename-dialog-neobrutalism.png") });
@@ -6892,6 +6949,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       .getByRole("button", { name: manualTitle, exact: true })
       .click({ button: "right" });
     await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
     await menu.press("Escape");
     await sidebar.getByRole("button", { name: manualTitle, exact: true }).press("Shift+F10");
     await menu.getByRole("menuitem", { name: "Open", exact: true }).click();
@@ -6918,18 +6976,9 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     ).toBeVisible();
     const before = await page.evaluate(() => window.desktop.snapshot());
     await sidebar
-      .getByRole("button", {
-        name: `Actions for ${manualTitle}`,
-        exact: true,
-      })
-      .click();
-    await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
-    await expect(
-      sidebar.getByRole("button", {
-        name: manualTitle,
-        exact: true,
-      }),
-    ).toHaveCount(0);
+      .getByRole("button", { name: `Archive chat: ${manualTitle}`, exact: true })
+      .press("Space");
+    await expect(sidebar.getByRole("button", { name: manualTitle, exact: true })).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Done notification", exact: true })).toContainText(
       "Chat archived.",
     );
@@ -7418,13 +7467,13 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
     await expect(
       page.locator(
-        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
+        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.sidebar-card-action > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
       ),
     ).toHaveCount(0);
     await expect(
       first
         .locator("..")
-        .getByRole("button", { name: /^Actions for / })
+        .getByRole("button", { name: /^Rename chat: / })
         .locator("svg"),
     ).toHaveCount(1);
     for (const disclosure of [
@@ -7645,7 +7694,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
             height: icon.getBoundingClientRect().height,
             fixedSize: icon.closest(".provider-primary-compact")
               ? 12
-              : icon.closest(".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop")
+              : icon.closest(
+                    ".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action",
+                  )
                 ? 16
                 : undefined,
           })),
@@ -10502,9 +10553,8 @@ test("desktop: parent project cards preserve conversations, unread state, worker
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Actions for Renamed conversation", exact: true })
+      .getByRole("button", { name: "Archive chat: Renamed conversation", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toHaveCount(0);
