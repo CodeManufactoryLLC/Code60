@@ -1602,6 +1602,11 @@ The bottom-right application footer persistently shows full runtime snapshot.ver
 
 ### Sidebar table navigation
 
+Project chats with owned workers use their leading chat artwork as the independent
+worker disclosure. They have no trailing legacy agent icon or reserved slot for
+it. The label still selects the chat, More retains its menu, and Left/Right
+keyboard disclosure remains available.
+
 Assistants, Apps, Projects and Settings each sit inside a separate opaque sidebar card, enclosing the
 heading, row actions and any expanded descendants. Home and Search share a matching
 opaque card above those sections. All cards use the current theme
