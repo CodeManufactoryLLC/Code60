@@ -17324,6 +17324,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
     await page.keyboard.press("Delete");
     await page.evaluate(() => window.desktop.orchestrationChatAction({ type: "new" }));
     const backgroundChat = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
     await page.evaluate(
       (id) => window.desktop.orchestrationChatAction({ type: "send", id, text: "Revise the plan" }),
       originalChat,
@@ -17384,6 +17385,20 @@ test("desktop: accepted plans show task progress outside their Markdown document
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.[0]?.state).toBe(
       "completed",
     );
+    const existing = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    const viewPlan = page
+      .locator("#chat-file-panel")
+      .getByRole("button", { name: "View Plan", exact: true });
+    await viewPlan.focus();
+    await viewPlan.press("Space");
+    await expect(panel.getByRole("heading", { name: "Revised change", exact: true })).toBeVisible();
+    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    const reopened = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(reopened.plans).toEqual(existing.plans);
+    expect(reopened.run?.turns).toBe(existing.run?.turns);
+    expect(
+      await readFile(join(snapshot.chat.directory as string, "plans", `${plan?.id}.md`), "utf8"),
+    ).toBe(markdown);
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

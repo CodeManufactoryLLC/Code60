@@ -605,6 +605,17 @@ an equally weighted completed/total progress bar and “X out of Y” outside th
 Each task row shows a read-only completion checkbox centred on its first line of text, a
 written status (Pending, In progress, Blocked, Completed) and its evidence note aligned
 with the task text.
+The right sidebar offers View Plan for the displayed orchestration session's
+latest existing plan, including after its tab is closed. It selects or reopens
+that plan's tab without generating a plan or granting execution authority.
+Plan records persist an immutable, conversation-local creation sequence, including
+rewound records when allocating the next sequence. Summaries sort by this sequence,
+so restart, atomic file replacement and edits to older plans never change which
+plan is latest. This prerelease schema requires that sequence on saved records.
+While Relay or a custom assistant browses project files, View Plan returns to
+that conversation's own panel without putting its plan into the project file scope.
+The action wraps within the 120px panel minimum with enlarged Button Text.
+Other conversations' plans do not supply this action, including in worker views.
 
 
 Exception for Chat review: desktop-only review records, immutable bounded file snapshots,

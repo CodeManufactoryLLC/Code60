@@ -21,6 +21,13 @@ const root = resolve(import.meta.dirname, "..");
 // atomic replacement. Native ARM64 measured about 5 s for each step.
 const nativeJournalTimeout = 5_000;
 
+async function attachJsonEvidence(name: string, evidence: unknown) {
+  const info = test.info();
+  const path = info.outputPath(`${name}.json`);
+  await writeFile(path, JSON.stringify(evidence, null, 2));
+  await info.attach(name, { path, contentType: "application/json" });
+}
+
 test("workflow: conversational browser modes, external errors, cancellation and restart", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-ui-")));
@@ -1326,6 +1333,7 @@ for (const custom of [false, true]) {
             exact: true,
           }),
         );
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await composer.fill(requestText);
         await composer.press("Enter");
         const plan = page.getByRole("region", { name: "Plan", exact: true });
@@ -1345,6 +1353,36 @@ for (const custom of [false, true]) {
         await checkCheckout("original\n");
         checks.push(
           "Draft plan has no worker, worktree or checkout mutation before human acceptance.",
+        );
+        const planPanel = page.locator(custom ? '[id^="relay-plan-panel-"]' : "#relay-plan-panel");
+        const existingPlans = (await page.evaluate(() => window.desktop.snapshot())).chat.plans;
+        const documentText =
+          (await plan.getByRole("article", { name: "Plan document" }).textContent()) ?? "";
+        await planPanel
+          .getByRole("tab", { name: "Plan · Relay target plan", exact: true })
+          .press("Delete");
+        await expect(plan).toHaveCount(0);
+        await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
+        await viewPlan.focus();
+        await viewPlan.press("Enter");
+        await expect(plan.getByRole("article", { name: "Plan document" })).toHaveText(documentText);
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toBeFocused();
+        await viewPlan.focus();
+        await viewPlan.press("Space");
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toHaveCount(1);
+        expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans).toEqual(
+          existingPlans,
+        );
+        expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        await checkCheckout("original\n");
+        checks.push(
+          "Keyboard View Plan reopened the same closed Relay plan from another tab without generating, accepting or dispatching work.",
         );
         await plan.getByRole("button", { name: "Accept", exact: true }).click();
         await expect
@@ -1367,6 +1405,7 @@ for (const custom of [false, true]) {
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await checkAgentMessageSpacing(
           application,
           page,
@@ -1458,6 +1497,63 @@ for (const custom of [false, true]) {
         expect((await dialogs())?.observed).toHaveLength(3);
         checks.push(
           "An accepted isolated worker integrated automatically without another approval, preserving staging and HEAD.",
+        );
+
+        // Browsing a project from either table must retain the displayed conversation's plan action.
+        const savedPlan = await page.evaluate(() =>
+          window.desktop.snapshot().then((s) => s.chat.plans?.at(-1)),
+        );
+        if (!savedPlan) throw new Error("Missing saved conversation plan");
+        const workspaceRoot = (await page.evaluate(() => window.desktop.snapshot())).chat.directory;
+        const planRoot = workspaceRoot ? join(workspaceRoot, "..", "documents") : undefined;
+        if (!planRoot) throw new Error("Missing conversation storage");
+        const savedRecord = await readFile(
+          join(planRoot, ".code60/plans", `${savedPlan.id}.json`),
+          "utf8",
+        );
+        for (const source of ["Sessions", "Worktrees"]) {
+          const apps = page.locator("#apps-card-toggle");
+          if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+          const tables = page.locator("#tables-toggle");
+          if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
+          await page.getByRole("tab", { name: source, exact: true }).click();
+          const grid = page.locator(`#panel-${source.toLowerCase()} .sessions-grid`);
+          await expect(grid.locator('[data-testid^="glide-cell-1-"]').first()).toBeAttached();
+          const canvas = grid.getByTestId("data-grid-canvas");
+          const box = await canvas.boundingBox();
+          if (!box) throw new Error("Missing project table");
+          await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+          await page.getByRole("menuitem", { name: "Browse project files", exact: true }).click();
+          const projectPanel = page.locator("#chat-file-panel");
+          await expect(projectPanel.getByLabel("File root")).toHaveValue(repo);
+          await expect(projectPanel.getByRole("note", { name: "File target" })).toContainText(repo);
+          await expect(projectPanel.getByRole("region", { name: "Plan", exact: true })).toHaveCount(
+            0,
+          );
+          const snapshot = await page.evaluate(() => window.desktop.snapshot());
+          expect(snapshot.chat.conversationId).toBe(completed.chat.conversationId);
+          expect(
+            snapshot.chats
+              .filter((chat) => chat.kind === "project")
+              .flatMap((chat) => chat.plans ?? []),
+          ).not.toContainEqual(expect.objectContaining({ id: savedPlan.id }));
+          const openPlan = projectPanel.getByRole("button", { name: "View Plan", exact: true });
+          await openPlan.focus();
+          await openPlan.press(source === "Sessions" ? "Enter" : "Space");
+          await expect(
+            plan.getByRole("heading", { name: savedPlan.title, exact: true }),
+          ).toBeVisible();
+          await expect(projectPanel).toBeHidden();
+          expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.at(-1)).toEqual(
+            savedPlan,
+          );
+          expect(
+            await readFile(join(planRoot, ".code60/plans", `${savedPlan.id}.json`), "utf8"),
+          ).toBe(savedRecord);
+          await checkCheckout("human accepted target\n");
+        }
+        checks.push(
+          "Sessions and Worktrees project-file browsing retained keyboard access to the displayed Relay/custom plan, with unchanged private record and project ownership.",
         );
 
         const panel = page.locator(custom ? '[id^="relay-plan-panel-"]' : "#relay-plan-panel");
@@ -1594,13 +1690,11 @@ for (const custom of [false, true]) {
         checks.push(
           "Concurrent Relay, assistant and worker names share the exact chat spotlight; accessibility, hidden navigation and independent cancellation preserve live ownership and checkout bytes.",
         );
-        await info.attach("workflow-checkpoints", {
-          body: JSON.stringify(
-            { checks, native, worker: { id: worker.record.id, worktree }, before },
-            null,
-            2,
-          ),
-          contentType: "application/json",
+        await attachJsonEvidence("workflow-checkpoints", {
+          checks,
+          native,
+          worker: { id: worker.record.id, worktree },
+          before,
         });
       } finally {
         // No broad process search/kill. Observe only this app and fixture-owned PIDs.
@@ -1626,9 +1720,10 @@ for (const custom of [false, true]) {
         // Include helpers started between the last checkpoint and shutdown.
         for (const entry of await processes()) owned.add(entry.pid);
         await expect.poll(() => [...owned].filter(alive), { timeout: 10_000 }).toEqual([]);
-        await info.attach("owned-process-cleanup", {
-          body: JSON.stringify({ pids: [...owned], remaining: [], checks }),
-          contentType: "application/json",
+        await attachJsonEvidence("owned-process-cleanup", {
+          pids: [...owned],
+          remaining: [],
+          checks,
         });
         await removeDesktopFixture(directory, { recursive: true, force: true });
       }
@@ -2315,6 +2410,317 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await expect(worker).toContainText("permission next-read: opt-allow_once");
   } finally {
     await application?.close();
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: completed project plans reopen latest after restart with narrow enlarged text", async () => {
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-project-plans-")));
+  const repo = join(directory, "repo");
+  const database = join(directory, "projects.sqlite");
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "processes");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  git("init", "-q", "-b", "main");
+  await writeFile(join(repo, "result.txt"), "original\n");
+  await writeFile(join(repo, "notes.txt"), "unrelated\n");
+  git("add", ".");
+  commitFixture(repo);
+  await writeFile(join(repo, "notes.txt"), "staged\n");
+  git("add", "notes.txt");
+  await writeFile(join(repo, "notes.txt"), "unstaged\n");
+  const before = {
+    head: git("rev-parse", "HEAD"),
+    index: await readFile(join(repo, ".git/index")),
+    staged: git("diff", "--cached", "--binary"),
+    worktrees: git("worktree", "list", "--porcelain"),
+  };
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--plan",
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  const processes = async (): Promise<ProcessEvidence[]> =>
+    Promise.all(
+      (await readdir(processLog)).map(async (file) =>
+        JSON.parse(await readFile(join(processLog, file), "utf8")),
+      ),
+    );
+  const owned = new Set<number>();
+  let application: ElectronApplication | undefined;
+  const close = async () => {
+    if (!application) return;
+    const pid = application.process().pid;
+    if (pid) owned.add(pid);
+    for (const child of await application.evaluate(({ app }) =>
+      app.getAppMetrics().map((entry) => entry.pid),
+    ))
+      owned.add(child);
+    for (const entry of await processes()) owned.add(entry.pid);
+    await application.close();
+    application = undefined;
+    for (const entry of await processes()) owned.add(entry.pid);
+    await expect.poll(() => [...owned].filter(alive), { timeout: 10_000 }).toEqual([]);
+  };
+  try {
+    await expect(readFile(join(directory, "state/code60/desktop.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    application = await launchDesktop(directory, repo, database);
+    await application.evaluate(
+      ({ dialog }, { repo, database }) => {
+        const requests: Record<string, unknown>[] = [];
+        (globalThis as typeof globalThis & { planDialogs: typeof requests }).planDialogs = requests;
+        dialog.showSaveDialog = async (...args: unknown[]) => {
+          requests.push({ kind: "save", ...(args.at(-1) as Record<string, unknown>) });
+          return { canceled: false, filePath: database };
+        };
+        dialog.showOpenDialog = async (...args: unknown[]) => {
+          requests.push({ kind: "open", ...(args.at(-1) as Record<string, unknown>) });
+          return { canceled: false, filePaths: [repo] };
+        };
+        dialog.showMessageBox = async (...args: unknown[]) => {
+          requests.push({ kind: "message", ...(args.at(-1) as Record<string, unknown>) });
+          return { response: 1, checkboxChecked: false };
+        };
+      },
+      { repo, database },
+    );
+    let page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    expect((await readFile(database)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    await page
+      .locator("#panel-projects")
+      .getByRole("button", { name: "New Project", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Open Project", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: `Project ${repo}`, exact: true })).toBeVisible();
+    const native = await application.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { planDialogs: Record<string, unknown>[] }).planDialogs,
+    );
+    expect(native).toEqual([
+      expect.objectContaining({
+        kind: "save",
+        title: "Create database",
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      }),
+      expect.objectContaining({
+        kind: "open",
+        title: "Open project",
+        properties: ["openDirectory", "createDirectory"],
+      }),
+      expect.objectContaining({
+        kind: "message",
+        title: "Open project?",
+        message: "Open this project?",
+        detail: repo,
+        buttons: ["Cancel", "Open project"],
+        defaultId: 0,
+        cancelId: 0,
+      }),
+    ]);
+    await page
+      .getByRole("region", { name: `Project ${repo}`, exact: true })
+      .getByRole("button", { name: /^New Session in / })
+      .click();
+    await expect(
+      page
+        .locator(".orchestration-chat-page:visible")
+        .getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+    ).toBeEditable();
+    const chatId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!chatId) throw new Error("Missing project conversation");
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const plan = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
+    for (const [index, request] of ["Plan a change", "Plan a second change"].entries()) {
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+      await composer.fill(request);
+      await composer.press("Enter");
+      await expect(
+        plan.getByRole("heading", {
+          name: index ? "Second planned change" : "Planned change",
+          exact: true,
+        }),
+      ).toBeVisible();
+      expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(index);
+      if (!index) {
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+      }
+      await plan.getByRole("button", { name: "Accept", exact: true }).click();
+      await expect(plan.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect.poll(() => readFile(join(repo, "result.txt"), "utf8")).toBe("planned result\n");
+    }
+    const completed = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(completed.plans).toHaveLength(2);
+    const latest = completed.plans?.at(-1);
+    if (!latest || !completed.directory) throw new Error("Missing latest completed plan");
+    const recordPath = join(completed.directory, ".code60/plans", `${latest.id}.json`);
+    const record = await readFile(recordPath, "utf8");
+    const markdown = await readFile(join(completed.directory, "plans", `${latest.id}.md`), "utf8");
+    expect(JSON.parse(record)).toMatchObject({
+      creationOrder: 2,
+      acceptedRevision: 1,
+      state: "completed",
+    });
+    const worktrees = git("worktree", "list", "--porcelain");
+    const panel = page.locator("#chat-file-panel");
+    const geometry = [];
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    for (const size of [14, 32, 64]) {
+      const settings = page.locator("#settings-card-toggle");
+      if ((await settings.getAttribute("aria-expanded")) === "false") await settings.click();
+      await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
+      await page
+        .getByRole("group", { name: "Button Text", exact: true })
+        .getByLabel("Font size")
+        .fill(String(size));
+      await page.locator(`[id="conversation-${chatId}"]`).click();
+      const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
+      const handle = await resize.boundingBox();
+      const panelBox = await panel.boundingBox();
+      if (!handle || !panelBox) throw new Error("Missing panel resize geometry");
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + 40);
+      await page.mouse.down();
+      await page.mouse.move(panelBox.x + panelBox.width - 120, handle.y + 40);
+      await page.mouse.up();
+      await resize.press("ArrowRight");
+      await expect
+        .poll(() => panel.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+        .toBe(120);
+      await panel
+        .getByRole("tab", { name: "Plan · Second planned change", exact: true })
+        .press("Delete");
+      const view = panel.getByRole("button", { name: "View Plan", exact: true });
+      await expect(view).toHaveCSS("font-size", `${size}px`);
+      const bounds = await view.evaluate((button) => {
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        const text = [...range.getClientRects()].map((r) => ({ x: r.x, right: r.right }));
+        const pane = button.closest(".file-panel")?.getBoundingClientRect();
+        const box = button.getBoundingClientRect();
+        return {
+          panelWidth: pane?.width,
+          panelRight: pane?.right,
+          x: box.x,
+          right: box.right,
+          height: box.height,
+          scrollWidth: button.scrollWidth,
+          clientWidth: button.clientWidth,
+          text,
+        };
+      });
+      expect(bounds.panelWidth).toBeCloseTo(120, 0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.panelRight ?? 0);
+      expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+      for (const rect of bounds.text) {
+        expect(rect.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right);
+      }
+      geometry.push({ size, ...bounds });
+      await view.focus();
+      await view.press(size === 32 ? "Space" : "Enter");
+      await expect(
+        plan.getByRole("heading", { name: "Second planned change", exact: true }),
+      ).toBeVisible();
+      expect(await readFile(recordPath, "utf8")).toBe(record);
+      if (size === 64)
+        await page.screenshot({ path: test.info().outputPath("view-plan-120px-64px.png") });
+    }
+    await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Button Text", exact: true })
+      .getByLabel("Font size")
+      .fill("14");
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    await panel
+      .getByRole("tab", { name: "Plan · Second planned change", exact: true })
+      .press("Delete");
+    const previousPids = new Set((await processes()).map((entry) => entry.pid));
+    const workerDirectories = (await page.evaluate(() => window.desktop.snapshot())).runs.map(
+      (run) => run.record.worktree,
+    );
+    await close();
+    // Rewrite older synthetic files last; their modification time cannot decide latest.
+    const first = completed.plans?.[0];
+    if (!first) throw new Error("Missing first plan");
+    const oldPath = join(completed.directory, ".code60/plans", `${first.id}.json`);
+    await writeFile(oldPath, await readFile(oldPath));
+    application = await launchDesktop(directory, repo, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    const reopen = page
+      .locator("#chat-file-panel")
+      .getByRole("button", { name: "View Plan", exact: true });
+    await reopen.focus();
+    await reopen.press("Space");
+    await expect(
+      page
+        .getByRole("region", { name: "Plan", exact: true })
+        .getByRole("heading", { name: "Second planned change", exact: true }),
+    ).toBeVisible();
+    const restored = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(restored.plans).toEqual(completed.plans);
+    expect(restored.restored).toBe(true);
+    expect(JSON.parse(await readFile(recordPath, "utf8"))).toEqual(JSON.parse(record));
+    const newProcesses = (await processes()).filter((entry) => !previousPids.has(entry.pid));
+    expect(newProcesses.some((entry) => workerDirectories.includes(entry.cwd))).toBe(false);
+    expect(await readFile(join(completed.directory, "plans", `${latest.id}.md`), "utf8")).toBe(
+      markdown,
+    );
+    expect(git("worktree", "list", "--porcelain")).toBe(worktrees);
+    expect(git("rev-parse", "HEAD")).toBe(before.head);
+    expect(git("diff", "--cached", "--binary")).toBe(before.staged);
+    expect(await readFile(join(repo, ".git/index"))).toEqual(before.index);
+    expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("unstaged\n");
+    await attachJsonEvidence("project-plan-reopen-evidence", {
+      geometry,
+      native,
+      newProcesses,
+      plans: restored.plans,
+      record: JSON.parse(record),
+      worktrees,
+      head: before.head,
+    });
+  } finally {
+    await close();
+    await attachJsonEvidence("project-plan-process-cleanup", { pids: [...owned], remaining: [] });
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });

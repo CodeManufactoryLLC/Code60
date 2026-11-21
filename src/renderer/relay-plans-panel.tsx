@@ -12,6 +12,7 @@ export function RelayPlansPanel({
   api,
   plans,
   conversationId,
+  currentChat,
   generation,
   active,
   open,
@@ -19,22 +20,39 @@ export function RelayPlansPanel({
   snapshot,
   recallSource,
   revisionPreview,
+  planRequest,
 }: {
   api: DesktopApi;
   plans: PlanSummary[];
   conversationId: string | undefined;
+  currentChat: string | undefined;
   generation?: number | undefined;
   active: boolean;
   open: boolean;
   onOpen(value: boolean): void;
   snapshot: Snapshot | undefined;
   recallSource?: RecallSource | undefined;
+  planRequest?: { conversationId: string; serial: number } | undefined;
   revisionPreview?: { id: number; preview: ReviewPreview } | undefined;
 }) {
   const [tabs, setTabs] = useState(() => emptyFileTabs("relay"));
   const proposals = useRef(new Map<string, number>());
   const discoveredPlans = useRef(false);
+  const handledPlanRequest = useRef<number | undefined>(undefined);
   const [root, setRoot] = useState("workspace");
+  useEffect(() => {
+    if (
+      !planRequest ||
+      planRequest.conversationId !== conversationId ||
+      handledPlanRequest.current === planRequest.serial
+    )
+      return;
+    const plan = plans.at(-1);
+    if (!plan) return;
+    handledPlanRequest.current = planRequest.serial;
+    setTabs((tabs) => updateFileTabs(tabs, { type: "plan", planId: plan.id, title: plan.title }));
+    onOpen(true);
+  }, [planRequest, conversationId, plans, onOpen]);
   useEffect(() => {
     if (!revisionPreview) return;
     const { preview } = revisionPreview;
@@ -123,7 +141,7 @@ export function RelayPlansPanel({
         api={api}
         recallSource={recallSource}
         plans={plans}
-        currentChat={conversationId}
+        currentChat={currentChat}
         knowledgeOwner={
           conversationId && generation !== undefined
             ? { kind: "relay", conversationId, generation }

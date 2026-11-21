@@ -246,10 +246,10 @@ export function createFakeAgent(options = {}) {
       }
       if (options.planWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request === "Plan a change") {
+        if (request === "Plan a change" || request === "Plan a second change") {
           const plan = await tool("code60_create_plan", {
-            requestId: "fixture-plan",
-            title: "Planned change",
+            requestId: request === "Plan a change" ? "fixture-plan" : "fixture-second-plan",
+            title: request === "Plan a change" ? "Planned change" : "Second planned change",
             description: "Create and verify a file.",
             tasks: [{ text: "Create result" }, { text: "Verify result" }],
           });
@@ -309,7 +309,7 @@ export function createFakeAgent(options = {}) {
             const { scope } = await tool("code60_get_context");
             await tool("code60_dispatch_agent", {
               scope,
-              requestId: "planned-worker",
+              requestId: `planned-worker-${plan.id}`,
               planTaskId: plan.tasks[0].id,
               prompt: JSON.stringify([
                 { write: { path: "result.txt", content: "planned result\n" } },

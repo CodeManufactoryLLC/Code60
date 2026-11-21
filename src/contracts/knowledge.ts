@@ -308,12 +308,12 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "plans",
     "Plans",
-    "Propose and track revisioned tasks.",
-    "Chat → plan tab",
-    "provider",
+    "Propose and track revisioned tasks; use View Plan to reopen the current conversation’s latest saved plan.",
+    "Chat → right sidebar → View Plan → existing plan tab",
+    "runtime",
     "existing-tools",
     "No agent tool can accept a plan.",
-    "Human Accept authorizes only that revision and targets.",
+    "View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.",
   ),
   feature(
     "reviews",

@@ -113,6 +113,23 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("discovers View Plan without treating saved plan viewing as provider or execution authority", async () => {
+    const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "View Plan" }, relay),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "plans",
+        access: expect.stringContaining("right sidebar → View Plan"),
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("current session has an existing plan"),
+          action: expect.stringContaining("View Plan"),
+        }),
+      }),
+    ]);
+  });
   it.each([false, true])(
     "discovers the auto-name limit with database availability %s",
     async (connected) => {
