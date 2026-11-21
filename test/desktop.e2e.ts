@@ -15110,7 +15110,9 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       .locator(".sidebar")
       .getByRole("button", { name: /^New Session in / })
       .click();
-    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    await add.click();
+    await expect(tabs.getByRole("tab", { name: "New tab", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );

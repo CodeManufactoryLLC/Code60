@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { DesktopApi, PlanSummary, Snapshot } from "../bridge/index.js";
 import { FilePanel } from "./file-panel.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
@@ -31,6 +31,7 @@ export function RelayPlansPanel({
   recallSource?: RecallSource | undefined;
   revisionPreview?: { id: number; preview: ReviewPreview } | undefined;
 }) {
+  const inactivePanelId = useId();
   const [tabs, setTabs] = useState(() => emptyFileTabs("relay"));
   const proposals = useRef(new Map<string, number>());
   const discoveredPlans = useRef(false);
@@ -111,7 +112,11 @@ export function RelayPlansPanel({
     <section className="project-file-panel-scope" hidden={!active}>
       <FilePanel
         panelId={
-          snapshot?.chat.customAgentId ? `relay-plan-panel-${conversationId}` : "relay-plan-panel"
+          active
+            ? snapshot?.chat.customAgentId
+              ? `relay-plan-panel-${conversationId}`
+              : "relay-plan-panel"
+            : inactivePanelId
         }
         tabs={tabs}
         onAction={act}

@@ -69,6 +69,7 @@ export function ChatWorkspace({
     setGitSetupProject,
     chatRequest,
     fileTabs: currentFileTabs,
+    filePanel,
     explorerOpen,
     setExplorerOpen,
   } = project;
@@ -254,8 +255,10 @@ export function ChatWorkspace({
       </Card>
       <section className="project-file-panel-scope" hidden={!projectFiles}>
         <RetainedProjectPanels
-          id={scope.viewKey}
-          liveIds={project.retainedScopes.map((owner) => owner.viewKey)}
+          id={filePanel.key}
+          liveIds={project.retainedScopes.flatMap((owner) =>
+            [...owner.panels.values()].map((panel) => panel.key),
+          )}
         >
           <FilePanel
             disabled={!database}
@@ -279,7 +282,7 @@ export function ChatWorkspace({
                   }
                 : undefined
             }
-            key={scope.viewKey}
+            key={filePanel.key}
             tabs={currentFileTabs}
             onAction={fileAction}
             browser={fileBrowser}
@@ -292,27 +295,38 @@ export function ChatWorkspace({
       </section>
       {snapshot?.chats
         .filter((chat) => chat.kind === "relay")
-        .map((owner) => (
-          <RelayPlansPanel
-            key={`${owner.conversationId}:${owner.generation}`}
-            snapshot={{ ...snapshot, chat: owner }}
-            api={api}
-            plans={owner.plans ?? []}
-            conversationId={owner.conversationId}
-            generation={owner.generation}
-            active={
-              !splash &&
-              conversationActive &&
-              owner.conversationId === relay?.conversationId &&
-              (relayActive || relayWorkerActive) &&
-              !projectFiles
-            }
-            recallSource={recallSource}
-            open={panelOpen[owner.conversationId ?? ""] ?? false}
-            onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
-            revisionPreview={revisionPreview}
-          />
-        ))}
+        .flatMap((owner) =>
+          [
+            undefined,
+            ...(project.visitedRelayWorkers ?? []).filter((id) => {
+              const worker = snapshot.runs.find((run) => run.record.id === id)?.relay;
+              return (
+                worker?.conversationId === owner.conversationId &&
+                worker?.generation === owner.generation
+              );
+            }),
+          ].map((id) => (
+            <RelayPlansPanel
+              key={`${owner.conversationId}:${owner.generation}:${id ?? "relay"}`}
+              snapshot={{ ...snapshot, chat: owner }}
+              api={api}
+              plans={id ? [] : (owner.plans ?? [])}
+              conversationId={owner.conversationId}
+              generation={owner.generation}
+              active={
+                !splash &&
+                conversationActive &&
+                owner.conversationId === relay?.conversationId &&
+                (id ? relayWorkerActive && workerId === id : relayActive) &&
+                !projectFiles
+              }
+              recallSource={recallSource}
+              open={panelOpen[owner.conversationId ?? ""] ?? false}
+              onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
+              revisionPreview={id ? undefined : revisionPreview}
+            />
+          )),
+        )}
     </div>
   );
 }

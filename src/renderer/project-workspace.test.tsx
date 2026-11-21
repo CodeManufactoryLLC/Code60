@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
-import { updateFileTabs } from "./file-tabs.js";
 import { useFiles } from "./files.js";
 import { ProjectScope, useProjectScope } from "./project-scope.js";
 import { useProjectWorkspace } from "./project-workspace.js";
+import { sessionPanelId } from "./session-panel.js";
 import type { DesktopState } from "./snapshot-state.js";
 import { initialTabs, type PageId } from "./tabs.js";
 import { useTranscripts } from "./transcripts.js";
@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   scope = new ProjectScope("/db", "/project", "instance");
   scope.set("workerSelection", { workspace: scope.workspace, id: "worker" });
-  scope.set("fileTabs", (tabs) => updateFileTabs(tabs, { type: "browse" }));
+  scope.panel(sessionPanelId("worker", undefined)).act({ type: "browse" });
   vi.mocked(useProjectScope).mockReturnValue({
     scope,
     retainedScopes: [scope],
@@ -44,7 +44,6 @@ beforeEach(() => {
     setWorkerSelection: vi.fn(),
     setVisitedWorkers: vi.fn(),
     setChatRequest: vi.fn(),
-    setFileTabs: vi.fn(),
   } as unknown as ReturnType<typeof useProjectScope>);
 });
 
@@ -93,9 +92,70 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
         .mock.calls.slice(-2)
         .map((args) => args[2]),
     ).toEqual([transcriptsActive, transcriptsActive]);
-    expect(vi.mocked(useFiles).mock.lastCall?.[5]).toBe(scope.files());
+    expect(vi.mocked(useFiles).mock.lastCall?.[5]).toBe(
+      scope.panel(sessionPanelId("worker", undefined)).files,
+    );
     expect(vi.mocked(useTranscripts).mock.calls.at(-2)?.[6]).toBe(scope.transcripts(api));
     expect(scope.snapshot().workerSelection?.id).toBe("worker");
-    expect(scope.snapshot().fileTabs.entries).toHaveLength(1);
+    expect(scope.panel(sessionPanelId("worker", undefined)).snapshot().entries).toHaveLength(1);
   },
 );
+
+function ReviewProbe({
+  api,
+  capture,
+}: {
+  api: DesktopApi;
+  capture(workspace: ReturnType<typeof useProjectWorkspace>): void;
+}) {
+  capture(
+    useProjectWorkspace({
+      api,
+      state: {
+        snapshot: {
+          ...snapshot,
+          chats: [{ run: { id: "chat-a" } }, { run: { id: "chat-b" } }],
+          chat: { ...snapshot.chat, run: { id: "chat-b" } },
+          reviews: [
+            { id: "review", chatId: "chat-a", title: "Task", revisions: [{ id: "revision" }] },
+          ],
+        },
+        events: {},
+        projectGeneration: 1,
+      } as unknown as DesktopState,
+      tabs: { ...initialTabs, active: "chat" },
+      splash: false,
+      navigationPending: false,
+      setTabs: vi.fn(),
+      setError: vi.fn(),
+      notify: vi.fn(),
+      setBusy: vi.fn(),
+      onWorkerSelection: vi.fn(),
+    }),
+  );
+  return null;
+}
+
+it("opens a review in its owning chat without changing the selected worker's tabs", () => {
+  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as DesktopApi;
+  const destination = scope.panel(sessionPanelId(undefined, "chat-a"));
+  const worker = scope.panel(sessionPanelId("worker", undefined));
+  const before = worker.snapshot();
+  let workspace: ReturnType<typeof useProjectWorkspace> | undefined;
+  renderToStaticMarkup(
+    <ReviewProbe
+      api={api}
+      capture={(value) => {
+        workspace = value;
+      }}
+    />,
+  );
+  workspace?.openReview("review");
+  expect(destination.snapshot()).toMatchObject({
+    active: 1,
+    entries: [{ kind: "revision", reviewId: "review", revisionId: "revision" }],
+  });
+  expect(worker.snapshot()).toBe(before);
+  expect(scope.panel(sessionPanelId(undefined, "chat-b")).snapshot().entries).toEqual([]);
+  expect(api.orchestrationChatAction).toHaveBeenCalledWith({ type: "select", id: "chat-a" });
+});
