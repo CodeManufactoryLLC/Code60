@@ -306,6 +306,11 @@ describe("conversation hierarchy", () => {
     expect(html).toContain("Worker. Failed");
     expect(html).not.toContain('class="chat-sidebar-status"');
     expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
+    const workerDisclosure = html.match(
+      /<button[^>]*aria-label="Workers for Chat 1"[\s\S]*?<\/button>/,
+    )?.[0];
+    expect(workerDisclosure).toContain('viewBox="0 0 16 16"');
+    expect(workerDisclosure).not.toContain('viewBox="0 0 32 32"');
     for (const action of ["Actions", "Workers"]) {
       const button = html.match(
         new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
