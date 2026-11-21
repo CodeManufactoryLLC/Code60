@@ -113,6 +113,24 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it.each([false, true])(
+    "discovers the auto-name limit with database availability %s",
+    async (connected) => {
+      const { knowledge, reads } = setup(connected ? {} : { database: null });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "auto-names" }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "projects",
+          limitations: expect.stringContaining("limited to 19 characters"),
+          availability: expect.objectContaining({ status: connected ? "available" : "blocked" }),
+        }),
+      ]);
+      expect(reads).toEqual([]);
+    },
+  );
+
   it("does not claim browser prerequisites or extension approval have been verified", async () => {
     const { knowledge, reads } = setup({ database: null });
     const capabilities = result(

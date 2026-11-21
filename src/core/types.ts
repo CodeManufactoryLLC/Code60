@@ -67,6 +67,8 @@ export interface RunView {
   pending: readonly PendingPermission[];
   /** The run is ending and its agent is being stopped. */
   stopping: boolean;
+  /** This live turn is cancelling; independent of ending the agent process. Never persisted. */
+  cancelling?: boolean;
   sessionState?: import("../contracts/index.js").SessionState;
   modeChanging?: boolean;
 }

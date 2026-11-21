@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { activityLabel } from "./activity-display.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
@@ -15,6 +16,7 @@ import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
+import { useDocumentVisible } from "./use-document-visible.js";
 
 export function ChatSidebar({
   chats,
@@ -49,6 +51,7 @@ export function ChatSidebar({
   entries?: readonly Conversation[];
   ancestorsExpanded?: boolean;
 }) {
+  const documentVisible = useDocumentVisible();
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
   );
@@ -166,13 +169,35 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
+    const activity = chat?.activity;
+    const statusLabel =
+      view?.cancelling || activity?.state === "stopping"
+        ? activityLabel("stopping")
+        : activity?.state === "waiting_for_workers"
+          ? activityLabel(activity.state)
+          : presentation.label;
+    // Match live chat activity, including connection and monitoring owned workers. An open
+    // process, saved record or selected conversation alone never establishes active work.
+    const working =
+      !error &&
+      !!view &&
+      !view.stopping &&
+      !view.cancelling &&
+      view.pending.length === 0 &&
+      (chat
+        ? !!activity &&
+          activity.state !== "stopping" &&
+          (activity.active ||
+            activity.state === "connecting" ||
+            activity.state === "waiting_for_workers")
+        : view.status === "queued" || view.status === "running");
     const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
     const summary = summaries.get(entry.id);
     const unread =
-      open && entry.id === selectedId
+      entry.role === "worker" || (open && entry.id === selectedId)
         ? 0
         : summary
           ? Math.max(0, summary.count - read)
@@ -181,17 +206,51 @@ export function ChatSidebar({
     const approvals = view?.pending.length ?? 0;
     const description = [
       entry.role === "orchestrator" ? "Orchestrator" : "Worker",
-      error || presentation.label,
+      error || statusLabel,
       approvals ? `${approvals} approvals waiting` : "",
       unreadLabel,
     ]
       .filter(Boolean)
       .join(". ");
     const children = childrenById.get(entry.id) ?? [];
+    const projectWorkers = chat?.kind === "project" && children.length > 0;
     const expanded = !collapsed.has(entry.id);
+    const workerToggle = children.length > 0 && (
+      <button
+        type="button"
+        className={`icon-button chat-workers-toggle${projectWorkers ? " chat-workers-toggle-leading" : ""}`}
+        aria-label={`Workers for ${entry.label}`}
+        aria-expanded={expanded}
+        aria-controls={`workers-${entry.id}`}
+        disabled={disabled}
+        onClick={() =>
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (next.has(entry.id)) next.delete(entry.id);
+            else next.add(entry.id);
+            return next;
+          })
+        }
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          event.stopPropagation();
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (event.key === "ArrowLeft") next.add(entry.id);
+            else next.delete(entry.id);
+            return next;
+          });
+          document.getElementById(`conversation-${entry.id}`)?.focus();
+        }}
+      >
+        {projectWorkers ? <NavigationIcon name="app-communication" /> : <Icon name="ai-agent" />}
+      </button>
+    );
     return (
       <div className="chat-sidebar-group" key={entry.id} data-conversation-id={entry.id}>
         <div className="chat-sidebar-row" data-nav-active={open && entry.id === selectedId}>
+          {projectWorkers && workerToggle}
           <button
             type="button"
             id={`conversation-${entry.id}`}
@@ -238,18 +297,22 @@ export function ChatSidebar({
               }
             }}
           >
-            <span className="chat-sidebar-artwork" aria-hidden="true">
-              {relayHeading && (
-                <NavigationIcon
-                  name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
-                />
-              )}
-              {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-                <NavigationIcon name="app-communication" />
-              )}
-              {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
+            {!projectWorkers && (
+              <span className="chat-sidebar-artwork" aria-hidden="true">
+                {relayHeading && (
+                  <NavigationIcon
+                    name={chat?.customAgentId ? "app-custom-agents" : "app-steering-wheel"}
+                  />
+                )}
+                {entry.role === "orchestrator" && chat?.kind !== "relay" && (
+                  <NavigationIcon name="app-communication" />
+                )}
+                {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
+              </span>
+            )}
+            <span className="chat-sidebar-label" data-working={working && documentVisible}>
+              {entry.label}
             </span>
-            <span className="chat-sidebar-label">{entry.label}</span>
             {(unread > 0 || approvals > 0) && (
               <span className="chat-sidebar-indicators">
                 {unread > 0 && (
@@ -290,37 +353,7 @@ export function ChatSidebar({
               </button>
             </>
           )}
-          {children.length > 0 && (
-            <button
-              type="button"
-              className="icon-button chat-workers-toggle"
-              aria-label={`Workers for ${entry.label}`}
-              aria-expanded={expanded}
-              aria-controls={`workers-${entry.id}`}
-              onClick={() =>
-                setCollapsed((current) => {
-                  const next = new Set(current);
-                  if (next.has(entry.id)) next.delete(entry.id);
-                  else next.add(entry.id);
-                  return next;
-                })
-              }
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                setCollapsed((current) => {
-                  const next = new Set(current);
-                  if (event.key === "ArrowLeft") next.add(entry.id);
-                  else next.delete(entry.id);
-                  return next;
-                });
-                document.getElementById(`conversation-${entry.id}`)?.focus();
-              }}
-            >
-              <Icon name="ai-agent" />
-            </button>
-          )}
+          {!projectWorkers && workerToggle}
         </div>
         {children.length > 0 && (
           // biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset.
