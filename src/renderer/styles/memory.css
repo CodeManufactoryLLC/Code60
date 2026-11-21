@@ -9,6 +9,19 @@
   gap: 8px;
   overflow-wrap: anywhere;
 }
+.memory-library-filter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  color: var(--muted);
+}
+.memory-library-filter select {
+  width: 180px;
+  max-width: 100%;
+  color: var(--text);
+}
 /* Memory details: one reading column with quiet metadata and a sticky action footer. */
 .setup-dialog.memory-dialog {
   width: min(720px, calc(100vw - 32px));
@@ -97,9 +110,7 @@
 
 .memory-facts dd {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .memory-section {

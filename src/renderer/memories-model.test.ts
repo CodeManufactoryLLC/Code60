@@ -40,10 +40,12 @@ describe("Memories table paging and lifetime", () => {
     const off = model.subscribe(changed);
     model.refresh();
     expect(api.browseMemories).not.toHaveBeenCalled();
+    expect(model.snapshot().loaded).toBe(false);
     model.activate(true);
     model.activate(true);
     await settled(model);
     expect(model.snapshot().metadata).toBe(metadata);
+    expect(model.snapshot().loaded).toBe(true);
     expect(api.browseMemories).toHaveBeenCalledTimes(1);
     model.refresh();
     await settled(model);
@@ -137,8 +139,10 @@ describe("Memories table paging and lifetime", () => {
     await settled(model);
     expect(model.snapshot().error).toContain("Refresh memories");
     expect(model.snapshot().error).not.toContain("private storage error");
+    expect(model.snapshot().loaded).toBe(false);
     model.refresh();
     await settled(model);
     expect(model.snapshot().error).toBe("");
+    expect(model.snapshot().loaded).toBe(true);
   });
 });

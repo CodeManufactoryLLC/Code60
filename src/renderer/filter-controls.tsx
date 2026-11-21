@@ -21,6 +21,7 @@ export function FilterControls({
   onChange,
   preview,
   retained = false,
+  pageLocal = false,
 }: {
   fields: FilterField[];
   library: FilterLibrary;
@@ -28,6 +29,7 @@ export function FilterControls({
   onChange(value: FilterLibrary): void;
   preview(filter: SavedFilter, now: number): number;
   retained?: boolean;
+  pageLocal?: boolean;
 }) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
@@ -84,7 +86,7 @@ export function FilterControls({
         type="button"
         className="icon-button"
         ref={trigger}
-        aria-label={`Filters${active ? `: ${filterIdentity(active).name}` : ""}`}
+        aria-label={`Filters${pageLocal ? " on this page" : ""}${active ? `: ${filterIdentity(active).name}` : ""}`}
         data-active={library.active ? "true" : undefined}
         onClick={() => {
           setOpen(true);
@@ -199,7 +201,7 @@ export function FilterControls({
                         <p role="status">
                           {retained
                             ? "Apply to search all retained history."
-                            : `${preview(value, now)} matching rows`}
+                            : `${preview(value, now)} matching rows${pageLocal ? " on this page" : ""}`}
                         </p>
                       </>
                     )}
@@ -382,7 +384,7 @@ export function FilterControls({
                   {problem ||
                     (retained
                       ? "Apply to search all retained history."
-                      : `${preview(draft, now)} matching rows`)}
+                      : `${preview(draft, now)} matching rows${pageLocal ? " on this page" : ""}`)}
                 </p>
                 <div className="button-group">
                   <button type="submit" className="primary" disabled={!!problem || !!error}>

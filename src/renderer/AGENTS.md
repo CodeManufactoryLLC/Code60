@@ -33,6 +33,10 @@
   keep store-wide selectors beside the title, apart from page-local table controls.
   Preserve filters and paging across navigation, defer hidden reads and reuse
   the existing evidence inspector and revision-checked actions.
+  Label library selectors visibly and identify page-local search/filter controls.
+  Present single-line text previews, subjects, applicability and named provenance.
+  Distinguish loading, empty library, no matches and failed reads; open detail
+  loading/errors in the same dismissible dialog with retry and focus restoration.
   Memory details use a single reading column: readable attribute tags, editable
   memory text, named project/conversation facts, formatted dates and recall status,
   attributed evidence quotes, expandable source messages with cited text marked,
