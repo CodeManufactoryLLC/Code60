@@ -1903,7 +1903,10 @@ fixed 48px heights at the default text size, independent of selection and animat
 ### Chat names and archive
 
 After the first completed human/agent exchange, a separate presentation-only ACP
-turn asks the configured orchestration provider for a short descriptive title.
+turn asks the configured orchestration provider for a project agent title under
+20 characters (at most 19). Valid generated titles are deterministically cut off
+at 19 Unicode characters; compliant names are unshortened. This limit does not
+apply to manually supplied names or rename existing session titles.
 It runs in a private temporary directory, without MCP servers, denies permissions,
 bounds input/output and times out after 30 seconds. Replacement, manual rename,
 Stop all and shutdown cancel generation; cleanup stops the process before removing

@@ -45,7 +45,7 @@ it("roundtrips private legacy, selected and explicitly cleared records with froz
   record.taskId = task.id;
   await store.save(record);
   record.tactic = null;
-  record.title = "Named chat";
+  record.title = "Existing session name longer than nineteen characters";
   record.archived = true;
   await store.save(record);
   expect((await new ChatStore(root).load()).chats).toEqual([record]);

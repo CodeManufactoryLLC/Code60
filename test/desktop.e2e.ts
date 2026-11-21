@@ -6751,6 +6751,23 @@ test("desktop: database connection from splash restores normal entry", async () 
 test("desktop: chat titles, context menus, archive and advanced navigation", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-chat-names-")));
   try {
+    const config = join(directory, "config", "code60");
+    await mkdir(config, { recursive: true });
+    await writeFile(
+      join(config, "config.json"),
+      JSON.stringify({
+        agents: {
+          claude: {
+            command: [
+              process.execPath,
+              join(root, "test/fixtures/fake-agent.mjs"),
+              "--chat-title",
+              "12345678901234567890 and a longer ignored limit",
+            ],
+          },
+        },
+      }),
+    );
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
     const errors: string[] = [];
@@ -6775,22 +6792,26 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await expect(
       page
         .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: ok", exact: true }),
+        .getByRole("button", { name: "Rename chat: 1234567890123456789", exact: true }),
     ).toBeVisible();
     const sidebar = page.locator("nav.chat-sidebar");
-    await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
+    await sidebar
+      .getByRole("button", { name: "Actions for 1234567890123456789", exact: true })
+      .click();
     const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
     await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
     await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await expectModalSurface(rename);
     await page.screenshot({ path: test.info().outputPath("rename-dialog-neobrutalism.png") });
-    await rename.getByRole("textbox", { name: "Chat name" }).fill("Parser work");
+    await rename.getByRole("textbox", { name: "Chat name" }).fill("Manually named parser work");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(sidebar.getByRole("button", { name: "Parser work", exact: true })).toBeVisible();
+    await expect(
+      sidebar.getByRole("button", { name: "Manually named parser work", exact: true }),
+    ).toBeVisible();
     await page
       .locator(".workspace-breadcrumbs")
-      .getByRole("button", { name: "Rename chat: Parser work", exact: true })
+      .getByRole("button", { name: "Rename chat: Manually named parser work", exact: true })
       .click();
     await rename.getByRole("textbox", { name: "Chat name" }).fill("Header name");
     await rename.getByRole("button", { name: "Save", exact: true }).click();

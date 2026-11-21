@@ -4216,14 +4216,21 @@ describe("app-wide orchestration chat", {
 
   it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
     agents.script = (_text, session) => {
-      session.update({ type: "message", text: "Parser validation" });
+      session.update({
+        type: "message",
+        text: "Parser validation work that needs a shorter auto-name",
+      });
       return "end_turn";
     };
     const id = await ready();
     await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
-    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Parser validation"));
+    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Parser validation w"));
     const count = agents.sessions.length;
-    await controller.orchestrationChatAction({ type: "rename", id, title: "My parser work" });
+    await controller.orchestrationChatAction({
+      type: "rename",
+      id,
+      title: "My manually supplied parser work",
+    });
     await controller.orchestrationChatAction({ type: "send", id, text: "Next step" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions).toHaveLength(count);
@@ -4231,7 +4238,7 @@ describe("app-wide orchestration chat", {
     await controller.orchestrationChatAction({ type: "archive", id });
     expect(controller.snapshot().chat.run?.id).not.toBe(id);
     expect(controller.snapshot().chats.find((chat) => chat.run?.id === id)).toMatchObject({
-      title: "My parser work",
+      title: "My manually supplied parser work",
       archived: true,
       directory,
     });

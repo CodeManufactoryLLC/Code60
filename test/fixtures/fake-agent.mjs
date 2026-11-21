@@ -21,8 +21,10 @@ if (processLogIndex >= 0)
   );
 if (process.env.FAKE_AGENT_STDERR) process.stderr.write(process.env.FAKE_AGENT_STDERR);
 const promptLogIndex = process.argv.indexOf("--prompt-log");
+const chatTitleIndex = process.argv.indexOf("--chat-title");
 let promptSequence = 0;
 createFakeAgent({
+  chatTitle: chatTitleIndex >= 0 ? process.argv[chatTitleIndex + 1] : undefined,
   onPrompt: () => {
     if (promptLogIndex >= 0)
       writeFileSync(
