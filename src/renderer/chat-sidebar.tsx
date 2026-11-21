@@ -15,6 +15,7 @@ import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { statusSpec } from "./session-presentation.js";
 import { loadReadMarker, readMarkerKey, replyTurns, unreadCount } from "./unread.js";
+import { useDocumentVisible } from "./use-document-visible.js";
 
 export function ChatSidebar({
   chats,
@@ -49,6 +50,7 @@ export function ChatSidebar({
   entries?: readonly Conversation[];
   ancestorsExpanded?: boolean;
 }) {
+  const documentVisible = useDocumentVisible();
   const [menu, setMenu] = useState<{ id: string; label: string; x: number; y: number } | null>(
     null,
   );
@@ -160,6 +162,16 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
+    // Match live chat activity, including connection and monitoring owned workers. An open
+    // process, saved record or selected conversation alone never establishes active work.
+    const working =
+      !error &&
+      !!view &&
+      !view.stopping &&
+      view.pending.length === 0 &&
+      (view.status === "queued" ||
+        view.status === "running" ||
+        (view.status === "idle" && chat?.activity?.state === "waiting_for_workers"));
     const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
@@ -243,7 +255,9 @@ export function ChatSidebar({
               )}
               {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
             </span>
-            <span className="chat-sidebar-label">{entry.label}</span>
+            <span className="chat-sidebar-label" data-working={working && documentVisible}>
+              {entry.label}
+            </span>
             {(unread > 0 || approvals > 0) && (
               <span className="chat-sidebar-indicators">
                 {unread > 0 && (

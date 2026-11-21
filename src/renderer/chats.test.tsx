@@ -33,6 +33,65 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  it.each<RunStatus>([
+    "queued",
+    "running",
+    "waiting",
+    "idle",
+    "finished",
+    "failed",
+    "cancelled",
+    "timed_out",
+    "interrupted",
+  ])("spotlights only live active sidebar entries (%s)", (status) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const ownerRun = view("owner", status);
+    const owner: OrchestrationChat = {
+      ...chat("owner", ["worker"]),
+      title: "Custom assistant",
+      kind: "relay",
+      customAgentId: "assistant-id",
+      run: ownerRun,
+    };
+    const relay: OrchestrationChat = {
+      ...chat("relay"),
+      kind: "relay",
+      run: view("relay", status),
+    };
+    const worker = run("worker", status);
+    const render = () =>
+      renderToStaticMarkup(
+        <ChatSidebar
+          chats={[owner, relay]}
+          runs={[worker]}
+          selectedId="relay"
+          navigationSerial={undefined}
+          database="/db"
+          eventsByRun={{}}
+          open
+          pending={false}
+          onSelect={() => {}}
+        />,
+      );
+    const working = () => (render().match(/data-working="true"/g) ?? []).length;
+    expect(working()).toBe(status === "running" || status === "queued" ? 3 : 0);
+    if (status !== "running") return;
+    ownerRun.stopping = true;
+    expect(working()).toBe(2);
+    relay.error = "Connection failed";
+    expect(working()).toBe(1);
+    if (worker.view) worker.view.pending = [{ id: "approval" } as RunView["pending"][number]];
+    expect(working()).toBe(0);
+    ownerRun.stopping = false;
+    ownerRun.status = "idle";
+    owner.activity = { state: "waiting_for_workers" } as NonNullable<OrchestrationChat["activity"]>;
+    expect(working()).toBe(1);
+    delete worker.view;
+    expect(working()).toBe(1); // A running saved record without a live view is static.
+    owner.run = null;
+    expect(working()).toBe(0);
+  });
+
   it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
     const worker = run("old-worker", "interrupted");
     worker.record.reason = "the owning process (PID 12345) is gone";

@@ -234,4 +234,13 @@ describe("desktop capability catalog", () => {
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
   });
+
+  it("describes sidebar activity as runtime-dependent presentation", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
+      prerequisite: "runtime",
+      access: expect.stringContaining("left navigation names"),
+      purpose: expect.stringContaining("custom assistants and Relay"),
+      limitations: expect.stringContaining("reduced motion and forced colors"),
+    });
+  });
 });

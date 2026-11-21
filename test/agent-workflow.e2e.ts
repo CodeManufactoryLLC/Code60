@@ -614,6 +614,113 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
 }
 
+async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) {
+  const relay = page.getByRole("button", { name: "Relay", exact: true, includeHidden: true });
+  const relayName = relay.locator(".chat-sidebar-label");
+  const project = page.getByRole("region", {
+    name: `Project ${repo}`,
+    exact: true,
+    includeHidden: true,
+  });
+  const chat = () => page.locator(".orchestration-chat-page:visible");
+  const composer = () =>
+    chat().getByRole("combobox", { name: "Message to orchestrator", exact: true });
+  const send = async (text: string) => {
+    await expect(composer()).toBeEditable();
+    await composer().fill(text);
+    await expect(chat().getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    await composer().press("Enter");
+  };
+  const hang = JSON.stringify([{ message: "Working until cancelled." }, { hang: "cancellable" }]);
+  await relay.click();
+  await expect(relay).toHaveAttribute("aria-current", "true");
+  const relayId = (await relay.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!relayId) throw new Error("Missing Relay identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await send(
+    `Relay target: ${JSON.stringify({ cwd: repo, workspaceMode: "worktree", label: "Spotlight worker", prompt: hang })}`,
+  );
+  const worker = page.getByRole("button", { name: /^Spotlight worker \[/, includeHidden: true });
+  const workerName = worker.locator(".chat-sidebar-label");
+  await expect(workerName).toHaveAttribute("data-working", "true");
+  await expect(composer()).toBeEditable();
+  // Relay continues monitoring its owned worker after its own turn becomes idle.
+  await expect(relayName).toHaveAttribute("data-working", "true");
+  await send(hang);
+  let assistant = project.locator(".chat-sidebar-entry").last();
+  if (custom) {
+    assistant = page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Workflow Agent", exact: true, includeHidden: true });
+    await assistant.click();
+  } else {
+    const chatCount = await project.locator(".chat-sidebar-entry").count();
+    await project.getByRole("button", { name: /^New Session in / }).click();
+    await expect(project.locator(".chat-sidebar-entry")).toHaveCount(chatCount + 1);
+    assistant = project.locator(".chat-sidebar-entry").last();
+  }
+  const assistantName = assistant.locator(".chat-sidebar-label");
+  await expect(assistant).toHaveAttribute("aria-current", "true");
+  const assistantId = (await assistant.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!assistantId) throw new Error("Missing assistant identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", assistantId);
+  await send(hang);
+  await expect(assistantName).toHaveAttribute("data-working", "true");
+  const names = [relayName, workerName, assistantName];
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(name).toHaveCSS("animation-duration", "2.8s");
+  }
+  const activityName = chat().locator(".activity-display .activity-name");
+  await expect(activityName).toHaveCSS("animation-name", "activity-spotlight");
+  const spotlightStyle = (element: Element) => {
+    const style = getComputedStyle(element);
+    return [
+      style.backgroundImage,
+      style.backgroundSize,
+      style.backgroundClip,
+      style.color,
+      style.animationName,
+      style.animationDuration,
+      style.animationTimingFunction,
+      style.animationIterationCount,
+    ];
+  };
+  const reference = await activityName.evaluate(spotlightStyle);
+  for (const name of names) expect(await name.evaluate(spotlightStyle)).toEqual(reference);
+  await page.screenshot({ path: test.info().outputPath("sidebar-spotlight.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "none");
+    await expect(name).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
+  }
+  await page.emulateMedia({ forcedColors: "none" });
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+  // Cancelling one owner never removes another owner's spotlight, even off selection.
+  await chat().getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(assistantName).toHaveAttribute("data-working", "false");
+  await expect(assistantName).toHaveCSS("animation-name", "none");
+  await expect(relayName).toHaveCSS("animation-name", "activity-spotlight");
+  await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  await relay.click();
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await chat().getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  await worker.click();
+  await page
+    .locator(".worker-chat-page:visible")
+    .getByRole("button", { name: "Stop", exact: true })
+    .click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  const snapshot = await page.evaluate(() => window.desktop.snapshot());
+  expect(snapshot.runs.filter((run) => run.view?.status === "running")).toEqual([]);
+}
+
 for (const custom of [false, true]) {
   test(
     custom
@@ -1111,6 +1218,12 @@ for (const custom of [false, true]) {
         expect(native?.observed).toHaveLength(5);
         checks.push(
           "Confirmed message Undo restores code and conversation, returns the unsent request, stops owned workers and preserves private evidence, unrelated edits, index bytes and HEAD.",
+        );
+        await checkSidebarSpotlight(page, repo, custom);
+        await checkCheckout("original\n");
+        expect(errors).toEqual([]);
+        checks.push(
+          "Concurrent Relay, assistant and worker names share the exact chat spotlight; accessibility, hidden navigation and independent cancellation preserve live ownership and checkout bytes.",
         );
         await info.attach("workflow-checkpoints", {
           body: JSON.stringify(

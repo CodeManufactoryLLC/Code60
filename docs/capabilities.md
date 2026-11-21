@@ -442,12 +442,12 @@ Schema version: 1
 
 - ID: `activity`
 - Status: shipped
-- Purpose: Show the orchestrator's current step beside the transcript.
-- Access: Chat transcript activity line
+- Purpose: Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.
+- Access: Chat transcript activity line and left navigation names
 - Prerequisite: runtime
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Presentation only; reports never change work or permissions.
+- Limits: Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.
 - Pages: none
 - Settings sections: none
 - Tools: `code60_get_activity_context`, `code60_report_activity`
