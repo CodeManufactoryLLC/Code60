@@ -45,6 +45,10 @@ it("ships unique valid built-ins and preserves saved overrides for each name", (
     "create-command",
     "plan",
     "business-evaluation",
+    "catch-me-up",
+    "big-picture",
+    "pushback",
+    "simplify",
   ]);
   expect(new Set(BUILTIN_COMMANDS.map((entry) => entry.id)).size).toBe(BUILTIN_COMMANDS.length);
   for (const builtin of BUILTIN_COMMANDS) {

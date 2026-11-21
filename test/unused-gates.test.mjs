@@ -10,7 +10,7 @@ const config = JSON.parse(await readFile(join(root, "knip.json"), "utf8"));
 describe("unused-code gate entry points", () => {
   it("models launched sidecars, preload, fixtures and manual assets tooling without including generated output", () => {
     for (const path of [
-      "src/cli/main.ts",
+      "src/automation/main.ts",
       "src/desktop/main.ts",
       "src/desktop/preload.cts",
       "src/desktop/mcp-server.ts",
@@ -51,7 +51,10 @@ describe("unused-code gate entry points", () => {
       await put("knip.json", JSON.stringify({ entry: config.entry, project: config.project }));
       for (const path of config.entry.filter((path) => !path.includes("*")))
         await put(path, "console.log('entry');");
-      await put("src/cli/main.ts", 'import {used} from "../core/shared.js"; console.log(used);');
+      await put(
+        "src/desktop/main.ts",
+        'import {used} from "../core/shared.js"; console.log(used);',
+      );
       await put("src/core/shared.ts", "export const used = 1; export const orphan = 2;");
       await put("src/core/dead.ts", "export const unused = true;");
       const result = await promisify(execFile)(

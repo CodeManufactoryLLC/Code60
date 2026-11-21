@@ -7,6 +7,7 @@ import type {
   Orchestrator,
   RunEvent,
   RunRecord,
+  SessionSelection,
   Workspace,
 } from "../core/index.js";
 import { ACTIVE_STATUSES, prepareRuns } from "../core/index.js";
@@ -76,10 +77,12 @@ export class ExecutionHost {
     private readonly deps: CoreDeps,
     private readonly env: Readonly<Record<string, string | undefined>>,
     private readonly hooks: {
+      orchestrationAutoApproval?: () => boolean;
       authorize(owner: ExecutionOwner): void;
       event(worker: ExecutionWorker, event: RunEvent): void;
       changed(targetId?: string): void;
       warning(message: string): void;
+      initialSettings?(provider: string): readonly SessionSelection[];
       checkout?(worker: ExecutionWorker): Promise<void>;
       checkpoint?(
         owner: ExecutionOwner,
@@ -290,8 +293,9 @@ export class ExecutionHost {
         workspaceMode: request.workspaceMode,
         agents: [request.provider],
         prompt: request.prompt,
-        allowAll: true,
+        orchestrationAutoApproval: this.hooks.orchestrationAutoApproval ?? (() => true),
         owner: "relay",
+        initialSettings: (provider) => this.hooks.initialSettings?.(provider),
         ...(base === undefined ? {} : { base }),
         ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
       },

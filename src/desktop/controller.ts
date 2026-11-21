@@ -30,6 +30,7 @@ import type {
   ProjectEntry,
   PromptId,
   PromptTemplates,
+  ProviderAction,
   RecoveryActionResult,
   RunConfiguration,
   RunSettings,
@@ -93,7 +94,12 @@ import {
   parsePollSettings,
   parsePollVisibility,
   parseProjectAction,
+  parseProjectSearchIdentity,
+  parseProjectSearchOpen,
+  parseProjectSearchPage,
+  parseProjectSearchQuery,
   parsePromptTemplateId,
+  parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
@@ -168,6 +174,8 @@ import {
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
+import { ApplicationAgents } from "./application-agents.js";
+import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
@@ -199,9 +207,16 @@ import {
 import { createMcpGateway } from "./mcp-gateway.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
+import { ModelDefaults } from "./model-defaults.js";
 import { PlanStore } from "./plans.js";
 import type { DesktopPreferences } from "./preferences.js";
 import { ProjectHost } from "./project-host.js";
+import { ProjectSearch } from "./project-search.js";
+import {
+  projectChatRoot,
+  projectEvidenceReader,
+  type SearchLiveHistory,
+} from "./project-search-reader.js";
 import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
@@ -211,11 +226,9 @@ import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
 import { RAG_LIMITS } from "./rag-store.js";
 import type { RagConversation } from "./rag-worker.js";
 import { RelayFiles } from "./relay-files.js";
-import { RelayService } from "./relay-service.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
-import { projectSearchEvidence } from "./search-evidence.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
@@ -304,17 +317,6 @@ interface Batch {
   disposers: (() => void)[];
 }
 
-function projectChatRoot(database: string, project: string): string {
-  return join(
-    dirname(database),
-    ".code60_workspace",
-    "projects",
-    createHash("sha256")
-      .update(JSON.stringify([database, project]))
-      .digest("hex"),
-  );
-}
-
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class DesktopController {
   private readonly projectHost = new ProjectHost(() => this.makeProjectState());
@@ -333,9 +335,6 @@ export class DesktopController {
       files: null as FileSnapshot | null,
       memoryExtraction: undefined as
         | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
-        | undefined,
-      searchSummary: undefined as
-        | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
         | undefined,
       chatKey: "" as string,
       chatStore: undefined as ChatStore | undefined,
@@ -365,13 +364,15 @@ export class DesktopController {
   private get conversations() {
     return this.projectState.conversations;
   }
-  private readonly relay: RelayService | undefined;
+  private readonly relay: ApplicationAgents | undefined;
   private relaySelected = true;
   private projectSession: ProjectSessionStore | undefined;
   private projectSessionPaths: string[] = [];
   private projectSessionWarnings: string[] = [];
   readonly rag: RagService;
   readonly memory: MemoryService;
+  readonly modelDefaults: ModelDefaults;
+  private providerMutation = false;
   private readonly agentSetup: AgentSetup;
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
@@ -461,6 +462,7 @@ export class DesktopController {
     connection: "idle",
     error: null,
   };
+  private readonly orchestrationAutoApproval = () => this.orchestration.allowAll;
   private get memoryExtraction():
     | { requestId: string; abort: AbortController; done: Promise<MemoryExtractionResult> }
     | undefined {
@@ -471,16 +473,18 @@ export class DesktopController {
     | undefined) {
     this.projectState.memoryExtraction = value;
   }
-  private get searchSummary():
-    | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
-    | undefined {
-    return this.projectState.searchSummary;
-  }
-  private set searchSummary(value:
-    | { requestId: string; abort: AbortController; done: Promise<SearchSummaryResult> }
-    | undefined) {
-    this.projectState.searchSummary = value;
-  }
+  private readonly projectSearch = new ProjectSearch();
+  private searchSubmission = 0;
+  private searchRequestId: string | undefined;
+  private searchSummaryQueue: Promise<void> = Promise.resolve();
+  private searchSummary:
+    | {
+        requestId: string;
+        searchId: string;
+        abort: AbortController;
+        done: Promise<SearchSummaryResult>;
+      }
+    | undefined;
   private connectionTest: { abort: AbortController; done: Promise<void> } | undefined;
   private get chatKey(): string {
     return this.projectState.chatKey;
@@ -1877,6 +1881,7 @@ export class DesktopController {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
@@ -1900,7 +1905,15 @@ export class DesktopController {
         this.memory.report("Saved memory is unavailable. Check private storage.");
       });
     this.relay = storage.relay
-      ? new RelayService(deps, env, () => this.changed(null), dialogs, this.memory)
+      ? new ApplicationAgents(
+          deps,
+          env,
+          () => this.changed(null),
+          dialogs,
+          this.memory,
+          this.modelDefaults,
+          this.orchestrationAutoApproval,
+        )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
     this.rag = new RagService(
@@ -2055,7 +2068,7 @@ export class DesktopController {
           ) {
             await this.cancelOrchestrationTest();
             await this.stopMemoryExtraction();
-            await this.stopSearchSummary();
+            await this.cancelSearchSummary();
             this.orchestration = { ...this.orchestration, connection: "idle", error: null };
           }
           await this.setConfig(config);
@@ -2178,7 +2191,7 @@ export class DesktopController {
   private requireEnabled(provider: string): void {
     if (!this.agentSetup.complete) throw new Error("Complete agent setup first");
     if (!this.agentSetup.enabled.includes(provider))
-      throw new Error(`Agent '${provider}' is not enabled. Connect it in Settings.`);
+      throw new Error(`Agent '${provider}' is not enabled. Connect it in Providers.`);
   }
 
   private async enabledConfig() {
@@ -2192,6 +2205,39 @@ export class DesktopController {
         Object.entries(config.agents).filter(([id]) => this.agentSetup.enabled.includes(id)),
       ),
     };
+  }
+
+  providerAction(value: ProviderAction): Promise<void> {
+    const request = parseProviderAction(value);
+    if (this.providerMutation)
+      return Promise.reject(new Error("Wait for the provider change to finish"));
+    this.providerMutation = true;
+    this.changed();
+    return this.exclusive(async () => {
+      const release = this.relay?.beginProviderChange();
+      try {
+        await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+        await this.cancelOrchestrationTest();
+        const record = await this.agentSetup.manage(request);
+        if (request.type === "set-primary") {
+          await this.stopMemoryExtraction();
+          await this.cancelSearchSummary();
+          this.chatKey = "";
+          this.orchestration = {
+            ...this.orchestration,
+            provider: record.primary,
+            connection: "idle",
+            error: null,
+          };
+        }
+        await this.syncOrchestrationChat();
+      } finally {
+        release?.();
+      }
+    }).finally(() => {
+      this.providerMutation = false;
+      this.changed();
+    });
   }
 
   beginAgentSetup(request: SetupBegin): Promise<void> {
@@ -2221,16 +2267,26 @@ export class DesktopController {
       const record = await this.agentSetup.finish(request);
       if (mode === "primary") {
         await this.stopMemoryExtraction();
-        await this.stopSearchSummary();
+        await this.cancelSearchSummary();
         this.chatKey = "";
       }
       this.orchestration = {
+        ...this.orchestration,
         provider: record.primary,
-        allowAll: true,
         connection: "idle",
         error: null,
       };
       await this.syncOrchestrationChat();
+      this.changed();
+    });
+  }
+
+  setOrchestrationAutoApproval(enabled: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      if (!this.storage.preferences.setOrchestrationAutoApproval)
+        throw new Error("Orchestration settings cannot be saved");
+      await this.storage.preferences.setOrchestrationAutoApproval(enabled);
+      this.orchestration = { ...this.orchestration, allowAll: enabled };
       this.changed();
     });
   }
@@ -2245,11 +2301,11 @@ export class DesktopController {
         throw new Error(`Unavailable provider: ${provider}`);
       await this.cancelOrchestrationTest();
       await this.stopMemoryExtraction();
-      await this.stopSearchSummary();
+      await this.cancelSearchSummary();
       if (!this.storage.preferences.setOrchestrationProvider)
         throw new Error("Orchestration settings cannot be saved");
       await this.storage.preferences.setOrchestrationProvider(provider);
-      this.orchestration = { provider, allowAll: true, connection: "idle", error: null };
+      this.orchestration = { ...this.orchestration, provider, connection: "idle", error: null };
       await this.syncOrchestrationChat();
       this.changed();
     });
@@ -2303,38 +2359,160 @@ export class DesktopController {
     await test?.done;
   }
 
+  async searchProjects(value: unknown) {
+    const request = parseProjectSearchQuery(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    const database = this.requireDatabase();
+    const submission = ++this.searchSubmission;
+    this.searchRequestId = request.requestId;
+    const cancelled = this.projectSearch.cancel();
+    void cancelled.catch(() => {});
+    const projects = database.all();
+    const membership = new Set(projects.map((project) => project.path));
+    const live = new Map<string, SearchLiveHistory[]>();
+    for (const owner of this.projectHost.all()) {
+      const directory = owner.state.workspace?.dir;
+      if (!directory || !membership.has(directory)) continue;
+      const histories: SearchLiveHistory[] = owner.state.history.map(({ record }) => ({
+        runId: record.id,
+        events: owner.state.events
+          .filter((entry) => entry.event.runId === record.id)
+          .map((entry) => ({ ...entry.event })),
+      }));
+      for (const session of owner.state.conversations.sessions) {
+        if (session.run)
+          histories.push({
+            runId: session.run.id,
+            title: session.title,
+            events: session.chatEvents.map((entry) => ({ ...entry.event })),
+          });
+      }
+      live.set(directory, histories);
+    }
+    await this.cancelSearchSummary();
+    await cancelled;
+    this.assertDatabaseRequest(request.databaseEpoch);
+    if (this.searchSubmission !== submission) throw new Error("Search cancelled");
+    return this.projectSearch.search(
+      request,
+      projects,
+      projectEvidenceReader(this.deps, this.env, database.path, live),
+      () => {
+        if (
+          this.closing ||
+          this.searchSubmission !== submission ||
+          this.database !== database ||
+          this.projectHost.databaseEpoch !== request.databaseEpoch
+        )
+          return false;
+        const current = new Set(database.all().map((project) => project.path));
+        // Additions participate in the next submitted search; removals retire captured sources.
+        return [...membership].every((path) => current.has(path));
+      },
+    );
+  }
+
+  searchProjectsPage(value: unknown) {
+    const request = parseProjectSearchPage(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    return this.projectSearch.page(request, request.cursor);
+  }
+
+  async cancelProjectSearch(value: unknown) {
+    const request = parseProjectSearchIdentity(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    if (this.searchRequestId === request.requestId) {
+      this.searchRequestId = undefined;
+      this.searchSubmission++;
+    }
+    const cancelled = this.projectSearch.cancel(request);
+    void cancelled.catch(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary(undefined, request.requestId);
+    await cancelled;
+  }
+
+  async clearSearch(): Promise<void> {
+    this.searchSubmission++;
+    this.searchRequestId = undefined;
+    const cancelled = this.projectSearch.cancel();
+    void cancelled.catch(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary();
+    await cancelled;
+  }
+
+  async openSearchSource(
+    value: unknown,
+    confirm?: (path: string) => Promise<boolean>,
+  ): Promise<import("../bridge/index.js").ProjectSearchOpened | null> {
+    const request = parseProjectSearchOpen(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
+    const source = await this.projectSearch.source(request, request.sourceId);
+    if (!this.projectHost.find(source.project.path)) {
+      const accepted = await (confirm
+        ? confirm(source.project.path)
+        : this.dialogs.confirm("Open this project?", source.project.path));
+      this.assertDatabaseRequest(request.databaseEpoch);
+      await this.projectSearch.source(request, request.sourceId);
+      if (!accepted) return null;
+    }
+    return this.databaseWrite(request.databaseEpoch, async () => {
+      await this.projectSearch.source(request, request.sourceId);
+      if (!this.projectHost.find(source.project.path))
+        await this.openDirectory(source.project.path);
+      const owner = this.projectHost.find(source.project.path);
+      if (!owner) throw new Error("The project could not be opened");
+      await this.selectProject(owner.id);
+      const session = owner.state.conversations.sessions.find(
+        (entry) => entry.run?.id === source.runId,
+      );
+      if (session && !session.archived) {
+        await this.projectHost.run(owner, async () => {
+          this.conversations.current = session;
+          this.relaySelected = false;
+          await this.loadChatHistory(session);
+          this.changed();
+        });
+      }
+      return {
+        projectId: owner.id,
+        databaseEpoch: request.databaseEpoch,
+        source,
+        conversation: !!session,
+        archived: session?.archived ?? false,
+      };
+    });
+  }
+
   async summarizeSearch(value: SearchSummaryRequest): Promise<SearchSummaryResult> {
     const request = parseSearchSummary(value);
+    this.assertDatabaseRequest(request.databaseEpoch);
     this.requireEnabled(this.orchestration.provider ?? "");
-    const { done } = await this.exclusive(async () => {
-      if (this.closing) throw new Error("The app is stopping");
-      const workspace = this.requireWorkspace();
-      if (workspace.dir !== request.directory)
-        throw new Error("The project changed. Search again.");
-      const provider = this.orchestration.provider;
-      const agent =
-        provider && this.config && Object.hasOwn(this.config.agents, provider)
-          ? this.config.agents[provider]
-          : undefined;
-      if (!provider || !agent)
-        throw new Error("Select an available orchestration provider in Settings");
-      const known = new Set(this.history.map((run) => run.record.id));
-      for (const source of request.sources) {
-        const valid =
-          source.kind === "project"
-            ? source.id === workspace.dir &&
-              source.runId === undefined &&
-              source.eventIndex === undefined
-            : source.runId !== undefined &&
-              known.has(source.runId) &&
-              (source.kind === "run"
-                ? source.id === source.runId && source.eventIndex === undefined
-                : source.eventIndex !== undefined &&
-                  source.id === `${source.runId}:${source.eventIndex}`);
-        if (!valid) throw new Error("A search source is no longer in the open project");
-      }
+    const database = this.requireDatabase();
+    const provider = this.orchestration.provider;
+    const agent =
+      provider && this.config && Object.hasOwn(this.config.agents, provider)
+        ? this.config.agents[provider]
+        : undefined;
+    if (!provider || !agent)
+      throw new Error("Select an available orchestration provider in Settings");
+    const evidence = this.projectSearch.evidence({
+      requestId: request.searchId,
+      databaseEpoch: request.databaseEpoch,
+    });
+    const prepared = this.searchSummaryQueue.then(async () => {
       await this.stopSearchSummary();
-      if (this.closing) throw new Error("The app is stopping");
+      this.assertDatabaseRequest(request.databaseEpoch);
+      if (
+        this.orchestration.provider !== provider ||
+        JSON.stringify(this.config?.agents[provider]?.command) !== JSON.stringify(agent.command)
+      )
+        throw new Error("Overview cancelled");
+      this.projectSearch.evidence({
+        requestId: request.searchId,
+        databaseEpoch: request.databaseEpoch,
+      });
       const abort = new AbortController();
       const operation = async (): Promise<SearchSummaryResult> => {
         const temporary = await mkdtemp(join(tmpdir(), "code60-search-"));
@@ -2342,24 +2520,29 @@ export class DesktopController {
           const cwd = join(temporary, "private");
           await privateDirectory(cwd);
           abort.signal.throwIfAborted();
-          const files =
-            request.includeFiles === false
-              ? []
-              : await projectSearchEvidence(workspace.dir, request.query, abort.signal);
-          const sources = [...request.sources.slice(0, files.length ? 10 : 20), ...files];
           const text = await summarizeSearch(
             this.deps.agents,
             { name: provider, command: agent.command, cwd },
-            request.query,
-            sources,
+            evidence.query,
+            evidence.sources,
             abort.signal,
           );
           abort.signal.throwIfAborted();
-          if (this.workspace !== workspace) throw new Error("The project changed. Search again.");
-          return { requestId: request.requestId, text, sources };
+          if (this.database !== database) throw new Error("The database changed. Search again.");
+          this.projectSearch.evidence({
+            requestId: request.searchId,
+            databaseEpoch: request.databaseEpoch,
+          });
+          return { requestId: request.requestId, text, sources: evidence.sources };
         } finally {
           await rm(temporary, { recursive: true, force: true });
         }
+      };
+      const task = {
+        requestId: request.requestId,
+        searchId: request.searchId,
+        abort,
+        done: Promise.resolve({} as SearchSummaryResult),
       };
       const done = operation()
         .catch((error: unknown) => {
@@ -2367,34 +2550,34 @@ export class DesktopController {
           throw error;
         })
         .finally(() => {
-          this.searchSummary = undefined;
+          if (this.searchSummary === task) this.searchSummary = undefined;
         });
+      task.done = done;
+      this.searchSummary = task;
       void done.catch(() => {});
-      this.searchSummary = { requestId: request.requestId, abort, done };
       return { done };
     });
-    return done;
+    this.searchSummaryQueue = prepared.then(
+      () => {},
+      () => {},
+    );
+    return (await prepared).done;
   }
 
-  cancelSearchSummary(requestId?: string): Promise<void> {
+  async cancelSearchSummary(requestId?: string): Promise<void> {
     const id = requestId === undefined ? undefined : parseSearchSummaryRequestId(requestId);
-    const owners = this.projectHost
-      .all()
-      .filter(
-        (owner) =>
-          owner.state.searchSummary &&
-          (id === undefined || owner.state.searchSummary.requestId === id),
-      );
-    return Promise.all(
-      owners.map((owner) =>
-        this.projectHost.run(owner, () => this.exclusive(() => this.stopSearchSummary(id))),
-      ),
-    ).then(() => {});
+    await this.searchSummaryQueue;
+    await this.stopSearchSummary(id);
   }
 
-  private async stopSearchSummary(requestId?: string): Promise<void> {
+  private async stopSearchSummary(requestId?: string, searchId?: string): Promise<void> {
     const task = this.searchSummary;
-    if (!task || (requestId !== undefined && task.requestId !== requestId)) return;
+    if (
+      !task ||
+      (requestId !== undefined && task.requestId !== requestId) ||
+      (searchId !== undefined && task.searchId !== searchId)
+    )
+      return;
     task.abort.abort();
     await task.done.catch(() => {});
   }
@@ -2486,12 +2669,12 @@ export class DesktopController {
   private async mcpAgentServer(session: ChatSession): Promise<AgentMcpServer[]> {
     if (!session.mcpGateway) {
       const owner = this.projectHost.current;
-      session.mcpGateway = await createMcpGateway((name, args) =>
+      session.mcpGateway = await createMcpGateway((name, args, signal) =>
         this.projectHost.run(owner, async () => {
           this.projectHost.assertCurrent(owner);
           if (this.closing) throw new Error("Code60 is shutting down");
           if (session.revoked) throw new Error("This orchestration chat is no longer current");
-          const result = await this.callChatTool(name, args, session);
+          const result = await this.callChatTool(name, args, session, signal);
           this.projectHost.assertCurrent(owner);
           return result;
         }),
@@ -2511,8 +2694,28 @@ export class DesktopController {
     ];
   }
 
-  private async callChatTool(name: string, args: unknown, session: ChatSession): Promise<unknown> {
+  private async callChatTool(
+    name: string,
+    args: unknown,
+    session: ChatSession,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     this.conversations.assertCurrent(session);
+    if (name === "code60_browser") {
+      const run = session.chat?.runs()[0];
+      if (
+        !run ||
+        !session.browserTurn ||
+        session.browserTurn !== run.turns ||
+        run.stopping ||
+        !["running", "waiting"].includes(run.status)
+      )
+        throw new Error("Browser actions require an active chat request.");
+      if (!session.chatDirectory) throw new Error("This chat's browser workspace is unavailable.");
+      session.browser ??= new BrowserAutomation(session.chatDirectory, this.env);
+      session.browserChat = session.chat;
+      return session.browser.call(args, signal);
+    }
     if (isKnowledgeTool(name))
       return this.knowledge.call(name, args, this.knowledgeCaller(session));
     if (isActivityTool(name)) {
@@ -2541,9 +2744,17 @@ export class DesktopController {
   }
 
   private async closeMcpGateway(session: ChatSession): Promise<void> {
+    session.browserTurn = undefined;
     session.activity.invalidate();
     const gateway = session.mcpGateway;
-    await gateway?.close();
+    const browser = session.browser;
+    const results = await Promise.allSettled([gateway?.close(), browser?.shutdown()]);
+    if (results.some((result) => result.status === "rejected"))
+      throw new Error("This chat's browser or tool connection could not be stopped.");
+    if (session.browser === browser) {
+      session.browser = undefined;
+      session.browserChat = undefined;
+    }
     if (session.mcpGateway === gateway) session.mcpGateway = undefined;
   }
 
@@ -2787,7 +2998,7 @@ export class DesktopController {
         ? projectChatRoot(this.database.path, this.workspace.dir)
         : join(dirname(this.database.path), ".code60_workspace")
       : undefined;
-    if (this.chatStore?.root !== root) this.chatRegistryLoaded = false;
+    if ((this.relay && !restart) || this.chatStore?.root !== root) this.chatRegistryLoaded = false;
     const loadSaved = !restart && !!root && !this.chatRegistryLoaded;
     if (restart) {
       const previous = this.conversations.current;
@@ -2930,6 +3141,8 @@ export class DesktopController {
         config,
         {
           mcpServers,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
+          initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
@@ -2959,13 +3172,33 @@ export class DesktopController {
     const gateway = session.mcpGateway;
     void chat.done
       .then(async () => {
-        await gateway?.close();
+        const browser = session.browserChat === chat ? session.browser : undefined;
+        await Promise.all([gateway?.close(), browser?.shutdown()]);
+        if (session.browserChat === chat && session.browser === browser) {
+          session.browser = undefined;
+          session.browserChat = undefined;
+          session.browserTurn = undefined;
+        }
         if (session.mcpGateway === gateway) session.mcpGateway = undefined;
       })
       .catch(() => {});
     session.chatDisposers = [
       chat.onEvent(
         this.projectHost.bind((event) => {
+          if (session.chat === chat) {
+            if (event.type === "prompt") session.browserTurn = event.turn;
+            if (
+              event.type === "turnEnd" ||
+              (event.type === "status" && !ACTIVE_STATUSES.has(event.status))
+            ) {
+              session.browserTurn = undefined;
+              if (event.type !== "turnEnd" || event.stopReason !== "end_turn")
+                void session.browser?.cancel().catch(() => {
+                  session.chatError = "Browser cleanup requires retry.";
+                  this.changed();
+                });
+            }
+          }
           session.activity.event(event);
           session.replies.event(event);
           if (
@@ -3076,6 +3309,8 @@ export class DesktopController {
         this.config,
         {
           recovery: record,
+          orchestrationAutoApproval: this.orchestrationAutoApproval,
+          initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
           promptContext: () =>
             `${assembleOperatingContract(
@@ -3227,10 +3462,27 @@ export class DesktopController {
       this.changed();
     }
   }
+  async customAgent(value: unknown) {
+    if (!this.relay) throw new Error("Custom assistants are unavailable");
+    const response = await this.relay.manage(value);
+    if (response.conversationId) this.relaySelected = true;
+    this.changed();
+    return response;
+  }
+
   orchestrationChatAction(value: OrchestrationChatAction): Promise<ChatUndoResult | undefined> {
     const request = parseOrchestrationChatAction(value);
+    const local =
+      "id" in request &&
+      request.id &&
+      !this.relaySelected &&
+      this.projectHost.current.state.conversations.sessions.some(
+        (session) => session.run?.id === request.id,
+      );
+
     if (
       this.relay &&
+      !local &&
       request.type !== "new" &&
       (this.relay.owns(request.id) || (request.id === null && this.relaySelected))
     ) {
@@ -3245,15 +3497,17 @@ export class DesktopController {
     const owner =
       request.type === "new" && request.projectId
         ? this.projectHost.byId(request.projectId)
-        : "id" in request && request.id
-          ? this.projectHost
-              .all()
-              .find((owner) =>
-                owner.state.conversations.sessions.some(
-                  (session) => session.run?.id === request.id,
-                ),
-              )
-          : this.projectHost.current;
+        : local
+          ? this.projectHost.current
+          : "id" in request && request.id
+            ? this.projectHost
+                .all()
+                .find((owner) =>
+                  owner.state.conversations.sessions.some(
+                    (session) => session.run?.id === request.id,
+                  ),
+                )
+            : this.projectHost.current;
     if (this.relay && !owner)
       return Promise.reject(new Error("This orchestration chat is no longer current"));
     if (owner && (request.type === "select" || request.type === "new"))
@@ -3263,8 +3517,18 @@ export class DesktopController {
     if (this.relay && !this.workspace)
       return Promise.reject(new Error("Open a project to create or use a project chat."));
     if (request.type === "select" || request.type === "new") this.relaySelected = false;
+    // A provider operation inside exclusive() may itself be waiting for this decision.
+    if (request.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const session = this.conversations.sessions.find((entry) => entry.run?.id === request.id);
+      return session?.chat?.answerPermission(request.permissionId, request.answer)
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (request.type === "set-mode")
       return this.changeHarnessMode(request.id, request.change, true).then(() => undefined);
+    if (request.type === "save-model-default")
+      return this.saveModelDefault(request.id, true).then(() => undefined);
     if (this.orchestration.provider) this.requireEnabled(this.orchestration.provider);
     return this.exclusive(async () => {
       if (request.type === "new") {
@@ -3301,7 +3565,7 @@ export class DesktopController {
           throw cause;
         }
       } else if (request.type === "select") {
-        if (session.archived) throw new Error("This chat is archived");
+        if (session.archived && !run?.pending.length) throw new Error("This chat is archived");
         this.conversations.current = session;
         await this.loadChatHistory(session).catch(() => {
           session.chatError =
@@ -3314,8 +3578,14 @@ export class DesktopController {
         session.titleTask?.abort.abort();
         await this.saveChat(session);
       } else if (request.type === "archive") {
+        const archived = session.archived;
         session.archived = true;
-        await this.saveChat(session);
+        try {
+          await this.saveChat(session);
+        } catch (cause) {
+          session.archived = archived;
+          throw cause;
+        }
         if (this.conversations.current === session) {
           const next = this.conversations.sessions.find((entry) => !entry.archived);
           if (next) this.conversations.current = next;
@@ -3424,13 +3694,21 @@ export class DesktopController {
         }
       } else if (!session.chat || !run) throw new Error("No orchestration session is available");
       else if (request.type === "cancel") {
+        session.browserTurn = undefined;
         if (!session.chat.cancelTurn(run.id)) throw new Error("No turn is in progress");
         this.conversations.pause(session);
+        await session.browser?.cancel();
         await this.pausePlan(session, "Stopped. Inspect previous work before resuming.");
       } else {
+        session.browserTurn = undefined;
         this.conversations.pause(session);
         await this.pausePlan(session, "Conversation stopped.");
-        await session.chat.shutdown();
+        const results = await Promise.allSettled([
+          this.closeMcpGateway(session),
+          session.chat.shutdown(),
+        ]);
+        if (results.some((result) => result.status === "rejected"))
+          throw new Error("Some conversation processes could not be stopped. Retry cleanup.");
       }
       this.changed();
     });
@@ -3551,7 +3829,12 @@ export class DesktopController {
     const owner = this.details.capture(context.subscriptionId);
     if (!this.relay || this.closing) throw new Error("Relay files are unavailable");
     const root = this.relay.fileRoot(owner.scope);
-    this.relayFiles.set(context, root, owner.valid);
+    this.relayFiles.set(
+      context,
+      root,
+      owner.valid,
+      owner.scope.kind === "project" ? undefined : owner.scope.conversationId,
+    );
   }
 
   private detailSource(
@@ -3562,7 +3845,7 @@ export class DesktopController {
     read(allEvents: boolean): DetailPayload;
     version(): string | number;
   } {
-    const relay = this.relay;
+    const relay = scope.kind === "project" ? undefined : this.relay?.owner(scope.conversationId);
     const relayAddress = () => {
       if (this.closing || !relay || scope.kind === "project")
         throw new Error("This Relay detail generation is no longer available");
@@ -3656,9 +3939,10 @@ export class DesktopController {
     validOwner: (owner) => this.validKnowledgeOwner(owner),
     readView: async (caller, _panel, tab) => {
       if (caller.kind === "relay") {
-        if (tab.kind === "plan") return this.relay?.knowledgePlan(tab.planId);
+        if (tab.kind === "plan")
+          return this.relay?.owner(caller.conversationId)?.knowledgePlan(tab.planId);
         if (tab.kind === "file" && !tab.savedRevision)
-          return this.relayFiles.knowledgePreview(tab.path);
+          return this.relayFiles.knowledgePreview(tab.path, caller.conversationId);
         return undefined;
       }
       const owner = this.projectHost.byId(caller.projectId);
@@ -3695,7 +3979,7 @@ export class DesktopController {
       if (runtime.epoch !== owner.databaseEpoch || !runtime.state.workspace)
         throw new Error("Stale project owner");
     } else {
-      const relay = this.relay?.snapshot(true);
+      const relay = this.relay?.owner(owner.conversationId)?.snapshot(true);
       if (relay?.conversationId !== owner.conversationId || relay.generation !== owner.generation)
         throw new Error("Stale Relay owner");
     }
@@ -3748,15 +4032,15 @@ export class DesktopController {
     const conversations: Record<string, unknown>[] = [];
     const sessions: Record<string, unknown>[] = [];
     const relay = this.relay?.snapshot(true);
-    if (relay)
+    for (const applicationChat of this.relay?.snapshots(true) ?? [])
       conversations.push({
-        id: relay.conversationId,
+        id: applicationChat.conversationId,
         kind: "relay",
-        generation: relay.generation,
-        title: "Relay",
-        status: relay.run?.status ?? "disconnected",
+        generation: applicationChat.generation,
+        title: applicationChat.title,
+        status: applicationChat.run?.status ?? "disconnected",
         historical: false,
-        selected: this.relaySelected,
+        selected: this.relaySelected && relay?.conversationId === applicationChat.conversationId,
       });
     for (const owner of this.projectHost.all()) {
       const state = owner.state;
@@ -3915,7 +4199,9 @@ export class DesktopController {
       liveWorkers:
         session && state
           ? state.conversations.liveWorkerCount(session)
-          : (this.relay?.knowledgeLiveWorkers() ?? 0),
+          : caller.kind === "relay"
+            ? (this.relay?.owner(caller.conversationId)?.knowledgeLiveWorkers() ?? 0)
+            : 0,
       gitReady: state?.gitState ? state.gitState.status === "ready" : null,
       projectOpen: !!state?.workspace,
       customizations,
@@ -4073,6 +4359,8 @@ export class DesktopController {
     const chatSnapshot = (current: ChatSession) => this.chatSnapshot(current, allEvents, summaries);
     return {
       ...project,
+      customAgents: this.relay?.summaries() ?? [],
+      customAgentError: this.relay?.error,
       ...(summaries
         ? { summaryOnly: true as const, detailRevisions: this.details.revisions() }
         : {}),
@@ -4091,7 +4379,7 @@ export class DesktopController {
       chat:
         this.relay && this.relaySelected ? this.relay.snapshot(summaries) : chatSnapshot(session),
       chats: [
-        ...(this.relay ? [this.relay.snapshot(summaries)] : []),
+        ...(this.relay?.snapshots(summaries) ?? []),
         ...this.projectHost
           .all()
           .filter((owner) => !this.relay || owner.state.workspace)
@@ -4108,7 +4396,19 @@ export class DesktopController {
         ...(relayWorkers?.runs.map((run) => run.record.id) ?? []),
       ],
       orchestration: { ...this.orchestration },
-      agentSetup: this.agentSetup.snapshot(),
+      agentSetup: {
+        ...this.agentSetup.snapshot(),
+        management: {
+          blockedReason: this.providerMutation
+            ? "Wait for the provider change to finish"
+            : this.agentSetup.snapshot().session
+              ? "Finish or cancel provider setup first"
+              : this.hasActiveWork
+                ? "Finish or stop active agent work before changing providers"
+                : null,
+        },
+      },
+      modelDefaults: this.modelDefaults.snapshot(),
       revision: this.revision,
       database: this.database?.path ?? null,
       databaseError: this.databaseError,
@@ -4164,14 +4464,18 @@ export class DesktopController {
     if (this.timer !== undefined) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      this.details.publish(this.revision);
+      // A change while building these frames schedules another frame; label both with
+      // the revision captured here so its predecessor matches what listeners received.
+      const revision = this.revision;
+      const previousRevision = this.publishedRevision;
+      this.details.publish(revision);
       const snapshot = this.listeners.size
-        ? { ...this.snapshot(false), previousRevision: this.publishedRevision }
+        ? { ...this.snapshot(false), revision, previousRevision }
         : undefined;
       const summary = this.summaryListeners.size
-        ? { ...this.snapshot(false, true), previousRevision: this.publishedRevision }
+        ? { ...this.snapshot(false, true), revision, previousRevision }
         : undefined;
-      this.publishedRevision = this.revision;
+      this.publishedRevision = revision;
       for (const runtime of this.projectHost.all()) {
         runtime.state.pending = [];
         for (const session of runtime.state.conversations.sessions) session.chatPending = [];
@@ -4210,10 +4514,26 @@ export class DesktopController {
   restore(): Promise<void> {
     return this.exclusive(async () => {
       try {
+        await this.modelDefaults.load();
+      } catch {
+        this.warnings.push(
+          "Saved model defaults could not be read. Existing preferences were preserved.",
+        );
+      }
+      try {
+        this.orchestration.allowAll =
+          (await this.storage.preferences.orchestrationAutoApproval?.()) ?? true;
+      } catch {
+        this.orchestration.allowAll = false;
+        this.warnings.push(
+          "Could not read Code60 auto-approval. Permission requests will require review.",
+        );
+      }
+      try {
         this.agentSetup.restore(await this.storage.preferences.agentSetup?.());
         this.orchestration = {
           provider: this.agentSetup.record?.primary ?? null,
-          allowAll: true,
+          allowAll: this.orchestration.allowAll,
           connection: "idle",
           error: null,
         };
@@ -4276,6 +4596,7 @@ export class DesktopController {
     return this.exclusive(async () => {
       this.assertDatabaseRequest(databaseEpoch);
       await this.cancelRag();
+      await this.clearSearch();
       if (this.relay) return this.connectRetainedDatabase(path, create);
       if (this.taskOperation) throw new Error("Wait for the task operation to finish");
       if (this.active) throw new Error("Finish or stop all runs before switching databases");
@@ -4398,6 +4719,7 @@ export class DesktopController {
       const database = this.requireDatabase();
       if (!this.projects.some((project) => project.path === path))
         throw new Error("This project is not in the database's history");
+      await this.clearSearch();
       database.remove(path);
       this.projects = database.list();
       this.changed();
@@ -4414,6 +4736,7 @@ export class DesktopController {
         `This removes all ${this.projects.length} projects from ${database.path}. Project folders and their runs are not affected.`,
       );
       if (!confirmed) return false;
+      await this.clearSearch();
       database.clear();
       this.projects = database.list();
       this.changed();
@@ -4429,7 +4752,6 @@ export class DesktopController {
   private async openDirectory(directory: string): Promise<void> {
     if (this.relay) return this.openRetainedProject(directory);
     await this.stopMemoryExtraction();
-    await this.stopSearchSummary();
     const database = this.requireDatabase();
     if (this.active) throw new Error("Finish or stop all runs before switching folders");
     let dir: string;
@@ -4630,7 +4952,6 @@ export class DesktopController {
     const results = await Promise.allSettled([
       operation?.done,
       this.stopMemoryExtraction(),
-      this.stopSearchSummary(),
       this.cancelGitSetup(),
       this.cancelProjectDiffReads(),
       this.shutdownBatches(force),
@@ -5025,6 +5346,7 @@ export class DesktopController {
         {},
         this.workerOverrides(id),
         enabledConfig,
+        this.modelDefaults.selections(run.record.agent, "worker"),
       );
     } catch (error) {
       if (
@@ -5081,6 +5403,7 @@ export class DesktopController {
       saved,
       this.workerOverrides(id),
       enabledConfig,
+      this.modelDefaults.selections(run.record.agent, "worker"),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -5127,10 +5450,10 @@ export class DesktopController {
     });
   }
 
-  /** `register` sees the new run IDs before any of them starts. */
+  /** `registerWorkers` sees the new run IDs before any of them starts. */
   private async startBatch(
     request: StartRequest,
-    register?: (ids: string[], workspace: Workspace) => void,
+    registerWorkers?: (ids: string[], workspace: Workspace) => void,
   ): Promise<string[]> {
     const launchEpoch = this.projectState.launchEpoch;
     await this.requireGitRun();
@@ -5158,6 +5481,8 @@ export class DesktopController {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
+        initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
       enabledConfig,
     );
@@ -5181,7 +5506,7 @@ export class DesktopController {
 
     this.history = history;
     this.activateBatch(orchestrator, workspace);
-    register?.(
+    registerWorkers?.(
       orchestrator.runs().map((run) => run.id),
       workspace,
     );
@@ -5219,6 +5544,21 @@ export class DesktopController {
     return this.projectHost.run(this.projectHost.current, () =>
       this.changeProjectHarnessMode(id, change, chat),
     );
+  }
+
+  modelDefault(value: unknown): Promise<void> {
+    return this.modelDefaults.clear(value);
+  }
+
+  private saveModelDefault(id: string, chat: boolean): Promise<void> {
+    return this.exclusive(async () => {
+      const owner = chat
+        ? this.conversations.sessions.find((session) => session.chat?.runs()[0]?.id === id)?.chat
+        : [...this.batches.keys()].find((batch) => batch.runs().some((run) => run.id === id));
+      const run = owner?.runs().find((run) => run.id === id);
+      if (!run) throw new Error("This session is no longer controlled by this app");
+      await this.modelDefaults.save(run, chat ? "orchestrator" : "worker");
+    });
   }
 
   private async changeProjectHarnessMode(
@@ -5311,42 +5651,50 @@ export class DesktopController {
   }
 
   action(action: Action): Promise<ActionResult> {
-    if (this.relay?.handlesWorkerAction(action)) return this.relay.workerAction(action);
-    const owner = this.projectHost
-      .all()
-      .find((owner) =>
-        action.type === "permission"
-          ? [...owner.state.batches.keys()].some((batch) =>
-              batch.runs().some((run) => run.pending.some((pending) => pending.id === action.id)),
-            )
-          : owner.state.history.some((run) => run.record.id === action.id),
-      );
+    // Historical IDs can repeat across projects. An explicitly selected project owns
+    // its read; Relay and background-owner routing remain the fallback.
+    const localRead =
+      action.type === "events" &&
+      this.projectHost.current.state.history.some((run) => run.record.id === action.id);
+    if (!localRead && this.relay?.handlesWorkerAction(action))
+      return this.relay.workerAction(action);
+    const owner = localRead
+      ? this.projectHost.current
+      : this.projectHost
+          .all()
+          .find((owner) =>
+            action.type === "permission"
+              ? [...owner.state.batches.keys()].some((batch) =>
+                  batch
+                    .runs()
+                    .some((run) => run.pending.some((pending) => pending.id === action.id)),
+                )
+              : owner.state.history.some((run) => run.record.id === action.id),
+          );
     if (owner && owner !== this.projectHost.current)
       return this.projectHost.run(owner, () => this.action(action));
+    if (action.type === "permission") {
+      if (this.closing) return Promise.reject(new Error("The app is stopping"));
+      const answered = [...this.batches].some(
+        ([batch, state]) => state.active && batch.answerPermission(action.id, action.answer),
+      );
+      return answered
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error("This approval request is no longer pending"));
+    }
     if (action.type === "diff") return this.readDiff({ requestId: randomUUID(), id: action.id });
     if (action.type === "set-mode")
       return this.changeHarnessMode(action.id, action.change, false).then(() => undefined);
+    if (action.type === "save-model-default")
+      return this.saveModelDefault(action.id, false).then(() => undefined);
     return this.exclusive(async () => {
       const workspace = this.requireWorkspace();
       const cmd = commandDeps(this.deps, workspace);
       const orchestrator = [...this.batches.entries()]
         .reverse()
         .find(
-          ([batch, state]) =>
-            state.active &&
-            batch
-              .runs()
-              .some((run) =>
-                action.type === "permission"
-                  ? run.pending.some((permission) => permission.id === action.id)
-                  : run.id === action.id,
-              ),
+          ([batch, state]) => state.active && batch.runs().some((run) => run.id === action.id),
         )?.[0];
-      if (action.type === "permission") {
-        if (!orchestrator?.answerPermission(action.id, action.answer))
-          throw new Error("This approval request is no longer pending");
-        return;
-      }
       if (!this.history.some((run) => run.record.id === action.id))
         throw new Error("Unknown run in this workspace");
       if (action.type === "continue") return this.continueRun(workspace, action.id, action.text);
@@ -5410,9 +5758,11 @@ export class DesktopController {
     });
   }
 
-  /** Orchestrated workers keep their fixed allow-all policy through restore and handoff. */
+  /** Orchestrated workers keep their live orchestration approval policy through restore and handoff. */
   private workerOverrides(id: string) {
-    return this.conversations.workers.has(id) ? { allow: [], allowAll: true } : undefined;
+    return this.conversations.workers.has(id)
+      ? { orchestrationAutoApproval: this.orchestrationAutoApproval }
+      : undefined;
   }
 
   private liveBatch(id: string): Orchestrator | undefined {
@@ -5714,7 +6064,7 @@ export class DesktopController {
           {
             agents: [provider],
             allow: [],
-            allowAll: true,
+            allowAll: this.orchestration.allowAll,
             prompt: request.prompt,
             ...(base === undefined ? {} : { base }),
             ...(request.turnTimeout === undefined ? {} : { turnTimeout: request.turnTimeout }),
@@ -5852,6 +6202,7 @@ export class DesktopController {
   async stopAll(): Promise<void> {
     const results = await Promise.allSettled([
       this.memory.stop(),
+      this.clearSearch(),
       this.cancelRag(),
       this.stopAllAgents(),
     ]);
@@ -5886,6 +6237,7 @@ export class DesktopController {
       for (const session of this.conversations.sessions) this.conversations.pause(session);
       for (const session of this.conversations.sessions) session.titleTask?.abort.abort();
       const stopped = await Promise.allSettled([
+        ...this.conversations.sessions.map((session) => this.closeMcpGateway(session)),
         ...this.conversations.sessions.map((session) => session.titleTask?.done),
         ...this.conversations.sessions.map((session) =>
           this.pausePlan(session, "Stopped. Inspect previous work before resuming."),
@@ -5908,6 +6260,7 @@ export class DesktopController {
     this.closing = true;
     const results = await Promise.allSettled([
       this.memory.close(),
+      this.clearSearch(),
       this.cancelRag(),
       this.shutdownAgents(force),
     ]);

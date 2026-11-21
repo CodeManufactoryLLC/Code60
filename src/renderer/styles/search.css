@@ -108,6 +108,16 @@
   margin-bottom: 4px;
 }
 
+.search-result-meta > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.search-warnings {
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
 /* Text actions keep native button activation and visible keyboard focus. */
 .search-results .search-result-title,
 .search-overview .search-citation {
@@ -192,10 +202,13 @@
 }
 
 .search-lead-space {
+  /* Keep its track when the title is portalled into the breadcrumb header. */
+  grid-row: 2;
   min-height: 0;
 }
 
 .search-entry {
+  grid-row: 3;
   width: 100%;
   max-width: 560px;
   min-width: 0;
@@ -360,6 +373,7 @@
 }
 
 .search-content {
+  grid-row: 4;
   display: flex;
   flex-direction: column;
   min-height: 0;

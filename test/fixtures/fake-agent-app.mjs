@@ -1,13 +1,13 @@
 // A scriptable ACP agent for tests. Each prompt is a JSON array of steps; any
 // other prompt text gets one "ok" message and `end_turn`.
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprotocol/sdk";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
+/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -29,14 +29,39 @@ export function createFakeAgent(options = {}) {
   let cancelWaiters = new Set();
   let cancelled = false;
   let mode = "ask";
+  let selectedModel = "fixture-model";
+  let effort = "low";
   const configOptions = () => [
     {
       id: "model",
       name: "Model",
       category: "model",
       type: "select",
-      currentValue: "fixture-model",
-      options: [{ value: "fixture-model", name: "Fixture Model" }],
+      currentValue: selectedModel,
+      options: [
+        {
+          group: "fixture",
+          name: "Fixture models",
+          options: [
+            { value: "fixture-model", name: "Fixture Model" },
+            { value: "fixture-two", name: "Fixture Two" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "effort",
+      name: "Reasoning",
+      category: "thought_level",
+      type: "select",
+      currentValue: effort,
+      options:
+        selectedModel === "fixture-model"
+          ? [{ value: "low", name: "Low" }]
+          : [
+              { value: "auto", name: "Automatic" },
+              { value: "high", name: "High" },
+            ],
     },
     {
       id: "permissions",
@@ -83,13 +108,22 @@ export function createFakeAgent(options = {}) {
       };
     })
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
-      if (
-        !options.sessionInfo ||
-        params.configId !== "permissions" ||
-        !["ask", "full"].includes(params.value)
+      if (!options.sessionInfo) throw RequestError.invalidParams();
+      if (params.configId === "permissions" && ["ask", "full"].includes(params.value))
+        mode = params.value;
+      else if (
+        params.configId === "model" &&
+        ["fixture-model", "fixture-two"].includes(params.value)
+      ) {
+        selectedModel = params.value;
+        effort = selectedModel === "fixture-model" ? "low" : "auto";
+      } else if (
+        params.configId === "effort" &&
+        selectedModel === "fixture-two" &&
+        ["auto", "high"].includes(params.value)
       )
-        throw RequestError.invalidParams();
-      mode = params.value;
+        effort = params.value;
+      else throw RequestError.invalidParams();
       return { configOptions: configOptions() };
     })
     .onNotification(methods.agent.session.cancel, () => {
@@ -157,7 +191,13 @@ export function createFakeAgent(options = {}) {
             tasks: [{ text: "Create a target result", target }],
           });
           planId = plan.id;
-          steps = [{ message: "Relay plan awaits human acceptance." }];
+          steps = readable
+            ? [
+                { message: "Relay plan awaits human acceptance." },
+                { thought: "Verify the target and wait for human acceptance." },
+                { message: "Review the displayed target before accepting." },
+              ]
+            : [{ message: "Relay plan awaits human acceptance." }];
         } else if (planId && text.includes("Human accepted plan ")) {
           const plan = await tool("code60_read_plan", { planId });
           const context = await tool("code60_get_context");
@@ -170,6 +210,8 @@ export function createFakeAgent(options = {}) {
             cwd: task.target.cwd,
             workspaceMode: task.target.workspaceMode,
             prompt: JSON.stringify([
+              { message: "Preparing target result." },
+              { thought: "Write the accepted file in this isolated worktree." },
               { write: { path: "result.txt", content: "human accepted target\n" } },
               { message: "Target result created." },
             ]),
@@ -426,11 +468,42 @@ export function createFakeAgent(options = {}) {
                   },
                 ];
       }
+      if (options.browserWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
+        const request = text.split(/--- (?:User request|New human request) ---\n/).at(-1);
+        const match = /^Use (headless|visible|existing) browser to open (https:\/\/\S+)\.$/.exec(
+          request,
+        );
+        const open = /^Open (https:\/\/\S+)\.$/.exec(request);
+        let result;
+        if (match) {
+          await tool("code60_browser", {
+            action: "set-mode",
+            mode: match[1] === "existing" ? "existing-browser" : match[1],
+          });
+          await tool("code60_browser", { action: "list-tools" });
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: match[2] },
+          });
+        } else if (open) {
+          result = await tool("code60_browser", {
+            action: "call",
+            name: "browser_navigate",
+            arguments: { url: open[1] },
+          });
+        } else if (request === "Report the browser mode.") {
+          result = await tool("code60_browser", { action: "status" });
+        } else if (request === "Close the browser.") {
+          result = await tool("code60_browser", { action: "close" });
+        }
+        if (result) steps = [{ message: `Browser fixture: ${JSON.stringify(result)}` }];
+      }
       try {
         if (!steps) {
           // The orchestration role prepends its Operating Contract; scripts remain user input.
           const request = text.split("--- User request ---\n").at(-1);
-          steps = request.startsWith("Command $fixture-")
+          steps = request.startsWith("Command $")
             ? [{ message: `Received command:\n${request}` }]
             : JSON.parse(request);
           if (!Array.isArray(steps)) throw new Error("not steps");
@@ -490,8 +563,13 @@ export function createFakeAgent(options = {}) {
           process.stderr.write(step.stderr);
         } else if (step.sleep !== undefined) {
           await Promise.race([sleep(step.sleep), waitForCancel()]);
+        } else if (step.waitForFile !== undefined) {
+          // A test-controlled gate, for ordering that must not depend on host speed.
+          while (!cancelled && !existsSync(step.waitForFile)) await sleep(25);
         } else if (step.hang === "cancellable") {
           await waitForCancel();
+          // Let UI journeys inspect cancellation before this external provider settles.
+          if (step.cancelWaitForFile) while (!existsSync(step.cancelWaitForFile)) await sleep(25);
           return { stopReason: "cancelled" };
         } else if (step.hang === "stubborn") {
           process.on("SIGTERM", () => {});

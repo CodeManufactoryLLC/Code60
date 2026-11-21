@@ -9,10 +9,18 @@ import type {
 } from "../bridge/index.js";
 import { conversationId } from "./chats.js";
 import type { PageId, SettingsSectionId } from "./navigation.js";
+import type { Current, Settle } from "./navigation-history.js";
 import type { NavigationTarget } from "./navigation-tree.js";
 import type { PageTabs } from "./tabs.js";
 
+function canOpenChat(chat: OrchestrationChat, id: string | null) {
+  return conversationId(chat) === id && (!chat.archived || Boolean(chat.run?.pending.length));
+}
+
+export type NavigationIntent = NavigationTarget | { kind: "new-conversation" };
+
 interface Context {
+  onNavigate?(target: NavigationIntent): [Settle, Current] | undefined;
   api: DesktopApi;
   tabs: PageTabs;
   database: string | null;
@@ -24,6 +32,8 @@ interface Context {
   onPage(id: PageId): void;
   onSection(id: SettingsSectionId | null): void;
   onProject(id: string): void;
+  providers?: readonly string[];
+  onProvider?(id: string): void;
   selectWorker(
     id: string | undefined,
     projectId?: string | null,
@@ -47,6 +57,7 @@ export function createNavigationActions(
     projectPending = false,
     valid: () => boolean = () => true,
     blocking = true,
+    target?: NavigationIntent,
   ) {
     if (pending) return false;
     pending = true;
@@ -55,11 +66,14 @@ export function createNavigationActions(
     const destination = read().tabs;
     const current = () =>
       ticket === serial && owner === scope() && read().tabs === destination && valid();
+    const expectation = target ? read().onNavigate?.(target) : undefined;
+    let succeeded = false;
     status(true, "", projectPending, blocking);
     try {
       await operation(current);
       if (!current()) return false;
       success?.();
+      succeeded = true;
       return true;
     } catch (cause) {
       if (current())
@@ -71,16 +85,20 @@ export function createNavigationActions(
         );
       return false;
     } finally {
+      expectation?.[0](succeeded);
       pending = false;
       status(false, "", false);
     }
   }
   const chatAction = (request: OrchestrationChatAction) => {
     const before = read();
-    const relay = before.chats.find((chat) => chat.kind === "relay");
+    const relay = before.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
     const relayId = relay && conversationId(relay);
     const id = "id" in request ? request.id : undefined;
-    if (!before.database && !(request.type === "select" && id === relayId))
+    if (
+      !before.database &&
+      !before.chats.some((chat) => chat.kind === "relay" && conversationId(chat) === id)
+    )
       return Promise.resolve(false);
     const archiveCurrent =
       request.type === "archive" && id === before.selectedId && before.tabs.active === "chat";
@@ -130,17 +148,44 @@ export function createNavigationActions(
         if (archiveToProject)
           return read().projects.some((project) => project.id === archiveToProject);
         if (request.type === "select")
-          return read().chats.some((chat) => conversationId(chat) === request.id && !chat.archived);
+          return read().chats.some((chat) => canOpenChat(chat, request.id));
         if (request.type === "new" && request.projectId)
           return read().projects.some((project) => project.id === request.projectId);
         return true;
       },
       request.type !== "select",
+      request.type === "select"
+        ? { kind: "conversation", id: request.id }
+        : request.type === "new"
+          ? { kind: "new-conversation" }
+          : undefined,
     );
   };
   const open = async (target: NavigationTarget) => {
     const context = read();
     switch (target.kind) {
+      case "provider":
+        if (!context.providers?.includes(target.id) || !context.onProvider) return false;
+        ++serial;
+        context.onProvider(target.id);
+        reveal(target);
+        return true;
+      case "custom-agent":
+        return run(
+          async () => {
+            if (!context.api.customAgent) throw new Error("Custom assistants are unavailable");
+            await context.api.customAgent({ type: "open", id: target.id });
+          },
+          () => {
+            read().selectWorker(undefined, null);
+            read().onPage("chat");
+            reveal(target);
+          },
+          false,
+          () => true,
+          true,
+          target,
+        );
       case "page":
         ++serial;
         if (target.id === "settings") context.onSection(null);
@@ -164,9 +209,10 @@ export function createNavigationActions(
           true,
           () => read().projects.some((project) => project.id === target.id),
           false,
+          target,
         );
       case "conversation":
-        if (context.chats.some((chat) => !chat.archived && conversationId(chat) === target.id))
+        if (context.chats.some((chat) => canOpenChat(chat, target.id)))
           return chatAction({ type: "select", id: target.id });
         if (!pending && context.runs.some((run) => run.record.id === target.id)) {
           const worker = context.runs.find((run) => run.record.id === target.id);
@@ -183,6 +229,7 @@ export function createNavigationActions(
             false,
             () => read().runs.some((run) => run.record.id === target.id),
             false,
+            target,
           );
         }
         return false;
@@ -204,10 +251,13 @@ export function useNavigationActions(context: Context) {
   latest.current = context;
   const [state, setState] = useState<{
     pending: boolean;
+    /** Any navigation is in flight, including non-blocking selections that ignore new clicks. */
+    busy: boolean;
     error: string;
     projectPending: boolean;
     destination?: NavigationTarget;
-  }>({ pending: false, error: "", projectPending: false });
+    expectedConversation?: NavigationTarget | undefined;
+  }>({ pending: false, busy: false, error: "", projectPending: false });
   const [actions] = useState(() =>
     createNavigationActions(
       () => latest.current,
@@ -218,15 +268,43 @@ export function useNavigationActions(context: Context) {
           setState((previous) => ({
             ...previous,
             pending: pending && blocking,
+            busy: pending,
             projectPending,
             error: pending ? error : previous.error,
           }));
       },
       (destination) => {
-        if (mounted.current) setState((previous) => ({ ...previous, destination }));
+        if (mounted.current)
+          setState((previous) => ({
+            ...previous,
+            destination,
+            expectedConversation:
+              destination.kind === "custom-agent" || destination.kind === "conversation"
+                ? destination
+                : undefined,
+          }));
       },
     ),
   );
+  const expected = state.expectedConversation;
+  // IPC completion can precede the app-stream selection update. Never expose the old composer.
+  const conversationPending =
+    expected?.kind === "custom-agent"
+      ? !context.chats.some(
+          (chat) =>
+            chat.customAgentId === expected.id &&
+            conversationId(chat) !== undefined &&
+            conversationId(chat) === context.selectedId,
+        )
+      : expected?.kind === "conversation" && context.selectedId !== expected.id;
+  useEffect(() => {
+    if (expected && !conversationPending)
+      setState((previous) =>
+        previous.expectedConversation === expected
+          ? { ...previous, expectedConversation: undefined }
+          : previous,
+      );
+  }, [expected, conversationPending]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -234,7 +312,7 @@ export function useNavigationActions(context: Context) {
       actions.invalidate();
     };
   }, [actions]);
-  return { ...actions, ...state };
+  return { ...actions, ...state, conversationPending };
 }
 
 export type NavigationActions = ReturnType<typeof useNavigationActions>;

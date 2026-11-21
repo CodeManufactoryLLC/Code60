@@ -13,7 +13,7 @@ state volume and whether the affected app uses the intended HOME/XDG settings.
 Storage is `$XDG_STATE_HOME/code60/logs`, default `~/.local/state/code60/logs`.
 Inspect only metadata (directory type, owner/private permissions, known app
 instances). Do not dump log/transcript contents or change permissions blindly.
-Private POSIX modes/Windows ACLs and live/unverifiable writers are safety gates.
+Private POSIX modes and live/unverifiable writers are safety gates.
 
 ## Supported recovery, only after consent
 

@@ -1,54 +1,89 @@
-import aiIcon from "./icons/apps/ai.svg?no-inline";
-import analyzeIcon from "./icons/apps/analyze.svg?no-inline";
-import appsIcon from "./icons/apps/apps.svg?no-inline";
-import backlogIcon from "./icons/apps/backlog.svg?no-inline";
-import bookshelfIcon from "./icons/apps/bookshelf.svg?no-inline";
+import { useEffect, useId, useRef, useState } from "react";
+import booksAnimation from "./icons/apps/books.gif?no-inline";
+import booksStill from "./icons/apps/books.png?no-inline";
 import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
-import cloudIcon from "./icons/apps/cloud-computing.svg?no-inline";
-import cogwheelIcon from "./icons/apps/cogwheel.svg?no-inline";
-import paletteIcon from "./icons/apps/color-palette.svg?no-inline";
-import communicationIcon from "./icons/apps/communication.svg?no-inline";
-import databaseIcon from "./icons/apps/database.svg?no-inline";
-import downRightIcon from "./icons/apps/down-right.svg?no-inline";
-import folderIcon from "./icons/apps/folder.svg?no-inline";
-import heartRateIcon from "./icons/apps/heart-rate.svg?no-inline";
-import helmetIcon from "./icons/apps/helmet.svg?no-inline";
-import homeIcon from "./icons/apps/home2.svg?no-inline";
-import infoIcon from "./icons/apps/info.svg?no-inline";
-import megaphoneIcon from "./icons/apps/megaphone.svg?no-inline";
-import roboticArmIcon from "./icons/apps/robotic-arm.svg?no-inline";
-import searchIcon from "./icons/apps/search.svg?no-inline";
-import steeringWheelIcon from "./icons/apps/steering-wheel.svg?no-inline";
-import tableIcon from "./icons/apps/table.svg?no-inline";
-import textSizeIcon from "./icons/apps/text-size.svg?no-inline";
+import databaseTableAnimation from "./icons/apps/database-table.gif?no-inline";
+import databaseTableStill from "./icons/apps/database-table.png?no-inline";
+import downloadAnimation from "./icons/apps/download.gif?no-inline";
+import downloadStill from "./icons/apps/download.png?no-inline";
+import droneAnimation from "./icons/apps/drone.gif?no-inline";
+import droneStill from "./icons/apps/drone.png?no-inline";
+import folderAnimation from "./icons/apps/folder.gif?no-inline";
+import folderStill from "./icons/apps/folder.png?no-inline";
+import fontSizeAnimation from "./icons/apps/font-size.gif?no-inline";
+import fontSizeStill from "./icons/apps/font-size.png?no-inline";
+import gearWheelAnimation from "./icons/apps/gear-wheel.gif?no-inline";
+import gearWheelStill from "./icons/apps/gear-wheel.png?no-inline";
+import heartbeatAnimation from "./icons/apps/heartbeat.gif?no-inline";
+import heartbeatStill from "./icons/apps/heartbeat.png?no-inline";
+import homeAnimation from "./icons/apps/home.gif?no-inline";
+import homeStill from "./icons/apps/home.png?no-inline";
+import infoAnimation from "./icons/apps/info.gif?no-inline";
+import infoStill from "./icons/apps/info.png?no-inline";
+import labourDayAnimation from "./icons/apps/labour-day.gif?no-inline";
+import labourDayStill from "./icons/apps/labour-day.png?no-inline";
+import laptopAnimation from "./icons/apps/laptop.gif?no-inline";
+import laptopStill from "./icons/apps/laptop.png?no-inline";
+import marketingAutomationAnimation from "./icons/apps/marketing-automation.gif?no-inline";
+import marketingAutomationStill from "./icons/apps/marketing-automation.png?no-inline";
+import menuAnimation from "./icons/apps/menu.gif?no-inline";
+import menuStill from "./icons/apps/menu.png?no-inline";
+import optionsAnimation from "./icons/apps/options.gif?no-inline";
+import optionsStill from "./icons/apps/options.png?no-inline";
+import paintingAnimation from "./icons/apps/painting.gif?no-inline";
+import paintingStill from "./icons/apps/painting.png?no-inline";
+import petAnimation from "./icons/apps/pet.gif?no-inline";
+import petStill from "./icons/apps/pet.png?no-inline";
+import projectInitiationAnimation from "./icons/apps/project-initiation.gif?no-inline";
+import projectInitiationStill from "./icons/apps/project-initiation.png?no-inline";
+import robotAnimation from "./icons/apps/robot.gif?no-inline";
+import robotStill from "./icons/apps/robot.png?no-inline";
+import searchAnimation from "./icons/apps/search.gif?no-inline";
+import searchStill from "./icons/apps/search.png?no-inline";
+import settingAnimation from "./icons/apps/setting.gif?no-inline";
+import settingStill from "./icons/apps/setting.png?no-inline";
+import speechBubbleAnimation from "./icons/apps/speech-bubble.gif?no-inline";
+import speechBubbleStill from "./icons/apps/speech-bubble.png?no-inline";
+import spellBookAnimation from "./icons/apps/spell-book.gif?no-inline";
+import spellBookStill from "./icons/apps/spell-book.png?no-inline";
+import tableAnimation from "./icons/apps/table.gif?no-inline";
+import tableStill from "./icons/apps/table.png?no-inline";
+import timeManagementAnimation from "./icons/apps/time-management.gif?no-inline";
+import timeManagementStill from "./icons/apps/time-management.png?no-inline";
 import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
 import viewBoxes from "./navigation-icon-viewboxes.json" with { type: "json" };
 
 const artwork = {
-  "app-ai": aiIcon,
-  "app-analyze": analyzeIcon,
-  "app-apps": appsIcon,
-  "app-backlog": backlogIcon,
-  "app-bookshelf": bookshelfIcon,
   "app-chemical": chemicalIcon,
-  "app-cloud-computing": cloudIcon,
-  "app-cogwheel": cogwheelIcon,
-  "app-color-palette": paletteIcon,
-  "app-communication": communicationIcon,
-  "app-database": databaseIcon,
-  "app-down-right": downRightIcon,
-  "app-folder": folderIcon,
-  "app-heart-rate": heartRateIcon,
-  "app-helmet": helmetIcon,
-  "app-home2": homeIcon,
-  "app-info": infoIcon,
-  "app-megaphone": megaphoneIcon,
-  "app-robotic-arm": roboticArmIcon,
-  "app-search": searchIcon,
-  "app-steering-wheel": steeringWheelIcon,
-  "app-table": tableIcon,
-  "app-text-size": textSizeIcon,
   "app-under-construction": underConstructionIcon,
+} as const;
+
+const animatedArtwork = {
+  "app-cloud-computing": { animation: downloadAnimation, still: downloadStill },
+  "app-heart-rate": { animation: heartbeatAnimation, still: heartbeatStill },
+  "app-color-palette": { animation: paintingAnimation, still: paintingStill },
+  "app-text-size": { animation: fontSizeAnimation, still: fontSizeStill },
+  "app-info": { animation: infoAnimation, still: infoStill },
+  "app-analyze": { animation: laptopAnimation, still: laptopStill },
+  "app-helmet": { animation: settingAnimation, still: settingStill },
+  "app-bookshelf": { animation: booksAnimation, still: booksStill },
+  "app-ai": { animation: spellBookAnimation, still: spellBookStill },
+  "app-assistants": { animation: speechBubbleAnimation, still: speechBubbleStill },
+  "app-apps": { animation: menuAnimation, still: menuStill },
+  "app-backlog": { animation: projectInitiationAnimation, still: projectInitiationStill },
+  "app-cogwheel": { animation: optionsAnimation, still: optionsStill },
+  "app-communication": { animation: labourDayAnimation, still: labourDayStill },
+  "app-custom-agents": { animation: robotAnimation, still: robotStill },
+  "app-database": { animation: databaseTableAnimation, still: databaseTableStill },
+  "app-down-right": { animation: droneAnimation, still: droneStill },
+  "app-folder": { animation: folderAnimation, still: folderStill },
+  "app-home2": { animation: homeAnimation, still: homeStill },
+  "app-megaphone": { animation: marketingAutomationAnimation, still: marketingAutomationStill },
+  "app-robotic-arm": { animation: timeManagementAnimation, still: timeManagementStill },
+  "app-search": { animation: searchAnimation, still: searchStill },
+  "app-steering-wheel": { animation: petAnimation, still: petStill },
+  "app-system-manager": { animation: gearWheelAnimation, still: gearWheelStill },
+  "app-table": { animation: tableAnimation, still: tableStill },
 } as const;
 
 /** Phosphor duotone, @phosphor-icons/core 2.1.1 (MIT; see icons/phosphor/). */
@@ -167,19 +202,77 @@ const shapes = {
   ],
 } as const;
 
-export type NavigationIconName = keyof typeof shapes | keyof typeof artwork;
+export type NavigationIconName =
+  | keyof typeof shapes
+  | keyof typeof artwork
+  | keyof typeof animatedArtwork;
+
+function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }) {
+  const { animation, still } = animatedArtwork[name];
+  const enlarged =
+    name === "app-steering-wheel" ||
+    name === "app-search" ||
+    name === "app-backlog" ||
+    name === "app-custom-agents";
+  const image = useRef<HTMLImageElement>(null);
+  const id = useId();
+  const sequence = useRef(0);
+  const [playback, setPlayback] = useState(0);
+  useEffect(() => {
+    const element = image.current;
+    if (!element) return;
+    const target =
+      element.closest("button, a, [role='tab'], [role='button']") ??
+      element.closest(".sidebar-navigation-card")?.querySelector(".sidebar-card-toggle");
+    if (!target) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
+    const reset = () => setPlayback(0);
+    const play = () => {
+      if (
+        !motion.matches &&
+        !document.hidden &&
+        !element.closest("[hidden], [inert]") &&
+        !target.matches(":disabled, [aria-disabled='true']")
+      )
+        setPlayback(++sequence.current);
+    };
+    const visibility = () => {
+      if (document.hidden) reset();
+    };
+    const hoverCard = target.matches(".home-card");
+    const trigger = hoverCard ? "pointerenter" : "click";
+    const focus = () => {
+      if (target.matches(":focus-visible")) play();
+    };
+    target.addEventListener(trigger, play);
+    if (hoverCard) target.addEventListener("focus", focus);
+    motion.addEventListener("change", reset);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      target.removeEventListener(trigger, play);
+      if (hoverCard) target.removeEventListener("focus", focus);
+      motion.removeEventListener("change", reset);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, []);
+  return (
+    <img
+      ref={image}
+      src={playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
+      className="navigation-icon"
+      data-icon={name}
+      data-animated="true"
+      data-enlarged={enlarged || undefined}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
+  );
+}
 
 export function NavigationIcon({ name }: { name: NavigationIconName }) {
-  if (name === "app-text-size") {
-    return (
-      <span
-        className="navigation-icon"
-        data-icon={name}
-        aria-hidden="true"
-        style={{ maskImage: `url("${artwork[name]}")` }}
-      />
-    );
-  }
+  if (name in animatedArtwork)
+    return <AnimatedNavigationIcon name={name as keyof typeof animatedArtwork} />;
   if (name in artwork) {
     return (
       <img
@@ -196,7 +289,7 @@ export function NavigationIcon({ name }: { name: NavigationIconName }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={viewBoxes[name]}
+      viewBox={viewBoxes[name as keyof typeof shapes]}
       width="1em"
       height="1em"
       fill="currentColor"

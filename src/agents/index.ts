@@ -81,7 +81,6 @@ export function createAgents(options: { clientVersion: string; log?: LogSink }):
       },
       setMode: (change) => session.setMode(change),
       pid: proc.pid,
-      ...(proc.identity === undefined ? {} : { identity: proc.identity }),
       exited: proc.exited.then(() => {}),
       prompt: (text) => session.prompt(text),
       cancel: () => session.cancel(),

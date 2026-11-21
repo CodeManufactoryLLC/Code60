@@ -3,6 +3,7 @@ import type { Snapshot, StartRequest } from "../bridge/index.js";
 import { agentCount, providers } from "./configurations.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 
 const kinds = [
   "read",
@@ -206,9 +207,10 @@ export function NewRun({
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
+    dialog.current?.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
   }, []);
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog"
       aria-label={editing ? "Run configuration" : "New agent sessions"}
@@ -253,7 +255,7 @@ export function NewRun({
             <label>
               Configuration name
               <input
-                autoFocus
+                data-initial-focus
                 required
                 maxLength={128}
                 value={name}
@@ -265,7 +267,7 @@ export function NewRun({
             <label>
               Task prompt <span className="muted">(optional)</span>
               <textarea
-                autoFocus
+                data-initial-focus
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="What would you like your agents to do?"
@@ -403,6 +405,6 @@ export function NewRun({
           </button>
         </div>
       </form>
-    </dialog>
+    </DialogContent>
   );
 }

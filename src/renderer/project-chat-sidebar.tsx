@@ -1,15 +1,9 @@
 import { type ComponentProps, useLayoutEffect, useRef, useState } from "react";
 import type { OpenProject, ProjectAction } from "../bridge/index.js";
-import { AnchoredMenu } from "./anchored-menu.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import {
-  conversationProject,
-  type NavigationTarget,
-  parentActivation,
-  projectConversations,
-} from "./navigation-tree.js";
+import { projectConversations } from "./navigation-tree.js";
 import { pathLabel } from "./path-label.js";
 
 type Props = ComponentProps<typeof ChatSidebar> & {
@@ -18,7 +12,6 @@ type Props = ComponentProps<typeof ChatSidebar> & {
   onProjectAction(request: ProjectAction): Promise<boolean>;
   homeProjectId: string | undefined;
   onProjectOpen(id: string): void;
-  destination?: NavigationTarget | undefined;
 };
 
 export function ProjectChatSidebar({
@@ -28,10 +21,8 @@ export function ProjectChatSidebar({
   homeProjectId,
   onProjectOpen,
   ancestorsExpanded = true,
-  destination,
   ...props
 }: Props) {
-  const [menu, setMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(projects.map((project) => project.id)),
   );
@@ -41,55 +32,26 @@ export function ProjectChatSidebar({
     const added = [...live].filter((id) => !known.current.has(id));
     known.current = live;
     setExpanded((current) => {
-      if (!ancestorsExpanded) return current.size ? new Set() : current;
       const next = new Set([...current].filter((id) => live.has(id)));
       for (const id of added) next.add(id);
       return next.size === current.size && [...next].every((id) => current.has(id))
         ? current
         : next;
     });
-  }, [projects, ancestorsExpanded]);
-  const selectedProject = conversationProject(props.selectedId, projects, props.chats, props.runs);
-  const previousSelection = useRef({ id: props.selectedId, serial: props.navigationSerial });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Page activation alone must not reveal a stale project selection while navigating to Relay.
-  useLayoutEffect(() => {
-    const previous = previousSelection.current;
-    previousSelection.current = { id: props.selectedId, serial: props.navigationSerial };
-    const changed = previous.id !== props.selectedId || previous.serial !== props.navigationSerial;
-    const matches = destination?.kind !== "conversation" || destination.id === props.selectedId;
-    const reveal =
-      homeProjectId ?? (props.open && changed && matches ? selectedProject : undefined);
-    if (reveal)
-      setExpanded((current) => (current.has(reveal) ? current : new Set([...current, reveal])));
-  }, [selectedProject, props.selectedId, props.navigationSerial, homeProjectId]);
-  const destinationProject =
-    destination?.kind === "project"
-      ? destination.id
-      : destination?.kind === "conversation"
-        ? conversationProject(destination.id, projects, props.chats, props.runs)
-        : undefined;
-  useLayoutEffect(() => {
-    if (destination && destinationProject)
-      setExpanded((current) =>
-        current.has(destinationProject) ? current : new Set([...current, destinationProject]),
-      );
-  }, [destination, destinationProject]);
+  }, [projects]);
   return (
     <>
       {projects.map((project) => {
         const open = expanded.has(project.id);
         const panelId = `project-chats-${project.id}`;
         const name = pathLabel(project.path);
-        const toggleProject = () => {
-          if (props.pending) return;
-          const next = parentActivation(homeProjectId === project.id, open);
+        const setOpen = (value: boolean) => {
           setExpanded((current) => {
-            const result = new Set(current);
-            if (next.expanded) result.add(project.id);
-            else result.delete(project.id);
-            return result;
+            const next = new Set(current);
+            if (value) next.add(project.id);
+            else next.delete(project.id);
+            return next;
           });
-          if (next.navigate) onProjectOpen(project.id);
         };
         return (
           <section
@@ -104,19 +66,12 @@ export function ProjectChatSidebar({
               className="project-chat-heading"
               data-project-selected={selectedProjectId === project.id}
               data-nav-active={homeProjectId === project.id}
-              onClick={(event) => {
-                if (event.target === event.currentTarget) toggleProject();
-              }}
               onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                setExpanded((current) => {
-                  const next = new Set(current);
-                  if (event.key === "ArrowLeft") next.delete(project.id);
-                  else next.add(project.id);
-                  return next;
-                });
+                // Row navigation never changes this project's disclosure.
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
               }}
             >
               <button
@@ -125,10 +80,9 @@ export function ProjectChatSidebar({
                 id={`project-${project.id}`}
                 title={project.path}
                 aria-current={homeProjectId === project.id ? "page" : undefined}
-                aria-expanded={open}
-                aria-controls={`panel-project ${panelId}`}
+                aria-controls="panel-project"
                 disabled={props.pending}
-                onClick={toggleProject}
+                onClick={() => onProjectOpen(project.id)}
               >
                 <span className="project-chat-label">
                   <NavigationIcon name="app-folder" />
@@ -138,28 +92,49 @@ export function ProjectChatSidebar({
               </button>
               <button
                 type="button"
-                className="icon-button"
-                aria-label={`New chat in ${name}`}
-                title={`New chat in ${project.path}`}
+                className="icon-button project-session-add"
+                aria-label={`New Session in ${name}`}
+                title={`New Session in ${project.path}`}
+                data-tooltip="New Session"
                 disabled={props.pending}
                 onClick={() => void props.onAction?.({ type: "new", projectId: project.id })}
               >
-                <Icon name="add" />
+                <span className="sidebar-card-add" aria-hidden="true">
+                  <Icon name="add" />
+                </span>
               </button>
               <button
                 type="button"
-                className="icon-button"
-                aria-label={`More for ${project.path}`}
-                title={`More for ${project.path}`}
-                aria-haspopup="menu"
-                aria-expanded={menu?.projectId === project.id}
+                className="icon-button project-folder-stop"
+                aria-label={`Close Project: ${project.path}`}
+                title="Close Project"
+                data-tooltip="Close Project"
                 disabled={props.pending}
-                onClick={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setMenu({ projectId: project.id, x: rect.left, y: rect.bottom });
+                onClick={() => void onProjectAction({ type: "stop-folder", projectId: project.id })}
+              >
+                <span className="sidebar-card-stop" aria-hidden="true">
+                  <Icon name="close" />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="icon-button project-chat-toggle"
+                id={`project-toggle-${project.id}`}
+                aria-label={`${open ? "Collapse" : "Expand"} project ${project.path}`}
+                aria-expanded={open}
+                aria-controls={panelId}
+                data-tooltip=""
+                onClick={() => setOpen(!open)}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setOpen(event.key === "ArrowRight");
                 }}
               >
-                <Icon name="overflow-menu--horizontal" />
+                <span className="sidebar-card-chevron" aria-hidden="true">
+                  <Icon name="chevron--down" />
+                </span>
               </button>
             </div>
             <div
@@ -175,24 +150,6 @@ export function ProjectChatSidebar({
                 entries={projectConversations(project, props.chats, props.runs, props.selectedId)}
               />
             </div>
-            {menu?.projectId === project.id && (
-              <AnchoredMenu
-                x={menu.x}
-                y={menu.y}
-                label={`Actions for ${project.path}`}
-                onClose={() => setMenu(null)}
-                items={[
-                  {
-                    label: "Stop folder",
-                    run: () => void onProjectAction({ type: "stop-folder", projectId: project.id }),
-                  },
-                  {
-                    label: "Close project",
-                    run: () => void onProjectAction({ type: "close", projectId: project.id }),
-                  },
-                ]}
-              />
-            )}
           </section>
         );
       })}

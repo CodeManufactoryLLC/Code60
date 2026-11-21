@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ProjectSearchOpened } from "../bridge/index.js";
 import type { AppPagesProps } from "./app-page-props.js";
 import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
 import { ChatWorkspace } from "./chat-workspace.js";
-import { conversationId } from "./chats.js";
+import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
+import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
@@ -18,12 +20,13 @@ import { MessagesPage } from "./messages.js";
 import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
-import { OrchestrationSettings } from "./orchestration-settings.js";
+import { Card } from "./neobrutalism/card.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
 import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
 import { PromptEditorPage } from "./prompt-editor.js";
+import { ProvidersPage } from "./providers-page.js";
 import { RagPage } from "./rag.js";
 import { SearchPage } from "./search-page.js";
 import { sessionRows } from "./session-presentation.js";
@@ -69,17 +72,20 @@ export function AppPages(props: AppPagesProps) {
     tabs.active,
     tabs.active === "settings"
       ? settingsSection
-      : tabs.active === "project"
-        ? tabs.projectId
-        : tabs.active === "chat"
-          ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
-          : undefined,
+      : tabs.active === "provider"
+        ? tabs.providerId
+        : tabs.active === "project"
+          ? tabs.projectId
+          : tabs.active === "chat"
+            ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
+            : undefined,
     !splash,
   );
   const titleNavigation = useMemo(
     () => ({
       open: navigation.open,
       pending: navigation.pending,
+      selectionPending: navigation.projectPending || navigation.conversationPending,
       header: !splash,
       projects: snapshot?.openProjects ?? [],
       chats: snapshot?.chats ?? [],
@@ -88,6 +94,8 @@ export function AppPages(props: AppPagesProps) {
     [
       navigation.open,
       navigation.pending,
+      navigation.projectPending,
+      navigation.conversationPending,
       splash,
       snapshot?.openProjects,
       snapshot?.chats,
@@ -115,10 +123,13 @@ export function AppPages(props: AppPagesProps) {
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
-  const { transparent, savingAppearance, saveTransparent } = appearance;
+  const { transparent, savingAppearance, saveTransparent, sidebarBlurSupported } = appearance;
   const {
     theme,
     setTheme,
+    sidebarAppearance,
+    setSidebarAppearance,
+    sidebarAppearanceSaved,
     textStyles,
     setTextStyles,
     lines,
@@ -145,7 +156,82 @@ export function AppPages(props: AppPagesProps) {
       onOpen={({ target }) => void navigation.open(target)}
     />
   );
+  const [searchTarget, setSearchTarget] = useState<ProjectSearchOpened | null>(null);
+  useEffect(() => {
+    if (!searchTarget) return;
+    if (snapshot?.databaseEpoch !== searchTarget.databaseEpoch) {
+      setSearchTarget(null);
+      return;
+    }
+    if (
+      snapshot.projectInstanceId !== searchTarget.projectId ||
+      directory !== searchTarget.source.project.path
+    )
+      return;
+    setSearchTarget(null);
+    const source = searchTarget.source;
+    if (source.kind === "file" && source.path) {
+      fileAction({ type: "file", path: source.path });
+      fileBrowser.selectFile(source.path);
+      setExplorerOpen(true);
+      setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    } else if (source.kind === "project")
+      void navigation.open({ kind: "project", id: searchTarget.projectId });
+    else if (source.runId) {
+      setSelected(source.runId);
+      openChat(source.runId, false, source.eventIndex);
+    }
+  }, [
+    searchTarget,
+    snapshot?.databaseEpoch,
+    snapshot?.projectInstanceId,
+    directory,
+    fileAction,
+    fileBrowser,
+    setExplorerOpen,
+    setTabs,
+    navigation,
+    setSelected,
+    openChat,
+  ]);
   const views = {
+    assistants: (
+      <HomePage
+        page="assistants"
+        database={database}
+        relayAvailable={Boolean(builtinRelayId(snapshot?.chats ?? []))}
+        onOpenRelay={props.openRelay}
+        onOpenPage={(id) => void navigation.open({ kind: "page", id })}
+      />
+    ),
+    "custom-agents": (
+      <CustomAgentsPage
+        storageError={snapshot?.customAgentError}
+        api={api}
+        agents={snapshot?.customAgents ?? []}
+        active={!splash && tabs.active === "custom-agents"}
+        onOpen={(id) => navigation.open({ kind: "custom-agent", id })}
+      />
+    ),
+    providers: (
+      <ProvidersPage
+        api={api}
+        snapshot={snapshot}
+        management={props.providerManagement}
+        active={!splash && tabs.active === "providers"}
+        onOpen={(id) => void navigation.open({ kind: "provider", id })}
+      />
+    ),
+    provider: (
+      <ProvidersPage
+        api={api}
+        snapshot={snapshot}
+        management={props.providerManagement}
+        providerId={tabs.providerId}
+        active={!splash && tabs.active === "provider"}
+        onOpen={(id) => void navigation.open({ kind: "provider", id })}
+      />
+    ),
     projects: (
       <ProjectsHomePage
         projects={snapshot?.openProjects ?? []}
@@ -168,7 +254,11 @@ export function AppPages(props: AppPagesProps) {
     advanced: parentHome("advanced"),
     experiments: parentHome("experiments"),
     "system-manager": (
-      <SystemManagerPage api={api} active={!splash && tabs.active === "system-manager"} />
+      <SystemManagerPage
+        api={api}
+        active={!splash && tabs.active === "system-manager"}
+        pollingPaused={snapshot?.polling.paused ?? false}
+      />
     ),
     automations: (
       <AutomationsPage
@@ -197,7 +287,7 @@ export function AppPages(props: AppPagesProps) {
     home: (
       <HomePage
         database={database}
-        relayAvailable={Boolean(snapshot?.chats.some((chat) => chat.kind === "relay"))}
+        relayAvailable={Boolean(builtinRelayId(snapshot?.chats ?? []))}
         onOpenRelay={props.openRelay}
         onOpenPage={(id) => void navigation.open({ kind: "page", id })}
       />
@@ -236,15 +326,6 @@ export function AppPages(props: AppPagesProps) {
           }
           updates={<UpdatesSection updates={updates} />}
           versions={snapshot?.versions}
-          orchestration={
-            snapshot && (
-              <OrchestrationSettings
-                snapshot={snapshot}
-                api={api}
-                active={!splash && tabs.active === "settings" && settingsSection === "agents"}
-              />
-            )
-          }
           pollingControls={
             snapshot && (
               <fieldset disabled={!database} className="database-dependent-controls">
@@ -266,6 +347,11 @@ export function AppPages(props: AppPagesProps) {
           onTransparent={(enabled) => void saveTransparent(enabled)}
           theme={theme}
           onTheme={setTheme}
+          sidebarAppearance={sidebarAppearance}
+          sidebarAppearanceSaved={sidebarAppearanceSaved}
+          sidebarBlurSupported={sidebarBlurSupported}
+          sidebarBlurError={props.sidebarBlurError}
+          onSidebarAppearance={setSidebarAppearance}
           textStyles={textStyles}
           onTextStyles={setTextStyles}
           lines={lines}
@@ -490,26 +576,12 @@ export function AppPages(props: AppPagesProps) {
     search: (
       <>
         <SearchPage
-          key={scope.viewKey}
+          key={databaseKey}
           api={api}
           provider={snapshot?.orchestration.provider ?? null}
-          directory={directory ?? null}
-          runs={projectRuns}
-          data={transcripts}
-          onOpen={(result) => {
-            if (result.kind === "file" && result.path) {
-              fileAction({ type: "file", path: result.path });
-              fileBrowser.selectFile(result.path);
-              setExplorerOpen(true);
-              setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
-              return;
-            }
-            setTabs((current) => updateTabs(current, { type: "select", id: "sessions" }));
-            if (result.runId) {
-              setSelected(result.runId);
-              openChat(result.runId, false, result.eventIndex);
-            }
-          }}
+          database={database}
+          databaseEpoch={snapshot?.databaseEpoch ?? 0}
+          onOpen={setSearchTarget}
         />
       </>
     ),
@@ -608,22 +680,25 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      {renderedPages.map(({ id }) => (
-        <div
-          key={id}
-          className="page-panel"
-          role="tabpanel"
-          id={`panel-${id}`}
-          aria-labelledby={
-            id === "chat" && snapshot
-              ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-              : sidebarPageElementId(id, tabs.projectId)
-          }
-          hidden={tabs.active !== id}
-        >
-          {views[id]}
-        </div>
-      ))}
+      {renderedPages.map(({ id }) => {
+        const Shell = id === "chat" ? "div" : Card;
+        return (
+          <Shell
+            key={id}
+            className="page-panel"
+            role="tabpanel"
+            id={`panel-${id}`}
+            aria-labelledby={
+              id === "chat" && snapshot
+                ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
+            }
+            hidden={tabs.active !== id}
+          >
+            {views[id]}
+          </Shell>
+        );
+      })}
     </PageTitleNavigationContext.Provider>
   );
 }

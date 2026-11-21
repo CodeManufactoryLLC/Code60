@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 const styleNonce = randomBytes(24).toString("base64");
@@ -7,6 +8,7 @@ const styleNonce = randomBytes(24).toString("base64");
 export default defineConfig({
   html: { cspNonce: styleNonce },
   plugins: [
+    tailwindcss(),
     {
       name: "monaco-csp-styles",
       transformIndexHtml(html) {

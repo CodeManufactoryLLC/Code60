@@ -69,7 +69,7 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
   ["chat", false, false, true, true],
   ["chat", true, false, false, false],
   ["chat", false, true, false, false],
-  ["search", false, false, true, false],
+  ["search", false, false, false, false],
   ...(
     [
       "home",

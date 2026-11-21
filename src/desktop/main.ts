@@ -1,3 +1,4 @@
+import "./console-output.js";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -9,7 +10,6 @@ import {
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
-  nativeTheme,
   shell,
 } from "electron";
 import updaterPackage from "electron-updater";
@@ -44,6 +44,7 @@ import {
   parseMemoryDetail,
   parseMemoryExtraction,
   parseMemoryRequestId,
+  parseModelDefaultAction,
   parseOrchestrationChatAction,
   parseOrchestrationProvider,
   parsePlanAction,
@@ -54,6 +55,7 @@ import {
   parseProjectAction,
   parseProjectPath,
   parsePromptTemplateId,
+  parseProviderAction,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
@@ -68,12 +70,18 @@ import {
   parseSetupAttempt,
   parseSetupBegin,
   parseSetupSession,
+  parseSidebarBackdrop,
   parseStart,
   parseTaskAction,
   parseUpdateAction,
+  parseWindowControl,
 } from "../bridge/index.js";
 import { defaultDeps, stateHome } from "../core/index.js";
-import { diagnosticMessage, setEnvironmentPath } from "../platform/index.js";
+import {
+  assertSupportedPlatform,
+  diagnosticMessage,
+  setEnvironmentPath,
+} from "../platform/index.js";
 import { installAppImage } from "./appimage-update.js";
 import { DesktopAutomations } from "./automations.js";
 import { DesktopController } from "./controller.js";
@@ -84,8 +92,11 @@ import { filePreferences } from "./preferences.js";
 import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
 import { WebLinks } from "./web-links.js";
+import { controlWindow } from "./window-controls.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const sidebarBlurSupported = process.platform === "darwin";
+const customWindowControls = process.platform === "linux";
 const page = pathToFileURL(join(here, "../renderer/index.html")).href;
 let window: BrowserWindow | undefined;
 let exiting = false;
@@ -109,6 +120,9 @@ const webLinks = new WebLinks({
   open: (url) => shell.openExternal(url),
 });
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
+assertSupportedPlatform();
+
+let sidebarBackdrop: import("./sidebar-backdrop.js").SidebarBackdrop | undefined;
 const preferences = filePreferences(join(stateHome(process.env), "code60", "desktop.json"));
 const logs = new DesktopLogStore(join(stateHome(process.env), "code60", "logs"));
 const launchOperation = randomUUID();
@@ -116,10 +130,6 @@ logs.sink({ event: "app.start", operationId: launchOperation, outcome: "started"
 logs.subscribe(() => {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
     window.webContents.send("desktop:logs-changed");
-});
-const windowControlColors = (dark: boolean) => ({
-  color: dark ? "#252525" : "#ffffff",
-  symbolColor: dark ? "#ffffff" : "#000000",
 });
 const controller = new DesktopController(
   defaultDeps(logs.sink),
@@ -190,6 +200,7 @@ const automations = new DesktopAutomations(
 );
 let shutdownTask: Promise<void> | undefined;
 function shutdownDesktop(force = false): Promise<void> {
+  sidebarBackdrop?.dispose();
   automations.reset();
   if (shutdownTask) {
     if (force) void controller.shutdown(true).catch(() => {});
@@ -372,7 +383,7 @@ async function ready(): Promise<void> {
   Menu.setApplicationMenu(applicationMenu());
   const supported =
     (process.platform === "darwin" && process.arch === "arm64") ||
-    ((process.platform === "linux" || process.platform === "win32") && process.arch === "x64");
+    (process.platform === "linux" && process.arch === "x64");
   updates = new DesktopUpdates(
     app.isPackaged && supported ? updaterPackage.autoUpdater : null,
     (state) => {
@@ -447,14 +458,27 @@ async function ready(): Promise<void> {
     });
   handle("desktop:app-update", (value) => updates?.action(parseUpdateAction(value)));
   handle("desktop:automation", (value) => automations.request(value));
+  handle("desktop:model-default", (value) =>
+    controller.modelDefault(parseModelDefaultAction(value)),
+  );
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
-    return { transparent, enabled, clickThrough };
+    return {
+      transparent,
+      enabled,
+      clickThrough,
+      sidebarBlurSupported,
+      customWindowControls,
+    };
   });
-  handle("desktop:window-theme", (value) => {
-    const dark = parseBoolean(value);
-    if (process.platform === "win32" && window && !window.isDestroyed())
-      window.setTitleBarOverlay({ height: 28, ...windowControlColors(dark) });
+  handle("desktop:window-control", (value) => {
+    const action = parseWindowControl(value);
+    if (!customWindowControls) throw new Error("Custom window controls are unavailable.");
+    if (window && !window.isDestroyed()) controlWindow(window, action);
+  });
+  handle("desktop:sidebar-backdrop", (value) => {
+    const request = parseSidebarBackdrop(value);
+    sidebarBackdrop?.update(request);
   });
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
@@ -504,6 +528,7 @@ async function ready(): Promise<void> {
     });
   });
   handle("desktop:detail-read", (value) => controller.readDetails(parseDetailRequest(value)));
+  handle("desktop:custom-agent", (value) => controller.customAgent(value));
   handle("desktop:relay-files", (value) => controller.setRelayFileContext(value));
   handle("desktop:knowledge-renderer", () => controller.knowledge.rendererIdentity());
   handle("desktop:knowledge-report", (value) => controller.knowledge.report(value));
@@ -589,6 +614,9 @@ async function ready(): Promise<void> {
   handle("desktop:orchestration-chat", (value) =>
     controller.orchestrationChatAction(parseOrchestrationChatAction(value)),
   );
+  handle("desktop:provider-action", (value) =>
+    controller.providerAction(parseProviderAction(value)),
+  );
   handle("desktop:setup-begin", (value) => controller.beginAgentSetup(parseSetupBegin(value)));
   handle("desktop:setup-attempt", (value) =>
     controller.attemptAgentSetup(parseSetupAttempt(value)),
@@ -597,6 +625,9 @@ async function ready(): Promise<void> {
   handle("desktop:setup-finish", (value) => controller.finishAgentSetup(parseSetupSession(value)));
   handle("desktop:setup-abandon", (value) =>
     controller.abandonAgentSetup(parseSetupSession(value)),
+  );
+  handle("desktop:orchestration-auto-approval", (value) =>
+    controller.setOrchestrationAutoApproval(parseBoolean(value)),
   );
   handle("desktop:orchestration-provider", (value) =>
     controller.setOrchestrationProvider(parseOrchestrationProvider(value)),
@@ -640,6 +671,25 @@ async function ready(): Promise<void> {
   handle("desktop:rag-retrieve", (value) => controller.retrieveRag(parseRagQuery(value)));
   handle("desktop:rag-cancel", (value) => controller.cancelRag(parseRagCancel(value)));
   handle("desktop:rag-clear", (value) => controller.clearRag(parseRagIdentity(value)));
+  handle("desktop:project-search", (value) => controller.searchProjects(value));
+  handle("desktop:project-search-page", (value) => controller.searchProjectsPage(value));
+  handle("desktop:project-search-cancel", (value) => controller.cancelProjectSearch(value));
+  handle("desktop:project-search-open", (value) =>
+    controller.openSearchSource(value, async (path) => {
+      if (!window || window.isDestroyed()) return false;
+      const result = await dialog.showMessageBox(window, {
+        type: "question",
+        title: "Open project?",
+        message: "Open this project?",
+        detail: path,
+        buttons: ["Cancel", "Open project"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      return result.response === 1;
+    }),
+  );
   handle("desktop:search-summary", (value) =>
     controller.summarizeSearch(parseSearchSummary(value)),
   );
@@ -720,14 +770,15 @@ async function ready(): Promise<void> {
     minWidth: 820,
     minHeight: 600,
     title: `Code60 - ${app.getVersion()}`,
-    transparent,
-    backgroundColor: transparent ? "#00000000" : "#252525",
+    // Keep native alpha available for the live sidebar opacity control. The
+    // renderer separately paints opaque content and optional transparent margins.
+    transparent: true,
+    backgroundColor: "#00000000",
     hasShadow: !transparent,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",
     titleBarOverlay: {
       height: 28,
-      ...(process.platform === "win32" ? windowControlColors(nativeTheme.shouldUseDarkColors) : {}),
     },
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 18, y: 7 } } : {}),
     webPreferences: {
@@ -738,6 +789,13 @@ async function ready(): Promise<void> {
     },
   });
   // Keep the versioned title instead of the page's <title>.
+  if (sidebarBlurSupported) {
+    const { SidebarBackdrop } = await import("./sidebar-backdrop.js");
+    sidebarBackdrop = new SidebarBackdrop(window, () => {
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send("desktop:sidebar-backdrop-error");
+    });
+  }
   window.on("page-title-updated", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => {
@@ -752,7 +810,7 @@ async function ready(): Promise<void> {
     void controller.cancelDiffReads().catch(() => {});
     void controller.cancelGitSetup().catch(() => {});
     void controller.cancelAgentSetup().catch(() => {});
-    void controller.cancelSearchSummary().catch(() => {});
+    void controller.clearSearch().catch(() => {});
     window?.setIgnoreMouseEvents(false);
     controller.setVisibility({ visible: false, worktrees: false });
   });
@@ -761,18 +819,6 @@ async function ready(): Promise<void> {
     event.preventDefault();
     void quit(true);
   });
-  if (process.platform === "win32") {
-    window.on("query-session-end", () => {
-      startup.abort();
-      // Do not veto sign-out. The owned jobs also close if Windows terminates us
-      // before these best-effort final record writes finish.
-      void shutdownDesktop(true).catch(() => {});
-    });
-    window.on("session-end", () => {
-      startup.abort();
-      void shutdownDesktop(true).catch(() => {});
-    });
-  }
   logs.sink({ event: "app.ready", operationId: launchOperation, outcome: "succeeded" });
   window.loadURL(page).catch(() => void quit(false));
 }

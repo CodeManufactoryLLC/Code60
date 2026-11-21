@@ -8,10 +8,12 @@ afterEach(() => vi.unstubAllGlobals());
 function navigation(
   database: string | null,
   _directory?: string,
-  settingsSection: SettingsSectionId | null = "agents",
+  settingsSection: SettingsSectionId | null = "appearance",
   active = initialTabs.active,
   expanded = true,
   sidebarOpen = true,
+  busy = false,
+  history = { canGoBack: false, canGoForward: false },
 ) {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) =>
@@ -20,6 +22,7 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      {...history}
       tabs={{ ...initialTabs, active }}
       settingsSection={settingsSection}
       database={database}
@@ -34,7 +37,9 @@ function navigation(
         projectAction: async () => true,
         invalidate: () => {},
         pending: false,
+        busy,
         projectPending: false,
+        conversationPending: false,
         error: "",
       }}
       chats={[]}
@@ -47,6 +52,28 @@ function navigation(
 }
 
 describe("database connection navigation", () => {
+  it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
+    const html = navigation(null);
+    expect(html).toMatch(/class="[^"]*sidebar-navigation-card"/);
+    expect(html.match(/data-slot="card"/g)).toHaveLength(7);
+    expect(html).toContain('id="assistants-toggle"');
+    expect(html).toContain('aria-controls="assistants-pages"');
+    expect(html).toContain('data-icon="app-assistants"');
+    expect(html.indexOf('id="assistants-pages"')).toBeLessThan(
+      html.indexOf('id="tab-custom-agents"'),
+    );
+    expect(html.indexOf('id="tab-custom-agents"')).toBeLessThan(html.indexOf('id="tab-chat"'));
+    expect(html).toContain('id="tab-assistants"');
+    expect(html).toContain('aria-controls="panel-assistants"');
+  });
+  it.each([true, false])(
+    "marks the sidebar busy only while navigation is in flight (%s)",
+    (busy) => {
+      const html = navigation(null, undefined, null, "home", true, true, busy);
+      const sidebar = html.match(/<nav[^>]*id="navigation-sidebar"[^>]*>/)?.[0];
+      expect(sidebar?.includes('aria-busy="true"')).toBe(busy);
+    },
+  );
   it.each([true, false])(
     "keeps a reachable external toggle and mounted navigation (open %s)",
     (open) => {
@@ -79,7 +106,7 @@ describe("database connection navigation", () => {
       const html = navigation(null, undefined, null, "settings", expanded);
       const tab = html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0];
       expect(tab).toContain('aria-selected="true"');
-      expect(tab).toContain(`aria-expanded="${expanded}"`);
+      expect(tab).not.toContain("aria-expanded");
       expect(html.match(/data-nav-active="true"/g)).toHaveLength(1);
       for (const child of html.matchAll(/<button[^>]*id="tab-settings-[^"]+"[^>]*>/g))
         expect(child[0]).toContain('aria-selected="false"');
@@ -87,7 +114,7 @@ describe("database connection navigation", () => {
   );
 
   it("shows Search as a labelled selected page tab before Projects, without a utility row", () => {
-    const html = navigation("/database.sqlite", undefined, "agents", "search");
+    const html = navigation("/database.sqlite", undefined, "appearance", "search");
     const search = html.match(/<button[^>]*id="tab-search"[\s\S]*?<\/button>/)?.[0];
     expect(search).toContain('class="page-tab-label">Search</span>');
     expect(search).toContain('aria-selected="true"');
@@ -118,7 +145,8 @@ describe("database connection navigation", () => {
     const card = html.match(
       /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
     )?.[0];
-    expect(card).toContain("Connect to database");
+    expect(card).toContain("Connect to database to add a project");
+    expect(card).toContain("Add Project");
     expect(card).not.toContain("old-project");
     expect(card).not.toContain("disabled");
     for (const id of ["prompts", "search", "sessions", "episodic-memory", "rag"]) {
@@ -131,7 +159,6 @@ describe("database connection navigation", () => {
     expect(html.indexOf('id="tab-logs"')).toBeLessThan(html.indexOf('id="tab-messages"'));
     expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).not.toContain("disabled");
     for (const section of [
-      "agents",
       "memory",
       "appearance",
       "table-defaults",
@@ -146,12 +173,16 @@ describe("database connection navigation", () => {
     }
     expect(html.match(/<button[^>]*id="tab-chat"[^>]*>/)?.[0]).not.toContain("disabled");
   });
-  it("keeps the Open Project action and workspace controls independent of the selected folder", () => {
+  it("keeps the Add Project action and workspace controls independent of the selected folder", () => {
     for (const directory of [undefined, "/project"]) {
       const html = navigation("/database.sqlite", directory);
-      expect(html).toContain('aria-label="Open Project"');
+      expect(html).toContain('aria-label="Add Project"');
       expect(html).not.toContain("sidebar-header");
-      expect(html).toContain('title="Open Project"');
+      expect(html).toContain('title="Add Project"');
+      const action = html.indexOf('class="icon-button project-sidebar-open"');
+      expect(action).toBeLessThan(html.indexOf('id="projects-card-toggle"'));
+      expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
+      expect(html).not.toContain('class="page-tab-label">Add Project</span>');
       expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
       expect(html.match(/<button[^>]*id="tab-prompts"[^>]*>/)?.[0]).not.toContain("disabled");
@@ -161,7 +192,6 @@ describe("database connection navigation", () => {
   it("nests Settings sub-pages alphabetically, including Advanced and its children", () => {
     const html = navigation("/database.sqlite", undefined, "appearance", "settings");
     const sections = [
-      ["agents", "Agents"],
       ["memory", "Memory"],
       ["appearance", "Appearance"],
       ["table-defaults", "Table defaults"],
@@ -181,7 +211,7 @@ describe("database connection navigation", () => {
       'aria-selected="true"',
     );
     expect(html.indexOf('id="settings-pages"')).toBeLessThan(
-      html.indexOf('id="tab-settings-agents"'),
+      html.indexOf('id="tab-settings-appearance"'),
     );
     expect(html.indexOf('id="tab-settings-about"')).toBeLessThan(
       html.indexOf('id="advanced-toggle"'),
@@ -193,7 +223,6 @@ describe("database connection navigation", () => {
       "experiments-toggle",
       "tab-episodic-memory",
       "tab-rag",
-      "tab-settings-agents",
       "tab-settings-appearance",
       "tab-settings-memory",
       "tab-settings-polling-settings",
@@ -214,7 +243,6 @@ describe("sidebar labels and disclosure icons", () => {
     const html = navigation("/database.sqlite");
     const order = [
       "app-pages",
-      "tab-automations",
       "tab-commands",
       "tables-toggle",
       "table-pages",
@@ -227,6 +255,7 @@ describe("sidebar labels and disclosure icons", () => {
       "tab-sessions",
       "tab-worktrees",
       "tab-prompts",
+      "tab-automations",
       "tab-system-manager",
       "tab-settings",
     ];
@@ -253,27 +282,27 @@ describe("sidebar labels and disclosure icons", () => {
   });
 
   it.each([null, "/database.sqlite"])(
-    "nests the database-independent Automation Studio destination under Apps (%s)",
+    "nests the database-independent Scheduled Jobs destination under Apps (%s)",
     (database) => {
-      const html = navigation(database, undefined, "agents", "automations");
+      const html = navigation(database, undefined, "appearance", "automations");
       const studio = html.match(/<button[^>]*id="tab-automations"[\s\S]*?<\/button>/)?.[0];
       expect(studio).toContain('aria-selected="true"');
-      expect(studio).toContain("Automation Studio");
+      expect(studio).toContain("Scheduled Jobs");
       expect(studio).not.toContain("disabled");
       expect(html.match(/id="tab-automations"/g)).toHaveLength(1);
       expect(html.indexOf('id="app-pages"')).toBeLessThan(html.indexOf('id="tab-automations"'));
-      expect(html.indexOf('id="tab-automations"')).toBeLessThan(html.indexOf('id="tables-toggle"'));
+      expect(html.indexOf('id="tables-toggle"')).toBeLessThan(html.indexOf('id="tab-automations"'));
       expect(html).not.toContain('aria-label="Automations page"');
     },
   );
 
   it.each([true, false])("selects Apps independently of its expansion (%s)", (expanded) => {
-    const html = navigation(null, undefined, "agents", "apps", expanded);
+    const html = navigation(null, undefined, "appearance", "apps", expanded);
     const tab = html.match(/<button[^>]*id="tab-apps"[\s\S]*?<\/button>/)?.[0];
     expect(tab).toContain('role="tab"');
     expect(tab).toContain('aria-selected="true"');
-    expect(tab).toContain('aria-controls="panel-apps app-pages"');
-    expect(tab).toContain(`aria-expanded="${expanded}"`);
+    expect(tab).toContain('aria-controls="panel-apps"');
+    expect(tab).not.toContain("aria-expanded");
     expect(tab).not.toContain('disabled=""');
   });
 
@@ -283,7 +312,7 @@ describe("sidebar labels and disclosure icons", () => {
       const html = navigation(
         "/database.sqlite",
         undefined,
-        "agents",
+        "appearance",
         initialTabs.active,
         expanded,
       );
@@ -314,7 +343,7 @@ describe("sidebar labels and disclosure icons", () => {
 
   it.each([true, false])("keeps navigation icons decorative (expanded: %s)", (expanded) => {
     for (const database of [null, "/database.sqlite"]) {
-      const html = navigation(database, undefined, "agents", initialTabs.active, expanded);
+      const html = navigation(database, undefined, "appearance", initialTabs.active, expanded);
       const promptTab = html.match(/<button[^>]*id="tab-prompts"[\s\S]*?<\/button>/)?.[0];
       const project = html.match(
         /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
@@ -322,14 +351,14 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(27);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(2);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(31);
+      expect(html.match(/<img/g)).toHaveLength(31);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(11);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(33);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],
-        ["tab-automations", "app-robotic-arm", "Automation Studio"],
-        ["tab-system-manager", "wrench", "System Manager"],
+        ["tab-automations", "app-robotic-arm", "Scheduled Jobs"],
+        ["tab-system-manager", "app-system-manager", "System Manager"],
         ["tab-chat", "app-backlog", "Projects"],
         ["tab-prompts", "app-ai", "Prompt Builder"],
         ["tab-commands", "app-megaphone", "Command Builder"],
@@ -339,7 +368,6 @@ describe("sidebar labels and disclosure icons", () => {
         ["tab-configurations", "app-table", "Configurations"],
         ["tab-logs", "app-table", "Logs"],
         ["tab-settings-table-defaults", "app-table", "Table defaults"],
-        ["tab-settings-agents", "app-helmet", "Agents"],
         ["tab-settings-memory", "app-bookshelf", "Memory"],
         ["tab-settings-appearance", "app-color-palette", "Appearance"],
         ["tab-settings-text", "app-text-size", "Text"],
@@ -355,11 +383,7 @@ describe("sidebar labels and disclosure icons", () => {
         expect(tab).toContain(`data-icon="${icon}"`);
         expect(tab).toContain(`class="page-tab-label">${label}</span>`);
         expect(tab).toMatch(/class="navigation-icon"[^>]*aria-hidden="true"/);
-        if (icon === "app-text-size") {
-          expect(tab).toContain("<span");
-          expect(tab).toContain("mask-image:url(");
-          expect(tab).toContain("text-size.svg");
-        } else if (icon.startsWith("app-")) {
+        if (icon.startsWith("app-")) {
           expect(tab).toContain('alt=""');
           expect(tab).toContain('draggable="false"');
         } else {
@@ -373,18 +397,40 @@ describe("sidebar labels and disclosure icons", () => {
       expect(html).not.toContain('aria-label="New chat"');
       const settingsToggle = html.match(/<button[^>]*id="tab-settings"[\s\S]*?<\/button>/)?.[0];
       expect(settingsToggle).toContain("<img");
-      expect(settingsToggle).toContain(`aria-expanded="${expanded}"`);
+      expect(settingsToggle).not.toContain("aria-expanded");
       for (const id of [
-        "tab-chat",
-        "tab-apps",
-        "tables-toggle",
-        "advanced-toggle",
-        "experiments-toggle",
+        "home-card-toggle",
+        "assistants-toggle",
+        "projects-card-toggle",
+        "apps-card-toggle",
+        "settings-card-toggle",
       ]) {
+        const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
+        expect(toggle).toContain(`aria-expanded="${expanded}"`);
+        expect(toggle).toContain('class="icon-button sidebar-card-toggle"');
+        expect(toggle).toContain('data-tooltip=""');
+        expect(toggle).not.toContain("title=");
+      }
+      for (const id of ["tables-toggle", "advanced-toggle", "experiments-toggle"]) {
         const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
         expect(toggle).toContain(`aria-expanded="${expanded}"`);
         expect(toggle).not.toContain('class="carbon-icon"');
       }
     }
+  });
+});
+
+describe("window navigation history", () => {
+  it("keeps history available when the sidebar is closed", () => {
+    const html = navigation(null, undefined, null, "home", false, false, false, {
+      canGoBack: true,
+      canGoForward: false,
+    });
+    const back = html.match(/<button[^>]*aria-label="Back"[^>]*>/)?.[0];
+    const forward = html.match(/<button[^>]*aria-label="Forward"[^>]*>/)?.[0];
+    expect(back).toBeDefined();
+    expect(back).not.toContain("disabled");
+    expect(forward).toContain("disabled");
+    expect(html.indexOf('aria-label="Back"')).toBeGreaterThan(html.indexOf("</nav>"));
   });
 });

@@ -11,6 +11,21 @@ import {
 import { MemoryStore } from "./memory-store.js";
 import { sqliteAvailable } from "./projects.js";
 
+// Node 22.12 has SQLite but lacks the FTS5 tables required by these memory fixtures.
+function sqliteFtsAvailable(): boolean {
+  if (!sqliteAvailable()) return false;
+  const sqlite = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+  const database = new sqlite.DatabaseSync(":memory:");
+  try {
+    return (
+      database.prepare("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled").get()
+        ?.enabled === 1
+    );
+  } finally {
+    database.close();
+  }
+}
+
 function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Expected test fixture value");
   return value;
@@ -67,7 +82,7 @@ function publish(cid: string, s: MemorySource, value = generation(s)) {
   store.publish(cid, range.cursor, range.boundary, value, "fixture");
   return must(store.browse({ conversationId: cid }).records[0]);
 }
-describe.skipIf(!sqliteAvailable())("private application memory", () => {
+describe.skipIf(!sqliteFtsAvailable())("private application memory", () => {
   it.each([false, true])(
     "restores a surviving fact after rewinding a correction=%s",
     (correction) => {
@@ -209,8 +224,7 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
     expect(store.settings().enabled).toBe(false);
     expect(store.register("chat", "Chat", null).id).toBe(c.id);
     expect(store.browse({}).records).toHaveLength(4);
-    if (process.platform !== "win32")
-      expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
+    expect((await stat(join(dir, "memory", "memory.sqlite"))).mode & 0o077).toBe(0);
   });
   it("shares only durable project identity and human-promoted global memories", async () => {
     const a = join(dir, "a"),
@@ -464,16 +478,13 @@ describe.skipIf(!sqliteAvailable())("private application memory", () => {
       ),
     ).toThrow("changed");
   });
-  it.skipIf(process.platform === "win32")(
-    "rejects linked and unsafe storage instead of resetting it",
-    async () => {
-      const linked = join(dir, "linked");
-      await mkdir(linked, { mode: 0o700 });
-      await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
-      expect(() => new MemoryStore(linked)).toThrow();
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
-      expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
-      await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
-    },
-  );
+  it("rejects linked and unsafe storage instead of resetting it", async () => {
+    const linked = join(dir, "linked");
+    await mkdir(linked, { mode: 0o700 });
+    await symlink(join(dir, "memory", "memory.sqlite"), join(linked, "memory.sqlite"));
+    expect(() => new MemoryStore(linked)).toThrow();
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o644);
+    expect(() => new MemoryStore(join(dir, "memory"))).toThrow("permissions");
+    await chmod(join(dir, "memory", "memory.sqlite"), 0o600);
+  });
 });

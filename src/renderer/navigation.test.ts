@@ -15,9 +15,9 @@ import {
 import { staticChildren } from "./navigation-tree.js";
 
 describe("navigation registry", () => {
-  it("uses the supplied artwork for Memory, Agents and Experiments", () => {
+  it("uses the supplied artwork for Memory, Providers and Experiments", () => {
     expect(settingsIcons.memory).toBe("app-bookshelf");
-    expect(settingsIcons.agents).toBe("app-helmet");
+    expect(pageDefinitions.providers.icon).toBe("app-helmet");
     expect(groups.experiments.icon).toBe("app-chemical");
     expect(pageDefinitions["episodic-memory"].icon).toBe("brain");
     expect(pageDefinitions.rag.icon).toBe("flask");
@@ -32,7 +32,6 @@ describe("navigation registry", () => {
     expect(staticChildren("settings", "/db").map(({ target }) => target.id)).toEqual([
       "about",
       "advanced",
-      "agents",
       "appearance",
       "memory",
       "polling-settings",
@@ -56,9 +55,16 @@ describe("navigation registry", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
     expect(pagesInGroup("apps")).toEqual(["automations", "commands", "prompts", "system-manager"]);
-    expect(pagesInGroup("primary")).toEqual(["home", "apps", "search"]);
+    expect(pagesInGroup("primary")).toEqual([
+      "home",
+      "assistants",
+      "custom-agents",
+      "providers",
+      "apps",
+      "search",
+    ]);
     expect(pageGroup("automations")).toBe("apps");
-    expect(pageDefinitions.automations.label).toBe("Automation Studio");
+    expect(pageDefinitions.automations.label).toBe("Scheduled Jobs");
     expect(pageGroup("system-manager")).toBe("apps");
     expect(pageDefinitions["system-manager"].label).toBe("System Manager");
   });
@@ -67,7 +73,7 @@ describe("navigation registry", () => {
       const navigate = vi.fn();
       const commands = pageCommands("chat", database, navigate, "Ctrl+,");
       expect(commands.find((command) => command.id === "automations")?.label).toBe(
-        "Automation Studio",
+        "Scheduled Jobs",
       );
       for (const command of commands) {
         const id = command.id as keyof typeof pageDefinitions;

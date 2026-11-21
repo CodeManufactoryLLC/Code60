@@ -12,7 +12,10 @@ import { FileBrowserState } from "./file-browser-state.js";
 import type { FileBrowser } from "./files.js";
 
 export function relayFileRoots(snapshot: Snapshot | undefined) {
-  const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const relay =
+    snapshot?.chat.kind === "relay"
+      ? snapshot.chat
+      : snapshot?.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   if (!relay?.conversationId || relay.generation === undefined) return [];
   const targets = new Map(
     snapshot?.runs.flatMap((run) =>
@@ -24,7 +27,10 @@ export function relayFileRoots(snapshot: Snapshot | undefined) {
     ),
   );
   return [
-    { path: "workspace", label: "Relay workspace" },
+    {
+      path: "workspace",
+      label: relay.customAgentId ? `${relay.title} workspace` : "Relay workspace",
+    },
     ...[...targets].map(([id, cwd]) => ({ path: `target:${id}`, label: `Target · ${cwd}` })),
   ];
 }
@@ -33,7 +39,10 @@ export function relayFileScope(
   snapshot: Snapshot | undefined,
   root: string,
 ): DetailScope | undefined {
-  const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const relay =
+    snapshot?.chat.kind === "relay"
+      ? snapshot.chat
+      : snapshot?.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   if (!relay?.conversationId || relay.generation === undefined) return;
   if (root === "workspace")
     return {

@@ -7,7 +7,12 @@ import type { RelayReviewEntry } from "../bridge/index.js";
 import { RelayReviewIndex } from "./relay-review-index.js";
 import * as storage from "./relay-storage.js";
 
+// Rollover fixtures publish 129 durable records, each with native ACL checks and
+// atomic replacement on Windows, rather than in-memory index operations. The
+// 129-record cases take about 27 s alone on native ARM64, before suite contention.
+
 let root: string;
+let parent: string;
 let conversationId: string;
 const entry = (title: string): RelayReviewEntry => ({
   id: randomUUID(),
@@ -21,12 +26,13 @@ const entry = (title: string): RelayReviewEntry => ({
   at: "2026-11-12T00:00:00.000Z",
 });
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "code60-relay-review-index-"));
+  parent = await mkdtemp(join(tmpdir(), "code60-relay-review-index-"));
+  root = join(parent, "index");
   conversationId = randomUUID();
 });
 afterEach(async () => {
   vi.restoreAllMocks();
-  await rm(root, { recursive: true, force: true });
+  await rm(parent, { recursive: true, force: true });
 });
 
 it("pages across full bounded index files without loading the lifetime collection", async () => {

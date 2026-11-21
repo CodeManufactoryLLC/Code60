@@ -89,7 +89,7 @@
   border: 1px solid var(--danger);
   border-left-width: 2px;
   color: var(--danger);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .error-banner::before {
@@ -116,17 +116,15 @@
 }
 
 /* Dialogs: a 48px title bar and footer stay in place while the body scrolls. */
-.setup-dialog {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--surface-edge);
-  border-radius: var(--dialog-radius);
+:where(.setup-dialog) {
   padding: 0 16px;
+}
+
+.setup-dialog {
   width: min(600px, calc(100vw - 32px));
   max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
-  scrollbar-gutter: stable;
-  box-shadow: var(--overlay-shadow);
+  scrollbar-gutter: auto;
 }
 
 .picker-dialog {
@@ -135,7 +133,6 @@
 
 .project-dialog {
   height: min(600px, calc(100dvh - 32px));
-  scrollbar-gutter: stable both-edges;
 }
 
 .project-dialog[open] {
@@ -250,7 +247,7 @@ fieldset {
 fieldset label {
   display: block;
   font-size: var(--text-size, 12px);
-  font-weight: var(--text-weight, 300);
+  font-weight: var(--text-weight, 400);
   margin-bottom: 9px;
 }
 
@@ -440,8 +437,8 @@ label.check-label {
   max-width: calc(100vw - 16px);
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid transparent;
+  background: var(--surface);
+  border: var(--rule) solid var(--border);
   box-shadow: var(--overlay-shadow);
 
   border-radius: var(--ui-radius);
@@ -465,7 +462,7 @@ label.check-label {
   padding: 4px 12px 4px 8px;
   border: 0;
   border-top: 1px solid transparent;
-  background: var(--bg);
+  background: var(--surface);
   text-align: left;
   font: 400 13px var(--font);
   --letter-spacing: normal;
@@ -515,6 +512,37 @@ label.check-label {
   .menu-group
   > [role="menuitem"]:is(:disabled, [aria-disabled="true"]):first-child {
   border-top-width: 0;
+}
+
+/* Adapted Neobrutalism dropdown popup/items; other anchored menus stay unchanged. */
+:is(.actions-menu, .harness-mode-menu).neo-dropdown-menu {
+  min-width: 12rem;
+  padding: 4px;
+  border: 2px solid var(--panel-border);
+  border-radius: var(--navigation-card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.neo-dropdown-menu [role^="menuitem"] {
+  display: flex;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: var(--navigation-card-radius);
+  box-shadow: none;
+  font: var(--button-weight, 600) var(--button-size, 13px) / 1.25 var(--button-font, var(--font));
+  text-transform: var(--button-case, none);
+  --letter-spacing: var(--button-spacing, normal);
+}
+
+.neo-dropdown-menu [role^="menuitem"]:is(:focus, :hover:not(:disabled)) {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--control-border);
+}
+
+.neo-dropdown-menu [role^="menuitem"]:focus-visible {
+  outline: 2px solid var(--primary-text);
+  outline-offset: -4px;
 }
 
 /* Tooltip: inverted, with a muted-yellow top edge and a stem toward its control. */
@@ -573,13 +601,9 @@ label.check-label {
   width: min(640px, calc(100vw - 32px));
   max-height: 76vh;
   padding: 0;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid transparent;
   overflow: hidden;
   scrollbar-gutter: auto;
   flex-direction: column;
-  box-shadow: var(--overlay-shadow);
 }
 
 .command-palette[open] {
@@ -649,7 +673,7 @@ label.check-label {
   gap: 8px;
   border: 0;
   padding: 0 16px 0 12px;
-  background: var(--bg);
+  background: var(--surface);
   font: 400 14px var(--font);
   --letter-spacing: normal;
   text-transform: none;
@@ -726,10 +750,9 @@ label.check-label {
   gap: 10px;
   padding: 10px 6px 12px 12px;
   padding-right: 12px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
-  border: 1px solid transparent;
-  border-left: 3px solid var(--border);
+  border: var(--rule) solid var(--border);
   margin: 0;
   min-width: 0;
   pointer-events: auto;
@@ -917,7 +940,6 @@ label.check-label {
 
 .polling-dialog {
   min-height: min(200px, calc(100dvh - 32px));
-  scrollbar-gutter: stable both-edges;
 }
 
 .polling-dialog[open] {

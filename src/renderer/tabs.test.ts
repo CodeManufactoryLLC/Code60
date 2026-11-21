@@ -30,6 +30,10 @@ describe("page tabs", () => {
         "tables",
         "advanced",
         "experiments",
+        "custom-agents",
+        "assistants",
+        "providers",
+        "provider",
       ],
       active: "chat",
     });
@@ -43,6 +47,14 @@ describe("page tabs", () => {
     expect(updateTabs(project, { type: "select", id: "projects" })).toEqual({
       ...initialTabs,
       active: "projects",
+    });
+  });
+  it("routes provider details separately and clears their identity on exit", () => {
+    const provider = updateTabs(initialTabs, { type: "provider", providerId: "codex" });
+    expect(provider).toEqual({ ...initialTabs, active: "provider", providerId: "codex" });
+    expect(updateTabs(provider, { type: "select", id: "providers" })).toEqual({
+      ...initialTabs,
+      active: "providers",
     });
   });
   it("selects the existing Settings tab without duplicating it", () => {

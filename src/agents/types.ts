@@ -7,7 +7,6 @@ import type {
   StopReason,
   ToolKind,
 } from "../contracts/index.js";
-import type { NativeProcessIdentity } from "../platform/index.js";
 
 export type { StopReason, ToolKind };
 
@@ -95,8 +94,6 @@ export interface AgentSession {
   setMode?(change: ModeChange): Promise<void>;
   /** PID of the agent process, which is also its process group ID. */
   readonly pid: number;
-  /** Native Windows process creation time, owner SID and owned job. Absent on POSIX. */
-  readonly identity?: NativeProcessIdentity;
   /** Resolves when the agent process has exited. */
   readonly exited: Promise<void>;
   /** Starts one turn. Rejects if a turn is already in progress, or if the agent exits or ACP fails. */

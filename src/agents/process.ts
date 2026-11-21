@@ -1,9 +1,5 @@
 import { Readable, Writable } from "node:stream";
-import {
-  DiagnosticTail,
-  type NativeProcessIdentity,
-  spawnOwnedProcess,
-} from "../platform/index.js";
+import { DiagnosticTail, spawnOwnedProcess } from "../platform/index.js";
 
 const STDERR_TAIL_BYTES = 64 * 1024;
 
@@ -14,7 +10,6 @@ export interface ExitInfo {
 
 export interface AgentProcess {
   readonly pid: number;
-  readonly identity?: NativeProcessIdentity;
   readonly input: WritableStream<Uint8Array>;
   readonly output: ReadableStream<Uint8Array>;
   readonly exited: Promise<ExitInfo>;
@@ -69,7 +64,6 @@ export async function spawnAgent(
   child.stdin.on("error", () => {});
   return {
     pid: child.pid,
-    ...(child.identity === undefined ? {} : { identity: child.identity }),
     input: Writable.toWeb(child.stdin) as WritableStream<Uint8Array>,
     output: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
     exited: child.exited,

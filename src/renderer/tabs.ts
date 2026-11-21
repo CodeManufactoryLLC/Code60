@@ -6,6 +6,7 @@ export interface PageTabs {
   open: PageId[];
   active: PageId;
   projectId?: string;
+  providerId?: string;
 }
 
 export const initialTabs: PageTabs = {
@@ -15,9 +16,12 @@ export const initialTabs: PageTabs = {
 
 export type TabAction =
   | { type: "open" | "select" | "close"; id: PageId }
-  | { type: "project"; projectId: string };
+  | { type: "project"; projectId: string }
+  | { type: "provider"; providerId: string };
 
 export function updateTabs(state: PageTabs, action: TabAction): PageTabs {
+  if (action.type === "provider")
+    return { open: state.open, active: "provider", providerId: action.providerId };
   if (action.type === "project")
     return { open: state.open, active: "project", projectId: action.projectId };
   action = { ...action, id: resolvePage(action.id) };

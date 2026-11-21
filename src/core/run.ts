@@ -53,7 +53,6 @@ export interface RunDeps {
   clock: Clock;
   processes: Processes;
   ownerPid?: number;
-  ownerIdentity?: NonNullable<RunRecord["ownerIdentity"]>;
   onEvent(event: RunEvent): void;
   /** Called when view-only state changes without an event, such as a run starting to stop. */
   onChange(): void;
@@ -75,6 +74,18 @@ export interface RunSettings {
   killGraceMs: number;
   decide(kind: ToolKind): PermissionRule;
   prompts: Readonly<PromptTemplates>;
+  /**
+   * Interactive only: saved session-option defaults applied to each newly created ACP session
+   * before its first prompt, model first. Restored sessions keep their own reported options.
+   */
+  initialSettings?: readonly SessionSelection[];
+}
+
+/** One advertised session option value, identified by the harness's own option ID. */
+export interface SessionSelection {
+  configId: string;
+  value: string;
+  name: string;
 }
 
 type CancelCause = "user" | "timeout" | "shutdown";
@@ -111,6 +122,9 @@ function message(error: unknown): string {
   return diagnosticMessage(error);
 }
 
+// A restored run keeps its run ID. Keep pending request IDs unique across its live instances.
+let permissionSequence = 0;
+
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
 export class Run {
   private readonly memory: RunMemory | undefined;
@@ -123,14 +137,17 @@ export class Run {
   private session: AgentSession | undefined;
   private sessionExited = false;
   private modeChanging = false;
+  /** Confirmed explicit session-option choices, reapplied to replacement sessions of this run. */
+  private readonly chosen = new Map<string, SessionSelection>();
+  private chosenModel = false;
   private worktreeCreated = false;
   private turnActive = false;
   private turnTimer: unknown;
   private graceTimer: unknown;
   private cancelCause: CancelCause | undefined;
   private lastOutcome: Outcome | undefined;
+  private waitingFromIdle = false;
   private readonly pending = new Map<string, Pending>();
-  private permissionCount = 0;
   private shutdownRequested = false;
   private forced = false;
   private ending = false;
@@ -219,6 +236,7 @@ export class Run {
       modeChanging: this.modeChanging,
       pending: [...this.pending.values()].map((p) => p.view),
       stopping: this.ending && !this.isFinal(),
+      ...(this.turnActive && this.cancelCause !== undefined ? { cancelling: true } : {}),
     };
   }
 
@@ -383,16 +401,32 @@ export class Run {
       !session?.setMode
     ) {
       throw new RefusedError(
-        "Harness mode can be changed only while the connected session is idle",
+        "Session options can be changed only while the connected session is idle",
       );
     }
     if (!supportsModeChange(this.record.sessionState ?? emptySessionState(), change)) {
-      throw new RefusedError("This harness mode is no longer available");
+      throw new RefusedError("This session option is no longer available");
     }
     this.modeChanging = true;
     this.deps.onChange();
     try {
       await session.setMode(change);
+      const control = session.sessionState?.settings?.controls.find(
+        (item) => item.id === change.configId,
+      );
+      const option = control?.options.find((item) => item.value === control.currentValue);
+      if (control && option && session.sessionState?.settings?.confirmed) {
+        // A model change can invalidate dependent reasoning choices; reapply it first.
+        if (control.category === "model") {
+          this.chosen.clear();
+          this.chosenModel = true;
+        }
+        this.chosen.set(control.id, {
+          configId: control.id,
+          value: option.value,
+          name: option.name,
+        });
+      }
     } finally {
       this.modeChanging = false;
       this.deps.onChange();
@@ -470,7 +504,7 @@ export class Run {
     if (entry === undefined) return false;
     this.pending.delete(id);
     this.emitPermission(entry.view, answer, "user");
-    if (this.pending.size === 0 && this.status === "waiting") void this.setStatus("running");
+    this.permissionSettled();
     entry.resolve(answer);
     return true;
   }
@@ -495,7 +529,9 @@ export class Run {
         break;
       case "running":
       case "waiting":
-        if (!this.cancelTurn("shutdown")) this.startAbort.abort();
+        if (this.status === "waiting" && this.waitingFromIdle)
+          void this.end(this.lastOutcome ?? { status: "finished" });
+        else if (!this.cancelTurn("shutdown")) this.startAbort.abort();
         break;
       default:
         break;
@@ -573,16 +609,113 @@ export class Run {
     }
     clock.clearTimeout(timer);
     await this.installSession(session);
+    await this.applySelections(session);
 
     if (this.shutdownRequested) {
       return this.end({ status: "cancelled", reason: "cancelled before the first prompt" });
     }
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited before the first prompt" });
     if (record.firstPrompt === "") {
       this.lastOutcome = { status: "finished", reason: "no prompt was sent" };
       await this.setStatus("idle", "no prompt yet");
       return;
     }
     await this.runTurn(record.firstPrompt);
+  }
+
+  /** Saved defaults overlaid with this run's explicit choices, in application order. */
+  private selections(): SessionSelection[] {
+    if (this.settings.mode !== "interactive") return [];
+    const merged = new Map<string, SessionSelection>();
+    // Saved reasoning values belong to the saved model; an explicit model replaces them all.
+    for (const item of this.chosenModel ? [] : (this.settings.initialSettings ?? []))
+      merged.set(item.configId, item);
+    for (const [id, item] of this.chosen) merged.set(id, item);
+    return [...merged.values()];
+  }
+
+  /**
+   * Applies saved or explicit session options to a newly created session. Unavailable or refused
+   * values are reported and skipped; the session keeps the connector's own current value.
+   */
+  private async applySelections(
+    session: AgentSession,
+    signal = this.startAbort.signal,
+  ): Promise<void> {
+    const selections = this.selections();
+    if (selections.length === 0) return;
+    const controls = session.sessionState?.settings?.controls;
+    selections.sort(
+      (a, b) =>
+        Number(controls?.find((c) => c.id === b.configId)?.category === "model") -
+        Number(controls?.find((c) => c.id === a.configId)?.category === "model"),
+    );
+    this.modeChanging = true;
+    this.deps.onChange();
+    try {
+      for (const selection of selections) {
+        signal.throwIfAborted();
+        if (this.sessionExited) throw new Error("the agent exited while applying session settings");
+        if (this.session !== session || this.shutdownRequested || this.ending) return;
+        const state = session.sessionState ?? emptySessionState();
+        const control = state.settings?.controls.find((item) => item.id === selection.configId);
+        if (control?.currentValue === selection.value && state.settings?.confirmed) continue;
+        const change = {
+          source: "config" as const,
+          configId: selection.configId,
+          value: selection.value,
+        };
+        if (!session.setMode || !control?.options.some((item) => item.value === selection.value)) {
+          this.emit({
+            type: "note",
+            text: `Saved default "${selection.name}" isn't available; using the connector's current value.`,
+          });
+          continue;
+        }
+        let abort = () => {};
+        try {
+          await Promise.race([
+            session.setMode(change),
+            new Promise<never>((_, reject) => {
+              abort = () => reject(new Error("session settings cancelled"));
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+            }),
+            session.exited.then(() => {
+              throw new Error("the agent exited while applying session settings");
+            }),
+          ]);
+          signal.throwIfAborted();
+          if (this.sessionExited)
+            throw new Error("the agent exited while applying session settings");
+          if (
+            !session.sessionState?.settings?.confirmed ||
+            session.sessionState.settings.controls.find((c) => c.id === selection.configId)
+              ?.currentValue !== selection.value
+          )
+            throw new Error("Session option was not confirmed");
+        } catch (error) {
+          if (signal.aborted) {
+            // A pending setter must not outlive preparation or leave a busy session reusable.
+            await session.stop(this.forced ? 0 : this.settings.killGraceMs);
+            if (this.session === session) this.session = undefined;
+            if (this.shutdownRequested) return;
+            throw error;
+          }
+          if (this.sessionExited) throw error;
+          this.emit({
+            type: "note",
+            text: `Saved default "${selection.name}" could not be confirmed; using the connector's reported value (which may be unconfirmed).`,
+          });
+        } finally {
+          signal.removeEventListener("abort", abort);
+        }
+      }
+    } finally {
+      this.modeChanging = false;
+      this.deps.onChange();
+    }
   }
 
   private async installSession(session: AgentSession): Promise<void> {
@@ -602,16 +735,17 @@ export class Run {
     void session.exited.then(() => {
       if (this.session !== session) return;
       this.sessionExited = true;
-      if (this.status === "idle" && !this.ending) {
+      if (
+        (this.status === "idle" || (this.status === "waiting" && this.waitingFromIdle)) &&
+        !this.ending
+      ) {
         void this.end({ status: "failed", reason: "the agent exited while idle" });
       }
     });
 
     this.record.agentPid = session.pid;
-    if (session.identity === undefined) delete this.record.agentIdentity;
-    else this.record.agentIdentity = session.identity;
-    if (this.deps.ownerIdentity) this.record.ownerIdentity = this.deps.ownerIdentity;
-    else delete this.record.ownerIdentity;
+    delete this.record.agentIdentity;
+    delete this.record.ownerIdentity;
     this.record.agentCommand = this.settings.command;
     this.record.acpSessionId = session.sessionId;
     const commandLine = await this.deps.processes.commandLine(session.pid).catch(() => undefined);
@@ -684,6 +818,8 @@ export class Run {
           ? { status: "cancelled", reason: "cancelled during context handoff" }
           : { status: "failed", reason: "the context handoff session could not start" },
       );
+    if (this.sessionExited)
+      return this.end({ status: "failed", reason: "the agent exited during context handoff" });
     await this.setStatus("idle", "Message not sent.");
   }
 
@@ -718,6 +854,21 @@ export class Run {
     let failure: unknown;
     let memoryUsed: string[] = [];
     try {
+      // Let the host publish the live handoff before a saved option can wait for human approval.
+      if (preserveInterruptedOnFailure) {
+        const abort = new AbortController();
+        this.preparationAbort = abort;
+        try {
+          await this.applySelections(
+            session,
+            AbortSignal.any([abort.signal, this.startAbort.signal]),
+          );
+        } finally {
+          this.preparationAbort = undefined;
+        }
+        if (this.cancelCause || this.shutdownRequested)
+          return await this.notSent(statusSaved, "Cancelled before this message was sent.", text);
+      }
       if (this.memory) {
         const abort = new AbortController();
         this.preparationAbort = abort;
@@ -770,6 +921,7 @@ export class Run {
                 signal,
               );
               await this.installSession(session);
+              await this.applySelections(session, signal);
             } catch (error) {
               return await this.notSent(
                 statusSaved,
@@ -885,23 +1037,27 @@ export class Run {
     if (signal.aborted || this.cancelCause !== undefined || this.ending) {
       return Promise.resolve("deny");
     }
-    this.permissionCount += 1;
-    const id = `${this.id}#${this.permissionCount}`;
+    const id = `${this.id}#${++permissionSequence}`;
     return new Promise((resolve) => {
+      if (!this.pending.size) this.waitingFromIdle = this.status === "idle";
       this.pending.set(id, { view: { id, runId: this.id, ...request }, resolve });
       signal.addEventListener(
         "abort",
         () => {
           if (!this.pending.delete(id)) return;
           resolve("deny");
-          if (this.pending.size === 0 && this.status === "waiting" && !this.ending) {
-            void this.setStatus("running");
-          }
+          this.permissionSettled();
         },
         { once: true },
       );
       void this.setStatus("waiting");
     });
+  }
+
+  private permissionSettled(): void {
+    if (!this.pending.size && this.status === "waiting" && !this.ending)
+      void this.setStatus(this.waitingFromIdle ? "idle" : "running");
+    else this.deps.onChange();
   }
 
   private withdrawPending(): void {
@@ -970,6 +1126,13 @@ export class Run {
     timing?: { turn: number; completedAt: string },
   ): Promise<void> {
     if (reason !== undefined) reason = diagnosticText(reason);
+    if (status === "idle") {
+      this.cancelCause = undefined;
+      if (this.pending.size) {
+        this.waitingFromIdle = true;
+        status = "waiting";
+      }
+    }
     this.record.status = status;
     if (reason === undefined) delete this.record.reason;
     else this.record.reason = reason;

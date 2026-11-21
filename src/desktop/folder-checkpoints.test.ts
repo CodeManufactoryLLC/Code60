@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TaskLoop } from "../core/index.js";
+import { privateDirectory } from "../platform/index.js";
 import { FolderCheckpoints } from "./folder-checkpoints.js";
 
 let root: string;
@@ -32,7 +33,7 @@ afterEach(async () => {
 });
 it("excludes Git and private state, preserves binary bytes and permissions, and charges before writing", async () => {
   for (const name of [".git", ".code60_workspace", "state"]) {
-    await mkdir(join(project, name));
+    await privateDirectory(join(project, name));
     await writeFile(join(project, name, "private.json"), "private");
   }
   const file = join(project, "binary");
@@ -54,10 +55,15 @@ it("excludes Git and private state, preserves binary bytes and permissions, and 
     path: "binary",
     before: {
       data: Buffer.from([0, 255, 1, 2]).toString("base64"),
-      mode: "100755",
-      permissions: 0o751,
+      // Windows exposes writable regular files without POSIX executable bits.
+      mode: process.platform === "win32" ? "100644" : "100755",
+      permissions: process.platform === "win32" ? 0o666 : 0o751,
     },
-    after: { data: Buffer.from("modified").toString("base64"), mode: "100644", permissions: 0o600 },
+    after: {
+      data: Buffer.from("modified").toString("base64"),
+      mode: "100644",
+      permissions: process.platform === "win32" ? 0o666 : 0o600,
+    },
   });
   expect(await readFile(join(project, "state", "private.json"), "utf8")).toBe("private");
   expect(() => folders.loop(join(project, "state"))).toThrow("private state");
@@ -70,7 +76,12 @@ it("refuses links and raw-byte or storage overflow before reserving a snapshot",
   await expect(folders.capture(project, 1_048_576, 1, reserve)).rejects.toThrow("32 MiB");
   await expect(folders.capture(project, 1, 1024, reserve)).rejects.toThrow("storage limit");
   expect(reserve).not.toHaveBeenCalled();
-  await symlink(join(project, "file"), join(project, "symbolic"));
+  // Directory junctions need no symlink privilege on non-elevated Windows.
+  await symlink(
+    process.platform === "win32" ? root : join(project, "file"),
+    join(project, "symbolic"),
+    "file",
+  );
   await expect(folders.capture(project, 1_048_576, 1024, reserve)).rejects.toThrow();
   await rm(join(project, "symbolic"));
   await link(join(project, "file"), join(project, "hard"));

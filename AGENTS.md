@@ -1,14 +1,14 @@
 # Agent Instructions
 
 This project is a Node.js application for orchestrating agents, with an
-Electron and React desktop app and a headless command-line interface. Keep
+Electron and React desktop app with an internal background scheduler. Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
 ## Architecture and Module Rules
 
 - Read `ARCHITECTURE.md` before changing behavior. It defines the modules
-  (`cli`, `desktop`, `bridge`, `renderer`, `core`, `automation`, `agents`, `git`, `contracts`, `platform`), their
+  (`desktop`, `bridge`, `renderer`, `core`, `automation`, `agents`, `git`, `contracts`, `platform`), their
   dependency rules, and the non-goals.
 - Each `src/<module>/AGENTS.md` adds rules for that module. Follow them when
   changing its code.
@@ -25,25 +25,22 @@ environments.
   coverage-enabled test suite with versioned four-metric gates. Run it before
   every commit. Never lower coverage floors or broaden Knip exclusions to hide
   findings; document explicitly reviewed exceptions. CI for PRs and pushes to main runs only on
-  Linux with Node.js 22.12 and 24. Windows x64 and macOS checks run with Node.js 24 only
+  Linux with Node.js 22.12 and 24. macOS checks run with Node.js 24 only
   in the manually requested release workflow.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
   JSON, and workflow files. Markdown is not auto-formatted.
 - `npm run build` compiles `src` to `dist` and builds the renderer with Vite.
-  Run the CLI locally with `node dist/cli/main.js`.
+  The scheduler uses its fixed internal service entrypoint.
 - `npm run dev` builds and starts the desktop app, rebuilding and restarting it
   on changes. `npm start` starts the built app.
 - Run desktop (Electron/Playwright, `test/desktop.e2e.ts`) tests locally only in
   the Linux container: `npm run test:desktop:container` (add
   `-- --grep "<name>"` to narrow). Do not run `npm run test:desktop` on the
   host; it opens windows on the user's machine. CI and native-platform
-  validation (macOS, Windows, packaged and installer tests) are the only places
+  validation (macOS, packaged and installer tests) are the only places
   it runs directly. If Docker is unavailable, stop and report it rather than
   falling back to the host. Unit tests and `npm run check` run on the host;
   `npm run check` does not run the desktop tests.
-- `npm run install:global` installs dependencies, builds, and links the
-  `code60` command globally with `npm link`. `npm run uninstall:global`
-  removes the link.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
   `ARCHITECTURE.md`; update it only together with that document.
@@ -74,8 +71,7 @@ environments.
   an interactive UI.
 - Make side effects explicit. Inject or isolate filesystem, process, network,
   clock, and agent/tool dependencies where practical so behavior is testable.
-- Preserve existing CLI flags, defaults, output formats, and exit-code behavior
-  unless the change explicitly requires a compatibility change.
+- Preserve desktop and internal scheduler defaults and stored record formats unless the change explicitly requires compatibility changes.
 - Handle orchestration concurrency deliberately: define cancellation, timeout,
   retry, and partial-failure behavior rather than silently dropping errors or
   leaving work running.
@@ -83,11 +79,11 @@ environments.
   Validate structured data at boundaries and do not execute generated shell
   commands or code without an explicit, narrowly scoped user action.
 
-## CLI and Desktop Behavior
+## Desktop and Scheduler Behavior
 
 - Keep standard output suitable for command results and machine-readable
   formats. Send diagnostics, progress, and errors to standard error when that
-  preserves the CLI's output contract.
+  preserves machine-readable internal output.
 - Provide useful non-interactive behavior when input or output is not a TTY.
   Do not prompt indefinitely in CI, scripts, or when standard input is closed.
 - Keep the desktop app responsive during long-running work. Surface progress and
@@ -114,7 +110,7 @@ environments.
   other processes.
 - Desktop diagnostics use only strict typed metadata and fixed messages through
   the optional sink. Never capture raw errors, prompts, transcripts, payloads,
-  paths or command/environment values. The CLI must not enable capture.
+  paths or command/environment values. The scheduler must not enable desktop capture.
 - Diagnostic retention (seven days / 20 MiB) applies only to private desktop
   JSONL segments, never existing transcripts, run records or databases.
 - Write files only to intended locations, and avoid overwriting user data
@@ -160,7 +156,7 @@ environments.
 
 - The app follows semantic versioning, and `package.json` is the only place
   the version is set. The desktop window title shows it.
-- Bump major for breaking changes to CLI flags, output, exit codes, the config
+- Bump major for breaking changes to supported interfaces, platforms, the config
   file, or run records; minor for new features; patch for fixes.
 - Releases are bumped by hand on a release-preparation branch with
   `npm version <major|minor|patch> --no-git-tag-version`. Commit the package and
@@ -172,6 +168,6 @@ environments.
 
 ## Documentation
 
-- Update CLI help text and relevant documentation when changing user-visible
+- Update relevant desktop and scheduler documentation when changing user-visible
   commands, options, defaults, output, or key bindings.
-- Keep examples safe to copy and consistent with the actual CLI behavior.
+- Keep examples safe to copy and consistent with the actual product behavior.

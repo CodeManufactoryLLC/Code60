@@ -40,22 +40,19 @@ describe("scoped file browsing", () => {
     expect(() => parseFileContext(context(null, Array(65).fill("")))).toThrow();
     expect(() => parseFileContext(context(null, ["a"]))).toThrow();
   });
-  it.skipIf(process.platform === "win32")(
-    "does not follow file or directory symlinks or block on special files",
-    async () => {
-      await writeFile(join(root, "secret"), "secret");
-      await symlink(join(root, "secret"), join(root, "link"));
-      await symlink(root, join(root, "dir-link"));
-      execFileSync("mkfifo", [join(root, "fifo")]);
-      for (const path of ["link", "dir-link/secret", "fifo"]) {
-        const result = await readFiles(context(path), () => true);
-        expect(result.preview?.text).toBeNull();
-        expect(result.preview?.error).toMatch(/links|regular files/);
-      }
-      const result = await readFiles(context(null, ["", "dir-link"]), () => true);
-      expect(result.directories[1]?.error).toMatch(/links/);
-    },
-  );
+  it("does not follow file or directory symlinks or block on special files", async () => {
+    await writeFile(join(root, "secret"), "secret");
+    await symlink(join(root, "secret"), join(root, "link"));
+    await symlink(root, join(root, "dir-link"));
+    execFileSync("mkfifo", [join(root, "fifo")]);
+    for (const path of ["link", "dir-link/secret", "fifo"]) {
+      const result = await readFiles(context(path), () => true);
+      expect(result.preview?.text).toBeNull();
+      expect(result.preview?.error).toMatch(/links|regular files/);
+    }
+    const result = await readFiles(context(null, ["", "dir-link"]), () => true);
+    expect(result.directories[1]?.error).toMatch(/links/);
+  });
   it("bounds previews and reports binary, encoding, and missing-file errors", async () => {
     await writeFile(join(root, "large"), Buffer.alloc(previewByteLimit + 1, 65));
     await writeFile(join(root, "binary"), Buffer.from([0, 1]));
@@ -71,47 +68,28 @@ describe("scoped file browsing", () => {
       expect(result.preview?.error).toMatch(error);
     }
   });
-  it(
-    "reports partial directory failures and caps large directory listings",
-    async () => {
-      for (let batch = 0; batch < 21; batch++) {
-        await Promise.all(
-          Array.from({ length: 100 }, (_, index) =>
-            writeFile(join(root, `file-${batch}-${index}`), ""),
-          ),
-        );
-      }
-      const result = await readFiles(context(null, ["", "missing"]), () => true);
-      expect(result.directories[0]?.entries).toHaveLength(2000);
-      expect(result.directories[0]?.truncated).toBe(true);
-      expect(result.directories[1]?.error).toMatch(/ENOENT/);
-    },
-    // Creating 2,100 real files includes Windows runner disk/antivirus latency.
-    process.platform === "win32" ? 30_000 : 5_000,
-  );
+  it("reports partial directory failures and caps large directory listings", async () => {
+    for (let batch = 0; batch < 21; batch++) {
+      await Promise.all(
+        Array.from({ length: 100 }, (_, index) =>
+          writeFile(join(root, `file-${batch}-${index}`), ""),
+        ),
+      );
+    }
+    const result = await readFiles(context(null, ["", "missing"]), () => true);
+    expect(result.directories[0]?.entries).toHaveLength(2000);
+    expect(result.directories[0]?.truncated).toBe(true);
+    expect(result.directories[1]?.error).toMatch(/ENOENT/);
+  }, 5_000); // Creating 2,100 real files includes Windows runner disk/antivirus latency.
   it("refuses a root that has been replaced by a symbolic link", async () => {
     const target = join(root, "target");
     const link = join(root, "link");
     await mkdir(target);
-    await symlink(target, link, process.platform === "win32" ? "junction" : "dir");
+    await symlink(target, link, "dir");
     await expect(readFiles({ ...context(), root: link }, () => true)).rejects.toThrow(
       /symbolic link/,
     );
   });
-
-  it.runIf(process.platform === "win32")(
-    "rejects directory junctions without requiring symlink privileges",
-    async () => {
-      const target = join(root, "outside");
-      await mkdir(target);
-      await writeFile(join(target, "secret"), "not previewable");
-      await symlink(target, join(root, "junction"), "junction");
-      const result = await readFiles(context("junction/secret", ["", "junction"]), () => true);
-      expect(result.preview?.text).toBeNull();
-      expect(result.preview?.error).toMatch(/Reparse|links/);
-      expect(result.directories[1]?.error).toMatch(/Reparse|links/);
-    },
-  );
 
   it("stops between reads when the context is no longer current", async () => {
     const result = await readFiles(context("missing"), () => false);

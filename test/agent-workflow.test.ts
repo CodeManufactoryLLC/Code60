@@ -26,6 +26,7 @@ it.each(["readable", "legacy"] as const)(
     const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
     git("init", "-q", "-b", "main");
+    git("config", "core.autocrlf", "false");
     await writeFile(join(repo, "result.txt"), "original\n");
     await writeFile(join(repo, "notes.txt"), "committed notes\n");
     git("add", ".");
@@ -149,14 +150,13 @@ it.each(["readable", "legacy"] as const)(
       expect(service.snapshot().plans).toHaveLength(0);
     } finally {
       await service.shutdown(true);
-      const evidence = await Promise.all(
-        (await readdir(processLog)).map(
-          async (file) =>
-            JSON.parse(await readFile(join(processLog, file), "utf8")) as { pid: number },
-        ),
-      );
+      // Shutdown can stop a starting helper after creating its PID entry but
+      // before writing the JSON body. Its filename still identifies that process.
+      const evidence = await readdir(processLog);
       expect(evidence.length).toBeGreaterThanOrEqual(2);
-      for (const { pid } of evidence) {
+      for (const file of evidence) {
+        const pid = Number(/^([1-9]\d*)-[0-9a-f-]{36}\.json$/.exec(file)?.[1]);
+        expect(pid).toBeGreaterThan(0);
         expect(() => process.kill(pid, 0)).toThrow();
       }
       await rm(root, { recursive: true, force: true });

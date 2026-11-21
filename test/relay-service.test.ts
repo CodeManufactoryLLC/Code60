@@ -21,7 +21,11 @@ import { MemoryService } from "../src/desktop/memory-service.js";
 import { RelayService } from "../src/desktop/relay-service.js";
 import * as storage from "../src/desktop/relay-storage.js";
 import { RelayStore } from "../src/desktop/relay-store.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
+
+// Native helper launches make real private writes/stream-draining slower than
+// POSIX. The Windows log already has passing lifecycle cases taking 4–5 s.
 
 let root: string;
 let agents: FakeAgents;
@@ -81,8 +85,82 @@ async function connect() {
     ...DEFAULT_CONFIG,
     agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
   });
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"), { timeout: 5000 });
 }
+it("does not advertise a disconnected member from a frozen human task", async () => {
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: {
+      claude: required(DEFAULT_CONFIG.agents.claude),
+      codex: required(DEFAULT_CONFIG.agents.codex),
+    },
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Observe providers" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  expect((await tool("code60_get_context")).providers).toEqual(["claude", "codex"]);
+  await relay.sync("claude", {
+    ...DEFAULT_CONFIG,
+    agents: { claude: required(DEFAULT_CONFIG.agents.claude) },
+  });
+  expect(relay.snapshot().run?.id).toBe(id);
+  expect((await tool("code60_get_context")).providers).toEqual(["claude"]);
+});
+it("denies browser authority during ACP startup and after slow turn cancellation", async () => {
+  let release!: () => void;
+  agents.startGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const connecting = connect();
+  try {
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(1));
+    await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+      "active chat request",
+    );
+  } finally {
+    release();
+  }
+  await connecting;
+  agents.script = () => "hang";
+  agents.sessions[0]!.onCancel = "ignore";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "headless" });
+  await relay.action({ type: "cancel", id });
+  await expect(tool("code60_browser", { action: "set-mode", mode: "visible" })).rejects.toThrow(
+    "active chat request",
+  );
+});
+it("gates browser controls to active requests, isolates modes and resets them on connection restart", async () => {
+  await connect();
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  agents.script = () => "hang";
+  const id = required(relay.snapshot().run).id;
+  await relay.action({ type: "send", id, text: "Use a visible browser" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "set-mode", mode: "visible" })).toMatchObject({
+    mode: "visible",
+    connected: false,
+  });
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({ mode: "visible" });
+  await relay.action({ type: "cancel", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await expect(tool("code60_browser", { action: "status" })).rejects.toThrow("active chat request");
+  await relay.action({ type: "restart", id });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  await relay.action({
+    type: "send",
+    id: required(relay.snapshot().run).id,
+    text: "Report browser mode",
+  });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("running"));
+  expect(await tool("code60_browser", { action: "status" })).toMatchObject({
+    mode: "headless",
+    connected: false,
+  });
+});
 it("rewinds a zero-edit request, retires its provider, and sends only surviving context after reload", async () => {
   const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
   relay = create(undefined, vi.fn(), confirm);
@@ -178,7 +256,7 @@ it("does not await a worker update queued behind the native Undo confirmation", 
     }
     for (const entry of wrapped) running.add(entry);
     accept(true);
-    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }));
+    await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound" }), { timeout: 5000 });
   } finally {
     accept(true);
     releaseCleanup();
@@ -239,7 +317,6 @@ it("rewinds worker memory only for the request's Relay generation", async () => 
 it.each(["removed", "replaced", "symlink"])(
   "refuses a %s workspace on in-process Retry",
   async (kind) => {
-    if (kind === "symlink" && process.platform === "win32") return;
     await connect();
     const workspace = required(relay.snapshot().directory);
     await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -260,7 +337,7 @@ it("revalidates workspace identity between preparation and agent launch", async 
     replace = false;
     const workspace = required(relay.snapshot().directory);
     await rename(workspace, `${workspace}-saved`);
-    await mkdir(workspace, { mode: 0o700 });
+    await privateDirectory(workspace);
   });
   await connect();
   await relay.action({ type: "stop", id: required(relay.snapshot().run).id });
@@ -796,6 +873,9 @@ it("refreshes verified providers without reconnecting and freezes each task's pr
   expect(worker.provider).toBe("codex");
   if (typeof worker.runId !== "string") throw new Error("Dispatch must return a run ID");
   const workerId = worker.runId;
+  // A newly constructed session is also inactive while native preparation is
+  // pending. Wait for the first completed prompt, not that pre-launch state.
+  await vi.waitFor(() => expect(agents.sessions[1]?.prompts).toHaveLength(1), { timeout: 5000 });
   await vi.waitFor(() => expect(agents.sessions[1]?.turnActive).toBe(false));
   await relay.action({ type: "cancel", id });
   await relay.sync("claude", {
@@ -987,26 +1067,23 @@ it("evicts only above one million serialized characters and resets the budget on
   ).toBe(true);
 });
 
-it.skipIf(process.platform === "win32")(
-  "checkpoints live requests when history permissions change without weakening journal reads",
-  async () => {
-    await connect();
-    const id = required(relay.snapshot().run).id;
-    const journal = join(root, "state", "code60", "relay", "history.frames");
-    await chmod(journal, 0o400);
-    try {
-      await relay.action({ type: "send", id, text: "Continue with unavailable history" });
-      await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
-      await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-      await relay.action({ type: "send", id, text: "Another checkpointed request" });
-      await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
-      expect(relay.snapshot().checkpoint).toBeDefined();
-      expect(relay.snapshot().error).toBeNull();
-    } finally {
-      await chmod(journal, 0o600);
-    }
-  },
-);
+it("checkpoints live requests when history permissions change without weakening journal reads", async () => {
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  const journal = join(root, "state", "code60", "relay", "history.frames");
+  await chmod(journal, 0o400);
+  try {
+    await relay.action({ type: "send", id, text: "Continue with unavailable history" });
+    await vi.waitFor(() => expect(relay.snapshot().historySaving).toBe("unavailable"));
+    await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+    await relay.action({ type: "send", id, text: "Another checkpointed request" });
+    await vi.waitFor(() => expect(relay.snapshot().run?.turns).toBe(2));
+    expect(relay.snapshot().checkpoint).toBeDefined();
+    expect(relay.snapshot().error).toBeNull();
+  } finally {
+    await chmod(journal, 0o600);
+  }
+});
 
 it.each(["write", "sync"] as const)(
   "keeps Send and worker delivery operational after a %s failure and saves again after Retry",

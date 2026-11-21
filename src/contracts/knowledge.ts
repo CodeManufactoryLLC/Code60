@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BUILTIN_COMMANDS } from "./commands.js";
 import { pages, settingsSections } from "./navigation.js";
 
 z.config({ jitless: true });
@@ -228,6 +229,16 @@ const feature = (
 });
 export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
+    "navigation-history",
+    "Back and Forward",
+    "Return to visited pages, Settings sections, project and provider homes, and specific chats.",
+    "Title bar → Back / Forward, beside the navigation sidebar toggle",
+    "none",
+    "human-only",
+    "Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.",
+    "No confirmation; navigation only.",
+  ),
+  feature(
     "memory-recall",
     "Memory Recall",
     "Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.",
@@ -241,20 +252,39 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "relay",
     "Relay",
     "Application-wide orchestration across explicit targets.",
-    "Sidebar → Relay",
+    "Sidebar → Assistants → Relay (also available from Home)",
     "provider",
     "existing-tools",
     "Requires explicit target and direct/worktree mode; selection and history grant no authority.",
   ),
   feature(
+    "assistants",
+    "Assistants",
+    "Open Relay or Custom Assistants from two navigation cards on the Assistants page.",
+    "Sidebar → Assistants heading (or command palette → Assistants)",
+    "none",
+    "human-only",
+    "Available without a database. Opening this page does not connect a provider or start work. The heading navigates independently of the disclosure chevron; Relay availability follows the existing application conversation.",
+  ),
+  feature(
+    "custom-agents",
+    "Custom Assistants",
+    "Create application-wide assistants with special instructions and one persistent Relay-style conversation each.",
+    "Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; Archived → card → More actions → Restore",
+    "none",
+    "human-only",
+    "Up to 64 assistants, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop the assistant and its workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.",
+    "Archiving confirms natively, stops only the assistant and preserves history.",
+  ),
+  feature(
     "projects",
     "Projects",
-    "Retain independent project workspaces and conversations.",
-    "Projects → New Project; project home → New Session; sidebar add controls remain available",
+    "Retain independent project workspaces and conversations. New Session starts a project-bound chat.",
+    "Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)",
     "database",
     "read",
-    "Opening or selecting a project is a human action; opening never initializes Git. Closing the last project chat returns to its home without a replacement. New Session explicitly creates a chat.",
-    "The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged.",
+    "Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.",
+    "The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
   ),
   feature(
     "workers",
@@ -264,6 +294,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "capacity",
     "existing-tools",
     "Project workers require Git isolation; idle workers consume capacity.",
+  ),
+  feature(
+    "browser",
+    "Browser automation",
+    "Use Headless, Visible or Existing Browser by stating a preference in chat.",
+    "Relay, Custom Assistant or project chat → ask for browser automation; code60_browser",
+    "provider",
+    "existing-tools",
+    "Default Headless. Each live conversation owns its mode and browser connection; no saved setting. status/set-mode never launch processes. list-tools/call lazily run pinned Playwright MCP through Node.js/npm; Chrome must be installed. Existing Browser requires the Playwright Chrome extension and connection approval. Switching modes closes the old connection and loses isolated state; errors never fall back. Calls are serialized, bounded to 100 seconds, and cancellation/Stop/Undo/provider replacement/shutdown close owned processes. External website changes are not undone by message Undo. Browser tools are unavailable to workers, setup probes, helpers and the scheduler. User-configured MCP servers stay independent. Only product-allowed browser tools; no host-code, install, upload or WebMCP tools. Private npm context; 32 MiB temporary automatic artifacts, explicit outputs directly in the owning conversation workspace. Only dispatched turns have browser authority. No native desktop control.",
+    "Existing Browser uses the extension's connection approval; Code60 does not bypass it or provide an extension token.",
   ),
   feature(
     "plans",
@@ -306,11 +346,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "commands",
     "Commands",
-    "Use bundled or saved reusable prompts with a leading $name.",
+    `Use bundled or saved reusable prompts with a leading $name. Bundled commands: ${BUILTIN_COMMANDS.map((command) => `$${command.name}: ${command.description}`).join(" ")}`,
     "Apps → Command Builder; project composer $ command picker",
     "database",
     "existing-tools",
-    "Saved names override bundled names; /name is plain text, not a command. Relay has no command creation tool; reading never executes.",
+    "Saved names override bundled names; /name is plain text, not a command. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.",
   ),
   feature(
     "tactics",
@@ -340,13 +380,33 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Saved settings are not live provider health.",
   ),
   feature(
+    "orchestration-permissions",
+    "Code60 auto-approval",
+    "Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.",
+    "Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)",
+    "none",
+    "human-only",
+    "Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.",
+    "When off, choose Allow once or Deny in the requesting conversation. The footer approval count opens a waiting conversation, including archived project chats with a pending request.",
+  ),
+  feature(
     "providers",
-    "Agents",
-    "Verify and choose coding-agent providers.",
-    "Settings → Agents",
+    "Providers",
+    "Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.",
+    "Providers → provider details",
     "none",
     "read",
-    "Configured does not mean detected, verified, or connected. No automatic installation.",
+    "Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped desktop agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.",
+  ),
+  feature(
+    "model-settings",
+    "Model and reasoning",
+    "Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.",
+    "Chat or worker composer → Model; Providers → provider details → Default models to clear",
+    "provider",
+    "human-only",
+    "Idle connected sessions only; choices depend on the connector. Busy: Available after this turn; ended: Last reported; timeout: Model unconfirmed. Defaults apply only to new sessions, model first; unavailable values produce notes, never substitutes. Orchestrator covers Relay, project chats and Custom Assistants. Workers do not follow parent changes. No changes to helpers, automation or resumed sessions.",
+    "Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.",
   ),
   feature(
     "memory",
@@ -368,22 +428,22 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   ),
   feature(
     "automations",
-    "Automations",
-    "Run consented local schedules in an independent service.",
-    "Apps → Automation Studio",
+    "Scheduled Jobs",
+    "Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. Actions offers New scheduled job in an inline editor and Refresh; Execution history remains a table.",
+    "Apps → Scheduled Jobs",
     "none",
     "human-only",
-    "Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.",
+    "Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.",
     "Human installation and schedule consent.",
   ),
   feature(
     "system-manager",
     "System Manager",
-    "Install, repair, start, stop or uninstall the background automation service.",
+    "Manage the macOS/Linux Scheduling Service through System Manager. Status checks run automatically every two seconds after a completed read while the page and window are visible. Verified status distinguishes Not installed, Stopped and Running, with Install, Start or Stop as the main action. Stop pauses jobs and cancels active scheduled work before stopping the service; there is no separate pause-and-cancel button. Jobs paused is separate from runtime status; Resume jobs remains available for existing paused jobs, and Repair and Uninstall remain in Service options. No public Code60 CLI is available.",
     "Apps → System Manager",
     "none",
     "human-only",
-    "Awareness never installs, probes or controls the service.",
+    "Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh remains available. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.",
     "Human service consent; native confirmation for service controls.",
   ),
   feature(
@@ -398,16 +458,16 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "settings",
     "Settings",
-    "Change appearance, text, polling and application options.",
-    "Sidebar → Settings",
+    "Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include left sidebar background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.",
+    "Sidebar → Settings; Appearance → Left sidebar",
     "none",
     "human-only",
-    "Only explicitly allowlisted values are included in awareness.",
+    "Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.",
   ),
   feature(
     "updates",
     "Updates",
-    "Check, download and install platform releases.",
+    "Check, download and install macOS arm64 and Linux x64 desktop releases.",
     "Settings → Updates",
     "runtime",
     "human-only",
@@ -450,11 +510,12 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "search",
     "Search",
-    "Search saved project evidence, with an optional cited overview.",
+    "Search all projects saved in the connected database, open or closed, with an optional cited overview.",
     "Sidebar → Search",
     "database",
     "human-only",
-    "Overview helpers run with denied permissions and no gateway; agents cannot request them.",
+    "Search needs no selected project. Includes project identity, saved project sessions/transcripts and bounded documentation/source evidence; excludes other databases, Relay and Custom Assistant histories. Results have project provenance and Load more pages of 100. Submitted results stay stable across project/page selection; new projects enter the next search. Missing/corrupt sources show partial results. Overview helpers use captured evidence, denied permissions and no gateway; failures preserve literal results. Agents cannot request Search.",
+    "Opening a closed project source asks the native Open Project confirmation. Archived conversations remain read-only.",
   ),
   feature(
     "logs",
@@ -469,11 +530,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "activity",
     "Activity display",
-    "Show the orchestrator's current step beside the transcript.",
-    "Chat transcript activity line",
+    "Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.",
+    "Chat transcript activity line and left navigation names",
     "runtime",
     "existing-tools",
-    "Presentation only; reports never change work or permissions.",
+    "Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.",
   ),
   feature(
     "knowledge",
@@ -482,14 +543,18 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Relay/project chat → read-only Code60 tools",
     "none",
     "read",
-    "No new action authority, workers, CLI, drafts, transcripts, diagnostic logs or credentials.",
+    "No new action authority, workers, drafts, transcripts, diagnostic logs or credentials.",
   ),
 ];
 export const PAGE_CAPABILITIES = {
+  "custom-agents": "custom-agents",
   home: "knowledge",
+  assistants: "assistants",
   apps: "settings",
   projects: "projects",
   project: "projects",
+  providers: "providers",
+  provider: "providers",
   chat: "projects",
   tables: "data",
   advanced: "settings",
@@ -515,7 +580,6 @@ export const PAGE_CAPABILITIES = {
 } as const satisfies Record<(typeof pages)[number]["id"], string>;
 
 export const SETTINGS_CAPABILITIES = {
-  agents: "providers",
   memory: "memory",
   appearance: "settings",
   "table-defaults": "settings",
@@ -527,6 +591,7 @@ export const SETTINGS_CAPABILITIES = {
 
 /** Every agent-visible tool belongs to exactly one capability. */
 export const TOOL_CAPABILITIES: Record<string, string> = {
+  code60_browser: "browser",
   code60_get_capabilities: "knowledge",
   code60_get_app_state: "knowledge",
   code60_list_customizations: "knowledge",

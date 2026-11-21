@@ -11,6 +11,7 @@ import {
   DEFAULT_PROMPT_TEMPLATES,
   type DetailFrame,
   type DetailRequest,
+  type ModelDefaultsRecord,
   type Plan,
   type PollSettingsPatch,
   type ProjectRequestIdentity,
@@ -32,12 +33,13 @@ import type {
 } from "../src/desktop/conversation-coordinator.js";
 import type { DesktopPreferences } from "../src/desktop/preferences.js";
 import { ProjectSessionStore } from "../src/desktop/project-session.js";
-import type { ProjectDatabase } from "../src/desktop/projects.js";
+import { type ProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
 import type { RagExecutor } from "../src/desktop/rag-service.js";
 import { RagStore } from "../src/desktop/rag-store.js";
 import type { RagConversation } from "../src/desktop/rag-worker.js";
 import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
+import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
@@ -51,6 +53,7 @@ let tick = 0;
 let stored: string | undefined;
 let preferencesFail = false;
 let orchestrationProvider: string | null = null;
+let modelDefaults: ModelDefaultsRecord = { version: 1, providers: {} };
 let listGate: (() => Promise<void>) | undefined;
 let ragSources: RagConversation[];
 let ragWaitForAbort = false;
@@ -92,6 +95,7 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   let open = true;
   return {
     path,
+    all: () => [...shared.entries].map(([path, openedAt]) => ({ path, openedAt })),
     list: () => {
       if (!open) throw new Error("closed");
       return [...shared.entries]
@@ -173,6 +177,10 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
   };
 });
 const preferences: DesktopPreferences = {
+  modelDefaults: async () => modelDefaults,
+  setModelDefaults: async (record) => {
+    modelDefaults = structuredClone(record);
+  },
   agentSetup: async () =>
     orchestrationProvider
       ? verifiedAgents(
@@ -225,7 +233,9 @@ const controllerDeps = (): CoreDeps => {
 };
 
 beforeEach(async () => {
-  directory = await fs.mkdtemp(join(tmpdir(), "code60-desktop-"));
+  // Project chat roots include a SHA-256 key, UUID and atomic-write suffix.
+  // Keep those generated paths below the Windows helper's 248-character limit.
+  directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
   agents = new FakeAgents();
   git = new FakeGit();
   git.repoInfo = async () => ({ topLevel: directory, commonDir: join(directory, ".git") });
@@ -234,6 +244,7 @@ beforeEach(async () => {
   stored = undefined;
   preferencesFail = false;
   orchestrationProvider = null;
+  modelDefaults = { version: 1, providers: {} };
   listGate = undefined;
   ragSources = [];
   ragWaitForAbort = false;
@@ -261,7 +272,78 @@ afterEach(async () => {
   await fs.rm(directory, { recursive: true, force: true });
 });
 
-describe("database-wide RAG discovery", () => {
+it("saves main-owned confirmed model defaults by role, applies only to new sessions, and clears independently", async () => {
+  const startAgent = agents.start.bind(agents);
+  agents.start = async (spec, signal) => {
+    const session = await startAgent(spec, signal);
+    const settings = {
+      confirmed: true,
+      reportedAt: "2026-11-16T00:00:00.000Z",
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [
+            { value: "m1", name: "One" },
+            { value: "m2", name: "Two" },
+          ],
+        },
+      ],
+    };
+    const state = { model: null, modes: null, usage: null, settings };
+    return Object.assign(session, {
+      sessionState: state,
+      setMode: async (change: { configId: string; value: string }) => {
+        const control = settings.controls.find((c) => c.id === change.configId);
+        if (control) control.currentValue = change.value;
+        agents.sessions
+          .find((s) => s.sessionId === session.sessionId)
+          ?.update({ type: "sessionState", state: structuredClone(state) });
+      },
+    });
+  };
+  await setProvider("claude");
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  const chatId = controller.snapshot().chat.run?.id as string;
+  await controller.orchestrationChatAction({
+    type: "set-mode",
+    id: chatId,
+    change: { source: "config", configId: "model", value: "m2" },
+  });
+  await controller.orchestrationChatAction({ type: "save-model-default", id: chatId });
+  expect(modelDefaults.providers.claude?.orchestrator).toEqual([
+    { configId: "model", value: "m2", name: "Two" },
+  ]);
+  const workerId = await start();
+  expect(
+    controller.snapshot().runs.find((r) => r.record.id === workerId)?.view?.sessionState?.settings
+      ?.controls[0]?.currentValue,
+  ).toBe("m1");
+  await controller.action({ type: "save-model-default", id: workerId });
+  expect(modelDefaults.providers.claude?.worker?.[0]?.value).toBe("m1");
+  await controller.orchestrationChatAction({ type: "new" });
+  await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await controller.modelDefault({ type: "clear", provider: "claude", role: "orchestrator" });
+  expect(controller.snapshot().modelDefaults?.providers.claude?.orchestrator).toBeUndefined();
+  expect(modelDefaults.providers.claude?.worker).toHaveLength(1);
+  expect(controller.snapshot().chat.run?.sessionState?.settings?.controls[0]?.currentValue).toBe(
+    "m2",
+  );
+  await expect(controller.action({ type: "save-model-default", id: chatId })).rejects.toThrow(
+    /no longer controlled/,
+  );
+});
+
+// These journeys persist multiple chats, run records and private RAG files;
+// each durable write launches native owner/ACL verification on Windows.
+describe("database-wide RAG discovery", {
+  timeout: 5000,
+}, () => {
   const identity = () => ({
     databaseKey: controller.rag.snapshot().databaseKey ?? "",
     requestId: randomUUID(),
@@ -310,7 +392,7 @@ describe("database-wide RAG discovery", () => {
     await controller.rebuildRag(identity());
     const previous = controller.rag.snapshot().index;
     const root = join(directory, ".code60_workspace", "chats");
-    await fs.mkdir(root, { recursive: true });
+    await privateDirectory(root);
     const corrupt = join(root, `${randomUUID()}.json`);
     await fs.writeFile(corrupt, "{}");
     await expect(controller.rebuildRag(identity())).rejects.toThrow("unreadable");
@@ -404,7 +486,10 @@ async function configureMcp(version = "first") {
   ];
 }
 
-describe("retained project runtimes", () => {
+// Windows CI completed sibling native-backed save/reopen journeys in up to 8.7 s.
+describe("retained project runtimes", {
+  timeout: 5000,
+}, () => {
   it("restores open projects and stopped chats on Relay without starting project providers", async () => {
     await prepareRelay();
     const a = await project("restart-a");
@@ -462,7 +547,7 @@ describe("retained project runtimes", () => {
     } finally {
       readHistory.mockRestore();
     }
-  });
+  }, 5000); // Multiple native-backed chat saves/reopens exceeded 5 s in CI.
 
   it("persists confirmed closes, preserves cancelled closes, and isolates database replacement", async () => {
     await prepareRelay();
@@ -606,7 +691,7 @@ describe("retained project runtimes", () => {
     }
   });
 
-  it.each(["search", "memory"] as const)(
+  it.each(sqliteAvailable() ? (["search", "memory"] as const) : (["memory"] as const))(
     "cancels an originating %s helper after switching projects",
     async (kind) => {
       await prepareRelay();
@@ -620,16 +705,20 @@ describe("retained project runtimes", () => {
       await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
       await controller.action({ type: "finish", id });
       const requestId = randomUUID();
+      const searchId = randomUUID();
+      const databaseEpoch = controller.snapshot().databaseEpoch ?? 0;
+      if (kind === "search")
+        await controller.searchProjects({
+          requestId: searchId,
+          databaseEpoch,
+          query: "evidence",
+          kind: "all",
+          sort: "relevance",
+        });
       agents.script = () => "hang";
       const pending =
         kind === "search"
-          ? controller.summarizeSearch({
-              requestId,
-              directory: a.path,
-              query: "evidence",
-              includeFiles: false,
-              sources: [{ id: a.path, kind: "project", title: "A", text: "Evidence" }],
-            })
+          ? controller.summarizeSearch({ requestId, searchId, databaseEpoch })
           : controller.extractMemory({
               requestId,
               directory: a.path,
@@ -764,7 +853,11 @@ describe("retained project runtimes", () => {
     );
     const a = await project("a");
     await fs.writeFile(join(a.path, "relay-note.txt"), "Not Relay");
-    await controller.connect(join(directory, "replacement.sqlite"), true);
+    await controller.connect(
+      join(directory, "replacement.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
     expect(controller.readDetails(details)).toMatchObject({
       payload: { files: { preview: { text: "Relay workspace only" } } },
     });
@@ -1841,6 +1934,64 @@ describe("retained project runtimes", () => {
     await controller.projectAction({ type: "close", projectId: a.id });
     await expect(controller.start({ ...request, ...identity })).rejects.toThrow("no longer open");
   });
+  it("retains independent custom-agent work and details across project closure and database replacement", async () => {
+    await prepareRelay();
+    const a = (
+      await controller.customAgent({
+        type: "create",
+        name: "Reviewer",
+        instructions: "Only Reviewer",
+      })
+    ).agent;
+    const b = (
+      await controller.customAgent({ type: "create", name: "Writer", instructions: "Only Writer" })
+    ).agent;
+    if (!a || !b) throw new Error("Missing custom assistants");
+    await controller.customAgent({ type: "open", id: a.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const aChat = controller.snapshot().chat;
+    const aSession = agents.sessions.at(-1);
+    const subscription = {
+      subscriptionId: randomUUID(),
+      scope: {
+        kind: "conversation" as const,
+        conversationId: aChat.conversationId!,
+        generation: aChat.generation!,
+      },
+    };
+    controller.subscribeDetails(subscription, () => {});
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: aChat.run!.id,
+      text: "Reviewer evidence",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    agents.script = () => "hang";
+    await controller.customAgent({ type: "open", id: b.id });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+    const bChat = controller.snapshot().chat;
+    const bSession = agents.sessions.at(-1);
+    await controller.orchestrationChatAction({
+      type: "send",
+      id: bChat.run!.id,
+      text: "Continue Writer work",
+    });
+    await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("running"));
+    const p = await project("custom-unrelated");
+    await controller.projectAction({ type: "close", projectId: p.id });
+    await controller.connect(join(directory, "custom-replacement.sqlite"), true);
+    expect(aSession?.stops).toHaveLength(0);
+    expect(bSession?.stops).toHaveLength(0);
+    const details = controller.readDetails(subscription);
+    expect(JSON.stringify(details)).toContain("Reviewer evidence");
+    expect(JSON.stringify(details)).not.toContain("Continue Writer work");
+    const chats = controller.snapshot().chats;
+    expect(chats.find((chat) => chat.customAgentId === b.id)?.run?.status).toBe("running");
+    expect(chats.find((chat) => chat.customAgentId === a.id)?.conversationId).toBe(
+      aChat.conversationId,
+    );
+    controller.unsubscribeDetails({ subscriptionId: subscription.subscriptionId });
+  });
   async function prepareRelay() {
     await controller.shutdown(true);
     orchestrationProvider = "claude";
@@ -1965,6 +2116,85 @@ describe("retained project runtimes", () => {
     if (!response.ok) throw new Error(body.error ?? "Tool failed");
     return body.result;
   }
+
+  it("archives the last retained project chat without creating a session and creates only on request", async () => {
+    await prepareRelay();
+    const a = await project("archive-a");
+    const first = await newChat(a.id);
+    const second = await newChat(a.id);
+    const b = await project("archive-b");
+    const other = await newChat(b.id);
+    const before = controller.snapshot();
+    const starts = agents.sessions.length;
+    const records = await Promise.all(
+      [first, second, other].map((chat) =>
+        fs.readFile(
+          join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+          "utf8",
+        ),
+      ),
+    );
+    // Background archive resolves A's owner while B remains selected.
+    await controller.orchestrationChatAction({ type: "archive", id: second.run?.id as string });
+    expect(controller.snapshot().chat.run?.id).toBe(other.run?.id);
+    await controller.projectAction({ type: "select", projectId: a.id });
+    for (const chat of before.chats.filter(
+      (chat) => chat.projectId === a.id && chat.run?.id !== second.run?.id,
+    )) {
+      await controller.orchestrationChatAction({ type: "select", id: chat.run?.id as string });
+      await controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string });
+    }
+    const archived = controller.snapshot();
+    expect(archived.chats).toHaveLength(before.chats.length);
+    expect(
+      archived.chats.filter((chat) => chat.projectId === a.id).every((chat) => chat.archived),
+    ).toBe(true);
+    expect(archived.chats.find((chat) => chat.run?.id === other.run?.id)?.archived).toBe(false);
+    expect(agents.sessions).toHaveLength(starts);
+    expect(agents.sessions.every((session) => session.stops.length === 0)).toBe(true);
+    expect(
+      await Promise.all(
+        [first, second, other].map((chat) =>
+          fs.readFile(
+            join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+            "utf8",
+          ),
+        ),
+      ),
+    ).toEqual(records);
+    const created = await newChat(a.id);
+    expect(created.run?.id).not.toBe(first.run?.id);
+    expect(created.run?.id).not.toBe(second.run?.id);
+    expect(agents.sessions).toHaveLength(starts + 1);
+    expect(controller.snapshot().chats).toHaveLength(before.chats.length + 1);
+  });
+
+  it("keeps a project chat visible and selected when archiving cannot be saved", async () => {
+    await prepareRelay();
+    const a = await project("archive-save-failure");
+    const chat = await newChat(a.id);
+    const starts = agents.sessions.length;
+    const save = vi
+      .spyOn(ChatStore.prototype, "save")
+      .mockRejectedValue(new Error("Archive save failed"));
+    try {
+      await expect(
+        controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string }),
+      ).rejects.toThrow("Archive save failed");
+      expect(controller.snapshot().chat.run?.id).toBe(chat.run?.id);
+      expect(
+        controller.snapshot().chats.find((entry) => entry.run?.id === chat.run?.id)?.archived,
+      ).toBe(false);
+      expect(agents.sessions).toHaveLength(starts);
+    } finally {
+      save.mockRestore();
+    }
+    await controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string });
+    expect(
+      controller.snapshot().chats.find((entry) => entry.run?.id === chat.run?.id)?.archived,
+    ).toBe(true);
+    expect(agents.sessions).toHaveLength(starts);
+  });
 
   it("answers self-knowledge reads for Relay and project chats without new authority", async () => {
     await prepareRelay();
@@ -2152,7 +2382,11 @@ describe("retained project runtimes", () => {
     const b = await project("b");
     await newChat(b.id);
     const projectSessions = agents.sessions.slice(1);
-    await controller.connect(join(directory, "replacement.sqlite"), true);
+    await controller.connect(
+      join(directory, "replacement.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
     expect(controller.snapshot().openProjects).toEqual([]);
     expect(controller.snapshot().projectInstanceId).toBeNull();
     expect(controller.snapshot().chat.run?.id).toBe(relayId);
@@ -3010,6 +3244,26 @@ describe("desktop orchestration", () => {
     await expect(controller.action({ type: "diff", id })).rejects.toThrow(/Unknown run/);
   });
 
+  it("chains published revisions when state changes while a frame is being built", async () => {
+    const updates: number[] = [];
+    const previous: (number | undefined)[] = [];
+    controller.subscribe((snapshot) => {
+      updates.push(snapshot.revision);
+      previous.push(snapshot.previousRevision);
+    });
+    const internal = controller as unknown as {
+      poller: { snapshot(): unknown };
+      changed(): void;
+    };
+    const original = internal.poller.snapshot.bind(internal.poller);
+    vi.spyOn(internal.poller, "snapshot").mockImplementationOnce(() => {
+      internal.changed();
+      return original();
+    });
+    internal.changed();
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(1));
+    expect(previous[1]).toBe(updates[0]);
+  });
   it("sends batched updates and stops idle agents on shutdown", async () => {
     const updates: number[] = [];
     const previous: (number | undefined)[] = [];
@@ -3268,7 +3522,10 @@ function withoutAwareness(prompt: string | undefined): string {
   return (prompt ?? "").replace(AWARENESS, "");
 }
 
-describe("app-wide orchestration chat", () => {
+// Windows CI took 2.1-2.3 s per two-send sibling journey; some cases send eight times.
+describe("app-wide orchestration chat", {
+  timeout: 5000,
+}, () => {
   it("applies and clears trusted tactics per chat without dispatch and composes only on Send", async () => {
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
@@ -4036,6 +4293,69 @@ describe("app-wide orchestration chat", () => {
     await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Public work"));
   });
 
+  it.each([19, 20, 500])(
+    "limits a generated %i-character project title and preserves a longer manual name",
+    async (length) => {
+      agents.script = (text, session) => {
+        session.update({
+          type: "message",
+          text: text.startsWith("Write a descriptive chat title") ? "x".repeat(length) : "Done",
+        });
+        return "end_turn";
+      };
+      const id = await ready();
+      await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
+      await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("x".repeat(19)));
+      await controller.orchestrationChatAction({
+        type: "rename",
+        id,
+        title: "My longer manual project name",
+      });
+      expect(controller.snapshot().chat.title).toBe("My longer manual project name");
+    },
+  );
+
+  it("publishes a usable title after removing quoted leading padding", async () => {
+    agents.script = (text, session) => {
+      session.update({
+        type: "message",
+        text: text.startsWith("Write a descriptive chat title")
+          ? `"${" ".repeat(19)}Fix parser   "`
+          : "Done",
+      });
+      return "end_turn";
+    };
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
+    await vi.waitFor(() => expect(controller.snapshot().chat.title).toBe("Fix parser"));
+    expect(controller.snapshot().chat.run?.status).toBe("idle");
+  });
+
+  it.each(["   ", '"   "', "'   '"])(
+    "keeps the unnamed fallback and accepts a manual title after blank generation %j",
+    async (generated) => {
+      agents.script = (text, session) => {
+        session.update({
+          type: "message",
+          text: text.startsWith("Write a descriptive chat title") ? generated : "Done",
+        });
+        return "end_turn";
+      };
+      const id = await ready();
+      await controller.orchestrationChatAction({ type: "send", id, text: "Fix the parser" });
+      await vi.waitFor(() => expect(agents.sessions[1]?.stops).toEqual([1_000]));
+      expect(controller.snapshot().chat.title).toBeUndefined();
+      expect(controller.snapshot().chat.error).toBeNull();
+      expect(controller.snapshot().chat.run?.status).toBe("idle");
+      const title = "My longer manual project name";
+      await controller.orchestrationChatAction({ type: "rename", id, title });
+      await controller.orchestrationChatAction({ type: "send", id, text: "Next step" });
+      await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
+      expect(controller.snapshot().chat.title).toBe(title);
+      expect(agents.sessions).toHaveLength(2);
+    },
+  );
+
   it("titles the first exchange once, preserves manual names, and archives without deleting records", async () => {
     agents.script = (_text, session) => {
       session.update({ type: "message", text: "Parser validation" });
@@ -4132,8 +4452,7 @@ describe("app-wide orchestration chat", () => {
     const secondId = second.run?.id as string;
     expect(secondId).not.toBe(firstId);
     expect(second.directory).not.toBe(first.directory);
-    if (process.platform !== "win32")
-      expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(second.directory as string)).mode & 0o777).toBe(0o700);
     expect(await fs.readFile(join(first.directory as string, "notes.txt"), "utf8")).toBe(
       "first chat",
     );
@@ -4345,7 +4664,7 @@ describe("app-wide orchestration chat", () => {
     await fs.rm(folder);
     await controller.orchestrationChatAction({ type: "restart", id: null });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    if (process.platform !== "win32") expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(folder)).mode & 0o777).toBe(0o700);
   });
 });
 
@@ -4450,7 +4769,11 @@ it("refuses Git setup while project workers are still owned", async () => {
   expect(preview).not.toHaveBeenCalled();
 });
 
-describe("orchestrated workers over ACP", () => {
+// Worker dispatch and Undo persist real private checkpoint/chat/run records,
+// each requiring native ACL checks and atomic replacement on Windows.
+describe("orchestrated workers over ACP", {
+  timeout: 5000,
+}, () => {
   it("keeps correction and failure updates with the original tactic after a newer human task and capacity rejection", async () => {
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
@@ -4637,7 +4960,11 @@ describe("orchestrated workers over ACP", () => {
       entry.result = Promise.race([entry.result, cleanupGate]);
       void entry.result.catch(() => {});
       confirmUndo(true);
-      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }));
+      // Undo stops the chat process and atomically rewrites checkpoint and chat records;
+      // each private write runs the native helper on Windows.
+      await vi.waitFor(() => expect(result).toMatchObject({ type: "rewound", checkpointId }), {
+        timeout: 1000,
+      });
       expect(agents.specs).toHaveLength(starts);
     } finally {
       confirmUndo(true);
@@ -5071,6 +5398,9 @@ describe("orchestrated workers over ACP", () => {
         blob: vi.fn(async (_path: string, oid: string) =>
           oid === before ? Buffer.from("before\n") : content,
         ),
+        hash: vi.fn<TaskGit["hash"]>(async () => {
+          throw new Error("This fixture does not convert checkout line endings");
+        }),
         merge: vi.fn<TaskGit["merge"]>(async (_base, _current, proposed) => proposed),
         identity: vi.fn(async () => "unchanged-head-and-index"),
         lockPath: async () => join(project, ".git", "task.lock"),
@@ -5125,8 +5455,11 @@ describe("orchestrated workers over ACP", () => {
       await controller.captureReview({ ...identity, requestId: randomUUID() });
       expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("before\n");
       session(worker)?.endTurn("end_turn");
-      await vi.waitFor(async () =>
-        expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+      // Integration writes several private journals; each is a native helper launch on Windows.
+      await vi.waitFor(
+        async () =>
+          expect(await fs.readFile(join(identity.project, "task.txt"), "utf8")).toBe("after\n"),
+        { timeout: 10_000 },
       );
     });
 
@@ -5762,6 +6095,55 @@ describe("orchestrated workers over ACP", () => {
     expect(chatPrompts()).toHaveLength(2);
   });
 
+  it("reviews live project chat and worker permissions independently across setting changes", async () => {
+    const { call, scope } = await setup();
+    const chat = controller.snapshot().chat.run;
+    const parent = agents.sessions[0];
+    if (!chat || !parent) throw new Error("Missing project chat");
+    await controller.orchestrationChatAction({ type: "send", id: chat.id, text: "HANG chat" });
+    const workerId = await dispatch(call, scope, "HANG worker");
+    await vi.waitFor(() => expect(session(workerId)?.turnActive).toBe(true));
+    const worker = session(workerId);
+    if (!worker) throw new Error("Missing worker");
+    preferences.setOrchestrationAutoApproval = async () => {};
+    try {
+      await controller.setOrchestrationAutoApproval(false);
+      const request = { toolCallId: "inspect", title: "Inspect file", kind: "read" as const };
+      const first = parent.requestPermission(request);
+      const second = worker.requestPermission(request);
+      const snapshot = controller.snapshot();
+      const chatRequest = snapshot.chat.run?.pending[0];
+      const workerRequest = snapshot.runs.find((run) => run.record.id === workerId)?.view
+        ?.pending[0];
+      if (!chatRequest || !workerRequest) throw new Error("Missing pending permission");
+      await controller.orchestrationChatAction({ type: "archive", id: chat.id });
+      await controller.orchestrationChatAction({ type: "select", id: chat.id });
+      expect(controller.snapshot().chat.run?.pending[0]?.id).toBe(chatRequest.id);
+      await expect(
+        controller.orchestrationChatAction({
+          type: "permission",
+          id: chat.id,
+          permissionId: workerRequest.id,
+          answer: "allow",
+        }),
+      ).rejects.toThrow("no longer pending");
+      await controller.setOrchestrationAutoApproval(true);
+      await controller.orchestrationChatAction({
+        type: "permission",
+        id: chat.id,
+        permissionId: chatRequest.id,
+        answer: "deny",
+      });
+      expect(await first).toBe("deny");
+      await controller.action({ type: "permission", id: workerRequest.id, answer: "allow" });
+      expect(await second).toBe("allow");
+      expect(await parent.requestPermission(request)).toBe("allow");
+    } finally {
+      worker.endTurn("end_turn");
+      parent.endTurn("end_turn");
+      delete preferences.setOrchestrationAutoApproval;
+    }
+  });
   it("rejects stale scopes, unknown arguments, manual sessions, and the chat itself", async () => {
     const { call, scope } = await setup();
     const [manual] = await controller.start({ ...request, prompt: "manual" });
@@ -6055,39 +6437,270 @@ describe("episodic memory controller", () => {
   );
 });
 
-describe("search overview helpers", () => {
-  async function summaryRequest() {
+describe.skipIf(!sqliteAvailable())("registered-project Search navigation", () => {
+  async function fixture() {
+    await controller.shutdown(true);
+    orchestrationProvider = "claude";
+    const adapter: CoreDeps["git"] = git;
+    adapter.repoInfo = async (cwd) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
+    controller = new DesktopController(
+      controllerDeps(),
+      {
+        XDG_CONFIG_HOME: join(directory, "config"),
+        XDG_STATE_HOME: join(directory, "state"),
+      },
+      { confirm },
+      { openDatabase, preferences, relay: true, ragExecutor },
+    );
+    await controller.restore();
+    const database = join(directory, "search.sqlite");
+    await controller.connect(database, true, controller.snapshot().databaseEpoch);
+    const canonical = await realOf(directory);
+    const roots = [join(canonical, "one", "same"), join(canonical, "two", "same")];
+    for (const [index, root] of roots.entries()) {
+      await fs.mkdir(root, { recursive: true });
+      const workspace = await openWorkspace(controllerDeps(), root, {
+        XDG_STATE_HOME: join(directory, "state"),
+      });
+      await workspace.store.save({
+        id: "duplicate-id",
+        agent: "claude",
+        status: "running",
+        firstPrompt: "needle",
+        turns: 1,
+        base: null,
+        branch: null,
+        worktree: root,
+        ownerPid: 999999,
+        startedAt: "2026-01-01",
+      });
+      await workspace.store.appendEvent({
+        type: "message",
+        runId: "duplicate-id",
+        text: `needle from project ${index}`,
+        at: "2026-01-01",
+      });
+      await fs.writeFile(join(root, "README.md"), `needle file from project ${index}`);
+      databases.get(database)?.entries.set(await realOf(root), "2026-01-01");
+    }
+    return {
+      database,
+      roots,
+      identity: {
+        requestId: randomUUID(),
+        databaseEpoch: controller.snapshot().databaseEpoch ?? 0,
+      },
+    };
+  }
+  it("searches closed projects without a selection, runtime opens, history writes or agent starts", async () => {
+    const { roots, identity } = await fixture();
+    const paths = await Promise.all(roots.map(realOf));
+    const before = await Promise.all(
+      roots.map(async (root) => {
+        const workspace = await openWorkspace(controllerDeps(), root, {
+          XDG_STATE_HOME: join(directory, "state"),
+        });
+        return fs.readFile(join(workspace.store.dir, "duplicate-id", "run.json"));
+      }),
+    );
+    const initial = controller.snapshot();
+    const starts = agents.sessions.length;
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "all",
+      sort: "relevance",
+    });
+    expect(result.partial).toBe(false);
+    expect(result.results.filter((s) => s.kind === "message")).toHaveLength(2);
+    expect(new Set(result.results.map((s) => s.id)).size).toBe(result.results.length);
+    expect(new Set(result.results.map((s) => s.project.name))).toEqual(new Set(paths));
+    expect(controller.snapshot().openProjects).toEqual(initial.openProjects);
+    expect(controller.snapshot().directory).toBe(initial.directory);
+    expect(agents.sessions.length).toBe(starts);
+    for (const [index, root] of roots.entries()) {
+      const workspace = await openWorkspace(controllerDeps(), root, {
+        XDG_STATE_HOME: join(directory, "state"),
+      });
+      expect(await fs.readFile(join(workspace.store.dir, "duplicate-id", "run.json"))).toEqual(
+        before[index],
+      );
+    }
+  });
+  it("builds one globally attributed overview and preserves literal evidence when its provider changes or fails", async () => {
+    const { identity, roots } = await fixture();
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "file",
+      sort: "relevance",
+    });
+    agents.script = (prompt, session) => {
+      const data = JSON.parse(prompt.split("Search data (JSON):\n\n")[1] ?? "{}");
+      expect(
+        new Set(data.results.map((source: { project: { path: string } }) => source.project.path)),
+      ).toEqual(new Set(roots));
+      session.update({ type: "message", text: "Both projects have documentation. [1] [2]" });
+      return "end_turn";
+    };
+    const starts = agents.sessions.length;
+    const summary = await controller.summarizeSearch({
+      requestId: randomUUID(),
+      searchId: identity.requestId,
+      databaseEpoch: identity.databaseEpoch,
+    });
+    expect(summary.sources).toHaveLength(2);
+    expect(new Set(summary.sources.map((s) => s.id)).size).toBe(2);
+    expect(agents.sessions.length).toBe(starts + 1);
+    expect(controller.snapshot().openProjects).toHaveLength(0);
+    await setProvider("codex");
+    agents.script = () => {
+      throw new Error("Provider unavailable");
+    };
+    await expect(
+      controller.summarizeSearch({
+        requestId: randomUUID(),
+        searchId: identity.requestId,
+        databaseEpoch: identity.databaseEpoch,
+      }),
+    ).rejects.toThrow(/setup|provider/i);
+    expect(
+      await controller.openSearchSource(
+        { ...identity, sourceId: result.results[0]?.id },
+        async () => false,
+      ),
+    ).toBeNull();
+  });
+  it.each(["cancel", "clear"])(
+    "retires a query cancelled during initialization: %s",
+    async (mode) => {
+      const { identity } = await fixture();
+      const pending = controller.searchProjects({
+        ...identity,
+        query: "needle",
+        kind: "all",
+        sort: "relevance",
+      });
+      const stopped = expect(pending).rejects.toThrow(/cancelled/);
+      if (mode === "clear") await controller.clearSearch();
+      else await controller.cancelProjectSearch(identity);
+      await stopped;
+      await expect(
+        controller.openSearchSource({ ...identity, sourceId: "a".repeat(64) }),
+      ).rejects.toThrow(/expired/);
+    },
+  );
+  it("confirms a closed source before changing navigation, reuses its owner and reads duplicate IDs in that owner", async () => {
+    const { roots, identity } = await fixture();
+    const result = await controller.searchProjects({
+      ...identity,
+      query: "needle",
+      kind: "message",
+      sort: "relevance",
+    });
+    const first = result.results.find((s) => s.project.path === roots[0]);
+    const second = result.results.find((s) => s.project.path === roots[1]);
+    if (!first || !second) throw new Error("Missing project-qualified history");
+    const denied = vi.fn(async () => false);
+    const initial = controller.snapshot();
+    expect(
+      await controller.openSearchSource({ ...identity, sourceId: first.id }, denied),
+    ).toBeNull();
+    expect(denied).toHaveBeenCalledWith(roots[0]);
+    expect(controller.snapshot().openProjects).toEqual(initial.openProjects);
+    const accept = vi.fn(async () => true);
+    for (const source of [first, second, first]) {
+      const target = await controller.openSearchSource(
+        { ...identity, sourceId: source.id },
+        accept,
+      );
+      expect(target?.source.project.path).toBe(source.project.path);
+      expect(controller.snapshot().directory).toBe(source.project.path);
+      expect(await controller.action({ type: "events", id: "duplicate-id" })).toEqual(
+        expect.arrayContaining([expect.objectContaining({ text: source.text })]),
+      );
+    }
+    expect(accept).toHaveBeenCalledTimes(2);
+  });
+  it("rechecks the database after confirmation and keeps new registry members for the next submission", async () => {
+    const { database, identity } = await fixture();
+    const request = {
+      ...identity,
+      query: "needle",
+      kind: "file" as const,
+      sort: "relevance" as const,
+    };
+    const result = await controller.searchProjects(request);
+    const added = join(directory, "new");
+    await fs.mkdir(added);
+    await fs.writeFile(join(added, "README.md"), "needle new member");
+    databases.get(database)?.entries.set(await realOf(added), "2026-01-02");
+    const next = await controller.searchProjects({ ...request, requestId: randomUUID() });
+    expect(result.results).toHaveLength(2);
+    expect(next.results).toHaveLength(3);
+    const source = next.results[0];
+    if (!source) throw new Error("Missing captured source");
+    await expect(
+      controller.openSearchSource(
+        { ...identity, requestId: next.requestId, sourceId: source.id },
+        async () => {
+          await controller.connect(
+            join(directory, "replacement.sqlite"),
+            true,
+            controller.snapshot().databaseEpoch,
+          );
+          return true;
+        },
+      ),
+    ).rejects.toThrow(/database/i);
+    expect(controller.snapshot().openProjects ?? []).toHaveLength(0);
+  });
+});
+
+describe.skipIf(!sqliteAvailable())("database-scoped search overview helpers", () => {
+  async function summaryRequest(query = "parser") {
     await controller.open(directory);
     await setProvider("claude");
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
-    const path = controller.snapshot().directory as string;
-    return {
-      requestId: crypto.randomUUID(),
-      directory: path,
-      query: "parser",
-      sources: [{ id: path, kind: "project" as const, title: "Project", text: "Parser fixed." }],
-    };
+    await fs.writeFile(
+      join(directory, "README.md"),
+      "This project builds an accessible parser and color palettes.",
+    );
+    const searchId = randomUUID();
+    const databaseEpoch = controller.snapshot().databaseEpoch ?? 0;
+    await controller.searchProjects({
+      requestId: searchId,
+      databaseEpoch,
+      query,
+      kind: "all",
+      sort: "relevance",
+    });
+    return { requestId: randomUUID(), searchId, databaseEpoch };
   }
 
-  it("uses the orchestration provider in a disposable directory without records or worktrees", async () => {
+  it("uses captured evidence in a disposable directory without records or worktrees", async () => {
     await configureMcp();
-    const input = { ...(await summaryRequest()), includeFiles: false };
+    const input = await summaryRequest();
     const initial = controller.snapshot();
     const count = agents.sessions.length;
-    agents.script = (_, session) => {
+    agents.script = (prompt, session) => {
+      expect(prompt).toContain("accessible parser");
       session.update({ type: "message", text: "Parser fixed. [1]" });
       return "end_turn";
     };
-    expect(await controller.summarizeSearch(input)).toEqual({
-      requestId: input.requestId,
-      text: "Parser fixed. [1]",
-      sources: input.sources,
+    const result = await controller.summarizeSearch(input);
+    expect(result.requestId).toBe(input.requestId);
+    expect(result.text).toBe("Parser fixed. [1]");
+    expect(result.sources[0]).toMatchObject({
+      kind: "file",
+      path: "README.md",
+      project: { path: await realOf(directory) },
     });
     expect(agents.sessions).toHaveLength(count + 1);
     const spec = agents.specs.at(-1);
     expect(spec?.name).toBe("claude");
     expect(spec?.mcpServers).toBeUndefined();
-    expect(spec?.cwd).not.toBe(input.directory);
+    expect(spec?.cwd).not.toBe(directory);
     await expect(fs.stat(spec?.cwd as string)).rejects.toThrow();
     expect(agents.sessions.at(-1)?.stops).toEqual([1000]);
     expect(controller.snapshot().runs).toEqual(initial.runs);
@@ -6095,50 +6708,32 @@ describe("search overview helpers", () => {
     expect(git.worktrees).toEqual([]);
   });
 
-  it("starts a worker for a natural-language question with no matching saved sessions", async () => {
-    const input = await summaryRequest();
-    await fs.writeFile(
-      join(directory, "README.md"),
-      "This project builds accessible color palettes.",
-    );
+  it("answers a natural-language question using captured files without literal matches", async () => {
+    const input = await summaryRequest("What is this project about?");
     agents.script = (prompt, session) => {
-      expect(prompt).toContain("This project builds accessible color palettes.");
+      expect(prompt).toContain("accessible parser and color palettes");
       session.update({ type: "message", text: "It builds accessible color palettes. [1]" });
       return "end_turn";
     };
-    const result = await controller.summarizeSearch({
-      ...input,
-      query: "What is this project about?",
-      sources: [],
-    });
+    const result = await controller.summarizeSearch(input);
     expect(result.text).toContain("color palettes");
     expect(result.sources[0]).toMatchObject({ kind: "file", path: "README.md" });
     expect(controller.snapshot().runs).toHaveLength(0);
   });
 
-  it("rejects stale projects, foreign sessions and malformed source addresses", async () => {
+  it("rejects stale database/query identities and renderer-supplied evidence or paths", async () => {
     const input = await summaryRequest();
-    await expect(controller.summarizeSearch({ ...input, directory: "/elsewhere" })).rejects.toThrow(
-      "project changed",
+    await expect(
+      controller.summarizeSearch({ ...input, databaseEpoch: input.databaseEpoch + 1 }),
+    ).rejects.toThrow(/database/i);
+    await expect(controller.summarizeSearch({ ...input, searchId: randomUUID() })).rejects.toThrow(
+      /current/i,
     );
-    for (const source of [
-      { id: "/elsewhere", kind: "project" as const, title: "Project", text: "" },
-      { id: "foreign", kind: "run" as const, title: "Foreign", text: "", runId: "foreign" },
-      {
-        id: "foreign:0",
-        kind: "message" as const,
-        title: "Foreign",
-        text: "",
-        runId: "foreign",
-        eventIndex: 0,
-      },
-    ])
-      await expect(controller.summarizeSearch({ ...input, sources: [source] })).rejects.toThrow(
-        "source",
-      );
+    for (const extra of [{ directory: "/elsewhere" }, { sources: [] }, { query: "injected" }])
+      await expect(controller.summarizeSearch({ ...input, ...extra })).rejects.toThrow();
   });
 
-  it("fully stops a superseded worker before starting the replacement and ignores stale cancellation", async () => {
+  it("fully stops a superseded worker before starting its replacement and ignores stale cancellation", async () => {
     const input = await summaryRequest();
     agents.script = () => "hang";
     const first = controller.summarizeSearch(input);
@@ -6151,14 +6746,15 @@ describe("search overview helpers", () => {
       session.update({ type: "message", text: "Replacement. [1]" });
       return "end_turn";
     };
-    const next = { ...input, requestId: crypto.randomUUID() };
-    expect((await controller.summarizeSearch(next)).text).toBe("Replacement. [1]");
+    expect((await controller.summarizeSearch({ ...input, requestId: randomUUID() })).text).toBe(
+      "Replacement. [1]",
+    );
     await rejected;
     await expect(fs.stat(oldDirectory)).rejects.toThrow();
     await controller.cancelSearchSummary(input.requestId);
   });
 
-  it.each(["cancel", "reload", "provider", "project", "database", "stop-all", "shutdown"])(
+  it.each(["cancel", "reload", "provider", "database", "stop-all", "shutdown"])(
     "cancels and cleans up on %s",
     async (mode) => {
       const input = await summaryRequest();
@@ -6169,14 +6765,9 @@ describe("search overview helpers", () => {
       const worker = agents.sessions.at(-1);
       const cwd = agents.specs.at(-1)?.cwd as string;
       if (mode === "cancel") await controller.cancelSearchSummary(input.requestId);
-      else if (mode === "reload") await controller.cancelSearchSummary();
+      else if (mode === "reload") await controller.clearSearch();
       else if (mode === "provider") await setProvider(null);
-      else if (mode === "project") {
-        const next = join(directory, "next-project");
-        await fs.mkdir(next);
-        await controller.open(next);
-      } else if (mode === "database")
-        await controller.connect(join(directory, "next.sqlite"), true);
+      else if (mode === "database") await controller.connect(join(directory, "next.sqlite"), true);
       else if (mode === "stop-all") await controller.stopAll();
       else await controller.shutdown(true);
       await rejected;
@@ -6185,13 +6776,35 @@ describe("search overview helpers", () => {
     },
   );
 
+  it("keeps the query and overview alive across project selection", async () => {
+    const input = await summaryRequest();
+    agents.script = () => "hang";
+    const pending = controller.summarizeSearch(input);
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
+    const helper = agents.sessions.at(-1);
+    const next = join(directory, "another-project");
+    await fs.mkdir(next);
+    await controller.open(next);
+    expect(helper?.turnActive).toBe(true);
+    await controller.cancelSearchSummary(input.requestId);
+    await rejected;
+    await expect(
+      controller.openSearchSource({
+        requestId: input.searchId,
+        databaseEpoch: input.databaseEpoch,
+        sourceId: "a".repeat(64),
+      }),
+    ).rejects.toThrow("Unknown search source");
+  });
+
   it("does not cancel the active worker for another request ID", async () => {
     const input = await summaryRequest();
     agents.script = () => "hang";
     const pending = controller.summarizeSearch(input);
     const rejected = expect(pending).rejects.toThrow("cancelled");
     await vi.waitFor(() => expect(agents.sessions.at(-1)?.turnActive).toBe(true));
-    await controller.cancelSearchSummary(crypto.randomUUID());
+    await controller.cancelSearchSummary(randomUUID());
     expect(agents.sessions.at(-1)?.turnActive).toBe(true);
     await controller.cancelSearchSummary(input.requestId);
     await rejected;

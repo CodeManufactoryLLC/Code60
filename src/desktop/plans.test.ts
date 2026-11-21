@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -74,10 +74,8 @@ it("keeps Relay target assignments and rejects private-record changes instead of
   expect(await readFile(path, "utf8")).toContain("Changed outside Code60");
   await writeFile(path, data);
   expect((await PlanStore.open(root, "relay", true)).get(plan.id).tasks[0]?.target).toEqual(target);
-  if (process.platform !== "win32") {
-    await chmod(path, 0o644);
-    await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
-  }
+  await chmod(path, 0o644);
+  await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
 });
 it("creates one draft, preserves task identities on revision and deduplicates creation", async () => {
   const { root, store } = await setup();
@@ -157,11 +155,14 @@ it("repairs Markdown from its record and never resumes execution on reopen", asy
 it("rejects links and preserves visible state on a failed write", async () => {
   const { root, store } = await setup();
   const plan = await store.create(draft, null);
+  const directory = join(root, "outside");
+  await mkdir(directory);
   const target = join(root, "outside.txt");
   await writeFile(target, "untouched");
   const path = join(root, "plans", `${plan.id}.md`);
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(target, path, "file");
   await expect(
     store.action({ type: "accept", chatId: "chat", planId: plan.id, revision: 1 }),
   ).rejects.toThrow("Unsafe");
@@ -193,10 +194,13 @@ it("rolls back the document if its record cannot be committed", async () => {
   const markdown = join(root, "plans", `${plan.id}.md`);
   const before = await readFile(markdown, "utf8");
   const path = join(root, ".code60", "plans", `${plan.id}.json`);
+  const directory = join(root, "outside");
+  await mkdir(directory);
   const target = join(root, "unrelated.txt");
   await writeFile(target, "untouched");
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(target, path, "file");
   await expect(
     store.update({
       operation: "revise",

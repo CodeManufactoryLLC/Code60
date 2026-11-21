@@ -2,8 +2,8 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { nativeIdentity, type OwnedProcess, ownedJob, spawnOwnedProcess } from "./index.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type OwnedProcess, spawnOwnedProcess } from "./index.js";
 
 const children: OwnedProcess[] = [];
 const directories: string[] = [];
@@ -32,14 +32,6 @@ describe("owned native processes", () => {
     await Promise.all([child.stop(1000), child.stop(0), child.stop(0)]);
     await child.stop(0);
     expect(Date.now() - started).toBeLessThan(7_000);
-  });
-
-  it.runIf(process.platform === "win32")("helper failure closes the job", async () => {
-    const child = await launch("setInterval(() => {}, 1000)");
-    process.kill(child.supervisorPid as number);
-    await child.exited;
-    await child.stop(0);
-    expect(await nativeIdentity(child.pid)).toBeNull();
   });
 
   it("reports the root exit code without waiting for stop", async () => {
@@ -76,20 +68,6 @@ describe("owned native processes", () => {
     expect(JSON.parse(output)).toEqual(args);
   });
 
-  it.runIf(process.platform === "win32")(
-    "refuses an identical-command PID with a different creation time",
-    async () => {
-      const child = await launch("setInterval(() => {}, 1000)");
-      expect(child.identity?.job).toBeTruthy();
-      const identity = child.identity as NonNullable<OwnedProcess["identity"]>;
-      await expect(ownedJob("stop", child.pid, { ...identity, createdAt: "1" })).rejects.toThrow(
-        /identity/,
-      );
-      expect(await nativeIdentity(child.pid)).toMatchObject({ createdAt: identity.createdAt });
-      expect(await ownedJob("status", child.pid, identity)).toBe("alive");
-    },
-  );
-
   it("kills descendants when the root exits, without touching an unrelated sentinel", async () => {
     const dir = await directory();
     const sentinel = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
@@ -114,6 +92,33 @@ describe("owned native processes", () => {
       expect(() => process.kill(sentinel.pid as number, 0)).not.toThrow();
     } finally {
       sentinel.kill();
+    }
+  });
+  it("retries verification after a delayed group exit without re-signalling an old identifier", async () => {
+    const child = await launch("process.exit(0)");
+    await child.exited;
+    const original = process.kill.bind(process);
+    let groupPresent = true;
+    const signals: (number | string | undefined)[] = [];
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid === -child.pid) {
+        if (signal === 0 && groupPresent) return true;
+        if (signal !== 0) signals.push(signal);
+      }
+      return original(pid, signal);
+    });
+    vi.useFakeTimers();
+    try {
+      const failed = expect(child.stop(0)).rejects.toThrow("cleanup exceeded");
+      await vi.advanceTimersByTimeAsync(7_100);
+      await failed;
+      const previous = [...signals];
+      groupPresent = false;
+      await child.stop(0);
+      expect(signals).toEqual(previous);
+    } finally {
+      kill.mockRestore();
+      vi.useRealTimers();
     }
   });
 });

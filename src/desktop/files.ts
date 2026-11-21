@@ -8,7 +8,7 @@ import {
   type FileSnapshot,
   parseFileContext,
 } from "../bridge/index.js";
-import { containedPath, diagnosticMessage, helperOutput } from "../platform/index.js";
+import { containedPath, diagnosticMessage } from "../platform/index.js";
 
 export const previewByteLimit = 1024 * 1024;
 const directoryEntryLimit = 2000;
@@ -31,33 +31,6 @@ async function checkedPath(root: string, path: string): Promise<string> {
 async function directory(root: string, path: string, limit: number): Promise<FileDirectory> {
   const result: FileDirectory = { path, entries: [], error: null, truncated: false };
   try {
-    if (process.platform === "win32") {
-      const value: unknown = JSON.parse(
-        (await helperOutput(["list", root, path])).toString("utf8"),
-      );
-      if (!Array.isArray(value) || value.length > directoryEntryLimit + 1)
-        throw new Error("Invalid native directory listing");
-      for (const entry of value.slice(0, limit)) {
-        if (
-          !entry ||
-          typeof entry.name !== "string" ||
-          !["file", "directory", "symlink", "other"].includes(entry.kind)
-        )
-          throw new Error("Invalid native directory entry");
-        result.entries.push({
-          name: entry.name,
-          path: path ? `${path}/${entry.name}` : entry.name,
-          kind: entry.kind,
-        });
-      }
-      result.truncated = value.length > limit;
-      result.entries.sort(
-        (a, b) =>
-          Number(b.kind === "directory") - Number(a.kind === "directory") ||
-          a.name.localeCompare(b.name),
-      );
-      return result;
-    }
     const dir = await opendir(await checkedPath(root, path));
     for await (const entry of dir) {
       if (result.entries.length >= limit) {
@@ -90,17 +63,6 @@ async function directory(root: string, path: string, limit: number): Promise<Fil
 async function preview(root: string, path: string): Promise<FilePreview> {
   const result: FilePreview = { path, text: null, size: null, modifiedAt: null, error: null };
   try {
-    if (process.platform === "win32") {
-      const output = await helperOutput(["preview", root, path], previewByteLimit + 128);
-      const end = output.indexOf(10);
-      const header = output.subarray(0, end).toString("ascii");
-      if (end < 0 || !/^\d+ \d+$/.test(header)) throw new Error("Invalid native preview");
-      const [size, modified] = header.split(" ").map(Number);
-      result.size = size as number;
-      result.modifiedAt = new Date(modified as number).toISOString();
-      result.text = decodePreview(output.subarray(end + 1));
-      return result;
-    }
     const target = await checkedPath(root, path);
     // Nonblocking prevents a replaced FIFO from hanging the main process; no-follow
     // rejects a last-component symlink swapped in after validation.
@@ -148,7 +110,7 @@ export async function readFiles(
   current: () => boolean,
 ): Promise<FileSnapshot> {
   parseFileContext(context);
-  const root = process.platform === "win32" ? context.root : await realpath(context.root);
+  const root = await realpath(context.root);
   if ((await lstat(context.root)).isSymbolicLink() || root !== context.root)
     throw new Error("The selected root has moved or become a symbolic link.");
   const directories: FileDirectory[] = [];

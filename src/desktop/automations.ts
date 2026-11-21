@@ -80,13 +80,17 @@ export class DesktopAutomations {
       if (
         request.control !== "status" &&
         !(await this.dialogs.confirm(
-          `${request.control} background execution?`,
+          `${request.control.charAt(0).toUpperCase() + request.control.slice(1)} Scheduling Service?`,
           "The local service can run saved prompts while Code60 is quit. Your computer must be awake and logged in. Worktrees are not a sandbox. Stop/uninstall pauses schedules and preserves evidence.",
         ))
       )
         return null;
       check();
-      return schedulerControl(this.env, request.control, true);
+      const result = await schedulerControl(this.env, request.control, true);
+      if (request.control === "status") {
+        if (result && "service" in result && result.service) await this.watch();
+      } else this.changed();
+      return result;
     }
     if (request.action === "create" || request.action === "update") {
       if (!this.providers().includes(request.draft.agent))

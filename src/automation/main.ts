@@ -1,4 +1,7 @@
+import { assertSupportedPlatform } from "../platform/index.js";
 import { startService } from "./service.js";
+
+assertSupportedPlatform();
 
 // Fixed service entry point. Tokens and prompts never appear in process arguments.
 startService(process.env)

@@ -17,9 +17,8 @@ const source = {
 };
 const request = (): SearchSummaryRequest => ({
   requestId: crypto.randomUUID(),
-  directory: "/project",
-  query: "parser",
-  sources: [source],
+  searchId: crypto.randomUUID(),
+  databaseEpoch: 1,
 });
 
 describe("search summary", () => {
@@ -116,10 +115,11 @@ describe("search summary", () => {
   it("validates scoped, bounded requests and cancellation IDs", () => {
     const valid = request();
     expect(parseSearchSummary(valid)).toEqual(valid);
-    expect(parseSearchSummary({ ...valid, sources: [] }).sources).toEqual([]);
     expect(parseSearchSummaryRequestId(valid.requestId)).toBe(valid.requestId);
     for (const change of [
       { requestId: "invalid" },
+      { searchId: "invalid" },
+      { databaseEpoch: -1 },
       { query: " " },
       { query: "x".repeat(2049) },
       { sources: [source, source] },

@@ -1,9 +1,11 @@
 /* Ownership and precedence are explicit; feature sheets contain no global theme copies. */
-@layer vendor, tokens, base, layout, components, utilities, accessibility;
+@layer vendor, tokens, base, neobrutalism, layout, components, utilities, accessibility;
 
 @import "@glideapps/glide-data-grid/dist/index.css" layer(vendor);
 @import "./styles/tokens.css" layer(tokens);
 @import "./styles/base.css" layer(base);
+@import "./neobrutalism/theme.css";
+@import "./neobrutalism/controls.css" layer(neobrutalism);
 @import "./styles/layout.css" layer(layout);
 @import "./styles/navigation.css" layer(components);
 @import "./styles/home.css" layer(components);
@@ -21,5 +23,6 @@
 @import "./styles/files.css" layer(components);
 @import "./styles/overlays.css" layer(components);
 @import "./styles/splash.css" layer(components);
+@import "./neobrutalism/dialog.css" layer(components);
 @import "./styles/utilities.css" layer(utilities);
 @import "./styles/accessibility.css" layer(accessibility);

@@ -1,4 +1,4 @@
-import type { EffectCallback } from "react";
+import type { EffectCallback, ReactElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { AnchoredMenu } from "./anchored-menu.js";
 
@@ -71,4 +71,43 @@ it("ignores queued scrolls but dismisses when the trigger actually moves", () =>
   expect(onClose).toHaveBeenCalledOnce();
   if (typeof cleanup === "function") cleanup();
   expect(listeners.size).toBe(0);
+});
+
+it("keeps disabled items focusable with a reason but never invokes them", () => {
+  vi.stubGlobal("document", { body: {} });
+  const run = vi.fn(),
+    onClose = vi.fn();
+  const menu = AnchoredMenu({
+    x: 0,
+    y: 0,
+    label: "Providers",
+    className: "provider-dropdown",
+    id: "provider-actions",
+    appearance: "neobrutalism",
+    onClose,
+    items: [
+      { label: "Disconnect", disabled: true, reason: "Choose another primary", run },
+      { label: "Set as Primary", run },
+    ],
+  });
+  expect((menu as unknown as ReactElement<{ id: string; className: string }>).props).toMatchObject({
+    id: "provider-actions",
+    className: "actions-menu neo-dropdown-menu provider-dropdown",
+  });
+  const [disabled, enabled] = (
+    menu as unknown as ReactElement<{
+      children: [
+        ReactElement<{ "aria-disabled": boolean; "aria-description": string; onClick(): void }>,
+        ReactElement<{ onClick(): void }>,
+      ];
+    }>
+  ).props.children;
+  expect(disabled.props["aria-disabled"]).toBe(true);
+  expect(disabled.props["aria-description"]).toBe("Choose another primary");
+  disabled.props.onClick();
+  expect(run).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  enabled.props.onClick();
+  expect(run).toHaveBeenCalledOnce();
+  expect(onClose).toHaveBeenCalledOnce();
 });

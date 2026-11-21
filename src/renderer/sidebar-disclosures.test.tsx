@@ -162,7 +162,9 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
       projectAction: vi.fn(async () => true),
       invalidate: vi.fn(),
       pending: false,
+      busy: false,
       projectPending: false,
+      conversationPending: false,
       error: "",
     },
     ...overrides,
@@ -176,10 +178,121 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
 }
 
 it.each([
+  ["home-card-toggle", "tab-home", "home-pages", "home"],
+  ["apps-card-toggle", "tab-apps", "app-pages", "apps"],
+  ["projects-card-toggle", "tab-chat", "chat-pages", "projects"],
+  ["settings-card-toggle", "tab-settings", "settings-pages", "settings"],
+] as const)("separates %s disclosure from header navigation", (toggle, header, panel, page) => {
+  const onSelect = vi.fn();
+  const onSettingsSectionSelect = vi.fn();
+  const tabs = { ...initialTabs, active: page };
+  const view = tabList({ tabs, settingsSection: null, onSelect, onSettingsSectionSelect });
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+  click(view.tree(), header);
+  view.render();
+  expect(onSelect).toHaveBeenLastCalledWith(page);
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+  onSelect.mockClear();
+  click(view.tree(), toggle);
+  view.render();
+  expect(byId(view.tree(), panel).props.hidden).toBe(true);
+  expect(byId(view.tree(), panel).props.inert).toBe(true);
+  expect(byId(view.tree(), toggle).props["aria-expanded"]).toBe(false);
+  expect(onSelect).not.toHaveBeenCalled();
+  click(view.tree(), header);
+  view.render({ tabs: { ...tabs } });
+  expect(byId(view.tree(), panel).props.hidden).toBe(true);
+  click(view.tree(), toggle);
+  view.render();
+  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+});
+
+it("reveals Search after explicit navigation and keeps its current page when collapsed", () => {
+  const view = tabList({ tabs: { ...initialTabs, active: "home" } });
+  click(view.tree(), "home-card-toggle");
+  view.render();
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(true);
+  view.render({ tabs: { ...initialTabs, active: "search" } });
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(false);
+  click(view.tree(), "home-card-toggle");
+  view.render();
+  expect(byId(view.tree(), "home-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "tab-search").props["aria-selected"]).toBe(true);
+});
+
+it("collapses Assistants without navigating or restoring nested disclosures", () => {
+  const onSelect = vi.fn();
+  const view = tabList({ tabs: { ...initialTabs, active: "custom-agents" }, onSelect });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+  click(view.tree(), "assistants-toggle");
+  view.render();
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "assistants-pages").props.inert).toBe(true);
+  expect(byId(view.tree(), "custom-agent-pages").props.hidden).toBe(true);
+  expect(onSelect).not.toHaveBeenCalled();
+  view.render({ tabs: { ...initialTabs, active: "custom-agents" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+  expect(byId(view.tree(), "custom-agent-pages").props.hidden).toBe(true);
+});
+
+it("honors a saved closed Assistants section even when an assistant view is selected", () => {
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => (key === "code60.assistantsExpanded" ? "false" : "true"),
+    setItem: vi.fn(),
+  });
+  const view = tabList({ tabs: { ...initialTabs, active: "custom-agents" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "assistants-toggle").props["aria-expanded"]).toBe(false);
+  press(view.tree(), "assistants-toggle", "ArrowRight");
+  view.render();
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
+});
+
+it("opens Assistants from its heading without expanding the collapsed section", () => {
+  const onSelect = vi.fn();
+  const view = tabList({ tabs: { ...initialTabs, active: "home" }, onSelect });
+  click(view.tree(), "assistants-toggle");
+  view.render();
+  click(view.tree(), "tab-assistants");
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("assistants");
+  view.render({ tabs: { ...initialTabs, active: "assistants" } });
+  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(true);
+  expect(byId(view.tree(), "tab-assistants").props["aria-selected"]).toBe(true);
+});
+
+it("keeps an unidentified failed custom assistant reachable through its definition entry", () => {
+  const view = tabList({
+    customAgents: [{ id: "unavailable", name: "Recovery Agent", revision: 1, archived: false }],
+    chats: [
+      ...chats,
+      {
+        kind: "relay",
+        customAgentId: "unavailable",
+        run: null,
+        directory: null,
+        error: "Storage is unavailable",
+      } as OrchestrationChat,
+    ],
+  });
+  const entry = find(
+    view.tree(),
+    (element) => element.type === "button" && element.props.className === "chat-sidebar-entry",
+  );
+  expect(
+    find(
+      entry.props.children as ReactNode,
+      (element) => element.props.className === "chat-sidebar-label",
+    ).props.children,
+  ).toBe("Recovery Agent");
+  expect(entry.props.disabled).toBe(false);
+  expect(entry.props.onClick).toBeTypeOf("function");
+});
+
+it.each([
   ["finished", "Finished"],
   ["interrupted", "Interrupted"],
 ] as const)(
-  "hides visible %s labels while preserving accessible status and unread counts",
+  "hides worker unread counts and visible %s labels while preserving accessible status",
   (status, label) => {
     const view = mount(ChatSidebar, {
       ...chatProps,
@@ -199,12 +312,61 @@ it.each([
     expect(find(row, (element) => element.props.className === "sr-only").props.children).toContain(
       label,
     );
-    expect(
-      find(row, (element) => element.props.className === "chat-unread").props["aria-label"],
-    ).toBe("1 unread reply");
+    expect(() => find(row, (element) => element.props.className === "chat-unread")).toThrow(
+      "Missing navigation element",
+    );
     expect(() =>
       find(view.tree(), (element) => element.props.className === "chat-sidebar-status"),
     ).toThrow("Missing navigation element");
+  },
+);
+
+it.each(["project", "relay", "manual"] as const)(
+  "keeps %s worker counts hidden across pushed replies and navigation",
+  (kind) => {
+    const owner = {
+      ...chats[1],
+      kind: kind === "relay" ? "relay" : "project",
+    } as OrchestrationChat;
+    if (kind === "manual") owner.workers = [];
+    const view = mount(ChatSidebar, { ...chatProps, chats: [owner] });
+    for (const count of [1, 3]) {
+      // Exercise both legacy transcript updates and compact app-summary updates.
+      for (const compact of [false, true]) {
+        view.render({
+          runs: runs.map((worker) => ({
+            ...worker,
+            ...(compact ? { replies: { count, lastTurn: count } } : {}),
+          })),
+          eventsByRun: {
+            worker: Array.from({ length: count }, (_, index) => [
+              {
+                runId: "worker",
+                at: "2026-01-01",
+                type: "prompt" as const,
+                turn: index + 1,
+                text: "Task",
+              },
+              { runId: "worker", at: "2026-01-01", type: "message" as const, text: "Reply" },
+            ]).flat(),
+          },
+        });
+        const row = byId(view.tree(), "conversation-worker");
+        expect(row.props["aria-description"]).toContain("Worker. Ready");
+        expect(row.props["aria-description"]).not.toContain("unread");
+        expect(() => find(row, (element) => element.props.className === "chat-unread")).toThrow(
+          "Missing navigation element",
+        );
+        view.render({ selectedId: "worker" });
+        view.render({ selectedId: "chat" });
+        expect(() =>
+          find(
+            byId(view.tree(), "conversation-worker"),
+            (element) => element.props.className === "chat-unread",
+          ),
+        ).toThrow("Missing navigation element");
+      }
+    }
   },
 );
 
@@ -241,13 +403,31 @@ it("keeps approval counts without a visible sidebar status label", () => {
   ).toThrow("Missing navigation element");
 });
 
+it("keeps project worker disclosure independent from chat selection on the leading icon", () => {
+  const onSelect = vi.fn();
+  const view = mount(ChatSidebar, { ...chatProps, onSelect });
+  const toggle = () =>
+    find(view.tree(), (element) => element.props["aria-controls"] === "workers-chat");
+  expect(toggle().props.className).toContain("chat-workers-toggle-leading");
+  expect(find(toggle(), (element) => element.props.name === "app-communication")).toBeDefined();
+  (toggle().props.onClick as () => void)();
+  view.render();
+  expect(toggle().props["aria-expanded"]).toBe(false);
+  expect(byId(view.tree(), "workers-chat").props.hidden).toBe(true);
+  expect(onSelect).not.toHaveBeenCalled();
+  click(view.tree(), "conversation-chat");
+  expect(onSelect).toHaveBeenCalledWith("chat");
+  view.render({ pending: true });
+  expect(toggle().props.disabled).toBe(true);
+});
+
 it.each(["click", "ArrowLeft"] as const)(
   "recursively closes Settings descendants via %s without changing the page",
   (method) => {
     const view = tabList();
     expect(byId(view.tree(), "advanced-toggle").props["aria-expanded"]).toBe(true);
     expect(byId(view.tree(), "experiments-toggle").props["aria-expanded"]).toBe(true);
-    if (method === "click") click(view.tree(), "tab-settings");
+    if (method === "click") click(view.tree(), "settings-card-toggle");
     else press(view.tree(), "tab-settings", method);
     view.render();
     for (const id of ["settings-pages", "advanced-pages", "experiment-pages"]) {
@@ -280,7 +460,9 @@ it("does not reveal Projects for Relay while its selection snapshot is delayed",
     projectAction: vi.fn(async () => true),
     invalidate: vi.fn(),
     pending: false,
+    busy: false,
     projectPending: false,
+    conversationPending: false,
     error: "",
     destination: { kind: "conversation", id: "relay" } as const,
   };
@@ -311,7 +493,9 @@ it("keeps the row selected without marking hidden streaming replies read during 
       projectAction: vi.fn(async () => true),
       invalidate: vi.fn(),
       pending: false,
+      busy: false,
       projectPending: true,
+      conversationPending: false,
       error: "",
     },
   });
@@ -343,32 +527,46 @@ it("keeps the row selected without marking hidden streaming replies read during 
   expect(sessionStorage.setItem).toHaveBeenLastCalledWith(expect.any(String), "2");
 });
 
-it("closes all project accordions on ancestor collapse and does not reopen them for Relay", () => {
+it("changes project disclosure only through its chevron, preserving it through selection and creation", () => {
+  const onProjectOpen = vi.fn();
+  const onAction = vi.fn(async () => true);
   const view = mount(ProjectChatSidebar, {
     ...chatProps,
     selectedId: "worker",
     projects: [project],
     selectedProjectId: "a",
     homeProjectId: "a" as string | undefined,
-    onProjectOpen: vi.fn(),
+    onProjectOpen,
     onProjectAction: vi.fn(async () => true),
+    onAction,
     ancestorsExpanded: true,
-    destination: undefined as ComponentProps<typeof ProjectChatSidebar>["destination"],
   });
+  click(view.tree(), "project-a");
+  view.render();
+  expect(onProjectOpen).toHaveBeenCalledWith("a");
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
+  click(view.tree(), "project-toggle-a");
+  view.render();
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  click(view.tree(), "project-a");
+  view.render({ homeProjectId: undefined, selectedId: "chat", navigationSerial: 1 });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  const add = find(
+    view.tree(),
+    (element) => element.props.className === "icon-button project-session-add",
+  );
+  (add.props.onClick as () => void)();
+  view.render({ selectedId: "new-chat", navigationSerial: 2 });
+  expect(onAction).toHaveBeenCalledWith({ type: "new", projectId: "a" });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
   view.render({ ancestorsExpanded: false });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ homeProjectId: undefined, open: false });
-  view.render({
-    selectedId: "chat",
-    open: true,
-    destination: { kind: "conversation", id: "relay" },
-    ancestorsExpanded: true,
-  });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ selectedId: "relay", ancestorsExpanded: true });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(false);
-  view.render({ destination: { kind: "conversation", id: "chat" } });
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(true);
+  view.render({ ancestorsExpanded: true, homeProjectId: "a" });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(false);
+  click(view.tree(), "project-toggle-a");
+  view.render();
+  view.render({ ancestorsExpanded: false });
+  view.render({ ancestorsExpanded: true });
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
 });
 
 it("closes owned workers with their ancestor and preserves that collapse when the ancestor reopens", () => {
@@ -382,7 +580,7 @@ it("closes owned workers with their ancestor and preserves that collapse when th
   expect(byId(view.tree(), "workers-chat").props.hidden).toBe(false);
 });
 
-it("propagates a project-label collapse to its retained worker disclosures", () => {
+it("propagates an explicit project-chevron collapse to its retained worker disclosures", () => {
   const view = mount(ProjectChatSidebar, {
     ...chatProps,
     projects: [project],
@@ -397,13 +595,31 @@ it("propagates a project-label collapse to its retained worker disclosures", () 
     >;
   const child = mount(ChatSidebar, childProps());
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(false);
-  click(view.tree(), "project-a");
+  click(view.tree(), "project-toggle-a");
   view.render();
   child.render(childProps());
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
-  click(view.tree(), "project-a");
+  click(view.tree(), "project-toggle-a");
   view.render();
   child.render(childProps());
-  expect(byId(view.tree(), "project-a").props["aria-expanded"]).toBe(true);
+  expect(byId(view.tree(), "project-toggle-a").props["aria-expanded"]).toBe(true);
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
+});
+
+it("preserves collapsed Providers until an explicit provider destination changes", () => {
+  const tabs = { ...initialTabs, active: "provider" as const, providerId: "claude" };
+  const view = tabList({ tabs });
+  const providers = () =>
+    find(
+      view.tree(),
+      (element) => typeof element.type === "function" && element.type.name === "ProvidersSidebar",
+    );
+  expect(providers().props.expanded).toBe(true);
+  (providers().props.onExpanded as (open: boolean) => void)(false);
+  view.render();
+  expect(providers().props.expanded).toBe(false);
+  view.render({ tabs: { ...tabs } });
+  expect(providers().props.expanded).toBe(false);
+  view.render({ tabs: { ...tabs, providerId: "codex" } });
+  expect(providers().props.expanded).toBe(true);
 });

@@ -1,10 +1,14 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { AgentStartError } from "../src/agents/index.js";
-import { diffRun, discardRun, listRuns, stopRun } from "../src/core/commands.js";
+import { discardRun, executeDiff, listRuns, prepareDiff, stopRun } from "../src/core/commands.js";
 import { DEFAULT_PERMISSIONS } from "../src/core/config.js";
-import { createOrchestrator, type OrchestratorOptions } from "../src/core/orchestrator.js";
-import type { RunRecord } from "../src/core/types.js";
+import {
+  createOrchestrator,
+  type OrchestratorDeps,
+  type OrchestratorOptions,
+} from "../src/core/orchestrator.js";
+import type { ModeChange, RunRecord, SessionState } from "../src/core/types.js";
 import {
   FakeAgents,
   FakeClock,
@@ -21,21 +25,27 @@ async function setup(
   options: Partial<OrchestratorOptions> & {
     script?: TurnScript;
     count?: number;
-    identity?: () => Promise<NonNullable<RunRecord["ownerIdentity"]> | null>;
+    memory?: OrchestratorDeps["memory"];
   } = {},
 ) {
   const clock = new FakeClock();
   const agents = new FakeAgents(options.script);
   const git = new FakeGit();
   const store = new MemoryStore();
-  const processes = Object.assign(
-    new FakeProcesses(),
-    options.identity ? { identity: options.identity } : {},
-  );
+  const processes = new FakeProcesses();
   let n = 0;
   const count = options.count ?? 1;
   const orch = await createOrchestrator(
-    { agents, git, store, clock, processes, ownerPid: 42, newRunId: () => `r${++n}` },
+    {
+      agents,
+      git,
+      store,
+      clock,
+      processes,
+      ownerPid: 42,
+      newRunId: () => `r${++n}`,
+      ...(options.memory ? { memory: options.memory } : {}),
+    },
     {
       mode: "headless",
       prompt: "do the thing",
@@ -112,28 +122,6 @@ it("cancels interactive worktree preparation and awaits started cleanup before s
 });
 
 describe("a headless run", () => {
-  it("records native owner identity before launching and reuses it for the batch", async () => {
-    const owner = { createdAt: "12345", owner: "S-1-5-21-1" };
-    const identity = vi.fn(async () => owner);
-    const { orch, store } = await setup({ identity });
-    expect(store.records.get("r1")).toMatchObject({ status: "queued", ownerIdentity: owner });
-    orch.start();
-    await orch.done;
-    expect(identity).toHaveBeenCalledTimes(1);
-    expect(store.records.get("r1")).toMatchObject({ status: "finished", ownerIdentity: owner });
-  });
-
-  it("refuses to prepare a batch when the native owner cannot be verified", async () => {
-    await expect(setup({ identity: async () => null })).rejects.toThrow(/owner/);
-    await expect(
-      setup({
-        identity: async () => {
-          throw new Error("access denied");
-        },
-      }),
-    ).rejects.toThrow(/access denied/);
-  });
-
   it("creates the worktree, runs one turn, stops the agent, and finishes", async () => {
     const { orch, agents, git, store } = await setup();
     orch.start();
@@ -200,7 +188,7 @@ describe("a headless run", () => {
       changedFiles: null,
     });
     await expect(
-      diffRun({ git, store, clock: new FakeClock(), processes: new FakeProcesses() }, "r1"),
+      testDiffRun({ git, store, clock: new FakeClock(), processes: new FakeProcesses() }, "r1"),
     ).rejects.toThrow(/without a worktree/);
     await expect(
       discardRun(
@@ -388,6 +376,31 @@ describe("turn timeouts and cancellation", () => {
     orch.finish("r1");
     await orch.done;
     expect(status("r1")).toBe("timed_out");
+  });
+
+  it("publishes cancellation only for the live turn without marking the process as stopping", async () => {
+    const { orch, agents, store } = await setup({ mode: "interactive", script: () => "hang" });
+    orch.start();
+    await flush();
+    const session = agents.sessions[0];
+    if (!session) throw new Error("Missing session");
+    session.onCancel = "ignore";
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    expect(orch.cancelTurn("r1")).toBe(true);
+    expect(orch.runs()[0]).toMatchObject({ status: "running", stopping: false, cancelling: true });
+    expect(await store.read("r1")).not.toHaveProperty("cancelling");
+    session.endTurn("cancelled");
+    await flush();
+    expect(orch.runs()[0]).toMatchObject({ status: "idle", stopping: false });
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    orch.reply("r1", "Next request");
+    await flush();
+    expect(orch.runs()[0]).toMatchObject({ status: "running", stopping: false });
+    expect(orch.runs()[0]?.cancelling).toBeUndefined();
+    session.endTurn("end_turn");
+    await flush();
+    orch.finish("r1");
+    await orch.done;
   });
 
   it("escalates to stopping the agent when a cancelled turn does not end within 10 s", async () => {
@@ -591,10 +604,18 @@ describe("permissions", () => {
     expect(status("r2")).toBe("idle");
     const pending = orch.runs()[0]?.pending ?? [];
     expect(pending).toEqual([
-      { id: "r1#1", runId: "r1", toolCallId: "x", title: "rm -rf build", kind: "execute" },
+      {
+        id: expect.stringMatching(/^r1#\d+$/),
+        runId: "r1",
+        toolCallId: "x",
+        title: "rm -rf build",
+        kind: "execute",
+      },
     ]);
-    expect(orch.answerPermission("r1#1", "allow")).toBe(true);
-    expect(orch.answerPermission("r1#1", "allow")).toBe(false);
+    const request = pending[0];
+    if (!request) throw new Error("Missing pending request");
+    expect(orch.answerPermission(request.id, "allow")).toBe(true);
+    expect(orch.answerPermission(request.id, "allow")).toBe(false);
     await flush();
     expect(answers).toEqual(["allow"]);
     expect(status("r1")).toBe("idle");
@@ -605,8 +626,80 @@ describe("permissions", () => {
     await orch.shutdown();
   });
 
+  it("keeps startup permission requests waiting until answered", async () => {
+    const { orch, agents, processes, status } = await setup({ mode: "interactive", prompt: "" });
+    let release!: (value: string) => void;
+    const metadata = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(processes, "commandLine").mockReturnValue(metadata);
+    orch.start();
+    await flush();
+    const session = agents.sessions[0];
+    if (!session) throw new Error("Missing starting session");
+    const decision = session.requestPermission({
+      toolCallId: "start",
+      title: "Inspect",
+      kind: "execute",
+    });
+    release("agent");
+    await flush();
+    const request = orch.runs()[0]?.pending[0];
+    if (!request) throw new Error("Missing startup request");
+    expect(status("r1")).toBe("waiting");
+    expect(() => orch.reply("r1", "next")).toThrow("idle");
+    expect(orch.answerPermission(request.id, "deny")).toBe(true);
+    expect(await decision).toBe("deny");
+    expect(status("r1")).toBe("idle");
+    await orch.shutdown();
+  });
+
+  it("returns to idle after an out-of-turn permission and withdraws it on shutdown", async () => {
+    const { orch, agents } = await setup({ mode: "interactive", prompt: "" });
+    orch.start();
+    await flush();
+    const agent = agents.sessions[0];
+    if (!agent) throw new Error("Missing session");
+    const request = { toolCallId: "inspect", kind: "execute" as const, title: "Inspect" };
+    const decision = agent.requestPermission(request);
+    const pending = orch.runs()[0]?.pending[0];
+    if (!pending) throw new Error("Missing request");
+    expect(orch.answerPermission(pending.id, "allow")).toBe(true);
+    expect(await decision).toBe("allow");
+    expect(orch.runs()[0]?.status).toBe("idle");
+    const next = agent.requestPermission(request);
+    await orch.shutdown();
+    expect(await next).toBe("deny");
+  });
+
+  it("rejects a delayed permission answer when a replacement run reuses the same run ID", async () => {
+    const options = { mode: "interactive" as const, script: () => "hang" as const };
+    let previous: string | undefined;
+    for (const answer of ["deny", "allow"] as const) {
+      const { orch, agents } = await setup(options);
+      orch.start();
+      await flush();
+      const session = agents.sessions[0];
+      if (!session) throw new Error("Missing session");
+      const decision = session.requestPermission({
+        toolCallId: "tool",
+        title: "Run command",
+        kind: "execute",
+      });
+      const request = orch.runs()[0]?.pending[0];
+      if (!request) throw new Error("Missing request");
+      if (previous) expect(orch.answerPermission(previous, "allow")).toBe(false);
+      expect(orch.answerPermission(request.id, answer)).toBe(true);
+      expect(await decision).toBe(answer);
+      previous = request.id;
+      session.endTurn("end_turn");
+      await flush();
+      await orch.shutdown();
+    }
+  });
+
   it("cancelling a waiting turn withdraws its permission request", async () => {
-    const { orch, status } = await setup({
+    const { orch, agents, status } = await setup({
       mode: "interactive",
       script: (_t, s) => {
         void s.requestPermission({ toolCallId: "x", title: "t", kind: "execute" });
@@ -620,6 +713,15 @@ describe("permissions", () => {
     await flush();
     expect(orch.runs()[0]?.pending).toEqual([]);
     expect(status("r1")).toBe("idle");
+    const next = agents.sessions[0]?.requestPermission({
+      toolCallId: "next",
+      title: "Inspect",
+      kind: "execute",
+    });
+    const request = orch.runs()[0]?.pending[0];
+    if (!request) throw new Error("Missing idle request after cancellation");
+    expect(orch.answerPermission(request.id, "allow")).toBe(true);
+    expect(await next).toBe("allow");
     await orch.shutdown();
   });
 });
@@ -765,7 +867,7 @@ describe("leftover commands", () => {
     expect(done.discarded).toBe(true);
     expect(d.git.removed).toEqual([{ path: "/w/r1", branch: "code60/r1" }]);
     expect(d.store.records.get("r1")?.discardedAt).toBeDefined();
-    await expect(diffRun(d, "r1")).rejects.toThrow(/discarded/);
+    await expect(testDiffRun(d, "r1")).rejects.toThrow(/discarded/);
   });
 
   it("stop refuses when the command line does not match", async () => {
@@ -790,6 +892,13 @@ describe("leftover commands", () => {
     ]);
   });
 
+  it("reads historical native identity metadata without authorizing a stop", async () => {
+    const d = await deps(base({ agentIdentity: { createdAt: "42", owner: "S-1-5-21-1" } }));
+    expect((await listRuns(d))[0]?.record.agentIdentity?.createdAt).toBe("42");
+    await expect(stopRun(d, "r1")).rejects.toThrow("cannot authorize process termination");
+    expect(d.processes.signals).toEqual([]);
+  });
+
   it("stop refuses a run owned by a live process and reports nothing to stop", async () => {
     const owned = await deps(base({ status: "running" }));
     owned.processes.alive.add(7);
@@ -800,6 +909,213 @@ describe("leftover commands", () => {
 });
 
 describe("harness session controls", () => {
+  const state = (): SessionState => ({
+    model: null,
+    modes: null,
+    usage: null,
+    settings: {
+      confirmed: true,
+      reportedAt: "2026-11-16T00:00:00.000Z",
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [
+            { value: "m1", name: "One" },
+            { value: "m2", name: "Two" },
+          ],
+        },
+        {
+          id: "effort",
+          category: "thought_level",
+          name: "Effort",
+          currentValue: "low",
+          options: [
+            { value: "low", name: "Low" },
+            { value: "high", name: "High" },
+          ],
+        },
+      ],
+    },
+  });
+  const selections = [
+    { configId: "effort", value: "high", name: "High" },
+    { configId: "model", value: "m2", name: "Two" },
+  ];
+  it("applies the model first before prompts and remembers explicit choices on memory replacement", async () => {
+    const { orch, agents, status } = await setup({
+      mode: "interactive",
+      prompt: "",
+      initialSettings: () => selections,
+      memory: () => ({
+        event: () => {},
+        dispose: () => {},
+        prepare: async () => ({ context: "", rollover: true, used: [] }),
+      }),
+    });
+    const calls: string[] = [];
+    const start = agents.start.bind(agents);
+    agents.start = async (spec, signal) => {
+      const session = await start(spec, signal);
+      const current = state();
+      return Object.assign(session, {
+        sessionState: current,
+        setMode: async (change: ModeChange) => {
+          calls.push(`${agents.sessions.length}:${change.configId}:${change.value}`);
+          expect(agents.sessions.at(-1)?.turnActive).toBe(false);
+          const control = current.settings?.controls.find((c) => c.id === change.configId);
+          if (control) control.currentValue = change.value;
+          agents.sessions.at(-1)?.update({ type: "sessionState", state: structuredClone(current) });
+        },
+      });
+    };
+    orch.start();
+    await flush();
+    expect(status("r1")).toBe("idle");
+    expect(calls).toEqual(["1:model:m2", "1:effort:high"]);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+    await orch.setMode("r1", { source: "config", configId: "model", value: "m1" });
+    await orch.setMode("r1", { source: "config", configId: "effort", value: "high" });
+    await orch.reply("r1", "next");
+    await flush();
+    expect(calls.slice(4)).toEqual(["2:effort:high"]);
+    // The chosen model m1 already matches the connector; saved m2 must not return.
+    expect(orch.runs()[0]?.sessionState?.settings?.controls[0]?.currentValue).toBe("m1");
+    await orch.shutdown();
+  });
+  it.each(["missing", "rejected", "no-setter"] as const)(
+    "notes an %s default without preventing startup",
+    async (failure) => {
+      const { orch, agents, store, status } = await setup({
+        mode: "interactive",
+        initialSettings: () => [
+          { configId: "model", value: failure === "missing" ? "gone" : "m2", name: "Saved model" },
+        ],
+      });
+      const start = agents.start.bind(agents);
+      agents.start = async (spec, signal) =>
+        Object.assign(await start(spec, signal), {
+          sessionState: state(),
+          ...(failure === "no-setter"
+            ? {}
+            : {
+                setMode: async () => {
+                  throw new Error("refused");
+                },
+              }),
+        });
+      orch.start();
+      await flush();
+      expect(status("r1")).toBe("idle");
+      expect(store.events.some((e) => e.type === "note" && e.text.includes("Saved default"))).toBe(
+        true,
+      );
+      expect(agents.sessions[0]?.prompts).toEqual(["do the thing"]);
+      await orch.shutdown();
+    },
+  );
+  it.each(["user", "timeout", "shutdown"] as const)(
+    "stops a stalled replacement setting on %s without sending the request",
+    async (cause) => {
+      const { orch, agents, clock, store, status } = await setup({
+        mode: "interactive",
+        prompt: "",
+        initialSettings: () => selections,
+        memory: () => ({
+          event: () => {},
+          dispose: () => {},
+          prepare: async () => ({ context: "", rollover: true, used: [] }),
+        }),
+      });
+      const calls: string[] = [];
+      const start = agents.start.bind(agents);
+      agents.start = async (spec, signal) => {
+        const session = await start(spec, signal);
+        const current = state();
+        return Object.assign(session, {
+          sessionState: current,
+          setMode: async (change: ModeChange) => {
+            calls.push(`${session.pid}:${change.configId}`);
+            if (session.pid !== 1000) return new Promise<void>(() => {});
+            const control = current.settings?.controls.find((c) => c.id === change.configId);
+            if (control) control.currentValue = change.value;
+          },
+        });
+      };
+      orch.start();
+      await flush();
+      expect(status("r1")).toBe("idle");
+      const reply = orch.reply("r1", "never send this");
+      await vi.waitFor(() => expect(calls).toContain("1001:model"));
+      let shutdown: Promise<void> | undefined;
+      if (cause === "timeout") await clock.advance(30 * MIN);
+      else if (cause === "shutdown") shutdown = orch.shutdown();
+      else orch.cancelTurn("r1");
+      await vi.waitFor(() => expect(agents.sessions[1]?.stops).not.toEqual([]));
+      await reply;
+      await shutdown;
+      expect(calls).toEqual(["1000:model", "1000:effort", "1001:model"]);
+      expect(agents.sessions[1]?.prompts).toEqual([]);
+      expect(status("r1")).not.toBe("idle");
+      expect(store.events.some((e) => e.type === "note" && e.text.includes("Unsent request"))).toBe(
+        true,
+      );
+      await orch.shutdown();
+    },
+  );
+  it.each(["rejects", "stalls"] as const)(
+    "fails promptless startup if the process exits and the setter %s",
+    async (result) => {
+      const { orch, agents, status } = await setup({
+        mode: "interactive",
+        prompt: "",
+        initialSettings: () => selections,
+      });
+      const setter = vi.fn(async () => {
+        agents.sessions[0]?.crash();
+        if (result === "stalls") return new Promise<void>(() => {});
+        throw new Error("agent exited");
+      });
+      const start = agents.start.bind(agents);
+      agents.start = async (spec, signal) =>
+        Object.assign(await start(spec, signal), { sessionState: state(), setMode: setter });
+      orch.start();
+      await vi.waitFor(() => expect(status("r1")).not.toBe("running"));
+      expect(status("r1")).toBe("failed");
+      expect(setter).toHaveBeenCalledTimes(1);
+      expect(agents.sessions[0]?.prompts).toEqual([]);
+      await orch.shutdown();
+    },
+  );
+  it("cancels promptless startup while a saved setting is pending", async () => {
+    const { orch, agents, status } = await setup({
+      mode: "interactive",
+      prompt: "",
+      initialSettings: () => selections,
+    });
+    const setter = vi.fn(() => new Promise<void>(() => {}));
+    const start = agents.start.bind(agents);
+    agents.start = async (spec, signal) =>
+      Object.assign(await start(spec, signal), { sessionState: state(), setMode: setter });
+    orch.start();
+    await vi.waitFor(() => expect(setter).toHaveBeenCalledTimes(1));
+    await orch.shutdown();
+    expect(status("r1")).toBe("cancelled");
+    expect(agents.sessions[0]?.stops).not.toEqual([]);
+    expect(agents.sessions[0]?.prompts).toEqual([]);
+  });
+  it("leaves headless provider defaults unchanged", async () => {
+    const { orch, agents } = await setup({ initialSettings: () => selections });
+    const start = agents.start.bind(agents);
+    const setter = vi.fn();
+    agents.start = async (spec, signal) =>
+      Object.assign(await start(spec, signal), { sessionState: state(), setMode: setter });
+    orch.start();
+    await orch.done;
+    expect(setter).not.toHaveBeenCalled();
+  });
   it("persists initial and live state, isolates runs, and gates prompts without changing permissions", async () => {
     const state = {
       model: null,
@@ -878,3 +1194,7 @@ describe("harness session controls", () => {
     await expect(orch.setMode("r1", change)).rejects.toThrow(/idle/);
   });
 });
+
+async function testDiffRun(deps: Parameters<typeof prepareDiff>[0], id: string) {
+  return executeDiff(deps.git, await prepareDiff(deps, id));
+}

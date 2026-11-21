@@ -35,12 +35,12 @@ describe("independent card titles", () => {
   });
 });
 
-describe("IBM Plex Light", () => {
+describe("readable body defaults", () => {
   it("reserves the previous title space without resetting explicitly saved sizes or weights", () => {
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
       "--title-size": "16px",
       "--page-title-space-size": "64px",
-      "--human-weight": "300",
+      "--human-weight": "400",
     });
     for (const size of [8, 16, 32, 64]) {
       const styles = parseTextStyles(

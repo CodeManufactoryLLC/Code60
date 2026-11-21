@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { copyFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -8,7 +8,6 @@ import { build } from "vite";
 import { expect, it } from "vitest";
 import { parseLogQuery } from "../src/bridge/index.js";
 import { DesktopLogStore } from "../src/desktop/log-store.js";
-import { privateDirectory, windowsHelper } from "../src/platform/index.js";
 
 it("independent processes share the private writer lock without losing accepted records", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-log-processes-")));
@@ -32,10 +31,6 @@ it("independent processes share the private writer lock without losing accepted 
     expect(code).toBeTruthy();
     const bundle = join(directory, "store.mjs");
     await writeFile(bundle, code as string);
-    if (process.platform === "win32") {
-      await privateDirectory(join(directory, "resources", "native"));
-      await copyFile(windowsHelper(), join(directory, "resources", "native", "code60-host.exe"));
-    }
     const worker = `
       process.resourcesPath = ${JSON.stringify(join(directory, "resources"))};
       const { DesktopLogStore } = await import(${JSON.stringify(pathToFileURL(bundle).href)});

@@ -23,6 +23,7 @@ import { FileBrowserState } from "./file-browser-state.js";
 import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
 import type { PreviewViewState } from "./monaco-preview.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import { PageTitle } from "./page-title.js";
 import { pathLabel } from "./path-label.js";
 
@@ -256,7 +257,7 @@ function FileSettings({
     };
   }, []);
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog picker-dialog"
       aria-labelledby={id}
@@ -290,7 +291,7 @@ function FileSettings({
           Done
         </button>
       </div>
-    </dialog>
+    </DialogContent>
   );
 }
 

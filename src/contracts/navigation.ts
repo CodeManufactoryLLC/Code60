@@ -21,7 +21,9 @@ export interface PageDefinition {
   internal?: boolean;
 }
 export const parentPageIds = [
+  "assistants",
   "projects",
+  "providers",
   "apps",
   "tables",
   "settings",
@@ -31,6 +33,25 @@ export const parentPageIds = [
 export type ParentPageId = (typeof parentPageIds)[number];
 export const pages = [
   {
+    id: "assistants",
+    label: "Assistants",
+    group: "primary",
+    order: 0,
+    initialOrder: 24,
+    database: false,
+    icon: "app-assistants",
+  },
+  {
+    id: "custom-agents",
+    parent: "assistants",
+    label: "Custom Assistants",
+    group: "primary",
+    order: 0,
+    initialOrder: 23,
+    database: false,
+    icon: "app-custom-agents",
+  },
+  {
     id: "projects",
     label: "Projects",
     group: "chat",
@@ -38,6 +59,26 @@ export const pages = [
     initialOrder: 18,
     database: false,
     icon: "app-backlog",
+  },
+  {
+    id: "providers",
+    label: "Providers",
+    group: "primary",
+    order: 1,
+    initialOrder: 25,
+    database: false,
+    icon: "app-helmet",
+  },
+  {
+    id: "provider",
+    label: "Provider",
+    group: "legacy",
+    order: 0,
+    initialOrder: 26,
+    database: false,
+    icon: "app-helmet",
+    parent: "providers",
+    internal: true,
   },
   {
     id: "project",
@@ -91,7 +132,7 @@ export const pages = [
   {
     id: "automations",
     initialOrder: 16,
-    label: "Automation Studio",
+    label: "Scheduled Jobs",
     group: "apps",
     order: -1,
     database: false,
@@ -104,7 +145,7 @@ export const pages = [
     group: "apps",
     order: 2,
     database: false,
-    icon: "wrench",
+    icon: "app-system-manager",
   },
   {
     id: "apps",
@@ -275,7 +316,6 @@ export const pages = [
 
 export const settingsSections = [
   { id: "about", label: "About", icon: "app-info" },
-  { id: "agents", label: "Agents", icon: "app-helmet" },
   { id: "appearance", label: "Appearance", icon: "app-color-palette" },
   { id: "memory", label: "Memory", icon: "app-bookshelf" },
   { id: "polling-settings", label: "Polling", icon: "app-heart-rate" },

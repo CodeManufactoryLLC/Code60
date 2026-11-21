@@ -82,6 +82,55 @@ const flush = async () => {
 };
 
 describe("durable automation scheduler", () => {
+  it("reports live job ownership independently of recurrence and history paging", async () => {
+    const s = setup();
+    const job = (await s.scheduler.request({
+      action: "create",
+      draft: { ...draft, enabled: false },
+    })) as Automation;
+    const list = async () =>
+      (await s.scheduler.request({ action: "list" })) as {
+        id: string;
+        enabled: boolean;
+        running: boolean;
+      }[];
+    expect(await list()).toMatchObject([{ id: job.id, enabled: false, running: false }]);
+    await s.scheduler.request({ action: "runNow", id: job.id });
+    await flush();
+    expect(await list()).toMatchObject([{ id: job.id, enabled: false, running: true }]);
+    await s.scheduler.request({ action: "history", before: 1 });
+    expect((await list())[0]?.running).toBe(true);
+    await expect(
+      s.scheduler.request({ action: "delete", id: job.id, revision: job.revision }),
+    ).rejects.toThrow("Cancel active work");
+    await s.scheduler.request({ action: "cancel", id: job.id });
+    await s.scheduler.stop();
+    expect((await list())[0]?.running).toBe(false);
+    expect(s.store.state.executions[0]?.status).toBe("cancelled");
+    expect(s.store.state.automations[0]).not.toHaveProperty("running");
+  });
+  it("notifies loss of live ownership after a failed final save without changing retained evidence", async () => {
+    const s = setup();
+    const job = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    await s.scheduler.request({ action: "runNow", id: job.id });
+    await flush();
+    const persisted = structuredClone(s.store.state);
+    const changed = vi.fn();
+    const unsubscribe = s.scheduler.onChange(changed);
+    vi.mocked(s.store.save).mockRejectedValueOnce(new Error("Synthetic final write failure"));
+    s.release();
+    await s.scheduler.stop();
+    expect(changed).toHaveBeenCalledWith(persisted.revision);
+    expect(s.store.state).toEqual(persisted);
+    expect(s.scheduler.status()).toMatchObject({
+      activeExecutionId: null,
+      block: { reason: "persistence_failed" },
+    });
+    const jobs = await s.scheduler.request({ action: "list" });
+    expect(jobs).toMatchObject([{ id: job.id, running: false }]);
+    expect(persisted.executions[0]?.status).toBe("running");
+    unsubscribe();
+  });
   it("fences a claim still being saved when shutdown begins", async () => {
     const s = setup();
     const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;

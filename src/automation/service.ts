@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
+import { assertSupportedPlatform } from "../platform/index.js";
 import { executionEvidence } from "./evidence.js";
 import { createExecutor } from "./executor.js";
 import { listenService, serviceRequest } from "./protocol.js";
@@ -13,6 +14,7 @@ export async function startService(
   env: Readonly<NodeJS.ProcessEnv>,
   deps: CoreDeps = defaultDeps(),
 ) {
+  assertSupportedPlatform();
   const root = automationRoot(env);
   const store = await AutomationStore.open(root);
   const scheduler = new Scheduler(store, createExecutor(deps, env));

@@ -72,6 +72,27 @@ function memoryFs() {
 }
 
 describe("shared record-store coordination", () => {
+  it("saves nested project records within the Windows private-path limit", async () => {
+    const fs = memoryFs();
+    const directory = join(root, "project".padEnd(182 - root.length - 1, "x"));
+    const id = "20261116-170358-b546d5";
+    const write = fs.writeFile.getMockImplementation();
+    if (!write) throw new Error("Missing fixture writer");
+    fs.writeFile.mockImplementation(async (path, data) => {
+      if (path.length > 247) throw new Error("Unsupported Windows path");
+      await write(path, data);
+    });
+    const store = createRecordStore(fs, directory);
+    expect(join(directory, id, "run.json")).toHaveLength(214);
+    await store.save(record(id));
+    await store.save({ ...record(id), status: "running" });
+    expect((await store.read(id)).status).toBe("running");
+    expect(await fs.readdir(join(directory, id))).toEqual(["run.json"]);
+    const temporaryPaths = fs.writeFile.mock.calls.map(([path]) => path);
+    expect(new Set(temporaryPaths).size).toBe(2);
+    for (const path of temporaryPaths) expect(path.length).toBeLessThanOrEqual(247);
+  });
+
   it("shares native storage scope across independently created dependencies", () => {
     expect(defaultDeps().fs.recordStoreScope).toBe(defaultDeps().fs.recordStoreScope);
   });
@@ -207,6 +228,98 @@ describe("shared record-store coordination", () => {
       root,
     ]);
     expect((await store.list())[0]?.id).toBe("r1");
+  });
+
+  it("coalesces queued event appends without moving them across run.json saves", async () => {
+    const fs = memoryFs();
+    const store = createRecordStore(fs, root);
+    const other = createRecordStore({ ...fs }, alias);
+    await other.list();
+    const append = fs.appendFile.getMockImplementation();
+    if (!append) throw new Error("Missing fixture appender");
+    const entered = deferred();
+    const release = deferred();
+    fs.appendFile.mockImplementationOnce(async (path, data) => {
+      entered.resolve();
+      await release.promise;
+      await append(path, data);
+    });
+    const event = (text: string) =>
+      store.appendEvent({ runId: "r1", at: "t", type: "message", text });
+    const first = event("0");
+    await entered.promise;
+    const queued = [event("1"), event("2")];
+    const saved = other.save(record());
+    const later = [event("3"), event("4")];
+    release.resolve();
+    await Promise.all([first, ...queued, saved, ...later]);
+    expect(fs.appendFile.mock.calls.map(([, data]) => data.split("\n").length - 1)).toEqual([
+      1, 2, 2,
+    ]);
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    const appends = fs.appendFile.mock.invocationCallOrder;
+    const save = fs.writeFile.mock.invocationCallOrder[0] as number;
+    expect(appends[1]).toBeLessThan(save);
+    expect(appends[2]).toBeGreaterThan(save);
+    expect(
+      (await store.readEvents("r1")).map((entry) => (entry.type === "message" ? entry.text : "")),
+    ).toEqual(["0", "1", "2", "3", "4"]);
+  });
+
+  it("splits queued append batches at the character bound without losing events", async () => {
+    const fs = memoryFs();
+    const store = createRecordStore(fs, root);
+    const entered = deferred();
+    const release = deferred();
+    const append = fs.appendFile.getMockImplementation();
+    if (!append) throw new Error("Missing fixture appender");
+    fs.appendFile.mockImplementationOnce(async (path, data) => {
+      entered.resolve();
+      await release.promise;
+      await append(path, data);
+    });
+    const event = (text: string) =>
+      store.appendEvent({ runId: "r1", at: "t", type: "message", text });
+    const first = event("held");
+    await entered.promise;
+    const overhead = JSON.stringify({ runId: "r1", at: "t", type: "message", text: "" }).length + 1;
+    const text = "x".repeat(524_288 - overhead);
+    const queued = [event(text), event(text), event("last")];
+    release.resolve();
+    await Promise.all([first, ...queued]);
+    expect(fs.appendFile).toHaveBeenCalledTimes(3);
+    for (const [, data] of fs.appendFile.mock.calls)
+      expect(data.length).toBeLessThanOrEqual(1_048_576);
+    expect(
+      (await store.readEvents("r1")).map((entry) => (entry.type === "message" ? entry.text : "")),
+    ).toEqual(["held", text, text, "last"]);
+  });
+
+  it("rejects every event in a failed coalesced append and accepts later events", async () => {
+    const fs = memoryFs();
+    const store = createRecordStore(fs, root);
+    const entered = deferred();
+    const release = deferred();
+    fs.appendFile.mockImplementationOnce(async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    fs.appendFile.mockRejectedValueOnce(new Error("Append failed"));
+    const event = (text: string) =>
+      store.appendEvent({ runId: "r1", at: "t", type: "message", text });
+    const first = event("held");
+    await entered.promise;
+    const failed = [event("a"), event("b")].map((promise) =>
+      expect(promise).rejects.toThrow("Append failed"),
+    );
+    release.resolve();
+    await first;
+    await Promise.all(failed);
+    await event("after");
+    expect(fs.appendFile).toHaveBeenCalledTimes(3);
+    expect(
+      (await store.readEvents("r1")).map((entry) => (entry.type === "message" ? entry.text : "")),
+    ).toEqual(["after"]);
   });
 
   it("releases failed writes and listings and retries failed canonicalization", async () => {

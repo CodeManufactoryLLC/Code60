@@ -1,7 +1,7 @@
 import type { DependencyList, EffectCallback } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { SessionState } from "../core/index.js";
-import { SessionInfo } from "./session-info.js";
+import { SessionOptionPicker } from "./session-info.js";
 
 const hooks = vi.hoisted(() => ({
   dependencies: undefined as DependencyList | undefined,
@@ -61,13 +61,17 @@ it("keeps harness choices through unrelated scrolls, but dismisses a moved ancho
   vi.stubGlobal("innerWidth", 1100);
   hooks.open = true;
   hooks.refs = [button, popup];
-  SessionInfo({
-    state: undefined,
+  SessionOptionPicker({
+    controls: [],
+    source: "config",
+    confirmed: true,
+    label: "Harness mode",
+    menuLabel: "Harness modes",
+    selected: "Ask",
+    tip: "Harness mode: Ask",
     ended: false,
     editable: true,
     changing: false,
-    autoApproval: false,
-    harness: "droid",
     sessionId: "same-session",
     onMode: vi.fn(),
   });
@@ -103,13 +107,17 @@ it("keeps an open mode menu across equivalent pushed snapshots, but not capabili
     },
   };
   const render = (state: SessionState) =>
-    SessionInfo({
-      state,
+    SessionOptionPicker({
+      controls: state.modes?.controls ?? [],
+      source: state.modes?.source ?? "config",
+      confirmed: state.modes?.confirmed ?? false,
+      label: "Harness mode",
+      menuLabel: "Harness modes",
+      selected: "Ask",
+      tip: "Harness mode: Ask",
       ended: false,
       editable: true,
       changing: false,
-      autoApproval: false,
-      harness: "droid",
       sessionId: "same-session",
       onMode: vi.fn(),
     });

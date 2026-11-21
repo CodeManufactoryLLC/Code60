@@ -41,13 +41,16 @@ Code60 answers permission requests reported by the agent through ACP. This
 policy is not an operating-system sandbox and cannot constrain actions an
 agent does not submit for approval.
 
-- **CLI and manual desktop runs:** the default policy allows `read`, `search`,
-  `think`, and `edit`, and asks for other kinds. In the headless CLI, `ask`
-  means deny, never an interactive prompt. Configuration and the CLI's
-  `--allow` and `--allow-all` flags can change these decisions.
-- **Orchestration chats and their workers:** Code60 automatically allows
-  permission requests using the agent's supported `allow_once` option. These
-  sessions do not use the manual-run policy to ask you for each action.
+- **Manual desktop runs:** the default policy allows `read`, `search`,
+  `think`, and `edit`, and asks for other kinds. Configuration and explicit desktop permission choices can change these decisions.
+- **Scheduled automations:** use the saved explicit allowlist and deny other
+  requests. The internal headless executor never prompts.
+- **Orchestration chats and their workers:** Code60 auto-approval defaults on.
+  Turn it off beside **Harness mode** in the chat or worker composer to review each new ACP request
+  in the originating Relay, custom assistant, project chat or worker. Choose **Allow
+  once** or **Deny**. The setting persists across restarts and applies to live
+  sessions. A request already awaiting review still requires a decision after
+  you turn auto-approval back on.
 - **Once-only decisions:** Code60 chooses the corresponding once-only
   allow/deny option, never an always-allow grant. If no matching once-only
   option exists, the request is answered as cancelled. Once-only does not
@@ -57,6 +60,11 @@ The provider's **Harness mode** is separate from Code60's approval policy.
 Choosing an Ask mode does not turn off Code60 auto-approval in orchestration
 chats or workers. Any provider sandbox or other restrictions depend on that
 provider and its configuration.
+
+Model and reasoning changes accept only current connector-advertised values
+between turns. Saving a role default derives confirmed selections in main, not
+from renderer-supplied values. Defaults do not change approval policy or grant
+new worker authority.
 
 See [permissions](ARCHITECTURE.md#permissions) and
 [harness modes](ARCHITECTURE.md#session-information-and-harness-modes).

@@ -189,7 +189,7 @@ describe("desktop IPC validation", () => {
         expect(() => parse({ ...value, ...extra })).toThrow("Invalid review request");
     }
   });
-  it("preserves POSIX file names while rejecting Windows devices, streams and ambiguous names", () => {
+  it("preserves POSIX file names and rejects unsupported drive roots", () => {
     const context = (root: string, preview: string) => ({
       project: root,
       root,
@@ -200,9 +200,7 @@ describe("desktop IPC validation", () => {
       expect(parseFileContext(context("/repo", path))).toEqual(context("/repo", path));
       expect(() => parseFileContext(context("C:\\repo", path))).toThrow();
     }
-    expect(parseFileContext(context("D:\\雪 project", "src/雪.ts"))).toEqual(
-      context("D:\\雪 project", "src/雪.ts"),
-    );
+    expect(() => parseFileContext(context("D:\\雪 project", "src/雪.ts"))).toThrow();
     for (const path of ["../escape", "src\\escape", "/absolute", "a\0b"])
       expect(() => parseFileContext(context("C:\\repo", path))).toThrow();
     for (const root of ["C:repo", "\\\\server\\share", "\\\\?\\C:\\repo", "C:\\repo:stream"])

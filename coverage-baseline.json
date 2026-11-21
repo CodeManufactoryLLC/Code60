@@ -5,7 +5,7 @@
     "provider": "@vitest/coverage-v8@5.1.0",
     "runtimes": ["22.12.0", "24.22.0"],
     "host": "macOS arm64",
-    "policy": "Floors use the lower measured supported-runtime result. Native Windows/Linux validation remains required; simulated process protocol tests do not establish native ACL or installer correctness."
+    "policy": "Floors use the lower measured supported-runtime result. Native Linux validation remains required; unit checks do not establish installer correctness."
   },
   "overall": { "statements": 59.8, "branches": 52.6, "functions": 51.4, "lines": 61.6 },
   "files": {

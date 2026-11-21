@@ -1,5 +1,11 @@
 import type { DesktopRun, OrchestrationChat } from "../bridge/index.js";
 
+/** Renderer event ownership; historical run IDs alone need not be globally unique. */
+export const chatEventKey = (chat: OrchestrationChat): string =>
+  chat.kind !== "relay" && chat.projectId
+    ? `${chat.projectId}:${chat.run?.id ?? ""}`
+    : (chat.run?.id ?? "");
+
 export interface Conversation {
   id: string;
   label: string;
@@ -23,6 +29,21 @@ export function conversationTitle(
 
 export const conversationId = (chat: OrchestrationChat): string | undefined =>
   chat.run?.id ?? (chat.kind === "relay" ? chat.conversationId : undefined);
+
+export function hasConversationRun(
+  chats: readonly OrchestrationChat[],
+  runs: readonly DesktopRun[],
+  id: string | undefined,
+): boolean {
+  return (
+    !!id && (chats.some((chat) => chat.run?.id === id) || runs.some((run) => run.record.id === id))
+  );
+}
+
+export const builtinRelayId = (chats: readonly OrchestrationChat[]): string | undefined => {
+  const relay = chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
+  return relay && conversationId(relay);
+};
 
 /** The orchestrator's role name for a worker, or its provider and short run ID. */
 export function workerLabel(chats: readonly OrchestrationChat[], run: DesktopRun): string {
@@ -101,4 +122,19 @@ export function reconcileDisclosure(
       result.delete(entry.parentId);
   }
   return result;
+}
+
+/** Application conversations share a null directory, so presentation needs their explicit owner. */
+export function isSelectedConversation(
+  chat: OrchestrationChat | undefined,
+  selected: OrchestrationChat | undefined,
+): boolean {
+  if (chat?.kind === "relay" || selected?.kind === "relay")
+    return (
+      chat?.kind === "relay" &&
+      selected?.kind === "relay" &&
+      chat.customAgentId === selected.customAgentId &&
+      chat.conversationId === selected.conversationId
+    );
+  return chat?.directory === selected?.directory;
 }

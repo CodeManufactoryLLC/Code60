@@ -16,7 +16,6 @@ import { createOrchestrator } from "../src/core/orchestrator.js";
 import { MemoryService } from "../src/desktop/memory-service.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
 import { memorySearch } from "../src/desktop/memory-worker.js";
-import { sqliteAvailable } from "../src/desktop/projects.js";
 import {
   FakeAgents,
   FakeClock,
@@ -25,6 +24,7 @@ import {
   flush,
   MemoryStore as Runs,
 } from "./fakes.js";
+import { sqliteFtsAvailable } from "./fixtures/sqlite.js";
 
 function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Expected test fixture value");
@@ -176,7 +176,7 @@ function exchange(memory: RunMemory, text = "Redis cache uses local storage.") {
   emit(memory, { type: "message", text: "a".repeat(4500) });
   emit(memory, { type: "turnEnd", turn: 1, stopReason: "end_turn", outcome: "finished" });
 }
-describe.skipIf(!sqliteAvailable())("scoped runtime memory and handoff", () => {
+describe.skipIf(!sqliteFtsAvailable())("scoped runtime memory and handoff", () => {
   it("invalidates prepared recalled context only for the rewound conversation", async () => {
     const key = "rewound-conversation";
     const memory = must(service.attach(deps, "relay", null, key).memory)(

@@ -45,7 +45,9 @@ const navigation: NavigationActions = {
   projectAction: vi.fn(async () => true),
   invalidate: vi.fn(),
   pending: false,
+  busy: false,
   projectPending: false,
+  conversationPending: false,
   error: "",
 };
 
@@ -67,10 +69,10 @@ describe("navigation tree", () => {
   });
   it("resolves only immediate children in sidebar order with real destinations", () => {
     expect(staticChildren("apps", null).map(({ id }) => id)).toEqual([
-      "automations",
       "commands",
       "tables",
       "prompts",
+      "automations",
       "system-manager",
     ]);
     expect(staticChildren("tables", null).map(({ id }) => id)).toEqual([
@@ -119,6 +121,7 @@ describe("navigation tree", () => {
     expect(inNavigationBranch("logs", "settings")).toBe(false);
     expect(navigationParent("home")).toBeUndefined();
     for (const id of [
+      "assistants",
       "projects",
       "project",
       "tables",
@@ -191,7 +194,7 @@ describe("navigation tree", () => {
     });
     const html = renderToStaticMarkup(dynamic);
     expect(html).toContain("No conversations");
-    expect(html).toContain('aria-label="New session in A"');
+    expect(html).toContain('aria-label="New Session in A"');
     expect(html).toContain('id="project-a-title"');
     expect(dynamic[0]?.props.hidden).toBe(false);
     dynamic[0]?.props.create?.onClick();

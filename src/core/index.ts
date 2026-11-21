@@ -25,6 +25,7 @@ import {
   type RecordStore,
   runsDir,
 } from "./records.js";
+import type { SessionSelection } from "./run.js";
 import {
   ACTIVE_STATUSES,
   type Config,
@@ -37,6 +38,7 @@ import { CODE60_VERSION } from "./version.js";
 
 export type { AgentMcpServer } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
+export { defaultableSelections } from "../contracts/index.js";
 export type {
   GitReadiness,
   GitSetupFile,
@@ -44,10 +46,8 @@ export type {
   GitWorktree,
   ReviewSnapshotFile,
 } from "../git/index.js";
-export { diagnosticMessage, diagnosticText } from "../platform/index.js";
 export * from "./agent-memory.js";
 export {
-  diffRun,
   discardRun,
   executeDiff,
   type ListedRun,
@@ -56,11 +56,11 @@ export {
   stopRun,
 } from "./commands.js";
 export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
-export { ExitCode, exitCodeFor } from "./exit-code.js";
 export type { Orchestrator } from "./orchestrator.js";
 export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";
 export * from "./recurrence.js";
+export type { SessionSelection } from "./run.js";
 export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
@@ -109,15 +109,16 @@ export async function prepareOrchestrationChat(
   config: Config,
   options: {
     mcpServers?: readonly AgentMcpServer[];
+    orchestrationAutoApproval?: () => boolean;
     promptContext?: () => string;
     recovery?: RunRecord;
+    /** Saved session-option defaults applied to each newly created session. */
+    initialSettings?: readonly SessionSelection[];
   } = {},
 ): Promise<Orchestrator> {
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
   if (!agent) throw new UsageError(`Unavailable orchestration provider: ${name}`);
   await deps.fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  if (process.platform === "win32")
-    await deps.fs.mkdir(join(directory, ".code60"), { recursive: true, mode: 0o700 });
   return createOrchestrator(
     { ...deps, store: createRecordStore(deps.fs, join(directory, ".code60", "runs")) },
     {
@@ -131,10 +132,13 @@ export async function prepareOrchestrationChat(
       turnTimeoutMs: parseDuration(config.turnTimeout),
       maxParallel: 1,
       policy: config.permissions,
-      overrides: { allow: [], allowAll: true },
+      overrides: { orchestrationAutoApproval: options.orchestrationAutoApproval ?? (() => true) },
       prompts: config.prompts,
       mcpServers: [...configuredMcpServers(config), ...(options.mcpServers ?? [])],
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
+      ...(options.initialSettings?.length
+        ? { initialSettings: () => options.initialSettings }
+        : {}),
     },
   );
 }
@@ -199,14 +203,7 @@ export async function openWorkspace(
   env: Env,
   includeDirectoryHistory = false,
 ): Promise<Workspace> {
-  let dir = resolve(cwd);
-  if (process.platform === "win32" && deps.fs.realpath) {
-    try {
-      dir = await deps.fs.realpath(dir);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-  }
+  const dir = resolve(cwd);
   const repo = await deps.git.repoInfo(dir).catch(() => null);
   const store = createRecordStore(
     deps.fs,
@@ -230,7 +227,7 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 }
 
 export interface RunRequest {
-  /** Explicit desktop execution policy. Omitted preserves CLI auto-detection. */
+  /** Explicit desktop execution policy. Omitted preserves internal workspace detection. */
   workspaceMode?: "direct" | "worktree";
   /** Desktop workers must never fall back to editing the shared directory. */
   requireIsolation?: boolean;
@@ -246,12 +243,15 @@ export interface RunRequest {
   parallel?: string;
   allow?: readonly string[];
   allowAll?: boolean;
+  orchestrationAutoApproval?: () => boolean;
   /** Internal desktop marker for Relay-owned workers. */
   owner?: "relay";
+  /** Internal desktop-only saved session-option defaults per provider. */
+  initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
 }
 
 /** Why runs go directly into the workspace directory instead of worktrees. */
-export type NoWorktreeReason = "not_a_repository" | "no_commits";
+type NoWorktreeReason = "not_a_repository" | "no_commits";
 
 export interface PreparedRuns {
   orchestrator: Orchestrator;
@@ -272,18 +272,15 @@ function worktreeRoot(
   if (config.worktreeDir === null) {
     return join(dirname(mainRoot), `${basename(mainRoot)}.worktrees`);
   }
-  const dir = config.worktreeDir.replace(
-    process.platform === "win32" ? /^~(?=$|[\\/])/ : /^~(?=$|\/)/,
-    userHome(env),
-  );
+  const dir = config.worktreeDir.replace(/^~(?=$|\/)/, userHome(env));
   return isAbsolute(dir) ? dir : resolve(mainRoot, dir);
 }
 
-/** Upper bound on the runs `--parallel` starts for a single agent, to catch typos. */
+/** Upper bound on copies requested for a single agent, to catch typos. */
 const MAX_COPIES = 32;
 
 /**
- * Validates a `run` request, then creates the queued runs. Invalid input throws `UsageError`.
+ * Validates an execution request, then creates the queued runs. Invalid input throws `UsageError`.
  * With one agent, `parallel` is the number of runs of it to start; with several, the limit on
  * active runs.
  */
@@ -355,7 +352,6 @@ export async function prepareRuns(
   }
   if ((request.requireIsolation || request.workspaceMode === "worktree") && noWorktree)
     throw new RefusedError("Set up Git with an initial commit before starting desktop workers.");
-  await preparePrivateRecords(deps, workspace, request.env);
   const interrupted = await markInterrupted(
     commandDeps(deps, workspace),
     await workspace.store.list(),
@@ -376,10 +372,15 @@ export async function prepareRuns(
       turnTimeoutMs,
       maxParallel,
       policy: config.permissions,
-      overrides: { allow, allowAll: request.allowAll === true },
+      overrides: request.orchestrationAutoApproval
+        ? { orchestrationAutoApproval: request.orchestrationAutoApproval }
+        : { allow, allowAll: request.allowAll === true },
       prompts: config.prompts,
       ...(mcpServers.length ? { mcpServers } : {}),
       ...(request.owner === undefined ? {} : { owner: request.owner }),
+      ...(request.initialSettings === undefined
+        ? {}
+        : { initialSettings: request.initialSettings }),
     },
   );
   return {
@@ -404,9 +405,11 @@ export async function prepareRecovery(
   env: Env,
   /** Template overrides applied over the config file's templates, such as desktop edits. */
   prompts: Partial<PromptTemplates> = {},
-  /** Permission overrides, such as the fixed allow-all policy of orchestrated workers. */
+  /** Permission overrides, such as the live approval policy of orchestrated workers. */
   overrides?: PolicyOverrides,
   configuration?: Config,
+  /** Desktop-only saved session-option defaults for a fresh handoff session. */
+  initialSettings?: readonly SessionSelection[],
 ): Promise<PreparedRecovery> {
   if (ACTIVE_STATUSES.has(record.status)) {
     throw new RefusedError(
@@ -422,7 +425,6 @@ export async function prepareRecovery(
   const mcpServers = configuredMcpServers(config);
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
-  await preparePrivateRecords(deps, workspace, env);
   const orchestrator = await createOrchestrator(
     { ...deps, store: workspace.store },
     {
@@ -438,6 +440,7 @@ export async function prepareRecovery(
       ...(overrides === undefined ? {} : { overrides }),
       prompts: { ...config.prompts, ...prompts },
       ...(mcpServers.length ? { mcpServers } : {}),
+      ...(initialSettings?.length ? { initialSettings: () => initialSettings } : {}),
     },
   );
   return { orchestrator, config };
@@ -455,17 +458,6 @@ export {
   type RagSource,
   topMatches,
 } from "./rag.js";
+// Read-only desktop consumers enumerate and validate records without lifecycle reconciliation.
+export { createRecordStore, directoryRunsDir } from "./records.js";
 export { summarizeSearch } from "./search-summary.js";
-
-async function preparePrivateRecords(
-  deps: CoreDeps,
-  workspace: Workspace,
-  env: Env,
-): Promise<void> {
-  if (process.platform !== "win32") return;
-  await deps.fs.mkdir(join(workspace.repo?.commonDir ?? stateHome(env), "code60"), {
-    recursive: true,
-    mode: 0o700,
-  });
-  await deps.fs.mkdir(workspace.store.dir, { recursive: true, mode: 0o700 });
-}

@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nativeIdentity, ownedJob } from "../platform/index.js";
 import { createProcesses, recordedAgentAlive } from "./processes.js";
 
-vi.mock("../platform/index.js", () => ({ nativeIdentity: vi.fn(), ownedJob: vi.fn() }));
 vi.mock("node:child_process", () => ({
   execFile: vi.fn((_file, _args, _options, callback) => callback(null, "  node agent  \n")),
 }));
@@ -11,7 +9,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
-const identity = { createdAt: "42", owner: "owner", job: "job" };
 const platform = (name: string, kill = vi.fn()) =>
   vi.stubGlobal("process", { ...process, platform: name, kill });
 
@@ -64,32 +61,10 @@ describe("leftover ownership checks", () => {
     expect(await processes.commandLine(42)).toBeUndefined();
   });
 
-  it("never treats unknown, inaccessible or reused Windows identities as safe", async () => {
-    platform("win32");
-    const processes = createProcesses();
-    expect(processes.isAlive(0)).toBe(false);
-    expect(processes.groupAlive(42)).toBe(true);
-    expect(await processes.commandLine(42)).toBeUndefined();
-    expect(() => processes.signalGroup(42, "SIGTERM")).toThrow(/verified/);
-    vi.mocked(nativeIdentity).mockResolvedValue(null);
-    expect(await processes.ownerAlive?.(42, identity)).toBe(false);
-    vi.mocked(nativeIdentity).mockResolvedValue(identity);
-    expect(await processes.ownerAlive?.(42)).toBe(true);
-    expect(await processes.ownerAlive?.(42, identity)).toBe(true);
-    expect(await processes.ownerAlive?.(42, { ...identity, createdAt: "different" })).toBe(false);
-    vi.mocked(nativeIdentity).mockRejectedValue(new Error("denied"));
-    expect(await processes.ownerAlive?.(42, identity)).toBe(true);
-    expect(await recordedAgentAlive(processes, { agentPid: 42 })).toBe(true);
-    await expect(processes.stopOwned?.(42)).rejects.toThrow(/missing/);
-    vi.mocked(ownedJob).mockResolvedValue("alive");
-    expect(await recordedAgentAlive(processes, { agentPid: 42, agentIdentity: identity })).toBe(
-      true,
-    );
-    await expect(processes.stopOwned?.(42, identity)).rejects.toThrow(/did not stop/);
-    vi.mocked(ownedJob).mockRejectedValue(new Error("denied"));
-    expect(await processes.agentAlive?.(42, identity)).toBe(true);
-    vi.mocked(ownedJob).mockResolvedValue("gone");
-    expect(await processes.agentAlive?.(42, identity)).toBe(false);
-    await expect(processes.stopOwned?.(42, identity)).resolves.toBeUndefined();
+  it("rejects unsupported platforms before probing or signaling", () => {
+    const kill = vi.fn();
+    platform("win32", kill);
+    expect(() => createProcesses()).toThrow("macOS and Linux only");
+    expect(kill).not.toHaveBeenCalled();
   });
 });

@@ -107,6 +107,13 @@ export function installPressFeedback(document: Document): () => void {
     )
       return;
     reset();
+    // Raised controls use hard-shadow displacement in CSS, never a second scale effect.
+    if (
+      control.matches(
+        ".home-card, .neo-button:not([data-variant='quiet']), .automation-job-controls > button, .neo-accordion-trigger, .primary, .destructive, .splash-enter, .sidebar-card-toggle, .project-sidebar-open, .project-folder-stop, .project-session-add, .project-chat-toggle, .chat-sidebar-action",
+      )
+    )
+      return;
     const iconOnly = control.matches(".icon-button, .gdg-search-bar-inner button");
     const contentOnly = iconOnly || control.closest(".sidebar") !== null;
     const target = contentOnly

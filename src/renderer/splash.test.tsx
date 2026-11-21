@@ -87,9 +87,7 @@ describe("splash entry", () => {
     const subtitleId = html.match(/aria-describedby="([^"]+)"/)?.[1];
     expect(subtitleId).toBeDefined();
     expect(html).toContain('class="splash-lockup"');
-    expect(html).toContain(
-      `<p id="${subtitleId}" class="splash-subtitle">v0.2 &#x27;Paddock&#x27; (Beta)</p>`,
-    );
+    expect(html).toContain(`<p id="${subtitleId}" class="splash-subtitle">v0.2 Paddock (Beta)</p>`);
     expect(html.indexOf('class="splash-subtitle"')).toBeGreaterThan(
       html.indexOf('class="wordmark splash-title"'),
     );

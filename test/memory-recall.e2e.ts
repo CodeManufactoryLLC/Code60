@@ -119,6 +119,9 @@ async function send(page: Page, text: string) {
 }
 async function memoryOff(page: Page) {
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  const settingsToggle = page.locator("#settings-card-toggle");
+  if ((await settingsToggle.getAttribute("aria-expanded")) === "false")
+    await settingsToggle.click();
   await page.getByRole("tab", { name: "Memory", exact: true }).click();
   const toggle = page
     .locator("#panel-settings-memory")
@@ -178,7 +181,7 @@ for (const kind of ["Relay", "project"] as const) {
       await expect(wizard).toBeVisible();
       await wizard.getByRole("button", { name: "Claude", exact: true }).click();
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
-      await wizard.getByRole("button", { name: "Close agent setup", exact: true }).click();
+      await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await page.getByRole("button", { name: "Start", exact: true }).click();
       let snapshot = await page.evaluate(() => window.desktop.snapshot());
       expect(snapshot.database).toBeNull();
@@ -198,7 +201,7 @@ for (const kind of ["Relay", "project"] as const) {
           .click();
         const group = page.getByRole("region", { name: `Project ${target}`, exact: true });
         await group
-          .getByRole("button", { name: `New chat in ${basename(target)}`, exact: true })
+          .getByRole("button", { name: `New Session in ${basename(target)}`, exact: true })
           .click();
         await expect(group.locator(".chat-sidebar-entry").last()).toHaveAttribute(
           "aria-current",
@@ -305,12 +308,14 @@ for (const kind of ["Relay", "project"] as const) {
         await expect(plan.locator(".plan-state")).toHaveText("Dismissed");
         await send(page, "Start a memory recall worker");
       }
+      // Native Windows worker startup (worktree plus provider spawn) measured 4.4-5.5 s.
       await expect
         .poll(
           async () =>
             (await page.evaluate(() => window.desktop.snapshot())).runs.find(
               (run) => run.view?.status === "idle",
             )?.record.id,
+          { timeout: 15_000 },
         )
         .toBeTruthy();
       snapshot = await page.evaluate(() => window.desktop.snapshot());

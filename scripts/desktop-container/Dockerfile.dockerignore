@@ -7,7 +7,6 @@
 **/playwright-report
 release
 release-assets
-native/win32
 media
 models
 output
