@@ -98,7 +98,7 @@
   Project rows expose only a red circular × with the tooltip “Close Project” and
   a path-qualified accessible name. Invoke stop-folder with its existing native
   confirmation; retain the project and its saved history. Remove the project
-  More menu. Other folders continue; conversation More menus stay independent.
+  More menu. Other folders continue; conversation context menus stay independent.
 - Show only Relay and project-bound conversations, not database-wide legacy chats.
   Put Home first in the sidebar’s page list, followed by Search, Assistants, Projects,
   Providers, Apps and Settings. The Assistants heading opens a database-independent home with
@@ -456,7 +456,7 @@
   paused; show pending records, retry, partial history and cursor expiry clearly.
   Details are text-only, Enter-accessible, with awaited icon-only Copy. Explain
   that diagnostic retention and Clear logs never affect transcripts or databases.
-- Orchestrator rows use main-process titles with numbered fallbacks and offer Open, Rename, Archive via a labelled More icon button and keyboard-accessible context menus. The main header displays and edits the same name. Archive hides the orchestrator only, retaining session records and work. Worker rows remain accessible.
+- Orchestrator rows use main-process titles with numbered fallbacks and open through their label and offer separate named circular Rename and Archive controls matching project-row controls, plus Open, Rename and Archive in keyboard-accessible context menus. Reveal the circles on row hover or keyboard focus; reuse the project controls’ theme, press, focus, reduced-motion and forced-color styles. The main header displays and edits the same name. Archive hides the orchestrator only, retaining session records and work. Worker rows remain accessible.
 
 - Group prompt templates beneath a collapsible System disclosure. Keep saved edits in this group, preserve drafts on collapse, omit per-prompt Built-in labels, and use borderless items with blue hover and neutral gray selection.
 - Nest Command Builder, Data Viewer and Prompt Builder under Apps, in alphabetical order. Command Builder and Prompt Builder remain disabled without a database. Data Viewer stays enabled and its Apps card opens Logs and reveals both groups. Apps uses the Phosphor app-window icon. Clicking Apps opens its database-independent home page, with a card for every nested app using shared Home card styles and each app's database gating. Clicking Apps toggles its children open and closed: opening also shows the Apps home page, while closing keeps the current page. Left/Right collapses/expands them without changing the active page. Start expanded, remember manual expansion using the existing code60.toolsExpanded key, and reveal it on external navigation to any child or Data Viewer page. Reuse the prompt-editor layout for a command list and labelled Name/Title/Description/Prompt fields, inline validation, Save/Discard and natively confirmed Delete. Preserve drafts across page and command switches, scoped to the database. The orchestrator composer alone offers a leading-dollar ARIA combobox filtered by name/title: Up/Down selects, Enter/Tab inserts and Escape dismisses without sending. Send only the recognized command name with the original text; main expands it. Mark recognized leading commands in user bubbles without changing Copy, and explain unknown dollar words as plain text. Slash-prefixed text is always plain text. Never expand commands in worker chats.
