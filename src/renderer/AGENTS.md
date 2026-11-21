@@ -556,7 +556,7 @@
 - Give human prompt bubbles in both chats 5px corners, 2px theme-aware outlines
   and solid pale-blue Light or dark-plum Dark/System-dark fills with contrasting
   text, through the local Bubble primitive, without a shadow. Keep automatic prompts
-  and agent code blocks square. Use 8px response bottom margins, 4px timing top margins
+  and agent code blocks square. Use 6px response bottom margins, 4px timing top margins
   and visually equal 8px text / bubble gaps around the 1px separator after completed
   turn timing notices, outside activity disclosure buttons and absent for active
   timers. Human and agent bubbles share one 12px vertical / 18px horizontal
