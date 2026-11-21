@@ -5840,14 +5840,19 @@ export class DesktopController {
   private controlTool(name: McpControlTool, args: unknown, session: ChatSession): Promise<unknown> {
     if (isMemoryTool(name)) {
       const request = parseControlArgs(name, args);
-      return this.chatExclusive(session, async () => {
+      const operation = async () => {
+        this.conversations.assertCurrent(session);
         const run = session.chat?.runs()[0];
         if (!run || !["running", "waiting"].includes(run.status) || run.stopping)
           throw new Error("Memory tools require a live conversation turn");
         return this.memory.agentTool(run.id, name, request, () =>
           this.conversations.assertCurrent(session),
         );
-      });
+      };
+      // Semantic reads must not hold the lifecycle/action queue over model I/O.
+      return name === "code60_retrieve_memories"
+        ? operation()
+        : this.chatExclusive(session, operation);
     }
     switch (name) {
       case "code60_create_command": {

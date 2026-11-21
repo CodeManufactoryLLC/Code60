@@ -95,7 +95,13 @@ export class MemoryRuntime implements RunMemory {
     authorize();
     if (this.stopped || !this.service.learning || revision !== this.service.generationRevision)
       throw new Error("Memory context changed; retry from the live conversation");
-    return this.service.call("agent-tool", registered.id, name, request);
+    const result = await this.service.call("agent-tool", registered.id, name, request);
+    if (name === "code60_retrieve_memories") {
+      authorize();
+      if (this.stopped || !this.service.learning || revision !== this.service.generationRevision)
+        throw new Error("Memory context changed; discard stale retrieval results");
+    }
+    return result;
   }
   settle() {
     return this.pending;

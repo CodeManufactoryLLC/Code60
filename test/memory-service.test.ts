@@ -780,3 +780,35 @@ it.skipIf(!sqliteFtsAvailable())(
     memory.dispose();
   },
 );
+
+it.skipIf(!sqliteFtsAvailable()).each(["owner", "settings"] as const)(
+  "discards memory reads when %s changes during sidecar I/O",
+  async (change) => {
+    const id = randomUUID();
+    const memory = must(service.attach(deps, "relay", null).memory)({ id } as RunRecord, dir);
+    const call = vi.mocked(service.call);
+    const original = must(call.getMockImplementation());
+    let finish: ((result: unknown) => void) | undefined;
+    call.mockImplementation((op, ...args) =>
+      op === "agent-tool"
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : original(op, ...args),
+    );
+    let current = true;
+    const pending = service.agentTool(id, "code60_retrieve_memories", { query: "" }, () => {
+      if (!current) throw new Error("Stale owner");
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    if (change === "owner") current = false;
+    else
+      await service.action(
+        { type: "configure", settings: { ...service.settings, enabled: false } },
+        async () => true,
+      );
+    must(finish)({ status: "ok", records: ["stale evidence"] });
+    await expect(pending).rejects.toThrow(change === "owner" ? "Stale owner" : "discard stale");
+    memory.dispose();
+  },
+);
