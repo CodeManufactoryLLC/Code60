@@ -626,9 +626,14 @@
   max-width: 100%;
 }
 
+.orchestration-chat-body .event.prompt:not(.automatic) {
+  margin-bottom: 21px;
+}
+
 .orchestration-chat-body .event.message {
-  margin-bottom: 8px;
-  padding: 0 0 16px;
+  /* Only the space outside the bubble and its controls is reduced by 25%. */
+  margin-bottom: 6px;
+  padding: 0 0 12px;
   border: 0;
 }
 
