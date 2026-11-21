@@ -45,6 +45,15 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Verify
 
+After an app installation, launch the installed Code60 once. Pending update
+recovery upgrades the existing registration, checks the scheduler's `appVersion`
+against the running main app and restores its previous global pause state.
+Packaged startup also reconciles an active older scheduler after manual
+installation; it does not activate a previously stopped or uninstalled service.
+A version mismatch, recovery block or failed restart keeps the pending restart
+metadata and displays an error. Preserve that evidence and use the consented
+System Manager repair path; never erase the marker to report success.
+
 Observe updated System Manager status and refresh Scheduled Jobs if needed.
 Confirm connectivity, expected pause state,
 no block, future run times, and no duplicate/uncertain executions. Preserve worktrees

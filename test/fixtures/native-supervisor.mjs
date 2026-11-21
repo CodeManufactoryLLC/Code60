@@ -43,11 +43,29 @@ if (action === "show") {
   // No OS manager is contacted.
 } else if (action === "start" || action === "enable") {
   if (!alive(pid)) {
+    // Honor the installed runtime, so an obsolete registration cannot pass an
+    // upgrade test merely because the fixture always launches the newest entry.
+    const unit = await readFile(
+      join(process.env.HOME, ".config/systemd/user/code60-scheduler.service"),
+      "utf8",
+    );
+    const decode = (line) =>
+      [...line.matchAll(/"(?:\\.|[^"\\])*"/g)].map((match) =>
+        JSON.parse(match[0]).replaceAll("%%", "%").replaceAll("$$", "$"),
+      );
+    const [executable, ...runtimeArgs] = decode(/^ExecStart=(.*)$/m.exec(unit)?.[1] ?? "");
+    if (!executable) throw new Error("Missing installed service runtime");
+    const env = { ...process.env };
+    for (const [, line] of unit.matchAll(/^Environment=(.*)$/gm)) {
+      const [assignment] = decode(line);
+      const equals = assignment.indexOf("=");
+      env[assignment.slice(0, equals)] = assignment.slice(equals + 1);
+    }
     const fd = openSync(join(root, "owned-service.log"), "a", 0o600);
-    const child = spawn(process.execPath, [entry], {
+    const child = spawn(executable, runtimeArgs, {
       detached: true,
       stdio: ["ignore", fd, fd],
-      env: process.env,
+      env,
     });
     closeSync(fd);
     child.on("error", () => {

@@ -17,6 +17,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes scheduler upgrade recovery without granting service authority", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "updates")).toMatchObject({
+      prerequisite: "runtime",
+      agentAccess: "human-only",
+      limitations: expect.stringContaining("verifies the matching app version"),
+      confirmation: "Human approval before installation and shutdown.",
+    });
+  });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       prerequisite: "none",

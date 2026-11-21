@@ -72,6 +72,30 @@ describe("per-user service supervisors", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it.each(["running", "unavailable", "stopped"] as const)(
+    "checks failed repair stops before replacement when native state is %s",
+    async (state) => {
+      const root = await mkdtemp(join(tmpdir(), "c60-repair-stop-"));
+      try {
+        const definition = userServiceDefinition("linux", root, root, runtime);
+        await controlUserService(definition, "install", async () => true);
+        const replacement = { ...definition, contents: "replacement" };
+        const command = vi.fn(async (argv: readonly string[]) => !argv.includes("stop"));
+        const inspect = vi.fn(async () => ({ definitionPresent: true, state }));
+        const repair = controlUserService(replacement, "repair", command, inspect);
+        if (state === "stopped") await repair;
+        else await expect(repair).rejects.toThrow("could not stop");
+        expect(await readFile(definition.path, "utf8")).toBe(
+          state === "stopped" ? "replacement" : definition.contents,
+        );
+        expect(command.mock.calls.map(([argv]) => argv)).toEqual(
+          state === "stopped" ? [...definition.stop, ...definition.install] : definition.stop,
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
   it.each([
     [true, "LoadState=loaded\nActiveState=active\n", "running"],
     [true, "LoadState=loaded\nActiveState=inactive\n", "stopped"],

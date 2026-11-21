@@ -363,7 +363,7 @@ Schema version: 1
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Human approval before installation and shutdown.
-- Limits: Development builds may be unavailable; awareness does not check or download.
+- Limits: Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.
 - Pages: none
 - Settings sections: `updates`
 - Tools: none

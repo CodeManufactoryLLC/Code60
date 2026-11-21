@@ -471,7 +471,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Settings → Updates",
     "runtime",
     "human-only",
-    "Development builds may be unavailable; awareness does not check or download.",
+    "Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.",
     "Human approval before installation and shutdown.",
   ),
   feature(

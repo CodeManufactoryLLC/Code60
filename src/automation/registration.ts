@@ -2,6 +2,7 @@ import { access, realpath, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SchedulerStatus, ServiceStatus } from "../contracts/index.js";
+import { CODE60_VERSION } from "../core/index.js";
 import {
   controlUserService,
   fileCode,
@@ -22,7 +23,19 @@ const updatePath = (env: Readonly<NodeJS.ProcessEnv>) =>
 /** Persist restart intent before stopping: the installer replaces this process too. */
 export async function prepareSchedulerUpdate(env: Readonly<NodeJS.ProcessEnv>): Promise<void> {
   const status = await automationClient(env)({ action: "status" }).catch(() => null);
-  if (!status) return;
+  if (!status) {
+    const registration = await schedulerControl(env, "status");
+    if (
+      "installed" in registration &&
+      registration.installed &&
+      registration.nativeState !== "stopped"
+    )
+      throw new AutomationError(
+        "unavailable",
+        "Scheduler stop could not be verified. No binaries were replaced.",
+      );
+    return;
+  }
   const registration = (await readPrivateJson(
     join(automationRoot(env), "registration.json"),
     16_384,
@@ -45,30 +58,86 @@ export async function prepareSchedulerUpdate(env: Readonly<NodeJS.ProcessEnv>): 
     previous,
     4096,
   );
-  await schedulerControl(env, "stop");
+  try {
+    await schedulerControl(env, "stop");
+  } catch (error) {
+    if (error instanceof AutomationError) throw error;
+    throw new AutomationError("unavailable", "Scheduler stop failed. No binaries were replaced.");
+  }
 }
 
 /** Repair the previously consented registration to point at the newly installed runtime. */
-export async function restoreSchedulerUpdate(env: Readonly<NodeJS.ProcessEnv>): Promise<void> {
-  const marker = await readPrivateJson(updatePath(env), 4096).catch((error) => {
+export async function restoreSchedulerUpdate(
+  env: Readonly<NodeJS.ProcessEnv>,
+  reconcileInstalled = false,
+): Promise<void> {
+  let marker = await readPrivateJson(updatePath(env), 4096).catch((error) => {
     if (fileCode(error) !== "ENOENT") throw error;
     return null;
   });
-  if (marker === null) return;
+  if (marker === null) {
+    if (!reconcileInstalled) return;
+    const registration = await schedulerControl(env, "status");
+    if (!("installed" in registration) || !registration.installed) return;
+    if (!registration.service) {
+      if (registration.nativeState !== "stopped")
+        throw new AutomationError(
+          "unavailable",
+          "Scheduler upgrade could not verify service health.",
+        );
+      return;
+    }
+    if (registration.service.appVersion === CODE60_VERSION) return;
+    // Manual installation has no pre-install marker. Capture the running service's
+    // pause state and stop it before replacing its previously consented registration.
+    await prepareSchedulerUpdate(env);
+    marker = await readPrivateJson(updatePath(env), 4096);
+  }
   const saved = marker as { version?: unknown; pausedAll?: unknown };
   if (saved.version !== 1 || typeof saved.pausedAll !== "boolean")
     throw new AutomationError("unavailable", "Scheduler update recovery metadata is invalid.");
-  await schedulerControl(env, "repair", true);
+  try {
+    await schedulerControl(env, "repair", true);
+  } catch (error) {
+    if (error instanceof AutomationError) throw error;
+    throw new AutomationError(
+      "unavailable",
+      "Scheduler upgrade failed. Restart recovery is still pending.",
+    );
+  }
   const client = automationClient(env);
   const deadline = Date.now() + 15_000;
   for (;;) {
     const status = await client({ action: "status" }).catch(() => null);
-    if (status) break;
+    if (status) {
+      const running = status as ServiceStatus;
+      if (running.appVersion !== CODE60_VERSION)
+        throw new AutomationError(
+          "unavailable",
+          "Scheduler version does not match the installed app.",
+        );
+      if (running.block)
+        throw new AutomationError(
+          "refused",
+          "Scheduler recovery is blocked. Review System Manager.",
+        );
+      if (running.pausedAll !== saved.pausedAll)
+        await client(
+          saved.pausedAll ? { action: "pauseAll", cancelActive: false } : { action: "resumeAll" },
+        );
+      const verified = (await client({ action: "status" })) as ServiceStatus;
+      if (
+        verified.appVersion !== CODE60_VERSION ||
+        verified.block ||
+        verified.pausedAll !== saved.pausedAll
+      )
+        throw new AutomationError("unavailable", "Scheduler reactivation could not be verified.");
+      break;
+    }
     if (Date.now() >= deadline)
       throw new AutomationError("unavailable", "Scheduler did not restart after the update.");
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  if (!saved.pausedAll) await client({ action: "resumeAll" });
   await unlink(updatePath(env));
 }
 
@@ -136,7 +205,7 @@ export async function schedulerControl(
   if (action === "install" || action === "repair" || action === "uninstall")
     await writePrivateJson(
       marker,
-      { installed: action !== "uninstall", runtime },
+      { installed: action !== "uninstall", appVersion: CODE60_VERSION, runtime },
       registered ?? undefined,
       16_384,
     );

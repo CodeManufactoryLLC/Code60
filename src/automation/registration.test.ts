@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRequest } from "../contracts/index.js";
+import { CODE60_VERSION } from "../core/index.js";
 import { readPrivateJson, writePrivateJson } from "../platform/index.js";
 import {
   prepareSchedulerUpdate,
@@ -17,6 +18,7 @@ const fake = vi.hoisted(() => ({
   request: vi.fn(),
   control: vi.fn(),
   inspect: vi.fn(),
+  appVersion: "",
 }));
 vi.mock("../platform/index.js", async (original) => ({
   ...(await original<object>()),
@@ -32,14 +34,21 @@ beforeEach(() => {
   fake.inspect.mockReset().mockResolvedValue({ definitionPresent: true, state: "stopped" });
   fake.running = true;
   fake.pausedAll = false;
+  fake.appVersion = CODE60_VERSION;
   fake.request.mockReset().mockImplementation(async (request: AutomationRequest) => {
     if (!fake.running) throw new Error("offline");
     if (request.action === "pauseAll") fake.pausedAll = true;
     if (request.action === "resumeAll") fake.pausedAll = false;
-    return { pausedAll: fake.pausedAll, activeExecutionId: null, block: null };
+    return {
+      appVersion: fake.appVersion,
+      pausedAll: fake.pausedAll,
+      activeExecutionId: null,
+      block: null,
+    };
   });
   fake.control.mockReset().mockImplementation(async (_definition, action) => {
     fake.running = action !== "stop";
+    if (action === "repair") fake.appVersion = CODE60_VERSION;
     return { available: fake.running };
   });
 });
@@ -129,6 +138,99 @@ async function setup(installed = true) {
   return { env, marker: join(automationRoot(env), "update-restart.json") };
 }
 describe("scheduler update recovery", () => {
+  it("reconciles a manually installed app with an older active service exactly once", async () => {
+    const s = await setup();
+    fake.appVersion = "0.0.0";
+    await restoreSchedulerUpdate(s.env, true);
+    expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop", "repair"]);
+    expect(fake.appVersion).toBe(CODE60_VERSION);
+    expect(fake.pausedAll).toBe(false);
+    expect(
+      await readPrivateJson(join(automationRoot(s.env), "registration.json"), 16_384),
+    ).toMatchObject({ installed: true, appVersion: CODE60_VERSION });
+    await restoreSchedulerUpdate(s.env, true);
+    expect(fake.control).toHaveBeenCalledTimes(2);
+  });
+  it.each(["development", "uninstalled", "current", "stopped"])(
+    "does not auto-upgrade a %s service",
+    async (kind) => {
+      const s = await setup(kind !== "uninstalled");
+      fake.inspect.mockResolvedValue({
+        definitionPresent: kind !== "uninstalled",
+        state: "stopped",
+      });
+      if (kind === "development" || kind === "uninstalled") fake.appVersion = "0.0.0";
+      if (kind === "stopped") fake.running = false;
+      await restoreSchedulerUpdate(s.env, kind !== "development");
+      expect(fake.control).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["running", "unavailable"])(
+    "refuses an unreachable %s native service before installation or recovery",
+    async (state) => {
+      const s = await setup();
+      fake.running = false;
+      fake.inspect.mockResolvedValue({ definitionPresent: true, state });
+      await expect(prepareSchedulerUpdate(s.env)).rejects.toThrow("stop could not be verified");
+      await expect(restoreSchedulerUpdate(s.env, true)).rejects.toThrow("verify service health");
+      expect(fake.control).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    "stop",
+    "repair",
+    "version",
+    "blocked",
+    "resume",
+    "verification",
+    "timeout",
+    "invalid-marker",
+  ])("retains recovery evidence on %s failure", async (stage) => {
+    const s = await setup();
+    if (stage === "stop") fake.control.mockRejectedValueOnce(new Error("stop failure"));
+    if (stage === "stop")
+      await expect(prepareSchedulerUpdate(s.env)).rejects.toThrow("stop failed");
+    else await prepareSchedulerUpdate(s.env);
+    if (stage === "repair") fake.control.mockRejectedValueOnce(new Error("repair failure"));
+    if (stage === "version")
+      fake.control.mockImplementationOnce(async () => {
+        fake.running = true;
+        fake.appVersion = "0.0.0";
+      });
+    if (stage === "blocked")
+      fake.request.mockImplementation(async () => ({
+        appVersion: CODE60_VERSION,
+        pausedAll: true,
+        block: { reason: "leftover_agent" },
+      }));
+    if (stage === "resume" || stage === "verification")
+      fake.request.mockImplementation(async (request: AutomationRequest) => {
+        if (!fake.running) throw new Error("offline");
+        if (request.action === "resumeAll" && stage === "resume") throw new Error("resume failure");
+        return {
+          appVersion: CODE60_VERSION,
+          pausedAll: true,
+          block: null,
+          activeExecutionId: null,
+        };
+      });
+    if (stage === "timeout") fake.control.mockImplementationOnce(async () => {});
+    if (stage === "invalid-marker")
+      await writePrivateJson(s.marker, { version: 9 }, await readPrivateJson(s.marker, 4096), 4096);
+    if (stage !== "stop") {
+      // Expire the bounded restart wait deterministically, with real filesystem I/O.
+      const now =
+        stage === "timeout"
+          ? vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(30_000)
+          : undefined;
+      try {
+        await expect(restoreSchedulerUpdate(s.env)).rejects.toThrow();
+      } finally {
+        now?.mockRestore();
+      }
+    }
+    expect(await readPrivateJson(s.marker, 4096)).toBeTruthy();
+  });
   it.each([false, true])(
     "restores a running scheduler with previous pausedAll=%s",
     async (paused) => {
@@ -158,7 +260,7 @@ describe("scheduler update recovery", () => {
     const s = await setup();
     await prepareSchedulerUpdate(s.env);
     fake.control.mockRejectedValueOnce(new Error("supervisor unavailable"));
-    await expect(restoreSchedulerUpdate(s.env)).rejects.toThrow("supervisor");
+    await expect(restoreSchedulerUpdate(s.env)).rejects.toThrow("upgrade failed");
     expect(await readPrivateJson(s.marker, 4096)).toEqual({ version: 1, pausedAll: false });
     await restoreSchedulerUpdate(s.env);
     expect(fake.pausedAll).toBe(false);

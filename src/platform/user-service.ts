@@ -202,10 +202,14 @@ export async function controlUserService(
   definition: UserServiceDefinition,
   action: "install" | "repair" | "start" | "stop" | "uninstall" | "status",
   command: ServiceCommand = runServiceCommand,
+  inspect: typeof inspectUserService = inspectUserService,
 ): Promise<{ available: boolean }> {
   if (action === "status") return { available: await command(definition.status) };
   if (action === "install" || action === "repair") {
-    if (action === "repair") for (const argv of definition.stop) await command(argv);
+    if (action === "repair")
+      for (const argv of definition.stop)
+        if (!(await command(argv)) && (await inspect(definition)).state !== "stopped")
+          throw new Error("Scheduling Service could not stop. Its registration was not replaced.");
     await mkdir(join(definition.path, ".."), { recursive: true, mode: 0o700 });
     const temporary = join(definition.path, "..", `${randomUUID()}.tmp`);
     await writePrivateFile(temporary, definition.contents, { mode: 0o600, flag: "wx" });

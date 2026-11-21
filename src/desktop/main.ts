@@ -14,6 +14,7 @@ import {
 } from "electron";
 import updaterPackage from "electron-updater";
 import {
+  AutomationError,
   automationClient,
   prepareSchedulerUpdate,
   restoreSchedulerUpdate,
@@ -368,12 +369,11 @@ async function ready(): Promise<void> {
   }
   setEnvironmentPath(process.env, await desktopPath({ signal: startup.signal }));
   if (startup.signal.aborted) return;
-  await restoreSchedulerUpdate(process.env).catch(async () => {
+  await restoreSchedulerUpdate(process.env, app.isPackaged).catch(async (error: unknown) => {
     await dialog.showMessageBox({
       type: "error",
-      message: "Background automations could not restart after the update.",
-      detail:
-        "Open Apps → System Manager to repair the background service. Your schedules and run evidence are kept.",
+      message: "The Scheduling Service could not finish updating.",
+      detail: `${error instanceof AutomationError ? `${error.message}\n\n` : ""}Open Apps → System Manager to repair the Scheduling Service. Your schedules and run evidence are kept.`,
       buttons: ["Continue"],
     });
   });
@@ -424,12 +424,11 @@ async function ready(): Promise<void> {
           app.relaunch(process.env.APPIMAGE ? { execPath: process.env.APPIMAGE } : {});
           app.quit();
         } else updaterPackage.autoUpdater.quitAndInstall(false, true);
-      } catch {
+      } catch (error) {
         await dialog.showMessageBox({
           type: "error",
           message: "The update could not be installed.",
-          detail:
-            "Restart Code60 and try again. Check installation permissions (DEB updates need a working PolicyKit authorization agent). Your data is kept.",
+          detail: `${error instanceof AutomationError ? `${error.message}\n\n` : ""}Restart Code60 and try again. Check installation permissions (DEB updates need a working PolicyKit authorization agent). Your data is kept.`,
           buttons: ["Close Code60"],
         });
         // Shutdown may have only partly succeeded; never leave agents behind.

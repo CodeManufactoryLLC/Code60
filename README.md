@@ -123,8 +123,12 @@ For source development, build with `npm run build` and run
 `node dist/automation/main.js` in a separate terminal before saving automations.
 That standalone process is not installed for future logins.
 
-App updates cancel active automation work, restart the installed service with the
-new runtime, and preserve its previous global pause state. Stop a standalone
+App updates cancel active automation work and stop the installed service before
+replacing the app. On the first launch after installation, Code60 upgrades the
+service registration, verifies that the running scheduler matches the installed
+app version, and restores its previous global pause state. Packaged startup also
+reconciles an active older service after a manual app installation. A service
+that was stopped or uninstalled stays stopped. Stop a standalone
 development scheduler before installing an app update. If restart fails, Code60
 shows a recovery message; repair the service from Apps → System Manager.
 Schedules, evidence and worktrees are preserved.
