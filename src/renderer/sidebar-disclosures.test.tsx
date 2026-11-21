@@ -292,7 +292,7 @@ it.each([
   ["finished", "Finished"],
   ["interrupted", "Interrupted"],
 ] as const)(
-  "hides visible %s labels while preserving accessible status and unread counts",
+  "hides worker unread counts and visible %s labels while preserving accessible status",
   (status, label) => {
     const view = mount(ChatSidebar, {
       ...chatProps,
@@ -312,12 +312,61 @@ it.each([
     expect(find(row, (element) => element.props.className === "sr-only").props.children).toContain(
       label,
     );
-    expect(
-      find(row, (element) => element.props.className === "chat-unread").props["aria-label"],
-    ).toBe("1 unread reply");
+    expect(() => find(row, (element) => element.props.className === "chat-unread")).toThrow(
+      "Missing navigation element",
+    );
     expect(() =>
       find(view.tree(), (element) => element.props.className === "chat-sidebar-status"),
     ).toThrow("Missing navigation element");
+  },
+);
+
+it.each(["project", "relay", "manual"] as const)(
+  "keeps %s worker counts hidden across pushed replies and navigation",
+  (kind) => {
+    const owner = {
+      ...chats[1],
+      kind: kind === "relay" ? "relay" : "project",
+    } as OrchestrationChat;
+    if (kind === "manual") owner.workers = [];
+    const view = mount(ChatSidebar, { ...chatProps, chats: [owner] });
+    for (const count of [1, 3]) {
+      // Exercise both legacy transcript updates and compact app-summary updates.
+      for (const compact of [false, true]) {
+        view.render({
+          runs: runs.map((worker) => ({
+            ...worker,
+            ...(compact ? { replies: { count, lastTurn: count } } : {}),
+          })),
+          eventsByRun: {
+            worker: Array.from({ length: count }, (_, index) => [
+              {
+                runId: "worker",
+                at: "2026-01-01",
+                type: "prompt" as const,
+                turn: index + 1,
+                text: "Task",
+              },
+              { runId: "worker", at: "2026-01-01", type: "message" as const, text: "Reply" },
+            ]).flat(),
+          },
+        });
+        const row = byId(view.tree(), "conversation-worker");
+        expect(row.props["aria-description"]).toContain("Worker. Ready");
+        expect(row.props["aria-description"]).not.toContain("unread");
+        expect(() => find(row, (element) => element.props.className === "chat-unread")).toThrow(
+          "Missing navigation element",
+        );
+        view.render({ selectedId: "worker" });
+        view.render({ selectedId: "chat" });
+        expect(() =>
+          find(
+            byId(view.tree(), "conversation-worker"),
+            (element) => element.props.className === "chat-unread",
+          ),
+        ).toThrow("Missing navigation element");
+      }
+    }
   },
 );
 

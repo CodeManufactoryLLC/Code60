@@ -283,7 +283,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)",
     "database",
     "read",
-    "Opening or selecting a project is a human action; opening never initializes Git. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.",
+    "Opening or selecting a project is a human action; opening never initializes Git. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.",
     "The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
   ),
   feature(
@@ -530,11 +530,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "activity",
     "Activity display",
-    "Show the orchestrator's current step beside the transcript.",
-    "Chat transcript activity line",
+    "Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.",
+    "Chat transcript activity line and left navigation names",
     "runtime",
     "existing-tools",
-    "Presentation only; reports never change work or permissions.",
+    "Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.",
   ),
   feature(
     "knowledge",
