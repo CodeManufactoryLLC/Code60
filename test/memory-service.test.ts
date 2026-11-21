@@ -692,3 +692,123 @@ describe.skipIf(!sqliteFtsAvailable())("scoped runtime memory and handoff", () =
     await orch.shutdown();
   });
 });
+
+it.skipIf(!sqliteFtsAvailable())(
+  "binds explicit memory tools to registered live runs and propagates storage failures",
+  async () => {
+    const id = randomUUID();
+    const memory = must(service.attach(deps, "project", dir).memory)({ id } as RunRecord, dir);
+    exchange(memory);
+    const call = vi.mocked(service.call);
+    const original = must(call.getMockImplementation());
+    call.mockImplementation(async (op, ...args) => {
+      if (op === "agent-tool") {
+        const cid = String(args[0]);
+        if (args[1] === "code60_create_memory")
+          return store.agentWrite(cid, "code60_create_memory", args[2]);
+        return { status: "ok", records: store.eligible(cid), sources: store.tail(cid) };
+      }
+      return original(op, ...args);
+    });
+    const authorize = vi.fn();
+    const retrieved = (await service.agentTool(
+      id,
+      "code60_retrieve_memories",
+      { query: "" },
+      authorize,
+    )) as { sources: MemorySource[] };
+    expect(retrieved.sources.length).toBeGreaterThan(0);
+    const s = must(retrieved.sources[0]);
+    const candidate = must(generated([s]).memories[0]);
+    const created = (await service.agentTool(
+      id,
+      "code60_create_memory",
+      { memory: candidate },
+      authorize,
+    )) as { status: string };
+    expect(created.status).toBe("ok");
+    expect(store.browse({}).records.some((r) => r.text === candidate.text)).toBe(true);
+    expect(authorize).toHaveBeenCalled();
+    await expect(
+      service.agentTool(
+        id,
+        "code60_retrieve_memories",
+        { query: "", projectId: randomUUID() },
+        authorize,
+      ),
+    ).rejects.toThrow();
+    expect(() =>
+      service.agentTool("other-run", "code60_retrieve_memories", { query: "" }, authorize),
+    ).toThrow(/unavailable/);
+    await service.action(
+      { type: "configure", settings: { ...service.settings, enabled: false } },
+      async () => true,
+    );
+    const count = call.mock.calls.length;
+    expect(
+      await service.agentTool(id, "code60_retrieve_memories", { query: "" }, authorize),
+    ).toEqual({ status: "disabled" });
+    expect(call.mock.calls.length).toBe(count);
+    await service.action(
+      { type: "configure", settings: { ...service.settings, enabled: true } },
+      async () => true,
+    );
+    call.mockRejectedValue(new Error("Storage unavailable"));
+    await expect(
+      service.agentTool(id, "code60_retrieve_memories", { query: "" }, authorize),
+    ).rejects.toThrow("Storage unavailable");
+    memory.dispose();
+    expect(() =>
+      service.agentTool(id, "code60_retrieve_memories", { query: "" }, authorize),
+    ).toThrow(/unavailable/);
+  },
+);
+
+it.skipIf(!sqliteFtsAvailable())(
+  "rechecks live authorization after asynchronous memory preparation",
+  async () => {
+    const id = randomUUID();
+    const memory = must(service.attach(deps, "relay", null).memory)({ id } as RunRecord, dir);
+    let current = true;
+    const authorize = () => {
+      if (!current) throw new Error("Stale conversation");
+    };
+    const pending = service.agentTool(id, "code60_retrieve_memories", { query: "" }, authorize);
+    current = false;
+    await expect(pending).rejects.toThrow("Stale conversation");
+    expect(vi.mocked(service.call).mock.calls.some(([op]) => op === "agent-tool")).toBe(false);
+    memory.dispose();
+  },
+);
+
+it.skipIf(!sqliteFtsAvailable()).each(["owner", "settings"] as const)(
+  "discards memory reads when %s changes during sidecar I/O",
+  async (change) => {
+    const id = randomUUID();
+    const memory = must(service.attach(deps, "relay", null).memory)({ id } as RunRecord, dir);
+    const call = vi.mocked(service.call);
+    const original = must(call.getMockImplementation());
+    let finish: ((result: unknown) => void) | undefined;
+    call.mockImplementation((op, ...args) =>
+      op === "agent-tool"
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : original(op, ...args),
+    );
+    let current = true;
+    const pending = service.agentTool(id, "code60_retrieve_memories", { query: "" }, () => {
+      if (!current) throw new Error("Stale owner");
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    if (change === "owner") current = false;
+    else
+      await service.action(
+        { type: "configure", settings: { ...service.settings, enabled: false } },
+        async () => true,
+      );
+    must(finish)({ status: "ok", records: ["stale evidence"] });
+    await expect(pending).rejects.toThrow(change === "owner" ? "Stale owner" : "discard stale");
+    memory.dispose();
+  },
+);

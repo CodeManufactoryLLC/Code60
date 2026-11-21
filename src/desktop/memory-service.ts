@@ -15,6 +15,7 @@ import {
   type MemorySettings,
   type MemorySnapshot,
   type MemorySource,
+  type MemoryTool,
   memorySettingsSchema,
   parseValue,
 } from "../bridge/index.js";
@@ -58,6 +59,7 @@ export class MemoryService {
     }
   >();
   private readonly runtimes = new Set<MemoryRuntime>();
+  private readonly runRuntimes = new Map<string, MemoryRuntime>();
   private readonly listeners = new Set<() => void>();
   private readonly jobs = new Map<string, { abort: AbortController; done: Promise<unknown> }>();
   private generationQueue: Promise<void> = Promise.resolve();
@@ -166,11 +168,20 @@ export class MemoryService {
           targets,
         );
         this.runtimes.add(runtime);
+        this.runRuntimes.set(record.id, runtime);
         return runtime;
       },
     };
   }
+  agentTool(runId: string, name: MemoryTool, args: unknown, authorize: () => void) {
+    authorize();
+    const runtime = this.runRuntimes.get(runId);
+    if (!this.active || !runtime) throw new Error("Live memory storage is unavailable");
+    return runtime.tool(name, args, authorize);
+  }
   release(runtime: MemoryRuntime) {
+    for (const [id, registered] of this.runRuntimes)
+      if (registered === runtime) this.runRuntimes.delete(id);
     this.runtimes.delete(runtime);
   }
   private async ready() {

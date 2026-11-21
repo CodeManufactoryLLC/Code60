@@ -6,6 +6,7 @@ import type {
   MemorySettings,
   MemorySource,
 } from "../bridge/index.js";
+import { isMemoryTool, memoryToolSchemas, parseValue } from "../bridge/index.js";
 import { checkedVector, chunkText, type RagEmbedder, topMatches } from "../core/index.js";
 import { lockPrivateState } from "../platform/index.js";
 import { MemoryStore } from "./memory-store.js";
@@ -129,9 +130,10 @@ export async function memorySearch(
   query: string,
   load: () => Promise<RagEmbedder>,
   projects: readonly string[] = [],
+  includeDisputed = false,
 ) {
-  if (!db.eligible(cid, "", 1, projects).length) return { records: [] };
-  const lexical = db.lexical(cid, query, projects);
+  if (!db.eligible(cid, "", 1, projects, includeDisputed).length) return { records: [] };
+  const lexical = db.lexical(cid, query, projects, includeDisputed);
   const lexicalRank = new Map(lexical.map((id, index) => [id, index]));
   const lexicalHits: MemoryRecord[] = [];
   // Bounded semantic shortlist, sorted by descending similarity then ID.
@@ -153,12 +155,12 @@ export async function memorySearch(
   for (;;) {
     if (Date.now() - started > 15000)
       throw new Error("Memory retrieval timed out; results are incomplete");
-    const page = db.eligible(cid, cursor, 256, projects);
+    const page = db.eligible(cid, cursor, 256, projects, includeDisputed);
     if (!page.length) break;
     for (const record of page) {
       cursor = record.id;
       let similarity = -1;
-      if (embed && queries.length) {
+      if (embed && queries.length && record.state === "active") {
         const vectors = db.vectors(record.id, MEMORY_MODEL);
         if (!vectors.length) {
           warning =
@@ -272,6 +274,33 @@ async function dispatch(op: string, args: unknown[]) {
       );
       scheduleIndex();
       return result;
+    }
+    case "agent-tool": {
+      const cid = String(args[0]);
+      const name = String(args[1]);
+      if (!isMemoryTool(name)) throw new Error("Unknown memory tool");
+      const request = parseValue(memoryToolSchemas[name], args[2]);
+      if (!store.settings().enabled) return { status: "disabled" };
+      if (name !== "code60_retrieve_memories") {
+        const result = store.agentWrite(cid, name, request);
+        if (result.status === "ok") {
+          scheduleIndex();
+          process.send?.({ changed: true });
+        }
+        return result;
+      }
+      const query = parseValue(memoryToolSchemas.code60_retrieve_memories, request);
+      // Explicit tools never expand scope from a caller-supplied project or target.
+      const hits = query.query.trim()
+        ? await memorySearch(store, cid, query.query, embedder, [], true)
+        : { records: store.eligible(cid, "", query.limit, [], true) };
+      const records = hits.records.slice(0, query.limit);
+      return {
+        ...hits,
+        status: records.length ? "ok" : "no-matches",
+        records,
+        sources: store.tail(cid),
+      };
     }
     case "browse":
       return store.browse(args[0] as MemoryBrowse);

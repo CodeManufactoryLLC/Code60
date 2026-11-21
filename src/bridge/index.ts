@@ -978,14 +978,17 @@ export type {
   MemorySettings,
   MemorySnapshot,
   MemorySource,
+  MemoryTool,
 } from "../contracts/index.js";
 export {
   DEFAULT_EPISODIC_MEMORY_PROMPT,
   DEFAULT_MEMORY_SETTINGS,
+  isMemoryTool,
   MEMORY_TYPES,
   memoryRecordSchema,
   memorySettingsSchema,
   memorySourceSchema,
+  memoryToolSchemas,
 } from "../contracts/index.js";
 export * from "./memory.js";
 export * from "./rag.js";

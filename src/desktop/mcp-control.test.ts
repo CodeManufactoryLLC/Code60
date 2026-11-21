@@ -65,3 +65,20 @@ it("keeps worker transcript MCP attribution scalar and respects corrected calls"
   );
   expect(workerTranscript([{ ...tool, mcp: {} }])[0]).toMatchObject({ mcp: true });
 });
+
+it("rejects arbitrary memory scopes, invalid revisions and unbounded retrieval", () => {
+  expect(parseControlArgs("code60_retrieve_memories", { query: "cache" })).toEqual({
+    query: "cache",
+    limit: 10,
+  });
+  for (const patch of [
+    { projectId: "other" },
+    { conversationId: "other" },
+    { cwd: "/other" },
+    { limit: 0 },
+    { limit: 21 },
+    { query: "x".repeat(2001) },
+  ])
+    expect(() => parseControlArgs("code60_retrieve_memories", { query: "", ...patch })).toThrow();
+  expect(() => parseControlArgs("code60_modify_memory", { id: "invalid", revision: 0 })).toThrow();
+});

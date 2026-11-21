@@ -52,6 +52,22 @@ export const memoryGenerationSchema = z.strictObject({
 });
 export type MemoryGeneration = z.infer<typeof memoryGenerationSchema>;
 export type MemoryCandidate = z.infer<typeof memoryCandidateSchema>;
+/** Agent scope is supplied by the authenticated live conversation, never tool input. */
+export const memoryToolSchemas = {
+  code60_create_memory: z.strictObject({ memory: memoryCandidateSchema }),
+  code60_modify_memory: z.strictObject({
+    id,
+    revision: z.number().int().positive(),
+    memory: memoryCandidateSchema,
+  }),
+  code60_retrieve_memories: z.strictObject({
+    query: z.string().max(2000),
+    limit: z.number().int().min(1).max(20).default(10),
+  }),
+};
+export type MemoryTool = keyof typeof memoryToolSchemas;
+export const isMemoryTool = (name: string): name is MemoryTool =>
+  Object.hasOwn(memoryToolSchemas, name);
 export const memoryRecordSchema = memoryCandidateSchema.extend({
   id,
   version: z.literal(1),

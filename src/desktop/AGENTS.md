@@ -70,7 +70,10 @@
   Cancel generators on owner disposal, provider changes, Stop all and shutdown.
 - Main validates every memory request. Confirm global promotion and forgetting
   natively. Suppress forgotten source ranges and invalidate stale generation and
-  recall. Keep content out of diagnostics and memory capabilities out of MCP.
+  recall. Keep content out of diagnostics. Explicit create/modify/retrieve memory
+  MCP tools use only live authenticated conversation scope, committed exact-span
+  evidence, revision checks and Memory On; no worker gateway, global promotion,
+  deletion or protected human edits. Memories never grant execution authority.
   Ordinary sends may continue without unavailable memory while context fits;
   a required but unavailable handoff must pause before dispatch.
 

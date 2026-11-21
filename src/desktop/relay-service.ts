@@ -25,6 +25,7 @@ import {
   isActivityTool,
   isKnowledgeTool,
   isMcpControlTool,
+  isMemoryTool,
   parseActivityContextArgs,
   planMarkdown,
 } from "../bridge/index.js";
@@ -1193,6 +1194,27 @@ export class RelayService {
       return this.activity.report(args);
     }
     if (!isMcpControlTool(name)) throw new Error("Database tools are not available in Relay.");
+    if (isMemoryTool(name)) {
+      const request = parseControlArgs(name, args);
+      const chat = this.chat;
+      const run = chat?.runs()[0];
+      const generation = this.generation;
+      const authorize = () => {
+        if (
+          this.closing ||
+          !this.gateway ||
+          this.chat !== chat ||
+          this.generation !== generation ||
+          !run ||
+          run.stopping ||
+          !["running", "waiting"].includes(chat?.runs()[0]?.status ?? "")
+        )
+          throw new Error("Memory tools require the current live Relay turn");
+      };
+      authorize();
+      if (!this.memory || !run) throw new Error("Memory storage is unavailable");
+      return this.memory.agentTool(run.id, name, request, authorize);
+    }
     if (name === "code60_get_context") {
       parseControlArgs(name, args);
       return {

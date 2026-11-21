@@ -251,3 +251,43 @@ task or failed worker leaves tasks unchecked and requires **Resume plan** after 
 previous work. Resuming a plan may continue existing work, so inspect any delivery error
 before retrying. Project changes pause accepted plans. Restarting or replacing a conversation
 retains its documents on disk but never restores execution authority or resumes work.
+
+
+### Explicit memory tools
+
+Live Relay, custom assistant and project orchestrators have three memory tools.
+Workers and scheduled automations have no Code60 memory gateway. Settings → Memory must be On;
+scope comes from the authenticated run, never sidebar selection or tool fields.
+No tool accepts a path, project ID, conversation ID or global promotion.
+
+- `code60_retrieve_memories({query, limit?})`: query is at most 2,000 UTF-16
+  code units; limit is 1–20 (default 10). An empty query returns an ID-ordered
+  bounded page of active or disputed authorized records. A query uses existing scoped
+  semantic/keyword retrieval, including lexical fallback warnings. Returns
+  `{status: "ok" | "no-matches", records, sources, warning?}`. Records include
+  stable IDs, revisions, scope, provenance and citations. Sources are up to eight
+  recent committed, unsuppressed sources from this conversation, for citations.
+- `code60_create_memory({memory})`: memory contains `type` (episodic, semantic,
+  lesson or history), nonblank `text` (up to 2,000), nonblank `subject` (up to 128),
+  `condition` (up to 1,000), `correction` (boolean), and 1–8 `citations`.
+  Each citation contains `sourceId`, `start`, `end` and `quote` (1–2,000).
+  Offsets are relative UTF-16 positions in source text, and the quote must match
+  exactly. Lessons require conditions; corrections require human evidence.
+  Only completed exchanges supply evidence; complete an exchange before creating
+  a memory from it. Returns `{status: "ok", record}` after persistence; an exact
+  duplicate may return its existing ID; inactive duplicates return `protected`.
+  Disputed creates remain inspectable by explicit retrieval (keyword matching),
+  while automatic recall continues to use active memories only.
+- `code60_modify_memory({id, revision, memory})`: same memory schema, explicit
+  UUID and positive revision. Returns `{status: "ok", record}` with the same ID
+  and incremented revision. New citations must be local committed evidence;
+  original citations remain, within the eight-citation limit. Changes are
+  agent-reported, never human edits. Returns `conflict` for a stale revision,
+  `not-found` for missing/out-of-scope records, or `protected` for pinned,
+  human-edited or inactive records. Global memories are read-only to agents.
+
+All inputs reject unknown fields. Memory Off returns `{status: "disabled"}`
+without reading or writing saved content. Invalid evidence/input and unavailable
+storage fail the tool call; failure never means successful empty retrieval.
+Writes appear in Apps → Data Viewer → Memories with revision history and evidence.
+Retrieval and saved evidence cannot authorize actions or override live permissions.

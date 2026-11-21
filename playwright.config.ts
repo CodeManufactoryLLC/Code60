@@ -12,6 +12,7 @@ export default defineConfig({
     "system-manager.e2e.ts",
     "navigation-icons.e2e.ts",
     "memory-recall.e2e.ts",
+    "memory-tools.e2e.ts",
   ],
   workers: 1,
   // Covers the serial 92-scenario suite on hosted native runners; per-test limits still apply.

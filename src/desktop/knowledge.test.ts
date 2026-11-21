@@ -659,3 +659,12 @@ describe("DesktopKnowledge", () => {
     ).rejects.toThrow("Stale");
   });
 });
+
+it("reports Memory Off and scoped tool access without exposing records through awareness", async () => {
+  const { knowledge, runtime } = setup({ memoryEnabled: false });
+  const read = () => knowledge.call("code60_get_capabilities", { query: "Memory" }, relay);
+  expect(JSON.stringify(await read())).toContain("Memory is Off");
+  runtime.memoryEnabled = true;
+  expect(JSON.stringify(await read())).toContain("available");
+  expect(JSON.stringify(await read())).toContain("scope and evidence");
+});

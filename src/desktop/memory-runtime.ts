@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { MemoryRecord, MemorySource } from "../bridge/index.js";
+import {
+  type MemoryRecord,
+  type MemorySource,
+  type MemoryTool,
+  memoryToolSchemas,
+  parseValue,
+} from "../bridge/index.js";
 import {
   checkpointText,
   estimateMemoryTokens,
@@ -77,6 +83,25 @@ export class MemoryRuntime implements RunMemory {
         throw error;
       });
     return this.registration;
+  }
+  async tool(name: MemoryTool, args: unknown, authorize: () => void) {
+    const request = parseValue(memoryToolSchemas[name], args);
+    await this.service.loadSettings();
+    if (!this.service.settings.enabled) return { status: "disabled" };
+    if (!this.service.learning || this.stopped) throw new Error("Memory is paused or changing");
+    const revision = this.service.generationRevision;
+    await this.pending;
+    const registered = await this.register();
+    authorize();
+    if (this.stopped || !this.service.learning || revision !== this.service.generationRevision)
+      throw new Error("Memory context changed; retry from the live conversation");
+    const result = await this.service.call("agent-tool", registered.id, name, request);
+    if (name === "code60_retrieve_memories") {
+      authorize();
+      if (this.stopped || !this.service.learning || revision !== this.service.generationRevision)
+        throw new Error("Memory context changed; discard stale retrieval results");
+    }
+    return result;
   }
   settle() {
     return this.pending;
