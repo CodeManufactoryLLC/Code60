@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { activityLabel } from "./activity-display.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
@@ -162,16 +163,28 @@ export function ChatSidebar({
       ? sessionStatus(view)
       : statusSpec[worker?.record.status ?? "interrupted"];
     const error = chat?.error;
+    const activity = chat?.activity;
+    const statusLabel =
+      view?.cancelling || activity?.state === "stopping"
+        ? activityLabel("stopping")
+        : activity?.state === "waiting_for_workers"
+          ? activityLabel(activity.state)
+          : presentation.label;
     // Match live chat activity, including connection and monitoring owned workers. An open
     // process, saved record or selected conversation alone never establishes active work.
     const working =
       !error &&
       !!view &&
       !view.stopping &&
+      !view.cancelling &&
       view.pending.length === 0 &&
-      (view.status === "queued" ||
-        view.status === "running" ||
-        (view.status === "idle" && chat?.activity?.state === "waiting_for_workers"));
+      (chat
+        ? !!activity &&
+          activity.state !== "stopping" &&
+          (activity.active ||
+            activity.state === "connecting" ||
+            activity.state === "waiting_for_workers")
+        : view.status === "queued" || view.status === "running");
     const relayHeading = (relayNavigation || !!chat?.customAgentId) && chat?.kind === "relay";
     const disabled = pending || (!database && chat?.kind !== "relay" && !worker?.relay);
     const key = markerKey(markerScope(entry.id) ?? "", entry.id);
@@ -187,7 +200,7 @@ export function ChatSidebar({
     const approvals = view?.pending.length ?? 0;
     const description = [
       entry.role === "orchestrator" ? "Orchestrator" : "Worker",
-      error || presentation.label,
+      error || statusLabel,
       approvals ? `${approvals} approvals waiting` : "",
       unreadLabel,
     ]

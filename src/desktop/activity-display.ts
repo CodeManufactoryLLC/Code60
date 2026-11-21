@@ -246,7 +246,8 @@ export class ActivityDisplay {
     });
     if (error) return make("failed", "host", true);
     if (run && terminal.has(run.status)) return make(run.status as ActivityState, "host", true);
-    if (run?.stopping || this.outcome === "stopping") return make("stopping", "host", true);
+    if (run?.stopping || run?.cancelling || this.outcome === "stopping")
+      return make("stopping", "host", true);
     if (run?.status === "waiting") return make("waiting_for_approval", "host", true);
     if (run?.status === "queued" || (run?.status === "running" && run.turns === 0))
       return make("connecting");

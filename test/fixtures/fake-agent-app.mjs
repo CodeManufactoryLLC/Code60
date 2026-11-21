@@ -560,6 +560,8 @@ export function createFakeAgent(options = {}) {
           while (!cancelled && !existsSync(step.waitForFile)) await sleep(25);
         } else if (step.hang === "cancellable") {
           await waitForCancel();
+          // Let UI journeys inspect cancellation before this external provider settles.
+          if (step.cancelWaitForFile) while (!existsSync(step.cancelWaitForFile)) await sleep(25);
           return { stopReason: "cancelled" };
         } else if (step.hang === "stubborn") {
           process.on("SIGTERM", () => {});

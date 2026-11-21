@@ -2110,6 +2110,11 @@ qualify; approval, stopping, idle and saved entries remain static. Each name
 follows its own live snapshot independently of chat selection. Hidden documents,
 collapsed/inert navigation, reduced motion and forced colors disable the effect.
 Existing readable role/status descriptions and indicators remain available.
+Owner names follow ephemeral conversation activity rather than retained run statuses.
+Worker run views expose a current-turn cancellation hint so their names stop animating
+before provider completion; this hint neither marks process shutdown nor enters saved records.
+Monitoring owners use the same “Monitoring subagents” wording in their accessible
+descriptions and tooltips as the transcript activity display.
 
 Settings → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a

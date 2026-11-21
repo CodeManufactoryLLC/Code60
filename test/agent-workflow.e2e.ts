@@ -632,13 +632,20 @@ async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) 
     await composer().press("Enter");
   };
   const hang = JSON.stringify([{ message: "Working until cancelled." }, { hang: "cancellable" }]);
+  const ownerCancelGate = join(repo, "..", "spotlight-owner-cancel-release");
+  const workerCancelGate = join(repo, "..", "spotlight-worker-cancel-release");
+  const gatedHang = (cancelWaitForFile: string) =>
+    JSON.stringify([
+      { message: "Working until cancelled." },
+      { hang: "cancellable", cancelWaitForFile },
+    ]);
   await relay.click();
   await expect(relay).toHaveAttribute("aria-current", "true");
   const relayId = (await relay.getAttribute("id"))?.replace(/^conversation-/, "");
   if (!relayId) throw new Error("Missing Relay identity");
   await expect(chat()).toHaveAttribute("data-chat-id", relayId);
   await send(
-    `Relay target: ${JSON.stringify({ cwd: repo, workspaceMode: "worktree", label: "Spotlight worker", prompt: hang })}`,
+    `Relay target: ${JSON.stringify({ cwd: repo, workspaceMode: "worktree", label: "Spotlight worker", prompt: gatedHang(workerCancelGate) })}`,
   );
   const worker = page.getByRole("button", { name: /^Spotlight worker \[/, includeHidden: true });
   const workerName = worker.locator(".chat-sidebar-label");
@@ -646,6 +653,8 @@ async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) 
   await expect(composer()).toBeEditable();
   // Relay continues monitoring its owned worker after its own turn becomes idle.
   await expect(relayName).toHaveAttribute("data-working", "true");
+  await expect(relay).toHaveAttribute("aria-description", /Monitoring subagents/);
+  await expect(relay).toHaveAttribute("title", /Monitoring subagents/);
   await send(hang);
   let assistant = project.locator(".chat-sidebar-entry").last();
   if (custom) {
@@ -664,7 +673,7 @@ async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) 
   const assistantId = (await assistant.getAttribute("id"))?.replace(/^conversation-/, "");
   if (!assistantId) throw new Error("Missing assistant identity");
   await expect(chat()).toHaveAttribute("data-chat-id", assistantId);
-  await send(hang);
+  await send(gatedHang(ownerCancelGate));
   await expect(assistantName).toHaveAttribute("data-working", "true");
   const names = [relayName, workerName, assistantName];
   for (const name of names) {
@@ -702,23 +711,54 @@ async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) 
   await page.locator(".sidebar-toggle").click();
   for (const name of names) await expect(name).toHaveCSS("animation-name", "activity-spotlight");
   // Cancelling one owner never removes another owner's spotlight, even off selection.
-  await chat().getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(assistantName).toHaveAttribute("data-working", "false");
-  await expect(assistantName).toHaveCSS("animation-name", "none");
-  await expect(relayName).toHaveCSS("animation-name", "activity-spotlight");
-  await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  try {
+    await chat().getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(assistantName).toHaveAttribute("data-working", "false");
+    await expect(assistant).toHaveAttribute("aria-description", /Stopping/);
+    await expect(assistantName).toHaveCSS("animation-name", "none");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+      (entry) => entry.run?.id === assistantId,
+    );
+    if (!cancelling) throw new Error("Missing cancelling assistant");
+    expect(cancelling.activity?.state).toBe("stopping");
+    expect(cancelling.run).toMatchObject({ status: "running", stopping: false, cancelling: true });
+    await expect(relayName).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  } finally {
+    await writeFile(ownerCancelGate, "release\n");
+  }
   await relay.click();
   await expect(chat()).toHaveAttribute("data-chat-id", relayId);
   await chat().getByRole("button", { name: "Stop", exact: true }).click();
   await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
   await worker.click();
-  await page
-    .locator(".worker-chat-page:visible")
-    .getByRole("button", { name: "Stop", exact: true })
-    .click();
+  try {
+    await page
+      .locator(".worker-chat-page:visible")
+      .getByRole("button", { name: "Stop", exact: true })
+      .click();
+    await expect(workerName).toHaveAttribute("data-working", "false");
+    await expect(worker).toHaveAttribute("aria-description", /Stopping/);
+    const workerId = (await worker.getAttribute("id"))?.replace(/^conversation-/, "");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+      ({ record }) => record.id === workerId,
+    );
+    expect(cancelling?.view).toMatchObject({
+      status: "running",
+      stopping: false,
+      cancelling: true,
+    });
+  } finally {
+    await writeFile(workerCancelGate, "release\n");
+  }
   for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
-  const snapshot = await page.evaluate(() => window.desktop.snapshot());
-  expect(snapshot.runs.filter((run) => run.view?.status === "running")).toEqual([]);
+  await expect
+    .poll(async () =>
+      (await page.evaluate(() => window.desktop.snapshot())).runs.filter(
+        (run) => run.view?.status === "running",
+      ),
+    )
+    .toEqual([]);
 }
 
 for (const custom of [false, true]) {
@@ -1506,6 +1546,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     }
     await expect.poll(() => [...owned].filter(alive)).toEqual([]);
 
+    // Reproduce retained running history whose recorded owner PID is still alive.
+    const historical = chats[0];
+    if (!historical) throw new Error("Missing saved project conversation");
+    const historicalFile = join(historical.directory, ".code60/runs", historical.id, "run.json");
+    const historicalRecord = JSON.parse(await readFile(historicalFile, "utf8"));
+    await writeFile(
+      historicalFile,
+      JSON.stringify({ ...historicalRecord, status: "running", ownerPid: process.pid }),
+    );
+
     page = await launch();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
@@ -1522,6 +1572,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
     ).toBeVisible();
     const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.chats.find((entry) => entry.run?.id === historical.id)).toMatchObject({
+      restored: true,
+      run: { status: "running" },
+      activity: { state: "idle", active: false },
+    });
+    for (const saved of chats.slice(0, 2)) {
+      const name = page.locator(`[id="conversation-${saved.id}"] .chat-sidebar-label`);
+      await expect(name).toHaveAttribute("data-working", "false");
+      await expect(name).toHaveCSS("animation-name", "none");
+    }
     expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects);
     expect(
       restored.openProjects?.some((entry) =>
