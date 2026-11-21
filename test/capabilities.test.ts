@@ -208,7 +208,9 @@ describe("desktop capability catalog", () => {
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
-      limitations: expect.stringContaining("never initializes Git"),
+      limitations: expect.stringContaining(
+        "Archiving the last displayed project chat returns to its home without a replacement",
+      ),
     });
     expect(projects?.access).toContain("project home → New Session");
     expect(projects?.access).toContain("red × (Close Project)");

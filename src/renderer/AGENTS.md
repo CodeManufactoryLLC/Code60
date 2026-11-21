@@ -584,7 +584,9 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
   Apply in both themes and forced colors.
 
 - After successfully archiving the currently displayed chat, show “Chat archived.”
-  through the shared success toast and select Relay. Archiving other chats leaves
+  through the shared success toast. For the last unarchived project chat, open its
+  project home with New Session; otherwise select Relay. Never create a replacement
+  on archive. Archiving other chats leaves
   the current page and conversation unchanged; failures retain inline feedback.
 
 ## Custom Assistants

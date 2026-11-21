@@ -1941,7 +1941,10 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 Archive only hides the orchestrator from sidebar navigation. It retains session
 records, transcripts, worker ownership and running work. Workers remain accessible.
 After successfully archiving the currently displayed chat, the renderer shows a
-“Chat archived.” success toast and selects Relay. Archiving another chat does not
+“Chat archived.” success toast. Closing the last unarchived chat for its project
+opens that project’s home with the New Session creation card, without creating or
+opening a replacement conversation. New Session explicitly creates a new chat.
+If another project chat remains, the existing Relay fallback applies. Archiving another chat does not
 change the displayed page or conversation. Failed archives keep inline feedback.
 Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped

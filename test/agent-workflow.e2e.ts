@@ -1189,6 +1189,73 @@ for (const custom of [false, true]) {
             .fill("32");
         }
 
+        const allProjectChats = (await page.evaluate(() => window.desktop.snapshot())).chats.filter(
+          (chat) => chat.kind === "project",
+        );
+        const projectChats = allProjectChats.filter((chat) => !chat.archived);
+        expect(projectChats.length).toBeGreaterThan(0);
+        const providerStarts = (await processes()).length;
+        const records = await Promise.all(
+          projectChats.map((chat) =>
+            readFile(
+              join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+              "utf8",
+            ),
+          ),
+        );
+        for (const item of projectChats) {
+          const row = page.locator(`#conversation-${item.run?.id}`);
+          await row.click();
+          await expect(row).toHaveAttribute("aria-current", "true");
+          await row.press("Shift+F10");
+          await page
+            .getByRole("menu", { name: "Chat actions", exact: true })
+            .getByRole("menuitem", { name: "Archive", exact: true })
+            .click();
+          await expect(row).toHaveCount(0);
+        }
+        const projectHome = page.locator("#panel-project .home-page:visible");
+        await expect(projectHome).toContainText("No conversations");
+        const newSession = projectHome.getByRole("button", { name: /^New Session in / });
+        await expect(newSession).toContainText("New Session");
+        await expect(
+          page.locator(".orchestration-chat-page:visible, .worker-chat-page:visible"),
+        ).toHaveCount(0);
+        const closed = await page.evaluate(() => window.desktop.snapshot());
+        expect(closed.chats.filter((chat) => chat.kind === "project")).toHaveLength(
+          allProjectChats.length,
+        );
+        expect(
+          closed.chats.filter((chat) => chat.kind === "project").every((chat) => chat.archived),
+        ).toBe(true);
+        expect((await processes()).length).toBe(providerStarts);
+        expect(
+          await Promise.all(
+            projectChats.map((chat) =>
+              readFile(
+                join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+                "utf8",
+              ),
+            ),
+          ),
+        ).toEqual(records);
+        await checkCheckout("original\n");
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        await newSession.focus();
+        await newSession.press("Enter");
+        await expect(
+          page.locator(".orchestration-chat-page:visible").getByRole("combobox"),
+        ).toBeEditable();
+        const explicit = await page.evaluate(() => window.desktop.snapshot());
+        expect(explicit.chat.projectId).toBe(projectChats[0]?.projectId);
+        expect(explicit.chats.filter((chat) => chat.kind === "project")).toHaveLength(
+          allProjectChats.length + 1,
+        );
+        await expect.poll(async () => (await processes()).length).toBe(providerStarts + 1);
+        checks.push(
+          "Closing the last project chat returned home without provider/session creation or record/Git changes; New Session explicitly created one chat.",
+        );
+
         // Exercise the same production execution path for Relay and a custom owner.
         if (custom) {
           await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();

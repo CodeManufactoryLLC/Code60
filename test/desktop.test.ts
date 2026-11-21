@@ -2117,6 +2117,85 @@ describe("retained project runtimes", {
     return body.result;
   }
 
+  it("archives the last retained project chat without creating a session and creates only on request", async () => {
+    await prepareRelay();
+    const a = await project("archive-a");
+    const first = await newChat(a.id);
+    const second = await newChat(a.id);
+    const b = await project("archive-b");
+    const other = await newChat(b.id);
+    const before = controller.snapshot();
+    const starts = agents.sessions.length;
+    const records = await Promise.all(
+      [first, second, other].map((chat) =>
+        fs.readFile(
+          join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+          "utf8",
+        ),
+      ),
+    );
+    // Background archive resolves A's owner while B remains selected.
+    await controller.orchestrationChatAction({ type: "archive", id: second.run?.id as string });
+    expect(controller.snapshot().chat.run?.id).toBe(other.run?.id);
+    await controller.projectAction({ type: "select", projectId: a.id });
+    for (const chat of before.chats.filter(
+      (chat) => chat.projectId === a.id && chat.run?.id !== second.run?.id,
+    )) {
+      await controller.orchestrationChatAction({ type: "select", id: chat.run?.id as string });
+      await controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string });
+    }
+    const archived = controller.snapshot();
+    expect(archived.chats).toHaveLength(before.chats.length);
+    expect(
+      archived.chats.filter((chat) => chat.projectId === a.id).every((chat) => chat.archived),
+    ).toBe(true);
+    expect(archived.chats.find((chat) => chat.run?.id === other.run?.id)?.archived).toBe(false);
+    expect(agents.sessions).toHaveLength(starts);
+    expect(agents.sessions.every((session) => session.stops.length === 0)).toBe(true);
+    expect(
+      await Promise.all(
+        [first, second, other].map((chat) =>
+          fs.readFile(
+            join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+            "utf8",
+          ),
+        ),
+      ),
+    ).toEqual(records);
+    const created = await newChat(a.id);
+    expect(created.run?.id).not.toBe(first.run?.id);
+    expect(created.run?.id).not.toBe(second.run?.id);
+    expect(agents.sessions).toHaveLength(starts + 1);
+    expect(controller.snapshot().chats).toHaveLength(before.chats.length + 1);
+  });
+
+  it("keeps a project chat visible and selected when archiving cannot be saved", async () => {
+    await prepareRelay();
+    const a = await project("archive-save-failure");
+    const chat = await newChat(a.id);
+    const starts = agents.sessions.length;
+    const save = vi
+      .spyOn(ChatStore.prototype, "save")
+      .mockRejectedValue(new Error("Archive save failed"));
+    try {
+      await expect(
+        controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string }),
+      ).rejects.toThrow("Archive save failed");
+      expect(controller.snapshot().chat.run?.id).toBe(chat.run?.id);
+      expect(
+        controller.snapshot().chats.find((entry) => entry.run?.id === chat.run?.id)?.archived,
+      ).toBe(false);
+      expect(agents.sessions).toHaveLength(starts);
+    } finally {
+      save.mockRestore();
+    }
+    await controller.orchestrationChatAction({ type: "archive", id: chat.run?.id as string });
+    expect(
+      controller.snapshot().chats.find((entry) => entry.run?.id === chat.run?.id)?.archived,
+    ).toBe(true);
+    expect(agents.sessions).toHaveLength(starts);
+  });
+
   it("answers self-knowledge reads for Relay and project chats without new authority", async () => {
     await prepareRelay();
     const relayId = controller.snapshot().chat.run?.id as string;
@@ -4291,15 +4370,18 @@ describe("app-wide orchestration chat", {
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions).toHaveLength(count);
     const directory = controller.snapshot().chat.directory as string;
+    const chats = controller.snapshot().chats.length;
+    const record = await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8");
     await controller.orchestrationChatAction({ type: "archive", id });
-    expect(controller.snapshot().chat.run?.id).not.toBe(id);
+    expect(controller.snapshot().chats).toHaveLength(chats);
+    expect(agents.sessions).toHaveLength(count);
     expect(controller.snapshot().chats.find((chat) => chat.run?.id === id)).toMatchObject({
       title: "My parser work",
       archived: true,
       directory,
     });
-    expect(await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8")).toContain(
-      id,
+    expect(await fs.readFile(join(directory, ".code60", "runs", id, "run.json"), "utf8")).toBe(
+      record,
     );
     await expect(controller.orchestrationChatAction({ type: "select", id })).rejects.toThrow(
       "archived",
