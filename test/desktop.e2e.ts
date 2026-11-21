@@ -5091,11 +5091,11 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     application = await launch(directory, folders[0] ?? "", join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await page.evaluate(() =>
-      window.desktop
-        .snapshot()
-        .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
-    );
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
     const composer = () => page.locator(".orchestration-chat-page:visible").getByRole("combobox");
     await expect(page.locator("#tab-search")).toBeEnabled();
     await expect(page.locator(".project-sidebar-open")).toHaveAttribute(
@@ -5143,15 +5143,49 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
     while (await dismiss.count()) await dismiss.first().click();
     await page.screenshot({ path: join(root, "test-results", "multi-project-sidebar.png") });
+    const expectProjectTitles = async () => {
+      for (const folder of folders) {
+        const group = page.getByRole("region", { name: `Project ${folder}`, exact: true });
+        const title = group.locator(".project-chat-name");
+        await expect(title).toHaveText(basename(folder));
+        await expect(title).toHaveAccessibleName(basename(folder));
+        await expect(group.locator(".project-chat-activity")).toHaveCount(0);
+        const centered = await title.evaluate((element) => {
+          const label = element.querySelector(".project-chat-label")?.getBoundingClientRect();
+          const row = element.getBoundingClientRect();
+          return label ? Math.abs(label.top + label.height / 2 - row.top - row.height / 2) : -1;
+        });
+        expect(centered).toBeGreaterThanOrEqual(0);
+        expect(centered).toBeLessThanOrEqual(1);
+      }
+    };
+    await expectProjectTitles();
+    // Selecting each project must never reintroduce its activity subtitle.
+    for (const folder of [folders[0], folders[1], folders[2], folders[0]]) {
+      if (!folder) throw new Error("Missing project fixture");
+      const title = page
+        .getByRole("region", { name: `Project ${folder}`, exact: true })
+        .getByRole("button", { name: basename(folder), exact: true });
+      await title.focus();
+      await title.press("Enter");
+      await expect(title).toHaveAttribute("aria-current", "page");
+      await expectSelectedProject(page, folder);
+      await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+      await expectProjectTitles();
+    }
+    // Return to the last project's retained draft before the layout/control checks.
+    await page
+      .getByRole("region", { name: `Project ${folders[2]}`, exact: true })
+      .getByRole("button", { name: "Chat 1", exact: true })
+      .click();
     const expectHierarchy = async (compressed = false) => {
+      await expectProjectTitles();
       const positions = await page.locator("#chat-pages").evaluate((element) => {
         const x = (node: Element | null) => node?.getBoundingClientRect().x ?? -1;
         return {
           chat: x(document.querySelector("#tab-chat .page-tab-label")),
           projects: [...element.querySelectorAll(".project-chat-title")].map(x),
-          clipped: [
-            ...element.querySelectorAll(".project-chat-title, .project-chat-activity"),
-          ].some((label) => {
+          clipped: [...element.querySelectorAll(".project-chat-title")].some((label) => {
             // Trimmed titles keep their ascenders and descenders visible.
             const parent = label.closest(".project-chat-name")?.getBoundingClientRect();
             const bounds = label.getBoundingClientRect();

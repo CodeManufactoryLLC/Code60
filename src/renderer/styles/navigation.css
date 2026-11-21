@@ -779,10 +779,8 @@
   --nav-label-inset: min(var(--project-label-inset), max(40px, calc(100cqw - 176px)));
   --project-icon-size: min(calc(2 * var(--button-size)), 24px, calc(var(--nav-label-inset) - 8px));
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: 0;
+  align-items: center;
+  justify-content: flex-start;
   flex: 1;
   min-width: 0;
   height: var(--nav-row-height);
@@ -806,14 +804,6 @@
   width: var(--project-icon-size);
   height: var(--project-icon-size);
   left: calc(var(--nav-label-inset) - var(--project-icon-size) - 8px);
-}
-
-.project-chat-activity {
-  overflow: hidden;
-  padding-left: 0;
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 .project-chat-heading > .icon-button {

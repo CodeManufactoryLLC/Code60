@@ -47,7 +47,9 @@ features, resource bounds and remaining native-platform validation.
   Startup remains on Chat. Search is a regular labelled sidebar page tab with
   selected, disabled and arrow-key behavior; there is no utility row or sidebar wordmark.
   Relay uses the locally bundled pet animation. Projects uses the supplied project-initiation animation and contains the
-  open project headings. Project chats
+  open project headings. Project rows show the title only, with no activity/status
+  subtitle or reserved subtitle spacing; labels use the shared navigation row height.
+  Project chats
   indent one 24px step beneath their project; owned workers indent one more step
   beneath their conversation. Project labels navigate without toggling their disclosure. Conversations retain More actions;
   project rows use a red circular × with the “Close Project” tooltip. That icon

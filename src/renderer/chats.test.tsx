@@ -290,6 +290,8 @@ describe("conversation hierarchy", () => {
     expect(sections).toHaveLength(3);
     expect(html).not.toContain('id="conversation-relay"');
     expect(html).not.toContain("Legacy history");
+    expect(html).not.toContain("project-chat-activity");
+    expect(html).not.toContain(">Active<");
     sections.forEach((section, index) => {
       const project = projects[index];
       expect(section).toContain(`id="conversation-${project?.id}"`);
