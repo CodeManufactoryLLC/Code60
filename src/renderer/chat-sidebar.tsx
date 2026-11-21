@@ -166,7 +166,7 @@ export function ChatSidebar({
     const read = markers.current.get(key) ?? loadReadMarker(sessionStorage, key);
     const summary = summaries.get(entry.id);
     const unread =
-      open && entry.id === selectedId
+      entry.role === "worker" || (open && entry.id === selectedId)
         ? 0
         : summary
           ? Math.max(0, summary.count - read)
