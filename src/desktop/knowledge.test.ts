@@ -362,6 +362,31 @@ describe("DesktopKnowledge", () => {
     expect(value.available).toBe(false);
     expect(reads).toEqual([]);
   });
+  it("keeps the enhanced prompt workspace gated by the database, with no preview execution authority", async () => {
+    const { knowledge, runtime } = setup();
+    const read = async () =>
+      result(
+        await knowledge.call("code60_get_capabilities", { query: "Prompt templates" }, project),
+      );
+    expect((await read()).entries).toContainEqual(
+      expect.objectContaining({
+        id: "prompts",
+        availability: expect.objectContaining({ status: "available" }),
+        limitations: expect.stringContaining("never sends requests"),
+      }),
+    );
+    runtime.database = null;
+    expect((await read()).entries).toContainEqual(
+      expect.objectContaining({
+        id: "prompts",
+        availability: expect.objectContaining({
+          status: "blocked",
+          action: "Connect to database.",
+        }),
+      }),
+    );
+  });
+
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(

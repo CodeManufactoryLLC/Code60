@@ -127,6 +127,7 @@ describe("sandboxed diagnostic preload", () => {
       setPollSettings: "poll-settings",
       setPollingPaused: "poll-paused",
       setVisibility: "visibility",
+      setPromptDraftsPending: "prompt-drafts",
       setOrchestrationProvider: "orchestration-provider",
       start: "start",
       action: "action",

@@ -204,12 +204,12 @@ Schema version: 1
 
 - ID: `prompts`
 - Status: shipped
-- Purpose: Customize project orchestration and handoff templates.
+- Purpose: Search and edit project orchestration and handoff templates with undo/redo, find/replace, wrapping, line numbers, merge-field help, located validation, sample preview and saved-version comparison.
 - Access: Apps → Prompt Builder
 - Prerequisite: database
 - Agent access: read
-- Confirmation: Existing permissions apply.
-- Limits: Database overrides precede config and built-ins; Relay uses its fixed application instructions.
+- Confirmation: Reset confirms removal of the saved override and its draft. Closing with unsaved prompt drafts asks before discarding them.
+- Limits: Database overrides precede config and built-ins; Relay uses its fixed application instructions. Preview uses sample data only and never sends requests. Drafts remain in this window across template, page and database switches; reload is blocked until all drafts are saved or discarded. External changes require explicit conflict resolution before saving or resetting.
 - Pages: `prompts`
 - Settings sections: none
 - Tools: none

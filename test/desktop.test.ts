@@ -3240,6 +3240,37 @@ describe("prompt templates", () => {
     expect(original.planning).not.toBe(configured.planning);
   });
 
+  it("rejects saves from stale effective sources and rechecks reset after its native confirmation", async () => {
+    const before = state("handoffSummary");
+    if (!before) throw new Error("Missing template");
+    await controller.savePromptTemplate({ id: before.id, template: "External" });
+    await expect(
+      controller.savePromptTemplate({
+        id: before.id,
+        template: "Draft",
+        expected: { template: before.template, source: before.source },
+      }),
+    ).rejects.toThrow(/changed externally/);
+    expect(state(before.id)?.template).toBe("External");
+    const expected = { source: "database" as const, template: "External" };
+    confirm.mockImplementationOnce(async () => {
+      const db = databases.get(join(directory, "first.sqlite"));
+      if (!db) throw new Error("Missing database");
+      db.prompts.handoffSummary = "Changed during confirmation";
+      return true;
+    });
+    await expect(controller.resetPromptTemplate({ id: before.id, expected })).rejects.toThrow(
+      /changed externally/,
+    );
+    expect(state(before.id)?.template).toBe("Changed during confirmation");
+    await controller.savePromptTemplate({
+      id: before.id,
+      template: "Explicit replacement",
+      expected: { source: "database", template: "Changed during confirmation" },
+    });
+    expect(state(before.id)?.template).toBe("Explicit replacement");
+  });
+
   it("keeps skipped-template warnings when switching databases", async () => {
     const open = openDatabase.getMockImplementation();
     if (!open) throw new Error("Missing database fixture");

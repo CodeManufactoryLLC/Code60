@@ -127,6 +127,8 @@ contextBridge.exposeInMainWorld("desktop", {
     }),
   setPollSettings: (settings: unknown) => ipcRenderer.invoke("desktop:poll-settings", settings),
   setPollingPaused: (paused: unknown) => ipcRenderer.invoke("desktop:poll-paused", paused),
+  setPromptDraftsPending: (pending: unknown) =>
+    ipcRenderer.invoke("desktop:prompt-drafts", pending),
   setVisibility: (visibility: unknown) => ipcRenderer.invoke("desktop:visibility", visibility),
   setOrchestrationAutoApproval: (enabled: unknown) =>
     ipcRenderer.invoke("desktop:orchestration-auto-approval", enabled),

@@ -199,3 +199,119 @@
   align-items: center;
   gap: 6px;
 }
+
+.prompt-editor-list input {
+  width: 100%;
+  min-width: 0;
+}
+.prompt-editor-toolbar,
+.prompt-editor-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+}
+.prompt-editor-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.prompt-editor-find label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.prompt-editor-find input {
+  max-width: 100%;
+}
+.prompt-editor-workspace[data-split="true"],
+.prompt-editor-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.prompt-editor-workspace > section,
+.prompt-editor-comparison > div {
+  min-width: 0;
+}
+.prompt-editor-workspace [hidden] {
+  display: none;
+}
+.prompt-editor-view-toggle {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.prompt-editor-view-toggle [aria-selected="true"] {
+  background: var(--accent-bg);
+}
+.prompt-editor-conflict {
+  border-left: 3px solid var(--danger);
+  padding: 0 12px;
+}
+.prompt-editor-conflict button {
+  margin: 4px;
+  white-space: normal;
+}
+.prompt-editor-fields details {
+  width: 100%;
+}
+.prompt-editor-fields dd {
+  margin-left: 12px;
+}
+.prompt-editor-fields pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prompt-editor-input[data-lines="true"] {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4ch minmax(0, 1fr);
+}
+.prompt-editor-input[data-lines="true"] textarea {
+  grid-column: 2;
+}
+.prompt-line-gutter {
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4ch;
+  pointer-events: none;
+  font: 13px / 1.65 var(--mono);
+  text-transform: none;
+}
+.prompt-line-gutter > div {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.prompt-line-mirror {
+  position: relative;
+  padding: 0 12px;
+  overflow-wrap: break-word;
+  color: transparent;
+}
+.prompt-line-mirror span {
+  position: absolute;
+  left: 0;
+  width: 4ch;
+  padding-right: 4px;
+  text-align: right;
+  color: var(--muted);
+}
+.prompt-editor-problem button {
+  white-space: normal;
+  text-align: left;
+}
+.prompt-editor-preview {
+  max-height: 60vh;
+  overflow: auto;
+}
+@media (max-width: 1000px) {
+  .prompt-editor-workspace[data-split="true"],
+  .prompt-editor-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

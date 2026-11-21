@@ -883,3 +883,12 @@ add outer padding to zero-padding layouts. Modal shells and their body panes use
 auto scrollbar gutters rather than reserving empty right-side strips; other
 reading panes keep stable gutters. Full-screen splash is separate. Honor live
 themes and forced colors. This visual change adds no capability/catalog entry.
+
+## Prompt workspace
+
+Prompt Builder retains drafts per database path in AppPages-owned sessions. Keep original
+effective text/source for conflict checks; always send expected metadata on save/reset.
+Do not clear newer drafts from an older completion. Keep validation locations supplementary
+to shared template validation. Native fields preserve Tab navigation, named merge fields,
+sample-only preview, keyboard tabs and plain-text comparison. Reload blocks until all
+database drafts are resolved; normal quit confirms through main's boolean-only close guard.

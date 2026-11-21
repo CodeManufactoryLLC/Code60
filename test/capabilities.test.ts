@@ -17,6 +17,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes the guarded sample-only prompt workspace without changing database availability", () => {
+    const prompts = DESKTOP_CAPABILITIES.find((capability) => capability.id === "prompts");
+    expect(prompts).toMatchObject({ prerequisite: "database", agentAccess: "read" });
+    expect(prompts?.purpose).toContain("find/replace");
+    expect(prompts?.limitations).toContain("sample data only");
+    expect(prompts?.limitations).toContain("External changes");
+    expect(prompts?.confirmation).toContain("unsaved prompt drafts");
+  });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       prerequisite: "none",

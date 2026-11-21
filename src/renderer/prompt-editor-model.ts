@@ -6,6 +6,7 @@ import {
   type PromptId,
   type PromptSource,
   type PromptTemplate,
+  type PromptTemplateState,
   type PromptTemplates,
   renderPrompt,
   validatePromptTemplate,
@@ -117,4 +118,222 @@ export function isDirty(drafts: PromptDrafts, id: PromptId, effective: PromptTem
   if (draft === undefined) return false;
   if (typeof draft === "string" || typeof effective === "string") return draft !== effective;
   return OPERATING_CONTRACT_CLAUSE_IDS.some((key) => draft[key] !== effective[key]);
+}
+
+function sameTemplate(a: PromptTemplate, b: PromptTemplate): boolean {
+  if (typeof a === "string" || typeof b === "string") return a === b;
+  return OPERATING_CONTRACT_CLAUSE_IDS.every((key) => a[key] === b[key]);
+}
+
+export const templateBody = (template: PromptTemplate): string =>
+  typeof template === "string" ? template : assembleOperatingContract(template);
+
+export function matchesPrompt(id: PromptId, query: string): boolean {
+  return `${promptLabels[id]} ${promptDescriptions[id]}`
+    .toLowerCase()
+    .includes(query.trim().toLowerCase());
+}
+
+export const fieldDescriptions: Record<string, string> = {
+  status: "Saved run status",
+  turns: "Number of completed turns",
+  agent: "Provider identifier",
+  branch: "Run branch, or none",
+  base: "Base commit, or none",
+  worktree: "Run working directory",
+  reason: "Recorded handoff reason, or none",
+  prompts: "Saved user prompts, one per line",
+  messages: "Saved agent messages, one per line",
+  toolCalls: "Latest tool-call titles, kinds and states",
+  summary: "Rendered handoff summary",
+  message: "New user message (required)",
+  updates: "Worker states and reply excerpts (required)",
+};
+
+export function fieldExample(id: PromptId, field: string): string {
+  return (
+    (sampleFields(DEFAULT_PROMPT_TEMPLATES.handoffSummary)[id] as Record<string, string>)[field] ??
+    ""
+  );
+}
+
+export interface PromptProblem {
+  clause?: (typeof OPERATING_CONTRACT_CLAUSE_IDS)[number];
+  start: number;
+  end: number;
+  line: number;
+  column: number;
+  message: string;
+}
+
+/** Location hints supplement the authoritative shared validator; they never change validity. */
+export function locateProblem(id: PromptId, template: PromptTemplate): PromptProblem | undefined {
+  const error = validatePromptTemplate(id, template);
+  if (!error) return undefined;
+  let clause =
+    typeof template === "string"
+      ? undefined
+      : OPERATING_CONTRACT_CLAUSE_IDS.find((key) =>
+          validatePromptTemplate(
+            "operatingContract",
+            Object.fromEntries(
+              OPERATING_CONTRACT_CLAUSE_IDS.map((clause) => [
+                clause,
+                clause === key ? template[key] : "x",
+              ]),
+            ),
+          ),
+        );
+  if (typeof template !== "string" && !clause && error.includes("at most"))
+    clause = OPERATING_CONTRACT_CLAUSE_IDS.at(-1);
+  const text =
+    typeof template === "string" ? template : clause ? template[clause] : templateBody(template);
+  const unknown = /unknown merge field '([^']+)'/.exec(error)?.[1];
+  let start = 0;
+  let end = 0;
+  let correction = "Enter nonempty text.";
+  if (unknown) {
+    const token = [...text.matchAll(/\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g)].find(
+      (match) => match[1] === unknown,
+    );
+    start = token?.index ?? 0;
+    end = start + (token?.[0].length ?? 0);
+    correction =
+      id === "operatingContract"
+        ? "Remove this merge field; clauses use plain text."
+        : "Replace this with an allowed merge field from Insert merge field.";
+  } else if (error.includes("malformed")) {
+    const valid = [...text.matchAll(/\{\{\s*[A-Za-z][A-Za-z0-9]*\s*\}\}/g)];
+    start = text.indexOf("{{");
+    while (start >= 0 && valid.some((match) => match.index === start))
+      start = text.indexOf("{{", start + 2);
+    start = Math.max(0, start);
+    end = Math.min(text.length, start + 2);
+    correction =
+      id === "operatingContract"
+        ? "Remove the opening braces; clauses use plain text."
+        : "Use {{name}} with an allowed field name and both closing braces.";
+  } else if (error.includes("must include")) {
+    start = end = text.length;
+    correction = `Insert ${/must include (.*)/.exec(error)?.[1] ?? "the required field"}.`;
+  } else if (error.includes("at most")) {
+    start = end = text.length;
+    correction = "Shorten the complete template to 8,000 characters, including clause separators.";
+  }
+  const prefix = text.slice(0, start).split("\n");
+  return {
+    ...(clause ? { clause } : {}),
+    start,
+    end,
+    line: prefix.length,
+    column: (prefix.at(-1)?.length ?? 0) + 1,
+    message: `This template ${error}. ${correction}`,
+  };
+}
+
+interface DraftRecord {
+  baseline: PromptTemplateState;
+  value: PromptTemplate;
+  past: PromptTemplate[];
+  future: PromptTemplate[];
+  revision: number;
+  awaiting?: PromptTemplateState;
+}
+
+/** Owned by the application view, indexed by database path; never persisted or sent to an agent. */
+export class PromptDraftSession {
+  readonly records = new Map<PromptId, DraftRecord>();
+  read(state: PromptTemplateState): PromptTemplate {
+    return this.records.get(state.id)?.value ?? state.template;
+  }
+  edit(state: PromptTemplateState, value: PromptTemplate): void {
+    const record = this.records.get(state.id) ?? {
+      baseline: state,
+      value: state.template,
+      past: [],
+      future: [],
+      revision: 0,
+    };
+    if (sameTemplate(record.value, value)) return;
+    record.past.push(record.value);
+    if (record.past.length > 100) record.past.shift();
+    record.value = value;
+    record.future = [];
+    record.revision++;
+    this.records.set(state.id, record);
+  }
+  dirty(state: PromptTemplateState): boolean {
+    const record = this.records.get(state.id);
+    return !!record && !sameTemplate(record.value, record.baseline.template);
+  }
+  get pending(): boolean {
+    return [...this.records.values()].some(
+      (record) => !sameTemplate(record.value, record.baseline.template),
+    );
+  }
+  conflict(state: PromptTemplateState): boolean {
+    const record = this.records.get(state.id);
+    if (!record) return false;
+    const matches =
+      record.baseline.source === state.source &&
+      sameTemplate(record.baseline.template, state.template);
+    if (matches) {
+      delete record.awaiting;
+      return false;
+    }
+    // Main broadcasts coalesce for 40ms. A successful write can precede its snapshot.
+    return !(
+      record.awaiting?.source === state.source &&
+      sameTemplate(record.awaiting.template, state.template)
+    );
+  }
+  failed(id: PromptId): void {
+    const record = this.records.get(id);
+    if (record) delete record.awaiting;
+  }
+  undo(id: PromptId, redo = false): void {
+    const record = this.records.get(id);
+    if (!record) return;
+    const from = redo ? record.future : record.past;
+    const to = redo ? record.past : record.future;
+    const value = from.pop();
+    if (value === undefined) return;
+    to.push(record.value);
+    record.value = value;
+    record.revision++;
+  }
+  rebase(state: PromptTemplateState): void {
+    const record = this.records.get(state.id);
+    if (record) {
+      record.baseline = state;
+      record.revision++;
+    }
+  }
+  discard(id: PromptId): void {
+    this.records.delete(id);
+  }
+  reset(state: PromptTemplateState, revision: number | undefined): void {
+    const record = this.records.get(state.id);
+    const restored = { ...state, template: state.fallback, source: state.fallbackSource };
+    if (record && record.revision !== revision) {
+      record.awaiting = state;
+      record.baseline = restored;
+      return;
+    }
+    this.records.set(state.id, {
+      baseline: restored,
+      value: restored.template,
+      past: [],
+      future: [],
+      revision: (revision ?? 0) + 1,
+      awaiting: state,
+    });
+  }
+  saved(id: PromptId, revision: number | undefined, value: PromptTemplate): void {
+    const record = this.records.get(id);
+    if (!record) return;
+    record.awaiting = record.baseline;
+    record.baseline = { ...record.baseline, template: value, source: "database" };
+    if (record.revision === revision) record.value = value;
+  }
 }

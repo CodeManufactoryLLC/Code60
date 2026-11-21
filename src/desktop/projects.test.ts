@@ -33,6 +33,46 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     db.close();
   });
 
+  it("atomically rejects stale prompt saves and resets across two database connections", () => {
+    const path = join(directory, "conflicts.sqlite");
+    const first = openProjectDatabase(path, true);
+    const other = openProjectDatabase(path, false);
+    try {
+      first.savePromptTemplate("handoffSummary", "First", "a", null);
+      other.savePromptTemplate("handoffSummary", "External", "b", "First");
+      expect(() => first.savePromptTemplate("handoffSummary", "Draft", "c", "First")).toThrow(
+        /changed externally/,
+      );
+      expect(() => first.deletePromptTemplate("handoffSummary", "First")).toThrow(
+        /changed externally/,
+      );
+      expect(() => first.savePromptTemplate("handoffSummary", "Draft", "c", null)).toThrow(
+        /changed externally/,
+      );
+      expect(first.promptTemplates().templates.handoffSummary).toBe("External");
+      first.deletePromptTemplate("handoffSummary", "External");
+      expect(() => other.savePromptTemplate("handoffSummary", "Draft", "d", "External")).toThrow(
+        /changed externally/,
+      );
+      const clauses = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "Role" };
+      first.savePromptTemplate("operatingContract", clauses, "a", null);
+      const reordered = Object.fromEntries(Object.entries(clauses).reverse()) as typeof clauses;
+      other.savePromptTemplate(
+        "operatingContract",
+        { ...clauses, role: "Changed" },
+        "b",
+        reordered,
+      );
+      expect(() => first.deletePromptTemplate("operatingContract", clauses)).toThrow(
+        /changed externally/,
+      );
+      expect(first.promptTemplates().templates.operatingContract?.role).toBe("Changed");
+    } finally {
+      first.close();
+      other.close();
+    }
+  });
+
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
 
   it("upgrades schema 4 without resetting clause edits, then persists sorted commands", () => {

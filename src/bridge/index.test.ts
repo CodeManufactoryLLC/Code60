@@ -17,7 +17,9 @@ import {
   parsePollSettings,
   parsePollVisibility,
   parseProjectPath,
+  parsePromptDraftsPending,
   parsePromptTemplateId,
+  parseResetPromptTemplate,
   parseReviewAction,
   parseReviewFileRead,
   parseReviewRead,
@@ -266,6 +268,27 @@ describe("desktop IPC validation", () => {
       "handoffTurn",
     ])
       expect(() => parseSavePromptTemplate(value)).toThrow();
+  });
+  it("strictly validates expected prompt versions, reset requests and the payload-free close guard", () => {
+    const expected = { template: "Previous {{message}}", source: "database" };
+    expect(
+      parseSavePromptTemplate({ id: "handoffTurn", template: "New {{message}}", expected })
+        .expected,
+    ).toEqual(expected);
+    expect(parseResetPromptTemplate({ id: "handoffTurn", expected })).toEqual({
+      id: "handoffTurn",
+      expected,
+    });
+    expect(parseResetPromptTemplate("handoffTurn")).toBe("handoffTurn");
+    for (const value of [
+      { id: "handoffTurn", expected: { ...expected, source: "remote" } },
+      { id: "handoffTurn", expected: { ...expected, extra: true } },
+      { id: "handoffTurn", extra: true },
+    ])
+      expect(() => parseResetPromptTemplate(value)).toThrow();
+    expect(parsePromptDraftsPending(true)).toBe(true);
+    for (const value of ["true", 1, {}, null])
+      expect(() => parsePromptDraftsPending(value)).toThrow();
   });
   it("validates polling requests", () => {
     expect(parsePollKeys(["history", "worktrees"])).toEqual(["history", "worktrees"]);

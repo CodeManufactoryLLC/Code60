@@ -5,6 +5,7 @@ import {
   COMMAND_LIMIT,
   type Command,
   commandSchema,
+  OPERATING_CONTRACT_CLAUSE_IDS,
   PROMPT_IDS,
   type ProjectEntry,
   type PromptId,
@@ -41,8 +42,13 @@ export interface ProjectDatabase {
   deleteConfiguration(id: string): void;
   useConfiguration(id: string, at: string): void;
   promptTemplates(): SavedPromptTemplates;
-  savePromptTemplate(id: PromptId, template: PromptTemplate, at: string): void;
-  deletePromptTemplate(id: PromptId): void;
+  savePromptTemplate(
+    id: PromptId,
+    template: PromptTemplate,
+    at: string,
+    expected?: PromptTemplate | null,
+  ): void;
+  deletePromptTemplate(id: PromptId, expected?: PromptTemplate | null): void;
   commands(): Command[];
   command(name: string): Command | undefined;
   saveCommand(command: Command): void;
@@ -174,6 +180,43 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
   const clear = database.prepare("DELETE FROM code60_projects");
   const commandColumns =
     "id, name, title, description, prompt, created_at AS createdAt, updated_at AS updatedAt";
+  const writePrompt = (
+    id: PromptId,
+    expected: PromptTemplate | null | undefined,
+    write: () => void,
+  ) => {
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      if (expected !== undefined) {
+        const row = database
+          .prepare("SELECT template FROM code60_prompt_templates WHERE id = ?")
+          .get(id);
+        let matches = expected === null ? !row : false;
+        if (row && expected !== null) {
+          if (typeof expected === "string") matches = row.template === expected;
+          else {
+            try {
+              const stored = JSON.parse(String(row.template));
+              matches =
+                validatePromptTemplate(id, stored) === undefined &&
+                OPERATING_CONTRACT_CLAUSE_IDS.every((key) => stored[key] === expected[key]);
+            } catch {
+              matches = false;
+            }
+          }
+        }
+        if (!matches)
+          throw new Error(
+            "This prompt template changed externally. Your draft is preserved. Reload the saved version before saving or resetting.",
+          );
+      }
+      write();
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  };
   return {
     path,
     commands: () =>
@@ -318,18 +361,22 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
       }
       return saved;
     },
-    savePromptTemplate: (id, template, at) => {
+    savePromptTemplate: (id, template, at, expected) => {
       const problem = validatePromptTemplate(id, template);
       if (problem) throw new Error(`The ${id} prompt template ${problem}`);
-      database
-        .prepare(
-          "INSERT INTO code60_prompt_templates (id, template, updated_at) VALUES (?, ?, ?) " +
-            "ON CONFLICT(id) DO UPDATE SET template = excluded.template, updated_at = excluded.updated_at",
-        )
-        .run(id, typeof template === "string" ? template : JSON.stringify(template), at);
+      writePrompt(id, expected, () =>
+        database
+          .prepare(
+            "INSERT INTO code60_prompt_templates (id, template, updated_at) VALUES (?, ?, ?) " +
+              "ON CONFLICT(id) DO UPDATE SET template = excluded.template, updated_at = excluded.updated_at",
+          )
+          .run(id, typeof template === "string" ? template : JSON.stringify(template), at),
+      );
     },
-    deletePromptTemplate: (id) => {
-      database.prepare("DELETE FROM code60_prompt_templates WHERE id = ?").run(id);
+    deletePromptTemplate: (id, expected) => {
+      writePrompt(id, expected, () =>
+        database.prepare("DELETE FROM code60_prompt_templates WHERE id = ?").run(id),
+      );
     },
     close: () => {
       if (database.isOpen) database.close();
