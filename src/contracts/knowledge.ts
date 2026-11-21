@@ -369,11 +369,11 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "automations",
     "Automations",
-    "Run consented local schedules in an independent service.",
+    "Run consented local schedules in an independent service; read live, assembled execution transcripts and saved outcomes.",
     "Apps → Automation Studio",
     "none",
     "human-only",
-    "Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.",
+    "Transcripts refresh while open from service notices, retain partial content on errors, and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.",
     "Human installation and schedule consent.",
   ),
   feature(

@@ -8,6 +8,7 @@ import {
   type RendererAutomationDraft,
   TOOL_KINDS,
 } from "../bridge/index.js";
+import { AutomationTranscriptModal } from "./automation-transcript.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
@@ -72,6 +73,7 @@ export function AutomationsPage({
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<AutomationEditor>();
   const [evidence, setEvidence] = useState("");
+  const [transcriptExecution, setTranscriptExecution] = useState<string>();
   const generation = useRef(0);
   const dirty = useRef(false);
   const flight = useRef(false);
@@ -129,8 +131,7 @@ export function AutomationsPage({
       const result = await api.automation(request);
       if (owner !== generation.current) return;
       if (request.action === "get") setEditor(result as AutomationEditor);
-      if (request.action === "transcript" || request.action === "diff")
-        setEvidence(JSON.stringify(result, null, 2));
+      if (request.action === "diff") setEvidence(JSON.stringify(result, null, 2));
       await refresh();
     } catch (error) {
       if (owner === generation.current) setError((error as Error).message);
@@ -318,7 +319,7 @@ export function AutomationsPage({
               type="button"
               className="small"
               disabled={busy}
-              onClick={() => void act({ action: "transcript", executionId: execution.id })}
+              onClick={() => setTranscriptExecution(execution.id)}
             >
               Transcript
             </button>
@@ -343,6 +344,14 @@ export function AutomationsPage({
             setEditor(undefined);
             void refresh();
           }}
+        />
+      )}
+      {active && transcriptExecution && (
+        <AutomationTranscriptModal
+          key={transcriptExecution}
+          api={api}
+          executionId={transcriptExecution}
+          onClose={() => setTranscriptExecution(undefined)}
         />
       )}
       {evidence && (

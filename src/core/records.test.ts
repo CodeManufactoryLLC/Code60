@@ -105,6 +105,35 @@ describe("shared record-store coordination", () => {
     expect(await fs.readdir(join(root, "r1"))).toEqual(["run.json"]);
   });
 
+  it("waits for same-run appends before reading live transcripts across aliases", async () => {
+    const fs = memoryFs();
+    const append = fs.appendFile.getMockImplementation();
+    if (!append) throw new Error("Missing fixture writer");
+    const entered = deferred();
+    const release = deferred();
+    fs.appendFile.mockImplementationOnce(async (path, data) => {
+      await append(path, data.slice(0, 10));
+      entered.resolve();
+      await release.promise;
+      await append(path, data.slice(10));
+    });
+    const a = createRecordStore(fs, root);
+    const b = createRecordStore({ ...fs }, alias);
+    const event = { runId: "r1", at: "t", type: "message" as const, text: "one\ntwo" };
+    const writing = a.appendEvent(event);
+    await entered.promise;
+    const reading = b.readEvents("r1");
+    try {
+      await b.appendEvent({ ...event, runId: "other" });
+      expect(await b.readEvents("other")).toHaveLength(1);
+      expect(fs.readFile).toHaveBeenCalledTimes(1);
+    } finally {
+      release.resolve();
+      await writing;
+    }
+    expect(await reading).toEqual([event]);
+  });
+
   it("deduplicates only in-flight aliased listings and isolates returned records", async () => {
     const fs = memoryFs();
     const a = createRecordStore(fs, root);

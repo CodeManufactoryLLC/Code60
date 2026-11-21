@@ -5,7 +5,11 @@ import {
   rendererAutomationDraftSchema,
 } from "../contracts/index.js";
 
-export type { RendererAutomationDraft, ServiceStatus } from "../contracts/index.js";
+export type {
+  AutomationTranscript,
+  RendererAutomationDraft,
+  ServiceStatus,
+} from "../contracts/index.js";
 export { TOOL_KINDS } from "../contracts/index.js";
 
 const id = z.uuid();

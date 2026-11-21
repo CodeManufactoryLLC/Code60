@@ -58,6 +58,16 @@ describe("desktop capability catalog", () => {
     );
   });
 
+  it("describes human-opened live automation transcripts without database prerequisites", () => {
+    expect(
+      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
+    ).toMatchObject({
+      prerequisite: "none",
+      purpose: expect.stringContaining("live, assembled execution transcripts"),
+      limitations: expect.stringContaining("bounded evidence with execution status"),
+    });
+  });
+
   it("describes the current creation cards, folder confirmation and dollar commands", () => {
     const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({

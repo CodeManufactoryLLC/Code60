@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
+import { startService } from "../src/automation/service.js";
 import type { MemoryGeneration, MemorySource, Snapshot, UpdateState } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG } from "../src/core/index.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
@@ -1326,6 +1327,142 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+for (const outcome of ["finished", "failed", "cancelled"] as const) {
+  test(`desktop: scheduled transcript streams readable content through ${outcome} and reopening`, async () => {
+    test.setTimeout(60_000);
+    const directory = await realpath(await mkdtemp(join(tmpdir(), "c60-stream-")));
+    const repository = join(directory, "repo");
+    let service: Awaited<ReturnType<typeof startService>> | undefined;
+    try {
+      await mkdir(repository);
+      execFileSync("git", ["init", "--initial-branch=main", repository]);
+      await writeFile(join(repository, "unchanged.txt"), "checkout stays unchanged\n");
+      execFileSync("git", ["add", "."], { cwd: repository });
+      commitFixture(repository);
+      const initialHead = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repository,
+        encoding: "utf8",
+      });
+      application = await launch(directory, repository, join(directory, "code60.sqlite"));
+      service = await startService({
+        ...process.env,
+        XDG_CONFIG_HOME: join(directory, "config"),
+        XDG_STATE_HOME: join(directory, "state"),
+      });
+      const scheduler = service.scheduler;
+      const page = await application.firstWindow();
+      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await selectSidebarPage(page, "Automation Studio");
+      const panel = page.locator("#panel-automations");
+      await panel.getByRole("button", { name: "New automation", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "New automation", exact: true });
+      await editor.getByLabel("Name", { exact: true }).fill("Streaming check");
+      await editor.getByRole("button", { name: "Choose repository", exact: true }).click();
+      await editor
+        .getByLabel("Saved prompt", { exact: true })
+        .fill(
+          JSON.stringify([
+            { message: "First " },
+            { sleep: 4000 },
+            { message: "line\n  last" },
+            { sleep: 4000 },
+            ...(outcome === "failed"
+              ? [{ exit: 1 }]
+              : outcome === "cancelled"
+                ? [{ hang: "cancellable" }]
+                : []),
+          ]),
+        );
+      await editor.getByRole("button", { name: "Save automation", exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await expect
+        .poll(async () => ((await scheduler.request({ action: "list" })) as unknown[]).length)
+        .toBe(1);
+      const schedules = panel.locator(".automation-schedules-grid .dvn-scroller").first();
+      await schedules.click({ position: { x: 80, y: 45 } });
+      await panel.getByRole("button", { name: "Run now", exact: true }).click();
+      await expect
+        .poll(async () => ((await scheduler.request({ action: "history" })) as unknown[]).length)
+        .toBe(1);
+      await panel
+        .locator(".automation-history-grid .dvn-scroller")
+        .first()
+        .click({ position: { x: 80, y: 45 } });
+      await panel.getByRole("button", { name: "Transcript", exact: true }).click();
+      const modal = page.getByRole("dialog", { name: "Execution transcript", exact: true });
+      const message = modal.locator('[data-transcript-type="message"]');
+      await expect(message).toHaveText("First ");
+      await expect(modal.getByRole("status")).toHaveText("running");
+      await modal.getByRole("button", { name: "Close Execution transcript", exact: true }).click();
+      await panel.getByRole("button", { name: "Transcript", exact: true }).click();
+      await expect(message).toHaveText("First ");
+      await expect(message).toHaveText("First line\n  last");
+      await expect(message).toHaveCount(1);
+      await expect(modal).not.toContainText("agent_message_chunk");
+      await expect(modal.getByRole("status")).toHaveText("running");
+      if (outcome === "cancelled") {
+        await modal
+          .getByRole("button", { name: "Close Execution transcript", exact: true })
+          .click();
+        await panel.getByText("More actions", { exact: true }).click();
+        await panel.getByRole("button", { name: "Cancel active run", exact: true }).click();
+        await panel.getByRole("button", { name: "Transcript", exact: true }).click();
+      }
+      await expect(modal.getByRole("status")).toContainText(outcome);
+      await expect(message).toHaveText("First line\n  last");
+      await modal.getByRole("button", { name: "Close Execution transcript", exact: true }).click();
+      await panel.getByRole("button", { name: "Transcript", exact: true }).click();
+      await expect(modal.getByRole("status")).toContainText(outcome);
+      await expect(message).toHaveText("First line\n  last");
+      const [execution] = (await service.scheduler.request({
+        action: "history",
+      })) as import("../src/contracts/index.js").Execution[];
+      if (!execution?.runId) throw new Error("Missing execution");
+      const common = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+        cwd: repository,
+        encoding: "utf8",
+      }).trim();
+      const runRoot = join(repository, common, "code60", "runs", execution.runId);
+      const events = (await readFile(join(runRoot, "events.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(
+        events
+          .filter((event) => event.type === "message")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe("First line\n  last");
+      const record = JSON.parse(await readFile(join(runRoot, "run.json"), "utf8"));
+      await expect
+        .poll(() => {
+          try {
+            process.kill(record.agentPid, 0);
+            return true;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+            throw error;
+          }
+        })
+        .toBe(false);
+      expect(
+        execFileSync("git", ["status", "--porcelain"], { cwd: repository, encoding: "utf8" }),
+      ).toBe("");
+      expect(
+        execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }),
+      ).toBe(initialHead);
+      expect(await readFile(join(repository, "unchanged.txt"), "utf8")).toBe(
+        "checkout stays unchanged\n",
+      );
+      await page.screenshot({ path: test.info().outputPath(`transcript-${outcome}.png`) });
+    } finally {
+      await application?.close().catch(() => {});
+      await service?.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
 
 test("desktop: Automation Studio excludes service controls and adapts its editor to narrow windows", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code60-automations-layout-"));

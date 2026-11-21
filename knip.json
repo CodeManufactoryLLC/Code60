@@ -15,6 +15,7 @@
     "test/fixtures/fake-docker.mjs",
     "test/fixtures/renderer-replay.tsx",
     "test/fixtures/system-manager.tsx",
+    "test/fixtures/automation-transcript.tsx",
     "test/fixtures/navigation-icons.tsx"
   ],
   "project": [

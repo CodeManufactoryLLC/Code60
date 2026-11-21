@@ -65,9 +65,12 @@ export class Scheduler {
         "Schedule persistence failed. No further launches are allowed.",
       );
     }
+    this.publish();
+  }
+  private publish() {
     for (const listener of this.listeners) {
       try {
-        listener(next.revision);
+        listener(this.store.state.revision);
       } catch {
         /* Client failures cannot affect dispatch. */
       }
@@ -255,14 +258,19 @@ export class Scheduler {
       });
       let outcome: ExecutionOutcome;
       try {
-        outcome = await this.executor.execute(automation, execution, signal, (evidence) =>
-          this.serial(async () => {
-            const state = structuredClone(this.store.state);
-            const entry = state.executions.find((value) => value.id === execution.id);
-            if (!entry || signal.aborted) throw new Error("Execution cancelled");
-            entry.evidence = evidence;
-            await this.save(state);
-          }),
+        outcome = await this.executor.execute(
+          automation,
+          execution,
+          signal,
+          (evidence) =>
+            this.serial(async () => {
+              const state = structuredClone(this.store.state);
+              const entry = state.executions.find((value) => value.id === execution.id);
+              if (!entry || signal.aborted) throw new Error("Execution cancelled");
+              entry.evidence = evidence;
+              await this.save(state);
+            }),
+          () => this.publish(),
         );
       } catch (error) {
         outcome = {

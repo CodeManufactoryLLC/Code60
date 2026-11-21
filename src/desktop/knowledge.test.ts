@@ -222,6 +222,19 @@ describe("DesktopKnowledge", () => {
       }),
     ]);
     runtime.database = null;
+    const automations = result(
+      await knowledge.call(
+        "code60_get_capabilities",
+        { query: "live, assembled execution transcripts" },
+        project,
+      ),
+    );
+    expect(automations.entries).toContainEqual(
+      expect.objectContaining({
+        id: "automations",
+        availability: expect.objectContaining({ status: "available" }),
+      }),
+    );
     const blocked = result(
       await knowledge.call("code60_get_capabilities", { query: "reusable prompts" }, project),
     );

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { executionEvidence } from "../src/automation/evidence.js";
 import { createExecutor, executionConfig } from "../src/automation/executor.js";
 import type {
   Automation,
@@ -148,6 +149,110 @@ describe("isolated automation execution", () => {
     expect(config.permissions).toEqual({ default: "deny", read: "allow" });
     expect(config.mcpServers).toEqual({});
   });
+  it.each(["finished", "failed", "cancelled"] as const)(
+    "publishes saved chunks before %s and preserves reopened evidence",
+    async (terminal) => {
+      const s = await setup();
+      s.agents.script = () => "hang";
+      s.automation.turnTimeout = "1m";
+      const abort = new AbortController();
+      const changed = vi.fn();
+      const running = s.executor.execute(
+        s.automation,
+        s.execution,
+        abort.signal,
+        async () => {},
+        changed,
+      );
+      const scheduler = { execution: () => structuredClone(s.execution) };
+      const read = async () =>
+        (await executionEvidence(
+          scheduler,
+          s.deps,
+          s.env,
+          s.execution.id,
+          "transcript",
+        )) as import("../src/contracts/index.js").AutomationTranscript;
+      try {
+        await vi.waitFor(() => expect(s.agents.sessions[0]?.turnActive).toBe(true));
+        const session = s.agents.sessions[0];
+        if (!session) throw new Error("Missing session");
+        session.update({ type: "message", text: "First " });
+        await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+        expect(
+          (await read()).entries
+            .filter((entry) => entry.type === "message")
+            .map((entry) => entry.text),
+        ).toEqual(["First "]);
+        changed.mockClear();
+        session.update({ type: "acp", update: "agent_message_chunk", payload: "{}", size: 2 });
+        session.update({ type: "message", text: "line\n  " });
+        session.update({ type: "message", text: "last" });
+        await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+        const live = await read();
+        expect(live.status).toBe("running");
+        expect(
+          live.entries.filter((entry) => entry.type === "message").map((entry) => entry.text),
+        ).toEqual(["First line\n  last"]);
+        if (terminal === "cancelled") abort.abort();
+        else if (terminal === "failed") session.failTurn(new Error("fixture failure"));
+        else session.endTurn("end_turn");
+        const outcome = await running;
+        expect(outcome.status).toBe(terminal);
+        Object.assign(s.execution, outcome);
+        const reopened = await read();
+        expect(reopened.status).toBe(terminal);
+        expect(reopened.entries.filter((entry) => entry.type === "message")).toEqual(
+          live.entries.filter((entry) => entry.type === "message"),
+        );
+      } finally {
+        abort.abort();
+        await running;
+      }
+    },
+  );
+
+  it("keeps hundreds of fragments in one message and preserves semantic boundaries and bounds", async () => {
+    const s = await setup();
+    await s.executor.execute(
+      s.automation,
+      s.execution,
+      new AbortController().signal,
+      async () => {},
+    );
+    const workspace = await openWorkspace(s.deps, s.repository, s.env);
+    const base = { runId: s.execution.runId as string, at: "2026-01-01T00:00:00Z" };
+    await Promise.all(
+      Array.from({ length: 600 }, () =>
+        workspace.store.appendEvent({ ...base, type: "message", text: "x " }),
+      ),
+    );
+    await workspace.store.appendEvent({ ...base, type: "thought", text: "thought " });
+    await workspace.store.appendEvent({ ...base, type: "thought", text: "continued" });
+    await workspace.store.appendEvent({ ...base, type: "message", text: "separate reply" });
+    const read = async () =>
+      (await executionEvidence(
+        { execution: () => s.execution },
+        s.deps,
+        s.env,
+        s.execution.id,
+        "transcript",
+      )) as import("../src/contracts/index.js").AutomationTranscript;
+    const value = await read();
+    expect(value.truncated).toBe(false);
+    expect(
+      value.entries.filter((entry) => entry.type === "message").map((entry) => entry.text),
+    ).toEqual(["x ".repeat(600), "separate reply"]);
+    expect(
+      value.entries.filter((entry) => entry.type === "thought").map((entry) => entry.text),
+    ).toEqual(["thought continued"]);
+    expect(new Set(value.entries.map((entry) => entry.key)).size).toBe(value.entries.length);
+    await workspace.store.appendEvent({ ...base, type: "message", text: "y".repeat(50_000) });
+    const bounded = await read();
+    expect(bounded.truncated).toBe(true);
+    expect(bounded.entries.reduce((sum, entry) => sum + entry.text.length, 0)).toBe(48_000);
+  });
+
   it("refuses changed providers, missing bases and replaced repositories before starting agents", async () => {
     const s = await setup();
     const pin = async () => {};

@@ -303,11 +303,14 @@ export const automationResponseSchema = z.union([
 export type AutomationResponse = z.infer<typeof automationResponseSchema>;
 
 interface AutomationTranscriptEntry {
+  key: string;
   at: string;
-  type: "prompt" | "message" | "tool" | "permission" | "status" | "note";
+  type: "prompt" | "message" | "thought" | "tool" | "permission" | "status" | "note";
   text: string;
 }
 export interface AutomationTranscript {
+  status: Execution["status"];
+  reason: Execution["reason"];
   executionId: string;
   runId: string;
   entries: AutomationTranscriptEntry[];

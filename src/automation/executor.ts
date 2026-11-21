@@ -35,6 +35,7 @@ export interface Executor {
     execution: Execution,
     signal: AbortSignal,
     pin: (evidence: AutomationEvidence) => Promise<void>,
+    changed?: () => void,
   ): Promise<ExecutionOutcome>;
   inspect(execution: Execution): Promise<"gone" | "blocked">;
 }
@@ -133,7 +134,7 @@ export function createExecutor(deps: CoreDeps, env: Readonly<NodeJS.ProcessEnv>)
         return "blocked";
       }
     },
-    async execute(automation, execution, signal, pin) {
+    async execute(automation, execution, signal, pin, changed) {
       await verifyRepository(automation.repository);
       const disk = await statfs(automation.repository.path, { bigint: true });
       if (disk.bavail * disk.bsize < 2n * 1024n * 1024n * 1024n)
@@ -155,6 +156,19 @@ export function createExecutor(deps: CoreDeps, env: Readonly<NodeJS.ProcessEnv>)
         void orchestrator?.shutdown().catch(() => {});
       };
       signal.addEventListener("abort", cancel);
+      let notice: ReturnType<typeof setTimeout> | undefined;
+      let disposed = false;
+      const publish = () => {
+        if (disposed || notice || !changed) return;
+        notice = setTimeout(() => {
+          notice = undefined;
+          try {
+            changed();
+          } catch {
+            /* Display failures cannot affect execution. */
+          }
+        }, 50);
+      };
       let denials = 0;
       let persistenceFailed = false;
       let unsubscribe = () => {};
@@ -191,6 +205,7 @@ export function createExecutor(deps: CoreDeps, env: Readonly<NodeJS.ProcessEnv>)
             async appendFile(...args) {
               try {
                 await deps.fs.appendFile(...args);
+                publish();
               } catch (error) {
                 persistenceFailed = true;
                 cancel();
@@ -259,6 +274,8 @@ export function createExecutor(deps: CoreDeps, env: Readonly<NodeJS.ProcessEnv>)
                   : null,
         };
       } finally {
+        disposed = true;
+        clearTimeout(notice);
         signal.removeEventListener("abort", cancel);
         unsubscribe();
         unwarn();

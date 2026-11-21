@@ -218,12 +218,12 @@ Schema version: 1
 
 - ID: `automations`
 - Status: shipped
-- Purpose: Run consented local schedules in an independent service.
+- Purpose: Run consented local schedules in an independent service; read live, assembled execution transcripts and saved outcomes.
 - Access: Apps → Automation Studio
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
-- Limits: Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.
+- Limits: Transcripts refresh while open from service notices, retain partial content on errors, and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Awareness never installs or probes the service.
 - Pages: `automations`
 - Settings sections: none
 - Tools: none

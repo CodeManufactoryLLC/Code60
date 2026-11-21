@@ -391,6 +391,11 @@ separate from Automation Studio's schedule and history tables. System Manager
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
+Open execution transcripts subscribe before reading, coalesce saved-chunk notices,
+assemble adjacent text chunks and show the saved execution outcome. Closing, hiding
+or replacing the modal releases its subscription and rejects late reads. Evidence
+reads share the core run writer queue to avoid partially appended JSONL records;
+stream notices do not mutate schedule revisions.
 
 ### Approved agent memory
 
