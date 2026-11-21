@@ -614,6 +614,246 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
 }
 
+test("workflow: sidebar spotlight follows independent Relay, assistant and worker activity", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-activity-")));
+  const repo = join(directory, "project");
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "processes");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  await writeFile(join(repo, "original.txt"), "original\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  commitFixture(repo);
+  const gitState = () =>
+    execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" });
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--relay",
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  try {
+    application = await launchDesktop(directory, repo, join(directory, "unused.sqlite"));
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("tab", { name: "Home", exact: true }).click();
+    const resize = page.getByRole("button", { name: "Resize navigation sidebar", exact: true });
+    for (let step = 0; step < 12; step++) await resize.press("ArrowRight");
+    await page.getByRole("button", { name: "Open Custom Assistants", exact: true }).click();
+    await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
+    await editor.getByLabel("Name", { exact: true }).fill("Spotlight assistant");
+    await editor
+      .getByLabel("Special instructions", { exact: true })
+      .fill("Follow the requested fixture steps.");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Open Spotlight assistant", exact: true }).click();
+    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+    const sidebarRow = (name: string) =>
+      page.locator(".sidebar").getByRole("button", {
+        name: name === "Spotlight worker" ? /^Spotlight worker \[/ : name,
+        exact: true,
+      });
+    const label = (name: string) => sidebarRow(name).locator(".chat-sidebar-label");
+    const send = async (text: string, owner: "Agent" | "Relay") => {
+      await expect(page.getByRole("main", { name: owner, exact: true })).toBeVisible();
+      await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+      const chat = page.locator(".orchestration-chat-page:visible");
+      const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+      await expect(composer).toBeVisible();
+      await expect(composer).toBeEditable();
+      await composer.fill(text);
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+      await composer.press("Enter");
+    };
+    const work = (activityType: string) =>
+      JSON.stringify([
+        { activity: { activityType, label: "Fixture activity" } },
+        { hang: "cancellable" },
+      ]);
+    await expect(label("Spotlight assistant")).toHaveCSS("animation-name", "none");
+    await page.screenshot({ path: test.info().outputPath("sidebar-spotlight-idle.png") });
+    await send(work("verifying"), "Agent");
+    await expect(label("Spotlight assistant")).toHaveCSS("animation-name", "activity-spotlight");
+    await sidebarRow("Relay").click();
+    await send(
+      `Relay target: ${JSON.stringify({
+        cwd: repo,
+        workspaceMode: "worktree",
+        label: "Spotlight worker",
+        prompt: JSON.stringify([
+          { write: { path: "worker.txt", content: "working\n" } },
+          { hang: "cancellable" },
+        ]),
+      })}`,
+      "Relay",
+    );
+    const names = ["Relay", "Spotlight assistant", "Spotlight worker"];
+    for (const name of names)
+      await expect(label(name)).toHaveCSS("animation-name", "activity-spotlight");
+    // The parent is idle but monitoring this worker; a live idle assistant alone stays static.
+    await expect(
+      page.locator(".orchestration-chat-page:visible .activity-display"),
+    ).toHaveAttribute("data-activity", "waiting_for_workers");
+    await send(work("reading"), "Relay");
+    const status = page.locator(".orchestration-chat-page:visible .activity-display");
+    await expect(status).toHaveAttribute("data-activity", "reading");
+    const snapshot = await page.evaluate(() => window.desktop.snapshot());
+    expect(snapshot.database).toBeNull();
+    const worker = snapshot.runs.find((run) => run.view?.status === "running");
+    if (!worker) throw new Error("Missing live fixture worker");
+    await expect
+      .poll(() => readFile(join(worker.record.worktree, "worker.txt"), "utf8"))
+      .toBe("working\n");
+    expect(await readFile(join(repo, "original.txt"), "utf8")).toBe("original\n");
+    expect(gitState()).toBe("");
+    const processes: ProcessEvidence[] = await Promise.all(
+      (await readdir(processLog)).map(async (file) =>
+        JSON.parse(await readFile(join(processLog, file), "utf8")),
+      ),
+    );
+    const workerProcess = processes.find((entry) => entry.cwd === worker.record.worktree);
+    expect(workerProcess && alive(workerProcess.pid)).toBe(true);
+    const workerLabel = page.locator(`[id="conversation-${worker.record.id}"] .chat-sidebar-label`);
+    const disclosure = page.getByRole("button", { name: "Workers for Relay", exact: true });
+    await disclosure.click();
+    await expect(workerLabel).toHaveAttribute("data-animate", "false");
+    await disclosure.click();
+    await expect(workerLabel).toHaveCSS("animation-name", "activity-spotlight");
+    for (const theme of ["light", "dark"]) {
+      await page.locator("html").evaluate((element, theme) => {
+        element.dataset.colorScheme = theme;
+      }, theme);
+      const appearance = (element: Element) => {
+        const css = getComputedStyle(element);
+        return {
+          gradient: css.backgroundImage,
+          size: css.backgroundSize,
+          clip: css.backgroundClip,
+          color: css.color,
+          animation: css.animation,
+        };
+      };
+      const reference = await status.locator(".activity-name").evaluate(appearance);
+      for (const name of names) expect(await label(name).evaluate(appearance)).toEqual(reference);
+      // Freeze only animation time for a reviewable side-by-side visual reference.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations())
+          if (
+            animation instanceof CSSAnimation &&
+            animation.animationName === "activity-spotlight"
+          ) {
+            animation.pause();
+            animation.currentTime = 1400;
+          }
+      });
+      await page.screenshot({ path: test.info().outputPath(`sidebar-spotlight-${theme}.png`) });
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations())
+          if (animation instanceof CSSAnimation && animation.animationName === "activity-spotlight")
+            animation.play();
+      });
+    }
+    for (const media of [
+      { reducedMotion: "reduce" as const },
+      { reducedMotion: "no-preference" as const, forcedColors: "active" as const },
+    ]) {
+      await page.emulateMedia(media);
+      for (const name of names) {
+        await expect(label(name)).toHaveCSS("animation-name", "none");
+        await expect(label(name)).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
+        await expect(sidebarRow(name)).toHaveAttribute("aria-description", /Orchestrator|Worker/);
+      }
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+    await page.getByRole("tab", { name: "Home", exact: true }).click();
+    for (const name of names)
+      await expect(label(name)).toHaveCSS("animation-name", "activity-spotlight");
+    await page.reload();
+    for (const name of names)
+      await expect(label(name)).toHaveCSS("animation-name", "activity-spotlight");
+    for (const [index, name] of ["Spotlight assistant", "Spotlight worker", "Relay"].entries()) {
+      await sidebarRow(name).click();
+      const owner = snapshot.chats.find((chat) =>
+        name === "Relay" ? chat.kind === "relay" && !chat.customAgentId : !!chat.customAgentId,
+      );
+      const chat =
+        name === "Spotlight worker"
+          ? page.locator(`[id="chat-${worker.record.id}"]`)
+          : page.locator(`[data-chat-id="${owner?.run?.id}"]`);
+      await expect(chat).toBeVisible();
+      await expect(chat).not.toHaveAttribute("aria-busy", "true");
+      await chat.getByRole("button", { name: "Stop", exact: true }).click();
+      await expect(label(name)).toHaveCSS("animation-name", "none");
+      if (index < 2) await expect(label("Relay")).toHaveCSS("animation-name", "activity-spotlight");
+      if (index === 0)
+        await expect(label("Spotlight worker")).toHaveCSS("animation-name", "activity-spotlight");
+    }
+    for (const name of names) await expect(label(name)).toHaveCSS("animation-name", "none");
+    await test.info().attach("worker-evidence", {
+      body: JSON.stringify({
+        isolatedWorktree: worker.record.worktree !== repo,
+        checkoutUnchangedDuringWork: true,
+        workerPidAliveDuringWork: true,
+      }),
+      contentType: "application/json",
+    });
+  } catch (error) {
+    const page = await application?.firstWindow();
+    await page?.screenshot({ path: test.info().outputPath("sidebar-spotlight-failure.png") });
+    if (page)
+      await test.info().attach("sidebar-state", {
+        body: JSON.stringify(
+          await page.evaluate(async () => {
+            const snapshot = await window.desktop.snapshot();
+            return {
+              selected: snapshot.chat,
+              chats: snapshot.chats,
+              visible: Array.from(
+                document.querySelectorAll(".orchestration-chat-page"),
+                (element) => ({
+                  hidden: element.hasAttribute("hidden"),
+                  label: element.getAttribute("aria-label"),
+                  composer: element.querySelector("textarea")?.getBoundingClientRect().toJSON(),
+                }),
+              ),
+            };
+          }),
+        ),
+        contentType: "application/json",
+      });
+    throw error;
+  } finally {
+    await application?.close();
+    const processes: ProcessEvidence[] = await Promise.all(
+      (await readdir(processLog)).map(async (file) =>
+        JSON.parse(await readFile(join(processLog, file), "utf8")),
+      ),
+    );
+    await expect.poll(() => processes.filter((entry) => alive(entry.pid))).toEqual([]);
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
 for (const custom of [false, true]) {
   test(
     custom

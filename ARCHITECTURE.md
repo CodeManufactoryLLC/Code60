@@ -2231,6 +2231,16 @@ the built-in Relay's identity, store and navigation entry remain unchanged.
 
 ## Chat activity artwork
 
+Working sidebar conversation names (project chats, workers, Relay and Custom
+Assistants) reuse the chat activity spotlight CSS and keyframes, independently of
+selection. Orchestrators use their own semantic snapshot, including monitoring
+workers; workers require a live running/connecting view, never a saved run record.
+Approval waits, stopping and ended activity stay static, matching chat activity.
+Hidden documents and collapsed ancestors stop sidebar animation. Reduced motion
+and forced colors keep ordinary readable labels; accessible status descriptions,
+approval and unread counts remain unchanged. This presentation-only change adds
+no capability, setting, IPC or stored format, so no knowledge catalog change is needed.
+
 Chat activity and connection indicators use static semantic icons only. Do not render
 activity GIFs in Relay, project chats, workers or custom-agent chats. This supersedes
 earlier animated-artwork guidance. Preserve activity labels, timers, attribution,

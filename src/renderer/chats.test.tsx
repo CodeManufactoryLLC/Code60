@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type {
+  ActivitySnapshot,
+  DesktopApi,
+  DesktopRun,
+  OrchestrationChat,
+} from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
@@ -31,6 +36,95 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
     view: view(id, status),
   }) as DesktopRun;
 afterEach(() => vi.unstubAllGlobals());
+
+describe("sidebar activity spotlight", () => {
+  const activity = (state: ActivitySnapshot["state"], active = false): ActivitySnapshot => ({
+    state,
+    active,
+    label: state,
+    source: "host",
+    urgent: false,
+    declaration: null,
+    otherOperations: 0,
+    workerCount: 0,
+  });
+  const render = (chats: OrchestrationChat[], runs: DesktopRun[] = [], hidden = false) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    return renderToStaticMarkup(
+      <ChatSidebar
+        chats={chats}
+        runs={runs}
+        selectedId="elsewhere"
+        navigationSerial={undefined}
+        database="/db"
+        eventsByRun={{}}
+        open={false}
+        ancestorsExpanded={!hidden}
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+  };
+  const animated = (html: string) =>
+    [...html.matchAll(/class="chat-sidebar-label" data-animate="true">([^<]+)/g)].map(
+      (match) => match[1],
+    );
+
+  it("reflects each unselected owner and worker independently across activity changes", () => {
+    const owners = [
+      { ...chat("relay", ["worker"]), kind: "relay" as const, title: "Relay" },
+      { ...chat("custom"), kind: "relay" as const, customAgentId: "custom", title: "Reviewer" },
+      { ...chat("project"), kind: "project" as const, title: "Project chat" },
+    ].map((owner) => ({ ...owner, activity: activity("working", true) }));
+    const worker = run("worker", "running");
+    expect(animated(render(owners, [worker]))).toEqual([
+      "Relay",
+      "fake / worker",
+      "Reviewer",
+      "Project chat",
+    ]);
+    for (const owner of owners) {
+      if (owner.title === "Relay") owner.activity = activity("waiting_for_workers");
+      if (owner.title === "Reviewer") owner.activity = activity("idle");
+    }
+    expect(animated(render(owners, [worker]))).toEqual(["Relay", "fake / worker", "Project chat"]);
+    worker.view = view("worker", "idle");
+    for (const owner of owners) if (owner.title === "Relay") owner.activity = activity("finished");
+    expect(animated(render(owners, [worker]))).toEqual(["Project chat"]);
+    expect(animated(render(owners, [worker], true))).toEqual([]);
+    vi.stubGlobal("document", { hidden: true });
+    expect(animated(render(owners, [worker]))).toEqual([]);
+  });
+
+  it("matches semantic connection, monitoring and approval states without inferring work from liveness", () => {
+    for (const [state, active, expected] of [
+      ["connecting", false, true],
+      ["waiting_for_workers", false, true],
+      ["verifying", true, true],
+      ["waiting_for_approval", false, false],
+      ["stopping", true, false],
+      ["idle", false, false],
+      ["failed", false, false],
+      ["cancelled", false, false],
+      ["timed_out", false, false],
+      ["interrupted", false, false],
+    ] as const) {
+      const owner = { ...chat("owner"), activity: activity(state, active) };
+      expect(animated(render([owner])).length, state).toBe(expected ? 1 : 0);
+    }
+    expect(animated(render([chat("idle")]))).toEqual([]);
+    const worker = run("worker", "running");
+    worker.view = undefined;
+    expect(animated(render([], [worker]))).toEqual([]);
+    worker.view = { ...view("worker", "running"), stopping: true };
+    expect(animated(render([], [worker]))).toEqual([]);
+    worker.view = view("worker", "waiting");
+    expect(render([], [worker])).toContain("Approval needed");
+    expect(animated(render([], [worker]))).toEqual([]);
+    worker.view = view("worker", "queued");
+    expect(animated(render([], [worker]))).toEqual(["fake / worker"]);
+  });
+});
 
 describe("conversation hierarchy", () => {
   it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
