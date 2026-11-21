@@ -196,6 +196,11 @@
   flex: 1;
 }
 
+.file-panel-view-plan {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
 .file-panel-empty-actions,
 .file-panel-saved-plans {
   display: flex;

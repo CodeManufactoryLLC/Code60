@@ -12,6 +12,7 @@ export function RelayPlansPanel({
   api,
   plans,
   conversationId,
+  currentChat,
   generation,
   active,
   open,
@@ -23,6 +24,7 @@ export function RelayPlansPanel({
   api: DesktopApi;
   plans: PlanSummary[];
   conversationId: string | undefined;
+  currentChat: string | undefined;
   generation?: number | undefined;
   active: boolean;
   open: boolean;
@@ -123,7 +125,7 @@ export function RelayPlansPanel({
         api={api}
         recallSource={recallSource}
         plans={plans}
-        currentChat={conversationId}
+        currentChat={currentChat}
         knowledgeOwner={
           conversationId && generation !== undefined
             ? { kind: "relay", conversationId, generation }

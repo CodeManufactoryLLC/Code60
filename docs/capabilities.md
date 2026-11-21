@@ -121,10 +121,10 @@ Schema version: 1
 - ID: `plans`
 - Status: shipped
 - Purpose: Propose and track revisioned tasks.
-- Access: Chat → plan tab
-- Prerequisite: provider
+- Access: Chat → right sidebar → View Plan → existing plan tab
+- Prerequisite: runtime
 - Agent access: existing-tools
-- Confirmation: Human Accept authorizes only that revision and targets.
+- Confirmation: View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.
 - Limits: No agent tool can accept a plan.
 - Pages: none
 - Settings sections: none

@@ -269,7 +269,7 @@ export function ChatWorkspace({
                 ? (directory ?? undefined)
                 : undefined
             }
-            currentChat={snapshot?.chat.run?.id}
+            currentChat={workerId ? undefined : snapshot?.chat.run?.id}
             knowledgeOwner={
               snapshot?.projectInstanceId && snapshot.databaseEpoch !== undefined
                 ? {
@@ -299,6 +299,7 @@ export function ChatWorkspace({
             api={api}
             plans={owner.plans ?? []}
             conversationId={owner.conversationId}
+            currentChat={relayActive ? owner.conversationId : undefined}
             generation={owner.generation}
             active={
               !splash &&
