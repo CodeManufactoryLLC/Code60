@@ -1823,3 +1823,170 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });
+
+test("workflow: project bookmarks persist and reject stale targets", async () => {
+  test.setTimeout(150_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-bookmarks-")));
+  const projects = [join(directory, "alpha"), join(directory, "beta")];
+  const database = join(directory, "projects.sqlite");
+  const config = join(directory, "config/code60");
+  await mkdir(config, { recursive: true });
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")],
+        },
+      },
+    }),
+  );
+  for (const repo of projects) {
+    await mkdir(join(repo, "src"), { recursive: true });
+    await writeFile(join(repo, "src/main.ts"), `export const project = ${JSON.stringify(repo)};\n`);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    commitFixture(repo);
+  }
+  const indexes = await Promise.all(projects.map((repo) => readFile(join(repo, ".git/index"))));
+  let app: ElectronApplication | undefined;
+  const start = async () => {
+    app = await launchDesktop(directory, projects[0] as string, database);
+    return app.firstWindow();
+  };
+  const selectChat = async (page: Page, repo: string) => {
+    const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+    const chat = group.getByRole("button", { name: "Chat 1", exact: true });
+    if (!(await chat.isVisible())) await group.locator(".project-chat-toggle").click();
+    await chat.click();
+    await expect(chat).toHaveAttribute("aria-current", "true");
+  };
+  const explorer = async (page: Page) => {
+    const toggle = page.getByRole("button", { name: "Toggle files panel" });
+    if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+    const panel = page.locator(".file-panel:visible");
+    const tab = panel.getByRole("tab", { name: "File Explorer", exact: true });
+    if (await tab.count()) await tab.first().click();
+    else await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+    return panel;
+  };
+  try {
+    let page = await start();
+    await page
+      .locator(".agent-setup-dialog")
+      .getByRole("button", { name: "Claude", exact: true })
+      .click();
+    await expect(page.locator(".agent-setup-dialog").getByRole("status")).toHaveText(
+      "Claude connected",
+    );
+    await page.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    for (const repo of projects) {
+      await app?.evaluate(({ dialog }, target) => {
+        dialog.showOpenDialog = async (...args: unknown[]) => {
+          const options = args.at(-1) as Record<string, unknown>;
+          if (
+            options.title !== "Open project" ||
+            JSON.stringify(options.properties) !==
+              JSON.stringify(["openDirectory", "createDirectory"])
+          )
+            throw new Error("Unexpected bookmark project dialog");
+          return { canceled: false, filePaths: [target] };
+        };
+      }, repo);
+      await page.locator(".sidebar .project-sidebar-open").click();
+      await page
+        .getByRole("dialog", { name: "Open Project", exact: true })
+        .getByRole("button", { name: "Open Folder", exact: true })
+        .click();
+      const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+      await group.getByRole("button", { name: /^New Session in / }).click();
+      await expect(group.getByRole("button", { name: "Chat 1", exact: true })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+      const panel = await explorer(page);
+      await expect(panel.getByRole("treeitem", { name: "src", exact: true })).toBeVisible();
+      if (repo === projects[0]) {
+        const folder = panel.getByRole("treeitem", { name: "src", exact: true });
+        await folder.focus();
+        await panel
+          .getByRole("button", { name: "Bookmark selected target", exact: true })
+          .press("Enter");
+        await folder.press("ArrowRight");
+        const file = panel.getByRole("treeitem", { name: "main.ts", exact: true });
+        await file.focus();
+        await panel
+          .getByRole("button", { name: "Bookmark selected target", exact: true })
+          .press("Enter");
+        await expect(
+          panel.getByRole("list", { name: "Project bookmarks" }).getByRole("listitem"),
+        ).toHaveCount(2);
+      } else {
+        await expect(
+          panel.getByRole("list", { name: "Project bookmarks" }).getByRole("listitem"),
+        ).toHaveCount(0);
+      }
+    }
+    await selectChat(page, projects[0] as string);
+    let panel = await explorer(page);
+    await panel
+      .getByRole("button", { name: "Open bookmarked file src/main.ts", exact: true })
+      .press("Enter");
+    await expect(
+      panel.getByRole("complementary", { name: "File preview", exact: true }),
+    ).toContainText(projects[0] as string);
+    await app?.close();
+    page = await start();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectChat(page, projects[0] as string);
+    panel = await explorer(page);
+    await expect(
+      panel.getByRole("list", { name: "Project bookmarks" }).getByRole("listitem"),
+    ).toHaveCount(2);
+    await panel
+      .getByRole("button", { name: "Open bookmarked directory src", exact: true })
+      .press("Enter");
+    await expect(panel.getByRole("treeitem", { name: "main.ts", exact: true })).toBeVisible();
+    // Replace the saved file with a directory: never open a different kind of target.
+    await removeDesktopFixture(join(projects[0] as string, "src/main.ts"), {
+      recursive: true,
+      force: true,
+    });
+    await mkdir(join(projects[0] as string, "src/main.ts"));
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.desktop.snapshot())).files?.directories
+            .find((dir) => dir.path === "src")
+            ?.entries.find((entry) => entry.path === "src/main.ts")?.kind,
+        { timeout: 15_000 },
+      )
+      .toBe("directory");
+    await panel
+      .getByRole("button", { name: "Open bookmarked file src/main.ts", exact: true })
+      .press("Enter");
+    await expect(panel.getByRole("status").filter({ hasText: "Unavailable" })).toBeVisible();
+    await expect(panel.getByRole("tab", { name: "main.ts", exact: true })).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("bookmarks-unavailable.png") });
+    await panel
+      .getByRole("button", { name: "Remove bookmark src/main.ts", exact: true })
+      .press("Enter");
+    await expect(
+      panel.getByRole("list", { name: "Project bookmarks" }).getByRole("listitem"),
+    ).toHaveCount(1);
+    for (const [i, repo] of projects.entries())
+      expect(await readFile(join(repo, ".git/index"))).toEqual(indexes[i]);
+    expect(await readFile(join(projects[1] as string, "src/main.ts"), "utf8")).toContain(
+      projects[1],
+    );
+  } finally {
+    await app?.close();
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});

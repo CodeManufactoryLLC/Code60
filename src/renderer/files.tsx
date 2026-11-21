@@ -19,6 +19,14 @@ import type {
   FileSnapshot,
   Snapshot,
 } from "../bridge/index.js";
+import {
+  bookmarkAvailable,
+  bookmarkDirectories,
+  bookmarkKey,
+  type FileBookmark,
+  readBookmarks,
+  writeBookmarks,
+} from "./file-bookmarks.js";
 import { FileBrowserState } from "./file-browser-state.js";
 import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
@@ -117,6 +125,7 @@ export function useFiles(
   const roots = project ? [{ path: project, label: `Project · ${pathLabel(project)}` }] : [];
   return {
     root,
+    bookmarkProject: project ?? undefined,
     preview,
     selectedFile,
     expanded,
@@ -133,6 +142,7 @@ export function useFiles(
   };
 }
 export interface FileBrowser {
+  bookmarkProject?: string | undefined;
   root: string | null;
   preview: string | null;
   selectedFile: string | null;
@@ -224,6 +234,7 @@ export function FilesPage({
           key={`${browser.workspace}:${browser.root}`}
           browser={browser}
           hidden={hidden}
+          onHidden={onHidden}
           onOpenFile={onOpenFile}
         />
       )}
@@ -298,12 +309,53 @@ function FileSettings({
 function FileTree({
   browser,
   hidden,
+  onHidden,
   onOpenFile,
 }: {
   browser: FileBrowser;
   hidden: boolean;
+  onHidden(value: boolean): void;
   onOpenFile(path: string): void;
 }) {
+  const [bookmarks, setBookmarks] = useState<FileBookmark[]>([]);
+  const [bookmarkError, setBookmarkError] = useState("");
+  const [pending, setPending] = useState<FileBookmark | null>(null);
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const project = browser.bookmarkProject;
+  useEffect(() => {
+    if (!project) return;
+    const refresh = () => {
+      try {
+        setBookmarks(readBookmarks(localStorage, project));
+        setBookmarkError("");
+      } catch {
+        setBookmarkError("Bookmarks could not be loaded. Check local storage access.");
+      }
+    };
+    const changed = (event: StorageEvent) => {
+      if (event.key === bookmarkKey(project) || event.key === null) refresh();
+    };
+    refresh();
+    window.addEventListener("storage", changed);
+    window.addEventListener("code60-bookmarks", refresh);
+    return () => {
+      window.removeEventListener("storage", changed);
+      window.removeEventListener("code60-bookmarks", refresh);
+    };
+  }, [project]);
+  const saveBookmarks = (change: (entries: FileBookmark[]) => FileBookmark[]) => {
+    if (!project) return;
+    try {
+      // Read at action time so another Explorer cannot be overwritten by a stale render.
+      const next = change(readBookmarks(localStorage, project));
+      writeBookmarks(localStorage, project, next);
+      setBookmarks(next);
+      setBookmarkError("");
+      window.dispatchEvent(new Event("code60-bookmarks"));
+    } catch (cause) {
+      setBookmarkError(`Bookmarks could not be saved. ${message(cause)}`);
+    }
+  };
   const entries = useMemo(
     () =>
       new Map(
@@ -336,9 +388,94 @@ function FileTree({
   useEffect(() => {
     tree.rebuildTree();
   }, [tree, browser.directories, hidden]);
+  const focused = tree.getState().focusedItem;
+  const selectedEntry = focused ? entries.get(focused) : undefined;
+  const saved = bookmarks.some((entry) => entry.path === selectedEntry?.path);
+  useEffect(() => {
+    if (!pending || !browser.files) return;
+    setPending(null);
+    if (!bookmarkAvailable(pending, browser.files.directories)) {
+      setUnavailable(pending.path);
+      return;
+    }
+    setUnavailable(null);
+    browser.selectFile(pending.path);
+    if (pending.kind === "file") onOpenFile(pending.path);
+    else {
+      tree.getItemInstance(pending.path).setFocused();
+      tree.updateDomFocus();
+    }
+  }, [pending, browser.files, browser.selectFile, onOpenFile, tree]);
   const issues = browser.directories.filter((dir) => dir.error || dir.truncated);
   return (
     <>
+      {project && (
+        <div className="file-bookmarks">
+          <button
+            type="button"
+            disabled={!selectedEntry || !["file", "directory"].includes(selectedEntry.kind)}
+            onClick={() => {
+              if (
+                !selectedEntry ||
+                (selectedEntry.kind !== "file" && selectedEntry.kind !== "directory")
+              )
+                return;
+              const entry: FileBookmark = { path: selectedEntry.path, kind: selectedEntry.kind };
+              saveBookmarks((previous) =>
+                saved ? previous.filter((item) => item.path !== entry.path) : [...previous, entry],
+              );
+            }}
+          >
+            {saved ? "Remove bookmark" : "Bookmark selected target"}
+          </button>
+          <details open>
+            <summary>Bookmarks</summary>
+            <ul aria-label="Project bookmarks">
+              {bookmarks.map((entry) => (
+                <li key={entry.path}>
+                  <button
+                    type="button"
+                    aria-label={`Open bookmarked ${entry.kind} ${entry.path}`}
+                    onClick={() => {
+                      const expanded = [
+                        ...new Set([...browser.expanded, ...bookmarkDirectories(entry)]),
+                      ];
+                      if (expanded.length > 63) {
+                        setBookmarkError(
+                          "Folder limit reached. Collapse a folder before opening this bookmark.",
+                        );
+                        return;
+                      }
+                      setUnavailable(null);
+                      if (entry.path.split("/").some((part) => part.startsWith(".")))
+                        onHidden(true);
+                      browser.setExpanded(expanded);
+                      setPending(entry);
+                    }}
+                  >
+                    {entry.path}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remove bookmark ${entry.path}`}
+                    onClick={() =>
+                      saveBookmarks((previous) =>
+                        previous.filter((item) => item.path !== entry.path),
+                      )
+                    }
+                  >
+                    <Icon name="close" />
+                  </button>
+                  {unavailable === entry.path && <span role="status">Unavailable</span>}
+                </li>
+              ))}
+            </ul>
+            {bookmarks.length === 0 && <p>No bookmarks.</p>}
+          </details>
+          {bookmarkError && <p role="alert">{bookmarkError}</p>}
+        </div>
+      )}
       {browser.loading && (
         <p className="files-status" role="status">
           Loading files…
@@ -353,6 +490,7 @@ function FileTree({
         {tree.getItems().map((item) => (
           <button
             {...item.getProps()}
+            onFocus={() => item.setFocused()}
             role="treeitem"
             type="button"
             key={item.getId()}

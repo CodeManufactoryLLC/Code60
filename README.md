@@ -312,3 +312,10 @@ before disconnecting it. Primary changes preserve other memberships. Both menu
 actions require stopped desktop agent work and no setup transaction. Disconnect
 removes Code60 membership only; histories, model defaults and external logins remain.
 Verified membership does not indicate a live connection.
+
+
+In a project's **File Explorer**, focus a file or folder and use **Bookmark selected
+target**. The **Bookmarks** list reopens files or reveals folders in that project.
+Bookmarks survive app restarts and project switches, with up to 100 per project.
+Moved, deleted or unavailable targets show **Unavailable**; use the adjacent
+**Remove bookmark** control to remove them. Bookmarks are local to this app's storage.
