@@ -337,7 +337,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("marks conversation roles with icons, accessible status, unread counts and separate actions", () => {
+  it("marks conversation roles with icons, accessible status and separate actions without worker unread counts", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -361,10 +361,10 @@ describe("conversation hierarchy", () => {
     expect(html).toContain('data-role="worker"');
     expect(html).toContain('aria-label="Workers for Chat 1"');
     expect(html).toContain('aria-label="Chat 1 workers"');
-    expect(html).toContain('aria-label="1 unread reply"');
+    expect(html).not.toContain('class="chat-unread"');
     expect(html).toContain("Worker. Failed");
     expect(html).not.toContain('class="chat-sidebar-status"');
-    expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
+    expect(html).toContain('<span class="sr-only">Worker. Failed</span>');
     for (const action of ["Actions", "Workers"]) {
       const button = html.match(
         new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
@@ -419,10 +419,10 @@ describe("conversation hierarchy", () => {
     expect(html.match(/<img/g)).toHaveLength(1);
     expect(html).toContain('data-icon="app-communication"');
   });
-  it("clears unread for the selected worker without clearing its siblings", () => {
+  it("keeps orchestrator unread counts while hiding selected and background worker counts", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = Object.fromEntries(
-      ["one", "two"].map((id) => [
+      ["a", "one", "two"].map((id) => [
         id,
         [{ runId: id, at: "2026-01-01", type: "message", text: "reply" }],
       ]),
@@ -441,6 +441,10 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html.match(/aria-label="1 unread reply"/g)).toHaveLength(1);
+    expect(html).toContain(
+      '<span class="sr-only">Orchestrator. Awaiting input. 1 unread reply</span>',
+    );
+    expect(html).not.toContain("Worker. Awaiting input. 1 unread reply");
   });
 });
 

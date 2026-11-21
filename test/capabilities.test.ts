@@ -216,6 +216,7 @@ describe("desktop capability catalog", () => {
     expect(projects?.limitations).toContain("keeps the project open");
     expect(projects?.confirmation).toContain("Stop folder confirmation");
     expect(projects?.limitations).toContain("only the project chevron");
+    expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",
