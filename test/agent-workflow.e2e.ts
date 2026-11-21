@@ -910,6 +910,11 @@ for (const custom of [false, true]) {
         const completed = await page.evaluate(() => window.desktop.snapshot());
         const worker = completed.runs.find((run) => run.relay);
         if (!worker) throw new Error("Accepted plan did not create a worker");
+        const workerRow = page.locator(`[id="conversation-${worker.record.id}"]`);
+        await expect(workerRow).toBeVisible();
+        await expect(workerRow).toHaveAttribute("data-role", "worker");
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
+        await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
@@ -1033,6 +1038,7 @@ for (const custom of [false, true]) {
         await expect(composer).toBeEditable();
         const restored = await page.evaluate(() => window.desktop.snapshot());
         expect(restored.runs.map((run) => run.record.id)).toEqual([worker.record.id]);
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
         expect(restored.chat.conversationId).toBe(completed.chat.conversationId);
         await expect(composer).toHaveValue(draft);
         await expect(page.getByRole("list", { name: "Attached code references" })).toContainText(
