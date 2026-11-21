@@ -10953,7 +10953,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
 
-    // Pushed worker replies use the same per-turn unread markers as orchestrators.
+    // Pushed worker replies remain available without a numeric unread badge.
     await row(b).click();
     await expect(worker(b)).toBeVisible();
     await page.evaluate(
@@ -10969,8 +10969,17 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
         }),
       a,
     );
-    await expect(row(a).locator(".chat-unread")).toHaveText("1");
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+            ({ record }) => record.id === a,
+          )?.replies?.count,
+      )
+      .toBe(1);
+    await expect(row(a).locator(".chat-unread")).toHaveCount(0);
     await row(a).click();
+    await expect(worker(a).locator(".event.message").last()).toContainText("more text");
     await expect(row(a).locator(".chat-unread")).toHaveCount(0);
     const scroller = worker(a).locator(".transcript");
     await expect
