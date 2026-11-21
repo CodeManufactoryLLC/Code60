@@ -6778,10 +6778,9 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
         .getByRole("button", { name: "Rename chat: ok", exact: true }),
     ).toBeVisible();
     const sidebar = page.locator("nav.chat-sidebar");
-    await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
+    await sidebar.getByRole("button", { name: "Rename chat: ok", exact: true }).press("Enter");
     const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
-    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
-    await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await expect(menu).toHaveCount(0);
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await expectModalSurface(rename);
     await page.screenshot({ path: test.info().outputPath("rename-dialog-neobrutalism.png") });
@@ -6798,6 +6797,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       .getByRole("button", { name: "Header name", exact: true })
       .click({ button: "right" });
     await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
     await menu.press("Escape");
     await sidebar.getByRole("button", { name: "Header name", exact: true }).press("Shift+F10");
     await menu.getByRole("menuitem", { name: "Open", exact: true }).click();
@@ -6807,8 +6807,9 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
         .getByRole("button", { name: "Rename chat: Header name", exact: true }),
     ).toBeVisible();
     const before = await page.evaluate(() => window.desktop.snapshot());
-    await sidebar.getByRole("button", { name: "Actions for Header name", exact: true }).click();
-    await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
+    await sidebar
+      .getByRole("button", { name: "Archive chat: Header name", exact: true })
+      .press("Space");
     await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Done notification", exact: true })).toContainText(
       "Chat archived.",
@@ -7293,13 +7294,13 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
     await expect(
       page.locator(
-        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
+        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.sidebar-card-action > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
       ),
     ).toHaveCount(0);
     await expect(
       first
         .locator("..")
-        .getByRole("button", { name: /^Actions for / })
+        .getByRole("button", { name: /^Rename chat: / })
         .locator("svg"),
     ).toHaveCount(1);
     for (const disclosure of [
@@ -7520,7 +7521,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
             height: icon.getBoundingClientRect().height,
             fixedSize: icon.closest(".provider-primary-compact")
               ? 12
-              : icon.closest(".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop")
+              : icon.closest(
+                    ".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action",
+                  )
                 ? 16
                 : undefined,
           })),
@@ -10377,9 +10380,8 @@ test("desktop: parent project cards preserve conversations, unread state, worker
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Actions for Renamed conversation", exact: true })
+      .getByRole("button", { name: "Archive chat: Renamed conversation", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toHaveCount(0);

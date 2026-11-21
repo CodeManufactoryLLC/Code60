@@ -40,7 +40,8 @@
 
   .sidebar-card-chevron,
   .sidebar-card-add,
-  .sidebar-card-stop {
+  .sidebar-card-stop,
+  .sidebar-card-action {
     border-color: ButtonText;
     color: ButtonText;
     background: Canvas;
@@ -52,7 +53,8 @@
   .project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
   .project-folder-stop:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-stop,
   .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
-  .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+  .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+  .chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
     background: Highlight;
     color: HighlightText;
   }
@@ -87,6 +89,7 @@
   .sidebar-card-chevron > .carbon-icon,
   .sidebar-card-add,
   .sidebar-card-stop,
+  .sidebar-card-action,
   .sidebar :is(.page-group-pages, .project-chat-pages, .chat-worker-children) {
     transition: none;
   }

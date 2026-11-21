@@ -147,7 +147,7 @@
 }
 
 /* Reserve action space, revealing only the row under the pointer or keyboard focus. */
-.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action) {
   opacity: 0;
 }
 
@@ -163,13 +163,15 @@
   > :is(.sidebar-card-chevron, .sidebar-card-add),
 .project-chat-heading:is(:hover, :has(:focus-visible))
   > .icon-button
-  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop) {
+  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop),
+.chat-sidebar-row:is(:hover, :has(:focus-visible)) > .chat-sidebar-action > .sidebar-card-action {
   opacity: 1;
 }
 
 .sidebar-card-chevron,
 .sidebar-card-add,
-.sidebar-card-stop {
+.sidebar-card-stop,
+.sidebar-card-action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,7 +205,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):is(:hover, :focus-visible, :active):not(:disabled)
   .sidebar-card-add,
 .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
-.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron {
+.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
+.chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
   background: var(--primary);
   color: var(--primary-text);
 }
@@ -217,7 +220,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):active:not(:disabled) .sidebar-card-add,
 .project-folder-stop:active:not(:disabled) .sidebar-card-stop,
 .project-session-add:active:not(:disabled) .sidebar-card-add,
-.project-chat-toggle:active .sidebar-card-chevron {
+.project-chat-toggle:active .sidebar-card-chevron,
+.chat-sidebar-action:active:not(:disabled) .sidebar-card-action {
   translate: 1px 1px;
   box-shadow: 1px 1px 0 #000000;
 }
@@ -226,7 +230,8 @@
 :is(.project-sidebar-open, .provider-sidebar-add):focus-visible .sidebar-card-add,
 .project-folder-stop:focus-visible .sidebar-card-stop,
 .project-session-add:focus-visible .sidebar-card-add,
-.project-chat-toggle:focus-visible .sidebar-card-chevron {
+.project-chat-toggle:focus-visible .sidebar-card-chevron,
+.chat-sidebar-action:focus-visible .sidebar-card-action {
   outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
@@ -815,7 +820,8 @@
   white-space: nowrap;
 }
 
-.project-chat-heading > .icon-button {
+.project-chat-heading > .icon-button,
+.chat-sidebar-row > .chat-sidebar-action {
   flex: 0 0 28px;
   padding: 0;
   align-self: center;
@@ -879,7 +885,8 @@
   justify-content: center;
 }
 
-.sidebar-card-add > .carbon-icon {
+.sidebar-card-add > .carbon-icon,
+.sidebar-card-action > .carbon-icon {
   --icon-size: 16px;
 }
 

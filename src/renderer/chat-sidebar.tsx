@@ -145,6 +145,12 @@ export function ChatSidebar({
 
   const chatById = new Map(chats.map((chat) => [conversationId(chat), chat]));
   const runById = new Map(runs.map((run) => [run.record.id, run]));
+  function archive(id: string) {
+    archivedFocus.current = id;
+    void onAction?.({ type: "archive", id }).then((saved) => {
+      if (!saved) archivedFocus.current = null;
+    });
+  }
   const childrenById = new Map<string, Conversation[]>();
   for (const entry of entries) {
     if (!entry.parentId) continue;
@@ -257,20 +263,32 @@ export function ChatSidebar({
             <span className="sr-only">{description}</span>
           </button>
           {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={`Actions for ${entry.label}`}
-              aria-haspopup="menu"
-              aria-expanded={menu?.id === entry.id}
-              disabled={pending}
-              onClick={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setMenu({ ...entry, x: rect.left, y: rect.bottom });
-              }}
-            >
-              <Icon name="overflow-menu--horizontal" />
-            </button>
+            <>
+              <button
+                type="button"
+                className="icon-button chat-sidebar-action"
+                aria-label={`Rename chat: ${entry.label}`}
+                data-tooltip="Rename chat"
+                disabled={disabled || !onAction}
+                onClick={() => setRenaming(entry)}
+              >
+                <span className="sidebar-card-action" aria-hidden="true">
+                  <Icon name="edit" />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="icon-button chat-sidebar-action"
+                aria-label={`Archive chat: ${entry.label}`}
+                data-tooltip="Archive chat"
+                disabled={disabled || !onAction}
+                onClick={() => archive(entry.id)}
+              >
+                <span className="sidebar-card-action" aria-hidden="true">
+                  <Icon name="archive" />
+                </span>
+              </button>
+            </>
           )}
           {children.length > 0 && (
             <button
@@ -338,12 +356,7 @@ export function ChatSidebar({
           onAction={(action) => {
             if (action === "open") onSelect(menu.id);
             else if (action === "rename") setRenaming(menu);
-            else {
-              archivedFocus.current = menu.id;
-              void onAction?.({ type: "archive", id: menu.id }).then((saved) => {
-                if (!saved) archivedFocus.current = null;
-              });
-            }
+            else archive(menu.id);
           }}
         />
       )}

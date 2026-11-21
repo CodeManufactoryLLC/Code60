@@ -84,6 +84,7 @@ describe("conversation hierarchy", () => {
     expect(html).not.toContain('data-icon="app-communication"');
     expect(html).not.toContain('data-icon="app-down-right"');
     expect(html).not.toContain("disabled");
+    expect(html).not.toContain("chat-sidebar-action");
   });
   it("renders only project-bound conversations inside project groups", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -297,8 +298,12 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('data-role="orchestrator"');
-    expect(html).toContain('aria-label="Actions for Chat 1"');
-    expect(html).not.toContain('aria-label="Actions for fake');
+    expect(html).toContain('aria-label="Rename chat: Chat 1"');
+    expect(html).toContain('aria-label="Archive chat: Chat 1"');
+    expect(html).not.toContain('aria-haspopup="menu"');
+    expect(html).not.toContain('aria-label="Actions for ');
+    expect(html).not.toContain('aria-label="Rename chat: fake');
+    expect(html).not.toContain('aria-label="Archive chat: fake');
     expect(html).toContain('data-role="worker"');
     expect(html).toContain('aria-label="Workers for Chat 1"');
     expect(html).toContain('aria-label="Chat 1 workers"');
@@ -306,9 +311,9 @@ describe("conversation hierarchy", () => {
     expect(html).toContain("Worker. Failed");
     expect(html).not.toContain('class="chat-sidebar-status"');
     expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
-    for (const action of ["Actions", "Workers"]) {
+    for (const action of ["Rename chat: Chat 1", "Archive chat: Chat 1", "Workers for Chat 1"]) {
       const button = html.match(
-        new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
+        new RegExp(`<button[^>]*aria-label="${action}"[\\s\\S]*?</button>`),
       )?.[0];
       expect(button).toContain('class="icon-button');
       expect(button?.match(/<svg/g)).toHaveLength(1);
@@ -353,10 +358,10 @@ describe("conversation hierarchy", () => {
     );
     expect(html).toContain('<span class="chat-approval-count">(1)</span>');
     expect(html).toContain("Connection failed. 1 approvals waiting");
-    expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
+    expect(html.match(/<button[^>]*aria-label="Rename chat: Chat 1"[^>]*>/)?.[0]).toContain(
       "disabled",
     );
-    expect(html.match(/<svg/g)).toHaveLength(1);
+    expect(html.match(/<svg/g)).toHaveLength(2);
     expect(html.match(/<img/g)).toHaveLength(1);
     expect(html).toContain('data-icon="app-communication"');
   });

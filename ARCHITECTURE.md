@@ -1225,7 +1225,7 @@ External navigation reveals only the destination's ancestors. Selecting Relay
 never reveals project chats. Selection retains the single-flight action guard
 without temporarily disabling or dimming unrelated navigation rows. Project and
 chat labels keep their text color through pointer presses and selection.
-Existing disclosure storage keys and independent plus/conversation More actions
+Existing disclosure storage keys and independent project plus/conversation actions
 are preserved. Project rows replace the former More menu with the circular red ×
 Stop Folder action described above.
 Settings also opens home from the palette and Cmd+, / Ctrl+,. Its section panels
@@ -1910,8 +1910,11 @@ Stop all and shutdown cancel generation; cleanup stops the process before removi
 its directory. Failure retains the numbered fallback. It never adds transcript
 messages or overwrites a human title.
 
-Orchestrator sidebar rows expose Open, Rename and Archive through both their
-labelled More icon button and context menu, including Shift+F10. The main header displays
+Project orchestrator sidebar rows open through their label and expose Rename and
+Archive as separate named circular icon controls, matching the project-row controls.
+Their glyphs reveal on row hover or keyboard focus and follow the active theme,
+reduced motion and forced colors. Open, Rename and Archive also remain available
+in the context menu, including Shift+F10. The main header displays
 the same title and opens the same rename dialog. Titles are bounded single-line
 plain text and actions target validated existing chat IDs.
 
