@@ -300,6 +300,13 @@ export class DesktopKnowledge {
       status = state.gitReady === false ? "blocked" : "unknown";
       reason = "Project workers require Git readiness with an initial commit.";
       action = "Set up Git from Chat, then continue explicitly.";
+    } else if (cap.id === "workflows") {
+      status = "available";
+      reason =
+        process.platform === "darwin"
+          ? "Workflow execution requires external Node >=24.22 <25 and Codex login; prompt drafting requires a verified primary provider."
+          : "Workflow history is readable; Transmission execution requires macOS. Prompt drafting requires a verified primary provider.";
+      action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
         "Desktop controls manage the independent macOS/Linux Scheduling Service and show verified installation/runtime status. No public Code60 CLI; awareness never probes or controls the service.";

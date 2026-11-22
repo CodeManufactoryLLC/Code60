@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 contextBridge.exposeInMainWorld("desktop", {
   modelDefault: (request: unknown) => ipcRenderer.invoke("desktop:model-default", request),
   customAgent: (request: unknown) => ipcRenderer.invoke("desktop:custom-agent", request),
+  workflow: (request: unknown) => ipcRenderer.invoke("desktop:workflow", request),
   automation: (request: unknown) => ipcRenderer.invoke("desktop:automation", request),
   onAutomationChanged: (listener: () => void) => {
     const handler = () => listener();

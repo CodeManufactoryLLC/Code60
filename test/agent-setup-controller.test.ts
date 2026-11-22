@@ -414,3 +414,31 @@ it.skipIf(!sqliteAvailable())(
     ).toEqual(["Alpha", "Beta"]);
   },
 );
+
+it("drafts a workflow with the verified primary without database or project authority", async () => {
+  const { controller, agents, identity, attempt } = await fixture();
+  await expect(controller.draftWorkflow("{}", new AbortController().signal)).rejects.toThrow();
+  await controller.beginAgentSetup({ mode: "primary" });
+  await attempt("claude");
+  await controller.finishAgentSetup(identity());
+  agents.script = (_text, session) => {
+    session.update({
+      type: "message",
+      text: JSON.stringify({
+        message: "Draft ready",
+        draft: {
+          name: "Fix parser",
+          tasks: [{ name: "Repair", instructions: "Fix", verify: "Test", checks: [] }],
+        },
+      }),
+    });
+    return "end_turn";
+  };
+  const result = await controller.draftWorkflow("{}", new AbortController().signal);
+  expect(result.draft?.name).toBe("Fix parser");
+  const spec = agents.specs.at(-1);
+  expect(spec?.name).toBe("claude");
+  expect(spec?.mcpServers).toEqual([]);
+  expect(spec?.cwd).toContain("code60-workflow-draft-");
+  if (spec) await expect(fs.stat(spec.cwd)).rejects.toMatchObject({ code: "ENOENT" });
+});

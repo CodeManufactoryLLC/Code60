@@ -1,0 +1,116 @@
+.workflows-page {
+  padding: 16px;
+  overflow: auto;
+}
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 12px;
+}
+.workflow-actions h1,
+.workflow-actions h2 {
+  margin: 0;
+  margin-right: auto;
+}
+.workflow-layout {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: 24px;
+}
+.workflow-layout nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.workflow-layout nav button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+}
+.workflow-layout nav button span {
+  font-size: 0.85em;
+}
+.workflow-form fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.workflows-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-block: 12px;
+}
+.workflows-page input,
+.workflows-page textarea,
+.workflows-page select {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.workflows-page textarea {
+  min-height: 72px;
+  width: 100%;
+}
+.workflows-page .workflow-check {
+  flex-direction: row;
+  align-items: center;
+}
+.workflow-task-editor > li {
+  margin-block: 20px;
+  padding-left: 4px;
+}
+.workflow-task-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-block: 8px;
+}
+.workflows-page dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 150px) minmax(0, 1fr);
+  gap: 8px 16px;
+}
+.workflows-page dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.workflows-page pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workflows-page progress {
+  width: 100%;
+}
+.workflows-page details {
+  margin-block: 16px;
+}
+.workflow-review {
+  margin-top: 24px;
+}
+.workflow-form dialog {
+  width: min(680px, calc(100vw - 64px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  box-sizing: border-box;
+}
+.workflow-draft-chat {
+  max-height: 35vh;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.workflow-draft-chat > div {
+  margin-block: 16px;
+}
+@media (max-width: 900px) {
+  .workflow-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workflows-page dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

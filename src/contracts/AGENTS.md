@@ -39,3 +39,8 @@ model defaults, histories and external logins. Set-primary/disconnect are strict
 human-only bridge actions, guarded in main against active desktop work, setup and
 overlapping writes. The primary must be replaced before disconnecting. Publish
 main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
+
+
+## Transmission prototype
+
+Transmission workflow/drafting contracts are strict and browser-safe. Preserve staging.18 task indices/cursors, bounded evidence and separate draft versus execution authority.

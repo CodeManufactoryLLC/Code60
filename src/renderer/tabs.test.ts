@@ -33,6 +33,7 @@ describe("page tabs", () => {
         "custom-agents",
         "assistants",
         "providers",
+        "workflows",
         "provider",
       ],
       active: "chat",
