@@ -1557,7 +1557,9 @@ test("desktop: project chat recovers a missed detail frame without app transcrip
 for (const outcome of ["finished", "failed", "cancelled"] as const) {
   test(`desktop: scheduled transcript streams readable content through ${outcome} and reopening`, async () => {
     test.setTimeout(60_000);
-    const directory = await realpath(await mkdtemp(join(tmpdir(), "c60-stream-")));
+    // Darwin's per-user TMPDIR can exceed the scheduler's local-socket path limit.
+    const temporaryRoot = process.platform === "darwin" ? "/tmp" : tmpdir();
+    const directory = await realpath(await mkdtemp(join(temporaryRoot, "c60-stream-")));
     const repository = join(directory, "repo");
     let service: Awaited<ReturnType<typeof startService>> | undefined;
     try {
@@ -12506,7 +12508,18 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
       path: join(root, "test-results", "theme-chat.png"),
     });
     await selectSidebarPage(page, "Messages");
-    await expect(page.locator("#panel-messages .sessions-grid tbody [role='row']")).toHaveCount(9);
+    const messages = page.locator("#panel-messages .sessions-grid");
+    // The accessibility tree virtualizes visible rows; native viewport sizes can
+    // show fewer than nine. Assert the complete data count (plus the header) and
+    // scroll to prove the final message is reachable.
+    await expect(messages.getByRole("grid", { includeHidden: true })).toHaveAttribute(
+      "aria-rowcount",
+      "10",
+    );
+    await messages.locator(".dvn-scroller").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(messages.locator('tbody [role="row"][aria-rowindex="10"]')).toBeAttached();
     await selectSidebarPage(page, "Events");
     const eventPanel = page.locator("#panel-events");
     await expect(
