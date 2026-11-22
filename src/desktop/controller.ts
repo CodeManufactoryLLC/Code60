@@ -2476,6 +2476,7 @@ export class DesktopController {
         });
       }
       return {
+        revision: this.revision,
         projectId: owner.id,
         databaseEpoch: request.databaseEpoch,
         source,

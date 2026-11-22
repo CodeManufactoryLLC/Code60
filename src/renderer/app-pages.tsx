@@ -166,8 +166,7 @@ export function AppPages(props: AppPagesProps) {
     if (
       snapshot.projectInstanceId !== searchTarget.projectId ||
       directory !== searchTarget.source.project.path ||
-      snapshot.chat.kind === "relay" ||
-      snapshot.chat.projectId !== searchTarget.projectId
+      snapshot.revision < searchTarget.revision
     )
       return;
     setSearchTarget(null);
@@ -187,8 +186,7 @@ export function AppPages(props: AppPagesProps) {
     searchTarget,
     snapshot?.databaseEpoch,
     snapshot?.projectInstanceId,
-    snapshot?.chat.kind,
-    snapshot?.chat.projectId,
+    snapshot?.revision,
     directory,
     fileAction,
     fileBrowser,
