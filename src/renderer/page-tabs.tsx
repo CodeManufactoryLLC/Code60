@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import type { Theme } from "./appearance.js";
 import { observeBreadcrumbMotion } from "./breadcrumb-motion.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
@@ -29,8 +30,11 @@ import type { ProviderManagement } from "./provider-management.js";
 import { ProvidersSidebar } from "./providers-sidebar.js";
 import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout.js";
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
+import { ThemeToggle } from "./theme-toggle.js";
 
 export function PageTabBar({
+  theme,
+  onThemeChange,
   tabs,
   settingsSection,
   onSelect,
@@ -55,6 +59,8 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
+  theme: Theme;
+  onThemeChange(theme: Theme): void;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?(): void;
@@ -187,6 +193,7 @@ export function PageTabBar({
             onBack={onBack}
             onForward={onForward}
           />
+          <ThemeToggle theme={theme} onChange={onThemeChange} />
         </Card>
       </header>
       <div className="workspace-panel-controls">

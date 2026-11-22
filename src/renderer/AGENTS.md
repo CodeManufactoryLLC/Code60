@@ -1076,3 +1076,24 @@ remain directly clickable in the main Card corners; their overlay is transparent
 and only its corner targets intercept clicks. Breadcrumb Rename moves to the chat
 content-header menu. Nested Files views, dialogs and section headings retain their
 own layouts. Update capability access paths without granting new availability.
+
+## Breadcrumb theme button
+
+The breadcrumb Card contains one global Color theme icon button at its upper-right
+side, vertically centered alongside the current-page selector. The selected mode
+is shown with the supplied eclipse (System), night (Dark), or sun (Light) artwork.
+Activation cycles System → Dark → Light → System, through the existing saved
+Theme preference and Settings selector. System remains the default and follows OS
+appearance changes; preserve explicit saved choices and all migration markers.
+The accessible name and tooltip identify both current mode and next action.
+
+Keep the button outside page-owned portals/inert content and independent of
+navigation/history, worker execution and chat drafts. Symmetric reserved side
+tracks retain the centered current-page selector in expanded/collapsed and narrow
+layouts; scale its hit target with the existing compact history controls. Keep
+keyboard activation/focus visible. Supplied artwork uses transparent posters at
+rest and one-shot click playback, with enclosed white moon detail preserved.
+Hover/focus alone stays still; reduced motion/forced colors use posters and system
+focus outlines. Monochrome settings apply through the shared icon pipeline.
+This is another human-only access path to Theme, with no new persistence, bridge
+method, dependency, availability rule or agent-write authority.

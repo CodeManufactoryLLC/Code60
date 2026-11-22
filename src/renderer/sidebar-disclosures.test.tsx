@@ -148,6 +148,8 @@ afterEach(() => {
 
 function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   const props: ComponentProps<typeof PageTabBar> = {
+    theme: "system",
+    onThemeChange: vi.fn(),
     ...chatProps,
     tabs: { ...initialTabs, active: "settings" },
     settingsSection: null,

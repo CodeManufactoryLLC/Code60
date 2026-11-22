@@ -37,3 +37,20 @@ a stacked chat with enlarged composer text. Automatic chat naming keeps an open
 command menu attached to its owner without resetting keyboard focus.
 
 ![Stationary header above a scrolled stacked chat with enlarged text](after-page-header-stacked.png)
+
+
+The right edge of the breadcrumb Card has one Color theme button. It shows the
+selected preference and cycles System → Dark → Light → System. System remains
+the default; saved selections and the Settings Theme selector stay synchronized.
+Artwork plays once on activation; hover/focus stays still and reduced motion or
+forced colors uses the poster. The current-page selector stays centered.
+
+| Light mode | Dark mode |
+| --- | --- |
+| ![Sun theme button at the right of the breadcrumb Card](after-theme-light.png) | ![Night theme button at the right of the breadcrumb Card](after-theme-dark.png) |
+
+The supplied [eclipse](../../../src/renderer/icons/apps/theme-eclipse.gif),
+[night](../../../src/renderer/icons/apps/theme-night.gif) and
+[sun](../../../src/renderer/icons/apps/theme-sun.gif) assets retain all 48 / 107 / 46
+frames and their exact per-frame delays (2.0 / 2.4 / 2.4 seconds). Background-only
+white removal preserves enclosed moon detail; source files remain untouched.

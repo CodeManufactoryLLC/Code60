@@ -137,6 +137,14 @@ describe("desktop capability catalog", () => {
       purpose: expect.stringContaining("whole-window background opacity"),
     });
   });
+  it("describes the human-only breadcrumb theme shortcut without changing availability", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("breadcrumb card → Color theme"),
+      limitations: expect.stringContaining("System → Dark → Light → System"),
+    });
+  });
   it("describes locally saved monochrome icons without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",

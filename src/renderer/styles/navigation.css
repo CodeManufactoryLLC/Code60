@@ -1166,7 +1166,21 @@
   min-height: 36px;
 }
 
-.sidebar-history .navigation-icon {
+/* Keep the global theme action outside the current page's portalled owner. */
+.breadcrumb-theme-toggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-history .navigation-icon,
+.breadcrumb-theme-toggle .navigation-icon {
   position: static;
   width: 36px;
   height: 36px;
@@ -1175,14 +1189,16 @@
 }
 
 /* Bitmap glyphs need a visible focus ring because their colors do not inherit. */
-.sidebar-history > .icon-button:focus-visible .navigation-icon {
+.sidebar-history > .icon-button:focus-visible .navigation-icon,
+.breadcrumb-theme-toggle:focus-visible .navigation-icon {
   outline: 2px solid var(--focus-line);
   outline-offset: 1px;
   border-radius: 50%;
 }
 
 @media (forced-colors: active) {
-  .sidebar-history > .icon-button:focus-visible .navigation-icon {
+  .sidebar-history > .icon-button:focus-visible .navigation-icon,
+  .breadcrumb-theme-toggle:focus-visible .navigation-icon {
     outline-color: Highlight;
   }
 }
@@ -1196,13 +1212,15 @@
     gap: 4px;
   }
 
-  .sidebar-history > .icon-button {
+  .sidebar-history > .icon-button,
+  .breadcrumb-theme-toggle {
     width: 28px;
     height: 28px;
     min-height: 28px;
   }
 
-  .sidebar-history .navigation-icon {
+  .sidebar-history .navigation-icon,
+  .breadcrumb-theme-toggle .navigation-icon {
     width: 28px;
     height: 28px;
   }

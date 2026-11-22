@@ -52,6 +52,12 @@ import spellBookAnimation from "./icons/apps/spell-book.gif?no-inline";
 import spellBookStill from "./icons/apps/spell-book.png?no-inline";
 import tableAnimation from "./icons/apps/table.gif?no-inline";
 import tableStill from "./icons/apps/table.png?no-inline";
+import themeSystemAnimation from "./icons/apps/theme-eclipse.gif?no-inline";
+import themeSystemStill from "./icons/apps/theme-eclipse.png?no-inline";
+import themeDarkAnimation from "./icons/apps/theme-night.gif?no-inline";
+import themeDarkStill from "./icons/apps/theme-night.png?no-inline";
+import themeLightAnimation from "./icons/apps/theme-sun.gif?no-inline";
+import themeLightStill from "./icons/apps/theme-sun.png?no-inline";
 import timeManagementAnimation from "./icons/apps/time-management.gif?no-inline";
 import timeManagementStill from "./icons/apps/time-management.png?no-inline";
 import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
@@ -63,6 +69,9 @@ const artwork = {
 } as const;
 
 const animatedArtwork = {
+  "app-theme-system": { animation: themeSystemAnimation, still: themeSystemStill },
+  "app-theme-dark": { animation: themeDarkAnimation, still: themeDarkStill },
+  "app-theme-light": { animation: themeLightAnimation, still: themeLightStill },
   "app-history-back": { animation: historyBackAnimation, still: historyBackStill },
   "app-history-forward": { animation: historyForwardAnimation, still: historyForwardStill },
   "app-cloud-computing": { animation: downloadAnimation, still: downloadStill },

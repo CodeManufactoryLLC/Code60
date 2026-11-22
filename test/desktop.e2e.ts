@@ -2125,6 +2125,137 @@ test("desktop: page selector transitions animate without stale controls", async 
   }
 });
 
+test("desktop: breadcrumb theme button cycles saved modes and follows System", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-theme-button-")));
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, directory, database);
+    let page = await application.firstWindow();
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const header = page.locator(".workspace-breadcrumbs");
+    const button = header.getByRole("button", { name: /^Color theme:/ });
+    const icon = button.locator("img");
+    const root = page.locator("html");
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Keep the theme-switch draft");
+    const geometry = async () => {
+      await expect
+        .poll(() =>
+          header.evaluate((element) => {
+            const card = element.getBoundingClientRect();
+            const action = element.querySelector<HTMLElement>(".breadcrumb-theme-toggle");
+            const theme = action?.getBoundingClientRect();
+            const selector = element.querySelector('[role="combobox"]')?.getBoundingClientRect();
+            const history = element.querySelector(".sidebar-history")?.getBoundingClientRect();
+            if (!action || !theme || !selector || !history) return false;
+            return (
+              theme.left >= selector.right + 4 &&
+              theme.right <= card.right &&
+              theme.top >= card.top &&
+              theme.bottom <= card.bottom &&
+              history.right <= selector.left &&
+              Math.abs(selector.left + selector.width / 2 - card.left - card.width / 2) < 1 &&
+              document
+                .elementFromPoint(theme.left + theme.width / 2, theme.top + theme.height / 2)
+                ?.closest("button") === action
+            );
+          }),
+        )
+        .toBe(true);
+    };
+    await expect(button).toHaveAccessibleName("Color theme: System. Switch to Dark mode");
+    await expect(root).toHaveAttribute("data-theme", "system");
+    await expect(root).toHaveAttribute("data-color-scheme", "light");
+    await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.png$/);
+    await geometry();
+    await button.hover();
+    await button.focus();
+    await expect(icon).toHaveAttribute("src", /\.png$/);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(root).toHaveAttribute("data-color-scheme", "dark");
+    await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.png$/);
+    await button.press("Enter");
+    await expect(button).toHaveAccessibleName("Color theme: Dark. Switch to Light mode");
+    await expect(button).toBeFocused();
+    await expect(icon).toHaveAttribute("src", /theme-night[^/]*\.gif\?play=/);
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(root).toHaveAttribute("data-color-scheme", "dark");
+    await button.click();
+    await expect(root).toHaveAttribute("data-theme", "light");
+    await expect(icon).toHaveAttribute("src", /theme-sun[^/]*\.gif\?play=/);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(root).toHaveAttribute("data-color-scheme", "light");
+    await button.press("Space");
+    await expect(root).toHaveAttribute("data-theme", "system");
+    await expect(root).toHaveAttribute("data-color-scheme", "dark");
+    await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.gif\?play=/);
+    await selectSettingsPage(page, "Appearance");
+    const theme = page.getByRole("combobox", { name: "Theme", exact: true });
+    await expect(theme).toHaveValue("system");
+    await theme.selectOption("light");
+    await expect(button).toHaveAccessibleName("Color theme: Light. Switch to System mode");
+    await page.getByRole("switch", { name: "Monochrome", exact: true }).check();
+    await expect(icon).toHaveCSS("filter", /code60-icon-monochrome/);
+    await page.getByRole("switch", { name: "Monochrome", exact: true }).uncheck();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(icon).toHaveAttribute("src", /theme-sun[^/]*\.png$/);
+    await button.click();
+    await expect(theme).toHaveValue("system");
+    await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.png$/);
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+    await button.click();
+    await expect(theme).toHaveValue("dark");
+    await expect(icon).toHaveAttribute("src", /theme-night[^/]*\.png$/);
+    await button.focus();
+    await expect(button).toBeFocused();
+    await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
+    await page.screenshot({ path: test.info().outputPath("breadcrumb-theme-dark.png") });
+    await button.click();
+    await expect(theme).toHaveValue("light");
+    await page.screenshot({ path: test.info().outputPath("breadcrumb-theme-light.png") });
+    await selectSettingsPage(page, "Text");
+    const font = page
+      .getByRole("group", { name: "Button Text", exact: true })
+      .getByLabel("Font size");
+    await font.fill("64");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 640),
+    );
+    await geometry();
+    await page.getByRole("button", { name: "Close navigation sidebar", exact: true }).click();
+    await geometry();
+    await button.click();
+    await expect(root).toHaveAttribute("data-theme", "system");
+    await button.click();
+    await expect(root).toHaveAttribute("data-theme", "dark");
+    await button.click();
+    await expect(root).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: "Open navigation sidebar", exact: true }).click();
+    await font.fill("");
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(composer).toHaveValue("Keep the theme-switch draft");
+    await page.reload();
+    await expect(button).toHaveAccessibleName("Color theme: Light. Switch to System mode");
+    await expect(icon).toHaveAttribute("src", /theme-sun[^/]*\.png$/);
+    await expect(composer).toHaveValue("Keep the theme-switch draft");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("code60.theme")))
+      .toBe("light");
+    await application.close();
+    application = await launch(directory, directory, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(
+      page.locator(".workspace-breadcrumbs").getByRole("button", { name: /^Color theme:/ }),
+    ).toHaveAccessibleName("Color theme: Light. Switch to System mode");
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: current-page combobox opens directly, animates and preserves drafts", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-page-selector-")));
@@ -18546,6 +18677,10 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
     await selector.focus();
     await selector.press("Shift+Tab");
+    const themeButton = header.getByRole("button", { name: /^Color theme:/ });
+    await expect(themeButton).toBeFocused();
+    await expect(themeButton.locator("img")).toHaveCSS("outline-width", "2px");
+    await themeButton.press("Shift+Tab");
     await expect(back).toBeFocused();
     await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
     await expect(backImage).toHaveCSS("outline-width", "2px");

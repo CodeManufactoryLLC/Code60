@@ -370,6 +370,8 @@ export function App({ api: transport }: { api: DesktopApi }) {
       <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
         {!splash && (
           <PageTabBar
+            theme={theme}
+            onThemeChange={setTheme}
             tabs={tabs}
             settingsSection={settingsSection}
             navigation={navigation}
