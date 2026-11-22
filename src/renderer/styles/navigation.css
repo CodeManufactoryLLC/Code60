@@ -1181,10 +1181,15 @@
 
 .breadcrumb-appearance-controls > .icon-button {
   position: relative;
+  opacity: 0.5;
   width: 36px;
   height: 36px;
   min-height: 36px;
   -webkit-app-region: no-drag;
+}
+
+.breadcrumb-appearance-controls > .icon-button:is(:hover, :focus-visible) {
+  opacity: 1;
 }
 
 .sidebar-history .navigation-icon,
@@ -1214,6 +1219,10 @@
 }
 
 @media (forced-colors: active) {
+  .breadcrumb-appearance-controls > .icon-button {
+    opacity: 1;
+  }
+
   .sidebar-history > .icon-button:focus-visible .navigation-icon,
   .breadcrumb-appearance-controls
     > .icon-button:focus-visible

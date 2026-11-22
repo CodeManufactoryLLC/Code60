@@ -2138,8 +2138,26 @@ test("desktop: icon animation toggle freezes artwork globally and preserves othe
     await composer.fill("Keep the animation-toggle draft");
     const header = page.locator(".workspace-breadcrumbs");
     const button = header.getByRole("button", { name: "Icon animations", exact: true });
+    const themeButton = header.getByRole("button", { name: /^Color theme:/ });
     const wheel = button.locator('[data-icon="app-icon-animations"]');
     const block = button.locator(".icon-animation-block");
+    await page.mouse.move(600, 500);
+    await composer.focus();
+    for (const control of [button, themeButton]) {
+      await expect(control).toHaveCSS("opacity", "0.5");
+      await control.hover();
+      await expect(control).toHaveCSS("opacity", "1");
+      await page.mouse.move(600, 500);
+      await expect(control).toHaveCSS("opacity", "0.5");
+    }
+    const currentPage = header.getByRole("combobox", { name: "Current page", exact: true });
+    await currentPage.focus();
+    await currentPage.press("Shift+Tab");
+    await expect(themeButton).toBeFocused();
+    await expect(themeButton).toHaveCSS("opacity", "1");
+    await themeButton.press("Shift+Tab");
+    await expect(button).toBeFocused();
+    await expect(button).toHaveCSS("opacity", "1");
     const still = async () => {
       await expect
         .poll(() =>
@@ -2223,6 +2241,7 @@ test("desktop: icon animation toggle freezes artwork globally and preserves othe
     await still();
     await button.click();
     await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+    for (const control of [button, themeButton]) await expect(control).toHaveCSS("opacity", "1");
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
     await still();

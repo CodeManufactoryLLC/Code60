@@ -72,3 +72,9 @@ all 94 frames, exact delays (2.04 seconds), and its 640×640 canvas, with a
 one-shot loop for activation. White gaps/background are transparent. The supplied
 [block SVG](../../../src/renderer/icons/apps/animation-block.svg) already has
 transparent cutouts and is retained unchanged. Source Downloads files are untouched.
+
+
+Both breadcrumb appearance controls are 50% opaque at rest and fully opaque on
+hover or keyboard focus; forced colors keeps them fully visible. The wheel/block
+composite fades as one control. The main-content grid is slightly more visible:
+7% black lines in Light and 8% white in Dark, retaining 1px lines and 24px spacing.

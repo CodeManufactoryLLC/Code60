@@ -89,7 +89,7 @@
   --workspace-background: #f4f8fe;
   --sidebar-background: #f4f8fe;
   --content-background: #ffffff;
-  --content-grid-line: rgb(0 0 0 / 4.5%);
+  --content-grid-line: rgb(0 0 0 / 7%);
   --surface: #ffffff;
   --surface-hover: #ffffff;
   --row-alt: #ffffff;
@@ -153,7 +153,7 @@
   --workspace-background: #111111;
   --sidebar-background: var(--workspace-background);
   --content-background: var(--surface);
-  --content-grid-line: rgb(255 255 255 / 5.5%);
+  --content-grid-line: rgb(255 255 255 / 8%);
   --surface: #202020;
   --surface-hover: #242424;
   --row-alt: #202020;
