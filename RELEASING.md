@@ -48,13 +48,13 @@ run records, and user-selected SQLite databases.
 
 Installed releases check for updates about 30 seconds after startup and every four
 hours afterward. The on-by-default **Automatically check for updates** switch in
-Settings → Updates is saved across restarts. Automatic failures stay quiet; manual
-checks show errors. A footer button opens the Updates section and shows availability,
+Apps → Update Manager is saved across restarts. Automatic failures stay quiet; manual
+checks show errors. A footer button opens Apps → Update Manager and shows availability,
 download progress, or readiness to install. An in-app popup offers **Download now**
 and **Later** once per version, remembered across renderer reloads and app restarts.
 It waits for other dialogs to close. Checks never start downloads.
 
-Installed releases offer **Settings → Updates**: Check for updates, Download update
+Installed releases offer **Apps → Update Manager**: Check for updates, Download update
 (with progress and cancellation), then Install and restart. Downloads never start
 automatically, and ordinary quitting never installs an update. Installation asks
 for confirmation and stops every agent before restarting. Stable releases stay
