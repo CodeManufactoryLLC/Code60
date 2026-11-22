@@ -53,7 +53,7 @@ body:has(.app .window-background) {
 
 .app-workspace {
   position: relative;
-  --nav-row-height: max(40px, calc(2.5 * var(--nav-font-size, 15px) + 2px));
+  --nav-row-height: calc(2px + 38 * var(--nav-font-size, 15px) / 15);
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -137,6 +137,12 @@ body:has(.app .window-background) {
 .chat-conversations,
 .file-panel {
   border-width: 1px;
+}
+
+/* Remove shell shadows without changing nested cards or inspector surfaces. */
+.page-panel[data-slot="card"],
+.chat-conversations {
+  box-shadow: none;
 }
 
 /* Primary content is a surface card beside the navigation. */

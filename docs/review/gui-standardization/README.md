@@ -111,3 +111,23 @@ These images supersede earlier screenshots containing a current-page selector.
 | ![History and appearance header with a Home title icon in Light](after-simplified-header-light.png) | ![History and appearance header with a Home title icon in Dark](after-simplified-header-dark.png) |
 
 ![Title artwork and wrapping at the maximum supported text size](after-title-icons-large.png)
+
+## Current flat surfaces and navigation density
+
+The main content and chat conversation Cards and the left navigation Card are now
+shadowless. Nested cards and the right Files inspector keep their existing
+presentation. Sidebar dividers reach both inner border edges, while row labels
+retain their horizontal inset and accordion behavior.
+
+Navigation row height scales with saved Button Text size, including below the
+default. It remains 40px at 15px text and shrinks to roughly 22px at 8px text; row
+actions and circular glyphs shrink to fit. Larger text grows every page, project,
+chat and worker row through the shared height. This supersedes earlier snapshots
+showing main/sidebar shadows and inset separators. No capability or availability
+change is introduced.
+
+| Current Light surfaces | Current Dark surfaces |
+| --- | --- |
+| ![Shadowless main/sidebar and edge-to-edge dividers in Light](after-shadowless-surfaces-light.png) | ![Shadowless main/sidebar and edge-to-edge dividers in Dark](after-shadowless-surfaces-dark.png) |
+
+![Compact navigation rows with 8px Button Text](after-sidebar-rows-8px.png)

@@ -24,12 +24,14 @@
   --nav-item-padding: 15px;
   --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
+  --nav-action-height: min(28px, var(--nav-row-height));
+  --nav-action-glyph: min(24px, calc(var(--nav-row-height) - 2px));
   --control-fill: transparent;
   --disabled-fill: transparent;
   grid-column: 1;
   /* Breadcrumb height belongs to the content column, never to navigation. */
   grid-row: 1 / -1;
-  /* Reserve shadow paint space without moving cards or the resize divider. */
+  /* Preserve the sidebar/resize alignment through reveal animation. */
   margin-left: calc(-4px * var(--sidebar-reveal));
   padding: 0 0 0 calc(4px * var(--sidebar-reveal));
   align-self: stretch;
@@ -84,15 +86,15 @@
   margin-bottom: 2.5px;
 }
 
-/* One outlined shell shares the main content shadow and contains every section. */
+/* One shadowless outlined shell contains every accordion section. */
 .sidebar-navigation-card {
-  --nb-card-shadow: var(--card-shadow);
+  box-shadow: none;
   border-width: 1px;
   border-radius: 5px;
   position: relative;
   min-width: 0;
   margin: 6px 0 4px;
-  padding: 0 4px;
+  padding: 0;
   gap: 0;
   isolation: isolate;
 }
@@ -103,7 +105,7 @@
   flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
-  padding: 4px 0;
+  padding: 4px;
   gap: 0;
   isolation: isolate;
 }
@@ -184,18 +186,18 @@
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
   position: absolute;
   z-index: 1;
-  top: calc(4px + (var(--nav-row-height) - 28px) / 2);
-  right: 4px;
+  top: calc(4px + (var(--nav-row-height) - var(--nav-action-height)) / 2);
+  right: 8px;
   width: 28px;
-  height: 28px;
-  min-height: 28px;
+  height: var(--nav-action-height);
+  min-height: var(--nav-action-height);
   padding: 0;
   color: var(--muted);
   transition: color var(--motion) var(--ease);
 }
 
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
-  right: 36px;
+  right: 40px;
 }
 
 .sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
@@ -231,8 +233,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--nav-action-glyph);
+  height: var(--nav-action-glyph);
   border: 1px solid #000000;
   border-radius: 50%;
   background: var(--surface-band);
@@ -794,9 +796,9 @@
   flex: 0 0 28px;
   padding: 0;
   align-self: center;
-  height: 28px;
-  min-height: 28px;
-  max-height: 28px;
+  height: var(--nav-action-height);
+  min-height: var(--nav-action-height);
+  max-height: var(--nav-action-height);
 }
 
 .chat-worker-children[hidden] {

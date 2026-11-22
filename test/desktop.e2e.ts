@@ -1951,6 +1951,133 @@ test("desktop: System Manager card opens the moved service section without a dat
   }
 });
 
+test("desktop: shadowless content and edge dividers follow proportional sidebar text", async () => {
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-proportional-nav-")));
+  const folder = join(directory, "project-a");
+  execFileSync("git", ["init", "-q", folder]);
+  commitFixture(folder);
+  try {
+    application = await launch(directory, folder, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    await selectProjectConversation(page);
+    const composer = () =>
+      page
+        .locator(".orchestration-chat-page:visible")
+        .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer().fill("Keep my proportional navigation draft");
+    const gitBefore = execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString();
+    const check = async (size: number) => {
+      await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", "none");
+      await expect(
+        page.locator(".page-panel[data-slot=card]:visible, .chat-conversations:visible"),
+      ).toHaveCSS("box-shadow", "none");
+      const layout = await page.locator(".sidebar-navigation-card").evaluate((card) => {
+        const bounds = card.getBoundingClientRect();
+        const dividers = [...card.querySelectorAll(".sidebar-section + .sidebar-section")].map(
+          (section) => {
+            const rect = section.getBoundingClientRect();
+            return {
+              left: rect.left - bounds.left,
+              right: bounds.right - rect.right,
+              border: getComputedStyle(section).borderTopWidth,
+            };
+          },
+        );
+        const rows = [
+          ...card.querySelectorAll(
+            "[role=tab], .page-group-label, .project-chat-heading, .chat-sidebar-row, .project-session-new",
+          ),
+        ]
+          .filter((row) => row.checkVisibility())
+          .map((row) => row.getBoundingClientRect().height);
+        const actions = [
+          ...card.querySelectorAll(
+            ".sidebar-card-toggle, .project-chat-heading > .icon-button, .chat-sidebar-row > .chat-sidebar-action",
+          ),
+        ]
+          .filter((button) => button.checkVisibility())
+          .map((button) => ({
+            height: button.getBoundingClientRect().height,
+            glyph: button.firstElementChild?.getBoundingClientRect().height ?? 0,
+          }));
+        return { dividers, rows, actions };
+      });
+      expect(layout.dividers).toHaveLength(5);
+      for (const divider of layout.dividers) {
+        expect(divider.border).toBe("1px");
+        expect(divider.left).toBeCloseTo(1, 1);
+        expect(divider.right).toBeCloseTo(1, 1);
+      }
+      const expected = 2 + (38 * size) / 15;
+      expect(layout.rows.length).toBeGreaterThan(10);
+      for (const height of layout.rows) expect(height).toBeCloseTo(expected, 1);
+      for (const action of layout.actions) {
+        expect(action.height).toBeLessThanOrEqual(expected + 0.1);
+        expect(action.glyph).toBeLessThanOrEqual(action.height);
+      }
+      return expected;
+    };
+    await selectSettingsPage(page, "Text");
+    const font = () =>
+      page.getByRole("group", { name: "Button Text", exact: true }).getByLabel("Font size");
+    for (const size of [8, 13, 15, 24, 64]) {
+      await font().fill(String(size));
+      await expect(page.locator("#tab-home")).toHaveCSS("font-size", `${size}px`);
+      await check(size);
+      await page.screenshot({ path: test.info().outputPath(`sidebar-rows-${size}px.png`) });
+    }
+    await font().fill("15");
+    for (const theme of ["light", "dark"]) {
+      await selectSettingsPage(page, "Appearance");
+      await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+      await check(15);
+      await page.locator("#tab-home").click();
+      await expect(page.locator("#panel-home .navigation-card").first()).toHaveCSS(
+        "box-shadow",
+        /4px 4px 0px/,
+      );
+      await check(15);
+      await page.screenshot({ path: test.info().outputPath(`shadowless-surfaces-${theme}.png`) });
+    }
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(640, 800),
+    );
+    await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+    await check(15);
+    const apps = page.locator("#tab-apps");
+    await apps.focus();
+    await apps.press("ArrowLeft");
+    await expect(page.locator("#apps-card-toggle")).toHaveAttribute("aria-expanded", "false");
+    await apps.press("ArrowRight");
+    await expect(page.locator("#apps-card-toggle")).toHaveAttribute("aria-expanded", "true");
+    await selectProjectConversation(page);
+    await expect(composer()).toHaveValue("Keep my proportional navigation draft");
+    await expect(page.locator(".chat-conversations:visible")).toHaveCSS("box-shadow", "none");
+    await page.reload();
+    await expect(composer()).toHaveValue("Keep my proportional navigation draft");
+    await expect(page.locator("#tab-home")).toHaveCSS("font-size", "15px");
+    expect(execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString()).toBe(
+      gitBefore,
+    );
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: simplified workspace header keeps title artwork, history and drafts accessible", async () => {
   test.setTimeout(120_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-simplified-header-")));
@@ -8419,7 +8546,7 @@ test("desktop: window background opacity applies live across the app and persist
     await expect(navigationCard).toHaveCSS("border-width", "1px");
     await expect(navigationCard).toHaveCSS("background-color", "rgb(255, 255, 255)");
     await expect(navigationCard).toHaveCSS("color", "rgb(17, 17, 17)");
-    await expect(navigationCard).toHaveCSS("box-shadow", /4px 4px 0px/);
+    await expect(navigationCard).toHaveCSS("box-shadow", "none");
     const sections = navigationCard.locator(":scope > .sidebar-section");
     await expect(sections).toHaveCount(6);
     for (const [index, section] of (await sections.all()).entries()) {
@@ -15204,12 +15331,12 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       for (const shell of await shells.all()) {
         await expect(shell).toHaveAttribute("data-slot", "card");
         await expect(shell).toHaveCSS("border-width", "1px");
-        const breadcrumb = await shell.evaluate((element) =>
-          element.classList.contains("workspace-breadcrumbs"),
+        const inspector = await shell.evaluate((element) =>
+          element.classList.contains("file-panel"),
         );
         await expect(shell).toHaveCSS("border-radius", "5px");
-        if (breadcrumb) await expect(shell).toHaveCSS("box-shadow", "none");
-        else await expect(shell).toHaveCSS("box-shadow", /4px 4px 0px/);
+        if (inspector) await expect(shell).toHaveCSS("box-shadow", /4px 4px 0px/);
+        else await expect(shell).toHaveCSS("box-shadow", "none");
       }
       const composer = page.locator(".orchestration-chat-page:visible .composer");
       await expect(composer).toHaveAttribute("data-slot", "card");
@@ -15229,7 +15356,8 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       );
       await expect(
         page.getByRole("navigation", { name: "Page navigation", exact: true }),
-      ).toHaveAttribute("data-slot", "breadcrumb");
+      ).toHaveCount(0);
+      await expect(page.locator(".content-page-title:visible .navigation-icon")).toHaveCount(1);
     };
     const expectBreadcrumbEdge = async (column = ".chat-conversations") => {
       const header = await page.locator(".workspace-header").boundingBox();

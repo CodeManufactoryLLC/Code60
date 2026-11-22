@@ -574,10 +574,8 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
     );
-    const mainShadow = await page
-      .locator("#panel-settings")
-      .evaluate((element) => getComputedStyle(element).boxShadow);
-    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", mainShadow);
+    await expect(page.locator("#panel-settings")).toHaveCSS("box-shadow", "none");
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", "none");
     await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("border-radius", "5px");
     await expect(page.locator(".sidebar-navigation-card")).toHaveCount(1);
     await expect(page.locator(".sidebar-navigation-card > .sidebar-section")).toHaveCount(6);

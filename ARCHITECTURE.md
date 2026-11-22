@@ -2802,3 +2802,21 @@ and corner controls. Standalone/nested headings retain their existing layout.
 Information-tooltip buttons are removed throughout the app. Keep explanatory text
 non-interactive and available to assistive technology, retaining aria-describedby
 IDs for settings controls. Ordinary action tooltips and status icons remain.
+
+## Shadowless main surfaces and proportional navigation rows
+
+The outer main content Cards (including chat conversation Cards) and left sidebar
+Card have no drop shadow. Apply this directly to those shells so nested cards,
+right inspectors and button/focus treatments retain their existing presentation.
+Sidebar section borders span the full inner width from the left to the right
+outline; keep the 4px horizontal row inset on the sections rather than on the
+outer Card. Accordions, scroll ownership and retained state stay unchanged.
+
+Navigation rows scale with saved Button Text size, including below the default:
+38px of content height at 15px text, proportional at other sizes, plus 2px for
+borders. Default rows remain 40px; there is no fixed minimum floor. Every page,
+project, chat and worker row uses that shared height. Clamp row action targets
+and circular glyphs to fit the smallest row without overlap, retaining keyboard
+controls and icon proportions. This supersedes earlier fixed-height and outer
+Card-shadow guidance. This is presentation only; no capability, availability,
+preference, bridge or persisted-format change, so no catalog change is needed.
