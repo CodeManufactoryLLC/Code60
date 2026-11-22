@@ -1833,9 +1833,11 @@ Secondary section headings, file-panel headings and embedded table history are n
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
 Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Center the
-Schedules heading in the content area, with Actions immediately 12px to its right
-and a 16px top inset. Below 480px of available content width, center Actions on a
-second row to preserve access without overflow. Actions offers the existing New scheduled job and Refresh handlers;
+Schedules heading and its chevron-only Actions menu together, with a 12px gap.
+Share the main card's top corner-control row rather than reserving extra vertical
+space. Keep symmetric side clearance for the panel toggles, allow long headings
+to wrap, and keep the heading row visible while scrolling. The menu retains its
+Actions accessible name, tooltip and existing New scheduled job/Refresh handlers;
 creation and editing use inline Card/Button/Textarea controls. Execution history
 remains a table, with its own icon-free Card Titles heading. Only the outer
 Scheduled Jobs title is a page breadcrumb.
@@ -2620,8 +2622,9 @@ Panel toggles share a stationary row at the top of the main content Card: sideba
 open/close at the upper left, Files open/close at the upper right when an active
 file-panel owner exists. The row overlays the Card's grid cell and follows the
 measured conversation inset through sidebar and inspector resizing. Reserve 44px
-above scrolling content; keep the native window strip and breadcrumb Card free of
-panel toggles. The active PanelShell portals its existing action into the shared
+above scrolling content, except Scheduled Jobs whose centered heading shares that
+row with clear space for the corner controls. Keep the native window strip and
+breadcrumb Card free of panel toggles. The active PanelShell portals its existing action into the shared
 right slot in both open/closed states, preserving labels, disabled state, tab
 order, focus, draft/scroll state and read ownership. Inactive retained panels
 never publish a toggle. Closing panels leaves both corner actions reachable;

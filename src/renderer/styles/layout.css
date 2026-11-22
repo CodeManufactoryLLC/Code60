@@ -192,6 +192,15 @@ body:has(.app .sidebar) {
   overflow: hidden;
 }
 
+/* Scheduled Jobs shares the corner-control row with its centered heading. */
+#panel-automations {
+  padding-top: 1px;
+}
+.app-workspace:has(> #panel-automations:not([hidden])) > .workspace-panel-controls {
+  background: transparent;
+  pointer-events: none;
+}
+
 /* Paint only the main reading plane; nested controls and Cards retain their fills. */
 @media (forced-colors: none) {
   .page-panel[data-slot="card"],

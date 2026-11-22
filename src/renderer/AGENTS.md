@@ -204,10 +204,12 @@
   small title sizes and taller actions do not shift titles. Put project-readiness
   notices below chat headers, not above them.
 - Scheduled Jobs uses local Neobrutalism accordions for jobs and a table for
-  Execution history. Center Schedules independently in the available content width;
-  place Actions immediately 12px to its right with the same vertical center and a
-  16px top inset. Below 480px content width, center Actions below the title to avoid
-  overflow. Actions contains New scheduled job/Refresh; creation/editing stays inline.
+  Execution history. Center Schedules and its chevron-only Actions trigger as one
+  group with a 12px gap, including narrow content widths. Share the main card's
+  corner-control row with symmetric side clearance; keep the heading visible
+  while scrolling and wrap larger text without displacing the corner toggles.
+  Retain the Actions accessible name/tooltip and New scheduled job/Refresh menu;
+  creation/editing stays inline.
   Order independent run/cancel, delete and disclosure controls in DOM and visually.
   Use 24px transparent circles in 28px targets with black outlines, 2px hard
   shadows, 1px press offsets and contrasting glyphs. Only the final chevron toggles
@@ -976,8 +978,9 @@ Panel toggles share a stationary row at the top of the main content Card: sideba
 open/close at the upper left, Files open/close at the upper right when an active
 file-panel owner exists. The row overlays the Card's grid cell and follows the
 measured conversation inset through sidebar and inspector resizing. Reserve 44px
-above scrolling content; keep the native window strip and breadcrumb Card free of
-panel toggles. The active PanelShell portals its existing action into the shared
+above scrolling content, except Scheduled Jobs whose centered heading shares that
+row with clear space for the corner controls. Keep the native window strip and
+breadcrumb Card free of panel toggles. The active PanelShell portals its existing action into the shared
 right slot in both open/closed states, preserving labels, disabled state, tab
 order, focus, draft/scroll state and read ownership. Inactive retained panels
 never publish a toggle. Closing panels leaves both corner actions reachable;

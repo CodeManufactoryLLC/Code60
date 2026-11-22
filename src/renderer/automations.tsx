@@ -165,6 +165,7 @@ export function AutomationsPage({
         </h2>
         <DropdownMenu
           label="Actions"
+          iconOnly
           triggerRef={actionsTrigger}
           active={visible}
           disabled={busy || !!editor}

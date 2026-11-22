@@ -7,12 +7,14 @@ import { Button } from "./button.js";
 /** Upstream dropdown presentation with Code60's native, anchored menu lifecycle. */
 export function DropdownMenu({
   label,
+  iconOnly = false,
   active,
   disabled,
   items,
   triggerRef,
 }: {
   label: string;
+  iconOnly?: boolean;
   active: boolean;
   disabled: boolean;
   items: readonly { label: string; run(): void }[];
@@ -34,6 +36,9 @@ export function DropdownMenu({
     <>
       <Button
         ref={trigger}
+        className={iconOnly ? "icon-button" : undefined}
+        aria-label={iconOnly ? label : undefined}
+        title={iconOnly ? label : undefined}
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={expanded ? id : undefined}
@@ -45,7 +50,7 @@ export function DropdownMenu({
           open(event.key === "ArrowUp");
         }}
       >
-        {label}
+        {!iconOnly && label}
         <Icon name="chevron--down" />
       </Button>
       {expanded && position && (

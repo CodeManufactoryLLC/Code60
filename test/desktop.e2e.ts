@@ -1730,27 +1730,31 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
       await expect(canvas).toBeVisible();
       expect((await canvas.boundingBox())?.height).toBeGreaterThan(100);
     }
-    const expectScheduleHeading = async (stacked = false) => {
+    const expectScheduleHeading = async () => {
       const header = await panel.locator(".automation-page-heading").boundingBox();
       const title = await panel
         .getByRole("heading", { name: "Schedules", exact: true })
         .boundingBox();
-      const actions = await panel
-        .getByRole("button", { name: "Actions", exact: true })
-        .boundingBox();
-      if (!header || !title || !actions) throw new Error("Missing schedule heading geometry");
-      expect(Math.abs(title.x + title.width / 2 - header.x - header.width / 2)).toBeLessThan(1);
-      if (stacked) {
-        expect(actions.y).toBeGreaterThanOrEqual(title.y + title.height);
-        expect(Math.abs(actions.x + actions.width / 2 - header.x - header.width / 2)).toBeLessThan(
-          1,
-        );
-      } else {
-        expect(actions.x - title.x - title.width).toBeCloseTo(12, 0);
-        expect(Math.abs(title.y + title.height / 2 - actions.y - actions.height / 2)).toBeLessThan(
-          2,
-        );
-      }
+      const trigger = panel.getByRole("button", { name: "Actions", exact: true });
+      const actions = await trigger.boundingBox();
+      const controls = await page.locator(".workspace-panel-controls").boundingBox();
+      if (!header || !title || !actions || !controls)
+        throw new Error("Missing schedule heading geometry");
+      const groupCenter = (title.x + actions.x + actions.width) / 2;
+      expect(Math.abs(groupCenter - header.x - header.width / 2)).toBeLessThan(1);
+      expect(actions.x - title.x - title.width).toBeCloseTo(12, 0);
+      expect(Math.abs(title.y + title.height / 2 - actions.y - actions.height / 2)).toBeLessThan(2);
+      expect(header.y).toBeLessThan(controls.y + 4);
+      await expect(trigger).toHaveText("");
+      await expect(trigger).toHaveAttribute("title", "Actions");
+      expect(
+        await trigger.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return element.contains(
+            document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+          );
+        }),
+      ).toBe(true);
     };
     for (const scheme of ["light", "dark"]) {
       await page.evaluate(
@@ -1765,6 +1769,14 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
       await page.keyboard.press("Escape");
       await expect(actions).toBeFocused();
     }
+    const closeNavigation = page.getByRole("button", {
+      name: "Close navigation sidebar",
+      exact: true,
+    });
+    await closeNavigation.click();
+    await expect(page.locator(".sidebar")).toHaveAttribute("data-open", "false");
+    await page.getByRole("button", { name: "Open navigation sidebar", exact: true }).click();
+    await expect(page.locator(".sidebar")).toHaveAttribute("data-open", "true");
     const actions = panel.getByRole("button", { name: "Actions", exact: true });
     await actions.press("ArrowUp");
     const menu = page.getByRole("menu", { name: "Actions" });
@@ -1821,7 +1833,7 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect
       .poll(async () => (await headingRow.boundingBox())?.width ?? 1000)
       .toBeLessThan(480);
-    await expectScheduleHeading(true);
+    await expectScheduleHeading();
     await page.screenshot({ path: test.info().outputPath("automations-heading-narrow.png") });
     expect(
       await panel
@@ -1832,6 +1844,17 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(menu).toBeVisible();
     await actions.click();
     await expect(menu).toHaveCount(0);
+    const schedulesTitle = panel.getByRole("heading", { name: "Schedules", exact: true });
+    await schedulesTitle.evaluate((element) => element.style.setProperty("--card-size", "40px"));
+    await expect(schedulesTitle).toHaveCSS("font-size", "40px");
+    await expectScheduleHeading();
+    expect(
+      await panel
+        .locator(".automations-page")
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(false);
+    await page.screenshot({ path: test.info().outputPath("automations-heading-large-text.png") });
+    await schedulesTitle.evaluate((element) => element.style.removeProperty("--card-size"));
     await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
     await actions.click();
     await expect(menu).toBeInViewport();

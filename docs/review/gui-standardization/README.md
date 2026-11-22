@@ -20,7 +20,8 @@ light foreground; Light and forced colors retain their own palettes.
 
 ![Dark sidebar headers matching the breadcrumb Card](after-dark.png)
 
-Scheduled Jobs centers the Schedules heading independently, with Actions 12px to
-its right. Below 480px of content width, Actions moves to a centered second row.
+Scheduled Jobs centers Schedules and the chevron-only Actions trigger as one group,
+with a 12px gap. They share the top row with the corner panel toggles; narrow
+layouts and larger text retain access without a separate reserved row.
 
-![Centered Schedules heading and adjacent Actions menu](after-scheduled-jobs.png)
+![Centered Schedules and chevron group sharing the corner-control row](after-scheduled-jobs.png)
