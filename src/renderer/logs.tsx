@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { DesktopApi, LogRecord } from "../bridge/index.js";
 import { parseLogQuery } from "../bridge/index.js";
 import { DataTable, type RetainedTableQuery, type TableOptions } from "./data-table.js";
@@ -49,6 +56,13 @@ export function LogsPage({
   const [filterError, setFilterError] = useState("");
   const [copied, setCopied] = useState("");
   const [clearing, setClearing] = useState(false);
+  const clearButton = useRef<HTMLButtonElement>(null);
+  const [restoreClearFocus, setRestoreClearFocus] = useState(false);
+  useLayoutEffect(() => {
+    if (!restoreClearFocus) return;
+    setRestoreClearFocus(false);
+    if (active) clearButton.current?.focus();
+  }, [restoreClearFocus, active]);
   const [clearError, setClearError] = useState("");
   useEffect(() => {
     if (state.page?.appLaunchId) setAppLaunchId(state.page.appLaunchId);
@@ -79,6 +93,7 @@ export function LogsPage({
     [viewer, scope, launchOnly, appLaunchId],
   );
   const clear = async () => {
+    const restoreFocus = document.activeElement === clearButton.current;
     setClearing(true);
     setClearError("");
     try {
@@ -90,6 +105,7 @@ export function LogsPage({
       setClearError("Could not clear logs. Retry Clear logs.");
     } finally {
       setClearing(false);
+      setRestoreClearFocus(restoreFocus);
     }
   };
   const select = async (id: string) => {
@@ -218,6 +234,7 @@ export function LogsPage({
               type="button"
               className="icon-button"
               aria-label="Clear logs"
+              ref={clearButton}
               disabled={clearing}
               onClick={() => void clear()}
             >

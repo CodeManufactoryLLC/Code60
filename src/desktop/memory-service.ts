@@ -326,12 +326,23 @@ export class MemoryService {
     }
     if (action.type === "promote" || action.type === "forget" || action.type === "forget-scope") {
       const record = "id" in action ? (await this.detail(action.id)).record : undefined;
+      if ("revision" in action && record?.revision !== action.revision)
+        throw new Error("This memory changed. Refresh before continuing.");
+      let target = record?.text ?? "Conversations without a project";
+      if (action.type === "forget-scope" && action.projectId) {
+        const project = (await this.snapshot()).projects.find(
+          (entry) => entry.id === action.projectId,
+        );
+        if (!project)
+          throw new Error("This memory project is unavailable. Refresh before forgetting.");
+        target = project.label;
+      }
       if (
         !(await confirm(
           action.type === "promote" ? "Share this memory globally?" : "Forget derived memories?",
           action.type === "promote"
             ? `${record?.text ?? ""}\n\nAll projects and agents may receive this memory. Original scope and evidence remain visible.`
-            : "Exclude these derived memories from future recall and suppress recreation from the same sources. Original transcripts and already running agent context are not erased.",
+            : `${target}\n\nExclude ${record ? "this memory" : "non-global memories in this scope"} from future recall and suppress recreation from the same sources. This cannot be undone. Original transcripts and already running agent context are not erased.`,
         ))
       )
         return false;

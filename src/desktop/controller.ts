@@ -697,10 +697,11 @@ export class DesktopController {
     if (this.closing) return Promise.reject(new Error("Application is stopping"));
     const parsed = parseRagIdentity(request);
     this.assertDatabaseRequest(parsed.databaseEpoch);
+    const database = this.requireDatabase();
     return this.rag.clear(parsed, () =>
       this.dialogs.confirm(
         "Clear RAG index?",
-        "Remove only the derived conversation index for this database. Original conversations and run records are kept.",
+        `Remove only the derived conversation index for ${database.path}. Original conversations and run records are kept.`,
       ),
     );
   }
@@ -4675,7 +4676,7 @@ export class DesktopController {
         ) &&
         !(await this.dialogs.confirm(
           "Replace database?",
-          "This stops and closes database-owned projects and chats. Relay and its workers will keep running.",
+          `Replace ${this.database?.path} with ${database.path}? This stops and closes database-owned projects and chats. Relay and its workers will keep running.`,
         ))
       ) {
         database.close();

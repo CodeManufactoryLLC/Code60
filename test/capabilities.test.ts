@@ -72,7 +72,7 @@ describe("desktop capability catalog", () => {
       access: "Apps → Scheduled Jobs",
       prerequisite: "none",
       agentAccess: "human-only",
-      confirmation: "Human installation and schedule consent.",
+      confirmation: expect.stringContaining("Human installation and schedule consent."),
     });
   });
   it("describes scheduled-job controls independently from recurring enablement", () => {
@@ -232,6 +232,22 @@ describe("desktop capability catalog", () => {
     expect(commands?.limitations).toContain("only in project orchestrator chats");
     expect(commands?.limitations).toContain("not Relay or worker chats");
     expect(commands?.limitations).toContain("do not grant new execution authority");
+  });
+
+  it("describes target-specific warnings without changing availability or granting authority", () => {
+    for (const [id, prerequisite, target] of [
+      ["configurations", "database", "names the configuration"],
+      ["memory", "none", "identifies the memory or scope"],
+      ["automations", "none", "names the saved automation and repository"],
+    ]) {
+      expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === id)).toMatchObject({
+        prerequisite,
+        confirmation: expect.stringContaining(target as string),
+      });
+    }
+    expect(
+      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations")?.confirmation,
+    ).toContain("changed revision requires review again");
   });
 
   it("matches the generated bundled reference", async () => {

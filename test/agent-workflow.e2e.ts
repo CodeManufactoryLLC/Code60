@@ -1135,7 +1135,7 @@ for (const custom of [false, true]) {
         {
           kind: "message",
           title: "Open project?",
-          message: "Open this project?",
+          message: "Open project?",
           detail: repo,
           buttons: ["Cancel", "Open project"],
           defaultId: 0,
@@ -1160,7 +1160,7 @@ for (const custom of [false, true]) {
               if (
                 state.allowQuit &&
                 actual.message === "Quit Code60?" &&
-                JSON.stringify(actual.buttons) === JSON.stringify(["Keep working", "Quit"]) &&
+                JSON.stringify(actual.buttons) === JSON.stringify(["Cancel", "Quit"]) &&
                 actual.defaultId === 0 &&
                 actual.cancelId === 0
               )
@@ -1890,19 +1890,15 @@ test("workflow: reopening restores projects and saved chats on Relay without res
         messages.push(options);
         const message = options.message;
         const quit = message === "Quit Code60?";
-        const open = message === "Open this project?";
+        const open = message === "Open project?";
         if (
           (!quit && !open && message !== "Stop folder?") ||
-          options.type !== (open ? "question" : "warning") ||
+          options.type !== "warning" ||
           options.defaultId !== 0 ||
           options.cancelId !== 0 ||
           JSON.stringify(options.buttons) !==
             JSON.stringify(
-              quit
-                ? ["Keep working", "Quit"]
-                : open
-                  ? ["Cancel", "Open project"]
-                  : ["Cancel", "Confirm"],
+              quit ? ["Cancel", "Quit"] : open ? ["Cancel", "Open project"] : ["Cancel", "Confirm"],
             )
         )
           throw new Error("Unexpected restart-workflow confirmation");
@@ -2040,9 +2036,9 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     const before = await page.evaluate(() => window.desktop.snapshot());
     native.push(...((await nativeMessages()) ?? []));
     expect(native.map((entry) => entry.message)).toEqual([
-      "Open this project?",
-      "Open this project?",
-      "Open this project?",
+      "Open project?",
+      "Open project?",
+      "Open project?",
       "Stop folder?",
     ]);
     expect(native.slice(0, 3).map((entry) => entry.detail)).toEqual(projects);
@@ -2637,7 +2633,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
       expect.objectContaining({
         kind: "message",
         title: "Open project?",
-        message: "Open this project?",
+        message: "Open project?",
         detail: repo,
         buttons: ["Cancel", "Open project"],
         defaultId: 0,
