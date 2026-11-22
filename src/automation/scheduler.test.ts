@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type {
   Automation,
@@ -304,5 +305,114 @@ describe("durable automation scheduler", () => {
     await s.scheduler.request({ action: "delete", id: automation.id, revision: 1 });
     expect(s.scheduler.execution(claim.id).repository).toEqual(identity.repository);
     expect(s.executor.execute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("scheduler notifications", () => {
+  const notices = (scheduler: Scheduler) =>
+    scheduler.request({ action: "notifications" }) as Promise<{
+      unread: number;
+      entries: Execution[];
+    }>;
+  it("notifies only terminal outcomes, publishes changes and acknowledges exact reviewed identities", async () => {
+    const s = setup();
+    const changed = vi.fn();
+    const off = s.scheduler.onChange(changed);
+    const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    const first = (await s.scheduler.request({ action: "runNow", id: automation.id })) as Execution;
+    await flush();
+    expect(await notices(s.scheduler)).toEqual({ unread: 0, entries: [] });
+    await expect(
+      s.scheduler.request({ action: "acknowledgeNotifications", executionIds: [first.id] }),
+    ).rejects.toThrow("completed");
+    s.release();
+    await flush();
+    const reviewed = await notices(s.scheduler);
+    expect(reviewed).toMatchObject({ unread: 1, entries: [{ id: first.id, status: "finished" }] });
+    expect(reviewed.entries[0]).not.toHaveProperty("repository");
+    expect(reviewed.entries[0]).not.toHaveProperty("evidence");
+    expect(changed).toHaveBeenCalledWith(s.store.state.revision);
+    // Unrelated reads/navigation and repeated notices do not acknowledge anything.
+    await s.scheduler.request({ action: "list" });
+    await s.scheduler.request({ action: "history" });
+    expect(await notices(s.scheduler)).toEqual(reviewed);
+    await s.scheduler.request({ action: "pauseAll", cancelActive: false });
+    const concurrent = (await s.scheduler.request({
+      action: "runNow",
+      id: automation.id,
+    })) as Execution;
+    await s.scheduler.request({
+      action: "acknowledgeNotifications",
+      executionIds: reviewed.entries.map((entry) => entry.id),
+    });
+    expect(await notices(s.scheduler)).toMatchObject({
+      unread: 1,
+      entries: [{ id: concurrent.id, status: "skipped" }],
+    });
+    const revision = s.store.state.revision;
+    await s.scheduler.request({
+      action: "acknowledgeNotifications",
+      executionIds: [first.id, first.id],
+    });
+    expect(s.store.state.revision).toBe(revision);
+    await expect(
+      s.scheduler.request({
+        action: "acknowledgeNotifications",
+        executionIds: [concurrent.id, randomUUID()],
+      }),
+    ).rejects.toThrow("completed");
+    expect((await notices(s.scheduler)).unread).toBe(1);
+    await s.scheduler.stop();
+    const restarted = setup(s.store.state);
+    await restarted.scheduler.initialize();
+    expect(await notices(restarted.scheduler)).toMatchObject({
+      unread: 1,
+      entries: [{ id: concurrent.id }],
+    });
+    await restarted.scheduler.request({
+      action: "acknowledgeNotifications",
+      executionIds: [concurrent.id],
+    });
+    expect(await notices(restarted.scheduler)).toEqual({ unread: 0, entries: [] });
+    await restarted.scheduler.stop();
+    off();
+  });
+  it("preserves unread state and reports unavailable after a failed acknowledgement save", async () => {
+    const s = setup();
+    const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    await s.scheduler.request({ action: "pauseAll", cancelActive: false });
+    const execution = (await s.scheduler.request({
+      action: "runNow",
+      id: automation.id,
+    })) as Execution;
+    vi.mocked(s.store.save).mockRejectedValueOnce(new Error("disk full"));
+    await expect(
+      s.scheduler.request({ action: "acknowledgeNotifications", executionIds: [execution.id] }),
+    ).rejects.toThrow("persistence");
+    expect(s.store.state.acknowledgedNotifications).toBeUndefined();
+    await expect(notices(s.scheduler)).rejects.toThrow("unavailable");
+    await expect(
+      s.scheduler.request({ action: "acknowledgeNotifications", executionIds: [execution.id] }),
+    ).rejects.toThrow("persistence");
+    await s.scheduler.stop();
+    const restarted = setup(s.store.state);
+    await restarted.scheduler.initialize();
+    expect((await notices(restarted.scheduler)).unread).toBe(1);
+    await restarted.scheduler.stop();
+  });
+  it("bounds each review batch while retaining every unread outcome", async () => {
+    const s = setup();
+    const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    await s.scheduler.request({ action: "pauseAll", cancelActive: false });
+    for (let i = 0; i < 51; i++) await s.scheduler.request({ action: "runNow", id: automation.id });
+    const page = await notices(s.scheduler);
+    expect(page.unread).toBe(51);
+    expect(page.entries).toHaveLength(50);
+    await s.scheduler.request({
+      action: "acknowledgeNotifications",
+      executionIds: page.entries.map((entry) => entry.id),
+    });
+    expect(await notices(s.scheduler)).toMatchObject({ unread: 1, entries: [{ sequence: 1 }] });
+    await s.scheduler.stop();
   });
 });

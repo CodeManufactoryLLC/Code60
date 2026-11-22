@@ -363,6 +363,24 @@ describe("DesktopKnowledge", () => {
     expect(value.available).toBe(false);
     expect(reads).toEqual([]);
   });
+  it("describes scheduler notification availability without probing service or granting agent access", async () => {
+    const { knowledge, reads } = setup({ database: null, providers: [], projectOpen: false });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Scheduled Jobs" }, relay),
+    );
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "automations",
+        agentAccess: "human-only",
+        tools: [],
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("background service"),
+        }),
+      }),
+    );
+    expect(reads).toEqual([]);
+  });
   it("keeps Memory Recall available without a database or provider and denies its content through awareness", async () => {
     const { knowledge, reads } = setup({ database: null, providers: [], projectOpen: false });
     const capabilities = result(
@@ -437,7 +455,7 @@ describe("DesktopKnowledge", () => {
     expect(automations.entries).toContainEqual(
       expect.objectContaining({
         id: "automations",
-        availability: expect.objectContaining({ status: "available" }),
+        availability: expect.objectContaining({ status: "unknown" }),
       }),
     );
     const blocked = result(

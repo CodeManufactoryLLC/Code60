@@ -17,7 +17,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
+import { automationClient, automationRoot } from "../src/automation/index.js";
 import { startService } from "../src/automation/service.js";
+import { AutomationStore } from "../src/automation/store.js";
 import type { MemoryGeneration, MemorySource, Snapshot, UpdateState } from "../src/bridge/index.js";
 import { BUILTIN_COMMANDS } from "../src/contracts/index.js";
 import { createRecordStore, DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
@@ -1688,6 +1690,151 @@ for (const outcome of ["finished", "failed", "cancelled"] as const) {
     }
   });
 }
+
+test("desktop: scheduler notifications require explicit acknowledgement and survive restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "c60-notices-"));
+  const env = { ...process.env, XDG_STATE_HOME: join(directory, "state") };
+  const stateRoot = automationRoot(env);
+  const id = randomUUID();
+  let service: Awaited<ReturnType<typeof startService>> | undefined;
+  const metadata = async () => JSON.parse(await readFile(join(stateRoot, "state.json"), "utf8"));
+  try {
+    // Isolated scheduler, never installed or registered. Paused work produces a real
+    // skipped occurrence over service IPC without launching a provider.
+    const store = await AutomationStore.open(stateRoot);
+    await store.save({
+      ...store.state,
+      pausedAll: true,
+      automations: [
+        {
+          id,
+          revision: 1,
+          name: "Synthetic checks",
+          prompt: "Synthetic task",
+          agent: "claude",
+          baseBranch: "main",
+          allow: [],
+          turnTimeout: "1m",
+          enabled: false,
+          schedule: { type: "interval", everyMinutes: 1, anchor: "2026-01-01T00:00:00Z" },
+          repository: { path: directory, dev: "1", ino: "2" },
+          providerHash: "a".repeat(64),
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          nextRunAt: null,
+        },
+      ],
+    });
+    await store.close();
+    service = await startService(env);
+    const client = automationClient(env);
+    application = await launch(directory, directory, join(directory, "unused.sqlite"));
+    let page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Scheduled Jobs");
+    let panel = page.locator("#panel-automations");
+    await expect(
+      panel.getByRole("button", { name: "No new notifications", exact: true }),
+    ).toBeEnabled();
+    const first = (await client({ action: "runNow", id })) as { id: string };
+    let indicator = panel.getByRole("button", { name: "New Notifications (1)", exact: true });
+    await expect(indicator).toBeEnabled(); // No manual refresh.
+    await indicator.focus();
+    await page.keyboard.press("Enter");
+    let dialog = page.getByRole("dialog", { name: "Scheduler notifications", exact: true });
+    await expect(dialog).toContainText("Synthetic checks");
+    await expect(dialog).toContainText("skipped · paused");
+    await expect(dialog.locator("time")).toHaveCount(1);
+    await page.screenshot({ path: test.info().outputPath("scheduler-notifications-new.png") });
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(760, 650),
+    );
+    await page.screenshot({ path: test.info().outputPath("scheduler-notifications-narrow.png") });
+    expect(await dialog.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+      false,
+    );
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1280, 1024),
+    );
+    expect((await metadata()).acknowledgedNotifications).toBeUndefined();
+    await page.keyboard.press("Escape");
+    await selectSidebarPage(page, "Home");
+    await selectSidebarPage(page, "Scheduled Jobs");
+    await expect(indicator).toBeEnabled();
+    await indicator.click();
+    const second = (await client({ action: "runNow", id })) as { id: string };
+    await expect(dialog.locator("li")).toHaveCount(2);
+    const acknowledge = dialog.getByRole("button", {
+      name: "Acknowledge Synthetic checks notification 1",
+      exact: true,
+    });
+    await acknowledge.focus();
+    await page.keyboard.press("Space");
+    await expect(dialog.locator("li")).toHaveCount(1);
+    expect((await metadata()).acknowledgedNotifications).toEqual([first.id]);
+    // Restart both desktop and service. The second occurrence remains unread;
+    // service replay and subscription acknowledgement never duplicate outcomes.
+    await page.keyboard.press("Escape");
+    await application.close();
+    await service.stop();
+    service = await startService(env);
+    application = await launch(directory, directory, join(directory, "unused.sqlite"));
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSidebarPage(page, "Scheduled Jobs");
+    panel = page.locator("#panel-automations");
+    indicator = panel.getByRole("button", { name: "New Notifications (1)", exact: true });
+    await expect(indicator).toBeEnabled();
+    await indicator.click();
+    dialog = page.getByRole("dialog", { name: "Scheduler notifications", exact: true });
+    await expect(dialog.locator("li")).toHaveCount(1);
+    await dialog
+      .getByRole("button", { name: "Acknowledge displayed notifications", exact: true })
+      .click();
+    await expect(dialog.getByRole("status")).toHaveText("No new notifications");
+    expect((await metadata()).acknowledgedNotifications).toEqual([first.id, second.id]);
+    expect((await metadata()).executions).toHaveLength(2);
+    await page.screenshot({
+      path: test.info().outputPath("scheduler-notifications-acknowledged.png"),
+    });
+    await page.keyboard.press("Escape");
+    await service.stop();
+    service = undefined;
+    await expect(
+      panel.getByRole("button", { name: "Notifications unavailable", exact: true }),
+    ).toBeDisabled();
+    await expect(panel.getByRole("alert")).toContainText("Scheduler unavailable");
+    service = await startService(env);
+    await panel.getByRole("button", { name: "Actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Refresh", exact: true }).click();
+    await expect(
+      panel.getByRole("button", { name: "No new notifications", exact: true }),
+    ).toBeEnabled();
+    const third = (await client({ action: "runNow", id })) as { id: string };
+    await panel.getByRole("button", { name: "New Notifications (1)", exact: true }).click();
+    await expect(dialog.locator("li")).toHaveCount(1);
+    // External storage change exercises the real guarded-save failure path.
+    const before = await metadata();
+    await writeFile(
+      join(stateRoot, "state.json"),
+      JSON.stringify({ ...before, revision: before.revision + 1 }),
+      { mode: 0o600 },
+    );
+    await dialog
+      .getByRole("button", { name: "Acknowledge displayed notifications", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText("Notifications unavailable");
+    expect((await metadata()).acknowledgedNotifications).not.toContain(third.id);
+    expect((await metadata()).executions).toHaveLength(3);
+    await page.screenshot({
+      path: test.info().outputPath("scheduler-notifications-save-failed.png"),
+    });
+  } finally {
+    await application?.close().catch(() => {});
+    await service?.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow widths", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-automations-layout-")));

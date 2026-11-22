@@ -358,6 +358,48 @@ export class Scheduler {
               ),
             repository: { dev: repository.dev, ino: repository.ino },
           }));
+        case "notifications": {
+          if (this.failed)
+            throw new AutomationError(
+              "unavailable",
+              "Scheduler notifications unavailable. Repair storage and restart the service.",
+            );
+          const acknowledged = new Set(state.acknowledgedNotifications);
+          const unread = state.executions.filter(
+            (entry) => !unfinished(entry) && !acknowledged.has(entry.id),
+          );
+          return {
+            unread: unread.length,
+            entries: unread
+              .slice(-50)
+              .reverse()
+              .map(({ repository: _repository, evidence: _evidence, ...entry }) => entry),
+          };
+        }
+        case "acknowledgeNotifications": {
+          const ids = new Set(request.executionIds);
+          for (const id of ids) {
+            const entry = state.executions.find((entry) => entry.id === id);
+            if (!entry || unfinished(entry))
+              throw new AutomationError(
+                "invalid",
+                "Only completed execution notifications can be acknowledged.",
+              );
+          }
+          const acknowledged = new Set(state.acknowledgedNotifications);
+          const size = acknowledged.size;
+          for (const id of ids) acknowledged.add(id);
+          if (acknowledged.size !== size) {
+            state.acknowledgedNotifications = [...acknowledged];
+            await this.save(state);
+          } else if (this.failed) {
+            throw new AutomationError(
+              "unavailable",
+              "Scheduler notifications unavailable. Repair storage and restart the service.",
+            );
+          }
+          return null;
+        }
         case "get":
           return this.find(state, request.id);
         case "history":

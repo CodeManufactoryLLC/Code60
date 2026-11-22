@@ -120,6 +120,15 @@ with native confirmation, to keep scheduling after Code60 quits.
 The computer must stay awake and the user logged in. Missed occurrences are skipped,
 not replayed, and an agent finishing a turn is not proof the task succeeded.
 
+Scheduled Jobs' **New Notifications** button shows unread finished, failed,
+cancelled, timed out, interrupted and skipped runs. Open it to review schedule,
+outcome, reason and completion time. Choose **Acknowledge** for an item or
+**Acknowledge displayed notifications** for the visible batch (up to 50). Opening
+notifications or navigating does not mark them read. New arrivals stay unread until
+explicitly acknowledged, and acknowledgements survive desktop/service restarts.
+Existing retained outcomes start unread. An unavailable scheduler or failed save
+shows an error; use Actions → Refresh after repairing/starting the service.
+
 Manage schedules in Scheduled Jobs and service installation/recovery in Apps → System Manager.
 For source development, build with `npm run build` and run
 `node dist/automation/main.js` in a separate terminal before saving automations.

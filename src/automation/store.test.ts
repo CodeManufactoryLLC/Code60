@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +23,18 @@ describe("automation store", () => {
     await store.close();
     const reopened = await AutomationStore.open(root);
     expect(reopened.state.pausedAll).toBe(true);
+    await reopened.close();
+  });
+  it("loads legacy metadata without changing it and persists acknowledgements across reopen", async () => {
+    const root = await temporary();
+    const store = await AutomationStore.open(root);
+    expect(store.state).not.toHaveProperty("acknowledgedNotifications");
+    const id = randomUUID();
+    await store.save({ ...store.state, revision: 1, acknowledgedNotifications: [id] });
+    await store.close();
+    const reopened = await AutomationStore.open(root);
+    expect(reopened.state.acknowledgedNotifications).toEqual([id]);
+    await reopened.save({ ...reopened.state, revision: 2 });
     await reopened.close();
   });
   it("refuses corrupt, externally changed and unsafe state without resetting it", async () => {

@@ -224,6 +224,7 @@ export const automationStateSchema = z.strictObject({
   block: serviceBlockSchema.nullable(),
   automations: z.array(automationSchema).max(AUTOMATION_LIMIT),
   executions: z.array(executionSchema).max(5000),
+  acknowledgedNotifications: z.array(z.uuid()).max(5000).optional(),
 });
 export type AutomationState = z.infer<typeof automationStateSchema>;
 
@@ -250,6 +251,11 @@ const revision = z.number().int().positive();
 const automationRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("status") }),
   z.strictObject({ action: z.literal("list") }),
+  z.strictObject({ action: z.literal("notifications") }),
+  z.strictObject({
+    action: z.literal("acknowledgeNotifications"),
+    executionIds: z.array(z.uuid()).min(1).max(AUTOMATION_HISTORY_PAGE),
+  }),
   z.strictObject({ action: z.literal("get"), id }),
   z.strictObject({
     action: z.literal("history"),
