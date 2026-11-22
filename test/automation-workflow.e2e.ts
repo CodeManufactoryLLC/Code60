@@ -18,6 +18,7 @@ import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { nativeSupervisorFixture } from "./fixtures/native-supervisor.js";
 import { recordedAgentPid } from "./fixtures/run-readiness.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -137,17 +138,16 @@ for (const updateRoute of ["startup", "install-ui"] as const) {
         await expect(wizard.getByRole("status")).toHaveText("Claude connected");
         await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
         await page.getByRole("button", { name: "Start", exact: true }).click();
-        await page.getByRole("tab", { name: "Settings", exact: true }).click();
-        await page.getByRole("button", { name: "Open Updates", exact: true }).click();
+        await page.locator("#tab-settings-updates").click();
         const updates = page.locator("#app-updates");
         await updates.getByRole("switch", { name: "Automatically check for updates" }).uncheck();
-        await updates.getByRole("button", { name: "Check for updates", exact: true }).click();
+        await (await pageCommand(page, "Check for updates")).click();
         const popup = page.getByRole("dialog", { name: "Update available", exact: true });
         await expect(popup).toBeVisible();
         await popup.getByRole("button", { name: "Later", exact: true }).click();
-        await updates.getByRole("button", { name: "Download update", exact: true }).click();
+        await (await pageCommand(page, "Download update")).click();
         const mainPid = await application.evaluate(() => process.pid);
-        await updates.getByRole("button", { name: "Install and restart", exact: true }).click();
+        await (await pageCommand(page, "Install and restart")).click();
         await expect.poll(() => alive(mainPid)).toBe(false);
         const evidence = (await readFile(join(directory, "installer-boundary.jsonl"), "utf8"))
           .trim()

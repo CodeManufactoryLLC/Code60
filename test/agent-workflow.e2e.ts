@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
-import { fileViewLabels, newFileTab } from "./file-panel-controls.js";
+import { fileViewLabels, newFileTab, selectFileView } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { pageCommand } from "./page-header-controls.js";
 
@@ -2924,18 +2924,19 @@ test("workflow: seventeen retained assistant file panels release inactive views 
         page.getByRole("alert").filter({ hasText: "Too many Relay file views" }),
       ).toHaveCount(0);
       if (!index) {
-        await panel.getByRole("tab", { name: "same.txt", exact: true }).press("Alt+ArrowLeft");
-        await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+        await panel
+          .getByRole("combobox", { name: "Files view", exact: true })
+          .press("Alt+ArrowLeft");
+        expect(await fileViewLabels(page)).toEqual(["same.txt", "File Explorer"]);
       }
     }
     await page
       .locator("#custom-agent-pages")
       .getByRole("button", { name: "Panel 1", exact: true })
       .click();
-    await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
-    await expect(panel.getByRole("tab", { name: "same.txt", exact: true })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    expect(await fileViewLabels(page)).toEqual(["same.txt", "File Explorer"]);
+    await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+      "same.txt",
     );
     await expect(panel.locator(".view-lines")).toContainText("owned panel 1");
     for (const entry of evidence)
@@ -3085,14 +3086,15 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     await send("Implement task loop", 2);
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    await panel.getByRole("tab", { name: "Changes", exact: true }).press("Delete");
+    expect(await fileViewLabels(page)).toContain("Changes");
+    await selectFileView(page, "Changes");
+    await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
     await panel.getByRole("button", { name: "Open Files", exact: true }).click();
     await panel.getByRole("treeitem", { name: "task.txt", exact: true }).click();
-    const savedTabs = await panel
-      .getByRole("tab")
-      .evaluateAll((tabs) =>
-        tabs.map((tab) => ({ text: tab.textContent, selected: tab.getAttribute("aria-selected") })),
-      );
+    const savedTabs = await fileViewLabels(page);
+    const selectedTab = await panel
+      .getByRole("combobox", { name: "Files view", exact: true })
+      .textContent();
     await group.locator(`[id="conversation-${a}"]`).click();
     await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
     await expect
@@ -3101,17 +3103,11 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     await send("Implement second task loop", 3);
     await group.locator(`[id="conversation-${b}"]`).click();
     await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
-    await expect
-      .poll(() =>
-        panel.getByRole("tab").evaluateAll((tabs) =>
-          tabs.map((tab) => ({
-            text: tab.textContent,
-            selected: tab.getAttribute("aria-selected"),
-          })),
-        ),
-      )
-      .toEqual(savedTabs);
-    await expect(panel.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+      selectedTab ?? "",
+    );
+    expect(await fileViewLabels(page)).toEqual(savedTabs);
+    expect(await fileViewLabels(page)).not.toContain("Changes");
     const archive = async (id: string) => {
       await group.locator(`[id="conversation-${id}"]`).click({ button: "right" });
       await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
@@ -3119,8 +3115,6 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     };
     await archive(a);
     const openReview = async () => {
-      const apps = page.locator("#apps-card-toggle");
-      if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
       const tables = page.locator("#tables-toggle");
       if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
       await page.getByRole("tab", { name: "Sessions", exact: true }).click();

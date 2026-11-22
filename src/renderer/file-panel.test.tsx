@@ -156,7 +156,7 @@ it("nests all revisions under their task without a review dropdown or diff", () 
 it.each(["blank", "recall", "changes"] as const)("omits Close from the %s page", (kind) => {
   const html = renderToStaticMarkup(
     <FilePanel
-      tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+      tabs={updateFileTabs(emptyFileTabs(), { type: kind })}
       onAction={() => {}}
       browser={{} as FileBrowser}
       open

@@ -348,7 +348,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "files",
     "Files",
-    "Browse files and bounded read-only previews. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.",
+    "Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.",
     "Chat → upper-right corner of main content card → Toggle files panel",
     "runtime",
     "read",
