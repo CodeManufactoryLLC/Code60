@@ -26,12 +26,8 @@
   padding-right: 8px;
 }
 
-.app:has(.sidebar[data-open="true"]) .app-footer {
-  background: linear-gradient(
-    to right,
-    transparent calc(var(--sidebar-left-inset) + var(--sidebar-track-width)),
-    var(--footer-bg) calc(var(--sidebar-left-inset) + var(--sidebar-track-width))
-  );
+.app:has(.window-background) .app-footer {
+  background: transparent;
 }
 
 .app:has(.sidebar[data-open="false"]) .footer-sidebar {

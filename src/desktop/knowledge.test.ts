@@ -177,7 +177,7 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
     ]);
   });
-  it.each(["sidebar background opacity", "Scientifica"])(
+  it.each(["window background opacity", "Scientifica"])(
     "keeps %s settings discoverable and human-only without a database",
     async (query) => {
       const { knowledge } = setup({ database: null });
@@ -188,7 +188,7 @@ describe("DesktopKnowledge", () => {
         expect.objectContaining({
           id: "settings",
           agentAccess: "human-only",
-          access: expect.stringContaining("Appearance → Left sidebar"),
+          access: expect.stringContaining("Appearance → Window background"),
           availability: expect.objectContaining({ status: "available" }),
         }),
       ]);

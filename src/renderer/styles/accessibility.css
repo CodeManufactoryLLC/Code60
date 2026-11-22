@@ -59,11 +59,7 @@
     color: HighlightText;
   }
 
-  .app:has(.sidebar)::before {
-    display: none;
-  }
-
-  .sidebar-background {
+  .window-background {
     opacity: 1;
     background: Canvas;
     backdrop-filter: none;

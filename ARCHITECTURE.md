@@ -1381,7 +1381,7 @@ One selected conversation fills the normal Chat workspace beside the shared file
   owner-scoped file/review behavior.
 
 - **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
-- **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. Each Settings page uses its specific name as its only main title, aligned at the standard upper-left page inset, without an additional Settings heading. Cards stay centered in a readable 640px maximum-width column; only the header drags the window so the page can scroll. The Settings overview retains its Settings title. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), a Transparent background switch (off by default), and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. The switch is saved in the main process's desktop.json alongside the database path, and applies only after restarting the app, not on renderer reload. The window always supports native alpha for live sidebar opacity. When Transparent background is enabled, other margins also become transparent without a native shadow; the area outside the content frame and opaque tabs is fully transparent instead of the solid theme surface. On macOS, mouse movement over these transparent areas enables click-through to the desktop, restoring interaction over content, overlays, tabs, and native controls. Linux keeps the window clickable. The splash stays opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, Card Titles, and Normal Text: font size (8 to 64px), weight (Light, Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, Scientifica, Roboto, Space Grotesk, Tahoma, or Verdana). Page Titles defaults to Space Grotesk Bold (700) at 16 CSS px; Card Titles uses Space Grotesk Bold (700). Body and chat default to IBM Plex Sans Regular (400); Button Text and Table Headings use IBM Plex Sans Semibold (600). Role sizes remain: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Card Titles 22px, and Normal Text 13px. All roles default to sentence case. Home/Apps card names and settings card/field-group titles use Card Titles, independently of every Page Titles choice. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses D-DIN Regular; the regular 18px D-DIN splash subtitle remains unchanged. Both IBM Plex families include bundled Light (300) normal and italic faces; IBM Plex Sans also includes bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Page/card titles default to Bold; sidebar rows honor Button Text weight independently of selection. Other navigation, labels, status text and the wordmark retain their configured weights. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows), Medium (32px), or Low (44px, the default). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, Scientifica, Roboto, and Space Grotesk are bundled for offline use (Scientifica includes regular, bold and italic faces; bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
+- **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. Each Settings page uses its specific name as its only main title, aligned at the standard upper-left page inset, without an additional Settings heading. Cards stay centered in a readable 640px maximum-width column; only the header drags the window so the page can scroll. The Settings overview retains its Settings title. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), live Window background opacity/blur sliders, and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. There is no separate Transparent background switch. The native window always supports alpha; the full-window backdrop uses the saved percentages while foreground cards remain opaque. All areas remain interactive on macOS and Linux, and the splash remains opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, Card Titles, and Normal Text: font size (8 to 64px), weight (Light, Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, Scientifica, Roboto, Space Grotesk, Tahoma, or Verdana). Page Titles defaults to Space Grotesk Bold (700) at 16 CSS px; Card Titles uses Space Grotesk Bold (700). Body and chat default to IBM Plex Sans Regular (400); Button Text and Table Headings use IBM Plex Sans Semibold (600). Role sizes remain: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Card Titles 22px, and Normal Text 13px. All roles default to sentence case. Home/Apps card names and settings card/field-group titles use Card Titles, independently of every Page Titles choice. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses D-DIN Regular; the regular 18px D-DIN splash subtitle remains unchanged. Both IBM Plex families include bundled Light (300) normal and italic faces; IBM Plex Sans also includes bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Page/card titles default to Bold; sidebar rows honor Button Text weight independently of selection. Other navigation, labels, status text and the wordmark retain their configured weights. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows), Medium (32px), or Low (44px, the default). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, Scientifica, Roboto, and Space Grotesk are bundled for offline use (Scientifica includes regular, bold and italic faces; bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
 - **Polling.** See [Polling](#polling). Settings has a Polling section after Text for intervals and reset controls, and a button that opens the Polling page.
 - **Quitting.** Closing the window or quitting while runs are active asks for confirmation, then cancels active turns, finishes every run, and waits for the agents to stop. SIGINT and SIGTERM do the same without asking; a second signal skips the grace periods. A crashed renderer also triggers this shutdown. Worktrees are never removed.
 
@@ -1642,7 +1642,7 @@ and edges. The shell keeps 4px horizontal padding plus its border, preserving th
 vertical padding, trims its final row spacing and retains the 5.5px gap below its
 header and 2.5px subsequent row gaps. The shell alone scrolls, so its outline stays
 visible while every section retains its local header actions and independent
-saved disclosure state. Opacity/blur affect only the background behind the shell.
+saved disclosure state. Window opacity/blur affects the full-window backdrop behind the opaque shell.
 Each section has a dedicated top-right chevron button
 with aria-expanded, aria-controls and Expand/Collapse labels. Clicking it changes
 only disclosure, without navigating or dispatching work. Home/Search can collapse
@@ -2220,7 +2220,7 @@ reduced motion and forced colors suppress decorative movement/shadows. Legacy
 card chrome is removed. Sidebar adapters keep direct-child hierarchy, fixed row
 geometry, independent disclosure/actions and opaque header bands without clipping
 focus. Saved width/expansion, opacity and native blur remain unchanged; only the
-sidebar background layer responds to opacity/blur. Unrelated controls keep their CSS;
+full-window background layer responds to opacity/blur. Unrelated controls keep their CSS;
 CSP, mounted state and appearance persistence stay unchanged. No capability,
 API, setting, schema or migration is added, so no self-knowledge catalog update
 or capabilities generation is needed for this presentation change.
@@ -2305,39 +2305,39 @@ activity GIFs in Relay, project chats, workers or custom-agent chats. This super
 earlier animated-artwork guidance. Preserve activity labels, timers, attribution,
 disclosures, theme behavior and transitions. Search loading artwork is unchanged.
 
-## Left sidebar background controls
+## Window background controls
 
-Settings → Appearance → Left sidebar provides Background opacity (0–100%, default
-100%) and Background blur strength (0–100%, default 0), plus Reset sidebar. Changes apply
-immediately and persist in `code60.sidebarAppearance`, with bounds checking and a
-visible retry message if storage fails. No appearance migration marker changes.
-Text and icons retain their normal opacity and sharpness.
+Settings → Appearance → Window background provides Background opacity (0–100%,
+default 100%), Background blur strength (0–100%, default 0), and Reset background.
+Both sliders apply live to one full-window decorative backdrop, including the
+native-control strip, margins and footer, regardless of sidebar width or collapse.
+Cards, fields, text, icons, menus and dialogs retain their own opaque/sharp surfaces.
+The splash remains opaque and never enables native blur. Forced colors uses an
+opaque Canvas backdrop with native blur off. Keep native drag/caption regions and
+all background areas interactive even at zero opacity; there is no click-through
+mode or separate Transparent background toggle.
 
-One decorative background covers the full window height from its left edge to
-the sidebar's adjustable divider, including the native-control strip, margins
-and footer background. Its width follows resizing and collapse; it is absent on
-the splash and while the sidebar is closed. Resting navigation fills and the
-left footer background are transparent above this layer; selection, hover, focus,
-drag regions and foreground controls remain usable. The full left region stays
-interactive in transparent windows, including at zero background opacity.
+Retain bounded percentages in the existing `code60.sidebarAppearance` local storage
+record without resetting values or advancing appearance migrations. Internal
+SidebarAppearance/backdrop transport names remain compatibility adapters for the
+window-wide controls. Legacy desktop.json transparency values and validated IPC
+methods remain compatible records/interfaces, but cannot gate live alpha, repaint
+margins or enable mouse-event passthrough. Capability reads report native alpha
+available and clickThrough false. Show preference-write and native-blur failures
+separately and allow slider/Reset retries. Do not expose these values through agent
+write tools or awareness.
 
-The native window always supports alpha. While navigation is open, body/app paint
-no opaque layer behind its left background, so lowering opacity immediately
-reveals the desktop even when Transparent background is off. The rest of the
-window remains opaque unless that separate, restart-only margin setting is on;
-the splash remains opaque and transparent sidebar areas stay interactive.
-On macOS, desktop blur uses an owned, non-focusable native vibrancy backdrop
-window behind the foreground window, clipped to the left background bounds. Its
-0–100% strength blends the OS-managed blur; it is not a pixel radius. The backdrop
-has no web contents, ignores mouse input, follows the owner bounds and stacking,
-and hides on collapse, splash, opaque tint, minimized/hidden state and forced
-colors. Reset it on renderer navigation/loss; close it and dispose listeners when
-the owner closes or the application shuts down. Native failures close the backdrop
-and surface a fixed error. Linux keeps opacity with the native blur slider disabled.
-A strict width/strength/visibility-only preload method updates this owned backdrop;
-main clamps its bounds to the owning window. No capture permission, screen capture,
-arbitrary window handle or agent-write capability is added. Sidebar preference
-values are not added to awareness reports. Forced colors use an opaque system fill.
+The foreground native window always supports alpha. On macOS, an owned,
+non-focusable, mouse-transparent BaseWindow with no web contents or capture
+permission supplies native vibrancy behind the complete owner content bounds.
+Strength blends the OS-managed material, not a pixel blur radius. The legacy strict
+bounded width/strength/visibility request reports viewport width; positive width
+only gates visibility, while main derives all coordinates and full dimensions from
+its owner. Follow owner move/resize/show/hide/minimize/fullscreen; hide on splash,
+opaque tint, document hiding and forced colors. Reset on renderer navigation/loss
+and dispose all listeners/windows on owner close or shutdown. Native failure closes
+the backdrop and reports a fixed, payload-free error. Linux retains live background
+opacity, with the blur slider disabled; do not substitute CSS blur on foregrounds.
 
 ## Neo-brutalist presentation
 
@@ -2400,8 +2400,7 @@ existing padding; leave clearance for hard shadows. On Chat, frame the conversat
 and right inspector separately; the outer Chat layout remains transparent and
 shadowless. Keep the 5px page top margin; sidebar sections share one shell with thin separators.
 
-Sidebar opacity/blur still affect only the full-height background, independently
-of restart-only transparent margins; never paint an opaque layer behind that
+Window opacity/blur affects the full-window background live; never paint an opaque layer behind that
 sidebar tint. Splash stays opaque and uses the same palette. Forced colors uses
 system fills/outlines and removes decorative shadows; reduced motion disables
 transitions. Keyboard focus uses a distinct solid outline/inset edge; the saved
@@ -2417,7 +2416,7 @@ disabled semantics. Artwork playback and reduced-motion rules are unchanged.
 Settings navigation artwork uses the supplied info.gif for About, laptop.gif
 for Advanced, setting.gif for Agents and books.gif for Memory. Transparent
 exteriors preserve white foreground details. All use shared still/one-shot
-playback, sidebar opacity and reduced-motion/forced-color behavior.
+playback, window opacity and reduced-motion/forced-color behavior.
 
 Settings Polling, Appearance and Text use heartbeat.gif, painting.gif and
 font-size.gif respectively. Preserve transparent exteriors, white foreground
@@ -2461,7 +2460,7 @@ Conversation icon/label insets shrink at narrow sidebar widths to preserve reada
 
 ## Settings action icons and spacing
 
-Appearance leaves 16px above the Left sidebar group. Chat bodies retain a 16px
+Appearance leaves 16px above the Window background group. Chat bodies retain a 16px
 bottom inset beneath composers at every width. Left-navbar disclosure chevrons
 and the Add Project action have a visible 24px circle within their unchanged
 28px hit target. Use black outlines and 2px hard black shadows with a theme-aware

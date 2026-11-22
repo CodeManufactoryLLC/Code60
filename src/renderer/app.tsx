@@ -323,7 +323,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
         color={preferences.iconAppearance.color}
         contrast={preferences.iconAppearance.contrast}
       />
-      {!splash && <div className="sidebar-background" aria-hidden="true" />}
+      {!splash && <div className="window-background" aria-hidden="true" />}
       <Tooltips />
       <Toasts messages={notifications} onDismiss={dismissNotification} />
       <AppMenus

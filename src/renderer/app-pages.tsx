@@ -128,7 +128,7 @@ export function AppPages(props: AppPagesProps) {
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
-  const { transparent, savingAppearance, saveTransparent, sidebarBlurSupported } = appearance;
+  const { sidebarBlurSupported } = appearance;
   const {
     theme,
     setTheme,
@@ -352,9 +352,6 @@ export function AppPages(props: AppPagesProps) {
               </fieldset>
             )
           }
-          transparent={transparent}
-          savingAppearance={savingAppearance}
-          onTransparent={(enabled) => void saveTransparent(enabled)}
           theme={theme}
           onTheme={setTheme}
           iconAppearance={iconAppearance}

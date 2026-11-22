@@ -62,11 +62,14 @@ it("creates no native window for disabled blur and bounds active blur to its own
     }),
   );
   expect(backdrop.setIgnoreMouseEvents).toHaveBeenCalledWith(true);
-  expect(backdrop.setBounds).toHaveBeenLastCalledWith({ x: 40, y: 60, width: 488, height: 480 });
+  expect(backdrop.setBounds).toHaveBeenLastCalledWith({ x: 40, y: 60, width: 640, height: 480 });
   expect(backdrop.setOpacity).toHaveBeenLastCalledWith(0.25);
   expect(owner.moveAbove).toHaveBeenCalledWith("window:owned-backdrop:0");
   control.update({ width: 16384, strength: 100, visible: true });
   expect(backdrop.setBounds).toHaveBeenLastCalledWith({ x: 40, y: 60, width: 640, height: 480 });
+  owner.getContentBounds = () => ({ x: 80, y: 100, width: 1000, height: 700 });
+  owner.emit("resize");
+  expect(backdrop.setBounds).toHaveBeenLastCalledWith({ x: 80, y: 100, width: 1000, height: 700 });
   control.dispose();
 });
 
@@ -92,7 +95,7 @@ it("closes a failed native backdrop and surfaces a fixed error", () => {
     throw new Error("native failure");
   });
   expect(() => control.update({ width: 244, strength: 50, visible: true })).toThrow(
-    "Native sidebar blur is unavailable.",
+    "Native window background blur is unavailable.",
   );
   expect(backdrop.close).toHaveBeenCalledOnce();
   control.dispose();

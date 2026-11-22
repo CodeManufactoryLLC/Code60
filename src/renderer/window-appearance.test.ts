@@ -2,85 +2,80 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { DesktopApi } from "../bridge/index.js";
 import { useWindowAppearance } from "./window-appearance.js";
 
-const effects = vi.hoisted(() => [] as (() => () => void)[]);
+const hooks = vi.hoisted(() => ({
+  effects: [] as (() => () => void)[],
+  setters: [] as ReturnType<typeof vi.fn>[],
+}));
 vi.mock("react", () => ({
-  useState: () => [false, vi.fn()],
-  useEffect: (effect: () => () => void) => effects.push(effect),
+  useState: () => {
+    const set = vi.fn();
+    hooks.setters.push(set);
+    return [false, set];
+  },
+  useEffect: (effect: () => () => void) => hooks.effects.push(effect),
 }));
 afterEach(() => {
-  effects.length = 0;
-  vi.unstubAllGlobals();
+  hooks.effects.length = 0;
+  hooks.setters.length = 0;
 });
 
-it("keeps the full left background interactive even where there is no navigation control", async () => {
-  const events = new EventTarget();
-  vi.stubGlobal("window", events);
-  vi.stubGlobal("document", {
-    documentElement: { dataset: {} },
-    elementFromPoint: () => null,
-    querySelector: (selector: string) =>
-      selector === ".sidebar-background"
-        ? { getBoundingClientRect: () => ({ left: 0, right: 244, top: 0, bottom: 900 }) }
-        : null,
-  });
-  const hitTest = vi.fn(async (_ignore: boolean) => {});
-  useWindowAppearance(
-    {
-      windowAppearance: async () => ({ transparent: true, enabled: true, clickThrough: true }),
-      setBackgroundHitTest: hitTest,
-    } as unknown as DesktopApi,
-    vi.fn(),
-  );
-  const dispose = effects[0]?.();
-  await Promise.resolve();
-  events.dispatchEvent(Object.assign(new Event("mousemove"), { clientX: 300, clientY: 14 }));
-  expect(hitTest).toHaveBeenLastCalledWith(true);
-  events.dispatchEvent(Object.assign(new Event("mousemove"), { clientX: 150, clientY: 14 }));
-  expect(hitTest).toHaveBeenLastCalledWith(false);
-  dispose?.();
-});
-
-it.each([
-  { control: "main-card toggle", selector: ".sidebar-toggle", x: 270, y: 120 },
-  { control: "main-card panel controls", selector: ".workspace-panel-controls", x: 900, y: 120 },
-  { control: "header breadcrumbs", selector: ".workspace-breadcrumbs", x: 300, y: 36 },
-])(
-  "keeps $control clickable after entering transparent margins and restores hit testing on disposal",
-  async ({ selector, x, y }) => {
-    const events = new EventTarget();
-    const glyph = {
-      closest: (selectors: string) => (selectors.split(", ").includes(selector) ? {} : null),
-    };
-    vi.stubGlobal("window", events);
-    vi.stubGlobal("document", {
-      documentElement: { dataset: {} },
-      elementFromPoint: (px: number, py: number) => (px === x && py === y ? glyph : null),
-      querySelector: () => null,
-    });
-    const hitTest = vi.fn(async (_ignore: boolean) => {});
-    const api = {
-      windowAppearance: async () => ({ transparent: true, enabled: true, clickThrough: true }),
-      setBackgroundHitTest: hitTest,
-    } as unknown as DesktopApi;
-    const error = vi.fn();
-    useWindowAppearance(api, error);
-    const dispose = effects[0]?.();
+it.each([false, true])(
+  "reads native capabilities without restoring the legacy transparent toggle (%s)",
+  async (legacy) => {
+    const windowAppearance = vi.fn(async () => ({
+      transparent: legacy,
+      enabled: legacy,
+      clickThrough: legacy,
+      customWindowControls: true,
+      sidebarBlurSupported: false,
+    }));
+    const setTransparent = vi.fn(),
+      setBackgroundHitTest = vi.fn(),
+      error = vi.fn();
+    const result = useWindowAppearance(
+      { windowAppearance, setTransparent, setBackgroundHitTest } as unknown as DesktopApi,
+      error,
+    );
+    const dispose = hooks.effects[0]?.();
     await Promise.resolve();
-    const move = (x: number, y: number) =>
-      events.dispatchEvent(Object.assign(new Event("mousemove"), { clientX: x, clientY: y }));
-    move(300, 14);
-    expect(hitTest).toHaveBeenLastCalledWith(true);
-    move(x, y);
-    expect(hitTest).toHaveBeenLastCalledWith(false);
-    move(300, 14);
-    move(30, 14);
-    expect(hitTest).toHaveBeenLastCalledWith(false);
-    move(300, 14);
-    dispose?.();
-    expect(hitTest).toHaveBeenLastCalledWith(false);
-    hitTest.mockClear();
-    move(300, 14);
-    expect(hitTest).not.toHaveBeenCalled();
+    expect(windowAppearance).toHaveBeenCalledOnce();
+    expect(hooks.setters[0]).toHaveBeenCalledWith(true);
+    expect(hooks.setters[1]).toHaveBeenCalledWith(false);
+    expect(result).not.toHaveProperty("transparent");
+    expect(result).not.toHaveProperty("saveTransparent");
+    expect(setTransparent).not.toHaveBeenCalled();
+    expect(setBackgroundHitTest).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
+    dispose?.();
   },
 );
+
+it("discards a native capability response after disposal", async () => {
+  let complete: (value: unknown) => void = () => {};
+  const pending = new Promise((resolve) => {
+    complete = resolve;
+  });
+  useWindowAppearance({ windowAppearance: () => pending } as unknown as DesktopApi, vi.fn());
+  const dispose = hooks.effects[0]?.();
+  dispose?.();
+  complete({ customWindowControls: true, sidebarBlurSupported: true });
+  await Promise.resolve();
+  expect(hooks.setters.every((set) => set.mock.calls.length === 0)).toBe(true);
+});
+
+it("reports capability failures without changing slider preferences", async () => {
+  const error = vi.fn();
+  useWindowAppearance(
+    {
+      windowAppearance: async () => {
+        throw new Error("Window capabilities unavailable");
+      },
+    } as unknown as DesktopApi,
+    error,
+  );
+  hooks.effects[0]?.();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(error).toHaveBeenCalledWith("Window capabilities unavailable");
+  expect(hooks.setters.every((set) => set.mock.calls.length === 0)).toBe(true);
+});

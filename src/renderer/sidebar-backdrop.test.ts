@@ -7,7 +7,7 @@ afterEach(() => vi.unstubAllGlobals());
 function fixture() {
   const document = Object.assign(new EventTarget(), {
     hidden: false,
-    querySelector: () => ({ getBoundingClientRect: () => ({ width: 244 }) }),
+    querySelector: vi.fn(() => ({ getBoundingClientRect: () => ({ width: 1280 }) })),
   });
   const forced = Object.assign(new EventTarget(), { matches: false });
   const frames = new Map<number, FrameRequestCallback>();
@@ -58,8 +58,9 @@ function fixture() {
 it("reports hidden visibility immediately even when animation frames stop", async () => {
   const f = fixture();
   await vi.waitFor(() => expect(f.error).toHaveBeenLastCalledWith(""));
+  expect(f.document.querySelector).toHaveBeenCalledWith(".window-background");
   expect(f.api.setSidebarBackdrop).toHaveBeenLastCalledWith({
-    width: 244,
+    width: 1280,
     strength: 65,
     visible: true,
   });
@@ -69,7 +70,7 @@ it("reports hidden visibility immediately even when animation frames stop", asyn
   f.document.dispatchEvent(new Event("visibilitychange"));
   expect(f.frames.size).toBe(0);
   expect(f.api.setSidebarBackdrop).toHaveBeenLastCalledWith({
-    width: 244,
+    width: 1280,
     strength: 0,
     visible: false,
   });

@@ -8371,7 +8371,7 @@ test("desktop: scoped message ages, turn timers, Copy, and minimized lifecycle",
   }
 });
 
-test("desktop: sidebar opacity works live without enabling transparent window margins", async () => {
+test("desktop: window background opacity applies live across the app and persists", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-sidebar-opacity-")));
   try {
     application = await launch(directory, directory, join(directory, "projects.sqlite"));
@@ -8380,8 +8380,7 @@ test("desktop: sidebar opacity works live without enabling transparent window ma
     await selectSettingsPage(page, "Appearance");
     await expect(
       page.getByRole("switch", { name: "Transparent background", exact: true }),
-    ).not.toBeChecked();
-    await expect(page.locator("html")).toHaveAttribute("data-transparent", "false");
+    ).toHaveCount(0);
     expect(
       await application.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows()[0]?.getBackgroundColor(),
@@ -8389,9 +8388,9 @@ test("desktop: sidebar opacity works live without enabling transparent window ma
     ).toMatch(/^#000000(?:00)?$/);
     const opacity = page.getByRole("slider", { name: "Background opacity", exact: true });
     await opacity.fill("0");
-    await expect(page.locator(".sidebar-background")).toHaveCSS("opacity", "0");
-    await expect(page.locator(".sidebar-background")).toHaveCSS("background-image", "none");
-    await expect(page.locator(".sidebar-background")).toHaveCSS(
+    await expect(page.locator(".window-background")).toHaveCSS("opacity", "0");
+    await expect(page.locator(".window-background")).toHaveCSS("background-image", "none");
+    await expect(page.locator(".window-background")).toHaveCSS(
       "background-color",
       "rgb(244, 248, 254)",
     );
@@ -8418,18 +8417,55 @@ test("desktop: sidebar opacity works live without enabling transparent window ma
         )
         .toBe("rgb(255, 255, 255)");
     }
-    await expect(page.locator(".app")).toHaveCSS(
-      "background-image",
-      /linear-gradient.*rgba\(0, 0, 0, 0\)/,
+    for (const selector of [".app", ".app-footer"])
+      await expect(page.locator(selector)).toHaveCSS("background-image", "none");
+    const backdrop = page.locator(".window-background");
+    const fullWindow = async () => {
+      const rect = await backdrop.boundingBox();
+      const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      expect(rect).toMatchObject({ x: 0, y: 0, ...viewport });
+    };
+    await fullWindow();
+    await page.getByRole("button", { name: "Close navigation sidebar", exact: true }).click();
+    await expect(backdrop).toBeVisible();
+    await fullWindow();
+    await page.getByRole("button", { name: "Open navigation sidebar", exact: true }).click();
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(1000, 720),
     );
-    await expect(page.locator("html")).toHaveAttribute("data-transparent", "false");
+    await fullWindow();
+    for (const scheme of ["dark", "light"]) {
+      await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(scheme);
+      await opacity.fill("35");
+      await expect(backdrop).toHaveCSS("opacity", "0.35");
+      await expect(navigationCard).toHaveCSS("opacity", "1");
+      await page.screenshot({ path: test.info().outputPath(`window-background-${scheme}.png`) });
+    }
+    await opacity.fill("0");
+    const nativeBlur = (await page.evaluate(() => window.desktop.windowAppearance()))
+      .sidebarBlurSupported;
+    const blur = page.getByRole("slider", { name: "Background blur", exact: true });
+    if (nativeBlur) await expect(blur).toBeEnabled();
+    else await expect(blur).toBeDisabled();
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(backdrop).toHaveCSS("opacity", "1");
+    await page.emulateMedia({ forcedColors: "none" });
+    await expect(backdrop).toHaveCSS("opacity", "0");
     await page.reload();
     page = await application.firstWindow();
     await selectSettingsPage(page, "Appearance");
     await expect(page.getByRole("slider", { name: "Background opacity", exact: true })).toHaveValue(
       "0",
     );
-    await page.getByRole("button", { name: "Reset sidebar", exact: true }).click();
+    await application.close();
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
+    await expect(page.getByRole("slider", { name: "Background opacity", exact: true })).toHaveValue(
+      "0",
+    );
+    await page.getByRole("button", { name: "Reset background", exact: true }).click();
     await expect(page.getByRole("slider", { name: "Background opacity", exact: true })).toHaveValue(
       "100",
     );
@@ -8439,7 +8475,7 @@ test("desktop: sidebar opacity works live without enabling transparent window ma
   }
 });
 
-test("desktop: sidebar tabs, solid background, and restart-only transparent background", async () => {
+test("desktop: sidebar tabs, themes and live window background remain interactive", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-appearance-")));
   const database = join(directory, "projects.sqlite");
   const enter = async () => {
@@ -8457,7 +8493,7 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
   try {
     application = await launch(directory, directory, database);
     let page = await enter();
-    await expect(page.locator(".app")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(page.locator(".app")).toHaveCSS("background-image", "none");
     await expect(page.locator(".sidebar")).toHaveCSS("width", "224px");
     const sidebarHeader = page.locator(".project-sidebar-open");
     await expect(sidebarHeader).toHaveAttribute("aria-label", "Add Project");
@@ -8623,28 +8659,21 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
           BrowserWindow.getAllWindows()[0]?.setSize(size[0] ?? 1100, size[1] ?? 800),
         originalSize,
       );
-    const toggle = () => page.getByRole("switch", { name: "Transparent background", exact: true });
-    await expect(toggle()).not.toBeChecked();
-    await toggle().check();
-    await expect(toggle()).toBeEnabled();
-    await expect(page.locator(".app")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(
+      page.getByRole("switch", { name: "Transparent background", exact: true }),
+    ).toHaveCount(0);
+    const opacity = page.getByRole("slider", { name: "Background opacity", exact: true });
+    await opacity.fill("25");
+    await expect(page.locator(".window-background")).toHaveCSS("opacity", "0.25");
     await page.reload();
-    if (
-      await page.evaluate(async () => {
-        const s = await window.desktop.snapshot();
-        return s.orchestration.provider !== null && s.agents.includes(s.orchestration.provider);
-      })
-    )
-      await selectSidebarPage(page, "Sessions");
-    await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await selectSettingsPage(page, "Appearance");
-    await expect(toggle()).toBeChecked();
-    await expect(page.locator("html")).toHaveAttribute("data-transparent", "false");
+    await expect(page.getByRole("slider", { name: "Background opacity", exact: true })).toHaveValue(
+      "25",
+    );
     await application.close();
-
     application = await launch(directory, directory, database);
     page = await enter();
-    await expect(page.locator("html")).toHaveAttribute("data-transparent", "true");
+    await expect(page.locator(".window-background")).toHaveCSS("opacity", "0.25");
     await selectSidebarPage(page, "Settings");
     await selectSettingsPage(page, "Appearance");
     await page.getByLabel("Theme", { exact: true }).selectOption("dark");
@@ -8696,10 +8725,9 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
         ({ x, y }) => window.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y })),
         { x, y },
       );
-    const mac = process.platform === "darwin";
     const width = await page.evaluate(() => window.innerWidth);
     await move(width - 4, 200);
-    await expect.poll(ignored).toBe(mac);
+    await expect.poll(ignored).toBe(false);
     // The full left sidebar area stays interactive, including its outer inset.
     await move(16, 200);
     await expect.poll(ignored).toBe(false);
@@ -8739,21 +8767,20 @@ test("desktop: sidebar tabs, solid background, and restart-only transparent back
     await navigationToggle.press("Enter");
     await expect(navigationToggle).toHaveAttribute("aria-expanded", "true");
     await move(width / 2, 14);
-    await expect.poll(ignored).toBe(mac);
+    await expect.poll(ignored).toBe(false);
     await move(width - 4, 200);
-    await expect.poll(ignored).toBe(mac);
+    await expect.poll(ignored).toBe(false);
     await move(30, 14);
     await expect.poll(ignored).toBe(false);
 
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await selectSettingsPage(page, "Appearance");
-    await toggle().uncheck();
-    await expect(toggle()).toBeEnabled();
-    await expect(page.locator(".app")).toHaveCSS("background-image", "none");
+    await page.getByRole("button", { name: "Reset background", exact: true }).click();
+    await expect(page.locator(".window-background")).toHaveCSS("opacity", "1");
     await application.close();
     application = await launch(directory, directory, database);
     page = await enter();
-    await expect(page.locator(".app")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(page.locator(".app")).toHaveCSS("background-image", "none");
   } finally {
     await application.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

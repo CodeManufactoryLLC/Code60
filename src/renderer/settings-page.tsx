@@ -17,9 +17,6 @@ export function SettingsPage({
   versions,
   memory,
   pollingControls,
-  transparent,
-  savingAppearance,
-  onTransparent,
   theme,
   onTheme,
   iconAppearance,
@@ -56,9 +53,6 @@ export function SettingsPage({
   onSignals(on: boolean): void;
   charts: boolean;
   onCharts(on: boolean): void;
-  transparent: boolean | undefined;
-  savingAppearance: boolean;
-  onTransparent(enabled: boolean): void;
   theme: Theme;
   onTheme(theme: Theme): void;
   iconAppearance: IconAppearance;
@@ -179,27 +173,6 @@ export function SettingsPage({
                 <option value="dark">Dark</option>
                 <option value="system">System</option>
               </select>
-            </label>
-            <label className="settings-row">
-              <span className="settings-label">
-                <span id={`${id}-transparent-label`}>Transparent background</span>
-                <InfoTip label="Transparent background" id={`${id}-transparent`}>
-                  Applies after restart. Makes the other areas outside the content frame and
-                  navigation transparent. On macOS, clicks in those areas pass through to the
-                  desktop; on Linux, the window stays clickable. Left sidebar opacity is controlled
-                  separately and applies immediately.
-                </InfoTip>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={transparent ?? false}
-                aria-checked={transparent ?? false}
-                aria-labelledby={`${id}-transparent-label`}
-                aria-describedby={`${id}-transparent`}
-                disabled={transparent === undefined || savingAppearance}
-                onChange={(event) => onTransparent(event.target.checked)}
-              />
             </label>
           </SettingsCard>
           <SettingsCard title="Accessibility">

@@ -128,13 +128,13 @@ describe("desktop capability catalog", () => {
     expect(access).toContain("assistant card → More actions → Edit or Archive");
     expect(access).toContain("title actions → Archived → card → More actions → Restore");
   });
-  it("describes human-only sidebar appearance controls and their transparency limits", () => {
+  it("describes human-only window background controls and their transparency limits", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      purpose: expect.stringContaining("left sidebar background opacity"),
-      access: expect.stringContaining("Appearance → Left sidebar"),
+      access: expect.stringContaining("Appearance → Window background"),
       limitations: expect.stringContaining("dedicated top-right chevron"),
+      purpose: expect.stringContaining("whole-window background opacity"),
     });
   });
   it("describes locally saved monochrome icons without database prerequisites", () => {

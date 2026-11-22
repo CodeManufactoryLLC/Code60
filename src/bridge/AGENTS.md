@@ -113,9 +113,12 @@ requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
 Custom definitions are private, revision-checked and database-independent.
 
-- Sidebar backdrop updates contain only strict bounded width, 0–100 strength and
-  visibility. Never accept coordinates, window handles, materials, paths or code.
-  Main derives bounds from its owned window; this grants no screen capture access.
+- The legacy sidebar-backdrop channel controls window-wide blur using only strict
+  bounded viewport width, 0–100 strength and visibility. Positive width gates display;
+  main derives the full bounds from its owned window. Never accept coordinates,
+  window handles, materials, paths or code; no screen capture access is granted.
+- Legacy transparency/hit-test interfaces remain validated, but the removed toggle
+  cannot affect live backdrop alpha or enable foreground mouse-event passthrough.
 
 Transparent Linux windows use three renderer caption buttons in the native drag
 strip because Electron hides its native caption controls for translucent windows.
@@ -123,10 +126,10 @@ A strict minimize/maximize/close enum targets only the owned main window. Close
 must call the normal guarded close path, never destroy the window or kill work.
 macOS retains native window controls. No arbitrary window IDs cross the bridge.
 
-Native sidebar backdrop failures use a payload-free main-to-renderer notification.
+Native window backdrop failures use a payload-free main-to-renderer notification.
 The renderer shows a fixed error; no native error, path or window handle crosses IPC.
 
-Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+Native window backdrop visibility follows owner show/hide/minimize events and immediate
 renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
 decorative window from Mission Control. A payload-free failure notice reports native
 event failures beside Appearance controls, separately from preference save errors; a

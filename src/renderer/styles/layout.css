@@ -17,45 +17,21 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: transparent;
 }
 
 .app:has(.sidebar[data-open="false"]) {
   --sidebar-reveal: 0;
 }
 
-/* Paint the workspace behind cards while preserving native sidebar transparency. */
-.app:has(.sidebar)::before {
-  content: "";
+/* One decorative layer owns the complete window backdrop; foregrounds stay sharp. */
+.window-background {
   position: fixed;
   inset: 0;
+  z-index: 0;
   background: var(--workspace-background);
+  opacity: var(--window-background-opacity);
   pointer-events: none;
-  z-index: 0;
-}
-
-.app:has(.sidebar[data-open="true"])::before {
-  clip-path: inset(0 0 0 calc(var(--sidebar-left-inset) + var(--sidebar-track-width)));
-}
-
-:root[data-transparent="true"] .app::before {
-  display: none;
-}
-
-/* One background spans the full left area; all controls paint sharply above it. */
-.sidebar-background {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: calc(var(--sidebar-left-inset) + var(--sidebar-track-width));
-  z-index: 0;
-  background: var(--sidebar-background);
-  background-size: 100vw 100dvh;
-  opacity: var(--sidebar-background-opacity);
-  pointer-events: none;
-}
-
-.app:has(.sidebar[data-open="false"]) .sidebar-background {
-  display: none;
 }
 
 .app:has(.sidebar) > :is(.window-drag-strip, .database-notice, .app-workspace) {
@@ -63,22 +39,8 @@
   z-index: 1;
 }
 
-/* Do not paint another solid surface behind the sidebar's adjustable tint. */
-body:has(.app .sidebar) {
-  background: transparent;
-}
-
-.app:has(.sidebar[data-open="true"]) {
-  background: linear-gradient(
-    to right,
-    transparent calc(var(--sidebar-left-inset) + var(--sidebar-track-width)),
-    var(--bg) calc(var(--sidebar-left-inset) + var(--sidebar-track-width))
-  );
-}
-
-:root[data-transparent="true"],
-:root[data-transparent="true"] body,
-:root[data-transparent="true"] .app {
+/* No opaque paint beneath the live alpha layer. The splash retains its own fill. */
+body:has(.app .window-background) {
   background: transparent;
 }
 

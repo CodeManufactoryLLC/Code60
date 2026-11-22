@@ -259,7 +259,7 @@
   and 2.5px subsequent row gaps. The shared shell starts at the existing 6px top
   margin and owns scrolling, retaining its border while children scroll. Section
   wrappers own their header action positions, icon playback targets and first-row
-  markers. Sidebar opacity/blur affects only the background behind the opaque shell.
+  markers. Window opacity/blur affects only the backdrop behind opaque foreground shells.
   Light keeps white #ffffff shell/headers; Dark keeps charcoal with the breadcrumb’s #2f1d37 purple header bands and light labels.
   Preserve text, distinct hover/selection, system colors, saved accordion state,
   row heights, keyboard navigation and recursive inert/hidden disclosures.
@@ -389,7 +389,7 @@
 - Support Light, Dark and System appearance and the existing opt-in Signal colors.
   Use the palette, square geometry, hard shadows and focus rules in
   [Neo-brutalist presentation](#neo-brutalist-presentation). Preserve native
-  window geometry, the chamfered wordmark and independent sidebar transparency.
+  window geometry, the chamfered wordmark and independent window-background transparency.
 
 - Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline even when Focus highlight border is enabled. Preserve hit targets, accessible labels, disabled semantics and visible keyboard focus. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
 - Use the 16px Carbon icons from `icons.tsx` (`Icon` in the DOM, `drawIcon` on canvas), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, animated conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
@@ -629,22 +629,39 @@ all sidebar icons; let only the content header grow to fit enlarged artwork
 without shifting navigation or clipping content. This adds no new
 product capability.
 
-## Left sidebar background controls
+## Window background controls
 
-Settings → Appearance offers saved Background opacity (0–100%, default 100%) and
-Background blur strength (0–100%, default 0), plus Reset sidebar. Persist the bounded values
-in `code60.sidebarAppearance` without advancing migration markers, apply changes
-live and report storage failure beside the controls. Style only the background;
-text and icons stay sharp and fully visible. Cover the entire left region up to
-the resizable divider, including margins, title strip and footer, and track the
-existing width/collapse state. Keep this layer out of the splash, preserve native
-drag areas and keep the whole left region interactive even at zero opacity.
-Forced colors use an opaque system fill without blur. Explain in information tips
-that sidebar opacity applies immediately independently of the restart-only
-Transparent background setting for other margins. Keep body/app paint transparent
-behind the left region, and keep the splash and other content opaque. Explain that
-Native desktop blur is macOS-only and blends system-managed vibrancy, not a pixel radius. Report only bounded sidebar width, strength and visibility. Disable blur on Linux and hide its native backdrop for splash, collapsed navigation, opaque tint and forced colors. Do not expose these
-preferences as agent-write tools or add their values to awareness.
+Settings → Appearance → Window background provides Background opacity (0–100%,
+default 100%), Background blur strength (0–100%, default 0), and Reset background.
+Both sliders apply live to one full-window decorative backdrop, including the
+native-control strip, margins and footer, regardless of sidebar width or collapse.
+Cards, fields, text, icons, menus and dialogs retain their own opaque/sharp surfaces.
+The splash remains opaque and never enables native blur. Forced colors uses an
+opaque Canvas backdrop with native blur off. Keep native drag/caption regions and
+all background areas interactive even at zero opacity; there is no click-through
+mode or separate Transparent background toggle.
+
+Retain bounded percentages in the existing `code60.sidebarAppearance` local storage
+record without resetting values or advancing appearance migrations. Internal
+SidebarAppearance/backdrop transport names remain compatibility adapters for the
+window-wide controls. Legacy desktop.json transparency values and validated IPC
+methods remain compatible records/interfaces, but cannot gate live alpha, repaint
+margins or enable mouse-event passthrough. Capability reads report native alpha
+available and clickThrough false. Show preference-write and native-blur failures
+separately and allow slider/Reset retries. Do not expose these values through agent
+write tools or awareness.
+
+The foreground native window always supports alpha. On macOS, an owned,
+non-focusable, mouse-transparent BaseWindow with no web contents or capture
+permission supplies native vibrancy behind the complete owner content bounds.
+Strength blends the OS-managed material, not a pixel blur radius. The legacy strict
+bounded width/strength/visibility request reports viewport width; positive width
+only gates visibility, while main derives all coordinates and full dimensions from
+its owner. Follow owner move/resize/show/hide/minimize/fullscreen; hide on splash,
+opaque tint, document hiding and forced colors. Reset on renderer navigation/loss
+and dispose all listeners/windows on owner close or shutdown. Native failure closes
+the backdrop and reports a fixed, payload-free error. Linux retains live background
+opacity, with the blur slider disabled; do not substitute CSS blur on foregrounds.
 
 ## Neo-brutalist presentation
 
@@ -707,9 +724,8 @@ existing padding; leave clearance for hard shadows. On Chat, frame the conversat
 and right inspector separately; the outer Chat layout remains transparent and
 shadowless. The 5px page top margin and 11px sidebar-card gaps remain.
 
-Sidebar opacity/blur still affect only the full-height background, independently
-of restart-only transparent margins; never paint an opaque layer behind that
-sidebar tint. Splash stays opaque and uses the same palette. Forced colors uses
+Window opacity/blur affects the full-window background live; never paint an opaque
+layer behind its tint. Splash stays opaque and uses the same palette. Forced colors uses
 system fills/outlines and removes decorative shadows; reduced motion disables
 transitions. Keyboard focus uses a distinct solid outline/inset edge; the saved
 Focus highlight border preference retains its stronger treatment.
@@ -774,7 +790,7 @@ Conversation icon/label insets shrink at narrow sidebar widths to preserve reada
 
 ## Settings action icons and spacing
 
-Appearance leaves 16px above the Left sidebar group. Chat bodies retain a 16px
+Appearance leaves 16px above the Window background group. Chat bodies retain a 16px
 bottom inset beneath composers at every width. Left-navbar disclosure chevrons
 and the Add Project action have a visible 24px circle within their unchanged
 28px hit target. Use black outlines and 2px hard black shadows with a theme-aware

@@ -620,17 +620,11 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     for (const section of await page.locator(".sidebar-section + .sidebar-section").all())
       await expect(section).toHaveCSS("border-top-width", "1px");
     const canvas = theme === "light" ? "rgb(244, 248, 254)" : "rgb(17, 17, 17)";
-    await expect(page.locator(".sidebar-background")).toHaveCSS(
+    await expect(page.locator(".window-background")).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(244, 248, 254)" : canvas,
     );
-    await expect
-      .poll(() =>
-        page
-          .locator(".app")
-          .evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
-      )
-      .toBe(canvas);
+    await expect(page.locator(".app")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await page.mouse.move(1000, 500);
     await expect(page.locator("#tab-settings-appearance")).toHaveCSS(
       "background-color",

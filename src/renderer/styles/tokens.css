@@ -36,7 +36,7 @@
   --card-shadow: 4px 4px 0 var(--shadow-color);
   --shadow-color: #111111;
   --button-shadow: 2px 2px 0 var(--shadow-color);
-  --sidebar-background-opacity: 100%;
+  --window-background-opacity: 100%;
   --input-radius: 0px;
   /* Metadata (timestamps, counts, versions) uses a compact monospace face. */
   --meta-font: var(--text-weight, 400) 11px / 16px var(--mono);

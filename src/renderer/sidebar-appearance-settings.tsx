@@ -24,26 +24,26 @@ export function SidebarAppearanceSettings({
     {
       key: "opacity",
       label: "Background opacity",
-      tip: "Changes the entire background to the left of the sidebar divider immediately. Text and icons stay sharp. Zero is transparent; 100% is opaque. This works independently of the Transparent background setting for the rest of the window.",
+      tip: "Changes the background behind the entire app window immediately, including its title strip, margins and footer. Zero is transparent; 100% is opaque. Cards, text and icons stay opaque and sharp.",
     },
     {
       key: "blur",
       label: "Background blur",
       tip:
         blurSupported === false
-          ? "Native desktop background blur is available on macOS. Sidebar opacity remains available on Linux."
-          : "Controls the strength of native macOS blur behind the sidebar. Zero turns blur off. Lower Background opacity to see the effect. Text and icons stay sharp; macOS controls the blur radius.",
+          ? "Native desktop background blur is available on macOS. Window background opacity remains available on Linux."
+          : "Controls the strength of native macOS blur behind the entire app window. Zero turns blur off. Lower Background opacity to see the effect. Text and icons stay sharp; macOS controls the blur radius.",
     },
   ] as const;
   return (
     <fieldset className="settings-group sidebar-appearance-settings">
-      <legend className="settings-group-title">Left sidebar</legend>
+      <legend className="settings-group-title">Window background</legend>
       <button
         type="button"
         className="settings-group-reset"
         onClick={() => onChange({ ...defaultSidebarAppearance })}
       >
-        Reset sidebar
+        Reset background
       </button>
       {fields.map((field) => {
         const slider = `${id}-${field.key}`;
@@ -82,8 +82,8 @@ export function SidebarAppearanceSettings({
       {nativeError && <div role="alert">{nativeError}</div>}
       {!saved && (
         <div role="alert">
-          Sidebar changes apply for this session but could not be saved. Adjust a slider or use
-          Reset sidebar to retry.
+          Window background changes apply for this session but could not be saved. Adjust a slider
+          or use Reset background to retry.
         </div>
       )}
     </fieldset>

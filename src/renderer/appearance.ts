@@ -34,7 +34,7 @@ export function parseSidebarAppearance(raw: string | null): SidebarAppearance {
 
 export function sidebarAppearanceProperties(appearance: SidebarAppearance): Record<string, string> {
   return {
-    "--sidebar-background-opacity": `${appearance.opacity}%`,
+    "--window-background-opacity": `${appearance.opacity}%`,
   };
 }
 
