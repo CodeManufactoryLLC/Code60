@@ -1730,20 +1730,35 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
       await expect(canvas).toBeVisible();
       expect((await canvas.boundingBox())?.height).toBeGreaterThan(100);
     }
+    const expectScheduleHeading = async (stacked = false) => {
+      const header = await panel.locator(".automation-page-heading").boundingBox();
+      const title = await panel
+        .getByRole("heading", { name: "Schedules", exact: true })
+        .boundingBox();
+      const actions = await panel
+        .getByRole("button", { name: "Actions", exact: true })
+        .boundingBox();
+      if (!header || !title || !actions) throw new Error("Missing schedule heading geometry");
+      expect(Math.abs(title.x + title.width / 2 - header.x - header.width / 2)).toBeLessThan(1);
+      if (stacked) {
+        expect(actions.y).toBeGreaterThanOrEqual(title.y + title.height);
+        expect(Math.abs(actions.x + actions.width / 2 - header.x - header.width / 2)).toBeLessThan(
+          1,
+        );
+      } else {
+        expect(actions.x - title.x - title.width).toBeCloseTo(12, 0);
+        expect(Math.abs(title.y + title.height / 2 - actions.y - actions.height / 2)).toBeLessThan(
+          2,
+        );
+      }
+    };
     for (const scheme of ["light", "dark"]) {
       await page.evaluate(
         (value) => document.documentElement.setAttribute("data-color-scheme", value),
         scheme,
       );
       const actions = panel.getByRole("button", { name: "Actions", exact: true });
-      const heading = await panel
-        .getByRole("heading", { name: "Schedules", exact: true })
-        .boundingBox();
-      const control = await actions.boundingBox();
-      if (!heading || !control) throw new Error("Missing scheduled header");
-      expect(
-        Math.abs(heading.y + heading.height / 2 - control.y - control.height / 2),
-      ).toBeLessThan(2);
+      await expectScheduleHeading();
       await actions.click();
       await expect(page.getByRole("menu", { name: "Actions" })).toBeVisible();
       await page.screenshot({ path: test.info().outputPath(`automations-${scheme}.png`) });
@@ -1791,6 +1806,23 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await page.screenshot({ path: test.info().outputPath("automation-editor-narrow.png") });
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(actions).toBeFocused();
+    await panel.getByRole("heading", { name: "Schedules", exact: true }).scrollIntoViewIfNeeded();
+    const headingRow = panel.locator(".automation-page-heading");
+    const resizeNav = page.getByRole("button", { name: "Resize navigation sidebar", exact: true });
+    // Native minimum window width can keep the content wider than the requested size.
+    for (let index = 0; index < 6; index++) {
+      const width = (await headingRow.boundingBox())?.width ?? 0;
+      if (width < 480) break;
+      await resizeNav.press("ArrowRight");
+      await expect
+        .poll(async () => (await headingRow.boundingBox())?.width ?? width)
+        .toBeLessThan(width);
+    }
+    await expect
+      .poll(async () => (await headingRow.boundingBox())?.width ?? 1000)
+      .toBeLessThan(480);
+    await expectScheduleHeading(true);
+    await page.screenshot({ path: test.info().outputPath("automations-heading-narrow.png") });
     expect(
       await panel
         .locator(".automations-page")

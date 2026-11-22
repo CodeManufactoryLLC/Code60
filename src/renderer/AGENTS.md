@@ -204,8 +204,10 @@
   small title sizes and taller actions do not shift titles. Put project-readiness
   notices below chat headers, not above them.
 - Scheduled Jobs uses local Neobrutalism accordions for jobs and a table for
-  Execution history. Align Schedules and Actions with a 16px top inset; Actions
-  contains New scheduled job/Refresh, and creation/editing stays inline.
+  Execution history. Center Schedules independently in the available content width;
+  place Actions immediately 12px to its right with the same vertical center and a
+  16px top inset. Below 480px content width, center Actions below the title to avoid
+  overflow. Actions contains New scheduled job/Refresh; creation/editing stays inline.
   Order independent run/cancel, delete and disclosure controls in DOM and visually.
   Use 24px transparent circles in 28px targets with black outlines, 2px hard
   shadows, 1px press offsets and contrasting glyphs. Only the final chevron toggles

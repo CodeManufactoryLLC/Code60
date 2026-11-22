@@ -19,3 +19,8 @@ Dark sidebar headers share the breadcrumb Card's purple fill (`#2f1d37`) and
 light foreground; Light and forced colors retain their own palettes.
 
 ![Dark sidebar headers matching the breadcrumb Card](after-dark.png)
+
+Scheduled Jobs centers the Schedules heading independently, with Actions 12px to
+its right. Below 480px of content width, Actions moves to a centered second row.
+
+![Centered Schedules heading and adjacent Actions menu](after-scheduled-jobs.png)

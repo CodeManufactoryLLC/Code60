@@ -1832,9 +1832,10 @@ ownership, never the globally selected project. Relay remains application-owned.
 Secondary section headings, file-panel headings and embedded table history are not
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
-Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Schedules
-and the Actions dropdown share the top row, with a 16px inset inside the main
-content area. Actions offers the existing New scheduled job and Refresh handlers;
+Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Center the
+Schedules heading in the content area, with Actions immediately 12px to its right
+and a 16px top inset. Below 480px of available content width, center Actions on a
+second row to preserve access without overflow. Actions offers the existing New scheduled job and Refresh handlers;
 creation and editing use inline Card/Button/Textarea controls. Execution history
 remains a table, with its own icon-free Card Titles heading. Only the outer
 Scheduled Jobs title is a page breadcrumb.
