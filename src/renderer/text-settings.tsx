@@ -1,5 +1,4 @@
 import { useId } from "react";
-import { Icon } from "./icons.js";
 import { SettingsHeader } from "./settings-layout.js";
 import {
   defaultTextStyles,
@@ -45,17 +44,17 @@ export function TextSettings({
   const id = useId();
   return (
     <section className="settings-section text-settings" aria-labelledby={`${id}-text`}>
-      <SettingsHeader page="text" id={`${id}-text`}>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Reset text"
-          title="Reset text"
-          onClick={() => onTextStyles(structuredClone(defaultTextStyles))}
-        >
-          <Icon name="renew" />
-        </button>
-      </SettingsHeader>
+      <SettingsHeader
+        page="text"
+        id={`${id}-text`}
+        actions={[
+          {
+            id: "text-settings-0",
+            label: "Reset text",
+            run: () => onTextStyles(structuredClone(defaultTextStyles)),
+          },
+        ]}
+      ></SettingsHeader>
       <div className="text-styles">
         {textRoles.map((role) => {
           const style = textStyles[role.id];

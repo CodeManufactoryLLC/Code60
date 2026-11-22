@@ -370,7 +370,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
-    await page.getByRole("button", { name: "Actions", exact: true }).click();
+    await page.getByRole("button", { name: "Scheduled Jobs actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "New scheduled job", exact: true }).click();
     const editor = page.getByRole("region", { name: "New scheduled job", exact: true });
     await editor.getByLabel("Name", { exact: true }).fill("Retained scheduler");
@@ -387,7 +387,9 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await editor.getByRole("button", { name: "Choose repository", exact: true }).click();
     await editor.getByRole("button", { name: "Create job", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Actions", exact: true })).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Scheduled Jobs actions", exact: true }),
+    ).toBeFocused();
     expect((await saved()).automations).toHaveLength(1);
     expect((await saved()).automations[0].enabled).toBe(false);
     expect((await saved()).executions).toHaveLength(0);

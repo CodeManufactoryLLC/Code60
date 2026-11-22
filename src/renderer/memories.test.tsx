@@ -17,12 +17,7 @@ vi.mock("react", async (importOriginal) => {
 vi.mock("./data-table.js", () => ({
   DataTable: (options: Record<string, unknown>) => {
     forwarded.options = options;
-    return createElement(
-      "section",
-      null,
-      options.scope as ReactElement,
-      options.actions as ReactElement,
-    );
+    return createElement("section", null, options.scope as ReactElement);
   },
 }));
 it("uses an application-scoped shared table with bounded paging and labelled filters", () => {
@@ -45,7 +40,9 @@ it("uses an application-scoped shared table with bounded paging and labelled fil
   expect(html).toContain("No memories in this view.");
   expect(html).toContain("Previous page");
   expect(html).toContain("Next page");
-  expect(html).toContain("Refresh memories");
+  expect(forwarded.options.pageActions).toMatchObject([
+    { label: "Refresh memories", run: expect.any(Function) },
+  ]);
   expect(forwarded.options.tableId).toBe("memories");
   expect(forwarded.options.workspace).toBe("application-memory");
   expect(forwarded.options.initialSort).toBe("createdAt");

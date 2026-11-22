@@ -8,16 +8,21 @@ import { ChatWorkspace } from "./chat-workspace.js";
 import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
+import { ContentHeaderSlot } from "./content-page-header.js";
 import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
-import { Icon } from "./icons.js";
 import { LogsPage } from "./logs.js";
 import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
-import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
+import {
+  isSettingsSection,
+  pageDefinitions,
+  type RenderedPageId,
+  renderedPages,
+} from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
 import { Card } from "./neobrutalism/card.js";
@@ -617,32 +622,28 @@ export function AppPages(props: AppPagesProps) {
           <main className="sessions" aria-label="Sessions" data-heading-lines={lines.heading}>
             <SessionsTable
               key={scope.viewKey}
-              actions={
-                <>
-                  {run?.agentAlive && (
-                    <button
-                      type="button"
-                      className="icon-button danger-text"
-                      aria-label="Stop leftover agent"
-                      disabled={busy}
-                      onClick={() => void act({ type: "stop", id: run.record.id })}
-                    >
-                      <Icon name="stop" />
-                    </button>
-                  )}
-                  {!!snapshot?.active && (
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label="Stop all runs"
-                      disabled={busy}
-                      onClick={() => void attempt(() => api.stopAll())}
-                    >
-                      <Icon name="stop" />
-                    </button>
-                  )}
-                </>
-              }
+              pageActions={[
+                ...(run?.agentAlive
+                  ? [
+                      {
+                        id: "app-pages-0",
+                        label: "Stop leftover agent",
+                        run: () => void act({ type: "stop", id: run.record.id }),
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
+                ...(snapshot?.active
+                  ? [
+                      {
+                        id: "app-pages-1",
+                        label: "Stop all runs",
+                        run: () => void attempt(() => api.stopAll()),
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
+              ]}
               tableId="sessions"
               workspace={`${database}:${directory}`}
               onAdd={() => {
@@ -703,6 +704,7 @@ export function AppPages(props: AppPagesProps) {
             }
             hidden={tabs.active !== id}
           >
+            {id !== "chat" && <ContentHeaderSlot fallback={pageDefinitions[id].label} />}
             {views[id]}
           </Shell>
         );

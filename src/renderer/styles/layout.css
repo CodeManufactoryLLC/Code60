@@ -156,15 +156,16 @@ body:has(.app .sidebar) {
   border: 1px solid var(--panel-border);
   border-bottom-color: transparent;
   border-radius: var(--navigation-card-radius) var(--navigation-card-radius) 0 0;
-  background: var(--content-background);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .workspace-panel-controls > #workspace-panel-actions {
   margin-left: auto;
+  pointer-events: auto;
 }
 
 /* Workspace shell cards share the sidebar's thin outline. */
@@ -186,19 +187,10 @@ body:has(.app .sidebar) {
   min-height: 0;
   min-width: 0;
   position: relative;
-  /* Reserve the stationary panel controls above scrolling page content. */
-  padding: calc(1px + var(--panel-controls-height)) 1px 1px;
+  /* The in-flow content header shares the stationary corner-control row. */
+  padding: 1px;
   gap: 0;
   overflow: hidden;
-}
-
-/* Scheduled Jobs shares the corner-control row with its centered heading. */
-#panel-automations {
-  padding-top: 1px;
-}
-.app-workspace:has(> #panel-automations:not([hidden])) > .workspace-panel-controls {
-  background: transparent;
-  pointer-events: none;
 }
 
 /* Paint only the main reading plane; nested controls and Cards retain their fills. */
@@ -308,4 +300,41 @@ dialog::backdrop {
   --hover-bg: var(--card-header-hover);
   --accent-bg: var(--card-header-hover);
   --control-hover: var(--card-header-hover);
+}
+
+/* Each retained page publishes into its own stationary card header. */
+.content-page-header-slot {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: var(--panel-controls-height);
+  margin-bottom: var(--page-header-gap);
+  background: var(--content-background);
+}
+.content-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: var(--panel-controls-height);
+  padding: 4px 44px;
+  margin: 0;
+}
+.content-page-title {
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+  font: var(--title-weight, 700) var(--title-size, 16px) / 1.25 var(--title-font, var(--font));
+  --letter-spacing: var(--title-spacing, normal);
+  text-transform: var(--title-case, none);
+}
+.content-page-heading > button {
+  flex-shrink: 0;
+}
+.content-page-header-slot:has(> .content-page-heading:not(.content-page-header-fallback))
+  > .content-page-header-fallback {
+  display: none;
 }

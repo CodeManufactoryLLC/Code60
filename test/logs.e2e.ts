@@ -8,6 +8,7 @@ import { DesktopLogStore } from "../src/desktop/log-store.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
 async function openLogs(page: Page) {
@@ -119,23 +120,21 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
       element.scrollTop = 600;
     });
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-    await logs.getByRole("button", { name: "Pause viewing", exact: true }).click();
+    await (await pageCommand(page, "Pause viewing")).click();
     await page.evaluate(() =>
       window.desktop
         .snapshot()
         .then(({ databaseEpoch }) => window.desktop.connectDatabase("create", databaseEpoch)),
     );
     await expect(logs.getByText("Viewing paused. Diagnostic capture continues.")).toBeVisible();
-    await expect(
-      logs.getByRole("button", { name: "New records available, show latest" }),
-    ).toBeVisible();
-    await logs.getByRole("button", { name: "Resume viewing", exact: true }).click();
+    await expect(await pageCommand(page, "New records available, show latest")).toBeVisible();
+    await (await pageCommand(page, "Resume viewing")).click();
     // Resume preserves a scrolled reader; explicitly accept the pending latest page.
-    const latest = logs.getByRole("button", { name: "New records available, show latest" });
+    const latest = await pageCommand(page, "New records available, show latest");
     await expect(latest).toBeVisible();
     await latest.click();
     await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(0);
-    await expect(logs.getByRole("button", { name: "Refresh logs", exact: true })).toBeVisible();
+    await expect(await pageCommand(page, "Refresh logs")).toBeVisible();
     const retained = await page.evaluate(() =>
       window.desktop.queryLogs({
         scope: "all",
@@ -171,34 +170,28 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     page = await application.firstWindow();
     await page.locator(".splash").getByRole("button", { name: "Start", exact: true }).click();
     await openLogs(page);
-    await page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Pause viewing", exact: true })
-      .click();
-    const clearLogs = page
-      .locator("#panel-logs")
-      .getByRole("button", { name: "Clear logs", exact: true });
-    const refreshed = page
-      .locator("#panel-logs")
-      .getByRole("button", { name: /^(Refresh logs|New records available, show latest)$/ });
-    await expect(refreshed).toBeEnabled();
+    await (await pageCommand(page, "Pause viewing")).click();
+    const clearLogs = () => pageCommand(page, "Clear logs");
+    const refreshed = () =>
+      pageCommand(page, /^(Refresh logs|New records available, show latest)$/);
+    await expect(await refreshed()).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
-    await clearLogs.click();
-    await expect(clearLogs).toBeEnabled();
+    await (await clearLogs()).click();
+    await expect(await clearLogs()).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await clearLogs.click();
-    await expect(clearLogs).toBeEnabled();
-    await expect(refreshed).toBeEnabled();
+    await (await clearLogs()).click();
+    await expect(await clearLogs()).toBeEnabled();
+    await expect(await refreshed()).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeNull();

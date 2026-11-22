@@ -20,8 +20,20 @@ light foreground; Light and forced colors retain their own palettes.
 
 ![Dark sidebar headers matching the breadcrumb Card](after-dark.png)
 
-Scheduled Jobs centers Schedules and the chevron-only Actions trigger as one group,
-with a 12px gap. They share the top row with the corner panel toggles; narrow
-layouts and larger text retain access without a separate reserved row.
+Primary pages share a centered text-only page title and adjacent chevron menu
+for existing page commands, using saved Page Titles typography. Scheduled Jobs
+uses its page name. Table tools, creation cards and corner panel toggles stay
+visible; pages without commands show only their title. Headers grow with larger
+text and remain in their own content card through navigation.
 
-![Centered Schedules and chevron group sharing the corner-control row](after-scheduled-jobs.png)
+![Scheduled Jobs title and command dropdown beside the corner controls](after-scheduled-jobs.png)
+
+| Shared header in Light | Shared header in Dark |
+| --- | --- |
+| ![Home title with no empty command menu in Light](after-page-headers-light.png) | ![Home title with no empty command menu in Dark](after-page-headers-dark.png) |
+
+The conversation header and both corner toggles remain reachable after scrolling
+a stacked chat with enlarged composer text. Automatic chat naming keeps an open
+command menu attached to its owner without resetting keyboard focus.
+
+![Stationary header above a scrolled stacked chat with enlarged text](after-page-header-stacked.png)

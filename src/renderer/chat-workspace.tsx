@@ -3,6 +3,7 @@ import type { AppPagesProps } from "./app-page-props.js";
 import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
 import { chatEventKey, conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
+import { ContentHeaderSlot } from "./content-page-header.js";
 import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
@@ -150,6 +151,7 @@ export function ChatWorkspace({
       }
     >
       <Card className="chat-conversations">
+        <ContentHeaderSlot />
         {gitSetupProject === directory && gitSetupProject && (
           <GitSetupDialog
             key={`${snapshot?.projectInstanceId}:${snapshot?.databaseEpoch}`}

@@ -1,6 +1,5 @@
 import { useId, useState } from "react";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
-import { Icon } from "./icons.js";
 import { SettingsHeader } from "./settings-layout.js";
 export function AboutSection({ versions }: { versions: Versions | undefined }) {
   const id = useId();
@@ -36,20 +35,21 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
   };
   return (
     <section className="settings-section" aria-labelledby={id}>
-      <SettingsHeader page="about" id={id}>
+      <SettingsHeader
+        page="about"
+        id={id}
+        actions={[
+          {
+            id: "about-section-0",
+            label: "Copy version info",
+            run: () => void copy(),
+            disabled: !versions,
+          },
+        ]}
+      >
         <span className="settings-status" role="status">
           {copyStatus}
         </span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Copy version info"
-          title="Copy version info"
-          disabled={!versions}
-          onClick={() => void copy()}
-        >
-          <Icon name="copy" />
-        </button>
       </SettingsHeader>
       <dl className="settings-card version-list">
         {rows.map(([label, value]) => (

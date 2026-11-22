@@ -62,18 +62,6 @@
   text-decoration: none;
 }
 
-.page-selector-rename {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  min-height: 24px;
-  border: 0;
-  background: transparent;
-  color: var(--card-header-muted);
-  box-shadow: none;
-  font-size: var(--button-size, 13px);
-  -webkit-app-region: no-drag;
-}
-
 .neo-combobox-popup {
   position: fixed;
   inset: auto;

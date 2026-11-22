@@ -36,6 +36,18 @@ describe("desktop capability catalog", () => {
       "No search field",
     );
   });
+  it("describes content-title commands while keeping navigation and availability human-only", () => {
+    const navigation = DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation");
+    expect(navigation?.limitations).toContain("chevron-only title actions menu");
+    expect(navigation?.limitations).toContain(
+      "Table tools, scope selectors, creation cards and corner panel toggles remain visible",
+    );
+    expect(navigation?.prerequisite).toBe("none");
+    expect(navigation?.agentAccess).toBe("human-only");
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "updates")?.access).toContain(
+      "title actions",
+    );
+  });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       access: "Current-page header card → Back / Forward, to the left of the page selector",
@@ -114,7 +126,7 @@ describe("desktop capability catalog", () => {
   it("describes per-card custom assistant management", () => {
     const access = DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
     expect(access).toContain("assistant card → More actions → Edit or Archive");
-    expect(access).toContain("Archived → card → More actions → Restore");
+    expect(access).toContain("title actions → Archived → card → More actions → Restore");
   });
   it("describes human-only sidebar appearance controls and their transparency limits", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
@@ -182,7 +194,7 @@ describe("desktop capability catalog", () => {
     const providers = DESKTOP_CAPABILITIES.find((capability) => capability.id === "providers");
     expect(providers).toMatchObject({
       label: "Providers",
-      access: "Providers → provider details",
+      access: "Providers → provider details → title actions for Disconnect or Set as Primary",
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped desktop agent work");

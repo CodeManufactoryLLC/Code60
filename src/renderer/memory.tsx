@@ -6,7 +6,6 @@ import type {
   MemorySettings,
   MemorySnapshot,
 } from "../bridge/index.js";
-import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
@@ -98,7 +97,20 @@ export function MemoryPage({
   };
   return (
     <section className="settings-section memory-page" aria-label="Memory">
-      <SettingsHeader page="memory">
+      <SettingsHeader
+        page="memory"
+        actions={[
+          {
+            id: "memory-0",
+            label: "Refresh",
+            run: () => {
+              setError("");
+              refresh.current();
+            },
+            disabled: busy,
+          },
+        ]}
+      >
         <span className="sr-only" id={helpId}>
           When on, Code60 learns useful information from conversations and uses relevant saved
           memories across Relay, project chats and workers. Memories, embeddings and search stay
@@ -107,19 +119,6 @@ export function MemoryPage({
           permissions or task authority. Automatic conversation handoffs are separate and may
           summarize the current conversation even when Memory is off.
         </span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Refresh"
-          title="Refresh"
-          disabled={busy}
-          onClick={() => {
-            setError("");
-            refresh.current();
-          }}
-        >
-          <Icon name="renew" />
-        </button>
       </SettingsHeader>
       {error && (
         <div role="alert" className="error-banner">

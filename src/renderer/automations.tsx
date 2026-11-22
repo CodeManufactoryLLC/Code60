@@ -13,7 +13,6 @@ import { AutomationTranscriptModal } from "./automation-transcript.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { Modal } from "./modal.js";
 import { Accordion } from "./neobrutalism/accordion.js";
-import { DropdownMenu } from "./neobrutalism/dropdown-menu.js";
 import { PageTitle } from "./page-title.js";
 import { useDocumentVisible } from "./use-document-visible.js";
 
@@ -158,38 +157,34 @@ export function AutomationsPage({
   const execution = history.find((value) => value.id === selectedExecution);
   return (
     <section className="automations-page" data-active={visible}>
-      <PageTitle page="automations" className="table-title" />
-      <header className="automation-page-heading">
-        <h2 id="schedules-heading" className="table-card-title">
-          Schedules
-        </h2>
-        <DropdownMenu
-          label="Actions"
-          iconOnly
-          triggerRef={actionsTrigger}
-          active={visible}
-          disabled={busy || !!editor}
-          items={[
-            {
-              label: "New scheduled job",
-              run: () =>
-                setEditor({
-                  id: "",
-                  revision: 0,
-                  repositoryLabel: "",
-                  draft: freshDraft(agents[0] ?? ""),
-                }),
+      <PageTitle
+        page="automations"
+        className="table-title"
+        actionsTrigger={actionsTrigger}
+        actions={[
+          {
+            id: "new-schedule",
+            label: "New scheduled job",
+            disabled: busy || !!editor,
+            run: () =>
+              setEditor({
+                id: "",
+                revision: 0,
+                repositoryLabel: "",
+                draft: freshDraft(agents[0] ?? ""),
+              }),
+          },
+          {
+            id: "refresh-schedules",
+            label: "Refresh",
+            disabled: busy || !!editor,
+            run: () => {
+              setActionError("");
+              void refreshLatest.current();
             },
-            {
-              label: "Refresh",
-              run: () => {
-                setActionError("");
-                void refreshLatest.current();
-              },
-            },
-          ]}
-        />
-      </header>
+          },
+        ]}
+      />
 
       {(actionError || error) && <p role="alert">{actionError || error}</p>}
       {editor && (
@@ -205,7 +200,7 @@ export function AutomationsPage({
           }}
         />
       )}
-      <section className="automation-schedules" aria-labelledby="schedules-heading">
+      <section className="automation-schedules" aria-label="Schedules">
         <Accordion>
           {[...automations]
             .sort((a, b) => a.name.localeCompare(b.name))

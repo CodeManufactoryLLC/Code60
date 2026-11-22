@@ -192,39 +192,21 @@ export function LogsPage({
             </label>
           </>
         }
-        actions={
-          <>
-            <button
-              type="button"
-              className="icon-button"
-              aria-pressed={state.paused}
-              aria-label={state.paused ? "Resume viewing" : "Pause viewing"}
-              data-active={state.paused ? "true" : undefined}
-              onClick={() => viewer.pause(!state.paused)}
-            >
-              <Icon name={state.paused ? "play--filled" : "pause"} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={state.newRecords ? "New records available, show latest" : "Refresh logs"}
-              data-attention={state.newRecords ? "true" : undefined}
-              onClick={() => void navigate(() => viewer.refresh())}
-              disabled={state.pending}
-            >
-              <Icon name="renew" />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Clear logs"
-              disabled={clearing}
-              onClick={() => void clear()}
-            >
-              <Icon name="trash-can" />
-            </button>
-          </>
-        }
+        pageActions={[
+          {
+            id: "logs-0",
+            label: state.paused ? "Resume viewing" : "Pause viewing",
+            run: () => viewer.pause(!state.paused),
+            checked: state.paused,
+          },
+          {
+            id: "logs-1",
+            label: state.newRecords ? "New records available, show latest" : "Refresh logs",
+            run: () => void navigate(() => viewer.refresh()),
+            disabled: state.pending,
+          },
+          { id: "logs-2", label: "Clear logs", run: () => void clear(), disabled: clearing },
+        ]}
       />
       {!state.pending && page?.state === "ready" && !page.records.length && (
         <p className="table-empty" role="status">

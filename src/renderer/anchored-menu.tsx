@@ -20,7 +20,15 @@ export function AnchoredMenu({
   x: number;
   y: number;
   label: string;
-  items: readonly { label: string; disabled?: boolean; reason?: string | undefined; run(): void }[];
+  items: readonly {
+    id?: string;
+    label: string;
+    disabled?: boolean | undefined;
+    reason?: string | undefined;
+    checked?: boolean;
+    describedBy?: string;
+    run(): void;
+  }[];
   onClose(): void;
   id?: string;
   align?: "start" | "end";
@@ -34,7 +42,7 @@ export function AnchoredMenu({
   close.current = onClose;
   useLayoutEffect(() => {
     const previous = anchor ?? document.activeElement;
-    const bounds = previous instanceof HTMLElement ? previous.getBoundingClientRect() : undefined;
+    let bounds = previous instanceof HTMLElement ? previous.getBoundingClientRect() : undefined;
     const rect = menu.current?.getBoundingClientRect();
     if (rect)
       setPosition({
@@ -44,6 +52,36 @@ export function AnchoredMenu({
         ),
         top: Math.max(8, Math.min(y, innerHeight - rect.height - 8)),
       });
+    // A live title can change the trigger's position without changing its owner.
+    // Reposition the same menu without resetting the highlighted item or focus.
+    let disposed = false;
+    let resize: ResizeObserver | undefined;
+    if (anchor && bounds && typeof ResizeObserver !== "undefined") {
+      const offsetX = x - (align === "end" ? bounds.right : bounds.left);
+      const offsetY = y - bounds.bottom;
+      resize = new ResizeObserver(() => {
+        if (disposed) return;
+        const rect = menu.current?.getBoundingClientRect();
+        if (!rect) return;
+        bounds = anchor.getBoundingClientRect();
+        const next = {
+          left: Math.max(
+            8,
+            Math.min(
+              (align === "end" ? bounds.right - rect.width : bounds.left) + offsetX,
+              innerWidth - rect.width - 8,
+            ),
+          ),
+          top: Math.max(8, Math.min(bounds.bottom + offsetY, innerHeight - rect.height - 8)),
+        };
+        setPosition((current) =>
+          current.left === next.left && current.top === next.top ? current : next,
+        );
+      });
+      resize.observe(anchor);
+      const title = anchor.closest(".content-page-heading")?.querySelector(".content-page-title");
+      if (title) resize.observe(title);
+    }
     menu.current
       ?.querySelector<HTMLButtonElement>(initialFocus === "last" ? "button:last-child" : "button")
       ?.focus({ preventScroll: true });
@@ -74,11 +112,19 @@ export function AnchoredMenu({
     window.addEventListener("resize", dismiss);
     window.addEventListener("blur", dismiss);
     return () => {
+      disposed = true;
+      resize?.disconnect();
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("scroll", outside, true);
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("blur", dismiss);
-      if (restore && previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      if (
+        restore &&
+        previous instanceof HTMLElement &&
+        previous.isConnected &&
+        !previous.closest("[hidden], [inert]")
+      )
+        previous.focus();
     };
   }, [x, y, align, initialFocus, anchor]);
   return createPortal(
@@ -119,8 +165,11 @@ export function AnchoredMenu({
       {items.map((item) => (
         <button
           type="button"
-          role="menuitem"
-          key={item.label}
+          {...(item.checked === undefined
+            ? { role: "menuitem" as const }
+            : { role: "menuitemcheckbox" as const, "aria-checked": item.checked })}
+          aria-describedby={item.describedBy}
+          key={item.id ?? item.label}
           aria-disabled={item.disabled || undefined}
           aria-description={item.reason}
           title={item.reason}

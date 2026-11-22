@@ -12,28 +12,6 @@
   overflow: auto;
   scrollbar-gutter: stable;
 }
-.automation-page-heading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--panel-controls-height);
-  padding: 4px 32px;
-  margin: 0 0 var(--page-header-gap);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--content-background);
-}
-.automation-page-heading > h2 {
-  min-width: 0;
-  margin: 0;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.automation-page-heading > button {
-  flex-shrink: 0;
-}
 .automation-action-group,
 .automation-details-actions {
   display: flex;

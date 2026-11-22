@@ -90,7 +90,9 @@
   padding-bottom: 12px;
 }
 
-.table-controls:has(> .page-title-placeholder:only-child) {
+.table-controls:has(> .page-title-placeholder):not(
+  :has(> :not(.page-title-placeholder, [hidden]))
+) {
   display: none;
 }
 
@@ -201,10 +203,6 @@
   opacity: 0.35;
 }
 
-.table-toolbar-divider:last-child {
-  display: none;
-}
-
 .table-scope {
   display: flex;
   flex-wrap: wrap;
@@ -238,13 +236,6 @@
   color: var(--muted);
   font-size: var(--text-size, 12px);
   white-space: nowrap;
-}
-
-.table-toolbar-divider {
-  width: 1px;
-  height: 16px;
-  margin: 0 6px;
-  background: var(--border);
 }
 
 .filter-chip {

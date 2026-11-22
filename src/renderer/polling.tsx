@@ -216,24 +216,21 @@ export function PollingControls({
       <SettingsHeader
         page="polling-settings"
         tip="Desktop only. Empty intervals turn automatic polling off. Worktrees scan only while their tab is visible. Manual polls still work while paused."
-      >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            void attempt(() =>
-              api.setPollSettings(Object.fromEntries(pollKeys.map((key) => [key, null]))),
-            )
-          }
-        >
-          Reset polling defaults
-        </button>
-        {onOpenMonitor && (
-          <button type="button" onClick={onOpenMonitor}>
-            Open polling monitor
-          </button>
-        )}
-      </SettingsHeader>
+        actions={[
+          {
+            id: "polling-0",
+            label: "Reset polling defaults",
+            run: () =>
+              void attempt(() =>
+                api.setPollSettings(Object.fromEntries(pollKeys.map((key) => [key, null]))),
+              ),
+            disabled: busy,
+          },
+          ...(onOpenMonitor
+            ? [{ id: "polling-1", label: "Open polling monitor", run: onOpenMonitor }]
+            : []),
+        ]}
+      ></SettingsHeader>
       {error && (
         <p className="error-banner" role="alert">
           {error}

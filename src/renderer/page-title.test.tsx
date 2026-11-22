@@ -59,7 +59,7 @@ it.each([
         ? ">Agent</span>"
         : ">Subagent</span>",
   );
-  if (page !== "relay") expect(html).not.toContain("&lt;custom title&gt;");
+  expect(html).toContain('<h2 class="content-page-title">&lt;custom title&gt;</h2>');
   expect(html).toContain('aria-label="Page navigation"');
   expect(html).toContain('aria-current="page"');
   expect(html).not.toMatch(/tabindex|<custom title>/);
@@ -123,8 +123,9 @@ it("keeps standalone secondary headings and embedded rename buttons out of neste
       <button type="button">Rename safe title</button>
     </PageTitle>,
   );
-  expect(html.match(/<button\b/g)).toHaveLength(2);
+  expect(html.match(/<button\b/g)).toHaveLength(1);
   expect(html).toContain('<span class="page-title-text">Agent</span>');
-  expect(html).toContain('<button type="button" class="page-selector-rename">Rename</button>');
+  expect(html).not.toContain("page-selector-rename");
+  expect(html).toContain('<h2 class="content-page-title">Rename safe title</h2>');
   expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button\b/);
 });

@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from "react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DesktopApi, LogPage } from "../bridge/index.js";
@@ -18,7 +18,7 @@ vi.mock("react", async (importOriginal) => {
 vi.mock("./data-table.js", () => ({
   DataTable: (options: Record<string, unknown>) => {
     forwarded.options = options;
-    return createElement("section", null, options.actions as ReactElement);
+    return createElement("section");
   },
 }));
 afterEach(() => vi.unstubAllGlobals());
@@ -45,22 +45,22 @@ it("offers private app-wide diagnostics without a database and wires explicit re
   );
   expect(markup).toContain('aria-label="Logs"');
   expect(markup).not.toContain("7 days and 20 MiB");
-  expect(markup).toContain("Pause viewing");
-  expect(markup).toContain("Refresh logs");
-  expect(markup).toContain("Clear logs");
+  const actions = forwarded.options.pageActions as { label: string; run(): void }[];
+  expect(actions.map((action) => action.label)).toEqual([
+    "Pause viewing",
+    "Refresh logs",
+    "Clear logs",
+  ]);
   expect(forwarded.options.tableId).toBe("logs");
   expect(forwarded.options.workspace).toBe("app-diagnostics");
   expect(forwarded.options.onRetainedQuery).toBeTypeOf("function");
   expect(queryLogs).not.toHaveBeenCalled();
-  const actions = forwarded.options.actions as ReactElement<{
-    children: ReactElement<{ onClick(): void }>[];
-  }>;
   const frame = vi.fn((callback: FrameRequestCallback) => {
     callback(0);
     return 1;
   });
   vi.stubGlobal("requestAnimationFrame", frame);
-  actions.props.children[1]?.props.onClick();
+  actions[1]?.run();
   await vi.waitFor(() => expect(frame).toHaveBeenCalledOnce());
   expect(queryLogs).toHaveBeenCalledOnce();
   expect(queryLogs).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }));

@@ -13,7 +13,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Lists only the current page and its parents, with the current page selected. No search field; arrows, Home/End and first-letter keys navigate the list. Selecting the current item closes the popup without navigation. Chat Rename remains a separate action. Pending selection disables the control. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
+- Limits: Lists only the current page and its parents, with the current page selected. No search field; arrows, Home/End and first-letter keys navigate the list. Selecting the current item closes the popup without navigation. Primary pages have a centered title inside their content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. Pending selection disables the control. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -79,7 +79,7 @@ Schema version: 1
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; Archived → card → More actions → Restore
+- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; title actions → Archived → card → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving confirms natively, stops only the assistant and preserves history.
@@ -219,7 +219,7 @@ Schema version: 1
 - ID: `prompts`
 - Status: shipped
 - Purpose: Customize project orchestration and handoff templates.
-- Access: Apps → Prompt Builder
+- Access: Apps → Prompt Builder → title actions for Save, Discard changes or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -261,7 +261,7 @@ Schema version: 1
 - ID: `providers`
 - Status: shipped
 - Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
-- Access: Providers → provider details
+- Access: Providers → provider details → title actions for Disconnect or Set as Primary
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -316,7 +316,7 @@ Schema version: 1
 
 - ID: `automations`
 - Status: shipped
-- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. Actions offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
+- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. The Scheduled Jobs title actions menu offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
 - Access: Apps → Scheduled Jobs
 - Prerequisite: none
 - Agent access: human-only
@@ -335,7 +335,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human service consent; native confirmation for service controls.
-- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh remains available. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
+- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh Scheduling Service remains available in the title actions menu. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
 - Pages: `system-manager`
 - Settings sections: none
 - Tools: none
@@ -373,7 +373,7 @@ Schema version: 1
 - ID: `updates`
 - Status: shipped
 - Purpose: Check, download and install macOS arm64 and Linux x64 desktop releases.
-- Access: Settings → Updates
+- Access: Settings → Updates → title actions
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Human approval before installation and shutdown.
@@ -443,7 +443,7 @@ Schema version: 1
 - ID: `logs`
 - Status: shipped
 - Purpose: Inspect private, typed desktop diagnostics.
-- Access: Apps → Data Viewer → Logs
+- Access: Apps → Data Viewer → Logs; title actions → Pause/Resume viewing, Refresh logs or Clear logs
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Native confirmation before Clear.

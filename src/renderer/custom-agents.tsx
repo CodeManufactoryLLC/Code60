@@ -59,17 +59,20 @@ export function CustomAgentsPage({
   return (
     <section className="custom-agents-page">
       <header className="table-controls">
-        <PageTitle page="custom-agents" />
-        <button
-          type="button"
-          aria-pressed={archived}
-          onClick={() => {
-            setMenu(undefined);
-            setArchived((v) => !v);
-          }}
-        >
-          {archived ? "Active assistants" : "Archived"}
-        </button>
+        <PageTitle
+          page="custom-agents"
+          actions={[
+            {
+              id: "custom-agents-0",
+              label: archived ? "Active assistants" : "Archived",
+              run: () => {
+                setMenu(undefined);
+                setArchived((v) => !v);
+              },
+              checked: archived,
+            },
+          ]}
+        />
       </header>
       {(error || storageError) && (
         <p role="alert" className="error-banner">

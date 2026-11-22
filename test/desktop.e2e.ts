@@ -36,6 +36,7 @@ import {
 } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -1706,7 +1707,7 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(panel.locator(".automation-service")).toHaveCount(0);
     await expect(panel.locator(".automation-table-card")).toHaveCount(1);
     await expect(panel.locator('[data-slot="accordion"]')).toHaveCount(1);
-    for (const title of ["Schedules", "Execution history"]) {
+    for (const title of ["Execution history"]) {
       const heading = panel.getByRole("heading", { name: title, exact: true });
       await expect(heading).toHaveCount(1);
       await expect(heading).toHaveAttribute("class", "table-card-title");
@@ -1731,11 +1732,13 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
       expect((await canvas.boundingBox())?.height).toBeGreaterThan(100);
     }
     const expectScheduleHeading = async () => {
-      const header = await panel.locator(".automation-page-heading").boundingBox();
-      const title = await panel
-        .getByRole("heading", { name: "Schedules", exact: true })
+      const header = await panel
+        .locator(".content-page-heading:not(.content-page-header-fallback)")
         .boundingBox();
-      const trigger = panel.getByRole("button", { name: "Actions", exact: true });
+      const title = await panel
+        .getByRole("heading", { name: "Scheduled Jobs", exact: true })
+        .boundingBox();
+      const trigger = panel.getByRole("button", { name: "Scheduled Jobs actions", exact: true });
       const actions = await trigger.boundingBox();
       const controls = await page.locator(".workspace-panel-controls").boundingBox();
       if (!header || !title || !actions || !controls)
@@ -1746,7 +1749,7 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
       expect(Math.abs(title.y + title.height / 2 - actions.y - actions.height / 2)).toBeLessThan(2);
       expect(header.y).toBeLessThan(controls.y + 4);
       await expect(trigger).toHaveText("");
-      await expect(trigger).toHaveAttribute("title", "Actions");
+      await expect(trigger).toHaveAttribute("title", "Scheduled Jobs actions");
       expect(
         await trigger.evaluate((element) => {
           const bounds = element.getBoundingClientRect();
@@ -1761,10 +1764,10 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
         (value) => document.documentElement.setAttribute("data-color-scheme", value),
         scheme,
       );
-      const actions = panel.getByRole("button", { name: "Actions", exact: true });
+      const actions = panel.getByRole("button", { name: "Scheduled Jobs actions", exact: true });
       await expectScheduleHeading();
       await actions.click();
-      await expect(page.getByRole("menu", { name: "Actions" })).toBeVisible();
+      await expect(page.getByRole("menu", { name: "Scheduled Jobs actions" })).toBeVisible();
       await page.screenshot({ path: test.info().outputPath(`automations-${scheme}.png`) });
       await page.keyboard.press("Escape");
       await expect(actions).toBeFocused();
@@ -1777,9 +1780,9 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(page.locator(".sidebar")).toHaveAttribute("data-open", "false");
     await page.getByRole("button", { name: "Open navigation sidebar", exact: true }).click();
     await expect(page.locator(".sidebar")).toHaveAttribute("data-open", "true");
-    const actions = panel.getByRole("button", { name: "Actions", exact: true });
+    const actions = panel.getByRole("button", { name: "Scheduled Jobs actions", exact: true });
     await actions.press("ArrowUp");
-    const menu = page.getByRole("menu", { name: "Actions" });
+    const menu = page.getByRole("menu", { name: "Scheduled Jobs actions" });
     await expect(menu.getByRole("menuitem", { name: "Refresh", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(menu).toHaveCount(0);
@@ -1818,8 +1821,10 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await page.screenshot({ path: test.info().outputPath("automation-editor-narrow.png") });
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(actions).toBeFocused();
-    await panel.getByRole("heading", { name: "Schedules", exact: true }).scrollIntoViewIfNeeded();
-    const headingRow = panel.locator(".automation-page-heading");
+    await panel
+      .getByRole("heading", { name: "Scheduled Jobs", exact: true })
+      .scrollIntoViewIfNeeded();
+    const headingRow = panel.locator(".content-page-heading:not(.content-page-header-fallback)");
     const resizeNav = page.getByRole("button", { name: "Resize navigation sidebar", exact: true });
     // Native minimum window width can keep the content wider than the requested size.
     for (let index = 0; index < 6; index++) {
@@ -1844,9 +1849,9 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
     await expect(menu).toBeVisible();
     await actions.click();
     await expect(menu).toHaveCount(0);
-    const schedulesTitle = panel.getByRole("heading", { name: "Schedules", exact: true });
-    await schedulesTitle.evaluate((element) => element.style.setProperty("--card-size", "40px"));
-    await expect(schedulesTitle).toHaveCSS("font-size", "40px");
+    const schedulesTitle = panel.getByRole("heading", { name: "Scheduled Jobs", exact: true });
+    await schedulesTitle.evaluate((element) => element.style.setProperty("--title-size", "64px"));
+    await expect(schedulesTitle).toHaveCSS("font-size", "64px");
     await expectScheduleHeading();
     expect(
       await panel
@@ -1854,7 +1859,7 @@ test("desktop: Scheduled Jobs uses accordions and an inline editor at narrow wid
         .evaluate((element) => element.scrollWidth > element.clientWidth),
     ).toBe(false);
     await page.screenshot({ path: test.info().outputPath("automations-heading-large-text.png") });
-    await schedulesTitle.evaluate((element) => element.style.removeProperty("--card-size"));
+    await schedulesTitle.evaluate((element) => element.style.removeProperty("--title-size"));
     await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
     await actions.click();
     await expect(menu).toBeInViewport();
@@ -2551,11 +2556,12 @@ test("desktop: settings icon actions and spacing preserve accessible controls an
       "0s",
     );
     await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
+    const trigger = () => page.locator(".content-page-heading:visible > button");
     await selectSettingsPage(page, "About");
-    const copy = page.getByRole("button", { name: "Copy version info", exact: true });
-    await expect(copy).toHaveClass(/icon-button/);
-    await expect(copy).toHaveText("");
-    await expect(copy.locator("svg")).toHaveCount(1);
+    await expect(trigger()).toHaveAccessibleName("About actions");
+    await expect(trigger()).toHaveText("");
+    await expect(trigger().locator("svg")).toHaveCount(1);
+    const copy = await pageCommand(page, "Copy version info");
     await copy.focus();
     await page.keyboard.press("Enter");
     await expect(
@@ -2564,47 +2570,39 @@ test("desktop: settings icon actions and spacing preserve accessible controls an
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toContain(
       `Code60: ${version}`,
     );
-    await expectIconAction(copy);
+    await expect(trigger()).toBeFocused();
+    await expectIconAction(trigger());
     await selectSettingsPage(page, "Memory");
     const memory = page.locator("#panel-settings-memory");
-    await expect(memory.getByRole("button", { name: "About Memory", exact: true })).toHaveCount(0);
     await expect(
       memory.getByRole("switch", { name: "Memory", exact: true }),
     ).toHaveAccessibleDescription(/verified provider.*privacy guarantee/);
-    const refresh = memory.getByRole("button", { name: "Refresh", exact: true });
-    await expect(refresh).toHaveClass(/icon-button/);
-    await expect(refresh).toHaveText("");
     const settings = (await page.evaluate(() => window.desktop.memorySnapshot())).settings;
+    const refresh = await pageCommand(page, "Refresh");
     await refresh.focus();
     await page.keyboard.press("Space");
     await expect(
       memory.getByRole("status").filter({ hasText: "Loading memory settings" }),
     ).toHaveCount(0);
     expect((await page.evaluate(() => window.desktop.memorySnapshot())).settings).toEqual(settings);
-    await expectIconAction(refresh);
+    await expect(trigger()).toBeFocused();
+    await expectIconAction(trigger());
     await selectSettingsPage(page, "Updates");
-    const updates = page.locator("#panel-settings-updates");
-    await expect(updates.getByRole("button", { name: "About Updates", exact: true })).toHaveCount(
-      0,
-    );
-    const check = updates.getByRole("button", { name: "Check for updates", exact: true });
-    await expect(check).toHaveClass(/icon-button/);
-    await expect(check).toHaveText("");
-    await expect(check.locator("svg")).toHaveCount(1);
+    const check = await pageCommand(page, "Check for updates");
     await expect(check).toHaveAccessibleDescription(/downloaded only when you choose/);
-    // Development builds retain the existing installed-release prerequisite.
     await expect(check).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(trigger()).toBeFocused();
     await selectSettingsPage(page, "Text");
     const group = page.getByRole("group", { name: "Normal Text", exact: true });
     await group.getByLabel("Font size").fill("18");
-    const reset = page.getByRole("button", { name: "Reset text", exact: true });
-    await expect(reset).toHaveClass(/icon-button/);
-    await expect(reset).toHaveText("");
+    const reset = await pageCommand(page, "Reset text");
     await reset.focus();
     await page.keyboard.press("Enter");
     await expect(group.getByLabel("Font size")).toHaveValue("");
     await expect(page.locator("body")).toHaveCSS("font-size", "13px");
-    await expectIconAction(reset);
+    await expect(trigger()).toBeFocused();
+    await expectIconAction(trigger());
     await page.reload();
     await selectSettingsPage(page, "Text");
     await expect(group.getByLabel("Font size")).toHaveValue("");
@@ -3079,6 +3077,20 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
     });
     const checkTitles = async (panel: Locator) => {
       await expect(panel).toBeVisible();
+      const content = page.locator(".content-page-heading:visible");
+      await expect(content).toHaveCount(1);
+      await expect(content.locator(".content-page-title")).toBeVisible();
+      await expect(content.locator("img, .navigation-icon")).toHaveCount(0);
+      const geometry = await content.evaluate((element) => {
+        const title = element.querySelector(".content-page-title")?.getBoundingClientRect();
+        const action = element.querySelector("button")?.getBoundingClientRect();
+        const row = element.getBoundingClientRect();
+        if (!title) throw new Error("Missing content title");
+        return Math.abs(
+          (title.left + (action?.right ?? title.right)) / 2 - row.left - row.width / 2,
+        );
+      });
+      expect(geometry).toBeLessThan(1);
       const trail = page.locator(
         ".workspace-breadcrumbs > .page-breadcrumbs:not(.breadcrumb-exit)",
       );
@@ -3112,7 +3124,16 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
             textGap = range.getBoundingClientRect().left - glyph.right;
           }
           const bounds = element.getBoundingClientRect();
+          const card = element.closest<HTMLElement>(".workspace-breadcrumbs");
+          const cardStyle = card && getComputedStyle(card);
+          const contentWidth =
+            card && cardStyle
+              ? card.clientWidth -
+                Number.parseFloat(cardStyle.paddingLeft) -
+                Number.parseFloat(cardStyle.paddingRight)
+              : 1000;
           return {
+            expectedGap: contentWidth <= 480 ? 4 : 8,
             size: Number.parseFloat(getComputedStyle(element).fontSize),
             scale:
               Number.parseFloat(getComputedStyle(icon).getPropertyValue("--nav-icon-scale")) || 1,
@@ -3135,8 +3156,8 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
           await expect(title).toHaveAccessibleName("Home");
           await expect(title.locator(".page-title-text")).toHaveCSS("position", "absolute");
         } else {
-          expect(geometry.gap).toBeCloseTo(8, 3);
-          expect(geometry.textGap).toBeCloseTo(8, 0);
+          expect(geometry.gap).toBeCloseTo(geometry.expectedGap, 3);
+          expect(geometry.textGap).toBeCloseTo(geometry.expectedGap, 0);
           if (geometry.buttonPadding !== null) expect(geometry.buttonPadding).toBe("0px");
           expect(geometry.center).toBeLessThan(1);
         }
@@ -3151,7 +3172,16 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
           const text = element.querySelector(".page-title-text");
           if (!icon || !text) throw new Error("Missing breadcrumb icon or text");
           const box = icon.getBoundingClientRect();
+          const card = element.closest<HTMLElement>(".workspace-breadcrumbs");
+          const style = card && getComputedStyle(card);
+          const contentWidth =
+            card && style
+              ? card.clientWidth -
+                Number.parseFloat(style.paddingLeft) -
+                Number.parseFloat(style.paddingRight)
+              : 1000;
           return {
+            expectedGap: contentWidth <= 480 ? 4 : 8,
             size: Number.parseFloat(getComputedStyle(element).fontSize),
             scale:
               Number.parseFloat(getComputedStyle(icon).getPropertyValue("--nav-icon-scale")) || 1,
@@ -3162,7 +3192,7 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
         });
         expect(geometry.width).toBeCloseTo(Math.min(geometry.size * geometry.scale, 40), 1);
         expect(geometry.height).toBeCloseTo(Math.min(geometry.size * geometry.scale, 40), 1);
-        expect(geometry.gap).toBe(8);
+        expect(geometry.gap).toBe(geometry.expectedGap);
       }
       for (const separator of await trail.locator(".breadcrumb-separator:visible").all()) {
         const geometry = await separator.evaluate((element) => ({
@@ -4076,7 +4106,7 @@ test("desktop: fixed navigation cards, bounded Polling, page gaps and responsive
     await selectSettingsPage(page, "Polling");
     const polling = page.locator("#panel-settings .polling-settings");
     await expect(polling).toBeVisible();
-    await expect(polling.getByRole("button", { name: "Reset polling defaults" })).toBeDisabled();
+    await expect(await pageCommand(page, "Reset polling defaults")).toBeDisabled();
     const columns = await polling
       .locator(":scope > .settings-group")
       .evaluateAll((groups) => groups.map((group) => group.getBoundingClientRect().width));
@@ -7116,9 +7146,7 @@ test("desktop: database connection gates splash and workspace controls", async (
     await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme", { exact: true })).toBeEnabled();
     await selectSettingsPage(page, "Polling");
-    await expect(
-      page.getByRole("button", { name: "Open polling monitor", exact: true }),
-    ).toBeDisabled();
+    await expect(await pageCommand(page, "Open polling monitor")).toBeDisabled();
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(notice).toBeVisible();
     await application.evaluate(({ BrowserWindow }) =>
@@ -7206,11 +7234,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       .getByRole("combobox", { name: "Message to orchestrator", exact: true })
       .fill("Fix parser validation");
     await chat.getByRole("button", { name: "Send", exact: true }).click();
-    await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: ok", exact: true }),
-    ).toBeVisible();
+    await expect(await pageCommand(page, "Rename")).toBeVisible();
     const manualTitle = "Manual parser title longer than nineteen";
     const sidebar = page.locator("nav.chat-sidebar");
     await sidebar.getByRole("button", { name: "Rename chat: ok", exact: true }).press("Enter");
@@ -7222,10 +7246,7 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await rename.getByRole("textbox", { name: "Chat name" }).fill("Parser work");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await expect(sidebar.getByRole("button", { name: "Parser work", exact: true })).toBeVisible();
-    await page
-      .locator(".workspace-breadcrumbs")
-      .getByRole("button", { name: "Rename chat: Parser work", exact: true })
-      .click();
+    await (await pageCommand(page, "Rename")).click();
     await rename.getByRole("textbox", { name: "Chat name" }).fill(manualTitle);
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await sidebar
@@ -7441,9 +7462,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
     await selectSidebarPage(page, "Chat");
     await footer.getByRole("button", { name: "Update available", exact: true }).click();
     await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Download update", exact: true }),
-    ).toBeInViewport();
+    await expect(await pageCommand(page, "Download update")).toBeInViewport();
     await page.reload();
     await expect(
       footer.getByRole("button", { name: "Update available", exact: true }),
@@ -7465,16 +7484,14 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
       "value",
       "42",
     );
-    await page.getByRole("button", { name: "Cancel download", exact: true }).click();
+    await (await pageCommand(page, "Cancel download")).click();
     await expect(
       footer.getByRole("button", { name: "Update available", exact: true }),
     ).toBeVisible();
     await expect(popup).toHaveCount(0);
     await publish("9.3.0", "ready", 400);
     await footer.getByRole("button", { name: "Ready to install", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Install and restart", exact: true }),
-    ).toBeInViewport();
+    await expect(await pageCommand(page, "Install and restart")).toBeInViewport();
     // A stale status response cannot erase a downloaded update.
     await publish("9.1.0", "available", 1);
     await expect(
@@ -8879,7 +8896,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const updates = page.getByRole("region", { name: "Updates", exact: true });
     await selectSettingsPage(page, "Updates");
     await expect(updates.getByRole("status")).toContainText("installed release build");
-    await expect(updates.getByRole("button", { name: "Check for updates" })).toBeDisabled();
+    await expect(await pageCommand(page, "Check for updates")).toBeDisabled();
     expect(await page.evaluate(() => window.desktop.update("status"))).toMatchObject({
       status: "unavailable",
     });
@@ -8917,7 +8934,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       expect(value).toBeTruthy();
       await expect(about.getByText(value as string, { exact: true })).toBeVisible();
     }
-    await about.getByRole("button", { name: "Copy version info" }).click();
+    await (await pageCommand(page, "Copy version info")).click();
     await expect(about.getByRole("status")).toHaveText("Version info copied.");
     expect(await application.evaluate(({ clipboard }) => clipboard.readText())).toContain(
       `Code60: ${version}`,
@@ -9781,7 +9798,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     const buttonSize = page
       .getByRole("group", { name: "Button Text", exact: true })
       .getByLabel("Font size");
-    const resetText = page.getByRole("button", { name: "Reset text", exact: true });
+    const resetText = await pageCommand(page, "Reset text");
     await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "15px");
     await expect(resetText).toHaveCSS("font-size", "13px");
     for (const size of [8, 13, 15, 16, 24, 32, 48]) {
@@ -9853,7 +9870,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await selectSidebarPage(page, "Sessions");
     await settingsTab.click();
     await selectSettingsPage(page, "Text");
-    await page.getByRole("button", { name: "Reset text", exact: true }).click();
+    await (await pageCommand(page, "Reset text")).click();
     for (const name of roles) {
       const group = page.getByRole("group", { name, exact: true });
       await expect(group.getByLabel("Font size")).toHaveValue("");
@@ -9863,10 +9880,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(page.locator(".workspace-breadcrumbs h1")).toHaveCSS("text-transform", "none");
     await expect(page.locator("#tab-chat")).toHaveCSS("font-size", "15px");
     await expect(page.locator("#tab-chat")).toHaveCSS("font-family", /IBM Plex Sans/);
-    await expect(page.getByRole("button", { name: "Reset text", exact: true })).toHaveCSS(
-      "font-size",
-      "13px",
-    );
+    await expect(await pageCommand(page, "Reset text")).toHaveCSS("font-size", "13px");
     await selectSettingsPage(page, "Appearance");
     await expect(page.getByLabel("Theme")).toHaveValue("system");
     await expect(page.locator(".settings-page pre, .settings-page code")).toHaveCount(0);
@@ -10398,22 +10412,20 @@ test("desktop: agent setup wizard gates legacy entry, connects providers without
     await page.locator("#provider-claude").click();
     await expect(page.locator("#panel-provider")).toBeVisible();
     expect(await readdir(processLog)).toEqual(processesBeforeDetails);
-    await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Providers", exact: true }),
-    ).toBeVisible();
+    const providerSelector = page
+      .locator(".workspace-breadcrumbs")
+      .getByRole("combobox", { name: "Current page", exact: true });
+    await expect(providerSelector).toHaveText("Claude");
+    await providerSelector.click();
+    await expect(page.getByRole("option", { name: "Providers", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(
       page.locator("#panel-provider").getByText("Verified provider", { exact: true }),
     ).toBeVisible();
     await expect(
       page.locator("#panel-provider").getByText("No saved model defaults."),
     ).toBeVisible();
-    await page
-      .locator("#panel-provider")
-      .getByRole("button", { name: "More actions for Claude", exact: true })
-      .click();
-    await page.getByRole("menuitem", { name: "Disconnect", exact: true }).click();
+    await (await pageCommand(page, "Disconnect")).click();
     await expect(providers).toBeVisible();
     await expect(page.locator("#provider-claude")).toHaveCount(0);
     expect(JSON.parse(await readFile(file, "utf8")).agentSetup.enabled).toEqual([
@@ -10831,8 +10843,8 @@ test("desktop: parent project cards preserve conversations, unread state, worker
     await projectHome.locator(`[data-feature="${chatId}"]`).click();
     await expect(chat.getByRole("combobox")).toHaveValue("Retain project A draft");
     await expect(row.locator(".chat-unread")).toHaveCount(0);
-    await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveText("Rename");
-    await page.locator(".workspace-breadcrumbs .page-selector-rename").click();
+    await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveCount(0);
+    await (await pageCommand(page, "Rename")).click();
     const renameDialog = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await renameDialog.getByRole("textbox", { name: "Chat name" }).fill("Renamed conversation");
     await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
@@ -10902,7 +10914,7 @@ test("desktop: prompt template editing and persistence", async () => {
     const originalPlanning = originalContract.split("\n")[3];
     await expect(panel.getByRole("textbox")).toHaveCount(13);
     await expect(template).toHaveCount(0);
-    const save = panel.getByRole("button", { name: "Save", exact: true });
+    const save = () => pageCommand(page, "Save");
     const fields = panel.getByRole("combobox", { name: "Insert merge field" });
     const preview = panel.locator(".prompt-editor-main .prompt-editor-preview");
     const showPreview = panel.getByRole("button", { name: "Preview", exact: true });
@@ -11013,12 +11025,12 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(role).toHaveValue(editedContract[0]);
     await expect(planning).toHaveValue(editedContract[3]);
     await planning.fill("");
-    await expect(save).toBeDisabled();
+    await expect(await save()).toBeDisabled();
     await expect(panel.locator(".prompt-editor-problem")).toContainText("Planning");
     await planning.fill(editedContract[3]);
     // Save all clauses while viewing their combined, read-only body.
     await showPreview.click();
-    await save.click();
+    await (await save()).click();
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
     await expect(preview).toHaveText(editedContract.join("\n"));
     await editTemplate.click();
@@ -11072,7 +11084,7 @@ test("desktop: prompt template editing and persistence", async () => {
     await selectSidebarPage(page, "Sessions");
     await tab.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
-    await save.click();
+    await (await save()).click();
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
     await page.reload();
     await tab.click();
@@ -11081,12 +11093,12 @@ test("desktop: prompt template editing and persistence", async () => {
     await role.fill("Unsaved role.");
     await planning.fill("Unsaved planning.");
     await showPreview.click();
-    await panel.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await (await pageCommand(page, "Discard changes")).click();
     await expect(preview).toHaveText(editedContract.join("\n"));
     await editTemplate.click();
     await expect(role).toHaveValue("You are controlled by Code60.");
     await expect(planning).toHaveValue("Make a plan and wait for acceptance.");
-    await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
+    await (await pageCommand(page, "Reset to default")).click();
     await expect(role).toHaveValue(/Code60's orchestration assistant/);
     await expect(planning).toHaveValue(originalPlanning ?? "");
     await showPreview.click();
@@ -11097,19 +11109,19 @@ test("desktop: prompt template editing and persistence", async () => {
     await expect(panel.getByRole("status")).toHaveText("Source: Saved edit.");
     await template.fill("{{unknown}}");
     await expect(template).toHaveAttribute("aria-invalid", "true");
-    await expect(save).toBeDisabled();
+    await expect(await save()).toBeDisabled();
     await showPreview.click();
     await expect(preview).toHaveText("Fix the template to see a preview.");
     await expect(panel.getByRole("status")).toContainText([
       "Unsaved changes.",
       "This template unknown merge field 'unknown'.",
     ]);
-    await expect(save).toBeDisabled();
-    await panel.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await expect(await save()).toBeDisabled();
+    await (await pageCommand(page, "Discard changes")).click();
     await expect(preview).toHaveText("Agent: claude");
     await editTemplate.click();
     await expect(template).toHaveValue("Agent: {{agent}}");
-    await panel.getByRole("button", { name: "Reset to default", exact: true }).click();
+    await (await pageCommand(page, "Reset to default")).click();
     await expect(panel.getByRole("status")).toBeEmpty();
   } finally {
     await application.close().catch(() => {});
@@ -11833,7 +11845,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     });
     await query.press("Enter");
     await expect(query).toBeFocused();
-    await expect(query).toHaveCSS("outline-color", "rgb(29, 78, 216)");
+    await expect(query).toHaveCSS("outline-color", "rgb(30, 64, 175)");
     await expect(query).toHaveCSS("box-shadow", /2px/);
     await expect
       .poll(async () => (await query.boundingBox())?.y ?? Infinity)
@@ -12146,7 +12158,7 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     await tableSettings.getByLabel("Row density").focus();
     await page.keyboard.press("Tab");
     await expect(rowLines).toBeFocused();
-    await expect(rowLines).toHaveCSS("outline-color", "rgb(29, 78, 216)");
+    await expect(rowLines).toHaveCSS("outline-color", "rgb(30, 64, 175)");
     await expect(rowLines).toHaveCSS("box-shadow", /2px/);
     await rowLines.check();
     await expect(rowLines).toHaveCSS("border-radius", "0px");
@@ -13735,7 +13747,7 @@ test("desktop: simplified memory settings save immediately and manage automatic 
     await memory.getByRole("switch", { name: "Memory", exact: true }).click();
     await expect(memory.getByRole("alert")).toContainText("could not be confirmed");
     await expect(memory.getByRole("switch", { name: "Memory", exact: true })).toBeChecked();
-    await memory.getByRole("button", { name: "Refresh", exact: true }).click();
+    await (await pageCommand(page, "Refresh")).click();
     await expect(memory.getByRole("alert")).toHaveCount(0);
     await memory.screenshot({ path: test.info().outputPath("memory-settings.png") });
     expect(errors).toEqual([]);
@@ -13902,8 +13914,8 @@ test("desktop: RAG manually indexes, retrieves and retains its database snapshot
       await expect(card).toHaveCSS("padding", "12px 16px");
     }
     await expect(rag.locator('label[for="rag-message"]')).toHaveCount(0);
-    await rag.getByRole("button", { name: "Index conversations", exact: true }).click();
-    await expect(rag.getByRole("button", { name: "Rebuild index", exact: true })).toBeEnabled({
+    await (await pageCommand(page, "Index conversations")).click();
+    await expect(await pageCommand(page, "Rebuild index")).toBeEnabled({
       timeout: 30_000,
     });
     const message = rag.getByRole("textbox", { name: "Retrieval query", exact: true });
@@ -13928,16 +13940,14 @@ test("desktop: RAG manually indexes, retrieves and retains its database snapshot
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
-    await rag.getByRole("button", { name: "Clear index", exact: true }).click();
-    await expect(rag.getByRole("button", { name: "Rebuild index", exact: true })).toBeEnabled();
+    await (await pageCommand(page, "Clear index")).click();
+    await expect(await pageCommand(page, "Rebuild index")).toBeEnabled();
     expect(await rag.locator(".rag-results").textContent()).toBe(saved);
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
-    await rag.getByRole("button", { name: "Clear index", exact: true }).click();
-    await expect(
-      rag.getByRole("button", { name: "Index conversations", exact: true }),
-    ).toBeEnabled();
+    await (await pageCommand(page, "Clear index")).click();
+    await expect(await pageCommand(page, "Index conversations")).toBeEnabled();
     await expect(rag.locator(".rag-results")).toHaveCount(0);
     await expect(rag.getByRole("button", { name: "Retrieve", exact: true })).toBeDisabled();
   } finally {
@@ -14053,17 +14063,24 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await expect(rows.first()).toHaveCSS("color", "rgb(247, 247, 242)");
     await page.screenshot({ path: "test-results/episodic-memory-clouds-dark.png" });
     await page.emulateMedia({ colorScheme: "light" });
-    await memory.getByRole("button", { name: "Clear", exact: true }).click();
+    await (await pageCommand(page, "Clear")).click();
     await expect(rows).toHaveCount(0);
     await expect(memory.getByRole("status")).toHaveCount(0);
-    await memory.getByRole("button", { name: "Edit prompt", exact: true }).click();
+    const editPrompt = await pageCommand(page, "Edit prompt");
+    await expect(editPrompt).toHaveAttribute("aria-checked", "false");
+    await editPrompt.click();
     const editor = memory.getByRole("textbox", { name: "Extraction prompt", exact: true });
     await expect(editor).toBeFocused();
+    await expect(await pageCommand(page, "Edit prompt")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("button", { name: "Episodic Memory actions", exact: true }),
+    ).toBeFocused();
     await editor.fill("Extract preferences only.");
     await extract.click();
     await expect(rows).toHaveText(["The user prefers concise responses."]);
     await page.screenshot({ path: "test-results/episodic-memory-prompt.png" });
-    await memory.getByRole("button", { name: "Clear", exact: true }).click();
+    await (await pageCommand(page, "Clear")).click();
     await editor.fill("Wait for cancellation.");
     await extract.click();
     await expect(limit).toBeDisabled();
@@ -14090,7 +14107,7 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
     await expect(settingsPages).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("tab", { name: "Episodic Memory", exact: true })).toBeFocused();
     await expect(memory).toBeVisible();
-    await memory.getByRole("button", { name: "Edit prompt", exact: true }).click();
+    await (await pageCommand(page, "Edit prompt")).click();
     await expect(editor).toHaveValue("Extract preferences only.");
     await expect(limit).toHaveValue("3");
     await expect(extract).toHaveText("Extract from 3 events");
@@ -14111,14 +14128,14 @@ test("desktop: Episodic Memory extracts event statements, edits prompts, clears,
       "false",
     );
     await page.getByRole("tab", { name: "Episodic Memory", exact: true }).click();
-    await memory.getByRole("button", { name: "Edit prompt", exact: true }).click();
+    await (await pageCommand(page, "Edit prompt")).click();
     await memory.getByRole("button", { name: "Reset prompt", exact: true }).click();
     await extract.click();
     await expect(rows).toHaveCount(2);
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(620, 620),
     );
-    await expect(memory.getByRole("button", { name: "Clear", exact: true })).toBeVisible();
+    await expect(await pageCommand(page, "Clear")).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
@@ -15018,9 +15035,9 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     }
     await selectSettingsPage(page, "Updates");
     await expect(page.getByRole("button", { name: "About Updates", exact: true })).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Check for updates", exact: true }),
-    ).toHaveAccessibleDescription(/Updates are downloaded only when you choose/);
+    await expect(await pageCommand(page, "Check for updates")).toHaveAccessibleDescription(
+      /Updates are downloaded only when you choose/,
+    );
     await selectSettingsPage(page, "Polling");
     await expect(
       page.getByRole("spinbutton", { name: "Chart ticker seconds", exact: true }),
@@ -15715,17 +15732,31 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(divider).toBeHidden();
     await expect(selector).toBeVisible();
     const controlRow = page.locator(".workspace-panel-controls");
-    await expect(controlRow).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    expect(
-      await controlRow.evaluate((row) => {
-        const bounds = row.getBoundingClientRect();
-        const hit = document.elementFromPoint(
-          bounds.left + bounds.width / 2,
-          bounds.top + bounds.height / 2,
-        );
-        return hit === row || row.contains(hit);
-      }),
-    ).toBe(true);
+    await expect(controlRow).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(page.locator(".chat-conversations > .content-page-header-slot")).toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)",
+    );
+    await page.screenshot({ path: test.info().outputPath("content-chat-narrow-header-hit.png") });
+    const headerHit = await controlRow.evaluate((row) => {
+      const bounds = row.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        bounds.left + bounds.width / 2,
+        bounds.top + bounds.height / 2,
+      );
+      const slot = document.querySelector(".chat-conversations > .content-page-header-slot");
+      const card = document.querySelector(".chat-conversations");
+      return {
+        passed: !!hit?.closest(".content-page-header-slot"),
+        hit: hit && `${hit.tagName}.${hit.className}`,
+        row: bounds.toJSON(),
+        header: slot?.getBoundingClientRect().toJSON(),
+        card: card?.getBoundingClientRect().toJSON(),
+        overflow: card && getComputedStyle(card).overflow,
+        scroll: document.querySelector(".chat-workspace-body")?.scrollTop,
+      };
+    });
+    expect(headerHit, JSON.stringify(headerHit)).toMatchObject({ passed: true });
     await page.screenshot({ path: test.info().outputPath("content-chat-narrow-text.png") });
     await page.screenshot({ path: "test-results/file-panel-narrow.png" });
     await page.evaluate(() => {
@@ -18120,7 +18151,7 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
     const heading = page
       .locator(".workspace-breadcrumbs")
       .getByRole("heading", { name: "Command Builder", level: 1, exact: true });
-    const newCommand = editor.getByRole("button", { name: "New command", exact: true });
+    const newCommand = page.getByRole("button", { name: "Command Builder actions", exact: true });
     const scroll = editor.locator(".commands-scroll");
     for (const size of [
       { width: 1200, height: 600 },
@@ -18138,7 +18169,7 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
       await expect(heading).toBeInViewport();
       await expect(newCommand).toBeInViewport();
       expect(await heading.boundingBox()).toEqual(before);
-      await newCommand.click();
+      await (await pageCommand(page, "New command")).click();
       await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("Fixture review");
     }
     if (originalViewport) await page.setViewportSize(originalViewport);
@@ -18153,7 +18184,7 @@ test("desktop: Command Builder drafts, keyboard picker and send-time expansion",
       list.getByRole("button", { name: "$fixture-review Fixture review", exact: true }),
     ).toBeVisible();
     await editor.getByLabel("Prompt", { exact: true }).fill("Unsaved edit.");
-    await editor.getByRole("button", { name: "New command", exact: true }).click();
+    await (await pageCommand(page, "New command")).click();
     await editor.getByLabel("Title", { exact: true }).fill("Fixture audit");
     await editor.getByLabel("Prompt", { exact: true }).fill("Audit changes.");
     await list.getByRole("button", { name: /\$fixture-review/ }).click();

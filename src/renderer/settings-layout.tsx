@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { PageAction } from "./content-page-header.js";
 import {
   isSettingsSection,
   type PageId,
@@ -15,17 +16,24 @@ export function SettingsHeader({
   page,
   tip,
   children,
+  actions,
 }: {
   id?: string;
   page: PageId | SettingsSectionId;
   tip?: string;
   children?: ReactNode;
+  actions?: readonly PageAction[] | undefined;
 }) {
   const title = isSettingsSection(page) ? settingsLabels[page] : pageDefinitions[page].label;
   return (
     <div className="settings-section-header">
       <div className="settings-title">
-        <PageTitle page={page} as={isSettingsSection(page) ? "h1" : "h2"} id={id} />
+        <PageTitle
+          page={page}
+          as={isSettingsSection(page) ? "h1" : "h2"}
+          id={id}
+          actions={actions}
+        />
         {tip && <InfoTip label={title}>{tip}</InfoTip>}
       </div>
       {children && <div className="settings-actions">{children}</div>}

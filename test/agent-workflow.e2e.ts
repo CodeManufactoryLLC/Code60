@@ -15,6 +15,7 @@ import { type ElectronApplication, expect, type Locator, type Page, test } from 
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { fileViewLabels } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
 // Automatic integration and message Undo each write several private checkpoint and
@@ -791,11 +792,10 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         await entry.click();
         await expect(entry).toHaveAttribute("aria-current", "true");
         await expect(composer).toHaveValue(draft);
-        await expect(
-          page.locator(".workspace-breadcrumbs .page-selector-rename"),
-        ).toHaveAccessibleName(
-          `Rename chat: ${await entry.locator(".chat-sidebar-label").textContent()}`,
+        await expect(page.locator(".content-page-heading:visible .content-page-title")).toHaveText(
+          (await entry.locator(".chat-sidebar-label").textContent()) ?? "",
         );
+        await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveCount(0);
         await page.waitForFunction(() =>
           document
             .querySelector(".workspace-breadcrumbs")
@@ -824,8 +824,8 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         ).toBeLessThan(1);
       }
       await page.screenshot({ path: test.info().outputPath(`chat-breadcrumbs-${theme}.png`) });
-      await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toBeVisible();
-      await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveCSS(
+      await expect(page.locator(".content-page-heading:visible > button")).toBeVisible();
+      await expect(page.locator(".content-page-heading:visible > button")).toHaveCSS(
         "text-decoration-line",
         "none",
       );
@@ -2062,11 +2062,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
         "true",
       );
       const chat = page.locator(".orchestration-chat-page:visible");
-      await expect(
-        page
-          .locator(".workspace-breadcrumbs")
-          .getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
-      ).toBeVisible();
+      await expect(await pageCommand(page, "Rename")).toBeVisible();
       const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
       const text = `Saved exchange ${i + 1}`;
       await expect(composer).toBeEditable();
@@ -2075,10 +2071,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await composer.press("Enter");
       await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
       const title = `Saved project ${i + 1}`;
-      await page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: /^Rename chat:/ })
-        .click();
+      await (await pageCommand(page, "Rename")).click();
       const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
       await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill(title);
       await rename.getByRole("button", { name: "Save", exact: true }).click();
@@ -2099,16 +2092,9 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       "true",
     );
     const archivedChat = page.locator(".orchestration-chat-page:visible");
-    await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
-    ).toBeVisible();
+    await expect(await pageCommand(page, "Rename")).toBeVisible();
     await expect(archivedChat.getByRole("combobox")).toBeEditable();
-    await page
-      .locator(".workspace-breadcrumbs")
-      .getByRole("button", { name: /^Rename chat:/ })
-      .click();
+    await (await pageCommand(page, "Rename")).click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
@@ -2449,11 +2435,11 @@ test("workflow: custom assistants without a database, instruction edits, archive
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toHaveCount(0);
     expect(await readFile(statePath)).toEqual(saved);
-    await page.getByRole("button", { name: "Archived", exact: true }).click();
+    await (await pageCommand(page, "Archived")).click();
     await (await cardMenu("Reviewer"))
       .getByRole("menuitem", { name: "Restore", exact: true })
       .click();
-    await page.getByRole("button", { name: "Active assistants", exact: true }).click();
+    await (await pageCommand(page, "Active assistants")).click();
     await expect(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toBeVisible();

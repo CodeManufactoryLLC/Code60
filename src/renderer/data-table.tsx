@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import type { PageAction } from "./content-page-header.js";
 import { FilterControls } from "./filter-controls.js";
 import { drawIcon, Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
@@ -62,11 +63,17 @@ function dataColumnIndex(index: number, actionsColumn: number): number {
   return actionsColumn >= 0 && index >= actionsColumn ? index - 1 : index;
 }
 
-export function TableHeading({ tableId }: { tableId: TableId }) {
+export function TableHeading({
+  tableId,
+  actions,
+}: {
+  tableId: TableId;
+  actions?: readonly PageAction[] | undefined;
+}) {
   return tableId === "automations" || tableId === "automation-history" ? (
     <h2 className="table-card-title">{tableTitles[tableId]}</h2>
   ) : (
-    <PageTitle page={tableId} className="table-title">
+    <PageTitle page={tableId} className="table-title" actions={actions}>
       {tableTitles[tableId]}
     </PageTitle>
   );
@@ -82,7 +89,7 @@ function compare<Row, Key extends keyof Row>(a: Row, b: Row, key: Key): number {
 
 export interface TableOptions {
   tableId: TableId;
-  actions?: ReactNode;
+  pageActions?: readonly PageAction[] | undefined;
   workspace?: string | undefined;
   lines: TableLines;
   density: RowDensity;
@@ -128,7 +135,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   addLabel,
   addDisabled,
   viewState,
-  actions: toolbarActions,
+  pageActions,
   scope,
   onRetainedQuery,
 }: {
@@ -476,7 +483,7 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
   return (
     <div className="data-table" data-heading-lines={lines.heading}>
       <div className="table-controls">
-        <TableHeading tableId={tableId} />
+        <TableHeading tableId={tableId} actions={pageActions} />
         {scope && <div className="table-scope">{scope}</div>}
         <TableControlGroup label="Table controls">
           <button
@@ -532,8 +539,6 @@ export function DataTable<Row extends { id: string }, Key extends keyof Row & st
           >
             <Icon name="settings--adjust" />
           </button>
-          {toolbarActions && <span className="table-toolbar-divider" aria-hidden="true" />}
-          {toolbarActions}
           {onAdd && (
             <button
               type="button"

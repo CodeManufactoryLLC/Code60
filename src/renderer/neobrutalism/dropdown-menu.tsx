@@ -1,6 +1,7 @@
 // Adapted from neobrutalism.dev/r/dropdown-menu.json; see README.md and LICENSE.
 import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { AnchoredMenu } from "../anchored-menu.js";
+import type { PageAction } from "../content-page-header.js";
 import { Icon } from "../icons.js";
 import { Button } from "./button.js";
 
@@ -17,8 +18,8 @@ export function DropdownMenu({
   iconOnly?: boolean;
   active: boolean;
   disabled: boolean;
-  items: readonly { label: string; run(): void }[];
-  triggerRef?: RefObject<HTMLButtonElement | null>;
+  items: readonly PageAction[];
+  triggerRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const id = useId();
   const localTrigger = useRef<HTMLButtonElement>(null);

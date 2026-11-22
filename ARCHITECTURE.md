@@ -1832,15 +1832,11 @@ ownership, never the globally selected project. Relay remains application-owned.
 Secondary section headings, file-panel headings and embedded table history are not
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
-Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Center the
-Schedules heading and its chevron-only Actions menu together, with a 12px gap.
-Share the main card's top corner-control row rather than reserving extra vertical
-space. Keep symmetric side clearance for the panel toggles, allow long headings
-to wrap, and keep the heading row visible while scrolling. The menu retains its
-Actions accessible name, tooltip and existing New scheduled job/Refresh handlers;
-creation and editing use inline Card/Button/Textarea controls. Execution history
-remains a table, with its own icon-free Card Titles heading. Only the outer
-Scheduled Jobs title is a page breadcrumb.
+Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Its shared
+content header is titled Scheduled Jobs; its adjacent chevron menu offers New
+scheduled job and Refresh, preserving inline creation/editing and trigger focus.
+The schedules section remains separately labelled Schedules. Execution history
+retains its icon-free Card Titles heading and its table tools.
 
 Each collapsed job header has independent run/cancel, delete and disclosure
 buttons in DOM and visual order. Use 24px transparent circles in 28px targets,
@@ -2557,8 +2553,8 @@ available without a database under existing destination guards.
 
 The page selector uses a 240px by 44px border-box trigger with 2px vertical margins, centered horizontally
 and vertically in its header card with either sidebar state. Symmetric side tracks
-keep the separate Rename action from shifting the selector. Narrow layouts shrink
-the trigger only when required to fit the card and Rename; height stays fixed.
+balance the history controls without shifting the selector. Narrow layouts shrink
+the trigger only when required to fit the card and history controls; height stays fixed.
 Long labels use ellipsis with their full text available to accessibility and the
 native title tooltip. Trigger artwork is capped at 40px. The popup is 240px wide
 within viewport bounds and grows vertically with its current path options.
@@ -2585,7 +2581,7 @@ The Light window and sidebar backdrops both use pale blue #f4f8fe; white Card
 foregrounds remain #ffffff. The sidebar shell uses a 1px outline, 5px corners and the same 4px
 hard shadow as main content, with bottom clearance for the shadow. The breadcrumb
 containing Card uses 5px corners with no decorative shadow.
-Its centered 240x44 selector with 2px vertical margins and separate Rename action retain their own geometry.
+Its centered 240x44 selector retains its 2px vertical margins; Rename belongs to the content-header menu.
 Dark backdrops keep their palette; forced colors removes decorative shadows.
 This presentation change adds no capability, preference or catalog update.
 
@@ -2598,7 +2594,7 @@ focus handoff and no-work navigation. Images remain decorative with labelled
 buttons and a visible keyboard focus ring. Keep the group inside the breadcrumb
 Card but outside the portalled/inert title owner. Symmetric reserved tracks keep
 the selector centered; compact containers reduce button size and selector padding
-to avoid overlapping Rename. The sidebar toggle stays in the main content Card’s upper-left corner.
+to fit the history controls. The sidebar toggle stays in the main content Card’s upper-left corner.
 Update the catalog access path without changing authority or availability.
 
 Monochrome icons are an optional Settings → Appearance → Icons preference, off
@@ -2621,9 +2617,8 @@ wrappers. This presentation change adds no capability or availability rule.
 Panel toggles share a stationary row at the top of the main content Card: sidebar
 open/close at the upper left, Files open/close at the upper right when an active
 file-panel owner exists. The row overlays the Card's grid cell and follows the
-measured conversation inset through sidebar and inspector resizing. Reserve 44px
-above scrolling content, except Scheduled Jobs whose centered heading shares that
-row with clear space for the corner controls. Keep the native window strip and
+measured conversation inset through sidebar and inspector resizing. Share an in-flow header row of at least 44px with the centered content title and
+actions. Larger text grows that row; do not reserve a second empty toggle row. Keep the native window strip and
 breadcrumb Card free of panel toggles. The active PanelShell portals its existing action into the shared
 right slot in both open/closed states, preserving labels, disabled state, tab
 order, focus, draft/scroll state and read ownership. Inactive retained panels
@@ -2671,3 +2666,35 @@ conversation ownership, panel sizing and main-card corner toggle unchanged.
 The shared combobox accepts optional trigger ref/keyboard handler, list label
 and empty placeholder; existing breadcrumb defaults stay intact. The Files
 catalog describes this UI without granting any new execution or read authority.
+
+## Shared content page headers
+
+Every primary page and Settings/detail page has a stationary header inside its main
+Card, separate from the breadcrumb navigation Card. Center a text-only page title
+and its chevron-only command menu together with a 12px gap, 36px trigger target,
+44px minimum row and symmetric corner-control clearance. Pin that in-flow row
+while stacked chat cards scroll; conversation Cards use overflow:clip so the outer
+workspace remains the sticky scroll owner. Use saved Page Titles
+styles; wrap long/large names and grow the row in normal flow. Preserve the shared
+24px content gap and theme surfaces. Pages without commands show only the title.
+Detail pages use their actual project/provider/chat name; Scheduled Jobs uses its
+page name. No extra title artwork or duplicate button row belongs in the body.
+
+PageTitle publishes renderer-only PageAction descriptors and its content title
+into the nearest own Card header slot. Ordinary page Cards and conversation Cards
+own separate slots. Hidden/inert retained owners cannot publish or keep popups;
+pending navigation may retain its inert title. Preserve inherited disabled
+Settings fieldsets across portals and close without focusing hidden owners.
+Stable action IDs, existing handlers, busy/disabled rules, toggle state, descriptions,
+confirmations and owner guards remain intact. Menus retain keyboard/typeahead,
+viewport anchoring and focus handoff to editors/dialogs. No global action registry,
+bridge API, setting or schema is introduced.
+
+Move existing header commands (including table-appended page commands) into that
+menu. Keep table Search/Filters/Columns/Settings, scope selectors, paging, grid add
+rows, creation cards, forms, composer/message controls, card/row menus, service
+lifecycle controls and recovery buttons in context. Navigation and Files toggles
+remain directly clickable in the main Card corners; their overlay is transparent
+and only its corner targets intercept clicks. Breadcrumb Rename moves to the chat
+content-header menu. Nested Files views, dialogs and section headings retain their
+own layouts. Update capability access paths without granting new availability.

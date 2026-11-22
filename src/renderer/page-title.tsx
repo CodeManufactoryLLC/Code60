@@ -3,10 +3,12 @@ import {
   createContext,
   isValidElement,
   type ReactNode,
+  type RefObject,
   useContext,
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
+import { ContentPageHeader, type PageAction } from "./content-page-header.js";
 import { isSettingsSection, pageDefinitions, settingsIcons, settingsLabels } from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import type { NavigationTarget } from "./navigation-tree.js";
@@ -39,6 +41,8 @@ export function PageTitle({
   children,
   target,
   breadcrumbs = true,
+  actions,
+  actionsTrigger,
 }: {
   page: PageTitleId;
   as?: "h1" | "h2";
@@ -47,6 +51,8 @@ export function PageTitle({
   children?: ReactNode;
   target?: NavigationTarget | undefined;
   breadcrumbs?: boolean;
+  actions?: readonly PageAction[] | undefined;
+  actionsTrigger?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const navigation = useContext(PageTitleNavigationContext);
   const slot = useRef<HTMLElement>(null);
@@ -114,10 +120,13 @@ export function PageTitle({
     })),
     { id: currentId, label: currentLabel, icon: icon && <NavigationIcon name={icon} /> },
   ];
-  const rename =
-    chatBreadcrumb && isValidElement<{ children?: ReactNode; className?: string }>(children)
-      ? cloneElement(children, { className: "page-selector-rename" }, "Rename")
-      : null;
+  const contentLabel =
+    typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : isValidElement<{ children?: ReactNode }>(children) &&
+          typeof children.props.children === "string"
+        ? children.props.children
+        : currentLabel;
   const placeholder = (
     <span className={className ? `page-title ${className}` : "page-title"}>
       {icon && <NavigationIcon name={icon} />}
@@ -143,12 +152,19 @@ export function PageTitle({
             }}
           />
         </Heading>
-        {rename}
       </BreadcrumbItem>
     </BreadcrumbList>
   );
   return (
     <>
+      <ContentPageHeader
+        title={contentLabel}
+        ownerKey={currentId}
+        actions={actions}
+        triggerRef={actionsTrigger}
+        portal={navigation?.header}
+        pending={navigation?.selectionPending}
+      />
       <Breadcrumb
         ref={slot}
         className={header ? "page-breadcrumbs page-title-placeholder" : "page-breadcrumbs"}

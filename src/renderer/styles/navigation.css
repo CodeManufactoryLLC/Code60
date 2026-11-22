@@ -544,11 +544,6 @@
   justify-self: center;
 }
 
-.workspace-breadcrumbs .page-selector-rename {
-  grid-column: 3;
-  justify-self: start;
-}
-
 .workspace-breadcrumbs[data-breadcrumb-height-motion] {
   overflow: hidden;
 }

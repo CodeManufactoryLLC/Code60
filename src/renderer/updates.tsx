@@ -123,37 +123,32 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
   const { state, error, act } = updates;
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
-      <SettingsHeader page="updates" id={id}>
+      <SettingsHeader
+        page="updates"
+        id={id}
+        actions={[
+          {
+            id: "updates-0",
+            label: "Check for updates",
+            run: () => void act("check"),
+            disabled: !state || !["idle", "available", "error"].includes(state.status),
+            describedBy: `${id}-help`,
+          },
+          ...(state?.status === "available"
+            ? [{ id: "updates-1", label: "Download update", run: () => void act("download") }]
+            : []),
+          ...(state?.status === "downloading"
+            ? [{ id: "updates-2", label: "Cancel download", run: () => void act("cancel") }]
+            : []),
+          ...(state?.status === "ready"
+            ? [{ id: "updates-3", label: "Install and restart", run: () => void act("install") }]
+            : []),
+        ]}
+      >
         <span className="sr-only" id={`${id}-help`}>
           Updates are downloaded only when you choose. Your settings, databases and worktrees are
           preserved.
         </span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Check for updates"
-          title="Check for updates"
-          aria-describedby={`${id}-help`}
-          disabled={!state || !["idle", "available", "error"].includes(state.status)}
-          onClick={() => void act("check")}
-        >
-          <Icon name="renew" />
-        </button>
-        {state?.status === "available" && (
-          <button type="button" className="primary" onClick={() => void act("download")}>
-            Download update
-          </button>
-        )}
-        {state?.status === "downloading" && (
-          <button type="button" onClick={() => void act("cancel")}>
-            Cancel download
-          </button>
-        )}
-        {state?.status === "ready" && (
-          <button type="button" className="primary" onClick={() => void act("install")}>
-            Install and restart
-          </button>
-        )}
       </SettingsHeader>
       <SettingsCard>
         <div className="settings-row">

@@ -12,7 +12,6 @@ import { Icon } from "./icons.js";
 import { InfoTip } from "./overlays.js";
 import { PageTitle } from "./page-title.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
-import { TableControlGroup } from "./table-controls.js";
 
 export function CommandsPage({
   commands,
@@ -88,25 +87,26 @@ export function CommandsPage({
   return (
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
-        <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
+        <PageTitle
+          page="commands"
+          className="table-title"
+          id={`${id}-heading`}
+          actions={[
+            {
+              id: "commands-page-0",
+              label: "New command",
+              run: () => {
+                setSelected("new");
+                setError("");
+              },
+              disabled: busy || commands.length >= COMMAND_LIMIT,
+            },
+          ]}
+        />
         <InfoTip label="About commands">
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with $name to use one.
         </InfoTip>
-        <TableControlGroup label="Command actions">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="New command"
-            disabled={busy || commands.length >= COMMAND_LIMIT}
-            onClick={() => {
-              setSelected("new");
-              setError("");
-            }}
-          >
-            <Icon name="add" />
-          </button>
-        </TableControlGroup>
       </header>
       <div className="commands-scroll">
         <div className="prompt-editor-body">

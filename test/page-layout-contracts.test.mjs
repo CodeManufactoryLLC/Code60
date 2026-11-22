@@ -101,9 +101,7 @@ it("keeps unrelated controls square while Card primitives own migrated surfaces"
   expect(rule("files", "#panel-chat")).toContain("border-radius: 0");
   expect(rule("files", "#panel-chat")).toContain("border: 0");
   expect(rule("layout", ".page-panel")).not.toContain("border-radius:");
-  expect(rule("layout", ".page-panel")).toContain(
-    "padding: calc(1px + var(--panel-controls-height)) 1px 1px",
-  );
+  expect(rule("layout", ".page-panel")).toContain("padding: 1px");
   expect(sheet("base")).toContain('input[type="radio"] { border-radius: 50%; }');
   expect(rule("base", 'input[type="checkbox"][role="switch"]')).toContain(
     "border-radius: var(--ui-radius)",
@@ -267,9 +265,6 @@ it("centers the page selector in both sidebar states without changing the conten
   const heading = rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs .page-title");
   expect(heading).toContain("grid-column: 2");
   expect(heading).toContain("justify-self: center");
-  expect(rule("navigation", ".workspace-breadcrumbs .page-selector-rename")).toContain(
-    "grid-column: 3",
-  );
   expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("margin-left:");
 });
 
@@ -367,7 +362,7 @@ it("uses the existing card radius and independent Card Titles role for Automatio
 it("adds the shared header gap to content pages but excludes navigation-card and chat headers", () => {
   expect(sheet("tokens")).toContain("--page-header-gap: 24px");
   for (const [file, selector] of [
-    ["automations", ".automation-page-heading"],
+    ["layout", ".content-page-header-slot"],
     ["settings", ".settings-section-header:has(.page-breadcrumbs)"],
     [
       "tables",

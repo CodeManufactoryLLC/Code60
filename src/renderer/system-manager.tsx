@@ -179,17 +179,18 @@ export function SystemManagerPage({
   return (
     <section className="system-manager-page">
       <header className="table-controls">
-        <PageTitle page="system-manager" className="table-title" />
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Refresh Scheduling Service"
-          title="Refresh Scheduling Service"
-          disabled={busy || reading}
-          onClick={() => void refresh.current()}
-        >
-          <Icon name="renew" />
-        </button>
+        <PageTitle
+          page="system-manager"
+          className="table-title"
+          actions={[
+            {
+              id: "system-manager-0",
+              label: "Refresh Scheduling Service",
+              run: () => void refresh.current(),
+              disabled: busy || reading,
+            },
+          ]}
+        />
       </header>
       <section
         className="automation-service"

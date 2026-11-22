@@ -11,7 +11,7 @@ it("labels Scheduling Service and waits for verified status before offering life
   );
   expect(markup).toContain('<span class="page-title-text">System Manager</span>');
   expect(markup).toContain("Scheduling Service");
-  expect(markup).toContain('aria-label="Refresh Scheduling Service"');
+  expect(markup).toContain('aria-label="System Manager actions"');
   expect(markup).toContain('data-state="checking"');
   expect(markup).toContain("Checking…");
   for (const label of ["Install", "Repair", "Start", "Stop", "Uninstall"])
