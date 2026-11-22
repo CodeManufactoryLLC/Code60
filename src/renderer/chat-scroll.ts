@@ -20,6 +20,14 @@ export function createChatScroll(
   let remainder = 0;
   let written = element.scrollTop;
   let layoutPending = false;
+  let wasLayoutMoving = false;
+  const settleLayout = () => {
+    const moving = position.following && layoutMoving();
+    // transitionend may clear the marker before the final resize is delivered.
+    const settling = moving || (position.following && wasLayoutMoving);
+    wasLayoutMoving = moving;
+    return settling;
+  };
   const geometry = () => `${element.clientWidth}:${element.clientHeight}:${element.scrollHeight}`;
   let measured = geometry();
   const bottom = () => Math.max(0, element.scrollHeight - element.clientHeight);
@@ -45,7 +53,8 @@ export function createChatScroll(
     if (!position.following) return;
     const distance = bottom() - element.scrollTop;
     const duration = response();
-    if (!animate() || duration <= 0 || layoutMoving() || Math.abs(distance) <= 1) {
+    const settling = settleLayout();
+    if (!animate() || duration <= 0 || settling || Math.abs(distance) <= 1) {
       write(bottom());
       return;
     }
@@ -61,13 +70,14 @@ export function createChatScroll(
     const nextGeometry = geometry();
     if (measured !== nextGeometry) layoutPending = true;
     measured = nextGeometry;
+    const settling = settleLayout();
     if (!position.following) {
       cancelFollow();
       if (immediate) {
         cancel();
         write(position.top);
       }
-    } else if (immediate || !animate() || response() <= 0 || layoutMoving()) {
+    } else if (immediate || !animate() || response() <= 0 || settling) {
       cancel();
       write(bottom());
     } else if (frame === undefined && Math.abs(bottom() - element.scrollTop) > 1) {
@@ -78,8 +88,12 @@ export function createChatScroll(
   };
   return {
     update,
+    finishLayout() {
+      if (position.following) update(true);
+    },
     pause() {
       cancel();
+      wasLayoutMoving = false;
       position.following = false;
       position.top = element.scrollTop;
     },
@@ -90,6 +104,7 @@ export function createChatScroll(
     },
     reveal(top: number, duration = 0, valid: () => boolean = () => true) {
       cancel();
+      wasLayoutMoving = false;
       position.following = false;
       write(top);
       if (duration <= 0 || !animate()) return;
@@ -151,7 +166,18 @@ export function useChatScroll(active: boolean, key: string) {
     current.update(true);
     const resize = new ResizeObserver(() => current.update());
     resize.observe(element);
-    if (content.current) resize.observe(content.current);
+    const inner = content.current;
+    if (inner) resize.observe(inner);
+    const layoutEnded = (event: TransitionEvent) => {
+      if (
+        event.propertyName === "height" &&
+        event.target instanceof HTMLElement &&
+        event.target.classList.contains("chat-message-layout")
+      )
+        // A missed frame can finish without any intermediate resize measurement.
+        current.finishLayout();
+    };
+    inner?.addEventListener("transitionend", layoutEnded);
     const settle = () => current.update(true);
     const wheel = (event: WheelEvent) => {
       if (event.deltaY < 0) current.pause();
@@ -177,6 +203,7 @@ export function useChatScroll(active: boolean, key: string) {
       current.dispose();
       controller.current = null;
       resize.disconnect();
+      inner?.removeEventListener("transitionend", layoutEnded);
       element.removeEventListener("scroll", current.onScroll);
       element.removeEventListener("wheel", wheel);
       element.removeEventListener("keydown", keyboard);

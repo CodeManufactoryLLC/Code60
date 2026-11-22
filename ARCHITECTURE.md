@@ -2150,6 +2150,9 @@ Message height also eases in normal document flow, including new user prompts an
 additional streamed lines. This moves the status row continuously without translating
 it over message text. While following the bottom, scrolling tracks those already-eased
 height changes directly rather than applying a second lag that throws status off-screen.
+Remember the active height transition through its final resize measurement, even
+when transitionend arrives first. Reconcile that event explicitly and remove its
+listener with the view; reader input still releases following immediately.
 The empty placeholder follows the pending status row so its removal cannot relocate it
 when the first prompt arrives. Historical mounts, viewport-width reflows, hidden views,
 reduced motion and instant timing settle without replay. Activity dropdowns keep their

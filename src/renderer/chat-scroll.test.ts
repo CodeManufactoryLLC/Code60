@@ -71,6 +71,42 @@ function setup(initialResponse = 75) {
 }
 
 describe("main-chat smooth following", () => {
+  it("finishes an unmeasured transition without interrupting a reader's reveal", () => {
+    const { element, controller, position, frames } = setup();
+    controller.update(true);
+    element.scrollHeight += 400;
+    controller.finishLayout();
+    expect(element.scrollTop).toBe(1400);
+    expect(frames.size).toBe(0);
+    controller.reveal(300, 200);
+    expect(frames.size).toBe(1);
+    element.scrollHeight += 200;
+    controller.finishLayout();
+    expect(position.following).toBe(false);
+    expect(element.scrollTop).toBe(300);
+    expect(frames.size).toBe(1);
+    controller.dispose();
+  });
+
+  it("settles the last height measurement when transitionend arrives before its resize", () => {
+    const { element, controller, frames, setLayoutMoving } = setup();
+    controller.update(true);
+    setLayoutMoving(true);
+    element.scrollHeight += 100;
+    controller.update();
+    expect(element.scrollTop).toBe(1100);
+    // A busy native renderer can deliver transitionend before the final ResizeObserver.
+    setLayoutMoving(false);
+    element.scrollHeight += 400;
+    controller.update();
+    expect(element.scrollTop).toBe(1500);
+    expect(frames.size).toBe(0);
+    // Subsequent non-animated content retains the configured smooth response.
+    element.scrollHeight += 100;
+    controller.update();
+    expect(frames.size).toBe(1);
+  });
+
   it("keeps status anchored during already-smoothed message growth instead of applying a second lag", () => {
     const { element, controller, position, frames, advance, setLayoutMoving } = setup();
     controller.update(true);

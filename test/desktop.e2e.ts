@@ -17461,6 +17461,14 @@ test("desktop: read-only revisions span workers and preserve saved diffs after r
   }
 });
 
+interface StatusMotion {
+  before: number;
+  overflow: boolean;
+  rows: number[];
+  baseline: number[];
+  samples: number[][];
+}
+
 test("desktop: incoming message height moves status smoothly and keeps it anchored while following", async () => {
   test.setTimeout(60_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-status-motion-")));
@@ -17513,46 +17521,66 @@ test("desktop: incoming message height moves status smoothly and keeps it anchor
       // Arm the read-only sampler before releasing the external provider boundary.
       // Reply arrival must not race an assumed delay or the initial prompt's scroll.
       const sampling = await page.evaluateHandle(
-        (previousMessages) => ({
-          finished: new Promise<{ before: number; overflow: boolean; rows: number[] }>(
-            (resolve, reject) => {
-              const started = performance.now();
-              let entered: number | undefined;
-              let before: number | undefined;
-              let overflow = false;
-              const rows: number[] = [];
-              const sample = () => {
-                const chat = document.querySelector(".orchestration-chat-page:not([hidden])");
-                const status = chat?.querySelector(".activity-display");
-                const viewport = chat?.querySelector(".transcript");
-                if (status && viewport) {
-                  const top = status.getBoundingClientRect().top;
-                  if ((chat?.querySelectorAll(".event.message").length ?? 0) <= previousMessages) {
-                    before = top;
-                    overflow = viewport.scrollHeight > viewport.clientHeight + 1;
-                  } else {
-                    entered ??= performance.now();
-                    rows.push(top);
-                    if (performance.now() - entered > 600 && before !== undefined) {
-                      resolve({ before, overflow, rows });
-                      return;
+        ({ previousMessages, stall }) => ({
+          finished: new Promise<StatusMotion>((resolve, reject) => {
+            const started = performance.now();
+            let entered: number | undefined;
+            let before: number | undefined;
+            let overflow = false;
+            const rows: number[] = [];
+            let baseline: number[] = [];
+            const samples: number[][] = [];
+            const sample = () => {
+              const chat = document.querySelector(".orchestration-chat-page:not([hidden])");
+              const status = chat?.querySelector(".activity-display");
+              const viewport = chat?.querySelector(".transcript");
+              if (status && viewport) {
+                const top = status.getBoundingClientRect().top;
+                const state = [
+                  top,
+                  viewport.scrollTop,
+                  viewport.scrollHeight,
+                  viewport.clientHeight,
+                  chat?.querySelectorAll('[data-layout-animating="true"]').length ?? 0,
+                  performance.now() - started,
+                ];
+                if ((chat?.querySelectorAll(".event.message").length ?? 0) <= previousMessages) {
+                  before = top;
+                  baseline = state;
+                  overflow = viewport.scrollHeight > viewport.clientHeight + 1;
+                } else {
+                  if (entered === undefined) {
+                    entered = performance.now();
+                    if (stall) {
+                      // Simulate a missed native frame near transition completion.
+                      // This must not introduce a second scroll easing/position jump.
+                      const until = performance.now() + 200;
+                      while (performance.now() < until) {
+                        // Deliberate renderer stall in this isolated test fixture.
+                      }
                     }
                   }
+                  rows.push(top);
+                  samples.push(state);
+                  if (performance.now() - entered > 600 && before !== undefined) {
+                    resolve({ before, overflow, rows, baseline, samples });
+                    return;
+                  }
                 }
-                if (performance.now() - started > 6000) {
-                  reject(new Error("Could not sample status movement around the incoming reply"));
-                  return;
-                }
-                // Sample after layout observers have synchronized scrolling for the painted frame.
-                requestAnimationFrame(() => setTimeout(sample, 0));
-              };
-              sample();
-            },
-          ),
+              }
+              if (performance.now() - started > 6000) {
+                reject(new Error("Could not sample status movement around the incoming reply"));
+                return;
+              }
+              // Sample after layout observers have synchronized scrolling for the painted frame.
+              requestAnimationFrame(() => setTimeout(sample, 0));
+            };
+            sample();
+          }),
         }),
-        count,
+        { previousMessages: count, stall: overflowing },
       );
-      let motion: { before: number; overflow: boolean; rows: number[] };
+      let motion: StatusMotion;
       try {
         await writeFile(gate, "release");
         motion = await sampling.evaluate(({ finished }) => finished);
@@ -17561,9 +17589,10 @@ test("desktop: incoming message height moves status smoothly and keeps it anchor
       }
       expect(motion.overflow).toBe(overflowing);
       if (overflowing) {
-        expect(Math.max(...motion.rows.map((top) => Math.abs(top - motion.before)))).toBeLessThan(
-          2,
-        );
+        expect(
+          Math.max(...motion.rows.map((top) => Math.abs(top - motion.before))),
+          JSON.stringify(motion),
+        ).toBeLessThan(2);
       } else {
         const distance = (motion.rows.at(-1) ?? motion.before) - motion.before;
         expect(distance).toBeGreaterThan(40);

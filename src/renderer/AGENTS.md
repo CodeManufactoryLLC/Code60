@@ -516,7 +516,9 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 - Smooth occupied message height, not just opacity/translation, so new prompts and
   streamed replies move the status row without a jump or overlap. Bottom-follow
   tracks already-smoothed height directly rather than adding a second lag. Keep
-  pending status above the empty placeholder, preserve instant history/width reflows,
+  the final resize anchored even when transitionend clears the animation marker
+  before that measurement; explicit reader input still releases follow.
+  Keep pending status above the empty placeholder, preserve instant history/width reflows,
   and leave activity dropdowns outside these message-height wrappers.
 
 - Keep the left sidebar borderless from the drag strip through the footer; do not
