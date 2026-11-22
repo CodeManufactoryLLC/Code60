@@ -49,7 +49,7 @@ run records, and user-selected SQLite databases.
 Installed releases check for updates about 30 seconds after startup and every four
 hours afterward. The on-by-default **Automatically check for updates** switch in
 Apps → Update Manager is saved across restarts. Automatic failures stay quiet; manual
-checks show errors. A footer button opens the Updates section and shows availability,
+checks show errors. A footer button opens Apps → Update Manager and shows availability,
 download progress, or readiness to install. An in-app popup offers **Download now**
 and **Later** once per version, remembered across renderer reloads and app restarts.
 It waits for other dialogs to close. Checks never start downloads.
