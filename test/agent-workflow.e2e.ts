@@ -556,8 +556,6 @@ async function checkSidebarNavigation(page: Page, repo: string) {
 
   for (const theme of ["light", "dark"]) {
     await page.locator("#tab-apps").click();
-    if ((await page.locator("#apps-card-toggle").getAttribute("aria-expanded")) === "false")
-      await page.locator("#apps-card-toggle").click();
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
@@ -575,10 +573,12 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
     );
     await expect(page.locator("#panel-settings")).toHaveCSS("box-shadow", "none");
-    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", "none");
-    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("border-radius", "5px");
-    await expect(page.locator(".sidebar-navigation-card")).toHaveCount(1);
-    await expect(page.locator(".sidebar-navigation-card > .sidebar-section")).toHaveCount(6);
+    for (const card of await page.locator(".sidebar-navigation-card").all())
+      await expect(card).toHaveCSS("box-shadow", "none");
+    for (const card of await page.locator(".sidebar-navigation-card").all())
+      await expect(card).toHaveCSS("border-radius", "5px");
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCount(6);
+    await expect(page.locator(".sidebar-navigation-card > .sidebar-card-header")).toHaveCount(6);
     for (const section of await page.locator(".sidebar-section + .sidebar-section").all())
       await expect(section).toHaveCSS("border-top-width", "1px");
     const canvas = theme === "light" ? "rgb(244, 248, 254)" : "rgb(17, 17, 17)";
@@ -814,7 +814,8 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         "aria-current",
         "true",
       );
-      await expect(page.locator("#projects-card-toggle")).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator("#projects-card-toggle")).toHaveCount(0);
+      await expect(page.locator("#chat-pages")).not.toHaveAttribute("hidden");
       await page.locator("#tab-chat").press("ArrowRight");
       await expect(project.locator(".project-chat-toggle")).toHaveAttribute(
         "aria-expanded",
@@ -840,20 +841,19 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       });
       expect(observed).toEqual({ disabled: [], retained: true });
     }
-    await page.locator("#tab-settings").press("ArrowRight");
     await page.locator("#advanced-toggle").press("ArrowRight");
     await page.locator("#experiments-toggle").press("ArrowRight");
-    await page.locator("#tab-settings").press("ArrowLeft");
-    for (const id of ["settings-pages", "advanced-pages", "experiment-pages"])
+    await page.locator("#advanced-toggle").press("ArrowLeft");
+    for (const id of ["advanced-pages", "experiment-pages"])
       await expect(page.locator(`#${id}`)).toHaveAttribute("inert", "");
-    await page.locator("#tab-settings").press("ArrowRight");
-    for (const id of ["advanced-toggle", "experiments-toggle"])
-      await expect(page.locator(`#${id}`)).toHaveAttribute("aria-expanded", "false");
-    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#settings-pages")).not.toHaveAttribute("inert");
+    await page.locator("#advanced-toggle").press("ArrowRight");
+    await expect(page.locator("#advanced-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#experiments-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.locator("#tables-toggle").press("ArrowRight");
-    await page.locator("#tab-apps").press("ArrowLeft");
+    await page.locator("#tables-toggle").press("ArrowLeft");
     await expect(page.locator("#tables-toggle")).toHaveAttribute("aria-expanded", "false");
-    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#app-pages")).not.toHaveAttribute("inert");
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
     await page.locator("#tab-apps").click();
     await page.mouse.move(1000, 500);
@@ -1285,9 +1285,6 @@ for (const custom of [false, true]) {
         );
 
         if (custom) {
-          const disclosure = page.locator("#settings-card-toggle");
-          if ((await disclosure.getAttribute("aria-expanded")) === "false")
-            await disclosure.click();
           await page
             .locator("#settings-pages")
             .getByRole("tab", { name: "Text", exact: true })
@@ -1641,8 +1638,6 @@ for (const custom of [false, true]) {
           "utf8",
         );
         for (const source of ["Sessions", "Worktrees"]) {
-          const apps = page.locator("#apps-card-toggle");
-          if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
           const tables = page.locator("#tables-toggle");
           if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
           await page.getByRole("tab", { name: source, exact: true }).click();
@@ -2258,8 +2253,6 @@ test("workflow: custom assistants without a database, instruction edits, archive
     await expect(page.locator(".custom-agent-actions")).toHaveCount(0);
     for (const theme of ["light", "dark"]) {
       await page.locator("#tab-apps").click();
-      if ((await page.locator("#apps-card-toggle").getAttribute("aria-expanded")) === "false")
-        await page.locator("#apps-card-toggle").click();
       await page.locator("#tab-settings-appearance").click();
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
       await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
@@ -2728,8 +2721,6 @@ test("workflow: completed project plans reopen latest after restart with narrow 
     const geometry = [];
     await page.setViewportSize({ width: 1600, height: 1000 });
     for (const size of [14, 32, 64]) {
-      const settings = page.locator("#settings-card-toggle");
-      if ((await settings.getAttribute("aria-expanded")) === "false") await settings.click();
       await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
       await page
         .getByRole("group", { name: "Button Text", exact: true })

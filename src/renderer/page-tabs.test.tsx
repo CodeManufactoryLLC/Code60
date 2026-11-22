@@ -58,11 +58,11 @@ function navigation(
 describe("database connection navigation", () => {
   it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
     const html = navigation(null);
-    expect(html).toMatch(/class="[^"]*sidebar-navigation-card"/);
-    expect(html.match(/data-slot="card"/g)).toHaveLength(2);
+    expect(html).toMatch(/class="[^"]*sidebar-navigation-card\b/);
+    expect(html.match(/data-slot="card"/g)).toHaveLength(7);
     expect(html.match(/class="[^"]*sidebar-section[^"]*"/g)).toHaveLength(6);
-    expect(html).toContain('id="assistants-toggle"');
-    expect(html).toContain('aria-controls="assistants-pages"');
+    expect(html).not.toContain('id="assistants-toggle"');
+    expect(html).toContain('id="assistants-pages"');
     expect(html).toContain('data-icon="app-assistants"');
     expect(html.indexOf('id="assistants-pages"')).toBeLessThan(
       html.indexOf('id="tab-custom-agents"'),
@@ -187,7 +187,7 @@ describe("database connection navigation", () => {
       expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Add Project"');
       const action = html.indexOf('class="icon-button project-sidebar-open"');
-      expect(action).toBeLessThan(html.indexOf('id="projects-card-toggle"'));
+      expect(html).not.toContain('id="projects-card-toggle"');
       expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
       expect(html).not.toContain('class="page-tab-label">Add Project</span>');
       expect(html).not.toContain(">project</span>");
@@ -243,13 +243,13 @@ describe("database connection navigation", () => {
 
 describe("sidebar labels and disclosure icons", () => {
   it.each(["appearance", "memory", "polling-settings", "updates"] as const)(
-    "keeps the selected Apps preference %s out of the collapsed Settings selection",
+    "keeps the selected Apps preference %s in its always-open card",
     (section) => {
       const html = navigation(null, undefined, section, "settings", false);
       expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).toContain(
         'aria-selected="false"',
       );
-      expect(html.match(/<button[^>]*id="tab-apps"[^>]*>/)?.[0]).toContain('data-active="true"');
+      expect(html.match(/<button[^>]*id="tab-apps"[^>]*>/)?.[0]).toContain('data-active="false"');
       expect(html.indexOf(`id="tab-settings-${section}"`)).toBeLessThan(
         html.indexOf('id="settings-pages"'),
       );
@@ -342,8 +342,9 @@ describe("sidebar labels and disclosure icons", () => {
         "experiment-pages",
       ]) {
         const group = html.match(new RegExp(`<div[^>]*id="${id}"[^>]*>`))?.[0];
-        expect(group).toContain(`aria-hidden="${!expanded}"`);
-        if (expanded) {
+        const closed = !expanded && !["chat-pages", "app-pages", "settings-pages"].includes(id);
+        expect(group).toContain(`aria-hidden="${closed}"`);
+        if (!closed) {
           expect(group).not.toContain('hidden=""');
           expect(group).not.toContain('inert=""');
         } else {
@@ -369,7 +370,7 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
       expect(html.match(/<img/g)).toHaveLength(33);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(9);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(3);
       expect(html.match(/class="navigation-icon"/g)).toHaveLength(35);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
@@ -419,15 +420,13 @@ describe("sidebar labels and disclosure icons", () => {
         "home-card-toggle",
         "assistants-toggle",
         "projects-card-toggle",
+        "providers-card-toggle",
         "apps-card-toggle",
         "settings-card-toggle",
       ]) {
-        const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
-        expect(toggle).toContain(`aria-expanded="${expanded}"`);
-        expect(toggle).toContain('class="icon-button sidebar-card-toggle"');
-        expect(toggle).toContain('data-tooltip=""');
-        expect(toggle).not.toContain("title=");
+        expect(html).not.toContain(`id="${id}"`);
       }
+      expect(html.match(/sidebar-navigation-card sidebar-section/g)).toHaveLength(5);
       for (const id of ["tables-toggle", "advanced-toggle", "experiments-toggle"]) {
         const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
         expect(toggle).toContain(`aria-expanded="${expanded}"`);

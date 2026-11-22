@@ -88,15 +88,13 @@ it("scopes saved defaults to the selected provider and shows the provider title"
   expect(html).not.toContain("Permissions");
 });
 
-it("mirrors provider navigation and primary status in a mounted inert sidebar group", () => {
+it("mirrors provider navigation and primary status in an always-open sidebar card", () => {
   const html = renderToStaticMarkup(
     <ProvidersSidebar
       setup={snapshot.agentSetup}
       management={management}
       selectedId="codex"
       active
-      expanded={false}
-      onExpanded={() => {}}
       onHome={() => {}}
       onOpen={() => {}}
       onKeyDown={() => {}}
@@ -106,10 +104,10 @@ it("mirrors provider navigation and primary status in a mounted inert sidebar gr
     />,
   );
   expect(html).toContain('aria-label="Add Provider"');
-  expect(html).toContain('aria-label="Expand Providers"');
+  expect(html).not.toContain('id="providers-card-toggle"');
   expect(html).toContain('id="provider-codex"');
   expect(html).toContain('aria-current="page"');
-  expect(html).toContain('hidden="" inert="" aria-hidden="true"');
+  expect(html.match(/<div[^>]*id="provider-pages"[^>]*>/)?.[0]).not.toMatch(/hidden|inert/);
   expect(html.match(/aria-label="More actions for /g)).toHaveLength(2);
 });
 

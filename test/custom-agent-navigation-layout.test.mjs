@@ -15,13 +15,11 @@ function rule(selector) {
   return matches.map((match) => match[2]).join("\n");
 }
 
-it("indents unopened and opened custom assistants through the shared label inset", () => {
-  expect(rule("#assistants-pages")).toMatch(/--nav-indent:\s*var\(--nav-step\);/);
+it("aligns first-level assistants and indents their conversation groups through the shared inset", () => {
+  expect(rule("#assistants-pages")).toMatch(/--nav-indent:\s*0px;/);
   const inset = rule("#custom-agent-pages .chat-sidebar-entry");
   expect(inset).toContain("var(--nav-item-padding)");
-  expect(inset).toContain(
-    "max(var(--nav-inset), calc(var(--nav-icon-scale, 2) * var(--button-size) + 8px))",
-  );
+  expect(inset).toContain("var(--nav-inset)");
   expect(inset).toContain("var(--nav-indent)");
   // Fixed text padding used a different origin from absolutely positioned icons.
   expect(`${navigation}\n${home}`).not.toMatch(

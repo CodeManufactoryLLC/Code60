@@ -18,7 +18,6 @@ import {
 import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import {
-  conversationProject,
   inNavigationBranch,
   navigationParent,
   parentActivation,
@@ -340,22 +339,13 @@ function PageTabList({
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
 }) {
-  const [providersExpanded, setProvidersExpanded] = useState(
-    () => localStorage.getItem("code60.providersExpanded") !== "false",
-  );
-  useEffect(() => {
-    localStorage.setItem("code60.providersExpanded", String(providersExpanded));
-  }, [providersExpanded]);
-  useLayoutEffect(() => {
-    if (tabs.active === "provider" && tabs.providerId) setProvidersExpanded(true);
-  }, [tabs.active, tabs.providerId]);
   const { pending: chatPending, error: chatError, chatAction, projectAction } = navigation;
-  const [homeExpanded, setHomeExpanded] = useState(
-    () => localStorage.getItem("code60.homeExpanded") !== "false",
-  );
-  useEffect(() => {
-    localStorage.setItem("code60.homeExpanded", String(homeExpanded));
-  }, [homeExpanded]);
+  const homeExpanded = true,
+    assistantsExpanded = true,
+    chatExpanded = true,
+    providersExpanded = true,
+    appsExpanded = true,
+    settingsExpanded = true;
   const relay = chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   const [customExpanded, setCustomExpanded] = useState(
     () => localStorage.getItem("code60.customAgentsExpanded") !== "false",
@@ -374,74 +364,16 @@ function PageTabList({
   }, [navigation.destination, selectedCustomAgent]);
   const relayId = relay && conversationId(relay);
   const relaySelected = relayId !== undefined && relayId === selectedId;
-  const [assistantsExpanded, setAssistantsExpanded] = useState(
-    () => localStorage.getItem("code60.assistantsExpanded") !== "false",
-  );
   const assistantActive =
     tabs.active === "custom-agents" ||
     (tabs.active === "chat" &&
       (relaySelected || relay?.workers?.includes(selectedId ?? "") || !!selectedCustomAgent));
-  useEffect(() => {
-    localStorage.setItem("code60.assistantsExpanded", String(assistantsExpanded));
-  }, [assistantsExpanded]);
-  const previousAssistantNavigation = useRef({ tabs, selectedId, navigationSerial });
-  useLayoutEffect(() => {
-    const previous = previousAssistantNavigation.current;
-    previousAssistantNavigation.current = { tabs, selectedId, navigationSerial };
-    if (
-      previous.tabs === tabs &&
-      previous.selectedId === selectedId &&
-      previous.navigationSerial === navigationSerial
-    )
-      return;
-    if (assistantActive) setAssistantsExpanded(true);
-    if (tabs.active === "chat" && selectedCustomAgent) setCustomExpanded(true);
-  }, [assistantActive, tabs, selectedCustomAgent, selectedId, navigationSerial]);
-  const setAssistantsDisclosure = (open: boolean) => {
-    setAssistantsExpanded(open);
-    if (!open) setCustomExpanded(false);
-  };
-  const [chatExpanded, setChatExpanded] = useState(
-    () => localStorage.getItem("code60.chatExpanded") !== "false",
-  );
-  useEffect(() => {
-    localStorage.setItem("code60.chatExpanded", String(chatExpanded));
-  }, [chatExpanded]);
   useLayoutEffect(() => {
     if (chatExpanded && selectedId && !relaySelected)
       document.querySelector("#chat-pages [aria-current='true']")?.scrollIntoView({
         block: "nearest",
       });
-  }, [chatExpanded, selectedId, relaySelected]);
-  const projectForConversation = (id: string | undefined) =>
-    conversationProject(id, openProjects ?? [], chats, runs);
-  const selectedConversationProject = projectForConversation(selectedId);
-  const previousSelection = useRef({ id: selectedId, serial: navigationSerial });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Reveal explicit destinations, not unrelated tab-object replacements or Relay navigation.
-  useLayoutEffect(() => {
-    const previous = previousSelection.current;
-    previousSelection.current = { id: selectedId, serial: navigationSerial };
-    const changed = previous.id !== selectedId || previous.serial !== navigationSerial;
-    const matches =
-      navigation.destination?.kind !== "conversation" || navigation.destination.id === selectedId;
-    if (changed && matches && tabs.active === "chat" && selectedConversationProject)
-      setChatExpanded(true);
-  }, [selectedId, navigationSerial, selectedConversationProject]);
-  useLayoutEffect(() => {
-    if (tabs.active === "project") setChatExpanded(true);
-  }, [tabs.active]);
-  const destinationProject =
-    navigation.destination?.kind === "project"
-      ? navigation.destination.id
-      : navigation.destination?.kind === "conversation"
-        ? projectForConversation(navigation.destination.id)
-        : undefined;
-  useLayoutEffect(() => {
-    if (navigation.destination && destinationProject) setChatExpanded(true);
-  }, [navigation.destination, destinationProject]);
-  const [settingsExpanded, setSettingsExpanded] = useState(
-    () => localStorage.getItem("code60.settingsExpanded") === "true",
-  );
+  }, [selectedId, relaySelected]);
   const [advancedExpanded, setAdvancedExpanded] = useState(
     () =>
       (localStorage.getItem("code60.advancedExpanded") ??
@@ -450,14 +382,10 @@ function PageTabList({
   const [experimentsExpanded, setExperimentsExpanded] = useState(
     () => localStorage.getItem("code60.experimentsExpanded") === "true",
   );
-  const [appsExpanded, setAppsExpanded] = useState(
-    () => localStorage.getItem("code60.toolsExpanded") !== "false",
-  );
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem("code60.tablesExpanded") === "true",
   );
   const navigationFrame = useRef<number | undefined>(undefined);
-  const previousActivePage = useRef<PageId | undefined>(undefined);
   const experimentActive = inNavigationBranch(tabs.active, "experiments");
   const advancedActive = inNavigationBranch(tabs.active, "advanced");
   const tableActive = inNavigationBranch(tabs.active, "tables");
@@ -469,12 +397,6 @@ function PageTabList({
   const settingsActive = (tabs.active === "settings" && sectionParent !== "apps") || advancedActive;
   const activeGroup = sectionParent ?? pageGroup(tabs.active);
   useLayoutEffect(() => {
-    const activeChanged = previousActivePage.current !== tabs.active;
-    previousActivePage.current = tabs.active;
-    if (sectionParent === "settings" || (activeChanged && advancedActive))
-      setSettingsExpanded(true);
-    if (appActive && tabs.active !== "apps") setAppsExpanded(true);
-    if (tabs.active === "search") setHomeExpanded(true);
     if (tableActive) setExpanded(true);
     if (advancedActive) setAdvancedExpanded(true);
     if (experimentActive) setExperimentsExpanded(true);
@@ -492,33 +414,19 @@ function PageTabList({
     return () => {
       if (navigationFrame.current !== undefined) cancelAnimationFrame(navigationFrame.current);
     };
-  }, [
-    tabs,
-    settingsSection,
-    sectionParent,
-    appActive,
-    tableActive,
-    advancedActive,
-    experimentActive,
-  ]);
+  }, [tabs, settingsSection, appActive, tableActive, advancedActive, experimentActive]);
   useEffect(() => {
     localStorage.setItem("code60.tablesExpanded", String(expanded));
   }, [expanded]);
-  useEffect(() => {
-    localStorage.setItem("code60.settingsExpanded", String(settingsExpanded));
-  }, [settingsExpanded]);
   useEffect(() => {
     localStorage.setItem("code60.advancedExpanded", String(advancedExpanded));
   }, [advancedExpanded]);
   useEffect(() => {
     localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
   }, [experimentsExpanded]);
-  useEffect(() => {
-    localStorage.setItem("code60.toolsExpanded", String(appsExpanded));
-  }, [appsExpanded]);
   const disclosures = {
-    apps: { open: appsExpanded, set: setAppsExpanded, panel: "app-pages" },
-    settings: { open: settingsExpanded, set: setSettingsExpanded, panel: "settings-pages" },
+    apps: { open: appsExpanded, panel: "app-pages" },
+    settings: { open: settingsExpanded, panel: "settings-pages" },
     tables: { open: expanded, set: setExpanded, panel: "table-pages" },
     advanced: { open: advancedExpanded, set: setAdvancedExpanded, panel: "advanced-pages" },
     experiments: {
@@ -534,7 +442,9 @@ function PageTabList({
       target.kind === "page" || target.kind === "settings" ? [target.id] : [],
     );
   const setDisclosure = (id: StaticParent, open: boolean) => {
-    disclosures[id].set(open);
+    const disclosure = disclosures[id];
+    if (!("set" in disclosure)) return;
+    disclosure.set(open);
     if (!open) for (const child of childIds(id)) if (isParent(child)) setDisclosure(child, false);
   };
   const descendants = (parent: StaticParent): (PageId | SettingsSectionId)[] =>
@@ -629,13 +539,11 @@ function PageTabList({
     if (id === "providers" && ["ArrowLeft", "ArrowRight", "ArrowDown"].includes(event.key)) {
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setProvidersExpanded(false);
         return;
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        if (providersExpanded) providerButtons()[0]?.focus();
-        else setProvidersExpanded(true);
+        providerButtons()[0]?.focus();
         return;
       }
       if (providersExpanded && providerButtons()[0]) {
@@ -651,22 +559,18 @@ function PageTabList({
     }
     if (id === "home" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
-      if (event.key === "ArrowLeft") setHomeExpanded(false);
-      else if (!homeExpanded) setHomeExpanded(true);
-      else moveTo("search", false);
+      if (event.key === "ArrowRight") moveTo("search", false);
       return;
     }
     if (id === "search" && event.key === "ArrowLeft") {
       event.preventDefault();
-      setHomeExpanded(false);
       moveTo("home", false);
       return;
     }
     if (id === "assistants" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
-      if (event.key === "ArrowLeft") setAssistantsDisclosure(false);
-      else if (!assistantsExpanded) setAssistantsDisclosure(true);
-      else document.querySelector<HTMLButtonElement>("#assistants-pages button:enabled")?.focus();
+      if (event.key === "ArrowRight")
+        document.querySelector<HTMLButtonElement>("#assistants-pages button:enabled")?.focus();
       return;
     }
     if (id === "custom-agents" && event.key === "ArrowRight") {
@@ -678,7 +582,7 @@ function PageTabList({
     if (id === "custom-agents" && event.key === "ArrowLeft") {
       event.preventDefault();
       if (customExpanded) setCustomExpanded(false);
-      else document.getElementById("assistants-toggle")?.focus();
+      else document.getElementById("tab-assistants")?.focus();
       return;
     }
     if (id === "custom-agents" && event.key === "ArrowDown" && customExpanded) {
@@ -727,13 +631,11 @@ function PageTabList({
     }
     if (id === "chat" && event.key === "ArrowLeft") {
       event.preventDefault();
-      setChatExpanded(false);
       return;
     }
     if (id === "chat" && event.key === "ArrowRight") {
       event.preventDefault();
-      if (chatExpanded) chatButtons()[0]?.focus();
-      else setChatExpanded(true);
+      chatButtons()[0]?.focus();
       return;
     }
     if (event.key === "ArrowLeft") {
@@ -767,7 +669,7 @@ function PageTabList({
           childIds(id).find((child) => isSettingsSection(child) || pageAvailable(child, database)),
           false,
         );
-      else disclosure.set(true);
+      else setDisclosure(id, true);
       return;
     }
     const index = visible.indexOf(id);
@@ -850,33 +752,6 @@ function PageTabList({
       </div>
     );
   }
-  function cardToggle(
-    id: string,
-    label: string,
-    panel: string,
-    open: boolean,
-    setOpen: (open: boolean) => void,
-    target: (typeof visible)[number],
-  ) {
-    const action = `${open ? "Collapse" : "Expand"} ${label}`;
-    return (
-      <button
-        type="button"
-        id={id}
-        className="icon-button sidebar-card-toggle"
-        aria-label={action}
-        data-tooltip=""
-        aria-controls={panel}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        onKeyDown={(event) => navigate(event, target)}
-      >
-        <span className="sidebar-card-chevron" aria-hidden="true">
-          <Icon name="chevron--down" />
-        </span>
-      </button>
-    );
-  }
   function settingsPage(id: SettingsSectionId) {
     const selected = tabs.active === "settings" && settingsSection === id;
     return (
@@ -945,8 +820,8 @@ function PageTabList({
     );
   }
   return (
-    <Card size="sm" className="page-tabs sidebar-navigation-card">
-      <div className="sidebar-section">
+    <div className="page-tabs">
+      <Card size="sm" className="sidebar-navigation-card sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -955,14 +830,6 @@ function PageTabList({
         >
           {page("home", true)}
         </div>
-        {cardToggle(
-          "home-card-toggle",
-          "Home and Search",
-          "home-pages",
-          homeExpanded,
-          setHomeExpanded,
-          "home",
-        )}
         <div
           id="home-pages"
           className="page-group-pages sidebar-home-pages"
@@ -975,8 +842,8 @@ function PageTabList({
         >
           {page("search", false)}
         </div>
-      </div>
-      <div className="sidebar-section">
+      </Card>
+      <Card size="sm" className="sidebar-navigation-card sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -985,14 +852,6 @@ function PageTabList({
         >
           {page("assistants", true)}
         </div>
-        {cardToggle(
-          "assistants-toggle",
-          "Assistants",
-          "assistants-pages",
-          assistantsExpanded,
-          setAssistantsDisclosure,
-          "assistants",
-        )}
         {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
         <div
           role="group"
@@ -1108,8 +967,8 @@ function PageTabList({
               })}
           </div>
         </div>
-      </div>
-      <div className="sidebar-section">
+      </Card>
+      <Card size="sm" className="sidebar-navigation-card sidebar-section">
         <div
           className="chat-page-heading sidebar-card-header"
           data-nav-active={
@@ -1156,14 +1015,6 @@ function PageTabList({
             <Icon name="add" />
           </span>
         </button>
-        {cardToggle(
-          "projects-card-toggle",
-          "Projects",
-          "chat-pages",
-          chatExpanded,
-          setChatExpanded,
-          "chat",
-        )}
         {chatError && (
           <p className="error-banner" role="alert">
             {chatError}
@@ -1186,7 +1037,6 @@ function PageTabList({
             if (index < 0) return;
             if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
               event.preventDefault();
-              if (event.key === "ArrowLeft") setChatExpanded(false);
               document.getElementById("tab-chat")?.focus();
             } else if (
               event.key === "ArrowDown" ||
@@ -1246,7 +1096,7 @@ function PageTabList({
             />
           )}
         </div>
-      </div>
+      </Card>
       <ProvidersSidebar
         menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
         sidebarOpen={sidebarOpen}
@@ -1254,8 +1104,6 @@ function PageTabList({
         management={providerManagement}
         selectedId={tabs.active === "provider" ? tabs.providerId : undefined}
         active={tabs.active === "providers" || tabs.active === "provider"}
-        expanded={providersExpanded}
-        onExpanded={setProvidersExpanded}
         onHome={() => onSelect("providers")}
         onOpen={(id) => void navigation.open({ kind: "provider", id })}
         onKeyDown={(event) => navigate(event, "providers")}
@@ -1263,7 +1111,7 @@ function PageTabList({
         onFirst={() => moveTo(visible[0])}
         onLast={() => moveTo(visible.at(-1))}
       />
-      <div className="sidebar-section">
+      <Card size="sm" className="sidebar-navigation-card sidebar-section">
         <div
           className="sidebar-card-header"
           role="tablist"
@@ -1272,17 +1120,12 @@ function PageTabList({
         >
           {page("apps", true)}
         </div>
-        {cardToggle(
-          "apps-card-toggle",
-          "Apps",
-          "app-pages",
-          appsExpanded,
-          (open) => setDisclosure("apps", open),
-          "apps",
-        )}
         {staticChildrenPanel("apps")}
-      </div>
-      <div className="page-tab-list sidebar-settings sidebar-section">
+      </Card>
+      <Card
+        size="sm"
+        className="page-tab-list sidebar-settings sidebar-navigation-card sidebar-section"
+      >
         <div
           className="sidebar-settings-heading sidebar-card-header"
           data-active={settingsActive && !settingsExpanded}
@@ -1297,16 +1140,8 @@ function PageTabList({
             {page("settings", true)}
           </div>
         </div>
-        {cardToggle(
-          "settings-card-toggle",
-          "Settings",
-          "settings-pages",
-          settingsExpanded,
-          (open) => setDisclosure("settings", open),
-          "settings",
-        )}
         {staticChildrenPanel("settings")}
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }

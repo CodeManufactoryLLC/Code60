@@ -1219,3 +1219,23 @@ The workspace header Card has 2px top/bottom padding (half the former 4px) and a
 Keep the right header height synchronized through the existing measurement,
 horizontal insets, responsive history/appearance targets and theme/forced colors.
 This supersedes earlier gutter, shell-shadow and 58px header guidance.
+
+## Permanently open top-level navigation cards
+
+Home (with Search), Assistants, Projects, Providers, Apps and Settings each own a
+separate shadowless 1px/5px Card inside the single scrolling sidebar. Give each
+header a full-width 1px bottom border and separate Cards by 8px. Remove the six
+card disclosure buttons and ignore their legacy saved collapsed flags; navigation
+never closes a top-level Card, including via Left. Keep heading navigation and
+existing Add Project/Add Provider actions. The global navigation panel toggle in
+the main content Card remains available.
+
+Immediate child labels align with the header title using one shared artwork
+gutter. Deeper Data Viewer, Advanced/Experiments, project and conversation groups
+retain their own persisted accordions, keyboard controls and one indent step per
+level. Left from an immediate child focuses its parent heading without collapsing
+the Card; Right from the heading enters its children. Preserve selected styling,
+read/visibility ownership and cached drafts. No provider connection or agent work
+is started by card rendering. Update the navigation catalog description only; no
+new bridge, preference, persistence schema or availability rules are introduced.
+This supersedes earlier unified-shell/top-level accordion guidance.

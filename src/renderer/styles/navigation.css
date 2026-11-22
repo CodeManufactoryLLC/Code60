@@ -22,7 +22,11 @@
   --button-size: var(--nav-font-size, 15px);
   --nav-step: 24px;
   --nav-item-padding: 19px;
-  --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
+  --nav-borderless-offset: 1px;
+  --nav-inset: min(
+    max(40px, calc(2.5 * var(--button-size) + 8px)),
+    max(21px, calc(100cqw - 147px))
+  );
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
   --nav-action-height: min(28px, var(--nav-row-height));
   --nav-action-glyph: min(24px, calc(var(--nav-row-height) - 2px));
@@ -93,10 +97,12 @@
   border-radius: 5px;
   position: relative;
   min-width: 0;
-  margin: 6px 0 4px;
+  margin: 0;
   padding: 0;
   gap: 0;
+  overflow: clip;
   isolation: isolate;
+  container-type: inline-size;
 }
 
 .sidebar-section {
@@ -110,8 +116,8 @@
   isolation: isolate;
 }
 
-.sidebar-section + .sidebar-section {
-  border-top: 1px solid var(--border);
+.sidebar-card-header {
+  border-bottom: 1px solid var(--border);
 }
 
 /* Match the Light sidebar canvas across cards; preserve system colors. */
@@ -179,7 +185,7 @@
 }
 
 .sidebar .sidebar-card-header :is([role="tab"], .page-group-toggle, .page-group-label) {
-  padding-right: 48px;
+  padding-right: 12px;
 }
 
 .sidebar .sidebar-card-toggle,
@@ -197,11 +203,11 @@
 }
 
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
-  right: 36px;
+  right: 4px;
 }
 
 .sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
-  padding-right: 72px;
+  padding-right: 44px;
 }
 
 /* Reserve action space, revealing only the row under the pointer or keyboard focus. */
@@ -332,11 +338,12 @@
 
 /* Vertical page tabs */
 .page-tabs {
+  margin: 6px 0 4px;
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -393,22 +400,13 @@
 .page-tab
   :is([role="tab"], .page-group-toggle, .page-group-label):has(> .navigation-icon[data-animated]),
 .chat-sidebar-entry:has(.navigation-icon[data-animated]) {
-  --nav-label-inset: calc(
-    max(var(--nav-inset), calc(var(--nav-icon-scale, 2) * var(--button-size) + 8px)) +
-    var(--nav-indent) +
-    var(--nav-item-padding)
-  );
+  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent) + var(--nav-item-padding));
 }
 
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-communication"]),
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]),
 .chat-sidebar-row > .chat-workers-toggle-leading {
-  --nav-label-inset: calc(
-    var(--nav-item-padding) +
-    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
-    var(--nav-indent) -
-    4px
-  );
+  --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
 }
 
 /* Center the visible letterforms with the icons and clip only at the end of the label. */
@@ -442,6 +440,10 @@
 
 /* Visible navigation artwork stays fully opaque in every interaction state. */
 .sidebar .navigation-icon {
+  --sidebar-icon-size: min(calc(1em * var(--nav-icon-scale, 1)), calc(var(--nav-inset) - 8px));
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  left: calc(var(--nav-label-inset) - var(--sidebar-icon-size) - 8px);
   opacity: 1;
 }
 
@@ -571,11 +573,11 @@
 
 #table-pages,
 #advanced-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
 }
 
 #experiment-pages {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 .page-group-pages[hidden] {
@@ -690,13 +692,13 @@
 }
 
 .project-chat-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
   display: flex;
   flex-direction: column;
 }
 
 .project-chat-pages .chat-worker-children {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 .project-chat-group {
@@ -710,12 +712,7 @@
 
 .project-chat-heading {
   container-type: inline-size;
-  --project-label-inset: calc(
-    var(--nav-item-padding) +
-    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
-    var(--nav-indent) -
-    4px
-  );
+  --project-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
   display: flex;
   flex-wrap: nowrap;
   flex-shrink: 0;
@@ -917,8 +914,9 @@
 #custom-agent-pages .chat-sidebar-entry {
   --nav-label-inset: calc(
     var(--nav-item-padding) +
-    max(var(--nav-inset), calc(var(--nav-icon-scale, 2) * var(--button-size) + 8px)) +
-    var(--nav-indent)
+    var(--nav-inset) +
+    var(--nav-indent) +
+    var(--nav-borderless-offset)
   );
 }
 
@@ -926,17 +924,21 @@
   --nav-indent: var(--nav-step);
 }
 
-#assistants-pages {
-  --nav-indent: var(--nav-step);
+#assistants-pages,
+#app-pages,
+#settings-pages,
+#provider-pages,
+#chat-pages {
+  --nav-indent: 0px;
 }
 
 #custom-agent-pages .chat-worker-children {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 #assistants-pages > .relay-sidebar .chat-worker-children,
 #custom-agent-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
 }
 
 .sidebar :is(button, [role="tab"]):focus-visible,
@@ -1145,5 +1147,48 @@
   .breadcrumb-appearance-controls .navigation-icon:not(.icon-animation-block) {
     width: 28px;
     height: 28px;
+  }
+}
+
+/* Immediate child labels share the card heading's gutter, regardless of artwork size. */
+#provider-pages .chat-sidebar-entry {
+  --nav-label-inset: calc(
+    var(--nav-item-padding) +
+    var(--nav-inset) +
+    var(--nav-borderless-offset)
+  );
+}
+
+.sidebar-navigation-card:has(#tab-chat) {
+  container-type: inline-size;
+}
+#tab-chat,
+#chat-pages .project-chat-name {
+  --project-root-label-inset: min(
+    calc(var(--nav-item-padding) + var(--nav-inset)),
+    max(40px, calc(100cqw - 128px))
+  );
+}
+#tab-chat > .navigation-icon {
+  --project-header-icon-size: min(
+    calc(1em * var(--nav-icon-scale)),
+    calc(var(--nav-label-inset) - var(--nav-item-padding) - 8px)
+  );
+  width: var(--project-header-icon-size);
+  height: var(--project-header-icon-size);
+  left: calc(var(--nav-label-inset) - var(--project-header-icon-size) - 8px);
+}
+
+#chat-pages .project-chat-name {
+  --nav-label-inset: calc(var(--project-root-label-inset) + var(--nav-borderless-offset));
+}
+
+#tab-chat {
+  --nav-label-inset: var(--project-root-label-inset);
+}
+
+@media (forced-colors: active) {
+  .sidebar {
+    --nav-borderless-offset: 0px;
   }
 }

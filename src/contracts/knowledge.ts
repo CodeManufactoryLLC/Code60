@@ -236,7 +236,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Left navigation sidebar or Home / Apps / Settings cards; workspace header → Back / Forward",
     "none",
     "human-only",
-    "The workspace header contains history and global appearance controls, with no current-page dropdown. Primary pages have a centered title with their navigation icon on its left inside the content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. No database is required; existing destination guards apply. Navigation never sends a request or starts work.",
+    "The workspace header contains history and global appearance controls, with no current-page dropdown. The sidebar has six permanently open cards: Home (with Search), Assistants, Projects, Providers, Apps and Settings. Each header has a full-width divider, with immediate child labels aligned beneath its title. Top-level collapse controls are absent; deeper navigation groups retain their accordions. Primary pages have a centered title with their navigation icon on its left inside the content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. No database is required; existing destination guards apply. Navigation never sends a request or starts work.",
     "No confirmation; navigation only.",
   ),
   feature(

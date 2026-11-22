@@ -190,8 +190,6 @@ async function selectSidebarPage(page: Page, name: string) {
     name === "Prompt Builder" ||
     name === "Command Builder"
   ) {
-    const tools = page.locator("#apps-card-toggle");
-    if ((await tools.getAttribute("aria-expanded")) === "false") await tools.click();
     await page.locator("#app-pages").getByRole("tab", { name, exact: true }).click();
     return;
   }
@@ -200,8 +198,6 @@ async function selectSidebarPage(page: Page, name: string) {
     const id = snapshot.chat.run?.id ?? snapshot.chat.conversationId;
     if (!id) throw new Error("No selected conversation");
     if (snapshot.chat.kind !== "relay") {
-      const root = page.locator("#projects-card-toggle");
-      if ((await root.getAttribute("aria-expanded")) === "false") await root.press("ArrowRight");
       const project = page.locator(`#project-toggle-${snapshot.chat.projectId}`);
       if ((await project.count()) && (await project.getAttribute("aria-expanded")) === "false")
         await project.press("ArrowRight");
@@ -257,8 +253,6 @@ async function selectSidebarPage(page: Page, name: string) {
       "Worktrees",
     ].includes(name)
   ) {
-    const apps = page.locator("#apps-card-toggle");
-    if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
     const tables = page.locator("#tables-toggle");
     if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
     await page.locator("#table-pages").getByRole("tab", { name, exact: true }).click();
@@ -271,10 +265,6 @@ async function selectSettingsPage(page: Page, name: string) {
   // Legacy helper name: shared descriptors now place several preferences under Apps.
   const section = settingsSections.find((section) => section.label === name);
   if (!section) throw new Error(`Unknown preference page: ${name}`);
-  const disclosure = page.locator(
-    section.parent === "apps" ? "#apps-card-toggle" : "#settings-card-toggle",
-  );
-  if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
   await page.locator(`#tab-settings-${section.id}`).click();
 }
 
@@ -1980,22 +1970,23 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
     await composer().fill("Keep my proportional navigation draft");
     const gitBefore = execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString();
     const check = async (size: number) => {
-      await expect(page.locator(".sidebar-navigation-card")).toHaveCSS("box-shadow", "none");
+      for (const card of await page.locator(".sidebar-navigation-card").all())
+        await expect(card).toHaveCSS("box-shadow", "none");
       await expect(
         page.locator(".page-panel[data-slot=card]:visible, .chat-conversations:visible"),
       ).toHaveCSS("box-shadow", "none");
-      const layout = await page.locator(".sidebar-navigation-card").evaluate((card) => {
-        const bounds = card.getBoundingClientRect();
-        const dividers = [...card.querySelectorAll(".sidebar-section + .sidebar-section")].map(
-          (section) => {
-            const rect = section.getBoundingClientRect();
-            return {
-              left: rect.left - bounds.left,
-              right: bounds.right - rect.right,
-              border: getComputedStyle(section).borderTopWidth,
-            };
-          },
-        );
+      const layout = await page.locator(".page-tabs").evaluate((card) => {
+        const dividers = [...card.querySelectorAll(".sidebar-card-header")].map((header) => {
+          const shell = header.closest(".sidebar-navigation-card");
+          if (!shell) throw new Error("Missing navigation card");
+          const bounds = shell.getBoundingClientRect(),
+            rect = header.getBoundingClientRect();
+          return {
+            left: rect.left - bounds.left,
+            right: bounds.right - rect.right,
+            border: getComputedStyle(header).borderBottomWidth,
+          };
+        });
         const rows = [
           ...card.querySelectorAll(
             "[role=tab], .page-group-label, .project-chat-heading, .chat-sidebar-row, .project-session-new",
@@ -2018,6 +2009,9 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
         ].find((row) => row.checkVisibility());
         if (!active) throw new Error("Missing selected navigation row");
         const selected = active.getBoundingClientRect();
+        const shell = active.closest(".sidebar-navigation-card");
+        if (!shell) throw new Error("Missing selected navigation card");
+        const bounds = shell.getBoundingClientRect();
         return {
           dividers,
           rows,
@@ -2038,7 +2032,7 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
       await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("padding-top", "2px");
       await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("padding-bottom", "2px");
       await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("height", "54px");
-      expect(layout.dividers).toHaveLength(5);
+      expect(layout.dividers).toHaveLength(6);
       for (const divider of layout.dividers) {
         expect(divider.border).toBe("1px");
         expect(divider.left).toBeCloseTo(1, 1);
@@ -2083,9 +2077,9 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
     const apps = page.locator("#tab-apps");
     await apps.focus();
     await apps.press("ArrowLeft");
-    await expect(page.locator("#apps-card-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#app-pages")).not.toHaveAttribute("hidden");
     await apps.press("ArrowRight");
-    await expect(page.locator("#apps-card-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#app-pages")).not.toHaveAttribute("hidden");
     await selectProjectConversation(page);
     await expect(composer()).toHaveValue("Keep my proportional navigation draft");
     await expect(page.locator(".chat-conversations:visible")).toHaveCSS("box-shadow", "none");
@@ -2815,107 +2809,175 @@ test("desktop: settings icon actions and spacing preserve accessible controls an
   }
 });
 
-test("desktop: sidebar card chevrons own expansion independently of header navigation", async () => {
-  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-card-chevrons-")));
+test("desktop: top-level navigation cards stay open and align their immediate children", async () => {
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-persistent-cards-")));
+  const folder = join(directory, "project-a");
+  execFileSync("git", ["init", "-q", folder]);
+  commitFixture(folder);
   try {
-    application = await launch(directory, directory, join(directory, "code60.sqlite"));
+    application = await launch(directory, folder, join(directory, "projects.sqlite"));
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.locator(".sidebar-card-toggle")).toHaveCount(6);
-    for (const [toggleId, panelId, headerId, destination] of [
-      ["home-card-toggle", "home-pages", "tab-home", "home"],
-      ["assistants-toggle", "assistants-pages", "tab-assistants", "assistants"],
-      ["projects-card-toggle", "chat-pages", "tab-chat", "projects"],
-      ["providers-card-toggle", "provider-pages", "tab-providers", "providers"],
-      ["apps-card-toggle", "app-pages", "tab-apps", "apps"],
-      ["settings-card-toggle", "settings-pages", "tab-settings", "settings"],
-    ] as const) {
-      await page.locator("#tab-home").click();
-      const toggle = page.locator(`#${toggleId}`);
-      const children = page.locator(`#${panelId}`);
-      if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
-      await expect(toggle.locator(".sidebar-card-chevron")).toHaveCSS("border-radius", "50%");
-      await expect(toggle.locator(".sidebar-card-chevron")).toHaveCSS("border-width", "1px");
-      await expect(toggle).toHaveAttribute("aria-controls", panelId);
-      await expect(toggle).not.toHaveAttribute("title");
-      await expect(toggle).toHaveAttribute("data-tooltip", "");
-      await toggle.hover();
-      await expect(page.getByRole("tooltip")).toHaveCount(0);
-      await expect(toggle.locator(".sidebar-card-chevron")).not.toHaveCSS(
-        "background-color",
-        "rgba(0, 0, 0, 0)",
-      );
-      await expect(children).not.toHaveAttribute("inert", "");
-      await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-expanded", "false");
-      await expect(children).toHaveAttribute("inert", "");
-      await expect(children).toBeHidden();
-      await expect(page.locator("#panel-home")).toBeVisible();
-      await expect(toggle.locator(".sidebar-card-chevron > .carbon-icon")).toHaveCSS(
-        "rotate",
-        "-90deg",
-      );
-      if (headerId) {
-        await page.locator(`#${headerId}`).click();
-        await expect(page.locator(`#panel-${destination}`)).toBeVisible();
-        await page.locator(`#${headerId}`).click();
-      } else {
-        await page.locator(".sidebar-section:has(#assistants-toggle) .page-group-label").click();
-      }
-      await expect(toggle).toHaveAttribute("aria-expanded", "false");
-      await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-expanded", "true");
-      await expect(toggle.locator(".sidebar-card-chevron > .carbon-icon")).toHaveCSS(
-        "rotate",
-        "0deg",
-      );
-      await expect(children).toHaveAttribute("aria-hidden", "false");
-      if (panelId === "chat-pages") {
-        // An empty project list has no height now that Add Project lives in the heading.
-        await expect(page.locator(".project-sidebar-open")).toBeVisible();
-      } else await expect(children).toBeVisible();
-      await expect(page.locator(`#panel-${destination}`)).toBeVisible();
-    }
-    await page.locator("#tab-home").click();
-    await page.locator("#home-card-toggle").click();
-    await page.reload();
-    await expect(page.locator("#home-card-toggle")).toHaveAttribute("aria-expanded", "false");
-    await page.locator("#home-card-toggle").focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#home-pages")).toBeVisible();
-    await page.locator("#home-card-toggle").press("ArrowLeft");
-    await expect(page.locator("#home-pages")).toBeHidden();
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator("#home-card-toggle").click();
-    await expect(page.locator("#home-card-toggle .sidebar-card-chevron > .carbon-icon")).toHaveCSS(
-      "transition-duration",
-      "0s",
-    );
-    await page.emulateMedia({ forcedColors: "active" });
-    const system = await page.evaluate(() => {
-      const probe = document.createElement("span");
-      document.body.append(probe);
-      probe.style.color = "Canvas";
-      const fill = getComputedStyle(probe).color;
-      probe.style.color = "CanvasText";
-      const edge = getComputedStyle(probe).color;
-      probe.remove();
-      return { fill, edge };
+    // Legacy preferences are the reported migration starting state, not execution authority.
+    await page.evaluate(() => {
+      for (const key of [
+        "homeExpanded",
+        "assistantsExpanded",
+        "chatExpanded",
+        "providersExpanded",
+        "toolsExpanded",
+        "settingsExpanded",
+      ])
+        localStorage.setItem(`code60.${key}`, "false");
     });
-    await expect(page.locator(".sidebar-navigation-card")).toHaveCSS(
-      "background-color",
-      system.fill,
-    );
-    for (const section of await page.locator(".sidebar-section").all())
-      await expect
-        .poll(() =>
-          section.evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
-        )
-        .toBe(system.fill);
-    for (const divider of await page.locator(".sidebar-section + .sidebar-section").all()) {
-      await expect(divider).toHaveCSS("border-top-width", "1px");
-      await expect(divider).toHaveCSS("border-top-color", system.edge);
+    await page.reload();
+    const cards = page.locator(".page-tabs > .sidebar-navigation-card");
+    const panels = [
+      "home-pages",
+      "assistants-pages",
+      "chat-pages",
+      "provider-pages",
+      "app-pages",
+      "settings-pages",
+    ];
+    const checkCards = async () => {
+      await expect(cards).toHaveCount(6);
+      await expect(page.locator(".sidebar-card-toggle")).toHaveCount(0);
+      for (const id of panels) await expect(page.locator(`#${id}`)).not.toHaveAttribute("hidden");
+      const layout = await cards.evaluateAll((cards) =>
+        cards.map((card) => {
+          const header = card.querySelector(":scope > .sidebar-card-header");
+          if (!header) throw new Error("Missing card heading");
+          const cardRect = card.getBoundingClientRect(),
+            rect = header.getBoundingClientRect();
+          const style = getComputedStyle(header);
+          return {
+            left: rect.left - cardRect.left,
+            right: cardRect.right - rect.right,
+            border: style.borderBottomWidth,
+            shadow: getComputedStyle(card).boxShadow,
+          };
+        }),
+      );
+      for (const card of layout) {
+        expect(card.left).toBeCloseTo(1, 1);
+        expect(card.right).toBeCloseTo(1, 1);
+        expect(card.border).toBe("1px");
+        expect(card.shadow).toBe("none");
+      }
+    };
+    await checkCards();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await expect(page.locator("#tab-search")).toBeEnabled();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    await selectProjectConversation(page);
+    const composer = page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Keep my always-open card draft");
+    const gitBefore = execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString();
+    const alignments = [
+      ["#tab-home .page-tab-label", "#tab-search .page-tab-label"],
+      ["#tab-assistants .page-tab-label", "#tab-custom-agents .page-tab-label"],
+      ["#tab-assistants .page-tab-label", ".relay-sidebar .chat-sidebar-label"],
+      ["#tab-chat .page-tab-label", ".project-chat-name .project-chat-title"],
+      ["#tab-providers .page-tab-label", "#provider-claude .chat-sidebar-label"],
+      ["#tab-apps .page-tab-label", "#tab-settings-appearance .page-tab-label"],
+      ["#tab-apps .page-tab-label", "#tables-toggle .page-tab-label"],
+      ["#tab-settings .page-tab-label", "#tab-settings-about .page-tab-label"],
+      ["#tab-settings .page-tab-label", "#advanced-toggle .page-tab-label"],
+    ];
+    const checkAlignment = async () => {
+      for (const [heading, child] of alignments) {
+        if (!heading || !child) throw new Error("Missing alignment selector");
+        await expect
+          .poll(
+            async () => {
+              const parent = await page.locator(heading).first().boundingBox(),
+                nested = await page.locator(child).first().boundingBox();
+              return parent && nested ? Math.abs(parent.x - nested.x) : Infinity;
+            },
+            { message: `Align ${child} beneath ${heading}` },
+          )
+          .toBeLessThan(0.6);
+      }
+    };
+    await selectSettingsPage(page, "Text");
+    for (const size of [8, 15, 32, 64]) {
+      await page
+        .getByRole("group", { name: "Button Text", exact: true })
+        .getByLabel("Font size")
+        .fill(String(size));
+      await checkCards();
+      await checkAlignment();
+      await page.screenshot({ path: test.info().outputPath(`persistent-cards-${size}px.png`) });
     }
+    await page
+      .getByRole("group", { name: "Button Text", exact: true })
+      .getByLabel("Font size")
+      .fill("15");
+    for (const heading of [
+      "tab-home",
+      "tab-assistants",
+      "tab-chat",
+      "tab-providers",
+      "tab-apps",
+      "tab-settings",
+    ]) {
+      await page.locator(`#${heading}`).press("ArrowLeft");
+      await checkCards();
+    }
+    await page.locator("#tab-home").press("ArrowRight");
+    await expect(page.locator("#tab-search")).toBeFocused();
+    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#tab-settings-appearance")).toBeFocused();
+    await page.locator("#tab-settings-appearance").press("ArrowLeft");
+    await expect(page.locator("#tab-apps")).toBeFocused();
+    await checkCards();
+    const tables = page.locator("#tables-toggle");
+    await tables.click();
+    await expect(page.locator("#table-pages")).not.toHaveAttribute("hidden");
+    await tables.press("ArrowLeft");
+    await expect(page.locator("#table-pages")).toHaveAttribute("hidden", "");
+    await checkCards();
+    const advanced = page.locator("#advanced-toggle");
+    await advanced.click();
+    await expect(page.locator("#advanced-pages")).not.toHaveAttribute("hidden");
+    await advanced.press("ArrowLeft");
+    await expect(page.locator("#advanced-pages")).toHaveAttribute("hidden", "");
+    await checkCards();
+    for (const theme of ["light", "dark"]) {
+      await selectSettingsPage(page, "Appearance");
+      await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+      await page.locator("#tab-home").click();
+      await checkCards();
+      await checkAlignment();
+      await page.screenshot({ path: test.info().outputPath(`persistent-cards-${theme}.png`) });
+    }
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(640, 800),
+    );
+    await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+    await checkCards();
+    await checkAlignment();
+    await selectProjectConversation(page);
+    await expect(composer).toHaveValue("Keep my always-open card draft");
+    await page.reload();
+    await checkCards();
+    await expect(composer).toHaveValue("Keep my always-open card draft");
+    expect(execFileSync("git", ["status", "--porcelain=v1"], { cwd: folder }).toString()).toBe(
+      gitBefore,
+    );
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
@@ -11615,7 +11677,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
     await expectNavigationHighlight(
       page,
-      page.locator('.sidebar-section:has(#settings-card-toggle) [data-nav-active="true"]'),
+      page.locator('.sidebar-section:has(#tab-settings) [data-nav-active="true"]'),
     );
     await row(a).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
@@ -13109,7 +13171,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
     await expect(page.locator("#settings-home-title")).toBeVisible();
     await expectNavigationHighlight(
       page,
-      page.locator('.sidebar-section:has(#settings-card-toggle) [data-nav-active="true"]'),
+      page.locator('.sidebar-section:has(#tab-settings) [data-nav-active="true"]'),
     );
     await expect(page.locator(".chat-sidebar-entry[aria-current='true']")).toHaveCount(0);
     await resetPointer();

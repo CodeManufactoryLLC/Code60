@@ -151,3 +151,28 @@ header has half its former vertical padding (2px instead of 4px per side), with 
 | ![Full-row Home selection and empty Forward placeholder in Light](after-flush-navigation-light.png) | ![Full-row Home selection and empty Forward placeholder in Dark](after-flush-navigation-dark.png) |
 
 ![Shadowless Files inspector, full-row chat highlight and empty Forward circle](after-flat-files-history-placeholder.png)
+
+## Current permanently open navigation cards
+
+Home/Search, Assistants, Projects, Providers, Apps and Settings now have separate
+shadowless Cards, each with a full-width 1px border beneath its heading. All six
+Cards stay open, including when legacy preferences previously saved them closed.
+Their heading disclosure buttons are removed; Add Project and Add Provider remain.
+The global navigation-panel toggle remains in the main content Card. These images
+supersede the unified sidebar shell shown in earlier phases.
+
+Immediate child labels align vertically with their header title. A shared bounded
+artwork gutter preserves that alignment at small and enlarged text sizes without
+overlapping row actions. Deeper Data Viewer, Advanced/Experiments, project and chat
+accordions retain their own controls and persistence. Left from an immediate child
+returns focus to its heading without collapsing the Card; Right enters its children.
+All earlier history circles, flush selection fills, reduced header padding and flat
+main/right-panel shells remain in place.
+
+| Persistent Cards in Light | Persistent Cards in Dark |
+| --- | --- |
+| ![Separate navigation Cards with aligned immediate child labels in Light](after-persistent-cards-light.png) | ![Separate navigation Cards with aligned immediate child labels in Dark](after-persistent-cards-dark.png) |
+
+| Small navigation text | Maximum supported text |
+| --- | --- |
+| ![All six open Cards with small text](after-persistent-cards-8px.png) | ![Cards and aligned labels at the maximum text size](after-persistent-cards-64px.png) |

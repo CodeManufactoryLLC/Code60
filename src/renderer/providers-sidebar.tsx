@@ -3,6 +3,7 @@ import type { AgentSetupSnapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
+import { Card } from "./neobrutalism/card.js";
 import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
@@ -14,8 +15,6 @@ export function ProvidersSidebar({
   management,
   selectedId,
   active,
-  expanded,
-  onExpanded,
   onHome,
   onOpen,
   onKeyDown,
@@ -29,8 +28,6 @@ export function ProvidersSidebar({
   management: ProviderManagement | undefined;
   selectedId: string | undefined;
   active: boolean;
-  expanded: boolean;
-  onExpanded(open: boolean): void;
   onHome(): void;
   onOpen(id: string): void;
   onKeyDown(event: KeyboardEvent<HTMLButtonElement>): void;
@@ -39,18 +36,14 @@ export function ProvidersSidebar({
   onLast(): void;
 }) {
   return (
-    <div className="sidebar-section providers-sidebar">
+    <Card size="sm" className="sidebar-section sidebar-navigation-card providers-sidebar">
       <div
         className="sidebar-card-header"
         role="tablist"
         aria-label="Providers page"
         aria-orientation="vertical"
       >
-        <div
-          className="page-tab"
-          role="presentation"
-          data-nav-active={active && (!selectedId || !expanded)}
-        >
+        <div className="page-tab" role="presentation" data-nav-active={active && !selectedId}>
           <button
             type="button"
             role="tab"
@@ -80,21 +73,6 @@ export function ProvidersSidebar({
           <Icon name="add" />
         </span>
       </button>
-      <button
-        type="button"
-        className="icon-button sidebar-card-toggle"
-        id="providers-card-toggle"
-        data-tooltip=""
-        aria-label={`${expanded ? "Collapse" : "Expand"} Providers`}
-        aria-controls="provider-pages"
-        aria-expanded={expanded}
-        onClick={() => onExpanded(!expanded)}
-        onKeyDown={onKeyDown}
-      >
-        <span className="sidebar-card-chevron" aria-hidden="true">
-          <Icon name="chevron--down" />
-        </span>
-      </button>
       {management?.error && (
         <p role="alert" className="error-banner">
           {management.error}
@@ -106,9 +84,6 @@ export function ProvidersSidebar({
         role="group"
         aria-label="Connected providers"
         className="page-group-pages"
-        hidden={!expanded}
-        inert={!expanded}
-        aria-hidden={!expanded}
         onKeyDown={(event) => {
           const buttons = [
             ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled"),
@@ -117,7 +92,6 @@ export function ProvidersSidebar({
           if (index < 0) return;
           if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
             event.preventDefault();
-            if (event.key === "ArrowLeft") onExpanded(false);
             document.getElementById("tab-providers")?.focus();
           } else if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
             event.preventDefault();
@@ -159,13 +133,13 @@ export function ProvidersSidebar({
                   name={provider.name}
                   setup={setup}
                   management={management}
-                  active={expanded && sidebarOpen}
+                  active={sidebarOpen}
                 />
               )}
             </div>
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
