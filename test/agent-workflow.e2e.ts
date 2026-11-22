@@ -512,6 +512,59 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await composer.fill(name);
   }
 
+  // Two sessions in the SAME project must retain separate tab sets and selections.
+  const panel = page.locator("#chat-file-panel");
+  const tabs = panel.getByRole("tablist", { name: "File tabs", exact: true });
+  const first = entries.nth(count - 2);
+  const second = entries.nth(count - 1);
+  await first.click();
+  await expect(first).toHaveAttribute("aria-current", "true");
+  await expect(composer).toHaveValue("First sidebar draft");
+  const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "docs", exact: true }).click();
+  await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
+  await panel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).press("Alt+ArrowLeft");
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "notes.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await tabs.getByRole("button", { name: "Close File Explorer", exact: true }).click();
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
+  await first.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["result.txt", "File Explorer", "Memory Recall"]);
+  await expect(tabs.getByRole("tab", { name: "result.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await tabs.getByRole("tab", { name: "File Explorer", exact: true }).click();
+  await expect(panel.getByRole("treeitem", { name: "docs", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
+  await tabs.getByRole("button", { name: "Close Memory Recall", exact: true }).click();
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["notes.txt", "New tab"]);
+  await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await page.screenshot({ path: test.info().outputPath("session-panel-isolation.png") });
+  await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
+
   for (const theme of ["light", "dark"]) {
     await page.locator("#tab-settings").click();
     if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
@@ -1010,7 +1063,9 @@ for (const custom of [false, true]) {
       git("init", "-q", "-b", "main");
       await writeFile(join(repo, "result.txt"), "original\n");
       await writeFile(join(repo, "notes.txt"), "committed notes\n");
-      git("add", "result.txt", "notes.txt");
+      await mkdir(join(repo, "docs"));
+      await writeFile(join(repo, "docs/nested.txt"), "nested fixture\n");
+      git("add", "result.txt", "notes.txt", "docs/nested.txt");
       commitFixture(repo);
       await writeFile(join(repo, "notes.txt"), "staged notes\n");
       git("add", "notes.txt");
@@ -1176,6 +1231,9 @@ for (const custom of [false, true]) {
         ).toBeVisible();
         checks.push(
           "Fresh setup, database creation and project opening completed through visible controls.",
+        );
+        await application.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]?.setSize(1500, 1000),
         );
         await checkSidebarNavigation(page, repo);
         checks.push(
@@ -1404,6 +1462,12 @@ for (const custom of [false, true]) {
         await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
+        const parentTabsBeforeWorker = await planPanel.getByRole("tab").evaluateAll((tabs) =>
+          tabs.map((tab) => ({
+            label: tab.textContent,
+            selected: tab.getAttribute("aria-selected"),
+          })),
+        );
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await checkAgentMessageSpacing(
@@ -1417,6 +1481,13 @@ for (const custom of [false, true]) {
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
+        const workerTabs = page.getByRole("tablist", { name: "File tabs", exact: true });
+        await expect(workerTabs.getByRole("tab")).toHaveCount(0);
+        await page.getByRole("button", { name: "New file tab", exact: true }).click();
+        await page.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -1441,6 +1512,9 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         // Cached worker text can show before selection settles; a click meanwhile is ignored.
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
@@ -1453,6 +1527,14 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        expect(
+          await planPanel.getByRole("tab").evaluateAll((tabs) =>
+            tabs.map((tab) => ({
+              label: tab.textContent,
+              selected: tab.getAttribute("aria-selected"),
+            })),
+          ),
+        ).toEqual(parentTabsBeforeWorker);
         const parentChat = page.locator(".orchestration-chat-page:visible");
         // Worker completion queues a separate autonomous parent turn. Wait for
         // its known reply and idle UI before capturing either layout sample.
@@ -1537,6 +1619,18 @@ for (const custom of [false, true]) {
               .filter((chat) => chat.kind === "project")
               .flatMap((chat) => chat.plans ?? []),
           ).not.toContainEqual(expect.objectContaining({ id: savedPlan.id }));
+          await projectPanel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
+          await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
+          await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+          await expect(page.locator(`#chat-${worker.record.id}`)).toBeVisible();
+          await page
+            .locator(".sidebar")
+            .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
+            .click();
+          await expect(
+            projectPanel.getByRole("tab", { name: "result.txt", exact: true }),
+          ).toHaveAttribute("aria-selected", "true");
+          await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
           const openPlan = projectPanel.getByRole("button", { name: "View Plan", exact: true });
           await openPlan.focus();
           await openPlan.press(source === "Sessions" ? "Enter" : "Space");
@@ -2721,6 +2815,376 @@ test("workflow: completed project plans reopen latest after restart with narrow 
   } finally {
     await close();
     await attachJsonEvidence("project-plan-process-cleanup", { pids: [...owned], remaining: [] });
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: seventeen retained assistant file panels release inactive views and isolate same paths", async () => {
+  test.setTimeout(180_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-panel-capacity-")));
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "processes");
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  const pids = new Set<number>();
+  const evidence: { conversationId: string; directory: string; content: string }[] = [];
+  try {
+    application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const panel = page.locator(".project-file-panel-scope:not([hidden]) .file-panel");
+    for (let index = 0; index < 17; index++) {
+      const name = `Panel ${index + 1}`;
+      await page.locator("#tab-home").click();
+      await page.getByRole("button", { name: "Open Custom Assistants", exact: true }).click();
+      await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
+      await editor.getByLabel("Name", { exact: true }).fill(name);
+      await editor
+        .getByLabel("Special instructions", { exact: true })
+        .fill(`Fixture ${index + 1}.`);
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await page.getByRole("button", { name: `Open ${name}`, exact: true }).click();
+      await expect(
+        page.locator(".orchestration-chat-page:visible").getByRole("combobox"),
+      ).toBeEditable();
+      const snapshot = await page.evaluate(() => window.desktop.snapshot());
+      const cwd = snapshot.chat.directory;
+      const conversationId = snapshot.chat.conversationId;
+      if (!cwd || !conversationId) throw new Error("Missing assistant workspace");
+      const content = `owned panel ${index + 1}`;
+      await writeFile(join(cwd, "same.txt"), content);
+      evidence.push({ conversationId, directory: cwd, content });
+      const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+      await panel.getByRole("treeitem", { name: "same.txt", exact: true }).click();
+      await expect(panel.locator(".view-lines")).toContainText(content);
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Too many Relay file views" }),
+      ).toHaveCount(0);
+      if (!index) {
+        await panel.getByRole("tab", { name: "same.txt", exact: true }).press("Alt+ArrowLeft");
+        await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+      }
+    }
+    await page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Panel 1", exact: true })
+      .click();
+    await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+    await expect(panel.getByRole("tab", { name: "same.txt", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(panel.locator(".view-lines")).toContainText("owned panel 1");
+    for (const entry of evidence)
+      expect(await readFile(join(entry.directory, "same.txt"), "utf8")).toBe(entry.content);
+    expect(new Set(evidence.map((entry) => entry.directory)).size).toBe(17);
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
+    await attachJsonEvidence("seventeen-panels", evidence);
+    await page.screenshot({ path: test.info().outputPath("seventeen-panels.png") });
+  } finally {
+    if (application) {
+      if (application.process().pid) pids.add(application.process().pid as number);
+      for (const pid of await application.evaluate(({ app }) =>
+        app.getAppMetrics().map((metric) => metric.pid),
+      ))
+        pids.add(pid);
+      for (const file of await readdir(processLog))
+        pids.add(JSON.parse(await readFile(join(processLog, file), "utf8")).pid);
+      await application.close();
+      await expect.poll(() => [...pids].filter(alive), { timeout: 10_000 }).toEqual([]);
+    }
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: session review arrivals preserve closed tabs and archived evidence stays reachable", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-review-panels-")));
+  const repo = join(directory, "repo"),
+    database = join(directory, "projects.sqlite");
+  const config = join(directory, "config/code60"),
+    processLog = join(directory, "processes");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  git("init", "-q", "-b", "main");
+  await writeFile(join(repo, "task.txt"), "original\n");
+  git("add", ".");
+  commitFixture(repo);
+  const head = git("rev-parse", "HEAD"),
+    index = await readFile(join(repo, ".git/index"));
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--review",
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  const pids = new Set<number>();
+  try {
+    application = await launchDesktop(directory, repo, database);
+    await application.evaluate(
+      ({ dialog }, { repo, database }) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath: database });
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [repo] });
+        dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+      },
+      { repo, database },
+    );
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const relayId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await page.getByRole("button", { name: "Add Project", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+    const create = group.getByRole("button", { name: /^New Session in / });
+    const composer = page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const panel = page.locator("#chat-file-panel");
+    const send = async (request: string, reviewCount: number) => {
+      await expect(composer).toBeVisible();
+      await expect(composer).toBeEditable();
+      await composer.fill(request);
+      await composer.press("Enter");
+      await expect
+        .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).reviews?.length, {
+          timeout: 20_000,
+        })
+        .toBe(reviewCount)
+        .catch(async (cause) => {
+          await attachJsonEvidence(
+            "review-arrival-failure",
+            await page.evaluate(() => window.desktop.snapshot()),
+          );
+          throw cause;
+        });
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.desktop.snapshot())).runs.filter(
+              (run) => run.view?.status === "idle",
+            ).length,
+        )
+        .toBe(reviewCount);
+    };
+    await create.click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
+      .toBe("project");
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const a = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!a) throw new Error("Missing chat A");
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
+    await send("Implement task loop", 1);
+    await create.click();
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.desktop.snapshot())).chats.filter(
+            (chat) => chat.kind === "project",
+          ).length,
+      )
+      .toBe(2);
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const b = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!b) throw new Error("Missing chat B");
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
+    await send("Implement task loop", 2);
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await panel.getByRole("tab", { name: "Changes", exact: true }).press("Delete");
+    await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+    await panel.getByRole("treeitem", { name: "task.txt", exact: true }).click();
+    const savedTabs = await panel
+      .getByRole("tab")
+      .evaluateAll((tabs) =>
+        tabs.map((tab) => ({ text: tab.textContent, selected: tab.getAttribute("aria-selected") })),
+      );
+    await group.locator(`[id="conversation-${a}"]`).click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
+      .toBe(a);
+    await send("Implement second task loop", 3);
+    await group.locator(`[id="conversation-${b}"]`).click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
+    await expect
+      .poll(() =>
+        panel.getByRole("tab").evaluateAll((tabs) =>
+          tabs.map((tab) => ({
+            text: tab.textContent,
+            selected: tab.getAttribute("aria-selected"),
+          })),
+        ),
+      )
+      .toEqual(savedTabs);
+    await expect(panel.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(0);
+    const archive = async (id: string) => {
+      await group.locator(`[id="conversation-${id}"]`).click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+      await expect(group.locator(`[id="conversation-${id}"]`)).toHaveCount(0);
+    };
+    await archive(a);
+    const openReview = async () => {
+      const apps = page.locator("#apps-card-toggle");
+      if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+      const tables = page.locator("#tables-toggle");
+      if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+      const canvas = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("Missing sessions grid");
+      await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+      await page.getByRole("menuitem", { name: "Review changes", exact: true }).click();
+      await expect(
+        panel.locator(".review-panel .modified .view-lines:not([monaco-view-zone])"),
+      ).toContainText("accepted task result");
+      const snapshot = await page.evaluate(() => window.desktop.snapshot());
+      expect(snapshot.chats.find((chat) => chat.run?.id === a)?.archived).toBe(true);
+      expect(snapshot.chats.filter((chat) => chat.kind === "project")).toHaveLength(2);
+      expect(git("rev-parse", "HEAD")).toBe(head);
+      expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+      expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("accepted task result\n");
+    };
+    await openReview();
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(b);
+    await archive(b);
+    await expect(page.locator("#panel-project")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Chat archived." })).toBeVisible();
+    await openReview();
+    const archived = await page.evaluate(() => window.desktop.snapshot());
+    expect(archived.chat.kind).toBe("relay");
+    expect(archived.chat.run?.id).toBe(relayId);
+    expect(archived.chats.filter((chat) => chat.kind === "project" && !chat.archived)).toEqual([]);
+    await attachJsonEvidence("archived-review-panels", {
+      head,
+      indexUnchanged: true,
+      a,
+      b,
+      savedTabs,
+      worktrees: git("worktree", "list", "--porcelain"),
+    });
+    // Supporting integration segment: delay only the read-only snapshot IPC
+    // response. All navigation still uses production UI, bridge and controllers.
+    await create.click();
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const captured = await page.evaluate(() => window.desktop.snapshot());
+    await application.evaluate(({ ipcMain }, captured) => {
+      const gate = { requested: false, release: undefined as (() => void) | undefined };
+      Object.assign(globalThis, { panelSnapshotGate: gate });
+      ipcMain.removeHandler("desktop:snapshot");
+      ipcMain.handle(
+        "desktop:snapshot",
+        () =>
+          new Promise((resolve) => {
+            gate.requested = true;
+            gate.release = () => resolve(captured);
+          }),
+      );
+    }, captured);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+    const canvas = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error("Missing sessions grid");
+    await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+    await page.getByRole("menuitem", { name: "Browse project files", exact: true }).click();
+    await expect
+      .poll(() =>
+        application?.evaluate(
+          () =>
+            (globalThis as unknown as { panelSnapshotGate: { requested: boolean } })
+              .panelSnapshotGate.requested,
+        ),
+      )
+      .toBe(true);
+    await page.locator(".sidebar").getByRole("button", { name: "Relay", exact: true }).click();
+    await page.locator("#tab-home").click();
+    await expect(page.locator("#panel-home")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "return to splash page", exact: true }),
+    ).toBeDisabled();
+    await application.evaluate(() =>
+      (
+        globalThis as unknown as { panelSnapshotGate: { release?: () => void } }
+      ).panelSnapshotGate.release?.(),
+    );
+    // Wait for the command's finally block, not an arbitrary timeout.
+    await expect(
+      page.getByRole("button", { name: "return to splash page", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator("#panel-home")).toBeVisible();
+    await expect(page.locator("#panel-chat")).toBeHidden();
+    expect(git("rev-parse", "HEAD")).toBe(head);
+    expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+    await attachJsonEvidence("delayed-browse-navigation", {
+      released: true,
+      destination: "Home",
+      gitUnchanged: true,
+    });
+  } finally {
+    if (application) {
+      if (application.process().pid) pids.add(application.process().pid as number);
+      for (const file of await readdir(processLog))
+        pids.add(JSON.parse(await readFile(join(processLog, file), "utf8")).pid);
+      await application.close();
+      await expect.poll(() => [...pids].filter(alive), { timeout: 10_000 }).toEqual([]);
+    }
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });

@@ -11663,6 +11663,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     // A citation opens the exact captured source through existing event navigation.
     await overview.getByRole("button", { name: /^Source 1:/ }).click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await selectSidebarPage(page, "Search");
     await expect(overview).toContainText("The recorded sessions report");
 
@@ -11790,6 +11792,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     // Single-click titles and keyboard actions both open sources without a preview pane.
     await search.locator(".search-result-title").first().click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await selectSidebarPage(page, "Search");
     await query.focus();
     await query.press("ArrowDown");
@@ -11802,6 +11806,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     );
     await expect(page.locator(".event.search-match")).toBeFocused();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await page.screenshot({
       animations: "disabled",
       path: join(root, "test-results", "theme-chat.png"),
@@ -12389,6 +12395,12 @@ test("desktop: project questions use files without saved sessions", async () => 
     await expect(
       page.getByRole("complementary", { name: "File preview", exact: true }),
     ).toContainText("README.md");
+    await expect(
+      page.getByRole("complementary", { name: "File preview", exact: true }).locator(".view-lines"),
+    ).toContainText("accessible palettes");
+    const opened = await page.evaluate(() => window.desktop.snapshot());
+    expect(opened.runs).toHaveLength(0);
+    expect(opened.chats.filter((chat) => chat.kind === "project")).toHaveLength(0);
   } finally {
     await application.close();
     await rm(directory, { recursive: true, force: true });
@@ -15297,7 +15309,9 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       .locator(".sidebar")
       .getByRole("button", { name: /^New Session in / })
       .click();
-    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    await add.click();
+    await expect(tabs.getByRole("tab", { name: "New tab", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );

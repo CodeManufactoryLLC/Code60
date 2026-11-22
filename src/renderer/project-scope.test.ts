@@ -6,12 +6,12 @@ describe("project scope ownership", () => {
     const scope = new ProjectScope("/db", "/a", "instance-a");
     const other = new ProjectScope("/db", "/b", "instance-b");
     const api = { action: vi.fn(async () => []) };
-    const files = scope.files();
+    const files = scope.panel("chat-a").files;
     const transcripts = scope.transcripts(api);
     files.selectFile("src/a.ts");
     files.setExpanded(["src"]);
-    other.files().selectFile("b.ts");
-    expect(scope.files()).toBe(files);
+    other.panel("chat-b").files.selectFile("b.ts");
+    expect(scope.panel("chat-a").files).toBe(files);
     expect(scope.transcripts(api)).toBe(transcripts);
     expect(files.snapshot()).toMatchObject({ selected: "src/a.ts", expanded: ["src"] });
     const fileLifetime = files.capture();
@@ -21,7 +21,7 @@ describe("project scope ownership", () => {
     expect(transcriptLifetime()).toBe(false);
     files.selectFile("late.ts");
     expect(files.snapshot().selected).toBe("src/a.ts");
-    expect(other.files().snapshot().selected).toBe("b.ts");
+    expect(other.panel("chat-b").files.snapshot().selected).toBe("b.ts");
   });
   it("keeps UI state when a view is hidden; only disposal invalidates its work", () => {
     const scope = new ProjectScope("/db", "/a");

@@ -6614,6 +6614,7 @@ describe.skipIf(!sqliteAvailable())("registered-project Search navigation", () =
         { ...identity, sourceId: source.id },
         accept,
       );
+      expect(target?.revision).toBe(controller.snapshot().revision);
       expect(target?.source.project.path).toBe(source.project.path);
       expect(controller.snapshot().directory).toBe(source.project.path);
       expect(await controller.action({ type: "events", id: "duplicate-id" })).toEqual(

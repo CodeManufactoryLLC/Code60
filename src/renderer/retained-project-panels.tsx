@@ -1,7 +1,7 @@
 import { type ComponentProps, cloneElement, type ReactElement, useId, useRef } from "react";
 import type { FilePanel } from "./file-panel.js";
 
-/** Mounted inspectors belong to open project instances, not the selected path. */
+/** Mounted inspectors belong to sessions within open project instances. */
 export function RetainedProjectPanels({
   id,
   liveIds,

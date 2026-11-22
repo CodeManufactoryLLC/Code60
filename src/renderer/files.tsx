@@ -37,14 +37,13 @@ export function useFiles(
   snapshot: Snapshot | undefined,
   active: boolean,
   preview: string | null,
-  instance?: string,
   ownerState?: FileBrowserState,
 ): FileBrowser {
   const project = snapshot?.directory ?? null;
   const workspace = `${snapshot?.database}:${project}`;
   const owner = useMemo(
-    () => ownerState ?? new FileBrowserState(instance ?? workspace),
-    [workspace, instance, ownerState],
+    () => ownerState ?? new FileBrowserState(workspace),
+    [workspace, ownerState],
   );
   useLayoutEffect(() => {
     owner.activate();
@@ -133,6 +132,7 @@ export function useFiles(
   };
 }
 export interface FileBrowser {
+  subscriptionId?: string | undefined;
   root: string | null;
   preview: string | null;
   selectedFile: string | null;

@@ -122,7 +122,12 @@ export function FilePanel({
   knowledgeOwner?: KnowledgeOwner | undefined;
   recallSource?: RecallSource | undefined;
 }) {
-  useKnowledgePanel(api, knowledgeOwner, { tabs, open, active });
+  useKnowledgePanel(api, knowledgeOwner, {
+    tabs,
+    open,
+    active,
+    fileSubscription: browser.subscriptionId,
+  });
   const [visible, setVisible] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );

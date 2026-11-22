@@ -41,7 +41,7 @@ it("offers View Plan only for the displayed session, including saved plans and o
   ) =>
     renderToStaticMarkup(
       <FilePanel
-        tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+        tabs={updateFileTabs(emptyFileTabs(), { type: kind })}
         onAction={() => {}}
         browser={{} as FileBrowser}
         open
@@ -69,7 +69,7 @@ it("offers recall beside Files without opening it automatically and never mounts
   const render = (kind: "recall" | "blank", active: boolean, open: boolean) =>
     renderToStaticMarkup(
       <FilePanel
-        tabs={updateFileTabs(emptyFileTabs("project"), { type: kind })}
+        tabs={updateFileTabs(emptyFileTabs(), { type: kind })}
         onAction={() => {}}
         browser={{} as FileBrowser}
         open={open}
@@ -95,7 +95,7 @@ it("offers recall beside Files without opening it automatically and never mounts
 });
 
 it.each(["empty", "blank"])("groups %s tab choices in one centered action list", (state) => {
-  const empty = emptyFileTabs("/project");
+  const empty = emptyFileTabs();
   const html = renderToStaticMarkup(
     <FilePanel
       tabs={state === "blank" ? updateFileTabs(empty, { type: "blank" }) : empty}

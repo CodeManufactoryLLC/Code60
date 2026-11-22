@@ -305,8 +305,9 @@
   visibility and splash lifecycles.
 - Application services outlive projects. Database conversations/events and
   Command Builder/Prompt Builder drafts survive same-database project replacement.
-  Project-instance state owns worker views, file tabs/reads, transcript caches,
-  table selections, menus and project dialogs. Keep form/draft/scroll state local.
+  Project-instance state owns worker views, retained session panels, transcript caches,
+  table selections, menus and project dialogs. Each chat or worker session owns
+  its right-panel tabs, selection and file reads. Keep form/draft/scroll state local.
 - Hiding a page/panel or returning to splash is activation, not disposal.
   Replacing today's single project disposes its scope. Use generation captures,
   not path equality alone, for delayed reads/actions, including A → B → A.

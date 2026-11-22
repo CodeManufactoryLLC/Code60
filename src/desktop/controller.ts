@@ -2476,6 +2476,7 @@ export class DesktopController {
         });
       }
       return {
+        revision: this.revision,
         projectId: owner.id,
         databaseEpoch: request.databaseEpoch,
         source,
@@ -3937,12 +3938,18 @@ export class DesktopController {
     runtime: (caller) => this.knowledgeRuntime(caller),
     valid: (caller) => this.validKnowledgeCaller(caller),
     validOwner: (owner) => this.validKnowledgeOwner(owner),
-    readView: async (caller, _panel, tab) => {
+    readView: async (caller, panel, tab) => {
       if (caller.kind === "relay") {
         if (tab.kind === "plan")
           return this.relay?.owner(caller.conversationId)?.knowledgePlan(tab.planId);
         if (tab.kind === "file" && !tab.savedRevision)
-          return this.relayFiles.knowledgePreview(tab.path, caller.conversationId);
+          return panel.active && panel.open
+            ? this.relayFiles.knowledgePreview(
+                tab.path,
+                caller.conversationId,
+                panel.fileSubscription,
+              )
+            : undefined;
         return undefined;
       }
       const owner = this.projectHost.byId(caller.projectId);

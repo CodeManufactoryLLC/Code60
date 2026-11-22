@@ -676,3 +676,29 @@ describe("DesktopKnowledge", () => {
     ).rejects.toThrow("Stale");
   });
 });
+
+it("invalidates a discovered file view when its panel subscription or visibility changes", async () => {
+  for (const change of [{ fileSubscription: randomUUID() }, { active: false }, { open: false }]) {
+    const { knowledge, reads } = setup();
+    const renderer = knowledge.rendererIdentity(),
+      id = randomUUID();
+    const initial = panel(
+      renderer,
+      1,
+      id,
+      { kind: "relay", conversationId: relayId, generation: 2 },
+      [{ id: 1, kind: "file", path: "same.txt", savedRevision: false }],
+    );
+    const view = { ...initial.view, fileSubscription: randomUUID() };
+    knowledge.report({ ...initial, view });
+    const discovery = result(
+      await knowledge.call("code60_get_app_state", { section: "tabs" }, relay),
+    );
+    const [tab] = discovery.entries as { revision: string }[];
+    knowledge.report({ ...initial, sequence: 2, view: { ...view, ...change } });
+    await expect(
+      knowledge.call("code60_read_view", { panelId: id, tabId: 1, revision: tab?.revision }, relay),
+    ).rejects.toThrow("View changed");
+    expect(reads).toEqual([]);
+  }
+});

@@ -165,7 +165,8 @@ export function AppPages(props: AppPagesProps) {
     }
     if (
       snapshot.projectInstanceId !== searchTarget.projectId ||
-      directory !== searchTarget.source.project.path
+      directory !== searchTarget.source.project.path ||
+      snapshot.revision < searchTarget.revision
     )
       return;
     setSearchTarget(null);
@@ -185,6 +186,7 @@ export function AppPages(props: AppPagesProps) {
     searchTarget,
     snapshot?.databaseEpoch,
     snapshot?.projectInstanceId,
+    snapshot?.revision,
     directory,
     fileAction,
     fileBrowser,

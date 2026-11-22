@@ -207,7 +207,13 @@ export class DesktopKnowledge {
     }
   }
   private tabRevision(panel: KnowledgePanel, tab: KnowledgePanel["tabs"][number]): string {
-    return knowledgeHash([this.renderer, panel.id, panel.owner, tab]);
+    return knowledgeHash([
+      this.renderer,
+      panel.id,
+      panel.owner,
+      tab,
+      tab.kind === "file" ? [panel.fileSubscription, panel.active, panel.open] : null,
+    ]);
   }
   private availability(cap: Capability, state: KnowledgeRuntime, caller: KnowledgeCaller) {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";

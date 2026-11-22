@@ -238,6 +238,23 @@ describe("desktop capability catalog", () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
   });
 
+  it("describes session-owned file tabs without changing their runtime prerequisite", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "files")).toMatchObject({
+      prerequisite: "runtime",
+      purpose: expect.stringContaining("individual chat or worker session"),
+      limitations: expect.stringContaining(
+        "Tab sets, order and selection are independent per session",
+      ),
+    });
+  });
+
+  it("describes bounded active file subscriptions and reachable archived review evidence", () => {
+    const files = DESKTOP_CAPABILITIES.find((capability) => capability.id === "files");
+    expect(files?.limitations).toContain("Inactive panels release file subscriptions");
+    expect(files?.limitations).toContain("exact active file subscription");
+    expect(files?.limitations).toContain("Archived reviews remain read-only");
+  });
+
   it("describes sidebar activity as runtime-dependent presentation", () => {
     expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
       prerequisite: "runtime",

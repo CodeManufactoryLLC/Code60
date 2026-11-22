@@ -192,10 +192,7 @@ function Fixture() {
       <button
         type="button"
         onClick={() => {
-          const current = contexts.at(-1);
-          const old = contexts.find(
-            (context) => context.subscriptionId === current?.subscriptionId,
-          );
+          const old = contexts[0];
           if (old) publish(old, "obsolete");
         }}
       >

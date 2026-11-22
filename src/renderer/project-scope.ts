@@ -2,9 +2,8 @@ import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { DesktopApi, RunConfiguration } from "../bridge/index.js";
 import type { OpenChat } from "./chats.js";
-import { FileBrowserState } from "./file-browser-state.js";
-import { emptyFileTabs, type FileTabs } from "./file-tabs.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
+import { SessionPanel } from "./session-panel.js";
 import { TranscriptCache } from "./transcripts.js";
 
 interface ProjectUi {
@@ -21,7 +20,6 @@ interface ProjectUi {
   workerSelection: { workspace: string; id: string } | undefined;
   visitedWorkers: { workspace: string; ids: string[] };
   chatRequest: OpenChat | undefined;
-  fileTabs: FileTabs;
 }
 type Change<T> = T | ((previous: T) => T);
 
@@ -30,22 +28,29 @@ export class ProjectScope extends ScopeLifetime {
   private state: ProjectUi;
   private listeners = new Set<() => void>();
   private transcriptCache: TranscriptCache | undefined;
-  private fileBrowser: FileBrowserState | undefined;
-  files(): FileBrowserState {
-    this.fileBrowser ??= new FileBrowserState(this.viewKey);
-    return this.fileBrowser;
+  readonly panels = new Map<string, SessionPanel>();
+  panel(session: string): SessionPanel {
+    let panel = this.panels.get(session);
+    if (!panel) {
+      panel = new SessionPanel(JSON.stringify([this.viewKey, session]));
+      if (!this.capture()()) panel.dispose();
+      this.panels.set(session, panel);
+    }
+    return panel;
   }
   transcripts(api: Pick<DesktopApi, "action">): TranscriptCache {
     this.transcriptCache ??= new TranscriptCache(api, this.viewKey);
     return this.transcriptCache;
   }
+  override activate(): void {
+    super.activate();
+    for (const panel of this.panels.values()) panel.activate();
+  }
   override dispose(): void {
     super.dispose();
     this.transcriptCache?.dispose();
-    this.fileBrowser?.dispose();
+    for (const panel of this.panels.values()) panel.dispose();
   }
-  readonly openedPlans = new Map<string, number>();
-  readonly ensuredChangesReview = new Map<string, string>();
   constructor(
     readonly database: string | null,
     readonly project: string | null | undefined,
@@ -67,7 +72,6 @@ export class ProjectScope extends ScopeLifetime {
       workerSelection: undefined,
       visitedWorkers: { workspace, ids: [] },
       chatRequest: undefined,
-      fileTabs: emptyFileTabs(workspace),
     };
   }
   get workspace() {
@@ -164,7 +168,6 @@ export function useProjectScope(
         scope.set("visitedWorkers", change),
       setChatRequest: (change: Change<ProjectUi["chatRequest"]>) =>
         scope.set("chatRequest", change),
-      setFileTabs: (change: Change<ProjectUi["fileTabs"]>) => scope.set("fileTabs", change),
     }),
     [scope],
   );
