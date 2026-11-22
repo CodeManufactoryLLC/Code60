@@ -259,7 +259,7 @@
   margin and owns scrolling, retaining its border while children scroll. Section
   wrappers own their header action positions, icon playback targets and first-row
   markers. Sidebar opacity/blur affects only the background behind the opaque shell.
-  Light keeps white #ffffff shell/headers; Dark keeps charcoal with #5494fd header bands.
+  Light keeps white #ffffff shell/headers; Dark keeps charcoal with the breadcrumb’s #2f1d37 purple header bands and light labels.
   Preserve text, distinct hover/selection, system colors, saved accordion state,
   row heights, keyboard navigation and recursive inert/hidden disclosures.
   Each section has a dedicated top-right chevron button with a state-specific accessible
@@ -661,7 +661,8 @@ header and its dropdown trigger use white #ffffff fill with dark text; Dark reta
 plum header. Muted text (`#303848`) and focus/link accents (`#1e40af`) remain
 readable over the Light canvas.
 Light sidebar Card bodies and headers use white #ffffff over the #f4f8fe sidebar backdrop.
-Dark retains charcoal bodies and #5494fd headers. Header labels stay dark and
+Dark retains charcoal bodies and inherits the breadcrumb’s purple #2f1d37 headers
+with light text. Light header labels stay dark and
 the sidebar shell uses 5px corners and the shared main content shadow.
 Nested rows use normal reading-surface text and hover colors, with #93c5fd selection in Light.
 Header hover (`#b9bfff`), selection (`#93c5fd`) and dark-blue focus (`#1e40af`)

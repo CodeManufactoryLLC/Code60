@@ -14,3 +14,8 @@ Appearance also adds optional locally saved Monochrome icons, a color picker
 default; system colors bypass the tint. Back/Forward artwork plays once on click.
 
 ![Monochrome icons with a selected color and 200% contrast](after-monochrome.png)
+
+Dark sidebar headers share the breadcrumb Card's purple fill (`#2f1d37`) and
+light foreground; Light and forced colors retain their own palettes.
+
+![Dark sidebar headers matching the breadcrumb Card](after-dark.png)

@@ -120,20 +120,25 @@
 
   .sidebar-navigation-card {
     --nb-card-fill: var(--surface);
-    --card-header-fill: #5494fd;
-    --card-header-text: #111111;
-    --card-header-muted: #303848;
-    --card-header-hover: #b9bfff;
   }
 
   :root:not([data-color-scheme="dark"]) .sidebar-navigation-card {
     --nb-card-fill: var(--content-background);
     --card-header-fill: var(--content-background);
+    --card-header-text: #111111;
+    --card-header-muted: #303848;
+    --card-header-hover: #b9bfff;
   }
 
+  /* Dark headers inherit the same purple and light foreground as breadcrumbs. */
   .sidebar-card-header {
     --text: var(--card-header-text);
     --muted: var(--card-header-muted);
+    --hover-bg: var(--card-header-hover);
+    --control-hover: var(--card-header-hover);
+  }
+
+  :root:not([data-color-scheme="dark"]) .sidebar-card-header {
     --accent: #1e40af;
     --hover-bg: var(--card-header-hover);
     --accent-bg: #93c5fd;
@@ -148,12 +153,14 @@
     background: var(--primary-text);
   }
 
-  .sidebar-section > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add) {
+  :root:not([data-color-scheme="dark"])
+    .sidebar-section
+    > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add) {
     --focus-outline: #1e40af;
   }
 
   :root[data-focus-highlight="on"] .sidebar-card-header {
-    --focus-inset-shadow: inset 0 0 0 5px #1e40af;
+    --focus-inset-shadow: inset 0 0 0 5px var(--focus-line);
   }
 }
 

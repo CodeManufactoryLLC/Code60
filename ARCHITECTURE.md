@@ -1634,7 +1634,8 @@ outline, 5px corners and the main content Card shadow. Its six plain accordion s
 Home/Search, Assistants, Projects, Providers, Apps and Settings. Five 1px theme
 border lines separate adjacent sections without individual card outlines or gaps.
 The Light shell and headers use white #ffffff, separately from the #f4f8fe app
-background; Dark keeps a charcoal shell and blue section headers. Main navigation
+background; Dark keeps a charcoal shell and the breadcrumb’s purple #2f1d37 section headers
+with light text. Main navigation
 artwork retains its independent theme header fill. Forced colors uses system fills
 and edges. The shell keeps 4px horizontal padding plus its border, preserving the
 5px row inset, and starts 6px below the native-control strip. Each section has 4px
@@ -2355,7 +2356,8 @@ header and its dropdown trigger use white #ffffff fill with dark text; Dark reta
 plum header. Muted text (`#303848`) and focus/link accents (`#1e40af`) remain
 readable over the Light canvas.
 Light sidebar Card bodies and headers use white #ffffff over the #f4f8fe sidebar backdrop.
-Dark retains charcoal bodies and #5494fd headers. Header labels stay dark and
+Dark retains charcoal bodies and inherits the breadcrumb’s purple #2f1d37 headers
+with light text. Light header labels stay dark and
 the sidebar shell uses 5px corners and the shared main content shadow.
 Nested rows use normal reading-surface text and hover colors, with #93c5fd selection in Light.
 Header hover (`#b9bfff`), selection (`#93c5fd`) and dark-blue focus (`#1e40af`)

@@ -143,8 +143,8 @@ semantics and Code60 theme colors.
 
 Registry SHA-256: `b42d88044834c0bbeb74b66148093b267907f6cc86894889e0823ea3a4fee517`.
 
-Sidebar Card adapters use white #ffffff across their Light bodies and headers. Dark retains charcoal bodies and #5494fd headers. Header labels stay
-dark and the sidebar Card uses 5px corners and the shared main content shadow. Nested rows
+Sidebar Card adapters use white #ffffff across their Light bodies and headers. Dark retains charcoal bodies and inherits the breadcrumb’s purple #2f1d37 headers
+with light text. Light header labels stay dark and the sidebar Card uses 5px corners and the shared main content shadow. Nested rows
 use normal readable theme colors, with #93c5fd selection in Light and distinct hover/focus.
 Disclosure/add glyphs use blue on white circles; existing stop controls keep
 semantic colors. Forced colors retains system fills and edges. Shared Card
