@@ -368,9 +368,9 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(35);
+      expect(html.match(/<img/g)).toHaveLength(33);
       expect(html.match(/class="carbon-icon"/g)).toHaveLength(9);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(37);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(35);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],
@@ -455,7 +455,27 @@ describe("window navigation history", () => {
     );
     expect(html.indexOf('aria-label="Navigation history"')).toBeGreaterThan(cardStart);
     expect(html).toContain('data-icon="app-history-back"');
-    expect(html).toContain('data-icon="app-history-forward"');
+    expect(html).not.toContain('data-icon="app-history-forward"');
+    expect(html).toContain('class="history-placeholder" aria-hidden="true"');
     expect(html).not.toContain('data-icon="arrow--left"');
   });
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    "reserves disabled history positions without arrow artwork (%s/%s)",
+    (canGoBack, canGoForward) => {
+      const html = navigation(null, undefined, null, "home", false, true, false, {
+        canGoBack,
+        canGoForward,
+      });
+      expect(html.includes('data-icon="app-history-back"')).toBe(canGoBack);
+      expect(html.includes('data-icon="app-history-forward"')).toBe(canGoForward);
+      expect(html.match(/class="history-placeholder"/g) ?? []).toHaveLength(
+        Number(!canGoBack) + Number(!canGoForward),
+      );
+    },
+  );
 });

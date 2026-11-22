@@ -1395,6 +1395,7 @@ for (const custom of [false, true]) {
         await expect(modelPicker).toHaveText("Fixture Two");
         // A confirmed option change dismisses an open picker, so reopen only after it settles.
         await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
+        await expect(modelMenu).toHaveCount(0);
         await modelPicker.click();
         await expect(
           modelMenu.getByRole("menuitemradio", { name: "Low", exact: true }),
@@ -1409,6 +1410,7 @@ for (const custom of [false, true]) {
           })
           .toBe("high");
         await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
+        await expect(modelMenu).toHaveCount(0);
         await modelPicker.click();
         await modelMenu
           .getByRole("menuitem", {

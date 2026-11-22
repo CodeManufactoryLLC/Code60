@@ -92,8 +92,8 @@ body:has(.app .window-background) {
   overflow: auto;
   box-sizing: border-box;
   --header-side-padding: calc((var(--page-padding) - 1px) / 2);
-  padding: 4px var(--header-side-padding);
-  min-height: 58px;
+  padding: 2px var(--header-side-padding);
+  min-height: 54px;
   scrollbar-gutter: auto;
   gap: 0;
   --nb-card-fill: var(--card-header-fill);

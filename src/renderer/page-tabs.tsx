@@ -274,7 +274,11 @@ function HistoryControls({
         disabled={!canGoBack}
         onClick={press("back", onBack)}
       >
-        <NavigationIcon name="app-history-back" />
+        {canGoBack ? (
+          <NavigationIcon name="app-history-back" />
+        ) : (
+          <span className="history-placeholder" aria-hidden="true" />
+        )}
       </button>
       <button
         ref={forward}
@@ -285,7 +289,11 @@ function HistoryControls({
         disabled={!canGoForward}
         onClick={press("forward", onForward)}
       >
-        <NavigationIcon name="app-history-forward" />
+        {canGoForward ? (
+          <NavigationIcon name="app-history-forward" />
+        ) : (
+          <span className="history-placeholder" aria-hidden="true" />
+        )}
       </button>
     </div>
   );

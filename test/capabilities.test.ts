@@ -55,6 +55,9 @@ describe("desktop capability catalog", () => {
       agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),
     });
+    expect(
+      DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")?.limitations,
+    ).toContain("An empty circle replaces the arrow artwork");
   });
   it("exposes conversational browser modes only through the orchestrator gateway", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({

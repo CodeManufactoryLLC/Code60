@@ -41,6 +41,7 @@
 }
 
 .file-panel {
+  box-shadow: none;
   box-sizing: border-box;
   --control-fill: var(--chat-neutral);
   position: relative;

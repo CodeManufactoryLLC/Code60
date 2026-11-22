@@ -131,3 +131,23 @@ change is introduced.
 | ![Shadowless main/sidebar and edge-to-edge dividers in Light](after-shadowless-surfaces-light.png) | ![Shadowless main/sidebar and edge-to-edge dividers in Dark](after-shadowless-surfaces-dark.png) |
 
 ![Compact navigation rows with 8px Button Text](after-sidebar-rows-8px.png)
+
+## Current flush highlights and history placeholders
+
+The Files inspector now joins the main and left navigation Cards without a drop
+shadow. Active sidebar fills meet the inner border edges and adjacent rows, with
+no surrounding white gutters. Labels retain their internal inset, proportional
+row heights and accordion controls. These images supersede earlier inset-row
+snapshots.
+
+Unavailable Back/Forward directions keep labelled disabled buttons with empty
+placeholder circles; available directions show their supplied click-only arrow
+artwork. Their positions and navigation/focus behavior are unchanged. The workspace
+header has half its former vertical padding (2px instead of 4px per side), with a
+54px minimum height; the right header follows the existing measurement.
+
+| Flush navigation in Light | Flush navigation in Dark |
+| --- | --- |
+| ![Full-row Home selection and empty Forward placeholder in Light](after-flush-navigation-light.png) | ![Full-row Home selection and empty Forward placeholder in Dark](after-flush-navigation-dark.png) |
+
+![Shadowless Files inspector, full-row chat highlight and empty Forward circle](after-flat-files-history-placeholder.png)

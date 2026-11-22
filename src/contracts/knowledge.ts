@@ -246,7 +246,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Workspace header card → Back / Forward",
     "none",
     "human-only",
-    "Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.",
+    "Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. An empty circle replaces the arrow artwork for each unavailable direction while preserving its position. Restoring a chat preserves drafts and running work; it never sends a request to an agent.",
     "No confirmation; navigation only.",
   ),
   feature(

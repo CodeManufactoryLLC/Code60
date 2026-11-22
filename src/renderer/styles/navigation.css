@@ -21,7 +21,7 @@
   position: relative;
   --button-size: var(--nav-font-size, 15px);
   --nav-step: 24px;
-  --nav-item-padding: 15px;
+  --nav-item-padding: 19px;
   --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
   --nav-action-height: min(28px, var(--nav-row-height));
@@ -73,7 +73,7 @@
   font-weight: var(--button-weight, 600);
 }
 
-/* Space rows themselves so nesting does not multiply container gaps. */
+/* Adjacent row fills meet without white gutters or compounded nested spacing. */
 .sidebar
   :is(
     .page-tab,
@@ -83,7 +83,7 @@
     .sidebar-settings-heading,
     .project-session-new
   ) {
-  margin-bottom: 2.5px;
+  margin-bottom: 0;
 }
 
 /* One shadowless outlined shell contains every accordion section. */
@@ -105,7 +105,7 @@
   flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
-  padding: 4px;
+  padding: 0;
   gap: 0;
   isolation: isolate;
 }
@@ -171,7 +171,7 @@
   content: "";
   position: absolute;
   inset: 0 0 auto;
-  height: calc(var(--nav-row-height) + 8px);
+  height: var(--nav-row-height);
   max-height: 100%;
   background: var(--card-header-fill);
   pointer-events: none;
@@ -186,8 +186,8 @@
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
   position: absolute;
   z-index: 1;
-  top: calc(4px + (var(--nav-row-height) - var(--nav-action-height)) / 2);
-  right: 8px;
+  top: calc((var(--nav-row-height) - var(--nav-action-height)) / 2);
+  right: 4px;
   width: 28px;
   height: var(--nav-action-height);
   min-height: var(--nav-action-height);
@@ -197,7 +197,7 @@
 }
 
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
-  right: 40px;
+  right: 36px;
 }
 
 .sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
@@ -298,22 +298,9 @@
   --nav-indent: 0px;
 }
 
-/* Add 3px to the row gap below each section heading. */
+/* Accordion children meet their heading without a second blank strip. */
 .sidebar-section > :is([role="tablist"], .page-group-pages):not(:first-child) {
-  margin-top: 3px;
-}
-
-/* An empty project list contributes no second-row gap below its heading. */
-#chat-pages:not(:has(.chat-sidebar-row, .project-chat-heading, .project-session-new)) {
   margin-top: 0;
-}
-
-/* Trim the final row's spacing even when it lives inside a disclosure. */
-.sidebar-section::after {
-  content: "";
-  flex: 0 0 0;
-  margin-top: -2.5px;
-  pointer-events: none;
 }
 
 .sidebar :is(.chat-sidebar-row, .project-chat-heading, .sidebar-settings-heading) {
@@ -1062,6 +1049,18 @@
   width: 36px;
   height: 36px;
   min-height: 36px;
+}
+
+/* Empty circles reserve unavailable directions without suggesting an available action. */
+.history-placeholder {
+  display: block;
+  box-sizing: border-box;
+  width: 75%;
+  aspect-ratio: 1;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 /* Global appearance actions stay outside the current page's portalled owner. */

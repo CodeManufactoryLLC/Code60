@@ -2820,3 +2820,23 @@ and circular glyphs to fit the smallest row without overlap, retaining keyboard
 controls and icon proportions. This supersedes earlier fixed-height and outer
 Card-shadow guidance. This is presentation only; no capability, availability,
 preference, bridge or persisted-format change, so no catalog change is needed.
+
+## Flush selected navigation and history placeholders
+
+The right Files inspector joins the main and sidebar shells without a drop shadow.
+Keep nested cards, button treatments and focus rings independent. Left sidebar
+sections and rows have no outer padding, inter-row margins or accordion-heading
+gaps, so selected backgrounds fill to the inner Card border and adjoining rows.
+Keep label padding inside each row and preserve text/icon alignment, proportional
+row heights, section dividers and accordion semantics.
+
+Disabled Back/Forward controls retain their labelled disabled buttons and layout
+positions but show neutral empty circles instead of arrow artwork. Enabled
+directions keep the supplied click-only icons, animation preferences, keyboard
+focus handoff and history behavior. No navigation or authority is added.
+
+The workspace header Card has 2px top/bottom padding (half the former 4px) and a
+54px minimum height, reducing its former 58px footprint by the padding difference.
+Keep the right header height synchronized through the existing measurement,
+horizontal insets, responsive history/appearance targets and theme/forced colors.
+This supersedes earlier gutter, shell-shadow and 58px header guidance.

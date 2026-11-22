@@ -158,7 +158,7 @@ it("preserves the content header clearance with the persistent toggle in the nat
   expect(rule("layout", ".workspace-header")).toContain("align-items: flex-start");
   expect(rule("layout", ".workspace-header")).toContain("padding: 6px 0");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
-    "padding: 4px var(--header-side-padding)",
+    "padding: 2px var(--header-side-padding)",
   );
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("border-radius: 5px");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("--nb-card-shadow: none");
@@ -258,7 +258,7 @@ it("moves the visible trail into the header without reserving the original title
 
 it("keeps the simplified header in the content track with a stable measured height", () => {
   expect(rule("layout", ".workspace-header")).toContain("grid-column: 2");
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("min-height: 58px");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("min-height: 54px");
   expect(rule("navigation", ".sidebar-history")).toContain("left: var(--header-side-padding)");
   expect(rule("navigation", ".breadcrumb-appearance-controls")).toContain(
     "right: var(--header-side-padding)",

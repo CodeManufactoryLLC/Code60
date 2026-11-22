@@ -1000,8 +1000,8 @@ async function expectNavigationHighlight(page: Page, row: Locator) {
     return {
       left: bounds.left,
       right: bounds.right,
-      start: card ? card.left + 5 : bar.left,
-      edge: card ? card.right - 5 : bar.right - 12,
+      start: card ? card.left + 1 : bar.left,
+      edge: card ? card.right - 1 : bar.right - 12,
       content: line.content,
       shadow: line.boxShadow,
       border: line.borderBottomWidth,
@@ -1966,6 +1966,7 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
       .getByRole("dialog", { name: "Select database", exact: true })
       .getByRole("button", { name: "Create database…", exact: true })
       .click();
+    await expect(page.locator("#tab-search")).toBeEnabled();
     await page.locator(".project-sidebar-open").click();
     await page
       .getByRole("dialog", { name: "Open Project", exact: true })
@@ -2012,8 +2013,31 @@ test("desktop: shadowless content and edge dividers follow proportional sidebar 
             height: button.getBoundingClientRect().height,
             glyph: button.firstElementChild?.getBoundingClientRect().height ?? 0,
           }));
-        return { dividers, rows, actions };
+        const active = [
+          ...card.querySelectorAll('[data-nav-active="true"], [role="tab"][aria-selected="true"]'),
+        ].find((row) => row.checkVisibility());
+        if (!active) throw new Error("Missing selected navigation row");
+        const selected = active.getBoundingClientRect();
+        return {
+          dividers,
+          rows,
+          actions,
+          selected: { left: selected.left - bounds.left, right: bounds.right - selected.right },
+          padding: [...card.querySelectorAll(".sidebar-section")].map(
+            (section) => getComputedStyle(section).padding,
+          ),
+          margins: [...card.querySelectorAll(".page-tab,.chat-sidebar-row,.project-chat-heading")]
+            .filter((row) => row.checkVisibility())
+            .map((row) => getComputedStyle(row).marginBottom),
+        };
       });
+      expect(layout.selected.left).toBeCloseTo(1, 1);
+      expect(layout.selected.right).toBeCloseTo(1, 1);
+      expect(layout.padding.every((padding) => padding === "0px")).toBe(true);
+      expect(layout.margins.every((margin) => margin === "0px")).toBe(true);
+      await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("padding-top", "2px");
+      await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("padding-bottom", "2px");
+      await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("height", "54px");
       expect(layout.dividers).toHaveLength(5);
       for (const divider of layout.dividers) {
         expect(divider.border).toBe("1px");
@@ -3711,7 +3735,7 @@ test("desktop: square controls, compact cards and collapsible navigation", async
       throw new Error("Missing navigation geometry");
     await expect
       .poll(async () => (await page.locator("#tab-home").boundingBox())?.y)
-      .toBe(strip.height + 12);
+      .toBe(strip.height + 8);
     expect(sidebarBounds.x).toBe(20);
     expect(toggleBounds.x).toBeGreaterThanOrEqual(80);
     const homeIcon = await page.locator("#tab-home .navigation-icon").boundingBox();
@@ -8128,7 +8152,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
           );
           expect(icon.top).toBeGreaterThanOrEqual(1);
           expect(icon.bottom).toBeGreaterThanOrEqual(1);
-          expect(icon.row).toBeCloseTo(Math.max(40, size * 2.5 + 2), 1);
+          expect(icon.row).toBeCloseTo(2 + (38 * size) / 15, 1);
         }
         const actionSizes = await sidebar.locator(".carbon-icon:visible").evaluateAll((icons) =>
           icons.map((icon) => ({
@@ -8698,7 +8722,7 @@ test("desktop: sidebar tabs, themes and live window background remain interactiv
     expect(customBounds.height).toBe(40);
     expect(searchBounds.y).toBe(homeBounds.y + homeBounds.height + 5.5);
     expect(relayBounds.y).toBe(assistantsHeaderBounds.y + assistantsHeaderBounds.height + 5.5);
-    expect(customBounds.y).toBe(relayBounds.y + relayBounds.height + 2.5);
+    expect(customBounds.y).toBe(relayBounds.y + relayBounds.height);
     expect(projectsBounds.y).toBe(assistantsBounds.y + assistantsBounds.height + 5);
     expect(customBounds.x).toBe(assistantsBounds.x);
     expect(customBounds.width).toBe(assistantsBounds.width);
@@ -8742,7 +8766,7 @@ test("desktop: sidebar tabs, themes and live window background remain interactiv
         return element.getBoundingClientRect().top - previous.getBoundingClientRect().bottom;
       }),
     );
-    expect(tabGaps).toEqual(Array(7).fill(2.5));
+    expect(tabGaps).toEqual(Array(7).fill(0));
     await expect(page.locator(".page-tabs")).toHaveCSS("gap", "0px");
     const nativeTitlebarHeight = await page.evaluate(() => {
       const overlay = (
@@ -15331,12 +15355,8 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       for (const shell of await shells.all()) {
         await expect(shell).toHaveAttribute("data-slot", "card");
         await expect(shell).toHaveCSS("border-width", "1px");
-        const inspector = await shell.evaluate((element) =>
-          element.classList.contains("file-panel"),
-        );
         await expect(shell).toHaveCSS("border-radius", "5px");
-        if (inspector) await expect(shell).toHaveCSS("box-shadow", /4px 4px 0px/);
-        else await expect(shell).toHaveCSS("box-shadow", "none");
+        await expect(shell).toHaveCSS("box-shadow", "none");
       }
       const composer = page.locator(".orchestration-chat-page:visible .composer");
       await expect(composer).toHaveAttribute("data-slot", "card");
@@ -16146,7 +16166,7 @@ test("desktop: Projects plus opens projects, cancels, and confirms selection", a
     expect(sidebarGaps.every((gap) => gap === "0px")).toBe(true);
     await expect(page.locator("#tab-chat")).toHaveCSS("height", "40px");
     // The label reserves its animated icon gutter plus 15px internal left padding.
-    await expect(page.locator("#tab-chat")).toHaveCSS("padding-left", "59px");
+    await expect(page.locator("#tab-chat")).toHaveCSS("padding-left", "63px");
     await expect(databaseAction).toHaveCSS("height", "20px");
     await expect(returnAction).toHaveCSS("height", "20px");
     await expect(page.locator(".app-footer")).toHaveCSS("padding-bottom", "4px");
@@ -18617,13 +18637,20 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     const forwardImage = forward.locator("img");
     await expect(header.getByRole("button", { name: "Back", exact: true })).toHaveCount(1);
     await expect(header.getByRole("button", { name: "Forward", exact: true })).toHaveCount(1);
-    await expect(backImage).toHaveAttribute("data-icon", "app-history-back");
-    await expect(forwardImage).toHaveAttribute("data-icon", "app-history-forward");
-    for (const image of [backImage, forwardImage]) {
-      await expect(image).toHaveJSProperty("complete", true);
-      await expect(image).toHaveJSProperty("naturalWidth", 640);
-      await expect(image).toHaveAttribute("aria-hidden", "true");
-    }
+    const expectPlaceholder = async (button: Locator) => {
+      await expect(button).toBeDisabled();
+      await expect(button.locator("img")).toHaveCount(0);
+      const circle = button.locator(".history-placeholder");
+      await expect(circle).toBeVisible();
+      await expect(circle).toHaveAttribute("aria-hidden", "true");
+      await expect(circle).toHaveCSS("border-radius", "50%");
+      await expect(circle).toHaveCSS("border-width", "1px");
+    };
+    await expectPlaceholder(back);
+    await expectPlaceholder(forward);
+    await expect(header).toHaveCSS("padding-top", "2px");
+    await expect(header).toHaveCSS("padding-bottom", "2px");
+    await expect(header).toHaveCSS("height", "54px");
     const expectHistoryLayout = async () => {
       await expect
         .poll(() =>
@@ -18655,6 +18682,10 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
       .getByRole("button", { name: "Open Text", exact: true })
       .click();
     await expect(page.locator("#panel-settings-text")).toBeVisible();
+    await expect(backImage).toHaveAttribute("data-icon", "app-history-back");
+    await expect(backImage).toHaveJSProperty("complete", true);
+    await expect(backImage).toHaveJSProperty("naturalWidth", 640);
+    await expectPlaceholder(forward);
     await back.hover();
     await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
     await headerTitle.hover();
@@ -18685,6 +18716,9 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     await back.press("Enter");
     await expect(page.locator("#panel-home")).toBeVisible();
     await expect.poll(() => backImage.getAttribute("src")).not.toBe(firstPlayback);
+    await expect(forwardImage).toHaveAttribute("data-icon", "app-history-forward");
+    await expect(forwardImage).toHaveJSProperty("complete", true);
+    await expect(forwardImage).toHaveJSProperty("naturalWidth", 640);
     await forward.hover();
     await forward.focus();
     await expect(forwardImage).toHaveAttribute("src", /history-forward[^/]*\.png$/);
@@ -18697,7 +18731,7 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     await forward.click();
     await expect(page.locator("#panel-settings-text")).toBeVisible();
     await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
-    await expect(forwardImage).toHaveAttribute("src", /history-forward[^/]*\.png$/);
+    await expectPlaceholder(forward);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(forward).toBeDisabled();
     await page.locator(".sidebar-toggle").click();
@@ -18772,8 +18806,10 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     await expectHistoryLayout();
     await page.emulateMedia({ forcedColors: "active" });
     await header.getByRole("button", { name: /^Color theme:/ }).focus();
-    await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
-    await expect(forwardImage).toHaveAttribute("src", /history-forward[^/]*\.png$/);
+    for (const button of [back, forward]) {
+      if (await button.isDisabled()) await expectPlaceholder(button);
+      else await expect(button.locator("img")).toHaveAttribute("src", /\.png$/);
+    }
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });
