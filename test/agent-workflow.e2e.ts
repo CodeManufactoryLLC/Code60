@@ -586,9 +586,9 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
 
   for (const theme of ["light", "dark"]) {
-    await page.locator("#tab-settings").click();
-    if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
-      await page.locator("#settings-card-toggle").click();
+    await page.locator("#tab-apps").click();
+    if ((await page.locator("#apps-card-toggle").getAttribute("aria-expanded")) === "false")
+      await page.locator("#apps-card-toggle").click();
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
@@ -2289,9 +2289,9 @@ test("workflow: custom assistants without a database, instruction edits, archive
     };
     await expect(page.locator(".custom-agent-actions")).toHaveCount(0);
     for (const theme of ["light", "dark"]) {
-      await page.locator("#tab-settings").click();
-      if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
-        await page.locator("#settings-card-toggle").click();
+      await page.locator("#tab-apps").click();
+      if ((await page.locator("#apps-card-toggle").getAttribute("aria-expanded")) === "false")
+        await page.locator("#apps-card-toggle").click();
       await page.locator("#tab-settings-appearance").click();
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
       await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppsPage } from "./apps-page.js";
 import { pageAvailable, pageDefinitions, pagesInGroup } from "./navigation.js";
 
@@ -22,13 +22,42 @@ describe("Apps home", () => {
     }
   });
 
+  it("opens the relocated preferences from their database-independent Apps cards", () => {
+    const onOpen = vi.fn();
+    const home = AppsPage({ database: null, onOpen });
+    const labels = home.props.cards.map((card: { label: string }) => card.label);
+    expect(labels).toEqual([
+      "Appearance",
+      "Command Builder",
+      "Data Viewer",
+      "Memory",
+      "Polling",
+      "Prompt Builder",
+      "Scheduled Jobs",
+      "System Manager",
+      "Update Manager",
+    ]);
+    for (const card of home.props.cards.filter((card: { id: string }) =>
+      ["appearance", "memory", "polling-settings", "updates"].includes(card.id),
+    )) {
+      expect(card.available).toBe(true);
+      home.props.onOpen(card);
+    }
+    expect(onOpen.mock.calls.map(([id]) => id)).toEqual([
+      "appearance",
+      "memory",
+      "polling-settings",
+      "updates",
+    ]);
+  });
+
   it.each([null, "/database.sqlite"])(
     "shows a labelled card for every nested app with database gating (%s)",
     (database) => {
       const html = renderToStaticMarkup(<AppsPage database={database} onOpen={() => {}} />);
       expect(html).toContain('id="apps-title" class="page-title table-title"');
       expect(html).toContain('<span class="page-title-text">Apps</span>');
-      expect(html.match(/class="home-card"/g)).toHaveLength(pagesInGroup("apps").length + 1);
+      expect(html.match(/class="home-card"/g)).toHaveLength(pagesInGroup("apps").length + 5);
       for (const id of pagesInGroup("apps")) {
         const card = html.match(
           new RegExp(`<button[^>]*data-feature="${id}"[\\s\\S]*?</button>`),

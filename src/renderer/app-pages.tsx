@@ -22,6 +22,7 @@ import {
   pageDefinitions,
   type RenderedPageId,
   renderedPages,
+  settingsLabels,
 } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
@@ -292,7 +293,14 @@ export function AppPages(props: AppPagesProps) {
       />
     ),
     apps: (
-      <AppsPage database={database} onOpen={(id) => void navigation.open({ kind: "page", id })} />
+      <AppsPage
+        database={database}
+        onOpen={(id) =>
+          void navigation.open(
+            isSettingsSection(id) ? { kind: "settings", id } : { kind: "page", id },
+          )
+        }
+      />
     ),
     home: (
       <HomePage
@@ -695,13 +703,23 @@ export function AppPages(props: AppPagesProps) {
             role="tabpanel"
             id={`panel-${id}`}
             aria-labelledby={
-              id === "chat" && snapshot
-                ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-                : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
+              id === "settings" && settingsSection
+                ? `tab-settings-${settingsSection}`
+                : id === "chat" && snapshot
+                  ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                  : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
             }
             hidden={tabs.active !== id}
           >
-            {id !== "chat" && <ContentHeaderSlot fallback={pageDefinitions[id].label} />}
+            {id !== "chat" && (
+              <ContentHeaderSlot
+                fallback={
+                  id === "settings" && settingsSection
+                    ? settingsLabels[settingsSection]
+                    : pageDefinitions[id].label
+                }
+              />
+            )}
             {views[id]}
           </Shell>
         );

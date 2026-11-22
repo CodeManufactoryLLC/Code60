@@ -69,11 +69,15 @@ describe("navigation tree", () => {
   });
   it("resolves only immediate children in sidebar order with real destinations", () => {
     expect(staticChildren("apps", null).map(({ id }) => id)).toEqual([
+      "appearance",
       "commands",
       "tables",
+      "memory",
+      "polling-settings",
       "prompts",
       "automations",
       "system-manager",
+      "updates",
     ]);
     expect(staticChildren("tables", null).map(({ id }) => id)).toEqual([
       "configurations",
@@ -93,7 +97,7 @@ describe("navigation tree", () => {
       "episodic-memory",
       "rag",
     ]);
-    expect(staticChildren("settings", null).find(({ id }) => id === "appearance")?.target).toEqual({
+    expect(staticChildren("apps", null).find(({ id }) => id === "appearance")?.target).toEqual({
       kind: "settings",
       id: "appearance",
     });

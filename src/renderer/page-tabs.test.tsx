@@ -204,7 +204,7 @@ describe("database connection navigation", () => {
       ["table-defaults", "Table defaults"],
       ["text", "Text"],
       ["polling-settings", "Polling"],
-      ["updates", "Updates"],
+      ["updates", "Update Manager"],
       ["about", "About"],
     ] as const;
     for (const [section, label] of sections) {
@@ -217,7 +217,7 @@ describe("database connection navigation", () => {
     expect(html.match(/<button[^>]*id="tab-settings-appearance"[^>]*>/)?.[0]).toContain(
       'aria-selected="true"',
     );
-    expect(html.indexOf('id="settings-pages"')).toBeLessThan(
+    expect(html.indexOf('id="app-pages"')).toBeLessThan(
       html.indexOf('id="tab-settings-appearance"'),
     );
     expect(html.indexOf('id="tab-settings-about"')).toBeLessThan(
@@ -230,12 +230,8 @@ describe("database connection navigation", () => {
       "experiments-toggle",
       "tab-episodic-memory",
       "tab-rag",
-      "tab-settings-appearance",
-      "tab-settings-memory",
-      "tab-settings-polling-settings",
       "tab-settings-table-defaults",
       "tab-settings-text",
-      "tab-settings-updates",
     ];
     for (let index = 1; index < order.length; index++) {
       expect(html.indexOf(`id="${order[index - 1]}"`)).toBeLessThan(
@@ -246,6 +242,20 @@ describe("database connection navigation", () => {
 });
 
 describe("sidebar labels and disclosure icons", () => {
+  it.each(["appearance", "memory", "polling-settings", "updates"] as const)(
+    "keeps the selected Apps preference %s out of the collapsed Settings selection",
+    (section) => {
+      const html = navigation(null, undefined, section, "settings", false);
+      expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).toContain(
+        'aria-selected="false"',
+      );
+      expect(html.match(/<button[^>]*id="tab-apps"[^>]*>/)?.[0]).toContain('data-active="true"');
+      expect(html.indexOf(`id="tab-settings-${section}"`)).toBeLessThan(
+        html.indexOf('id="settings-pages"'),
+      );
+    },
+  );
+
   it("nests Data Viewer alphabetically under Apps and gives every child the grid icon", () => {
     const html = navigation("/database.sqlite");
     const order = [
@@ -379,7 +389,7 @@ describe("sidebar labels and disclosure icons", () => {
         ["tab-settings-appearance", "app-color-palette", "Appearance"],
         ["tab-settings-text", "app-text-size", "Text"],
         ["tab-settings-polling-settings", "app-heart-rate", "Polling"],
-        ["tab-settings-updates", "app-cloud-computing", "Updates"],
+        ["tab-settings-updates", "app-cloud-computing", "Update Manager"],
         ["tab-settings-about", "app-info", "About"],
         ["advanced-toggle", "app-analyze", "Advanced"],
         ["experiments-toggle", "app-chemical", "Experiments"],

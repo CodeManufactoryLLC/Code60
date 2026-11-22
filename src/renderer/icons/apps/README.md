@@ -35,7 +35,7 @@ User-supplied SVGs, retaining their original colors and geometry. Only each root
   white window stays opaque.
 - `backlog.svg`: retained original Projects SVG source and geometry reference.
 - `home2.svg`: retained original Home SVG source (supplied as `home (2).svg`).
-- `color-palette.svg`: Settings → Appearance
+- `color-palette.svg`: Apps → Appearance
 - `folder.gif` and `folder.png`: individual projects (79 frames, 2.12 seconds),
   supplied as `folder (1).gif`. Remove the exterior background, preserving the white star.
 - `labour-day.gif` and `labour-day.png`: project orchestrator chats (100 frames,
@@ -44,8 +44,8 @@ User-supplied SVGs, retaining their original colors and geometry. Only each root
 - `folder.svg`, `communication.svg`, `down-right.svg`: retained original artwork
   and SVG geometry references for projects, orchestrator chats and subagents.
 - `text-size.svg`: Settings → Text
-- `heart-rate.svg`: Settings → Polling
-- `cloud-computing.svg`: Settings → Updates
+- `heart-rate.svg`: Apps → Polling
+- `cloud-computing.svg`: Apps → Update Manager
 - `analyze.svg`: Settings → Advanced
 - `info.svg`: Settings → About
 - `search.gif` and `search.png`: Search (162 frames, 3.56 seconds), supplied as
@@ -54,7 +54,7 @@ User-supplied SVGs, retaining their original colors and geometry. Only each root
 - `table.gif` and `table.png`: individual Data Viewer tables and Settings → Table defaults (109 frames, 2.9 seconds).
 - `table.svg`: retained original table SVG and geometry reference.
 - `under-construction.svg`: Contributor Tools
-- `bookshelf.svg`: Settings → Memory
+- `bookshelf.svg`: Apps → Memory
 - `helmet.svg`: Providers
 - `chemical.svg`: Settings → Advanced → Experiments
 

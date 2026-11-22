@@ -137,6 +137,19 @@ describe("desktop capability catalog", () => {
       purpose: expect.stringContaining("whole-window background opacity"),
     });
   });
+  it("describes Apps-owned preferences and Update Manager with unchanged human-only access", () => {
+    const updates = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
+    expect(updates).toMatchObject({
+      label: "Update Manager",
+      access: "Apps → Update Manager → title actions",
+      prerequisite: "runtime",
+      agentAccess: "human-only",
+    });
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "memory")?.access).toContain("Apps → Memory");
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")?.access).toContain(
+      "Apps → Appearance",
+    );
+  });
   it("describes the global icon playback switch without changing authority", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",

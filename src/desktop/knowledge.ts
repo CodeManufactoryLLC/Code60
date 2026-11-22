@@ -308,7 +308,7 @@ export class DesktopKnowledge {
       status = "unknown";
       reason =
         "Updates ship for macOS arm64 and Linux x64. Development builds may be unavailable; awareness never checks or downloads.";
-      action = "Settings → Updates.";
+      action = "Apps → Update Manager.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =

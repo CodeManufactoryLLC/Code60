@@ -19,7 +19,7 @@
   changes. Dispose timers on pause, page hide and unmount. Initial/manual reads
   still work while paused; no new polling key, setting or bridge method.
 
-- Settings → Memory is application-wide and database-independent. Persist its
+- Apps → Memory is application-wide and database-independent. Persist its
   controls through main, not local storage. Expose only the application-wide
   Memory On/Off switch, immediate-save retention selector and Manage memories
   navigation to the shared Data Viewer. No daily learning allowance, pipeline,
@@ -631,7 +631,7 @@ product capability.
 
 ## Window background controls
 
-Settings → Appearance → Window background provides Background opacity (0–100%,
+Apps → Appearance → Window background provides Background opacity (0–100%,
 default 100%), Background blur strength (0–100%, default 0), and Reset background.
 Both sliders apply live to one full-window decorative backdrop, including the
 native-control strip, margins and footer, regardless of sidebar width or collapse.
@@ -970,7 +970,7 @@ the selector centered; compact containers reduce button size and selector paddin
 to fit the history controls. The sidebar toggle stays in the main content Card’s upper-left corner.
 Update the catalog access path without changing authority or availability.
 
-Monochrome icons are an optional Settings → Appearance → Icons preference, off
+Monochrome icons are an optional Apps → Appearance → Icons preference, off
 by default, with a native color selector defaulting to gray (#808080). Apply
 immediately and save locally without altering theme, migration markers or
 existing icon assets. Retain color when disabled, and surface failed persistence.
@@ -1142,3 +1142,24 @@ opacity on hover or keyboard-visible focus. Forced colors keeps both fully opaqu
 Apply opacity to each button as one composited control, preserving overlay alpha,
 hit targets, saved state and click-only playback. This is independent of window
 background opacity and introduces no setting or capability/catalog change.
+
+## Apps-owned preferences and Update Manager
+
+Appearance, Memory, Polling controls and Update Manager are direct Apps children,
+alphabetical alongside existing Apps destinations. They appear in the Apps sidebar
+and Apps home Cards, with Home → Apps breadcrumbs and matching keyboard parents.
+They no longer appear on the Settings home/sidebar. Settings retains About,
+Advanced, Table defaults and Text. Existing Data Viewer → Polling remains the
+separate polling monitor; Apps → Polling retains its existing controls/monitor action.
+
+Update Manager is the visible name everywhere for the existing updates destination;
+retain check/download/cancel/install/automatic-check behavior and native consent.
+Stable settings section IDs, DOM IDs and navigation/history target kinds remain
+compatibility adapters inside the retained settings render owner. Shared descriptor
+parent metadata owns visible ancestry; do not duplicate preference state or views.
+Revealing a promoted page opens Apps without forcing Settings open. Collapsing an
+ancestor preserves selection/content and marks the correct collapsed parent; Left
+returns focus to the actual owner. Preserve cached content, page actions, focus,
+request ownership, saved values, bridge contracts and database availability.
+Capability labels/access paths and recovery advice use Apps/Update Manager; keep
+capability IDs, availability rules and all execution/agent-write authority unchanged.

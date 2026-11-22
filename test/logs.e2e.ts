@@ -148,11 +148,11 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     const id = retained.records[0]?.id;
     expect(id).toBeTruthy();
     for (const theme of ["dark", "light", "system"]) {
-      const settingsPages = page.locator("#settings-card-toggle");
+      const settingsPages = page.locator("#apps-card-toggle");
       if ((await settingsPages.getAttribute("aria-expanded")) === "false")
         await settingsPages.press("ArrowRight");
       await page
-        .locator("#settings-pages")
+        .locator("#app-pages")
         .getByRole("tab", { name: "Appearance", exact: true })
         .click();
       await page.getByLabel("Theme", { exact: true }).selectOption(theme);

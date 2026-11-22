@@ -205,7 +205,7 @@ Workspace shell adapters (sidebar navigation, breadcrumbs, main page/conversatio
 and right file panel) use 1px borders. Other Card defaults also use 1px borders.
 Minimized file panels and the unframed outer Chat tabpanel remain borderless.
 
-Monochrome icons are an optional Settings → Appearance → Icons preference, off
+Monochrome icons are an optional Apps → Appearance → Icons preference, off
 by default, with a native color selector defaulting to gray (#808080). Apply
 immediately and save locally without altering theme, migration markers or
 existing icon assets. Retain color when disabled, and surface failed persistence.

@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { type _electron, expect, type Locator, type Page, test } from "@playwright/test";
 import { startService } from "../src/automation/service.js";
 import type { MemoryGeneration, MemorySource, Snapshot, UpdateState } from "../src/bridge/index.js";
-import { BUILTIN_COMMANDS } from "../src/contracts/index.js";
+import { BUILTIN_COMMANDS, settingsSections } from "../src/contracts/index.js";
 import { createRecordStore, DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import { ChatStore } from "../src/desktop/chat-store.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
@@ -268,9 +268,14 @@ async function selectSidebarPage(page: Page, name: string) {
 }
 
 async function selectSettingsPage(page: Page, name: string) {
-  const disclosure = page.locator("#settings-card-toggle");
+  // Legacy helper name: shared descriptors now place several preferences under Apps.
+  const section = settingsSections.find((section) => section.label === name);
+  if (!section) throw new Error(`Unknown preference page: ${name}`);
+  const disclosure = page.locator(
+    section.parent === "apps" ? "#apps-card-toggle" : "#settings-card-toggle",
+  );
   if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
-  await page.locator("#settings-pages").getByRole("tab", { name, exact: true }).click();
+  await page.locator(`#tab-settings-${section.id}`).click();
 }
 
 async function expectSplashLayout(page: Page, scheme: "light" | "dark" = "light") {
@@ -2548,7 +2553,7 @@ test("desktop: current-page combobox opens directly, animates and preserves draf
       await expect(popup).toHaveCSS("width", "240px");
       await expect(selector).toHaveCSS("border-radius", "5px");
       await expect(selector).toHaveCSS("box-shadow", "none");
-      await expect(options.getByRole("option")).toHaveText(["Home", "Settings", "Appearance"]);
+      await expect(options.getByRole("option")).toHaveText(["Home", "Apps", "Appearance"]);
       await expect(options.getByRole("option", { selected: true })).toHaveText("Appearance");
       const selectedId = await options.getByRole("option", { selected: true }).getAttribute("id");
       await expect(options).toHaveAttribute("aria-activedescendant", selectedId ?? "");
@@ -2563,10 +2568,10 @@ test("desktop: current-page combobox opens directly, animates and preserves draf
       await expect(page.locator("#panel-settings-appearance")).toBeVisible();
       await expect(options).toHaveCount(0);
       await selector.click();
-      await options.press("s");
+      await options.press("a");
       await options.press("Enter");
-      await expect(page.locator("#panel-settings")).toBeVisible();
-      await expect(selector).toHaveText("Settings");
+      await expect(page.locator("#panel-apps")).toBeVisible();
+      await expect(selector).toHaveText("Apps");
       await choose("Home");
       await expect(page.locator("#panel-home")).toBeVisible();
       await selector.click();
@@ -2913,7 +2918,7 @@ test("desktop: settings icon actions and spacing preserve accessible controls an
     expect((await page.evaluate(() => window.desktop.memorySnapshot())).settings).toEqual(settings);
     await expect(trigger()).toBeFocused();
     await expectIconAction(trigger());
-    await selectSettingsPage(page, "Updates");
+    await selectSettingsPage(page, "Update Manager");
     const check = await pageCommand(page, "Check for updates");
     await expect(check).toHaveAccessibleDescription(/downloaded only when you choose/);
     await expect(check).toBeDisabled();
@@ -3201,6 +3206,130 @@ test("desktop: animated navigation respects sidebar clicks, card hover and reduc
   }
 });
 
+test("desktop: Apps owns preferences and Update Manager without changing their state", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-app-preferences-")));
+  try {
+    application = await launch(directory, directory, join(directory, "projects.sqlite"));
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Preserve this Apps navigation draft");
+    const apps = page.locator("#apps-card-toggle");
+    const settings = page.locator("#settings-card-toggle");
+    if ((await settings.getAttribute("aria-expanded")) === "true") await settings.click();
+    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    const home = page.locator("#panel-apps");
+    await expect(home.locator(".home-card-name")).toHaveText([
+      "Appearance",
+      "Command Builder",
+      "Data Viewer",
+      "Memory",
+      "Polling",
+      "Prompt Builder",
+      "Scheduled Jobs",
+      "System Manager",
+      "Update Manager",
+    ]);
+    const current = page
+      .locator(".workspace-breadcrumbs")
+      .getByRole("combobox", { name: "Current page", exact: true });
+    const list = page.getByRole("listbox", { name: "Current page and parents", exact: true });
+    for (const [id, name] of [
+      ["appearance", "Appearance"],
+      ["memory", "Memory"],
+      ["polling-settings", "Polling"],
+      ["updates", "Update Manager"],
+    ] as const) {
+      const card = home.getByRole("button", { name: `Open ${name}`, exact: true });
+      await expect(card).toBeEnabled();
+      await card.click();
+      await expect(page.locator(`#panel-settings-${id}`)).toBeVisible();
+      await expect(page.locator(".content-page-title:visible")).toHaveText(name);
+      await expect(page.locator("#panel-settings")).toHaveAccessibleName(name);
+      await expect(apps).toHaveAttribute("aria-expanded", "true");
+      await expect(settings).toHaveAttribute("aria-expanded", "false");
+      const nav = page.locator(`#tab-settings-${id}`);
+      await expect(nav).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator(`#settings-pages #tab-settings-${id}`)).toHaveCount(0);
+      await expect(page.locator(`#app-pages #tab-settings-${id}`)).toHaveCount(1);
+      await expect(page.locator("#tab-settings")).toHaveAttribute("aria-selected", "false");
+      if (id === "appearance") {
+        await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
+      } else if (id === "updates") {
+        await expect(await pageCommand(page, "Check for updates")).toHaveCount(1);
+        await page.keyboard.press("Escape");
+      }
+      await current.click();
+      await expect(list.getByRole("option")).toHaveText(["Home", "Apps", name]);
+      await list.getByRole("option", { name: "Apps", exact: true }).click();
+      await expect(home).toBeVisible();
+    }
+    await expect(page.getByRole("tab", { name: "Updates", exact: true })).toHaveCount(0);
+    await home.getByRole("button", { name: "Open Memory", exact: true }).click();
+    const memory = page.locator("#tab-settings-memory");
+    await memory.focus();
+    await memory.press("ArrowLeft");
+    await expect(apps).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#tab-apps")).toBeFocused();
+    await expect(page.locator("#tab-apps")).toHaveAttribute("data-active", "true");
+    await expect(page.locator("#panel-settings-memory")).toBeVisible();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(home).toBeVisible();
+    await page.getByRole("button", { name: "Forward", exact: true }).click();
+    await expect(apps).toHaveAttribute("aria-expanded", "true");
+    await expect(settings).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#panel-settings .home-page .home-card-name")).toHaveText([
+      "About",
+      "Advanced",
+      "Table defaults",
+      "Text",
+    ]);
+    await selectSettingsPage(page, "Appearance");
+    await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toHaveValue("dark");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 640),
+    );
+    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    expect(
+      await home
+        .locator(".home-content")
+        .evaluate((element) => element.scrollHeight > element.clientHeight),
+    ).toBe(true);
+    await home
+      .getByRole("button", { name: "Open Update Manager", exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      home.getByRole("button", { name: "Open Update Manager", exact: true }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: test.info().outputPath("apps-preferences-dark.png"),
+      animations: "disabled",
+    });
+    await selectSettingsPage(page, "Appearance");
+    await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("light");
+    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    await page.screenshot({
+      path: test.info().outputPath("apps-preferences-light.png"),
+      animations: "disabled",
+    });
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(composer).toHaveValue("Preserve this Apps navigation draft");
+    await page.reload();
+    await expect(composer).toHaveValue("Preserve this Apps navigation draft");
+    await selectSettingsPage(page, "Appearance");
+    await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toHaveValue("light");
+    await page.emulateMedia({ forcedColors: "active" });
+    await current.click();
+    await expect(list.getByRole("option")).toHaveText(["Home", "Apps", "Appearance"]);
+    await list.press("Escape");
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: Settings home cards open every page and preserve navigation and preferences", async () => {
   test.setTimeout(120_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-settings-home-")));
@@ -3224,16 +3353,7 @@ test("desktop: Settings home cards open every page and preserve navigation and p
     if (!titlePosition) throw new Error("Settings overview title has no layout box");
     await expect(settings).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#panel-settings > .settings-page")).toBeHidden();
-    const labels = [
-      "About",
-      "Advanced",
-      "Appearance",
-      "Memory",
-      "Polling",
-      "Table defaults",
-      "Text",
-      "Updates",
-    ];
+    const labels = ["About", "Advanced", "Table defaults", "Text"];
     await expect(home.locator(".home-card-name")).toHaveText(labels);
     await expect(home.locator(".home-welcome")).toHaveCount(0);
     for (const label of labels) {
@@ -3257,14 +3377,14 @@ test("desktop: Settings home cards open every page and preserve navigation and p
         animations: "disabled",
       });
     }
+    await selectSettingsPage(page, "Appearance");
+    await page.getByRole("spinbutton", { name: "Reply entrance in milliseconds" }).fill("230");
+    await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
+    await settings.click();
     for (const [id, label] of [
       ["about", "About"],
-      ["appearance", "Appearance"],
-      ["memory", "Memory"],
-      ["polling-settings", "Polling"],
       ["table-defaults", "Table defaults"],
       ["text", "Text"],
-      ["updates", "Updates"],
     ] as const) {
       await home.getByRole("button", { name: `Open ${label}`, exact: true }).click();
       await expect(page.locator(`#panel-settings-${id}`)).toBeVisible();
@@ -3284,10 +3404,6 @@ test("desktop: Settings home cards open every page and preserve navigation and p
       await expect(page.locator(`#tab-settings-${id}`)).toHaveAttribute("aria-selected", "true");
       await expect(page.locator(`#tab-settings-${id}`)).toBeFocused();
       await expect(settings).toHaveAttribute("aria-selected", "false");
-      if (id === "appearance") {
-        await page.getByRole("spinbutton", { name: "Reply entrance in milliseconds" }).fill("230");
-        await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
-      }
       await settings.click();
       await expect(home).toBeVisible();
       await expect(page.locator(`#panel-settings-${id}`)).toBeHidden();
@@ -3312,13 +3428,13 @@ test("desktop: Settings home cards open every page and preserve navigation and p
     await expect(page.locator("#panel-contributor-tools")).toBeVisible();
     await expect(page.locator("#advanced-toggle")).toHaveAttribute("aria-expanded", "true");
     await settings.click();
-    await home.getByRole("button", { name: "Open Appearance", exact: true }).click();
+    await selectSettingsPage(page, "Appearance");
     await expect(
       page.getByRole("spinbutton", { name: "Reply entrance in milliseconds" }),
     ).toHaveValue("230");
     await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toHaveValue("dark");
     await page.locator("#tab-settings-appearance").press("ArrowLeft");
-    await expect(page.locator("#settings-card-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#apps-card-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("#panel-settings-appearance")).toBeVisible();
     await page.keyboard.press("ControlOrMeta+,");
     await expect(home).toBeVisible();
@@ -3371,16 +3487,10 @@ test("desktop: Settings home cards open every page and preserve navigation and p
       document.documentElement.style.setProperty("--button-size", "32px");
       document.documentElement.style.setProperty("--title-size", "32px");
     });
-    expect(
-      await home.evaluate((element) => ({
-        overflow: element.scrollWidth > element.clientWidth,
-        scrollable:
-          element.querySelector(".home-content")?.scrollHeight !==
-          element.querySelector(".home-content")?.clientHeight,
-      })),
-    ).toEqual({ overflow: false, scrollable: true });
-    await home.getByRole("button", { name: "Open Updates", exact: true }).scrollIntoViewIfNeeded();
-    await expect(home.getByRole("button", { name: "Open Updates", exact: true })).toBeInViewport();
+    expect(await home.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
+    // Scrolling of the moved collection is covered on Apps; remaining Settings cards stay usable.
+    await home.getByRole("button", { name: "Open Text", exact: true }).scrollIntoViewIfNeeded();
+    await expect(home.getByRole("button", { name: "Open Text", exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath("settings-home-narrow-large-text.png") });
   } finally {
     await application?.close().catch(() => {});
@@ -3569,16 +3679,7 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
           .filter((label) => !label.closest("#advanced-pages"))
           .map((label) => label.textContent),
       );
-    expect(order).toEqual([
-      "About",
-      "Advanced",
-      "Appearance",
-      "Memory",
-      "Polling",
-      "Table defaults",
-      "Text",
-      "Updates",
-    ]);
+    expect(order).toEqual(["About", "Advanced", "Table defaults", "Text"]);
     const settings = page.locator("#tab-settings");
     await settings.press("ArrowRight");
     await expect(page.locator("#tab-settings-about")).toBeFocused();
@@ -3603,7 +3704,7 @@ test("desktop: page title icons match navigation and Settings sub-pages are alph
       "Polling",
       "Table defaults",
       "Text",
-      "Updates",
+      "Update Manager",
     ]) {
       await selectSettingsPage(page, name);
       await checkTitles(page.locator("#panel-settings"));
@@ -4036,7 +4137,7 @@ test("desktop: square controls, compact cards and collapsible navigation", async
         "Polling",
         "Table defaults",
         "Text",
-        "Updates",
+        "Update Manager",
       ]) {
         await selectSettingsPage(page, label);
         const title = page.locator(".workspace-breadcrumbs .page-breadcrumbs:visible").first();
@@ -4492,10 +4593,9 @@ test("desktop: fixed navigation cards, bounded Polling, page gaps and responsive
       .locator("#panel-home")
       .getByRole("button", { name: "Open Relay", exact: true })
       .click();
-    await expect(page.locator("#panel-chat .orchestration-chat-heading:visible")).toHaveCSS(
-      "padding-bottom",
-      "16px",
-    );
+    const chatHeader = page.locator("#panel-chat .content-page-header-slot:visible");
+    await expect(chatHeader).toHaveCSS("min-height", "44px");
+    await expect(chatHeader).toHaveCSS("margin-bottom", "24px");
     for (const forcedColors of ["none", "active"] as const) {
       await page.emulateMedia({
         reducedMotion: forcedColors === "none" ? "reduce" : "no-preference",
@@ -7704,7 +7804,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
   try {
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await selectSettingsPage(page, "Updates");
+    await selectSettingsPage(page, "Update Manager");
     const toggle = page.getByRole("switch", { name: "Automatically check for updates" });
     await expect(toggle).toBeChecked();
     await toggle.uncheck();
@@ -7712,7 +7812,7 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
       .poll(() => page.evaluate(() => window.desktop.update("status")))
       .toMatchObject({ autoCheck: false });
     await page.reload();
-    await selectSettingsPage(page, "Updates");
+    await selectSettingsPage(page, "Update Manager");
     await expect(toggle).not.toBeChecked();
     await toggle.check();
     await expect
@@ -7787,7 +7887,8 @@ test("desktop: update footer, once-per-version popup, download and automatic-che
     ).toBeVisible();
     await selectSidebarPage(page, "Chat");
     await footer.getByRole("button", { name: "Update available", exact: true }).click();
-    await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
+    await expect(page.locator("#panel-settings")).toBeVisible();
+    await expect(page.locator("#panel-settings")).toHaveAccessibleName("Update Manager");
     await expect(await pageCommand(page, "Download update")).toBeInViewport();
     await page.reload();
     await expect(
@@ -9246,8 +9347,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expect(page.locator("#settings-home-title")).toBeVisible();
     await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeVisible();
     const about = page.getByRole("region", { name: "About", exact: true });
-    const updates = page.getByRole("region", { name: "Updates", exact: true });
-    await selectSettingsPage(page, "Updates");
+    const updates = page.getByRole("region", { name: "Update Manager", exact: true });
+    await selectSettingsPage(page, "Update Manager");
     await expect(updates.getByRole("status")).toContainText("installed release build");
     await expect(await pageCommand(page, "Check for updates")).toBeDisabled();
     expect(await page.evaluate(() => window.desktop.update("status"))).toMatchObject({
@@ -9844,6 +9945,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Projects",
       "Providers",
       "Apps",
+      "Appearance",
       "Command Builder",
       "Data Viewer",
       "Configurations",
@@ -9854,9 +9956,12 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Polling",
       "Sessions",
       "Worktrees",
+      "Memory",
+      "Polling",
       "Prompt Builder",
       "Scheduled Jobs",
       "System Manager",
+      "Update Manager",
       "Settings",
       "About",
       "Advanced",
@@ -9864,12 +9969,8 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Experiments",
       "Episodic Memory",
       "RAG",
-      "Appearance",
-      "Memory",
-      "Polling",
       "Table defaults",
       "Text",
-      "Updates",
     ] as const;
     await expect(page.getByRole("tab")).toHaveText([
       "Home",
@@ -9897,26 +9998,32 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       await expect(
         name === "Assistants"
           ? page.locator("#tab-assistants")
-          : page
-              .locator(
-                index > sidebarPages.indexOf("Settings")
-                  ? "#settings-pages"
-                  : index === sidebarPages.indexOf("Polling")
-                    ? "#table-pages"
-                    : ".page-tabs",
+          : name === "Polling"
+            ? page.locator(
+                index === sidebarPages.indexOf("Polling")
+                  ? "#tab-polling"
+                  : "#tab-settings-polling-settings",
               )
-              .getByRole(
-                name === "Relay" ||
-                  name === "Data Viewer" ||
-                  name === "Advanced" ||
-                  name === "Experiments"
-                  ? "button"
-                  : "tab",
-                {
-                  name,
-                  exact: true,
-                },
-              ),
+            : page
+                .locator(
+                  index > sidebarPages.indexOf("Settings")
+                    ? "#settings-pages"
+                    : index === sidebarPages.indexOf("Polling")
+                      ? "#table-pages"
+                      : ".page-tabs",
+                )
+                .getByRole(
+                  name === "Relay" ||
+                    name === "Data Viewer" ||
+                    name === "Advanced" ||
+                    name === "Experiments"
+                    ? "button"
+                    : "tab",
+                  {
+                    name,
+                    exact: true,
+                  },
+                ),
       ).toBeFocused();
       if (name === "Providers") await page.locator("#tab-providers").press("ArrowLeft");
       if (name === "Projects") {
@@ -9967,7 +10074,14 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
         ),
       ),
     ).toEqual(["none", "drag"]);
-    for (const name of ["Appearance", "Table defaults", "Text", "Polling", "Updates", "About"]) {
+    for (const name of [
+      "Appearance",
+      "Table defaults",
+      "Text",
+      "Polling",
+      "Update Manager",
+      "About",
+    ]) {
       await selectSettingsPage(page, name);
       await expect(
         page.locator(".workspace-breadcrumbs").getByRole("heading", { level: 1 }),
@@ -15386,7 +15500,7 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
       await selectSettingsPage(page, name);
       await expect(page.getByRole("button", { name: button, exact: true })).toBeVisible();
     }
-    await selectSettingsPage(page, "Updates");
+    await selectSettingsPage(page, "Update Manager");
     await expect(page.getByRole("button", { name: "About Updates", exact: true })).toHaveCount(0);
     await expect(await pageCommand(page, "Check for updates")).toHaveAccessibleDescription(
       /Updates are downloaded only when you choose/,
@@ -15395,7 +15509,7 @@ test("desktop: Settings explanations sit behind information tooltips", async () 
     await expect(
       page.getByRole("spinbutton", { name: "Chart ticker seconds", exact: true }),
     ).toBeVisible();
-    for (const name of ["Table defaults", "Text", "Polling", "Updates"] as const) {
+    for (const name of ["Table defaults", "Text", "Polling", "Update Manager"] as const) {
       await selectSettingsPage(page, name);
       const visible = page.locator(
         '[id^="panel-settings-"]:visible .settings-section > p:not([role])',
@@ -15417,7 +15531,14 @@ test("desktop: Settings pages share one card layout", async () => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    const pages = ["Appearance", "Table defaults", "Text", "Polling", "Updates", "About"] as const;
+    const pages = [
+      "Appearance",
+      "Table defaults",
+      "Text",
+      "Polling",
+      "Update Manager",
+      "About",
+    ] as const;
     const capture = async (suffix: string) => {
       for (const name of pages) {
         await selectSettingsPage(page, name);

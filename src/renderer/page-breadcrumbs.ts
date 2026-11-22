@@ -5,6 +5,7 @@ import {
   type PageId,
   pageDefinitions,
   type SettingsSectionId,
+  settingsParents,
 } from "./navigation.js";
 import type { NavigationIconName } from "./navigation-icons.js";
 import { type NavigationTarget, navigationParent } from "./navigation-tree.js";
@@ -41,7 +42,7 @@ function pageAncestors(
   source: BreadcrumbSource,
   target?: NavigationTarget,
 ): Breadcrumb[] {
-  if (isSettingsSection(page)) return [pageCrumb("settings")];
+  if (isSettingsSection(page)) return [pageCrumb(settingsParents[page])];
   if (page === "project") return [pageCrumb("projects")];
   if (page === "relay") return [pageCrumb("assistants")];
   if (page !== "orchestrator" && page !== "worker") {

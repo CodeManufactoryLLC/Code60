@@ -41,7 +41,7 @@ command menu attached to its owner without resetting keyboard focus.
 
 The right edge of the breadcrumb Card has one Color theme button. It shows the
 selected preference and cycles System → Dark → Light → System. System remains
-the default; saved selections and the Settings Theme selector stay synchronized.
+the default; saved selections and the Appearance Theme selector stay synchronized.
 Artwork plays once on activation; hover/focus stays still and reduced motion or
 forced colors uses the poster. The current-page selector stays centered. Main page and conversation backgrounds
 also have a subtle stationary 24px grid with 1px lines, using faint black in Light
@@ -78,3 +78,15 @@ Both breadcrumb appearance controls are 50% opaque at rest and fully opaque on
 hover or keyboard focus; forced colors keeps them fully visible. The wheel/block
 composite fades as one control. The main-content grid is slightly more visible:
 7% black lines in Light and 8% white in Dark, retaining 1px lines and 24px spacing.
+
+
+Memory, Polling controls, Appearance and Update Manager are now direct Apps
+children in both the sidebar and Apps home. Earlier snapshots above show the
+previous placement. Current breadcrumbs and keyboard parents use Apps; Settings
+retains About, Advanced, Table defaults and Text. Existing preferences and update
+check/download/install controls keep their state and permissions. The Data Viewer
+Polling monitor remains separate from Apps → Polling controls.
+
+| Apps in Light (narrow, scrolled to Update Manager) | Apps in Dark |
+| --- | --- |
+| ![Moved preferences in Apps and the Update Manager card in Light](after-apps-preferences-light.png) | ![Moved preferences in Apps and the Update Manager card in Dark](after-apps-preferences-dark.png) |

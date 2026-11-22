@@ -197,7 +197,7 @@ describe("DesktopKnowledge", () => {
   it("reports retained desktop update targets and scheduler controls without probes", async () => {
     const { knowledge, reads } = setup();
     const updates = result(
-      await knowledge.call("code60_get_capabilities", { query: "Updates" }, relay),
+      await knowledge.call("code60_get_capabilities", { query: "Update Manager" }, relay),
     );
     expect(updates.entries).toEqual(
       expect.arrayContaining([

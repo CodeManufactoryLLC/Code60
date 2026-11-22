@@ -14,6 +14,7 @@ import {
   pageGroup,
   settingsIcons,
   settingsLabels,
+  settingsParents,
 } from "./navigation.js";
 import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationIcon } from "./navigation-icons.js";
@@ -457,14 +458,17 @@ function PageTabList({
   const experimentActive = inNavigationBranch(tabs.active, "experiments");
   const advancedActive = inNavigationBranch(tabs.active, "advanced");
   const tableActive = inNavigationBranch(tabs.active, "tables");
-  const appActive = inNavigationBranch(tabs.active, "apps");
+  const sectionParent =
+    tabs.active === "settings" && settingsSection !== null
+      ? settingsParents[settingsSection]
+      : undefined;
+  const appActive = inNavigationBranch(tabs.active, "apps") || sectionParent === "apps";
+  const settingsActive = (tabs.active === "settings" && sectionParent !== "apps") || advancedActive;
+  const activeGroup = sectionParent ?? pageGroup(tabs.active);
   useLayoutEffect(() => {
     const activeChanged = previousActivePage.current !== tabs.active;
     previousActivePage.current = tabs.active;
-    if (
-      (tabs.active === "settings" && settingsSection !== null) ||
-      (activeChanged && advancedActive)
-    )
+    if (sectionParent === "settings" || (activeChanged && advancedActive))
       setSettingsExpanded(true);
     if (appActive && tabs.active !== "apps") setAppsExpanded(true);
     if (tabs.active === "search") setHomeExpanded(true);
@@ -485,7 +489,15 @@ function PageTabList({
     return () => {
       if (navigationFrame.current !== undefined) cancelAnimationFrame(navigationFrame.current);
     };
-  }, [tabs, settingsSection, appActive, tableActive, advancedActive, experimentActive]);
+  }, [
+    tabs,
+    settingsSection,
+    sectionParent,
+    appActive,
+    tableActive,
+    advancedActive,
+    experimentActive,
+  ]);
   useEffect(() => {
     localStorage.setItem("code60.tablesExpanded", String(expanded));
   }, [expanded]);
@@ -733,7 +745,7 @@ function PageTabList({
         return;
       }
       const owner = isSettingsSection(id)
-        ? "settings"
+        ? settingsParents[id]
         : id === "relay" || id === "assistants"
           ? undefined
           : navigationParent(id);
@@ -779,7 +791,8 @@ function PageTabList({
         key={id}
         data-nav-active={
           (tabs.active === id &&
-            (id !== "settings" || (settingsSection === null && settingsExpanded))) ||
+            (id !== "settings" ||
+              (settingsActive && settingsSection === null && settingsExpanded))) ||
           (id === "apps" && appActive && !appsExpanded) ||
           (id === "assistants" && assistantActive && !assistantsExpanded) ||
           (id === "home" && tabs.active === "search" && !homeExpanded)
@@ -796,7 +809,8 @@ function PageTabList({
           aria-expanded={id === "custom-agents" ? customExpanded : undefined}
           aria-selected={
             tabs.active === id &&
-            (id !== "settings" || settingsSection === null || !settingsExpanded)
+            (id !== "settings" ||
+              (settingsActive && (settingsSection === null || !settingsExpanded)))
           }
           data-active={
             id === "apps" ? tabs.active === id || (appActive && !appsExpanded) : undefined
@@ -804,7 +818,10 @@ function PageTabList({
           title={pageDefinitions[id].label}
           disabled={!pageAvailable(id, database)}
           tabIndex={
-            tabs.active === id || (first && pageGroup(tabs.active) !== pageGroup(id)) ? 0 : -1
+            (tabs.active === id && (id !== "settings" || settingsActive)) ||
+            (first && activeGroup !== pageGroup(id))
+              ? 0
+              : -1
           }
           onClick={() => {
             if (id === "custom-agents") {
@@ -1265,8 +1282,8 @@ function PageTabList({
       <div className="page-tab-list sidebar-settings sidebar-section">
         <div
           className="sidebar-settings-heading sidebar-card-header"
-          data-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
-          data-nav-active={(tabs.active === "settings" || advancedActive) && !settingsExpanded}
+          data-active={settingsActive && !settingsExpanded}
+          data-nav-active={settingsActive && !settingsExpanded}
         >
           <div
             className="page-tab-list"

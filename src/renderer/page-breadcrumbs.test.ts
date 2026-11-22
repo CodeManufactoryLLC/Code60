@@ -47,7 +47,10 @@ describe("page breadcrumb hierarchy", () => {
     ["commands", ["Apps"]],
     ["logs", ["Apps", "Data Viewer"]],
     ["polling", ["Apps", "Data Viewer"]],
-    ["polling-settings", ["Settings"]],
+    ["polling-settings", ["Apps"]],
+    ["appearance", ["Apps"]],
+    ["memory", ["Apps"]],
+    ["updates", ["Apps"]],
     ["contributor-tools", ["Settings", "Advanced"]],
     ["rag", ["Settings", "Advanced", "Experiments"]],
     ["episodic-memory", ["Settings", "Advanced", "Experiments"]],
@@ -71,7 +74,9 @@ describe("page breadcrumb hierarchy", () => {
     for (const page of settingsSectionIds)
       expect(breadcrumbAncestors(page, empty)).toEqual([
         { label: "Home", icon: "app-home2", target: { kind: "page", id: "home" } },
-        { label: "Settings", icon: "app-cogwheel", target: { kind: "page", id: "settings" } },
+        ["appearance", "memory", "polling-settings", "updates"].includes(page)
+          ? { label: "Apps", icon: "app-apps", target: { kind: "page", id: "apps" } }
+          : { label: "Settings", icon: "app-cogwheel", target: { kind: "page", id: "settings" } },
       ]);
   });
 

@@ -889,7 +889,7 @@ export class Run {
           } catch {
             return await this.notSent(
               statusSaved,
-              "Memory preparation failed. This message was not sent. Open Settings → Memory, resolve the warning and try again. Unsent request:",
+              "Memory preparation failed. This message was not sent. Open Apps → Memory, resolve the warning and try again. Unsent request:",
               text,
             );
           }

@@ -483,7 +483,7 @@ newest-first revision history. Raw IDs and offsets stay out of the presentation.
 A sticky action row provides revision-checked edit, pin, resolve, promote and
 forget actions; Save changes is enabled only for changed text or pin state.
 Native confirmation still owns
-global promotion and forgetting. Settings → Memory links to this shared browser,
+global promotion and forgetting. Apps → Memory links to this shared browser,
 without maintaining a second record list.
 
 Desktop memory is an explicit exception to automatic semantic retrieval and
@@ -1980,7 +1980,7 @@ The bundle ID is `com.codemanufactory.code60`; the
 Linux GUI executable is `code60-desktop`.
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
-Settings → Updates offers explicit Check for updates, Download update, cancellation,
+Apps → Update Manager offers explicit Check for updates, Download update, cancellation,
 and Install and restart on all distributed targets. The main-process `Poller` also
 schedules app-wide release checks after 30 seconds and then four hours after each
 check completes, independently of workspace polling and its pause switch. Checks
@@ -1988,7 +1988,7 @@ are single-flight, run only from idle update state, stop on shutdown, and never
 download automatically. Background failures stay quiet; manual failures are shown.
 The on-by-default automatic-check switch persists as `updateCheck` in desktop.json;
 fixed `auto-on`/`auto-off` update actions change it without affecting shared configuration.
-A footer button opens Settings → Updates and labels availability, download progress,
+A footer button opens Apps → Update Manager and labels availability, download progress,
 or readiness to install. A popup offers Download now / Later once per version,
 remembered in renderer local storage, and waits for other dialogs to close.
 `electron-updater` reads the
@@ -2170,7 +2170,7 @@ before provider completion; this hint neither marks process shutdown nor enters 
 Monitoring owners use the same “Monitoring subagents” wording in their accessible
 descriptions and tooltips as the transcript activity display.
 
-Settings → Appearance has a Transitions card for reply entrance, scroll response,
+Apps → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a
 nonlinear slider for fine short-duration control, exact millisecond input, current
 duration and a shared Reset transitions action. Zero is instant. Scroll response is
@@ -2307,7 +2307,7 @@ disclosures, theme behavior and transitions. Search loading artwork is unchanged
 
 ## Window background controls
 
-Settings → Appearance → Window background provides Background opacity (0–100%,
+Apps → Appearance → Window background provides Background opacity (0–100%,
 default 100%), Background blur strength (0–100%, default 0), and Reset background.
 Both sliders apply live to one full-window decorative backdrop, including the
 native-control strip, margins and footer, regardless of sidebar width or collapse.
@@ -2596,7 +2596,7 @@ the selector centered; compact containers reduce button size and selector paddin
 to fit the history controls. The sidebar toggle stays in the main content Card’s upper-left corner.
 Update the catalog access path without changing authority or availability.
 
-Monochrome icons are an optional Settings → Appearance → Icons preference, off
+Monochrome icons are an optional Apps → Appearance → Icons preference, off
 by default, with a native color selector defaulting to gray (#808080). Apply
 immediately and save locally without altering theme, migration markers or
 existing icon assets. Retain color when disabled, and surface failed persistence.
@@ -2763,3 +2763,24 @@ opacity on hover or keyboard-visible focus. Forced colors keeps both fully opaqu
 Apply opacity to each button as one composited control, preserving overlay alpha,
 hit targets, saved state and click-only playback. This is independent of window
 background opacity and introduces no setting or capability/catalog change.
+
+## Apps-owned preferences and Update Manager
+
+Appearance, Memory, Polling controls and Update Manager are direct Apps children,
+alphabetical alongside existing Apps destinations. They appear in the Apps sidebar
+and Apps home Cards, with Home → Apps breadcrumbs and matching keyboard parents.
+They no longer appear on the Settings home/sidebar. Settings retains About,
+Advanced, Table defaults and Text. Existing Data Viewer → Polling remains the
+separate polling monitor; Apps → Polling retains its existing controls/monitor action.
+
+Update Manager is the visible name everywhere for the existing updates destination;
+retain check/download/cancel/install/automatic-check behavior and native consent.
+Stable settings section IDs, DOM IDs and navigation/history target kinds remain
+compatibility adapters inside the retained settings render owner. Shared descriptor
+parent metadata owns visible ancestry; do not duplicate preference state or views.
+Revealing a promoted page opens Apps without forcing Settings open. Collapsing an
+ancestor preserves selection/content and marks the correct collapsed parent; Left
+returns focus to the actual owner. Preserve cached content, page actions, focus,
+request ownership, saved values, bridge contracts and database availability.
+Capability labels/access paths and recovery advice use Apps/Update Manager; keep
+capability IDs, availability rules and all execution/agent-write authority unchanged.

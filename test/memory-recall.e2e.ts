@@ -118,10 +118,9 @@ async function send(page: Page, text: string) {
   await expect(composer).toBeEditable();
 }
 async function memoryOff(page: Page) {
-  await page.getByRole("tab", { name: "Settings", exact: true }).click();
-  const settingsToggle = page.locator("#settings-card-toggle");
-  if ((await settingsToggle.getAttribute("aria-expanded")) === "false")
-    await settingsToggle.click();
+  await page.getByRole("tab", { name: "Apps", exact: true }).click();
+  const apps = page.locator("#apps-card-toggle");
+  if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
   await page.getByRole("tab", { name: "Memory", exact: true }).click();
   const toggle = page
     .locator("#panel-settings-memory")
