@@ -363,7 +363,7 @@ Schema version: 1
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Human approval before installation and shutdown.
-- Limits: Development builds may be unavailable; awareness does not check or download.
+- Limits: Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Automatic recovery requires the native service PID to match the responding scheduler and never replaces a newer or unknown version. Recovery has one exclusive owner. AppImages require executable and parent locations protected from other users. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.
 - Pages: none
 - Settings sections: `updates`
 - Tools: none

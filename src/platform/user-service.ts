@@ -121,7 +121,12 @@ const inspectCommand: ServiceInspectionCommand = (argv) =>
 export async function inspectUserService(
   definition: UserServiceDefinition,
   command: ServiceInspectionCommand = inspectCommand,
-): Promise<{ definitionPresent: boolean; state: "running" | "stopped" | "unavailable" }> {
+): Promise<{
+  definitionPresent: boolean;
+  state: "running" | "stopped" | "unavailable";
+  pid?: number;
+  loaded?: boolean;
+}> {
   const file = await lstat(definition.path).catch((error) => {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return null;
@@ -137,6 +142,7 @@ export async function inspectUserService(
       "code60-scheduler.service",
       "--property=LoadState",
       "--property=ActiveState",
+      "--property=MainPID",
     ]);
     const fields = new Map(
       result.stdout
@@ -151,6 +157,7 @@ export async function inspectUserService(
     const state = fields.get("ActiveState");
     return {
       definitionPresent,
+      ...(Number(fields.get("MainPID")) > 0 ? { pid: Number(fields.get("MainPID")) } : {}),
       state:
         (!result.ok && !(load === "not-found" && state === "inactive")) ||
         !["loaded", "not-found"].includes(load ?? "")
@@ -170,6 +177,10 @@ export async function inspectUserService(
     const state = /^\s*state = (.+)$/m.exec(result.stdout)?.[1]?.trim();
     return {
       definitionPresent,
+      loaded: true,
+      ...(/^\s*pid = ([1-9]\d*)$/m.exec(result.stdout)
+        ? { pid: Number(/^\s*pid = ([1-9]\d*)$/m.exec(result.stdout)?.[1]) }
+        : {}),
       state:
         state === "running"
           ? "running"
@@ -178,12 +189,16 @@ export async function inspectUserService(
             : "unavailable",
     };
   }
-  const supervisor = await command([
-    "launchctl",
-    "print-disabled",
-    `gui/${process.getuid?.() ?? -1}`,
-  ]);
-  return { definitionPresent, state: supervisor.ok ? "stopped" : "unavailable" };
+  // A reachable domain alone is insufficient. Its successful service inventory
+  // must positively show that this job is absent, even after a failed bootout.
+  const supervisor = await command(["launchctl", "print", `gui/${process.getuid?.() ?? -1}`]);
+  const services = /^\s*services = \{\n([\s\S]*?)^\s*\}/m.exec(supervisor.stdout)?.[1];
+  const unloaded = supervisor.ok && services !== undefined && !services.includes(LABEL);
+  return {
+    definitionPresent,
+    ...(unloaded ? { loaded: false } : {}),
+    state: unloaded ? "stopped" : "unavailable",
+  };
 }
 const runServiceCommand: ServiceCommand = (argv) =>
   new Promise((resolve) => {
@@ -202,10 +217,19 @@ export async function controlUserService(
   definition: UserServiceDefinition,
   action: "install" | "repair" | "start" | "stop" | "uninstall" | "status",
   command: ServiceCommand = runServiceCommand,
+  inspectionCommand: ServiceInspectionCommand = inspectCommand,
 ): Promise<{ available: boolean }> {
   if (action === "status") return { available: await command(definition.status) };
   if (action === "install" || action === "repair") {
-    if (action === "repair") for (const argv of definition.stop) await command(argv);
+    if (action === "repair")
+      for (const argv of definition.stop)
+        if (!(await command(argv))) {
+          const native = await inspectUserService(definition, inspectionCommand);
+          if (native.state !== "stopped" || (argv[0] === "launchctl" && native.loaded !== false))
+            throw new Error(
+              "Scheduling Service could not stop. Its registration was not replaced.",
+            );
+        }
     await mkdir(join(definition.path, ".."), { recursive: true, mode: 0o700 });
     const temporary = join(definition.path, "..", `${randomUUID()}.tmp`);
     await writePrivateFile(temporary, definition.contents, { mode: 0o600, flag: "wx" });

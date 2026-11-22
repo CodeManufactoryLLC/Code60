@@ -17,6 +17,14 @@ import {
 const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
 
 describe("desktop capability catalog", () => {
+  it("describes scheduler upgrade recovery without granting service authority", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "updates")).toMatchObject({
+      prerequisite: "runtime",
+      agentAccess: "human-only",
+      limitations: expect.stringContaining("verifies the matching app version"),
+      confirmation: "Human approval before installation and shutdown.",
+    });
+  });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       prerequisite: "none",
@@ -128,6 +136,15 @@ describe("desktop capability catalog", () => {
     expect(service?.limitations).toContain("global Pause polling");
     expect(service?.limitations).toContain("sixty seconds");
     expect(service?.limitations).toContain("no native Stop action");
+  });
+  it("describes the scheduler update ownership and executable prerequisites without agent authority", () => {
+    const update = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
+    expect(update?.limitations).toContain("native service PID");
+    expect(update?.limitations).toContain("newer or unknown version");
+    expect(update?.limitations).toContain("one exclusive owner");
+    expect(update?.limitations).toContain("parent locations protected");
+    expect(update?.prerequisite).toBe("runtime");
+    expect(update?.agentAccess).toBe("human-only");
   });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
     expect(PAGE_CAPABILITIES.providers).toBe("providers");

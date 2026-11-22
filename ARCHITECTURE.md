@@ -1998,6 +1998,18 @@ asynchronous, five-minute-bounded `pkexec /usr/bin/dpkg -i` authorization, and A
 stages a complete executable beside the original before atomic replacement.
 Linux authorization or installation failures are shown before closing the stopped app.
 The main process rejects other renderer requests during installation.
+Before replacement, app updates persist scheduler restart intent, cancel active
+automation work and stop the installed Scheduling Service. On the first launch
+after installation, startup repairs the previously consented registration using
+the new runtime, verifies its reported app version and absence of recovery blocks,
+then restores and verifies the saved global pause state before clearing restart
+intent. Packaged startup also detects and reconciles an active older scheduler
+after a manual app installation. Stopped or uninstalled services are not activated
+without pending restart intent. Development startup does not reconcile versions.
+Native repair refuses to replace a registration after a failed stop unless native
+inspection proves the service stopped (launchd must show the job absent from a successful domain inventory). Native supervisor PID and socket responder PID must match before automatic stop or reactivation. Update recovery holds an exclusive private process-owned lock; concurrent launches cannot consume the same intent. Automatic reconciliation never replaces newer or unknown release versions. AppImage executable and canonical ancestor ownership/permissions must exclude replacement by other users before any pause, stop or registration rewrite. No app version is persisted in registration; the live process supplies it. Stop, upgrade and reactivation failures
+remain visible and retain recovery intent; definitions, occurrence history and
+worktrees are never removed or replayed by this sequence.
 Release staging verifies channel metadata against the exact final artifacts.
 The macOS ZIP and platform channel YAML files are published alongside installers.
 
