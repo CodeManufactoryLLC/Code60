@@ -88,6 +88,9 @@ export function createChatScroll(
   };
   return {
     update,
+    finishLayout() {
+      if (position.following) update(true);
+    },
     pause() {
       cancel();
       wasLayoutMoving = false;
@@ -172,7 +175,7 @@ export function useChatScroll(active: boolean, key: string) {
         event.target.classList.contains("chat-message-layout")
       )
         // A missed frame can finish without any intermediate resize measurement.
-        current.update(true);
+        current.finishLayout();
     };
     inner?.addEventListener("transitionend", layoutEnded);
     const settle = () => current.update(true);
