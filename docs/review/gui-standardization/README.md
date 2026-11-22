@@ -189,3 +189,17 @@ header colors and casing in earlier screenshots.
 | Blue headers in Light | Purple headers in Dark |
 | --- | --- |
 | ![Blue sidebar headers with uppercase titles in Light](after-sidebar-header-palette-light.png) | ![Purple sidebar headers with uppercase titles in Dark](after-sidebar-header-palette-dark.png) |
+
+## Transparent titles, wider card spacing and chat provider marks
+
+The shared content title header now has a transparent background, allowing the
+main Card's stationary grid to continue behind the title and its action dropdown.
+Top-level sidebar Card gaps are 16px, twice the former 8px. Project chat sidebar
+entries show the provider logo from their own chat run, including on the leading
+worker disclosure. Changing the global primary provider does not relabel saved
+chats. Unknown provider artwork uses the existing terminal fallback. Relay,
+custom-assistant and worker navigation artwork retain their identities.
+
+| Transparent title and provider marks in Light | Transparent title and provider marks in Dark |
+| --- | --- |
+| ![Grid behind title with wider sidebar gaps and chat provider logo in Light](after-transparent-header-provider-light.png) | ![Grid behind title with wider sidebar gaps and chat provider logo in Dark](after-transparent-header-provider-dark.png) |

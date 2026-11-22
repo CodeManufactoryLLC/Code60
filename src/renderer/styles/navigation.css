@@ -345,7 +345,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: 16px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -967,6 +967,23 @@
   aspect-ratio: 1;
   left: auto;
   right: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Provider marks share the bounded artwork gutter, including the worker disclosure. */
+.chat-sidebar-entry .chat-sidebar-artwork:has(> :is(.agent-logo, .carbon-icon)) {
+  height: min(28px, 2em);
+}
+
+.chat-sidebar-entry .chat-sidebar-artwork > :is(.agent-logo, .carbon-icon),
+.chat-workers-toggle-leading > :is(.agent-logo, .carbon-icon) {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: min(28px, 2em);
+  height: min(28px, 2em);
   max-width: 100%;
   max-height: 100%;
 }

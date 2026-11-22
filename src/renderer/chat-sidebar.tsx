@@ -2,6 +2,7 @@ import { type KeyboardEvent, useLayoutEffect, useMemo, useRef, useState } from "
 import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { activityLabel } from "./activity-display.js";
+import { AgentLogo } from "./agent-logo.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
@@ -244,7 +245,7 @@ export function ChatSidebar({
           document.getElementById(`conversation-${entry.id}`)?.focus();
         }}
       >
-        {projectWorkers ? <NavigationIcon name="app-communication" /> : <Icon name="ai-agent" />}
+        {projectWorkers ? <AgentLogo id={chat?.run?.agent ?? ""} /> : <Icon name="ai-agent" />}
       </button>
     );
     return (
@@ -305,7 +306,7 @@ export function ChatSidebar({
                   />
                 )}
                 {entry.role === "orchestrator" && chat?.kind !== "relay" && (
-                  <NavigationIcon name="app-communication" />
+                  <AgentLogo id={chat?.run?.agent ?? ""} />
                 )}
                 {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
               </span>

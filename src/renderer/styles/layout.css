@@ -284,7 +284,7 @@ dialog::backdrop {
   min-width: 0;
   min-height: var(--panel-controls-height);
   margin-bottom: var(--page-header-gap);
-  background: var(--content-background);
+  background: transparent;
 }
 .content-page-heading {
   display: flex;

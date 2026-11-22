@@ -7,6 +7,7 @@ import {
 } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import { AgentLogo } from "./agent-logo.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { PageTabBar } from "./page-tabs.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
@@ -118,7 +119,7 @@ const chats = [
   {
     kind: "project",
     projectId: "a",
-    run: { id: "chat", status: "idle", turns: 0, pending: [] },
+    run: { id: "chat", agent: "claude", status: "idle", turns: 0, pending: [] },
     workers: ["worker"],
   },
 ] as unknown as OrchestrationChat[];
@@ -372,7 +373,7 @@ it("keeps project worker disclosure independent from chat selection on the leadi
   const toggle = () =>
     find(view.tree(), (element) => element.props["aria-controls"] === "workers-chat");
   expect(toggle().props.className).toContain("chat-workers-toggle-leading");
-  expect(find(toggle(), (element) => element.props.name === "app-communication")).toBeDefined();
+  expect(find(toggle(), (element) => element.type === AgentLogo).props.id).toBe("claude");
   (toggle().props.onClick as () => void)();
   view.render();
   expect(toggle().props["aria-expanded"]).toBe(false);

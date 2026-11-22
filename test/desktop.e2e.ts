@@ -2843,6 +2843,17 @@ test("desktop: top-level navigation cards stay open and align their immediate ch
     ];
     const checkCards = async () => {
       await expect(cards).toHaveCount(6);
+      await expect(page.locator(".page-tabs")).toHaveCSS("row-gap", "16px");
+      const gaps = await cards.evaluateAll((items) =>
+        items
+          .slice(1)
+          .map(
+            (item, index) =>
+              item.getBoundingClientRect().top -
+              (items[index]?.getBoundingClientRect().bottom ?? 0),
+          ),
+      );
+      for (const gap of gaps) expect(gap).toBeCloseTo(16, 1);
       await expect(page.locator(".sidebar-card-toggle")).toHaveCount(0);
       for (const id of panels) await expect(page.locator(`#${id}`)).not.toHaveAttribute("hidden");
       const layout = await cards.evaluateAll((cards) =>
@@ -2910,6 +2921,24 @@ test("desktop: top-level navigation cards stay open and align their immediate ch
           )
           .toBeLessThan(0.6);
       }
+      const provider = page.locator("#chat-pages .chat-sidebar-entry .agent-logo").first();
+      await expect(provider).toBeVisible();
+      const artwork = await provider.evaluate((image) => {
+        const row = image.closest(".chat-sidebar-row");
+        const label = row?.querySelector(".chat-sidebar-label")?.getBoundingClientRect();
+        const card = row?.getBoundingClientRect();
+        const icon = image.getBoundingClientRect();
+        return (
+          !!label &&
+          !!card &&
+          icon.width > 0 &&
+          icon.height > 0 &&
+          icon.right <= label.left &&
+          icon.top >= card.top &&
+          icon.bottom <= card.bottom
+        );
+      });
+      expect(artwork).toBe(true);
     };
     await selectSettingsPage(page, "Text");
     for (const size of [8, 15, 32, 64]) {
@@ -2961,6 +2990,19 @@ test("desktop: top-level navigation cards stay open and align their immediate ch
       await page.locator("#tab-home").click();
       await checkCards();
       await checkAlignment();
+      await expect(page.locator("#chat-pages .chat-sidebar-entry .agent-logo").first()).toHaveCSS(
+        "width",
+        "28px",
+      );
+      await expect(page.locator("#chat-pages .chat-sidebar-entry .agent-logo").first()).toHaveCSS(
+        "height",
+        "28px",
+      );
+      await expect(page.locator("#panel-home > .content-page-header-slot")).toHaveCSS(
+        "background-color",
+        "rgba(0, 0, 0, 0)",
+      );
+      await expect(page.locator("#panel-home")).toHaveCSS("background-image", /linear-gradient/);
       await page.mouse.move(900, 500);
       for (const header of await cards.locator(":scope > .sidebar-card-header").all()) {
         await expect(header.locator(".page-tab-label")).toHaveCSS("text-transform", "uppercase");
@@ -11615,8 +11657,10 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
   await writeFile(
     join(config, "config.json"),
     JSON.stringify({
-      defaultAgent: "fake",
-      agents: { fake: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] } },
+      defaultAgent: "claude",
+      agents: {
+        claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
+      },
     }),
   );
   application = await launch(directory, repo, join(directory, "code60.sqlite"));
@@ -11638,7 +11682,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(page.locator(".orchestration-chat-page:visible .activity-display")).toHaveCount(0);
     await selectProjectConversation(page);
     const start = () =>
-      page.evaluate(() => window.desktop.start({ agents: ["fake"], allow: [], allowAll: false }));
+      page.evaluate(() => window.desktop.start({ agents: ["claude"], allow: [], allowAll: false }));
     const [a] = await start();
     const [b] = await start();
     if (!a || !b) throw new Error("Missing fixture runs");
@@ -11657,8 +11701,9 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
       .locator("..")
       .locator(":scope > .chat-workers-toggle-leading");
     // These manually started workers acquire ownership only in the later projection.
+    await expect(row(owner).locator(".agent-logo-claude")).toHaveCount(1);
     await expect(row(owner).locator("..").locator('[data-icon="app-communication"]')).toHaveCount(
-      1,
+      0,
     );
     await expect(row(a).locator('[data-icon="app-down-right"]')).toHaveCount(1);
     await expect(page.locator(".chat-dock, .chat-popup")).toHaveCount(0);
@@ -11684,7 +11729,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expectNavigationHighlight(page, row(a).locator(".."));
     await expect(row(owner)).not.toHaveAttribute("aria-current", "true");
     await expect(page.locator(".chat-page-heading[data-nav-active='true']")).toHaveCount(0);
-    await expect(page.locator(".content-page-title:visible")).toHaveText(`fake / ${a.slice(-6)}`);
+    await expect(page.locator(".content-page-title:visible")).toHaveText(`claude / ${a.slice(-6)}`);
     const nameBounds = await page.locator(".content-page-title:visible").boundingBox();
     const statusBounds = await worker(a).locator(".worker-chat-subtitle").boundingBox();
     expect(nameBounds && statusBounds && statusBounds.y >= nameBounds.y + nameBounds.height).toBe(
@@ -11822,15 +11867,22 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     const toggle = page.getByRole("button", { name: "Workers for Chat 1", exact: true });
     await expect(children).toBeVisible();
     await expect(children.locator('[data-role="worker"]')).toHaveCount(2);
-    await expect(ownerDisclosure.locator('[data-icon="app-communication"]')).toHaveCount(1);
+    await expect(ownerDisclosure.locator(".agent-logo-claude")).toHaveCount(1);
+    await expect(ownerDisclosure.locator("img")).toHaveAttribute("src", /claude[^/]*\.svg$/);
+    await expect(ownerDisclosure.locator("img")).toHaveJSProperty("complete", true);
+    expect(
+      await ownerDisclosure
+        .locator("img")
+        .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+    ).toBeGreaterThan(0);
+    await expect(ownerDisclosure.locator('[data-icon="app-communication"]')).toHaveCount(0);
     await expect(row(owner).locator("img.navigation-icon")).toHaveCount(0);
     for (const [id, file] of [
-      [owner, "labour-day"],
       [a, "drone"],
       [b, "drone"],
     ]) {
       if (!id) throw new Error("Missing conversation identity");
-      const icon = (id === owner ? ownerDisclosure : row(id)).locator("img.navigation-icon");
+      const icon = row(id).locator("img.navigation-icon");
       await expect(icon).toHaveAttribute(
         "src",
         new RegExp(`/${file}-[\\w-]+\\.(?:png|gif)(?:\\?play=[^ ]+)?$`),
@@ -16003,7 +16055,7 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
     await expect(controlRow).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".chat-conversations > .content-page-header-slot")).toHaveCSS(
       "background-color",
-      "rgb(255, 255, 255)",
+      "rgba(0, 0, 0, 0)",
     );
     await page.screenshot({ path: test.info().outputPath("content-chat-narrow-header-hit.png") });
     const headerHit = await controlRow.evaluate((row) => {

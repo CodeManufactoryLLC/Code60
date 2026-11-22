@@ -1700,10 +1700,11 @@ and animation never resize an item; row actions stay on one line and long labels
 ellipsize. The workspace header grows to fit its artwork without clipping content.
 Settings Appearance, Text, Polling, Updates, Advanced and About use
 `color-palette.svg`, `text-size.svg`, `heart-rate.svg`, `cloud-computing.svg`,
-`analyze.svg` and `info.svg`. Individual projects, orchestrator chats and subagents
-use transparent `folder.gif` (79 frames, 2.12 seconds), `labour-day.gif`
-(100 frames, 4 seconds) and `drone.gif` (109 frames, 2.4 seconds), respectively,
-with first-frame PNGs at rest and the shared navigation playback behavior. Preserve
+`analyze.svg` and `info.svg`. Individual projects and subagents use transparent `folder.gif` (79 frames,
+2.12 seconds) and `drone.gif` (109 frames, 2.4 seconds), respectively, with
+first-frame PNGs at rest and the shared navigation playback behavior. Project
+chat sidebar entries use their own provider's AgentLogo. The shared orchestrator
+page-title artwork remains `labour-day.gif` (100 frames, 4 seconds). Preserve
 the folder star; remove the gear opening with its background. Original folder,
 communication and down-right SVGs remain geometry references. Keep project artwork
 out of the label/activity flow so fixed rows and label indents remain stable. Relay uses the transparent `pet.gif` (120 frames, 2.4 seconds)
@@ -2675,7 +2676,9 @@ and its chevron-only command menu together with a 12px gap, 36px trigger target,
 while stacked chat cards scroll; conversation Cards use overflow:clip so the outer
 workspace remains the sticky scroll owner. Use saved Page Titles
 styles; wrap long/large names and grow the row in normal flow. Preserve the shared
-24px content gap and theme surfaces. Pages without commands show only the title.
+24px content gap and theme surfaces. The shared content header is transparent so
+its Card's stationary grid continues behind the title and actions. Pages without
+commands show only the title.
 Detail pages use their actual project/provider/chat name; Scheduled Jobs uses its
 page name. Do not duplicate the title or its command buttons in the body.
 
@@ -2845,7 +2848,7 @@ This supersedes earlier gutter, shell-shadow and 58px header guidance.
 
 Home (with Search), Assistants, Projects, Providers, Apps and Settings each own a
 separate shadowless 1px/5px Card inside the single scrolling sidebar. Give each
-header a full-width 1px bottom border and separate Cards by 8px. Remove the six
+header a full-width 1px bottom border and separate Cards by 16px. Remove the six
 card disclosure buttons and ignore their legacy saved collapsed flags; navigation
 never closes a top-level Card, including via Left. Keep heading navigation and
 existing Add Project/Add Provider actions. The global navigation panel toggle in
@@ -2872,3 +2875,15 @@ there while preserving its font, weight and size. Child labels, content titles,
 accessible page names and stored values remain unchanged. Forced colors keeps
 system fills/text. This presentation-only change adds no capability, preference,
 availability or bridge behavior, so no catalog update is needed.
+
+## Project conversation provider artwork
+
+Project chat sidebar entries use AgentLogo with the provider from that chat's own
+run snapshot, not the current global primary provider. Use the same mark on the
+leading worker disclosure when owned workers exist; otherwise keep it in the
+chat's decorative artwork gutter. Unknown providers use AgentLogo's terminal
+fallback. Preserve bounded artwork sizing, saved monochrome/color/contrast,
+Light/Dark rendering, labels, selection, worker disclosure and read ownership.
+Relay, custom-assistant and individual worker artwork remain unchanged. No new
+capability, availability rule, preference or bridge/persistence behavior is added;
+this presentation-only change needs no capability catalog regeneration.

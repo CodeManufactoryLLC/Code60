@@ -415,7 +415,7 @@
 
 - Enclose repository identity and page navigation in one square-edged sidebar without borders or divider overlays, with rows filling the navigation area inside a 12px right gutter and wider in-row label indents. Align its top and bottom with the desktop right file panel, leaving the shared 12px bottom inset above the footer. Keep the native-control drag strip separate, without extending the sidebar fill into it. Place a labelled icon toggle at the main content Card’s upper-left corner, outside the sidebar; keep the breadcrumb header in the same content grid column through opening and closing, driven by the shared sidebar reveal animation; center the trail inside its card when closed. Match the main card edges without discrete column or negative-margin changes, preserving the measured inspector inset. Remember open/closed state locally; collapse its track to zero and make the mounted navigation inert and hidden, without disposing drafts, selection, scroll, disclosures or saved width. Keep the toggle and footer actions reachable when closed. Do not add hover expansion. Provide a borderless right-edge resize handle with visible keyboard focus and Left/Right adjustment. Default to 220px, constrain to 180–480px while reserving content space, and remember the width locally. Preserve navigation, conversations, drafts and disclosure state when resizing. Keep matching 12px workspace insets. Resting labeled controls match the sidebar fill. Enabled hover uses blue. Mark the selected page with a contrasting fill and accessible selection state, without an underline or bottom border. Preserve system selection outlines in forced colors. The tab list scrolls within the available height and uses the full sidebar width. Its full left background region, including gaps between buttons, remains interactive in transparent windows even at zero background opacity.
 
-- Use the labour-day animation for project orchestrator conversations and the drone animation for workers. The top-level Relay item uses its own icon. Use local Phosphor duotone icons for pages and navigation groups and the folder animation for each project accordion. Clicking the project name selects its home without changing its accordion. Only its dedicated chevron changes expansion; row background clicks do not toggle. Preserve the official paths and 20% secondary layer from @phosphor-icons/core 2.1.1, its MIT license/provenance, and the CSP without adding a dependency or runtime fetch. Let decorative icons inherit the label color, including hover, selection and forced colors. Keep these SVGs non-focusable, with an 8px label gap and at least 12px of leading space. Expand the gutter and shared 40px rows together only for larger saved text, retaining hierarchy alignment and avoiding clipping; clicking never resizes a row. Center the project selector with equal horizontal padding. Size Carbon chevrons and action glyphs to match navigation text. Keep chevrons on the dedicated sidebar-card and project disclosure controls, with accessible names. Use labels for nested page-group disclosures, including Settings; use the dedicated circular chevron for project disclosures; retain aria-expanded, arrow-key controls and motion. Use a separate agent-icon toggle for owned workers so collapsing them preserves the open conversation. Project chats use separate labelled circular Rename and Archive `icon-button` controls; retain Open, Rename and Archive in the right-click/Shift+F10 context menu. New chat uses a separate labelled Carbon plus action. Stack sidebar rows without gaps, preserving labels, keyboard order, selection, disclosure semantics, unread counts, errors and approvals. The application footer database icon remains separate.
+- Use each project chat's own provider logo for its sidebar entry and leading worker disclosure, and the drone animation for workers. The top-level Relay item uses its own icon. Use local Phosphor duotone icons for pages and navigation groups and the folder animation for each project accordion. Clicking the project name selects its home without changing its accordion. Only its dedicated chevron changes expansion; row background clicks do not toggle. Preserve the official paths and 20% secondary layer from @phosphor-icons/core 2.1.1, its MIT license/provenance, and the CSP without adding a dependency or runtime fetch. Let decorative icons inherit the label color, including hover, selection and forced colors. Keep these SVGs non-focusable, with an 8px label gap and at least 12px of leading space. Expand the gutter and shared 40px rows together only for larger saved text, retaining hierarchy alignment and avoiding clipping; clicking never resizes a row. Center the project selector with equal horizontal padding. Size Carbon chevrons and action glyphs to match navigation text. Keep chevrons on the dedicated sidebar-card and project disclosure controls, with accessible names. Use labels for nested page-group disclosures, including Settings; use the dedicated circular chevron for project disclosures; retain aria-expanded, arrow-key controls and motion. Use a separate agent-icon toggle for owned workers so collapsing them preserves the open conversation. Project chats use separate labelled circular Rename and Archive `icon-button` controls; retain Open, Rename and Archive in the right-click/Shift+F10 context menu. New chat uses a separate labelled Carbon plus action. Stack sidebar rows without gaps, preserving labels, keyboard order, selection, disclosure semantics, unread counts, errors and approvals. The application footer database icon remains separate.
 
 - Show the shared Code60 auto-approval toggle beside the harness mode dropdown in orchestration chats and their workers. Keep it available during a turn. Manual runs retain their own approval policy.
 - Providers exposes the shared setup wizard through Add Provider. Present bundled logos and alphabetical Antigravity, Claude, Codex, Copilot, Droid, Kiro and OpenCode choices as agent cards that immediately start detection and connection on click or Enter/Space, never radio inputs or a separate Continue step. Use compact wizard typography (16px headings, 13px body and controls), independent of larger page-title settings. Keep arrow/Home/End focus navigation and Enter/Space selection. Select primary first, detect, connect and save automatically through the existing finish action, without further confirmation or review steps. Keep the result open with Close and optional Add another agent; failures offer Close and Retry, including save retry without another probe. Each addition starts a new add transaction so dismissal cannot undo earlier successes. Show only Detected and Connected as agent statuses; use separate progress and error messages with retry/cancel controls. Preserve native keyboard navigation, live progress announcements, shared text-role and theme tokens, and reduced-motion support. Persist no verification in renderer storage.
@@ -611,8 +611,9 @@ never play sidebar animations; noninteractive page headings stay still.
 Preserve every frame and its timing, including the white foreground window in Projects.
 Custom Assistants and each nested assistant sidebar item share the enlarged robot
 artwork, including definitions without a conversation and connected conversations.
-Individual projects use folder.gif, project orchestrator chats use labour-day.gif,
-and subagents use drone.gif with matching first-frame PNGs. Preserve the folder
+Individual projects use folder.gif and subagents use drone.gif with matching
+first-frame PNGs. Project chat sidebar entries use their own provider's AgentLogo;
+the shared orchestrator page-title artwork remains labour-day.gif. Preserve the folder
 star while removing its exterior white background; the gear opening is transparent.
 Keep the shared 40px row height and existing label indents; position project icons
 independently of their text/activity so the artwork cannot enlarge the row.
@@ -1054,7 +1055,9 @@ and its chevron-only command menu together with a 12px gap, 36px trigger target,
 while stacked chat cards scroll; conversation Cards use overflow:clip so the outer
 workspace remains the sticky scroll owner. Use saved Page Titles
 styles; wrap long/large names and grow the row in normal flow. Preserve the shared
-24px content gap and theme surfaces. Pages without commands show only the title.
+24px content gap and theme surfaces. The shared content header is transparent so
+its Card's stationary grid continues behind the title and actions. Pages without
+commands show only the title.
 Detail pages use their actual project/provider/chat name; Scheduled Jobs uses its
 page name. Do not duplicate the title or its command buttons in the body.
 
@@ -1224,7 +1227,7 @@ This supersedes earlier gutter, shell-shadow and 58px header guidance.
 
 Home (with Search), Assistants, Projects, Providers, Apps and Settings each own a
 separate shadowless 1px/5px Card inside the single scrolling sidebar. Give each
-header a full-width 1px bottom border and separate Cards by 8px. Remove the six
+header a full-width 1px bottom border and separate Cards by 16px. Remove the six
 card disclosure buttons and ignore their legacy saved collapsed flags; navigation
 never closes a top-level Card, including via Left. Keep heading navigation and
 existing Add Project/Add Provider actions. The global navigation panel toggle in
@@ -1251,3 +1254,15 @@ there while preserving its font, weight and size. Child labels, content titles,
 accessible page names and stored values remain unchanged. Forced colors keeps
 system fills/text. This presentation-only change adds no capability, preference,
 availability or bridge behavior, so no catalog update is needed.
+
+## Project conversation provider artwork
+
+Project chat sidebar entries use AgentLogo with the provider from that chat's own
+run snapshot, not the current global primary provider. Use the same mark on the
+leading worker disclosure when owned workers exist; otherwise keep it in the
+chat's decorative artwork gutter. Unknown providers use AgentLogo's terminal
+fallback. Preserve bounded artwork sizing, saved monochrome/color/contrast,
+Light/Dark rendering, labels, selection, worker disclosure and read ownership.
+Relay, custom-assistant and individual worker artwork remain unchanged. No new
+capability, availability rule, preference or bridge/persistence behavior is added;
+this presentation-only change needs no capability catalog regeneration.

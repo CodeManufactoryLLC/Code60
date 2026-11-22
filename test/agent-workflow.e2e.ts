@@ -562,6 +562,9 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     const composerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
     const headerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(47, 29, 55)";
     await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("background-color", headerFill);
+    for (const header of await page.locator(".content-page-header-slot:visible").all())
+      await expect(header).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(page.locator(".page-tabs")).toHaveCSS("row-gap", "16px");
     await expect(page.locator("#panel-settings")).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
