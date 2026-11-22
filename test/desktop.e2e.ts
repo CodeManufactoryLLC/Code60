@@ -9518,14 +9518,21 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Repository",
       "Size",
     ]);
-    const listedPaths = await worktreesGrid
-      .locator("[data-testid^='glide-cell-1-']")
-      .allTextContents();
-    const listedBranches = await worktreesGrid
-      .locator("[data-testid^='glide-cell-3-']")
-      .allTextContents();
-    expect(listedPaths.some((path) => path.includes(".worktrees"))).toBe(true);
-    expect(listedBranches.some((branch) => branch.startsWith("code60/"))).toBe(true);
+    // The accessibility rows arrive before Glide paints its visible cell mirrors.
+    await expect
+      .poll(async () =>
+        (await worktreesGrid.locator("[data-testid^='glide-cell-1-']").allTextContents()).some(
+          (path) => path.includes(".worktrees"),
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(async () =>
+        (await worktreesGrid.locator("[data-testid^='glide-cell-3-']").allTextContents()).some(
+          (branch) => branch.startsWith("code60/"),
+        ),
+      )
+      .toBe(true);
     await expectSelectedProject(page, repo);
     await worktreesGrid.locator(".dvn-scroller").evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
