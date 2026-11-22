@@ -12246,7 +12246,7 @@ test("desktop: all saved projects Search preserves scope, pages and closed-sourc
       () => (globalThis as unknown as { searchDialogs: { seen: unknown[] } }).searchDialogs.seen[0],
     );
     expect(dialog).toMatchObject({
-      type: "question",
+      type: "warning",
       title: "Open project?",
       detail: roots[1],
       buttons: ["Cancel", "Open project"],

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -185,14 +185,59 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
-    await application.evaluate(({ dialog }) => {
-      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    const databaseBeforeClear = await readFile(database);
+    const diagnosticBytes = async () => {
+      const folder = join(directory, "state/code60/logs");
+      const files = (await readdir(folder)).filter((file) => file.endsWith(".jsonl"));
+      return (await Promise.all(files.map((file) => readFile(join(folder, file), "utf8")))).join(
+        "\n",
+      );
+    };
+    expect(await diagnosticBytes()).toContain("retained-139");
+    await application.evaluate(({ dialog, BrowserWindow }) => {
+      dialog.showMessageBox = async (...args: unknown[]) => {
+        const options = args[1] as Record<string, unknown>;
+        if (
+          !(args[0] instanceof BrowserWindow) ||
+          options.message !== "Clear all retained diagnostic logs?" ||
+          options.type !== "warning" ||
+          options.defaultId !== 0 ||
+          options.cancelId !== 0 ||
+          JSON.stringify(options.buttons) !== JSON.stringify(["Cancel", "Clear logs"]) ||
+          !String(options.detail).includes("transcripts, run records and databases are kept")
+        )
+          throw new Error("Unexpected diagnostic warning contract");
+        return { response: 0, checkboxChecked: false };
+      };
     });
     await clearLogs.click();
     await expect(clearLogs).toBeEnabled();
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeTruthy();
+    const clearButton = page
+      .locator("#panel-logs")
+      .getByRole("button", { name: "Clear logs", exact: true });
+    await expect(clearButton).toBeFocused();
+    expect(await diagnosticBytes()).toContain("retained-139");
+    expect(await readFile(database)).toEqual(databaseBeforeClear);
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = () =>
+        new Promise((resolve) => {
+          (globalThis as typeof globalThis & { finishWarning: () => void }).finishWarning = () =>
+            resolve({ response: 1, checkboxChecked: false });
+        });
+    });
+    await clearButton.click();
+    await expect(clearButton).toBeDisabled();
+    await page.reload();
+    await openLogs(page);
+    await application.evaluate(() => {
+      (globalThis as typeof globalThis & { finishWarning: () => void }).finishWarning();
+    });
+    await expect.poll(() => clearButton.isEnabled()).toBe(true);
+    expect(await diagnosticBytes()).toContain("retained-139");
+    expect(await readFile(database)).toEqual(databaseBeforeClear);
     await application.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     });
@@ -202,7 +247,9 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     expect(
       await page.evaluate((id) => window.desktop.logDetail({ id: id as string }), id),
     ).toBeNull();
-    expect((await readFile(database)).byteLength).toBeGreaterThan(0);
+    await expect(clearButton).toBeFocused();
+    expect(await diagnosticBytes()).not.toContain("retained-139");
+    expect(await readFile(database)).toEqual(databaseBeforeClear);
     expect(errors).toEqual([]);
   } finally {
     await application.close();

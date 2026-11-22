@@ -113,10 +113,14 @@ export class DesktopAutomations {
       return result ? { ok: true } : null;
     }
     if (request.action === "delete") {
+      const automation = (await client({ action: "get", id: request.id })) as Automation;
+      check();
+      if (automation.revision !== request.revision)
+        throw new Error("The automation changed. Reload before deleting.");
       if (
         !(await this.dialogs.confirm(
           "Delete automation?",
-          "Cancel active work first. Saved run evidence and worktrees will be kept.",
+          `Delete “${automation.name}” in ${automation.repository.path}? This removes its saved schedule and prompt and cannot be undone. Cancel active work first. Saved run evidence and worktrees will be kept.`,
         ))
       )
         return null;

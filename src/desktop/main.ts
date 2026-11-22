@@ -84,6 +84,7 @@ import {
 } from "../platform/index.js";
 import { installAppImage } from "./appimage-update.js";
 import { DesktopAutomations } from "./automations.js";
+import { Confirmations } from "./confirmations.js";
 import { DesktopController } from "./controller.js";
 import { installDeb } from "./deb-update.js";
 import { desktopPath } from "./environment.js";
@@ -102,21 +103,20 @@ let window: BrowserWindow | undefined;
 let exiting = false;
 let quitPending = false;
 const startup = new AbortController();
+const confirmations = new Confirmations(
+  () =>
+    !exiting &&
+    !startup.signal.aborted &&
+    window &&
+    !window.isDestroyed() &&
+    !window.webContents.isDestroyed()
+      ? window
+      : undefined,
+  (owner, options) => dialog.showMessageBox(owner, options),
+);
 let updates: DesktopUpdates | undefined;
 const webLinks = new WebLinks({
-  async confirm(url) {
-    const result = await dialog.showMessageBox({
-      type: "question",
-      title: "Open web link?",
-      message: "Open this address in your default browser?",
-      detail: url,
-      buttons: ["Cancel", "Open link"],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    return result.response === 1 && !exiting && !!window && !window.isDestroyed();
-  },
+  confirm: (url) => confirmations.confirm("Open in your default browser?", url, "Open link"),
   open: (url) => shell.openExternal(url),
 });
 const databaseFilters = [{ name: "SQLite database", extensions: ["sqlite", "sqlite3", "db"] }];
@@ -135,19 +135,7 @@ const controller = new DesktopController(
   defaultDeps(logs.sink),
   process.env,
   {
-    async confirm(title, detail) {
-      const result = await dialog.showMessageBox({
-        type: "warning",
-        title,
-        message: title,
-        detail,
-        buttons: ["Cancel", "Confirm"],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
-      return result.response === 1;
-    },
+    confirm: (title, detail) => confirmations.confirm(title, detail),
   },
   {
     openDatabase: openProjectDatabase,
@@ -180,18 +168,7 @@ const automations = new DesktopAutomations(
       });
       return selected.canceled ? null : (selected.filePaths[0] ?? null);
     },
-    async confirm(title, detail) {
-      const result = await dialog.showMessageBox({
-        type: "warning",
-        message: title,
-        detail,
-        buttons: ["Cancel", "Confirm"],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
-      return result.response === 1 && !exiting;
-    },
+    confirm: (title, detail) => confirmations.confirm(title, detail),
   },
   () => {
     if (window && !window.isDestroyed()) window.webContents.send("desktop:automation-changed");
@@ -201,6 +178,7 @@ const automations = new DesktopAutomations(
 let shutdownTask: Promise<void> | undefined;
 function shutdownDesktop(force = false): Promise<void> {
   sidebarBackdrop?.dispose();
+  confirmations.invalidate();
   automations.reset();
   if (shutdownTask) {
     if (force) void controller.shutdown(true).catch(() => {});
@@ -234,16 +212,14 @@ async function quit(confirm: boolean): Promise<void> {
       ? await automationClient(process.env)({ action: "status" }).catch(() => null)
       : null;
     if (confirm && (controller.hasActiveWork || background)) {
-      const result = await dialog.showMessageBox({
-        type: "warning",
-        message: "Quit Code60?",
-        detail:
+      if (
+        !(await confirmations.confirm(
+          "Quit Code60?",
           "Desktop-owned turns will be cancelled and idle sessions finished. Background automations keep running while Code60 is quit. Worktrees are kept. Use Apps → System Manager to pause or cancel background work.",
-        buttons: ["Keep working", "Quit"],
-        defaultId: 0,
-        cancelId: 0,
-      });
-      if (result.response !== 1) return;
+          "Quit",
+        ))
+      )
+        return;
     }
     startup.abort();
     updates?.close();
@@ -394,17 +370,11 @@ async function ready(): Promise<void> {
       if (quitPending) return false;
       quitPending = true;
       try {
-        const result = await dialog.showMessageBox({
-          type: "warning",
-          message: "Install update and restart Code60?",
-          detail:
-            "Active turns will be cancelled and all agents stopped. Worktrees, settings and databases are kept. Linux DEB updates may ask for administrator authorization.",
-          buttons: ["Keep working", "Install and restart"],
-          defaultId: 0,
-          cancelId: 0,
-        });
-        if (result.response !== 1) return false;
-        return true;
+        return await confirmations.confirm(
+          "Install update and restart Code60?",
+          "Active turns will be cancelled and all agents stopped. Worktrees, settings and databases are kept. Linux DEB updates may ask for administrator authorization.",
+          "Install and restart",
+        );
       } finally {
         quitPending = false;
       }
@@ -504,20 +474,12 @@ async function ready(): Promise<void> {
   handle("desktop:logs-detail", (value) => logs.detail(parseLogDetail(value).id));
   handle("desktop:logs-clear", async (value) => {
     parseLogClear(value);
-    const confirmation = await dialog.showMessageBox({
-      type: "warning",
-      title: "Clear logs?",
-      message: "Clear all retained diagnostic logs?",
-      detail:
-        "This affects local diagnostic logs only, across all projects and app launches. Events, transcripts, run records and databases are kept.",
-      buttons: ["Cancel", "Clear logs"],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (confirmation.response !== 1) return false;
-    await logs.clear();
-    return true;
+    return confirmations.perform(
+      "Clear all retained diagnostic logs?",
+      "This affects local diagnostic logs only, across all projects and app launches. Events, transcripts, run records and databases are kept.",
+      () => logs.clear(),
+      "Clear logs",
+    );
   });
   handle("desktop:snapshot", () => controller.snapshot());
   handle("desktop:snapshot-summary", () => controller.snapshot(true, true));
@@ -574,18 +536,13 @@ async function ready(): Promise<void> {
     controller.assertDatabaseRequest(epoch);
     if (result.canceled || !result.filePaths[0]) return false;
     if (!window || window.isDestroyed()) return false;
-    const confirmation = await dialog.showMessageBox(window, {
-      type: "question",
-      title: "Open project?",
-      message: "Open this project?",
-      detail: result.filePaths[0],
-      buttons: ["Cancel", "Open project"],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
+    const confirmed = await confirmations.confirm(
+      "Open project?",
+      result.filePaths[0],
+      "Open project",
+    );
     controller.assertDatabaseRequest(epoch);
-    if (confirmation.response !== 1) return false;
+    if (!confirmed) return false;
     await controller.open(result.filePaths[0], epoch);
     return true;
   });
@@ -654,18 +611,9 @@ async function ready(): Promise<void> {
   handle("desktop:memory-browse", (value) => controller.memory.browse(parseMemoryBrowse(value)));
   handle("desktop:memory-detail", (value) => controller.memory.detail(parseMemoryDetail(value).id));
   handle("desktop:memory-action", (value) =>
-    controller.memory.action(parseMemoryAction(value), async (title, detail) => {
-      const result = await dialog.showMessageBox({
-        type: "warning",
-        title,
-        message: title,
-        detail,
-        buttons: ["Cancel", "Confirm"],
-        defaultId: 0,
-        cancelId: 0,
-      });
-      return result.response === 1;
-    }),
+    controller.memory.action(parseMemoryAction(value), (title, detail) =>
+      confirmations.confirm(title, detail),
+    ),
   );
   handle("desktop:rag-rebuild", (value) => controller.rebuildRag(parseRagIdentity(value)));
   handle("desktop:rag-retrieve", (value) => controller.retrieveRag(parseRagQuery(value)));
@@ -675,20 +623,9 @@ async function ready(): Promise<void> {
   handle("desktop:project-search-page", (value) => controller.searchProjectsPage(value));
   handle("desktop:project-search-cancel", (value) => controller.cancelProjectSearch(value));
   handle("desktop:project-search-open", (value) =>
-    controller.openSearchSource(value, async (path) => {
-      if (!window || window.isDestroyed()) return false;
-      const result = await dialog.showMessageBox(window, {
-        type: "question",
-        title: "Open project?",
-        message: "Open this project?",
-        detail: path,
-        buttons: ["Cancel", "Open project"],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
-      return result.response === 1;
-    }),
+    controller.openSearchSource(value, (path) =>
+      confirmations.confirm("Open project?", path, "Open project"),
+    ),
   );
   handle("desktop:search-summary", (value) =>
     controller.summarizeSearch(parseSearchSummary(value)),
@@ -745,15 +682,12 @@ async function ready(): Promise<void> {
   handle("desktop:diff-cancel", (value) => controller.cancelDiff(parseDiffIdentity(value)));
   handle("desktop:action", (value) => controller.action(parseAction(value)));
   handle("desktop:stop-all", async () => {
-    const result = await dialog.showMessageBox({
-      type: "warning",
-      message: "Stop all runs?",
-      detail: "Active turns will be cancelled and idle sessions finished. Worktrees are kept.",
-      buttons: ["Keep working", "Stop all"],
-      defaultId: 0,
-      cancelId: 0,
-    });
-    if (result.response === 1) await controller.stopAll();
+    await confirmations.perform(
+      "Stop all desktop runs?",
+      "Cancel desktop-owned turns, finish idle sessions and pause automatic worker updates across all open projects and Relay. Worktrees and saved evidence are kept. Background automations keep running.",
+      () => controller.stopAll(),
+      "Stop all",
+    );
   });
   void controller.restore();
   controller.subscribe((snapshot) => {
@@ -802,8 +736,12 @@ async function ready(): Promise<void> {
     if (event.url !== page) event.preventDefault();
   });
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
-  window.webContents.on("render-process-gone", () => void quit(false));
+  window.webContents.on("render-process-gone", () => {
+    confirmations.invalidate();
+    void quit(false);
+  });
   window.webContents.on("did-start-loading", () => {
+    confirmations.invalidate();
     automations.reset();
     controller.clearDetailSubscriptions();
     void controller.cancelRag().catch(() => {});

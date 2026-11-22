@@ -222,7 +222,7 @@ Schema version: 1
 - Access: Apps → Data Viewer → Configurations
 - Prerequisite: database
 - Agent access: read
-- Confirmation: Existing permissions apply.
+- Confirmation: Native confirmation names the configuration before deletion; existing sessions are kept.
 - Limits: Saved settings are not live provider health.
 - Pages: `configurations`
 - Settings sections: none
@@ -278,7 +278,7 @@ Schema version: 1
 - Access: Settings → Memory; Apps → Data Viewer → Memories
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Existing permissions apply.
+- Confirmation: Native confirmation identifies the memory or scope before forgetting, global sharing and shorter retention.
 - Limits: Memory Off disables learning/recall, not session-local continuity. No memory records exposed through awareness.
 - Pages: `memories`
 - Settings sections: `memory`
@@ -306,7 +306,7 @@ Schema version: 1
 - Access: Apps → Scheduled Jobs
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Human installation and schedule consent.
+- Confirmation: Human installation and schedule consent. Native deletion confirmation names the saved automation and repository; a changed revision requires review again.
 - Limits: Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
 - Pages: `automations`
 - Settings sections: none
