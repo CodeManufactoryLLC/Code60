@@ -132,10 +132,10 @@
 
   :root:not([data-color-scheme="dark"]) .sidebar-navigation-card {
     --nb-card-fill: var(--content-background);
-    --card-header-fill: var(--content-background);
-    --card-header-text: #111111;
-    --card-header-muted: #303848;
-    --card-header-hover: #b9bfff;
+    --card-header-fill: #5494fd;
+    --card-header-text: #ffffff;
+    --card-header-muted: #ffffff;
+    --card-header-hover: #73a7fd;
   }
 
   /* Dark headers inherit the same purple and light foreground as breadcrumbs. */
@@ -144,12 +144,14 @@
     --muted: var(--card-header-muted);
     --hover-bg: var(--card-header-hover);
     --control-hover: var(--card-header-hover);
+    --accent-bg: var(--card-header-fill);
+    --control-fill: var(--card-header-fill);
   }
 
   :root:not([data-color-scheme="dark"]) .sidebar-card-header {
     --accent: #1e40af;
     --hover-bg: var(--card-header-hover);
-    --accent-bg: #93c5fd;
+    --accent-bg: var(--card-header-fill);
     --control-hover: var(--card-header-hover);
     --focus-line: #1e40af;
     --focus-outline: #1e40af;
@@ -1032,6 +1034,11 @@
   --button-weight: 700;
   --title-weight: 700;
   font-weight: 700;
+}
+
+/* The six card titles keep their own case, independent of saved Button Text case. */
+.sidebar-card-header .page-tab-label {
+  text-transform: uppercase;
 }
 
 /* History belongs to the current-page card, independently of the portal owner. */

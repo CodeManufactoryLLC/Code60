@@ -176,3 +176,16 @@ main/right-panel shells remain in place.
 | Small navigation text | Maximum supported text |
 | --- | --- |
 | ![All six open Cards with small text](after-persistent-cards-8px.png) | ![Cards and aligned labels at the maximum text size](after-persistent-cards-64px.png) |
+
+## Current sidebar header colors and case
+
+The six sidebar Card headers now use #5494fd with bold white titles in Light mode
+and retain their purple #2f1d37 palette in Dark mode. Only their title spans are
+always uppercase, including when Button Text is set to Lowercase. Child labels
+keep the saved typography, and child selection keeps its independent highlight.
+The breadcrumb Card remains white in Light mode. These images supersede the
+header colors and casing in earlier screenshots.
+
+| Blue headers in Light | Purple headers in Dark |
+| --- | --- |
+| ![Blue sidebar headers with uppercase titles in Light](after-sidebar-header-palette-light.png) | ![Purple sidebar headers with uppercase titles in Dark](after-sidebar-header-palette-dark.png) |

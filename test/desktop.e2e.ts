@@ -2451,7 +2451,7 @@ test("desktop: breadcrumb theme button cycles saved modes and follows System", a
     await expect(mainCard).toHaveCSS("background-size", "24px 24px, 24px 24px");
     for (const surface of [
       header,
-      page.locator(".sidebar-navigation-card"),
+      ...(await page.locator(".sidebar-navigation-card").all()),
       page.locator(".settings-group").first(),
     ])
       await expect(surface).toHaveCSS("background-image", "none");
@@ -2961,8 +2961,46 @@ test("desktop: top-level navigation cards stay open and align their immediate ch
       await page.locator("#tab-home").click();
       await checkCards();
       await checkAlignment();
+      await page.mouse.move(900, 500);
+      for (const header of await cards.locator(":scope > .sidebar-card-header").all()) {
+        await expect(header.locator(".page-tab-label")).toHaveCSS("text-transform", "uppercase");
+        const title = header.locator("[role=tab]");
+        const selected = (await title.getAttribute("aria-selected")) === "true";
+        // Projects retains its existing bright heading even when unselected.
+        const bright = selected || (await title.getAttribute("id")) === "tab-chat";
+        await expect(title).toHaveCSS(
+          "color",
+          theme === "light"
+            ? "rgb(255, 255, 255)"
+            : bright
+              ? "rgb(240, 233, 242)"
+              : "rgb(215, 201, 221)",
+        );
+        await expect
+          .poll(() =>
+            header.evaluate(
+              (element) =>
+                getComputedStyle(element.parentElement ?? element, "::before").backgroundColor,
+            ),
+          )
+          .toBe(theme === "light" ? "rgb(84, 148, 253)" : "rgb(47, 29, 55)");
+      }
+      await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS(
+        "background-color",
+        theme === "light" ? "rgb(255, 255, 255)" : "rgb(47, 29, 55)",
+      );
       await page.screenshot({ path: test.info().outputPath(`persistent-cards-${theme}.png`) });
     }
+    await selectSettingsPage(page, "Text");
+    const buttonCase = page.getByRole("group", { name: "Button Text", exact: true });
+    await buttonCase.getByRole("radio", { name: "Lowercase", exact: true }).check();
+    for (const header of await cards.locator(":scope > .sidebar-card-header").all())
+      await expect(header.locator(".page-tab-label")).toHaveCSS("text-transform", "uppercase");
+    await expect(page.locator("#tab-settings-about .page-tab-label")).toHaveCSS(
+      "text-transform",
+      "lowercase",
+    );
+    await buttonCase.getByRole("radio", { name: "As written", exact: true }).check();
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.setSize(640, 800),
     );

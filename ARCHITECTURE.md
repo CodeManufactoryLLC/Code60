@@ -2860,3 +2860,15 @@ read/visibility ownership and cached drafts. No provider connection or agent wor
 is started by card rendering. Update the navigation catalog description only; no
 new bridge, preference, persistence schema or availability rules are introduced.
 This supersedes earlier unified-shell/top-level accordion guidance.
+
+## Sidebar header palette and title case
+
+In Light mode the six sidebar Card header bands use #5494fd with bold white
+labels. Dark retains the breadcrumb palette's purple #2f1d37 and existing light
+foreground. Keep selected header fills on the header palette, with theme-aware
+hover/focus treatments; ordinary child selection colors remain independent.
+Uppercase only the Card header title spans, overriding saved Button Text case
+there while preserving its font, weight and size. Child labels, content titles,
+accessible page names and stored values remain unchanged. Forced colors keeps
+system fills/text. This presentation-only change adds no capability, preference,
+availability or bridge behavior, so no catalog update is needed.

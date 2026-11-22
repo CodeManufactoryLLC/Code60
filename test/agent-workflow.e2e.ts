@@ -599,14 +599,14 @@ async function checkSidebarNavigation(page: Page, repo: string) {
           .first()
           .evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
       )
-      .toBe(headerFill);
+      .toBe(theme === "light" ? "rgb(84, 148, 253)" : headerFill);
     for (const section of await page.locator(".sidebar-section").all())
       expect(
         await section.evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
-      ).toBe(headerFill);
+      ).toBe(theme === "light" ? "rgb(84, 148, 253)" : headerFill);
     await expect(page.locator("#tab-home")).toHaveCSS(
       "color",
-      theme === "light" ? "rgb(48, 56, 72)" : "rgb(215, 201, 221)",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(215, 201, 221)",
     );
     await expect(page.locator("body")).toHaveCSS("font-weight", "400");
     await page.locator("#tab-home").scrollIntoViewIfNeeded();
@@ -859,7 +859,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await page.mouse.move(1000, 500);
     await expect(page.locator("#tab-apps")).toHaveCSS(
       "background-color",
-      theme === "light" ? "rgb(147, 197, 253)" : "rgb(70, 70, 70)",
+      theme === "light" ? "rgb(84, 148, 253)" : "rgb(47, 29, 55)",
     );
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
     await project.locator(".project-chat-toggle").press("ArrowRight");
