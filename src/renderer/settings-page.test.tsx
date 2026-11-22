@@ -16,7 +16,7 @@ const props: ComponentProps<typeof SettingsPage> = {
   pollingControls: <SettingsHeader page="polling-settings" />,
   theme: "dark",
   onTheme: unchanged,
-  iconAppearance: { monochrome: false, color: "#808080", contrast: 100 },
+  iconAppearance: { animations: true, monochrome: false, color: "#808080", contrast: 100 },
   iconAppearanceSaved: true,
   onIconAppearance: unchanged,
   sidebarAppearance: { opacity: 100, blur: 0 },
@@ -55,7 +55,7 @@ describe("Settings page titles", () => {
       <SettingsPage
         {...props}
         section="appearance"
-        iconAppearance={{ monochrome: true, color: "#348a56", contrast: 150 }}
+        iconAppearance={{ animations: true, monochrome: true, color: "#348a56", contrast: 150 }}
       />,
     );
     expect(enabled).toContain('Icon color<input type="color" value="#348a56"');

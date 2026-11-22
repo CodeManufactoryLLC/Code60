@@ -1,4 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
+import { IconAnimations } from "./icon-animations.js";
+import animationWheel from "./icons/apps/animation-wheel.gif?no-inline";
+import animationWheelStill from "./icons/apps/animation-wheel.png?no-inline";
 import booksAnimation from "./icons/apps/books.gif?no-inline";
 import booksStill from "./icons/apps/books.png?no-inline";
 import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
@@ -69,6 +72,7 @@ const artwork = {
 } as const;
 
 const animatedArtwork = {
+  "app-icon-animations": { animation: animationWheel, still: animationWheelStill },
   "app-theme-system": { animation: themeSystemAnimation, still: themeSystemStill },
   "app-theme-dark": { animation: themeDarkAnimation, still: themeDarkStill },
   "app-theme-light": { animation: themeLightAnimation, still: themeLightStill },
@@ -222,7 +226,15 @@ export type NavigationIconName =
   | keyof typeof artwork
   | keyof typeof animatedArtwork;
 
-function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }) {
+function AnimatedNavigationIcon({
+  name,
+  playOnEnable = false,
+}: {
+  name: keyof typeof animatedArtwork;
+  playOnEnable?: boolean;
+}) {
+  const enabled = useContext(IconAnimations);
+  const previous = useRef(enabled);
   const { animation, still } = animatedArtwork[name];
   const enlarged =
     name === "app-steering-wheel" ||
@@ -244,6 +256,7 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
     const reset = () => setPlayback(0);
     const play = () => {
       if (
+        enabled &&
         !motion.matches &&
         !document.hidden &&
         !element.closest("[hidden], [inert]") &&
@@ -255,6 +268,9 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
       if (document.hidden) reset();
     };
     const hoverControl = target.matches(".home-card");
+    if (!enabled) reset();
+    else if (!previous.current && playOnEnable) play();
+    previous.current = enabled;
     const trigger = hoverControl ? "pointerenter" : "click";
     const focus = () => {
       if (target.matches(":focus-visible")) play();
@@ -269,11 +285,11 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
       motion.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, []);
+  }, [enabled, playOnEnable]);
   return (
     <img
       ref={image}
-      src={playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
+      src={enabled && playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
       className="navigation-icon"
       data-icon={name}
       data-animated="true"
@@ -285,9 +301,20 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
   );
 }
 
-export function NavigationIcon({ name }: { name: NavigationIconName }) {
+export function NavigationIcon({
+  name,
+  playOnEnable = false,
+}: {
+  name: NavigationIconName;
+  playOnEnable?: boolean;
+}) {
   if (name in animatedArtwork)
-    return <AnimatedNavigationIcon name={name as keyof typeof animatedArtwork} />;
+    return (
+      <AnimatedNavigationIcon
+        name={name as keyof typeof animatedArtwork}
+        playOnEnable={playOnEnable}
+      />
+    );
   if (name in artwork) {
     return (
       <img

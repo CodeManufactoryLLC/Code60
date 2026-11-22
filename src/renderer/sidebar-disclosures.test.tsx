@@ -148,6 +148,8 @@ afterEach(() => {
 
 function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   const props: ComponentProps<typeof PageTabBar> = {
+    iconAnimations: true,
+    onIconAnimationsChange: vi.fn(),
     theme: "system",
     onThemeChange: vi.fn(),
     ...chatProps,

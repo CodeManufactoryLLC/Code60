@@ -1,5 +1,10 @@
 /* Accessibility styles. Imported into its declared layer by style.css. */
 
+/* This preference stops icon artwork only; layout/status motion keeps its settings. */
+:root[data-icon-animations="off"] :is(.navigation-icon, .carbon-icon) {
+  animation: none;
+}
+
 @media (forced-colors: active) {
   :root {
     --shadow-color: CanvasText;

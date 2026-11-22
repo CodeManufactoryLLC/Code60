@@ -9,6 +9,7 @@ describe("saved icon appearance", () => {
   );
   it("restores a strict boolean and six-digit color without accepting CSS or URLs", () => {
     expect(parseIconAppearance('{"monochrome":true,"color":"#3FA281"}')).toEqual({
+      animations: true,
       monochrome: true,
       color: "#3fa281",
       contrast: 100,
@@ -19,7 +20,22 @@ describe("saved icon appearance", () => {
       );
     expect(parseIconAppearance('{"monochrome":true}')).toEqual({
       ...defaultIconAppearance,
+      animations: true,
       monochrome: true,
+    });
+  });
+  it("keeps legacy icons animated and accepts only explicit false to disable playback", () => {
+    for (const value of [true, null, "false", 0])
+      expect(parseIconAppearance(JSON.stringify({ animations: value })).animations).toBe(true);
+    expect(
+      parseIconAppearance(
+        '{"animations":false,"monochrome":true,"color":"#335577","contrast":150}',
+      ),
+    ).toEqual({
+      animations: false,
+      monochrome: true,
+      color: "#335577",
+      contrast: 150,
     });
   });
   it("restores and bounds contrast without changing an older saved color or switch", () => {
@@ -33,6 +49,7 @@ describe("saved icon appearance", () => {
       expect(
         parseIconAppearance(JSON.stringify({ monochrome: true, color: "#335577", contrast })),
       ).toEqual({
+        animations: true,
         monochrome: true,
         color: "#335577",
         contrast: expected,

@@ -57,3 +57,18 @@ The supplied [eclipse](../../../src/renderer/icons/apps/theme-eclipse.gif),
 [sun](../../../src/renderer/icons/apps/theme-sun.gif) assets retain all 48 / 107 / 46
 frames and their exact per-frame delays (2.0 / 2.4 / 2.4 seconds). Background-only
 white removal preserves enclosed moon detail; source files remain untouched.
+
+
+Icon animations has its own toggle immediately left of Color theme. It freezes
+playing artwork app-wide and adds a transparent block symbol over the still wheel.
+Re-enabling plays the wheel once, then restores each icon's normal click/hover
+behavior. The setting is saved with icon color/contrast; ordinary application
+transitions and status text motion retain their existing settings.
+
+![Icon animations disabled, with the wheel visible through the block symbol](after-icon-animations-off.png)
+
+The supplied [wheel](../../../src/renderer/icons/apps/animation-wheel.gif) retains
+all 94 frames, exact delays (2.04 seconds), and its 640×640 canvas, with a
+one-shot loop for activation. White gaps/background are transparent. The supplied
+[block SVG](../../../src/renderer/icons/apps/animation-block.svg) already has
+transparent cutouts and is retained unchanged. Source Downloads files are untouched.

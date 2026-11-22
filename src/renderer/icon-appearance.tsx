@@ -1,10 +1,12 @@
 export interface IconAppearance {
+  animations: boolean;
   monochrome: boolean;
   color: string;
   contrast: number;
 }
 
 export const defaultIconAppearance: Readonly<IconAppearance> = Object.freeze({
+  animations: true,
   monochrome: false,
   color: "#808080",
   contrast: 100,
@@ -16,6 +18,7 @@ export function parseIconAppearance(raw: string | null): IconAppearance {
     if (!value || typeof value !== "object" || Array.isArray(value)) return defaultIconAppearance;
     const record = value as Record<string, unknown>;
     return {
+      animations: record.animations !== false,
       monochrome: record.monochrome === true,
       contrast:
         typeof record.contrast === "number" && Number.isFinite(record.contrast)

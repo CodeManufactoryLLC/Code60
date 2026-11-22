@@ -22,6 +22,8 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      iconAnimations
+      onIconAnimationsChange={() => {}}
       theme="system"
       onThemeChange={() => {}}
       {...history}
@@ -356,9 +358,9 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(34);
+      expect(html.match(/<img/g)).toHaveLength(35);
       expect(html.match(/class="carbon-icon"/g)).toHaveLength(9);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(36);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(37);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],

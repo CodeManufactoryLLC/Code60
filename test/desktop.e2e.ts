@@ -2125,6 +2125,161 @@ test("desktop: page selector transitions animate without stale controls", async 
   }
 });
 
+test("desktop: icon animation toggle freezes artwork globally and preserves other motion", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-icon-playback-")));
+  const database = join(directory, "projects.sqlite");
+  try {
+    application = await launch(directory, directory, database);
+    let page = await application.firstWindow();
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Keep the animation-toggle draft");
+    const header = page.locator(".workspace-breadcrumbs");
+    const button = header.getByRole("button", { name: "Icon animations", exact: true });
+    const wheel = button.locator('[data-icon="app-icon-animations"]');
+    const block = button.locator(".icon-animation-block");
+    const still = async () => {
+      await expect
+        .poll(() =>
+          page
+            .locator("img.navigation-icon")
+            .evaluateAll((images) =>
+              images.every((image) => !(image as HTMLImageElement).src.includes(".gif")),
+            ),
+        )
+        .toBe(true);
+    };
+    const geometry = async () => {
+      await expect
+        .poll(() =>
+          header.evaluate((element) => {
+            const card = element.getBoundingClientRect();
+            const actions = element
+              .querySelector(".breadcrumb-appearance-controls")
+              ?.getBoundingClientRect();
+            const current = element.querySelector('[role="combobox"]')?.getBoundingClientRect();
+            const history = element.querySelector(".sidebar-history")?.getBoundingClientRect();
+            return (
+              !!actions &&
+              !!current &&
+              !!history &&
+              actions.left >= current.right + 4 &&
+              actions.right <= card.right &&
+              actions.top >= card.top &&
+              actions.bottom <= card.bottom &&
+              history.right <= current.left &&
+              Math.abs(current.left + current.width / 2 - card.left - card.width / 2) < 1
+            );
+          }),
+        )
+        .toBe(true);
+    };
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(block).toHaveCount(0);
+    await button.hover();
+    await button.focus();
+    await expect(wheel).toHaveAttribute("src", /animation-wheel[^/]*\.png$/);
+    await page.locator("#tab-home").click();
+    const cardIcon = page.locator("#panel-home .home-card").first().locator("img");
+    await page.locator("#panel-home .home-card").first().hover();
+    await expect(cardIcon).toHaveAttribute("src", /\.gif\?play=/);
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await expect(block).toBeVisible();
+    await expect(wheel).toHaveAttribute("src", /animation-wheel[^/]*\.png$/);
+    await still();
+    await geometry();
+    await page.screenshot({ path: test.info().outputPath("icon-animations-off-light.png") });
+    await page.locator("#panel-home .home-card").first().hover();
+    await still();
+    await header.getByRole("button", { name: /^Color theme:/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await still();
+    await page.screenshot({ path: test.info().outputPath("icon-animations-off-dark.png") });
+    // Disabling icon artwork must not disable the ordinary page-selector transition.
+    await header.getByRole("combobox", { name: "Current page", exact: true }).click();
+    const popup = page.locator(".neo-combobox-popup");
+    await expect(popup).toHaveCSS("transition-duration", /0\.175s/);
+    await page
+      .getByRole("listbox", { name: "Current page and parents", exact: true })
+      .press("Escape");
+    await button.focus();
+    await button.press("Space");
+    await expect(button).toBeFocused();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(block).toHaveCount(0);
+    await expect(wheel).toHaveAttribute("src", /animation-wheel[^/]*\.gif\?play=/);
+    await expect(cardIcon).toHaveAttribute("src", /\.png$/);
+    await page.locator("#panel-home .home-card").first().hover();
+    await expect(cardIcon).toHaveAttribute("src", /\.gif\?play=/);
+    await button.press("Enter");
+    await still();
+    await expect(block).toBeVisible();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await still();
+    await button.click();
+    await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await still();
+    await page.emulateMedia({ forcedColors: "none" });
+    await button.click();
+    await selectSettingsPage(page, "Appearance");
+    await page.getByRole("switch", { name: "Monochrome", exact: true }).check();
+    await page.getByLabel("Icon color", { exact: true }).fill("#26834a");
+    await page.getByRole("slider", { name: "Icon contrast", exact: true }).fill("140");
+    for (const glyph of [wheel, block])
+      await expect(glyph).toHaveCSS("filter", /code60-icon-monochrome/);
+    await still();
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window?.setMinimumSize(640, 480);
+      window?.setSize(640, 650);
+    });
+    await geometry();
+    await page.getByRole("button", { name: "Close navigation sidebar", exact: true }).click();
+    await geometry();
+    await button.click();
+    await expect(wheel).toHaveAttribute("src", /animation-wheel[^/]*\.gif\?play=/);
+    await button.click();
+    await still();
+    await page.getByRole("button", { name: "Open navigation sidebar", exact: true }).click();
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await expect(composer).toHaveValue("Keep the animation-toggle draft");
+    await page.reload();
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await expect(block).toBeVisible();
+    await still();
+    await expect(composer).toHaveValue("Keep the animation-toggle draft");
+    await expect
+      .poll(() =>
+        page.evaluate(() => JSON.parse(localStorage.getItem("code60.iconAppearance") ?? "null")),
+      )
+      .toEqual({ animations: false, monochrome: true, color: "#26834a", contrast: 140 });
+    await application.close();
+    application = await launch(directory, directory, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const restored = page.getByRole("button", { name: "Icon animations", exact: true });
+    await expect(restored).toHaveAttribute("aria-pressed", "false");
+    await expect(restored.locator(".icon-animation-block")).toBeVisible();
+    await expect(page.locator('img.navigation-icon[src*=".gif"]')).toHaveCount(0);
+    await restored.click();
+    await expect(restored).toHaveAttribute("aria-pressed", "true");
+    await expect(restored.locator('[data-icon="app-icon-animations"]')).toHaveAttribute(
+      "src",
+      /\.gif\?play=/,
+    );
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: breadcrumb theme button cycles saved modes and follows System", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-theme-button-")));
@@ -18702,6 +18857,10 @@ test("desktop: Back and Forward restore pages and chat drafts without creating w
     await expect(themeButton).toBeFocused();
     await expect(themeButton.locator("img")).toHaveCSS("outline-width", "2px");
     await themeButton.press("Shift+Tab");
+    const animationButton = header.getByRole("button", { name: "Icon animations", exact: true });
+    await expect(animationButton).toBeFocused();
+    await expect(animationButton.locator("img")).toHaveCSS("outline-width", "2px");
+    await animationButton.press("Shift+Tab");
     await expect(back).toBeFocused();
     await expect(backImage).toHaveAttribute("src", /history-back[^/]*\.png$/);
     await expect(backImage).toHaveCSS("outline-width", "2px");
@@ -18934,6 +19093,7 @@ test("desktop: monochrome icons tint live and persist without changing artwork o
         JSON.parse(localStorage.getItem("code60.iconAppearance") ?? "null"),
       ),
     ).toEqual({
+      animations: true,
       monochrome: true,
       color: "#26834a",
       contrast: 200,

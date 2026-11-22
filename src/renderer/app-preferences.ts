@@ -49,6 +49,7 @@ export function useAppPreferences() {
   const [iconAppearanceSaved, setIconAppearanceSaved] = useState(true);
   useLayoutEffect(() => {
     document.documentElement.dataset.monochrome = iconAppearance.monochrome ? "on" : "off";
+    document.documentElement.dataset.iconAnimations = iconAppearance.animations ? "on" : "off";
     try {
       localStorage.setItem("code60.iconAppearance", JSON.stringify(iconAppearance));
       setIconAppearanceSaved(true);

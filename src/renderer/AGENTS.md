@@ -1109,3 +1109,28 @@ layout wrapper remains transparent. Forced colors removes the decorative grid;
 reduced motion needs no special handling because the pattern does not animate.
 No setting, capability, persistence, bridge or availability change is introduced;
 no catalog update is needed for this background-only presentation change.
+
+## Application-wide icon animation control
+
+The breadcrumb Card has an Icon animations toggle immediately left of Color theme,
+in a shared right-side group balanced against history controls. Preserve the
+centered selector at narrow widths and with navigation open/closed. Its stable
+accessible label is Icon animations; aria-pressed reflects playback enabled.
+Use the supplied wheel poster at rest and one-shot GIF on activation. Disabled
+playback immediately replaces all animated artwork with its posters, including
+already-playing and retained icons. Overlay the supplied transparent block SVG
+on the still wheel only when disabled. Re-enabling plays the wheel once; other
+icons wait for their normal click/hover triggers. Hover/focus alone never plays
+this toggle. Reduced motion, forced colors, hidden/inert owners and disabled
+controls retain their playback vetoes even when the preference is enabled.
+
+Persist a strict animations boolean (default true, only explicit false disables)
+in the existing code60.iconAppearance record, preserving old monochrome/color/
+contrast values and migration markers. Root appearance context owns GIF playback
+through shared navigation artwork; data-icon-animations suppresses CSS icon pulses
+only. Page/panel/popover transitions, reply entry, activity text/status and timers
+keep their existing owners and settings. Preserve monochrome/alpha treatment of
+wheel and block artwork. Preference save failure remains session-only, with an
+accessible retry message and existing Appearance error feedback. Dispose/rebind
+owned icon listeners on preference changes; no capture, bridge or agent authority.
+Update human-only capability access descriptions without changing prerequisites.

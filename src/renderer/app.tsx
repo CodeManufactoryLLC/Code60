@@ -13,6 +13,7 @@ import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { useHistoryNavigation } from "./history-navigation.js";
+import { IconAnimations } from "./icon-animations.js";
 import { IconColorFilter } from "./icon-appearance.js";
 import { useKnowledgeNavigation } from "./knowledge-report.js";
 import { pageAvailable } from "./navigation.js";
@@ -317,7 +318,7 @@ export function App({ api: transport }: { api: DesktopApi }) {
     setSetup,
     setExplorerOpen,
   });
-  return (
+  const content = (
     <div className="app">
       <IconColorFilter
         color={preferences.iconAppearance.color}
@@ -370,6 +371,11 @@ export function App({ api: transport }: { api: DesktopApi }) {
       <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
         {!splash && (
           <PageTabBar
+            iconAnimations={preferences.iconAppearance.animations}
+            iconAnimationsSaved={preferences.iconAppearanceSaved}
+            onIconAnimationsChange={(animations) =>
+              preferences.setIconAppearance((current) => ({ ...current, animations }))
+            }
             theme={theme}
             onThemeChange={setTheme}
             tabs={tabs}
@@ -482,4 +488,5 @@ export function App({ api: transport }: { api: DesktopApi }) {
       />
     </div>
   );
+  return <IconAnimations value={preferences.iconAppearance.animations}>{content}</IconAnimations>;
 }

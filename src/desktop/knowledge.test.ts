@@ -177,7 +177,7 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
     ]);
   });
-  it.each(["window background opacity", "Scientifica"])(
+  it.each(["window background opacity", "Scientifica", "icon animations"])(
     "keeps %s settings discoverable and human-only without a database",
     async (query) => {
       const { knowledge } = setup({ database: null });

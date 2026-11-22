@@ -5,6 +5,7 @@ import type { Theme } from "./appearance.js";
 import { observeBreadcrumbMotion } from "./breadcrumb-motion.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
+import { IconAnimationToggle } from "./icon-animation-toggle.js";
 import { Icon } from "./icons.js";
 import {
   isSettingsSection,
@@ -33,6 +34,9 @@ import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
 import { ThemeToggle } from "./theme-toggle.js";
 
 export function PageTabBar({
+  iconAnimations,
+  iconAnimationsSaved = true,
+  onIconAnimationsChange,
   theme,
   onThemeChange,
   tabs,
@@ -59,6 +63,9 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
+  iconAnimations: boolean;
+  iconAnimationsSaved?: boolean;
+  onIconAnimationsChange(enabled: boolean): void;
   theme: Theme;
   onThemeChange(theme: Theme): void;
   canGoBack?: boolean;
@@ -193,7 +200,14 @@ export function PageTabBar({
             onBack={onBack}
             onForward={onForward}
           />
-          <ThemeToggle theme={theme} onChange={onThemeChange} />
+          <div className="breadcrumb-appearance-controls">
+            <IconAnimationToggle
+              enabled={iconAnimations}
+              saved={iconAnimationsSaved}
+              onChange={onIconAnimationsChange}
+            />
+            <ThemeToggle theme={theme} onChange={onThemeChange} />
+          </div>
         </Card>
       </header>
       <div className="workspace-panel-controls">

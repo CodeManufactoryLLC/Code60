@@ -253,6 +253,7 @@ it.each([
 
 it.each([
   ["app-history-back", "history-back.png"],
+  ["app-icon-animations", "animation-wheel.png"],
   ["app-history-forward", "history-forward.png"],
   ["app-theme-system", "theme-eclipse.png"],
   ["app-theme-dark", "theme-night.png"],

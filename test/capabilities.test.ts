@@ -137,6 +137,14 @@ describe("desktop capability catalog", () => {
       purpose: expect.stringContaining("whole-window background opacity"),
     });
   });
+  it("describes the global icon playback switch without changing authority", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Color theme or Icon animations"),
+      limitations: expect.stringContaining("freezes GIF artwork and CSS icon pulses app-wide"),
+    });
+  });
   it("describes the human-only breadcrumb theme shortcut without changing availability", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
