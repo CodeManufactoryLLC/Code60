@@ -97,12 +97,12 @@ it("keeps separate retained owners in their own card slots", () => {
   expect(second).toHaveBeenLastCalledWith({ target: b.slot, disabled: false });
 });
 
-it("shows a text-only safe title, no empty menu, and an accessible chevron for commands", () => {
+it("shows a safe title, no empty menu, and an accessible chevron for commands", () => {
   const title = "<project>";
   const empty = renderToStaticMarkup(
     <ContentPageHeader title={title} ownerKey="a" portal={undefined} />,
   );
-  expect(empty).toContain("&lt;project&gt;</h2>");
+  expect(empty).toContain("&lt;project&gt;</span></h2>");
   expect(empty).not.toContain("<button");
   const run = vi.fn();
   const commands = renderToStaticMarkup(
@@ -117,7 +117,13 @@ it("shows a text-only safe title, no empty menu, and an accessible chevron for c
   expect(commands).toContain('aria-haspopup="menu"');
   expect(commands).not.toContain(">Refresh</button>");
   expect(run).not.toHaveBeenCalled();
-  expect(renderToStaticMarkup(<ContentHeaderSlot fallback="Sessions" />)).toContain(
-    "content-page-header-fallback",
-  );
+  expect(
+    renderToStaticMarkup(<ContentHeaderSlot fallback="Sessions" icon="app-table" />),
+  ).toContain("content-page-header-fallback");
+});
+
+it("includes navigation artwork even when an unavailable page uses its fallback header", () => {
+  const html = renderToStaticMarkup(<ContentHeaderSlot fallback="Logs" icon="app-table" />);
+  expect(html).toContain('data-icon="app-table"');
+  expect(html).toContain('<span class="page-title-text">Logs</span>');
 });

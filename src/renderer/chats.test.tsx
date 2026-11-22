@@ -637,7 +637,7 @@ describe("embedded worker chat", () => {
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
     expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain('class="page-title worker-chat-title"');
+    expect(html).toContain('class="content-page-title"');
     expect(html).toContain('data-icon="app-down-right"');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
@@ -665,9 +665,9 @@ describe("embedded worker chat", () => {
     expect(html).not.toContain('class="turn-separator"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
-  it("uses the generic Subagent breadcrumb independently of its saved role label", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span>.*<\/h2>/);
-    expect(render(run("one"))).toMatch(/Subagent<\/span>.*<\/h2>/);
+  it("shows the actual worker title and keeps its navigation icon", () => {
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/span>.*<\/h2>/);
+    expect(render(run("one"))).toMatch(/fake \/ one<\/span>.*<\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

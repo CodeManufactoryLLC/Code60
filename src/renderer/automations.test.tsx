@@ -23,7 +23,7 @@ it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
     />,
   );
 
-  expect(markup).toContain('<h1 class="page-title table-title"');
+  expect(markup).toContain('<h1 class="content-page-title"');
   expect(markup).toContain('data-icon="app-robotic-arm"');
   expect(markup).toContain('<span class="page-title-text">Scheduled Jobs</span>');
   expect(markup).not.toContain("Runs continue after you quit Code60.");

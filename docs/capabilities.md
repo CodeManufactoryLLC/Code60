@@ -4,16 +4,16 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
-## Current page selector
+## Page navigation
 
 - ID: `page-navigation`
 - Status: shipped
-- Purpose: Navigate from the displayed page to one of its parent pages.
-- Access: Workspace header → Current page combobox → choose a parent page
+- Purpose: Open pages through the sidebar, navigation cards or Back and Forward.
+- Access: Left navigation sidebar or Home / Apps / Settings cards; workspace header → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Lists only the current page and its parents, with the current page selected. No search field; arrows, Home/End and first-letter keys navigate the list. Selecting the current item closes the popup without navigation. Primary pages have a centered title inside their content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. Pending selection disables the control. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
+- Limits: The workspace header contains history and global appearance controls, with no current-page dropdown. Primary pages have a centered title with their navigation icon on its left inside the content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -23,7 +23,7 @@ Schema version: 1
 - ID: `navigation-history`
 - Status: shipped
 - Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
-- Access: Current-page header card → Back / Forward, to the left of the page selector
+- Access: Workspace header card → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.

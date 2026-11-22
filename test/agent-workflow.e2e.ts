@@ -473,49 +473,18 @@ async function checkSidebarIconSpacing(entry: Locator) {
 
 async function checkHeaderBreadcrumbs(page: Page) {
   const header = page.locator(".workspace-breadcrumbs");
-  await expect(
-    header.getByRole("navigation", { name: "Page navigation", exact: true }),
-  ).toHaveCount(1);
-  await expect(header.getByRole("heading")).toHaveCount(1);
-  await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
-  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "700");
+  await expect(header.getByRole("navigation")).toHaveCount(0);
+  await expect(header.getByRole("combobox")).toHaveCount(0);
+  await expect(header.getByRole("heading")).toHaveCount(0);
   await expect(header).toHaveCSS("box-shadow", "none");
   await expect(header).toHaveCSS("border-radius", "5px");
-  const selector = header.getByRole("combobox", { name: "Current page", exact: true });
-  await expect(selector).toHaveCSS("width", "240px");
-  await expect(selector).toHaveCSS("height", "44px");
-  await expect
-    .poll(() =>
-      selector.evaluate((element) => {
-        const control = element.getBoundingClientRect();
-        const card = element.closest(".workspace-breadcrumbs")?.getBoundingClientRect();
-        return card
-          ? Math.abs(control.left + control.width / 2 - card.left - card.width / 2)
-          : Infinity;
-      }),
-    )
-    .toBeLessThan(1);
-  const slot = page.locator(".page-title-placeholder");
-  await expect(slot).toHaveCount(1);
-  await expect(slot).toHaveAttribute("aria-hidden", "true");
-  await expect(slot).toHaveAttribute("inert", "");
-  await expect(slot).toHaveCSS("display", "none");
-  await expect(slot.locator("button, h1, h2, [id]")).toHaveCount(0);
-  const geometry = await slot.evaluate((element) => {
-    const header = document.querySelector(".workspace-header");
-    const heading = header?.querySelector("h1, h2");
-    const panel = element.closest(".page-panel");
-    if (!header || !heading || !panel) throw new Error("Missing header heading or page panel");
-    return {
-      panel: panel.getBoundingClientRect().top,
-      slotHeight: element.getBoundingClientRect().height,
-      header: header.getBoundingClientRect().bottom,
-      ids: heading.id ? document.querySelectorAll(`#${CSS.escape(heading.id)}`).length : null,
-    };
-  });
-  expect(geometry.panel).toBeGreaterThanOrEqual(geometry.header);
-  expect(geometry.slotHeight).toBe(0);
-  if (geometry.ids !== null) expect(geometry.ids).toBe(1);
+  const title = page.locator(".content-page-title:visible");
+  await expect(title).toHaveCount(1);
+  await expect(title).toHaveCSS("font-size", "16px");
+  await expect(title).toHaveCSS("font-weight", "700");
+  await expect(title.locator(".navigation-icon")).toHaveCount(1);
+  await expect(header.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  await expect(header.getByRole("button", { name: /^Color theme:/ })).toBeVisible();
 }
 
 async function checkSidebarNavigation(page: Page, repo: string) {
@@ -595,11 +564,6 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     const composerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
     const headerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(47, 29, 55)";
     await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("background-color", headerFill);
-    await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("combobox", { name: "Current page", exact: true }),
-    ).toHaveCSS("background-color", headerFill);
     await expect(page.locator("#panel-settings")).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
@@ -748,7 +712,11 @@ async function checkSidebarNavigation(page: Page, repo: string) {
           };
           let frame = 0;
           const sample = () => {
-            const items = [...card.querySelectorAll<HTMLElement>("[data-breadcrumb-key]")];
+            const items = [
+              ...document.querySelectorAll<HTMLElement>(
+                ".content-page-heading:not(.content-page-header-fallback)",
+              ),
+            ].filter((item) => item.checkVisibility());
             const visible = [
               ...document.querySelectorAll<HTMLElement>(
                 "#panel-chat .chat-conversations > .orchestration-chat-page:not([hidden])",
@@ -756,20 +724,20 @@ async function checkSidebarNavigation(page: Page, repo: string) {
             ];
             samples.push({
               opacity: Math.min(...items.map((item) => Number(getComputedStyle(item).opacity))),
-              current: card.querySelectorAll('[aria-current="page"]').length,
+              current: items.length,
               exits: card.querySelectorAll(".breadcrumb-exit").length,
               height: card.getBoundingClientRect().height,
               trail: items
-                .map(
-                  (item) =>
-                    `${item.dataset.breadcrumbKey}:${item.textContent}:${getComputedStyle(item).opacity}`,
-                )
+                .map((item) => `${item.textContent}:${getComputedStyle(item).opacity}`)
                 .join("|"),
               visibleChats: visible.length,
               safePending: visible.every(
                 (chat) =>
                   !chat.hasAttribute("data-navigation-pending") ||
-                  (chat.inert && card.querySelector<HTMLElement>("nav")?.inert === true),
+                  (chat.inert &&
+                    document.querySelector<HTMLElement>(
+                      ".content-page-heading:not(.content-page-header-fallback)",
+                    )?.inert === true),
               ),
             });
             frame = requestAnimationFrame(sample);

@@ -1,9 +1,10 @@
 # GUI standardization visual review
 
 Synthetic project fixtures from the Linux Electron/Playwright harness; no real
-workspace content or credentials. Before is current main at `053126a`. After
-shows this branch's white reading surfaces, unified sidebar, navigation combobox,
-main-card panel toggles, Files dropdown and file-only Close action below its header.
+workspace content or credentials. Before is current main at `053126a`. Historical After images below show intermediate stages. The latest header images
+show the current layout: white reading surfaces, unified sidebar, page artwork
+beside each content title, a history/appearance header without a page selector,
+main-card panel toggles, and the Files dropdown.
 
 | Before | After |
 | --- | --- |
@@ -82,7 +83,7 @@ composite fades as one control. The main-content grid is slightly more visible:
 
 Memory, Polling controls, Appearance and Update Manager are now direct Apps
 children in both the sidebar and Apps home. Earlier snapshots above show the
-previous placement. Current breadcrumbs and keyboard parents use Apps; Settings
+previous placement. Keyboard parents use Apps; Settings
 retains About, Advanced, Table defaults and Text. Existing preferences and update
 check/download/install controls keep their state and permissions. The Data Viewer
 Polling monitor remains separate from Apps → Polling controls.
@@ -90,3 +91,23 @@ Polling monitor remains separate from Apps → Polling controls.
 | Apps in Light (narrow, scrolled to Update Manager) | Apps in Dark |
 | --- | --- |
 | ![Moved preferences in Apps and the Update Manager card in Light](after-apps-preferences-light.png) | ![Moved preferences in Apps and the Update Manager card in Dark](after-apps-preferences-dark.png) |
+
+## Current header simplification
+
+The top Card now contains history and global appearance buttons only. Its horizontal
+padding is half its previous value, with the controls using the same inset. The
+current-page combobox and its ancestor menu have been removed; use navigation cards,
+the sidebar or Back/Forward. Each content title includes its navigation artwork on
+the left, including actual project/provider/chat names and unavailable-page headers.
+The shared title/action group remains centered and grows for enlarged text.
+
+Information-tooltip icons are removed across Settings, Memory, polling, transitions,
+commands and Search. Settings retain their assistive descriptions and described-control
+IDs; Search shows unapplied changes as status text. Ordinary action tooltips remain.
+These images supersede earlier screenshots containing a current-page selector.
+
+| Current Light header | Current Dark header |
+| --- | --- |
+| ![History and appearance header with a Home title icon in Light](after-simplified-header-light.png) | ![History and appearance header with a Home title icon in Dark](after-simplified-header-dark.png) |
+
+![Title artwork and wrapping at the maximum supported text size](after-title-icons-large.png)

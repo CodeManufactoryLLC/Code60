@@ -13,7 +13,7 @@ import { DataTable, type TableOptions } from "./data-table.js";
 import { drawIcon, Icon } from "./icons.js";
 import { MessageAge } from "./message-controls.js";
 import { Modal } from "./modal.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import { pollRequestIdentity } from "./poll-identity.js";
 import { SettingsHeader } from "./settings-layout.js";
 import { useTicker } from "./ticker.js";
@@ -282,9 +282,9 @@ export function PollingControls({
           <label className="settings-field settings-field-number">
             <span className="settings-label">
               <span id={tickerId}>Chart ticker seconds</span>
-              <InfoTip label="Chart ticker">
+              <ControlDescription>
                 Redraws the sessions table charts on the local clock. It reads no data.
-              </InfoTip>
+              </ControlDescription>
             </span>
             <input
               aria-labelledby={tickerId}

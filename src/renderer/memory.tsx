@@ -6,7 +6,7 @@ import type {
   MemorySettings,
   MemorySnapshot,
 } from "../bridge/index.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
 type Api = Pick<DesktopApi, "memorySnapshot" | "memoryAction" | "onMemoryChanged">;
@@ -153,12 +153,12 @@ export function MemoryPage({
           <SettingsCard title="Saved memories">
             <div className="settings-row">
               <span>
-                {snapshot?.count ?? 0} memories{" "}
-                <InfoTip label="Saved memory scope">
+                <span>{snapshot?.count ?? 0} memories</span>{" "}
+                <ControlDescription>
                   Memories stay within their conversation or project unless you explicitly share
                   them across projects. Manage memories to inspect evidence, edit, pin, resolve
                   conflicts, share or delete records. Turning Memory off does not delete them.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <button type="button" onClick={onManage}>
                 Manage memories
@@ -183,12 +183,12 @@ export function MemoryPage({
                 <label htmlFor="memory-retention">
                   Automatically delete unpinned memories after
                 </label>{" "}
-                <InfoTip label="Memory retention" id="memory-retention-tip">
+                <ControlDescription id="memory-retention-tip">
                   Deletes unpinned memories based on their creation date, including derived search
                   and revision data. Pinned memories and evidence needed by retained memories are
                   kept. Original transcripts are never deleted. Shortening retention requires
                   confirmation.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <select
                 id="memory-retention"
@@ -396,7 +396,9 @@ export function MemoryInspector({
               />
               Pinned
             </label>
-            <InfoTip label="Pinned">Pinned memories are never replaced automatically.</InfoTip>
+            <ControlDescription>
+              Pinned memories are never replaced automatically.
+            </ControlDescription>
           </span>
           {m.state === "disputed" && (
             <button

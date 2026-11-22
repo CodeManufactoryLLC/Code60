@@ -478,6 +478,14 @@
   max-width: 100%;
 }
 
+.content-page-title > .navigation-icon {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  width: 2em;
+  height: 2em;
+}
+
 .page-title > .navigation-icon,
 .breadcrumb-link > .navigation-icon,
 .breadcrumb-label > .navigation-icon {
@@ -502,118 +510,6 @@
 
 .page-title-placeholder {
   display: none;
-}
-
-.page-breadcrumbs ol {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.page-breadcrumbs li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.workspace-breadcrumbs .page-breadcrumbs {
-  --history-reserve: 88px;
-  width: 100%;
-}
-
-.workspace-breadcrumbs .page-breadcrumbs li {
-  display: grid;
-  grid-template-columns: minmax(var(--history-reserve), 1fr) minmax(0, 240px) minmax(
-      var(--history-reserve),
-      1fr
-    );
-  column-gap: 8px;
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-breadcrumbs .page-breadcrumbs .page-title {
-  grid-column: 2;
-  width: 100%;
-  justify-self: center;
-}
-
-.workspace-breadcrumbs[data-breadcrumb-height-motion] {
-  overflow: hidden;
-}
-
-.breadcrumb-exit {
-  position: absolute;
-  pointer-events: none;
-  user-select: none;
-}
-
-.breadcrumb-exit .page-title-text {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.page-breadcrumbs .page-title {
-  flex-shrink: 1;
-}
-
-.page-breadcrumbs [aria-current="page"] :is(.page-title-text, .chat-title) {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only) {
-  position: relative;
-}
-
-.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only)::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: -0.15em;
-  border-bottom: 1px solid currentColor;
-  pointer-events: none;
-}
-
-.page-breadcrumbs :is(.breadcrumb-link, .breadcrumb-label) {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.page-breadcrumbs .breadcrumb-link {
-  min-width: 0;
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  -webkit-app-region: no-drag;
-}
-
-.page-breadcrumbs .breadcrumb-link:where(:hover, :focus-visible) {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 0.1em;
-}
-
-.breadcrumb-separator {
-  --icon-size: 1em;
-  flex-shrink: 0;
-  color: var(--muted);
 }
 
 .page-tab[data-closable="true"] [role="tab"] {
@@ -1150,7 +1046,7 @@
 /* History belongs to the current-page card, independently of the portal owner. */
 .sidebar-history {
   position: absolute;
-  left: 16px;
+  left: var(--header-side-padding);
   top: 50%;
   translate: 0 -50%;
   z-index: 4;
@@ -1169,7 +1065,7 @@
 /* Global appearance actions stay outside the current page's portalled owner. */
 .breadcrumb-appearance-controls {
   position: absolute;
-  right: 16px;
+  right: var(--header-side-padding);
   top: 50%;
   translate: 0 -50%;
   z-index: 4;
@@ -1232,10 +1128,6 @@
 }
 
 @container page-header (max-width: 480px) {
-  .workspace-breadcrumbs .page-breadcrumbs {
-    --history-reserve: 64px;
-  }
-
   .sidebar-history,
   .breadcrumb-appearance-controls {
     gap: 4px;
@@ -1252,10 +1144,5 @@
   .breadcrumb-appearance-controls .navigation-icon:not(.icon-animation-block) {
     width: 28px;
     height: 28px;
-  }
-
-  .workspace-breadcrumbs .neo-combobox-trigger {
-    padding-inline: 6px;
-    gap: 4px;
   }
 }

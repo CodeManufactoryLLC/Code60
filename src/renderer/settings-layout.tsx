@@ -1,16 +1,10 @@
 import type { ReactNode } from "react";
 import type { PageAction } from "./content-page-header.js";
-import {
-  isSettingsSection,
-  type PageId,
-  pageDefinitions,
-  type SettingsSectionId,
-  settingsLabels,
-} from "./navigation.js";
-import { InfoTip } from "./overlays.js";
+import { isSettingsSection, type PageId, type SettingsSectionId } from "./navigation.js";
+import { ControlDescription } from "./overlays.js";
 import { PageTitle } from "./page-title.js";
 
-/** A Settings page header: its title, an optional explanation tooltip, and page-wide actions. */
+/** A Settings page header: its title, an optional accessible explanation, and page-wide actions. */
 export function SettingsHeader({
   id,
   page,
@@ -24,7 +18,6 @@ export function SettingsHeader({
   children?: ReactNode;
   actions?: readonly PageAction[] | undefined;
 }) {
-  const title = isSettingsSection(page) ? settingsLabels[page] : pageDefinitions[page].label;
   return (
     <div className="settings-section-header">
       <div className="settings-title">
@@ -34,7 +27,7 @@ export function SettingsHeader({
           id={id}
           actions={actions}
         />
-        {tip && <InfoTip label={title}>{tip}</InfoTip>}
+        {tip && <ControlDescription>{tip}</ControlDescription>}
       </div>
       {children && <div className="settings-actions">{children}</div>}
     </div>

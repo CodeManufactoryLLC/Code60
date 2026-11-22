@@ -4,7 +4,7 @@ import {
   type SidebarAppearance,
   sidebarPercentageLimit,
 } from "./appearance.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 
 export function SidebarAppearanceSettings({
   appearance,
@@ -54,9 +54,7 @@ export function SidebarAppearanceSettings({
             <div className="sidebar-appearance-heading">
               <span className="settings-label">
                 <label htmlFor={slider}>{field.label}</label>
-                <InfoTip label={field.label} id={tip}>
-                  {field.tip}
-                </InfoTip>
+                <ControlDescription id={tip}>{field.tip}</ControlDescription>
               </span>
               <output htmlFor={slider}>{`${value}%`}</output>
             </div>

@@ -25,15 +25,15 @@ describe("desktop capability catalog", () => {
       confirmation: "Human approval before installation and shutdown.",
     });
   });
-  it("describes the human-only current-page combobox and its bounded parent path", () => {
+  it("describes human-only sidebar/card navigation without a current-page menu", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      access: expect.stringContaining("Current page combobox"),
-      limitations: expect.stringContaining("only the current page and its parents"),
+      access: expect.stringContaining("Left navigation sidebar"),
+      limitations: expect.stringContaining("no current-page dropdown"),
     });
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations).toContain(
-      "No search field",
+      "navigation icon on its left",
     );
   });
   it("describes content-title commands while keeping navigation and availability human-only", () => {
@@ -50,7 +50,7 @@ describe("desktop capability catalog", () => {
   });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
-      access: "Current-page header card → Back / Forward, to the left of the page selector",
+      access: "Workspace header card → Back / Forward",
       prerequisite: "none",
       agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),

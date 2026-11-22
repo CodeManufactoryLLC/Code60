@@ -87,13 +87,14 @@ body:has(.app .window-background) {
   grid-column: 1;
   min-width: 0;
   margin-right: var(--breadcrumb-right-inset, 0px);
-  /* Keep the centered selector and its focus outline within the header surface. */
+  /* History and global appearance controls retain their shared header height. */
   max-height: 40vh;
   overflow: auto;
-  scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
-  /* Header margin and inner padding retain the 12px first-row inset. */
-  padding: 4px calc(var(--page-padding) - 1px);
+  --header-side-padding: calc((var(--page-padding) - 1px) / 2);
+  padding: 4px var(--header-side-padding);
+  min-height: 58px;
+  scrollbar-gutter: auto;
   gap: 0;
   --nb-card-fill: var(--card-header-fill);
   --nb-card-shadow: none;
@@ -289,6 +290,10 @@ dialog::backdrop {
   margin: 0;
 }
 .content-page-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-width: 0;
   margin: 0;
   text-align: center;

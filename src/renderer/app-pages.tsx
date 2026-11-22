@@ -22,6 +22,7 @@ import {
   pageDefinitions,
   type RenderedPageId,
   renderedPages,
+  settingsIcons,
   settingsLabels,
 } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
@@ -89,24 +90,10 @@ export function AppPages(props: AppPagesProps) {
   );
   const titleNavigation = useMemo(
     () => ({
-      open: navigation.open,
-      pending: navigation.pending,
       selectionPending: navigation.projectPending || navigation.conversationPending,
       header: !splash,
-      projects: snapshot?.openProjects ?? [],
-      chats: snapshot?.chats ?? [],
-      runs: navigationRuns,
     }),
-    [
-      navigation.open,
-      navigation.pending,
-      navigation.projectPending,
-      navigation.conversationPending,
-      splash,
-      snapshot?.openProjects,
-      snapshot?.chats,
-      navigationRuns,
-    ],
+    [navigation.projectPending, navigation.conversationPending, splash],
   );
   const projectRuns = useMemo(
     () => snapshot?.runs.filter((run) => !run.relay) ?? [],
@@ -713,6 +700,11 @@ export function AppPages(props: AppPagesProps) {
           >
             {id !== "chat" && (
               <ContentHeaderSlot
+                icon={
+                  id === "settings" && settingsSection
+                    ? settingsIcons[settingsSection]
+                    : pageDefinitions[id].icon
+                }
                 fallback={
                   id === "settings" && settingsSection
                     ? settingsLabels[settingsSection]

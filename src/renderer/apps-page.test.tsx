@@ -55,7 +55,7 @@ describe("Apps home", () => {
     "shows a labelled card for every nested app with database gating (%s)",
     (database) => {
       const html = renderToStaticMarkup(<AppsPage database={database} onOpen={() => {}} />);
-      expect(html).toContain('id="apps-title" class="page-title table-title"');
+      expect(html).toContain('id="apps-title" class="content-page-title"');
       expect(html).toContain('<span class="page-title-text">Apps</span>');
       expect(html.match(/class="home-card"/g)).toHaveLength(pagesInGroup("apps").length + 5);
       for (const id of pagesInGroup("apps")) {

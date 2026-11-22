@@ -2669,7 +2669,7 @@ catalog describes this UI without granting any new execution or read authority.
 ## Shared content page headers
 
 Every primary page and Settings/detail page has a stationary header inside its main
-Card, separate from the breadcrumb navigation Card. Center a text-only page title
+Card, separate from the breadcrumb navigation Card. Center a page title with its decorative navigation icon to the left
 and its chevron-only command menu together with a 12px gap, 36px trigger target,
 44px minimum row and symmetric corner-control clearance. Pin that in-flow row
 while stacked chat cards scroll; conversation Cards use overflow:clip so the outer
@@ -2677,7 +2677,7 @@ workspace remains the sticky scroll owner. Use saved Page Titles
 styles; wrap long/large names and grow the row in normal flow. Preserve the shared
 24px content gap and theme surfaces. Pages without commands show only the title.
 Detail pages use their actual project/provider/chat name; Scheduled Jobs uses its
-page name. No extra title artwork or duplicate button row belongs in the body.
+page name. Do not duplicate the title or its command buttons in the body.
 
 PageTitle publishes renderer-only PageAction descriptors and its content title
 into the nearest own Card header slot. Ordinary page Cards and conversation Cards
@@ -2784,3 +2784,21 @@ returns focus to the actual owner. Preserve cached content, page actions, focus,
 request ownership, saved values, bridge contracts and database availability.
 Capability labels/access paths and recovery advice use Apps/Update Manager; keep
 capability IDs, availability rules and all execution/agent-write authority unchanged.
+
+## Simplified workspace header and title artwork
+
+The workspace header Card contains Back/Forward and the global icon-animation/theme
+controls only. Remove its current-page combobox and ancestor popup; navigation uses
+the sidebar, navigation cards and history. This supersedes the earlier current-page
+selector and breadcrumb-portal/motion guidance. Keep the Card aligned with the
+conversation column and its measured height shared with the Files header. Retain a
+58px minimum height and halve the former horizontal padding, including control
+insets; keep 5px corners, 1px borders and no shadow.
+
+Primary content titles now include the page's existing navigation artwork to the
+left of the actual title, with an 8px gap. Center the complete icon/title/actions
+group, retaining the separate 12px action gap, typography, wrapping, owner guards
+and corner controls. Standalone/nested headings retain their existing layout.
+Information-tooltip buttons are removed throughout the app. Keep explanatory text
+non-interactive and available to assistive technology, retaining aria-describedby
+IDs for settings controls. Ordinary action tooltips and status icons remain.

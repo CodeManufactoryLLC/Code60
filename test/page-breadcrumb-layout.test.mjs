@@ -16,6 +16,8 @@ it("removes generic button spacing from clickable and disabled chat titles", () 
   expect(title).toMatch(/\bwhite-space:\s*normal;/);
 });
 
-it("sizes breadcrumb chevrons from the surrounding font rather than a fixed pixel size", () => {
-  expect(rule(".breadcrumb-separator")).toMatch(/--icon-size:\s*1em;/);
+it("keeps content-title artwork in flow instead of absolute sidebar positioning", () => {
+  const icon = rule(".content-page-title > .navigation-icon");
+  expect(icon).toMatch(/position:\s*static;/);
+  expect(icon).toMatch(/transform:\s*none;/);
 });

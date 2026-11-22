@@ -2,7 +2,6 @@ import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import type { Theme } from "./appearance.js";
-import { observeBreadcrumbMotion } from "./breadcrumb-motion.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
 import { IconAnimationToggle } from "./icon-animation-toggle.js";
@@ -94,10 +93,6 @@ export function PageTabBar({
   selectedProjectId?: string | null | undefined;
 }) {
   const sidebar = useRef<HTMLElement>(null);
-  const breadcrumbCard = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (breadcrumbCard.current) return observeBreadcrumbMotion(breadcrumbCard.current);
-  }, []);
   const toggle = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(() => localStorage.getItem("code60.sidebarOpen") !== "false");
   const [width, setWidth] = useState(() => {
@@ -194,7 +189,7 @@ export function PageTabBar({
         </div>
       </nav>
       <header className="workspace-header">
-        <Card className="workspace-breadcrumbs" ref={breadcrumbCard}>
+        <Card className="workspace-breadcrumbs">
           <HistoryControls
             canGoBack={canGoBack}
             canGoForward={canGoForward}

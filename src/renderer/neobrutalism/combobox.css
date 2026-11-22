@@ -53,15 +53,6 @@
   box-shadow: none;
 }
 
-.page-breadcrumbs .page-title {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.page-breadcrumbs [aria-current="page"] .page-title-text {
-  text-decoration: none;
-}
-
 .neo-combobox-popup {
   position: fixed;
   inset: auto;

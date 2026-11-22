@@ -25,7 +25,7 @@
   navigation to the shared Data Viewer. No daily learning allowance, pipeline,
   role/type/conversation switches or context tuning controls. Explain provider
   usage, independent conversation continuity and privacy limits in the Memory
-  switch’s accessible description; retain scope and retention information tips.
+  switch’s accessible description; retain scope and retention descriptions for assistive technology.
   Show search repair only on an actual indexing failure.
 - The Memories browser pages main-owned records, filters by project/type/state
   and is also available as a database-independent shared table under Apps →
@@ -278,7 +278,7 @@
 
 - Prefer quiet, professional layouts over explanatory copy. Do not add sentences
   that explain how a page, filter or control works; name things clearly and use
-  an InfoTip only for setting consequences that users must understand.
+  a non-interactive accessible description for setting consequences.
 - Page and table toolbars use borderless Carbon icon actions (`icon-button`)
   with accessible labels that the shared tooltip displays. Keep a native select
   as the accessible control behind the Columns glyph. Active saved/column filters
@@ -442,7 +442,7 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 
 - Display automatic worker prompts as labelled activity, never as user messages. Do not show a paused-updates banner or Resume updates control in Chat; sending a message resumes delivery. Label orchestrator-owned worker chats by ownership and show the current shared approval policy. MCP contract descriptions must distinguish read-only tools from tools that change worker state.
 
-- Group Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees beneath Apps → Data Viewer. Give each child the Phosphor grid-nine icon, retaining the database icon on Data Viewer. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Nest Appearance, Table defaults, Text, Polling, Updates and About as individual pages beneath Settings. Build Settings pages from `SettingsHeader` (the specific page name as the sole main title at the standard upper-left inset, optional tip, page-wide actions; no extra Settings heading) and bordered `SettingsCard` rows or `settings-group` field cards, so no row or field sits outside a card; use the shared `segmented` control for short exclusive choices. Settings pages have no explanatory paragraphs: put explanations behind an `InfoTip` information button beside the setting or heading, keep them as the control's accessible description, and drop text that only restates the controls. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
+- Group Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees beneath Apps → Data Viewer. Give each child the Phosphor grid-nine icon, retaining the database icon on Data Viewer. Keep table children alphabetized and Settings last in normal navigation, without a bottom spacer. Nest Appearance, Table defaults, Text, Polling, Updates and About as individual pages beneath Settings. Build Settings pages from `SettingsHeader` (the specific page name as the sole main title at the standard upper-left inset, optional tip, page-wide actions; no extra Settings heading) and bordered `SettingsCard` rows or `settings-group` field cards, so no row or field sits outside a card; use the shared `segmented` control for short exclusive choices. Settings pages have no explanatory paragraphs: keep explanations in non-interactive accessible descriptions beside the setting or heading, keep them as the control's accessible description, and drop text that only restates the controls. Under Settings → Advanced, put Experiments → Episodic Memory and the sibling Contributor Tools placeholder page. Remember disclosures, reveal external destinations, and support arrow-key navigation without changing the active page on collapse.
 - Logs is app-wide and available without a database. Reuse DataTable settings and
   saved filters, applying search/conditions to retained history through validated
   requests, not only the visible page. Use bounded cursors and stale-response
@@ -1048,7 +1048,7 @@ presentation-only change with no capability, availability or ownership change.
 ## Shared content page headers
 
 Every primary page and Settings/detail page has a stationary header inside its main
-Card, separate from the breadcrumb navigation Card. Center a text-only page title
+Card, separate from the breadcrumb navigation Card. Center a page title with its decorative navigation icon to the left
 and its chevron-only command menu together with a 12px gap, 36px trigger target,
 44px minimum row and symmetric corner-control clearance. Pin that in-flow row
 while stacked chat cards scroll; conversation Cards use overflow:clip so the outer
@@ -1056,7 +1056,7 @@ workspace remains the sticky scroll owner. Use saved Page Titles
 styles; wrap long/large names and grow the row in normal flow. Preserve the shared
 24px content gap and theme surfaces. Pages without commands show only the title.
 Detail pages use their actual project/provider/chat name; Scheduled Jobs uses its
-page name. No extra title artwork or duplicate button row belongs in the body.
+page name. Do not duplicate the title or its command buttons in the body.
 
 PageTitle publishes renderer-only PageAction descriptors and its content title
 into the nearest own Card header slot. Ordinary page Cards and conversation Cards
@@ -1163,3 +1163,21 @@ returns focus to the actual owner. Preserve cached content, page actions, focus,
 request ownership, saved values, bridge contracts and database availability.
 Capability labels/access paths and recovery advice use Apps/Update Manager; keep
 capability IDs, availability rules and all execution/agent-write authority unchanged.
+
+## Simplified workspace header and title artwork
+
+The workspace header Card contains Back/Forward and the global icon-animation/theme
+controls only. Remove its current-page combobox and ancestor popup; navigation uses
+the sidebar, navigation cards and history. This supersedes the earlier current-page
+selector and breadcrumb-portal/motion guidance. Keep the Card aligned with the
+conversation column and its measured height shared with the Files header. Retain a
+58px minimum height and halve the former horizontal padding, including control
+insets; keep 5px corners, 1px borders and no shadow.
+
+Primary content titles now include the page's existing navigation artwork to the
+left of the actual title, with an 8px gap. Center the complete icon/title/actions
+group, retaining the separate 12px action gap, typography, wrapping, owner guards
+and corner controls. Standalone/nested headings retain their existing layout.
+Information-tooltip buttons are removed throughout the app. Keep explanatory text
+non-interactive and available to assistive technology, retaining aria-describedby
+IDs for settings controls. Ordinary action tooltips and status icons remain.

@@ -9,7 +9,7 @@ import {
   emptyCommand,
 } from "./commands-model.js";
 import { Icon } from "./icons.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import { PageTitle } from "./page-title.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 
@@ -103,10 +103,10 @@ export function CommandsPage({
             },
           ]}
         />
-        <InfoTip label="About commands">
+        <ControlDescription>
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with $name to use one.
-        </InfoTip>
+        </ControlDescription>
       </header>
       <div className="commands-scroll">
         <div className="prompt-editor-body">

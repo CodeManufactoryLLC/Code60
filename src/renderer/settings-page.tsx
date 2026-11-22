@@ -4,7 +4,7 @@ import { AboutSection } from "./about-section.js";
 import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
 import type { IconAppearance } from "./icon-appearance.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 import { SidebarAppearanceSettings } from "./sidebar-appearance-settings.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
@@ -129,11 +129,11 @@ export function SettingsPage({
               <div className="icon-contrast-heading">
                 <span className="settings-label">
                   <label htmlFor={`${id}-icon-contrast`}>Icon contrast</label>
-                  <InfoTip label="Icon contrast" id={`${id}-icon-contrast-tip`}>
+                  <ControlDescription id={`${id}-icon-contrast-tip`}>
                     Spreads the selected color into darker shadows and lighter highlights. Zero uses
                     one flat color; 100% keeps the standard shades; 200% reaches black and white.
                     Applies immediately while Monochrome is on.
-                  </InfoTip>
+                  </ControlDescription>
                 </span>
                 <output htmlFor={`${id}-icon-contrast`}>{iconAppearance.contrast}%</output>
               </div>
@@ -189,10 +189,10 @@ export function SettingsPage({
             <label className="settings-row">
               <span className="settings-label">
                 <span id={`${id}-signals-label`}>Signal colors</span>
-                <InfoTip label="Signal colors" id={`${id}-signals`}>
+                <ControlDescription id={`${id}-signals`}>
                   Adds color to status labels, banners, and toasts. Every state keeps its icon and
                   written label, so nothing depends on color alone.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <input
                 type="checkbox"
@@ -270,10 +270,10 @@ export function SettingsPage({
             <label className="settings-row">
               <span className="settings-label">
                 <span id={`${id}-charts-label`}>Inline charts</span>
-                <InfoTip label="Inline charts" id={`${id}-charts`}>
+                <ControlDescription id={`${id}-charts`}>
                   Shows turn time, event activity, and the last two minutes of state for each
                   session.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <input
                 type="checkbox"

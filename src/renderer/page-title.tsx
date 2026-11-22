@@ -1,37 +1,21 @@
-import {
-  cloneElement,
-  createContext,
-  isValidElement,
-  type ReactNode,
-  type RefObject,
-  useContext,
-  useRef,
-} from "react";
-import { createPortal } from "react-dom";
+import { createContext, isValidElement, type ReactNode, type RefObject, useContext } from "react";
 import { ContentPageHeader, type PageAction } from "./content-page-header.js";
-import { isSettingsSection, pageDefinitions, settingsIcons, settingsLabels } from "./navigation.js";
+import {
+  isSettingsSection,
+  type PageId,
+  pageDefinitions,
+  type SettingsSectionId,
+  settingsIcons,
+  settingsLabels,
+} from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import type { NavigationTarget } from "./navigation-tree.js";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from "./neobrutalism/breadcrumb.js";
-import { Combobox } from "./neobrutalism/combobox.js";
-import {
-  type BreadcrumbSource,
-  breadcrumbAncestors,
-  type PageTitleId,
-} from "./page-breadcrumbs.js";
-import { useBreadcrumbHeader } from "./page-title-header.js";
 
-export type { PageTitleId } from "./page-breadcrumbs.js";
-
-export const PageTitleNavigationContext = createContext<
-  | (BreadcrumbSource & {
-      open(target: NavigationTarget): Promise<boolean>;
-      pending: boolean;
-      selectionPending?: boolean;
-      header?: boolean;
-    })
-  | null
->(null);
+export type PageTitleId = PageId | SettingsSectionId | "relay" | "orchestrator" | "worker";
+export const PageTitleNavigationContext = createContext<{
+  header?: boolean;
+  selectionPending?: boolean;
+} | null>(null);
 
 export function PageTitle({
   page,
@@ -55,8 +39,6 @@ export function PageTitle({
   actionsTrigger?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const navigation = useContext(PageTitleNavigationContext);
-  const slot = useRef<HTMLElement>(null);
-  const header = useBreadcrumbHeader(slot, breadcrumbs && navigation?.header === true);
   const icon =
     page === "relay"
       ? "app-steering-wheel"
@@ -77,115 +59,37 @@ export function PageTitle({
           : isSettingsSection(page)
             ? settingsLabels[page]
             : pageDefinitions[page].label;
-  const chatBreadcrumb = breadcrumbs && (page === "orchestrator" || page === "worker");
-  const title = chatBreadcrumb
-    ? isValidElement<{ children?: ReactNode }>(children)
-      ? cloneElement(children, undefined, label)
-      : label
-    : (children ?? label);
-  const heading = (
-    <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
-      {icon && <NavigationIcon name={icon} />}
-      <span
-        className={page === "home" && breadcrumbs ? "page-title-text sr-only" : "page-title-text"}
-      >
-        {title}
-      </span>
-    </Heading>
-  );
-  if (!breadcrumbs) return heading;
-  const ancestors = breadcrumbAncestors(
-    page,
-    navigation ?? { projects: [], chats: [], runs: [] },
-    target,
-  );
+  if (!breadcrumbs)
+    return (
+      <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
+        {icon && <NavigationIcon name={icon} />}
+        <span className="page-title-text">{children ?? label}</span>
+      </Heading>
+    );
   const currentId = target
     ? `${target.kind}:${target.id}`
     : `${isSettingsSection(page) ? "settings" : "page"}:${page}`;
-  const currentLabel = chatBreadcrumb
-    ? label
-    : typeof children === "string" || typeof children === "number"
-      ? String(children)
-      : label;
-  const options = [
-    ...ancestors.map((ancestor) => ({
-      id: `${ancestor.target.kind}:${ancestor.target.id}`,
-      label: ancestor.label,
-      icon: ancestor.icon && <NavigationIcon name={ancestor.icon} />,
-      disabled:
-        !navigation ||
-        (navigation.pending &&
-          ancestor.target.kind !== "page" &&
-          ancestor.target.kind !== "settings"),
-    })),
-    { id: currentId, label: currentLabel, icon: icon && <NavigationIcon name={icon} /> },
-  ];
   const contentLabel =
     typeof children === "string" || typeof children === "number"
       ? String(children)
       : isValidElement<{ children?: ReactNode }>(children) &&
           typeof children.props.children === "string"
         ? children.props.children
-        : currentLabel;
-  const placeholder = (
-    <span className={className ? `page-title ${className}` : "page-title"}>
-      {icon && <NavigationIcon name={icon} />}
-      <span className="page-title-text">{currentLabel}</span>
-    </span>
-  );
-  const selector = (
-    <BreadcrumbList>
-      <BreadcrumbItem aria-current="page" data-breadcrumb-key={currentId}>
-        <Heading
-          id={id}
-          className={className ? `page-title ${className}` : "page-title"}
-          aria-label={currentLabel}
-        >
-          <Combobox
-            label="Current page"
-            value={currentId}
-            options={options}
-            disabled={navigation?.selectionPending === true}
-            onSelect={(id) => {
-              const ancestor = ancestors.find(({ target }) => `${target.kind}:${target.id}` === id);
-              if (ancestor && navigation) void navigation.open(ancestor.target);
-            }}
-          />
-        </Heading>
-      </BreadcrumbItem>
-    </BreadcrumbList>
-  );
+        : label;
   return (
     <>
       <ContentPageHeader
         title={contentLabel}
+        icon={icon}
+        id={id}
+        as={Heading}
         ownerKey={currentId}
         actions={actions}
         triggerRef={actionsTrigger}
         portal={navigation?.header}
         pending={navigation?.selectionPending}
       />
-      <Breadcrumb
-        ref={slot}
-        className={header ? "page-breadcrumbs page-title-placeholder" : "page-breadcrumbs"}
-        aria-label={header ? undefined : "Page navigation"}
-        aria-hidden={header ? true : undefined}
-        inert={header ? true : undefined}
-      >
-        {header ? placeholder : selector}
-      </Breadcrumb>
-      {header &&
-        createPortal(
-          <Breadcrumb
-            className="page-breadcrumbs"
-            aria-label="Page navigation"
-            inert={navigation?.selectionPending}
-            aria-busy={navigation?.selectionPending || undefined}
-          >
-            {selector}
-          </Breadcrumb>,
-          header,
-        )}
+      <span className="page-breadcrumbs page-title-placeholder" aria-hidden="true" inert />
     </>
   );
 }

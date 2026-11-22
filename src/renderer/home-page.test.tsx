@@ -93,7 +93,7 @@ describe("Home destinations", () => {
       expect(html.match(/Welcome to Code60/g)).toHaveLength(1);
       expect(html).toContain('<p class="home-welcome">Welcome to Code60</p>');
       expect(html.indexOf("Welcome to Code60")).toBeLessThan(html.indexOf('class="home-cards"'));
-      expect(html).toContain('id="home-title" class="page-title table-title"');
+      expect(html).toContain('id="home-title" class="content-page-title"');
       expect(html).not.toContain("home-card-description");
       for (const [id, icon, available] of [
         ["relay", "app-steering-wheel", relayAvailable],

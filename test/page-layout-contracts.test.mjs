@@ -158,7 +158,7 @@ it("preserves the content header clearance with the persistent toggle in the nat
   expect(rule("layout", ".workspace-header")).toContain("align-items: flex-start");
   expect(rule("layout", ".workspace-header")).toContain("padding: 6px 0");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
-    "padding: 4px calc(var(--page-padding) - 1px)",
+    "padding: 4px var(--header-side-padding)",
   );
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("border-radius: 5px");
   expect(rule("layout", ".workspace-breadcrumbs")).toContain("--nb-card-shadow: none");
@@ -168,8 +168,8 @@ it("preserves the content header clearance with the persistent toggle in the nat
   expect(rule("layout", ".workspace-breadcrumbs")).toContain(
     "margin-right: var(--breadcrumb-right-inset, 0px)",
   );
-  expect(rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs li")).toContain(
-    "display: grid",
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain(
+    "--header-side-padding: calc((var(--page-padding) - 1px) / 2)",
   );
   expect(rule("navigation", ".sidebar")).toContain("grid-row: 1 / -1");
   expect(rule("navigation", ".sidebar")).toContain(
@@ -256,16 +256,13 @@ it("moves the visible trail into the header without reserving the original title
   );
 });
 
-it("centers the page selector in both sidebar states without changing the content track", () => {
+it("keeps the simplified header in the content track with a stable measured height", () => {
   expect(rule("layout", ".workspace-header")).toContain("grid-column: 2");
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("grid-column: 1");
-  const item = rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs li");
-  expect(item.match(/var\(--history-reserve\)/g)).toHaveLength(2);
-  expect(item).toContain("minmax(0, 240px)");
-  const heading = rule("navigation", ".workspace-breadcrumbs .page-breadcrumbs .page-title");
-  expect(heading).toContain("grid-column: 2");
-  expect(heading).toContain("justify-self: center");
-  expect(rule("layout", ".workspace-breadcrumbs")).not.toContain("margin-left:");
+  expect(rule("layout", ".workspace-breadcrumbs")).toContain("min-height: 58px");
+  expect(rule("navigation", ".sidebar-history")).toContain("left: var(--header-side-padding)");
+  expect(rule("navigation", ".breadcrumb-appearance-controls")).toContain(
+    "right: var(--header-side-padding)",
+  );
 });
 
 it("shares outlined card geometry with creation cards and a centered label", () => {
@@ -315,20 +312,11 @@ it("aligns page-title blocks at the shared workspace origin instead of page-spec
   expect(rule("tables", ".table-title")).toContain("/ 1.25");
 });
 
-it("aligns breadcrumb items and underlines only the current page, including rename controls and Home", () => {
-  expect(rule("navigation", ".page-breadcrumbs ol")).toContain("align-items: center");
-  const current = rule(
-    "navigation",
-    '.page-breadcrumbs [aria-current="page"] :is(.page-title-text, .chat-title)',
-  );
-  expect(current).toContain("text-decoration: underline");
-  expect(current).toContain("text-underline-offset: 0.15em");
-  expect(
-    rule(
-      "navigation",
-      '.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only)::after',
-    ),
-  ).toContain("border-bottom: 1px solid currentColor");
+it("centers page artwork with wrapping titles while keeping action controls separate", () => {
+  expect(rule("layout", ".content-page-title")).toContain("align-items: center");
+  expect(rule("layout", ".content-page-title")).toContain("gap: 8px");
+  expect(rule("layout", ".content-page-title")).toContain("overflow-wrap: anywhere");
+  expect(rule("layout", ".content-page-heading")).toContain("gap: 12px");
   expect(rule("chat", ".orchestration-chat-status:empty")).toContain("display: none");
 });
 

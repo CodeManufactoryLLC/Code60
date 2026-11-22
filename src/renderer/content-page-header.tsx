@@ -1,5 +1,6 @@
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
 import { DropdownMenu } from "./neobrutalism/dropdown-menu.js";
 
 export interface PageAction {
@@ -69,12 +70,21 @@ function useContentHeader(source: RefObject<HTMLElement | null>, enabled: boolea
   return owner;
 }
 
-export function ContentHeaderSlot({ fallback }: { fallback?: string }) {
+export function ContentHeaderSlot({
+  fallback,
+  icon,
+}: {
+  fallback?: string;
+  icon?: NavigationIconName | undefined;
+}) {
   return (
     <div className="content-page-header-slot">
       {fallback && (
         <header className="content-page-heading content-page-header-fallback">
-          <h2 className="content-page-title">{fallback}</h2>
+          <h2 className="content-page-title">
+            {icon && <NavigationIcon name={icon} />}
+            <span className="page-title-text">{fallback}</span>
+          </h2>
         </header>
       )}
     </div>
@@ -83,6 +93,9 @@ export function ContentHeaderSlot({ fallback }: { fallback?: string }) {
 
 export function ContentPageHeader({
   title,
+  icon,
+  id,
+  as: Heading = "h2",
   ownerKey,
   actions = [],
   triggerRef,
@@ -90,6 +103,9 @@ export function ContentPageHeader({
   pending = false,
 }: {
   title: string;
+  icon?: NavigationIconName | undefined;
+  id?: string | undefined;
+  as?: "h1" | "h2";
   ownerKey: string;
   actions?: readonly PageAction[] | undefined;
   triggerRef?: RefObject<HTMLButtonElement | null> | undefined;
@@ -101,7 +117,10 @@ export function ContentPageHeader({
   const active = portal === undefined || !!owner.target;
   const content = (
     <header className="content-page-heading" inert={pending || undefined}>
-      <h2 className="content-page-title">{title}</h2>
+      <Heading id={id} className="content-page-title">
+        {icon && <NavigationIcon name={icon} />}
+        <span className="page-title-text">{title}</span>
+      </Heading>
       {actions.length > 0 && (
         <DropdownMenu
           key={ownerKey}
