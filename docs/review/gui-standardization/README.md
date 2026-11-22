@@ -203,3 +203,25 @@ custom-assistant and worker navigation artwork retain their identities.
 | Transparent title and provider marks in Light | Transparent title and provider marks in Dark |
 | --- | --- |
 | ![Grid behind title with wider sidebar gaps and chat provider logo in Light](after-transparent-header-provider-light.png) | ![Grid behind title with wider sidebar gaps and chat provider logo in Dark](after-transparent-header-provider-dark.png) |
+
+## Plan navigation and execution progress
+
+View Plan now appears only in the centered blank/empty Files action list beside
+Open Files and Open Memory Recall, reached through + New Tab from other views.
+It reopens the current conversation's latest saved plan without accepting it or
+creating another plan tab. The redundant button above the plan itself is gone.
+The blank action list wraps and scrolls at narrow widths and enlarged text.
+
+The bar is 12px tall and its equally weighted task count includes an integer
+percentage: 33% (1 out of 3). Execution time appears above it, adding only running
+intervals and continuing on Resume. Main owns the timer and persists five-second
+checkpoints without changing plan revisions or Markdown. Restart preserves the
+last recorded total and excludes downtime; legacy execution history is labelled
+Not recorded until new, recorded-only time becomes available. Undo restores the
+checkpoint's timing without reviving execution authority.
+
+| Plan completion and execution time | Centered Files choices |
+| --- | --- |
+| ![Plan with rounded percentage, thicker progress bar and saved execution time](after-plan-execution-time.png) | ![View Plan beside Open Files and Open Memory Recall in the centered blank tab](after-plan-blank-actions.png) |
+
+[Extreme narrow plan view with enlarged Button Text](after-plan-blank-narrow.png).

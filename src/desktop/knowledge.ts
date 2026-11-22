@@ -234,9 +234,9 @@ export class DesktopKnowledge {
     } else if (cap.id === "plans") {
       status = "unknown";
       reason =
-        "View Plan is available in the right sidebar when the current session has an existing plan. Viewing saved content does not generate a new plan or restore execution authority.";
+        "View Plan is available in the centered blank/empty Files tab choices when the current session has an existing plan. Viewing saved content does not generate a new plan or restore execution authority.";
       action =
-        "Open the files panel and use View Plan to reopen the current session's latest plan.";
+        "Open the files panel, choose + New Tab, then View Plan to reopen the current session's latest plan.";
     } else if (cap.id === "reviews") {
       status = "unknown";
       reason =

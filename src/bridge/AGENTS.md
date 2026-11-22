@@ -146,3 +146,29 @@ model defaults, histories and external logins. Set-primary/disconnect are strict
 human-only bridge actions, guarded in main against active desktop work, setup and
 overlapping writes. The primary must be replaced before disconnecting. Publish
 main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
+
+## Plan execution time
+
+Display Execution time above the 12px progress bar, with a once-per-second local
+clock only while the visible plan is running. Use shared duration formatting and
+role=timer with aria-live=off. Progress is Math.round(completed / total * 100),
+followed by the equally weighted task count; neither timing nor counts belong to
+Markdown. View Plan is only in the centered blank/empty Files choices; retain
+latest-plan selection, keyboard focus, tab identity and captured conversation
+ownership, including Relay/custom assistants browsing a project's files.
+
+Optional host-owned executionTiming on Plan contains elapsedMs, runningSince and
+historyIncomplete. New drafts start at zero; legacy executed plans without timing
+show Not recorded. Resuming a legacy plan records new time with a recorded-only
+label. Only running intervals count, once per plan rather than per worker. Queue,
+pause/failure/finished periods do not count. State-transition writes finalize
+intervals; five-second serialized private-record checkpoints preserve revisions,
+accepted revision and Markdown. A checkpoint failure preserves saved state and
+reports a fixed desktop warning without changing execution authority.
+
+Recovery removes running anchors, retains the last checkpoint and pauses existing
+execution as before; never count offline time or restore authority. An abrupt
+crash may lose the last five-second interval (or more if storage writes failed).
+Undo restores checkpoint timing, clears anchors and freezes discarded plans.
+Owner teardown cancels timers; failed timing writes do not authorize or dispatch
+work. This adds no preference, agent-write field, IPC endpoint or dependency.

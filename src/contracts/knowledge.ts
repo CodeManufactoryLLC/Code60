@@ -319,12 +319,12 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "plans",
     "Plans",
-    "Propose and track revisioned tasks; use View Plan to reopen the current conversation’s latest saved plan.",
-    "Chat → right sidebar → View Plan → existing plan tab",
+    "Propose and track revisioned tasks with rounded completion percentages and cumulative running time; use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.",
+    "Chat → right sidebar → + New Tab → View Plan → existing plan tab",
     "runtime",
     "existing-tools",
     "No agent tool can accept a plan.",
-    "View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.",
+    "View Plan appears beside Open Files and Open Memory Recall on blank/empty tabs only. It reopens the current session's latest existing plan without generating or accepting one. Human Accept authorizes only that revision and targets. Execution time counts running intervals only; Resume adds to the saved total. Restart keeps recorded time without restoring authority or counting downtime; older executed plans may lack historical timing.",
   ),
   feature(
     "reviews",

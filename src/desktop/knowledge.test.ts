@@ -121,7 +121,7 @@ describe("DesktopKnowledge", () => {
     expect(capabilities.entries).toEqual([
       expect.objectContaining({
         id: "plans",
-        access: expect.stringContaining("right sidebar → View Plan"),
+        access: expect.stringContaining("right sidebar → + New Tab → View Plan"),
         availability: expect.objectContaining({
           status: "unknown",
           reason: expect.stringContaining("current session has an existing plan"),

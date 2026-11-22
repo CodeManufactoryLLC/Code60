@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { DesktopApi, Plan, PlanAction, PlanSummary } from "../bridge/index.js";
+import { durationText } from "./chat-presentation.js";
+import { useTicker } from "./ticker.js";
 
 const states: Record<Plan["state"], string> = {
   draft: "Awaiting acceptance",
@@ -33,6 +35,21 @@ export function PlanPanel({
   const id = useId();
   const completed = plan.tasks.filter((task) => task.state === "completed").length;
   const total = plan.tasks.length;
+  const percentage = total ? Math.round((completed / total) * 100) : 0;
+  const timing = plan.executionTiming;
+  const now = useTicker(plan.state === "running" && timing?.runningSince !== undefined, 1_000);
+  const elapsed = timing
+    ? timing.elapsedMs +
+      (plan.state === "running" && timing.runningSince !== undefined
+        ? Math.max(0, now - timing.runningSince)
+        : 0)
+    : undefined;
+  const executionTime =
+    elapsed === undefined
+      ? plan.state === "draft"
+        ? "0s"
+        : "Not recorded"
+      : `${durationText(elapsed)}${timing?.historyIncomplete ? " (recorded)" : ""}`;
   const current = currentChat === plan.chatId;
   const available = current && project === plan.project && !pending;
   const action = async (type: PlanAction["type"]) => {
@@ -55,12 +72,20 @@ export function PlanPanel({
             {states[plan.state]}
           </span>
           <output className="plan-count" aria-label="Tasks completed">
-            {completed} out of {total}
+            {percentage}% ({completed} out of {total})
           </output>
+        </div>
+        <div
+          className="plan-execution-time"
+          role="timer"
+          aria-live="off"
+          aria-label="Plan execution time"
+        >
+          Execution time: {executionTime}
         </div>
         <progress
           aria-label="Tasks completed"
-          aria-valuetext={`${completed} out of ${total} tasks completed`}
+          aria-valuetext={`${percentage}% (${completed} out of ${total} tasks completed)`}
           value={completed}
           max={total}
         />

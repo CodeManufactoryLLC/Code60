@@ -414,6 +414,18 @@ export class DesktopController {
   private set warnings(value: string[]) {
     this.projectState.warnings = value;
   }
+  private planTimingFailure = false;
+  private readonly reportPlanTimingFailure = () => {
+    if (this.planTimingFailure) return;
+    this.planTimingFailure = true;
+    this.changed(null);
+  };
+  private openPlanStore(root: string, chatId: string) {
+    return PlanStore.open(root, chatId, false, {
+      now: () => this.deps.clock.now().getTime(),
+      onTimingError: this.reportPlanTimingFailure,
+    });
+  }
   private listeners = new Set<(snapshot: Snapshot) => void>();
   private summaryListeners = new Set<(snapshot: Snapshot) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -710,7 +722,7 @@ export class DesktopController {
       return;
     const { events } = await this.chatHistory(session.saved);
     await this.chatCheckpoints(session);
-    session.plans = await PlanStore.open(session.chatDirectory, session.saved.runId);
+    session.plans = await this.openPlanStore(session.chatDirectory, session.saved.runId);
     session.chatEvents = events.map((event) => ({ revision: ++this.revision, event }));
     session.replies.reset(
       events.filter(
@@ -1038,7 +1050,7 @@ export class DesktopController {
     this.conversations.assertCurrent(session);
     const id = session.run?.id;
     if (!id || !session.chatDirectory) throw new Error("No orchestration session is available");
-    session.plans ??= await PlanStore.open(session.chatDirectory, id);
+    session.plans ??= await this.openPlanStore(session.chatDirectory, id);
     return session.plans;
   }
 
@@ -1913,6 +1925,7 @@ export class DesktopController {
           this.memory,
           this.modelDefaults,
           this.orchestrationAutoApproval,
+          this.reportPlanTimingFailure,
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -3280,7 +3293,7 @@ export class DesktopController {
       throw new Error("Open the originating task's project before continuing");
     if (session.restored) {
       await this.loadChatHistory(session);
-      session.plans = await PlanStore.open(directory, record.id);
+      session.plans = await this.openPlanStore(directory, record.id);
     }
     const previousTask = session.taskId;
     session.taskId = taskId;
@@ -4454,7 +4467,15 @@ export class DesktopController {
       runs: [...project.runs, ...(relayWorkers?.runs ?? [])],
       liveIds: [...project.liveIds, ...(relayWorkers?.liveIds ?? [])],
       active: this.active,
-      warnings: [...this.warnings, ...this.projectSessionWarnings],
+      warnings: [
+        ...this.warnings,
+        ...this.projectSessionWarnings,
+        ...(this.planTimingFailure
+          ? [
+              "Plan execution time could not be saved. Recent timing may be unavailable after restart.",
+            ]
+          : []),
+      ],
       events: [...project.events, ...(relayWorkers?.events ?? [])],
       polling: this.poller.snapshot(),
       prompts: promptStates(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts),

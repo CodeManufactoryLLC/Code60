@@ -21,6 +21,10 @@ import {
 } from "./relay-storage.js";
 
 const MAX_BYTES = 1_048_576;
+interface TimingOptions {
+  now?: (() => number) | undefined;
+  onTimingError?: (() => void) | undefined;
+}
 async function directory(path: string, strict: boolean) {
   if (strict) {
     try {
@@ -91,10 +95,14 @@ export class PlanStore {
   private writes: Promise<unknown> = Promise.resolve();
   private readonly markdownRoot: string;
   private readonly recordRoot: string;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private timingStopped = false;
+  private timingFailed = false;
   private constructor(
     readonly root: string,
     readonly chatId: string,
     private readonly strict: boolean,
+    private readonly timing: TimingOptions,
   ) {
     this.markdownRoot = join(root, "plans");
     this.recordRoot = join(root, ".code60", "plans");
@@ -103,8 +111,8 @@ export class PlanStore {
     for (const path of [this.root, join(this.root, ".code60"), this.recordRoot, this.markdownRoot])
       await directory(path, this.strict);
   }
-  static async open(root: string, chatId: string, strict = false) {
-    const store = new PlanStore(root, chatId, strict);
+  static async open(root: string, chatId: string, strict = false, timing: TimingOptions = {}) {
+    const store = new PlanStore(root, chatId, strict, timing);
     await store.directories();
     const entries: string[] = [];
     if (strict) {
@@ -133,7 +141,7 @@ export class PlanStore {
         plan.error = "Execution interrupted. Inspect previous work before continuing.";
         plan.revision++;
       }
-      await store.save(plan); // Repair a Markdown projection interrupted before record commit.
+      await store.save(plan, true); // Recovery excludes downtime and repairs Markdown.
     }
     return store;
   }
@@ -158,15 +166,94 @@ export class PlanStore {
     this.writes = result.catch(() => {});
     return result;
   }
-  private async save(plan: Plan) {
+  private now() {
+    return Math.max(0, Math.trunc((this.timing.now ?? Date.now)()));
+  }
+  /** Only the host accrues timing. A recovered/restored anchor never counts downtime. */
+  private trackTiming(plan: Plan, restoring: boolean) {
+    const previous = this.records.get(plan.id);
+    if (restoring) {
+      if (plan.executionTiming) delete plan.executionTiming.runningSince;
+      return;
+    }
+    const now = this.now();
+    const timing: Plan["executionTiming"] = previous?.executionTiming
+      ? { ...previous.executionTiming }
+      : previous?.state === "draft" || !previous
+        ? { elapsedMs: 0 }
+        : undefined;
+    if (previous?.state === "running" && timing?.runningSince !== undefined)
+      timing.elapsedMs = Math.min(
+        Number.MAX_SAFE_INTEGER,
+        timing.elapsedMs + Math.max(0, now - timing.runningSince),
+      );
+    if (plan.state === "running") {
+      plan.executionTiming = {
+        ...(timing ?? { elapsedMs: 0, historyIncomplete: true }),
+        runningSince: now,
+      };
+    } else if (timing) {
+      delete timing.runningSince;
+      plan.executionTiming = timing;
+    }
+  }
+  private scheduleTiming() {
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+    if (this.timingStopped || ![...this.records.values()].some((plan) => plan.state === "running"))
+      return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.checkpointTiming()
+        .then(() => {
+          this.timingFailed = false;
+        })
+        .catch(() => {
+          if (!this.timingFailed) {
+            this.timingFailed = true;
+            try {
+              this.timing.onTimingError?.();
+            } catch {
+              /* A warning cannot alter execution. */
+            }
+          }
+        })
+        .finally(() => this.scheduleTiming());
+    }, 5_000);
+    this.timer.unref();
+  }
+  /** Owner teardown cancels even a queued checkpoint, without reviving authority. */
+  stopTiming() {
+    this.timingStopped = true;
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+  checkpointTiming(): Promise<void> {
+    return this.serialized(async () => {
+      if (this.timingStopped) return;
+      for (const original of this.records.values()) {
+        if (original.state !== "running" || original.rewound) continue;
+        const plan = structuredClone(original);
+        this.trackTiming(plan, false);
+        await this.saveRecord(plan);
+      }
+    });
+  }
+  private async saveRecord(plan: Plan) {
+    planSchema.parse(plan);
+    const path = join(this.recordRoot, `${plan.id}.json`);
+    if (this.strict) await writeRelayState(path, plan, this.records.get(plan.id), MAX_BYTES);
+    else await write(path, JSON.stringify(plan));
+    this.records.set(plan.id, structuredClone(plan));
+  }
+  private async save(plan: Plan, restoring = false) {
+    this.trackTiming(plan, restoring);
     planSchema.parse(plan);
     await this.directories();
     // The record is the commit point; reopening regenerates any interrupted projection.
     await write(join(this.markdownRoot, `${plan.id}.md`), planMarkdown(plan), this.strict);
     try {
-      const path = join(this.recordRoot, `${plan.id}.json`);
-      if (this.strict) await writeRelayState(path, plan, this.records.get(plan.id), MAX_BYTES);
-      else await write(path, JSON.stringify(plan));
+      await this.saveRecord(plan);
     } catch (error) {
       const previous = this.records.get(plan.id);
       if (previous)
@@ -177,7 +264,7 @@ export class PlanStore {
         ).catch(() => {});
       throw error;
     }
-    this.records.set(plan.id, structuredClone(plan));
+    this.scheduleTiming();
     return this.get(plan.id);
   }
   create(request: PlanCreate, project: string | null, targets?: readonly PlanTarget[]) {
@@ -247,12 +334,15 @@ export class PlanStore {
           });
       for (const original of prefix) {
         if (original.chatId !== this.chatId) throw new Error("Checkpoint plan owner changed");
-        await this.save({
-          ...original,
-          revision: Math.max(original.revision, this.records.get(original.id)?.revision ?? 0) + 1,
-          state: ["queued", "running"].includes(original.state) ? "paused" : original.state,
-          tasks: original.tasks.map((task) => ({ ...task, workerIds: [] })),
-        });
+        await this.save(
+          {
+            ...original,
+            revision: Math.max(original.revision, this.records.get(original.id)?.revision ?? 0) + 1,
+            state: ["queued", "running"].includes(original.state) ? "paused" : original.state,
+            tasks: original.tasks.map((task) => ({ ...task, workerIds: [] })),
+          },
+          true,
+        );
       }
     });
   }

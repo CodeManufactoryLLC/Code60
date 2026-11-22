@@ -55,6 +55,14 @@ export const planSchema = z.strictObject({
   rewound: z.literal(true).optional(),
   acceptedRevision: revision.optional(),
   error: z.string().max(2_000).optional(),
+  /** Host-owned presentation evidence; absent in older saved plans. */
+  executionTiming: z
+    .strictObject({
+      elapsedMs: z.number().int().nonnegative().safe(),
+      runningSince: z.number().int().nonnegative().safe().optional(),
+      historyIncomplete: z.boolean().optional(),
+    })
+    .optional(),
   tasks: z
     .array(
       z.strictObject({

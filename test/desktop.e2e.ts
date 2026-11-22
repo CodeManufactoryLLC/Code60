@@ -17990,6 +17990,147 @@ test("desktop: semantic activity preserves provenance, reload state and reduced 
   }
 });
 
+test("desktop: plan execution time persists through pause, navigation, reload and restart", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-plan-timer-")));
+  const repo = join(directory, "repo");
+  const database = join(directory, "projects.sqlite");
+  const config = join(directory, "config", "code60");
+  await mkdir(config, { recursive: true });
+  execFileSync("git", ["init", "-q", repo]);
+  await writeFile(join(repo, "source.txt"), "unchanged source\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  commitFixture(repo);
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo }).toString();
+  const index = await readFile(join(repo, ".git", "index"));
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      defaultAgent: "claude",
+      agents: {
+        claude: {
+          command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs"), "--plan"],
+        },
+      },
+    }),
+  );
+  try {
+    application = await launch(directory, repo, database);
+    let page = await application.firstWindow();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await expect(page.locator("#tab-search")).toBeEnabled();
+    await page.locator(".project-sidebar-open").click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    await selectProjectConversation(page);
+    await page
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true })
+      .fill(`Plan a timed change\n${directory}`);
+    await page
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true })
+      .press("Enter");
+    let panel = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(panel.getByRole("heading", { name: "Timed plan", exact: true })).toBeVisible();
+    await expect(panel.getByRole("timer")).toHaveText("Execution time: 0s");
+    await expect(panel.getByRole("progressbar")).toHaveCSS("height", "12px");
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
+    const chat = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    const summary = chat.plans?.at(-1);
+    if (!summary || !chat.directory || !chat.run) throw new Error("Missing timing fixture plan");
+    const chatId = chat.run.id;
+    const recordPath = join(chat.directory, ".code60", "plans", `${summary.id}.json`);
+    const markdownPath = join(chat.directory, "plans", `${summary.id}.md`);
+    const readRecord = async () =>
+      JSON.parse(await readFile(recordPath, "utf8")) as import("../src/bridge/index.js").Plan;
+    await panel.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(panel.getByText("Timing gate active.", { exact: true })).toBeVisible();
+    const running = await readRecord();
+    const markdown = await readFile(markdownPath, "utf8");
+    await expect
+      .poll(async () => (await readRecord()).executionTiming?.elapsedMs ?? 0, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(5_000);
+    const checkpoint = await readRecord();
+    expect(checkpoint.revision).toBe(running.revision);
+    expect(checkpoint.acceptedRevision).toBe(running.acceptedRevision);
+    expect(await readFile(markdownPath, "utf8")).toBe(markdown);
+    await expect(panel.getByRole("timer")).not.toHaveText("Execution time: 0s");
+    await page.locator("#tab-home").click();
+    await expect(panel).toHaveCount(0);
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    await expect(panel.getByRole("timer")).not.toHaveText("Execution time: 0s");
+    await page.reload();
+    const reloadToggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await reloadToggle.getAttribute("aria-expanded")) !== "true") await reloadToggle.click();
+    await newFileTab(page);
+    await page.getByRole("button", { name: "View Plan", exact: true }).click();
+    await expect(panel.getByRole("timer")).toBeVisible();
+    await expect(panel.getByRole("timer")).not.toHaveText("Execution time: 0s");
+    await writeFile(join(directory, "pause-timing"), "release first segment");
+    await expect(panel.getByRole("button", { name: "Resume plan", exact: true })).toBeVisible();
+    const paused = await readRecord();
+    expect(paused.executionTiming?.runningSince).toBeUndefined();
+    const pausedText = await panel.getByRole("timer").textContent();
+    const pausedAt = Date.now();
+    await expect
+      .poll(async () => {
+        expect(await panel.getByRole("timer").textContent()).toBe(pausedText);
+        return Date.now() - pausedAt;
+      })
+      .toBeGreaterThan(1_500);
+    await panel.getByRole("button", { name: "Resume plan", exact: true }).click();
+    await expect(page.locator(".orchestration-chat-page:visible")).toContainText(
+      "Second timing segment active.",
+    );
+    await expect
+      .poll(async () => {
+        const current = await readRecord();
+        return (
+          (current.executionTiming?.elapsedMs ?? 0) +
+          Math.max(0, Date.now() - (current.executionTiming?.runningSince ?? Date.now()))
+        );
+      })
+      .toBeGreaterThan((paused.executionTiming?.elapsedMs ?? 0) + 1_000);
+    await writeFile(join(directory, "complete-timing"), "release second segment");
+    await expect(panel.getByText("100% (2 out of 2)", { exact: true })).toBeVisible();
+    const completed = await readRecord();
+    expect(completed.executionTiming?.elapsedMs).toBeGreaterThan(
+      paused.executionTiming?.elapsedMs ?? 0,
+    );
+    expect(completed.executionTiming?.runningSince).toBeUndefined();
+    await page.screenshot({ path: test.info().outputPath("plan-execution-time-completed.png") });
+    await application.close();
+    application = await launch(directory, repo, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await newFileTab(page);
+    await expect(page.locator('[role="listbox"][aria-label="Open Files tabs"]')).toBeHidden();
+    await page.screenshot({ path: test.info().outputPath("plan-blank-actions.png") });
+    await page.getByRole("button", { name: "View Plan", exact: true }).click();
+    panel = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(panel.getByText("100% (2 out of 2)", { exact: true })).toBeVisible();
+    expect((await readRecord()).executionTiming).toEqual(completed.executionTiming);
+    await expect(panel.getByRole("timer")).not.toHaveText("Execution time: Not recorded");
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo }).toString()).toBe(head);
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(index);
+    expect(await readFile(join(repo, "source.txt"), "utf8")).toBe("unchanged source\n");
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+  } finally {
+    await application?.close().catch(() => {});
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("desktop: accepted plans show task progress outside their Markdown document", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-planning-")));
@@ -18038,7 +18179,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
       "value",
       "0",
     );
-    await expect(panel.getByText("0 out of 2", { exact: true })).toBeVisible();
+    await expect(panel.getByText("0% (0 out of 2)", { exact: true })).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
     await expect(composer).toBeEnabled();
     const originalChat = (await page.evaluate(() => window.desktop.snapshot())).chat.run
@@ -18075,7 +18216,9 @@ test("desktop: accepted plans show task progress outside their Markdown document
     );
     await expect(panel.getByRole("heading", { name: "Revised change" })).toBeVisible();
     await panel.getByRole("button", { name: "Accept", exact: true }).click();
-    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText("100% (2 out of 2)", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(panel.getByRole("progressbar")).toHaveAttribute("value", "2");
     await expect(panel.getByRole("progressbar")).toHaveAttribute("max", "2");
     await expect(panel.locator(".plan-document input:checked")).toHaveCount(2);
@@ -18094,7 +18237,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
     await page.evaluate(() => {
       document.documentElement.dataset.colorScheme = "dark";
     });
-    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    await expect(panel.getByText("100% (2 out of 2)", { exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/orchestrator-plan-dark.png" });
     await page.emulateMedia({ forcedColors: "active" });
     await expect(panel.getByRole("progressbar")).toBeVisible();
@@ -18107,13 +18250,14 @@ test("desktop: accepted plans show task progress outside their Markdown document
       "completed",
     );
     const existing = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    await newFileTab(page);
     const viewPlan = page
       .locator("#chat-file-panel")
       .getByRole("button", { name: "View Plan", exact: true });
     await viewPlan.focus();
     await viewPlan.press("Space");
     await expect(panel.getByRole("heading", { name: "Revised change", exact: true })).toBeVisible();
-    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    await expect(panel.getByText("100% (2 out of 2)", { exact: true })).toBeVisible();
     const reopened = (await page.evaluate(() => window.desktop.snapshot())).chat;
     expect(reopened.plans).toEqual(existing.plans);
     expect(reopened.run?.turns).toBe(existing.run?.turns);
@@ -18704,7 +18848,9 @@ test("desktop: plan task rows align checkboxes with their first line of text", a
     const panel = page.getByRole("region", { name: "Plan", exact: true });
     await expect(panel.getByRole("heading", { name: "Layout check" })).toBeVisible();
     await panel.getByRole("button", { name: "Accept", exact: true }).click();
-    await expect(panel.getByText("1 out of 4", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText("25% (1 out of 4)", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(panel.getByText("Paused", { exact: true })).toBeVisible();
     const resize = page.getByRole("button", { name: "Resize files panel", exact: true });
     const drag = async (width: number) => {

@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
-import { fileViewLabels } from "./file-panel-controls.js";
+import { fileViewLabels, newFileTab } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { pageCommand } from "./page-header-controls.js";
 
@@ -1378,7 +1378,7 @@ for (const custom of [false, true]) {
           await page.getByRole("button", { name: "Open Workflow Agent", exact: true }).click();
         } else await page.getByRole("button", { name: "Relay", exact: true }).click();
         await expect(
-          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
         ).toBeVisible();
         const composer = page
           .locator(".orchestration-chat-page:visible")
@@ -1465,6 +1465,10 @@ for (const custom of [false, true]) {
         await planPanel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
         await expect(plan).toHaveCount(0);
         await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        await expect(planPanel.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(
+          0,
+        );
+        await newFileTab(page);
         const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
         await viewPlan.focus();
         await viewPlan.press("Enter");
@@ -1472,6 +1476,10 @@ for (const custom of [false, true]) {
         await expect(
           planPanel.getByRole("combobox", { name: "Files view", exact: true }),
         ).toBeFocused();
+        await expect(planPanel.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(
+          0,
+        );
+        await newFileTab(page);
         await viewPlan.focus();
         await viewPlan.press("Space");
         await expect(
@@ -1571,7 +1579,7 @@ for (const custom of [false, true]) {
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         // Worker pages share this class and model text, so prove the parent chat is shown.
         await expect(
-          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
         expect(
@@ -1673,9 +1681,13 @@ for (const custom of [false, true]) {
             .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
             .click();
           await expect(
-            projectPanel.getByRole("tab", { name: "result.txt", exact: true }),
-          ).toHaveAttribute("aria-selected", "true");
+            projectPanel.getByRole("combobox", { name: "Files view", exact: true }),
+          ).toHaveText("result.txt");
           await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
+          await expect(
+            projectPanel.getByRole("button", { name: "View Plan", exact: true }),
+          ).toHaveCount(0);
+          await newFileTab(page);
           const openPlan = projectPanel.getByRole("button", { name: "View Plan", exact: true });
           await openPlan.focus();
           await openPlan.press(source === "Sessions" ? "Enter" : "Space");
@@ -2704,7 +2716,9 @@ test("workflow: completed project plans reopen latest after restart with narrow 
         expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
       }
       await plan.getByRole("button", { name: "Accept", exact: true }).click();
-      await expect(plan.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(plan.getByText("100% (2 out of 2)", { exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
       await expect.poll(() => readFile(join(repo, "result.txt"), "utf8")).toBe("planned result\n");
     }
     const completed = (await page.evaluate(() => window.desktop.snapshot())).chat;
@@ -2743,6 +2757,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
         .poll(() => panel.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
         .toBe(120);
       await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
+      await newFileTab(page);
       const view = panel.getByRole("button", { name: "View Plan", exact: true });
       await expect(view).toHaveCSS("font-size", `${size}px`);
       const bounds = await view.evaluate((button) => {
@@ -2802,6 +2817,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
     await page.locator(`[id="conversation-${chatId}"]`).click();
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await newFileTab(page);
     const reopen = page
       .locator("#chat-file-panel")
       .getByRole("button", { name: "View Plan", exact: true });

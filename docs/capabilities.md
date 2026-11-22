@@ -134,11 +134,11 @@ Schema version: 1
 
 - ID: `plans`
 - Status: shipped
-- Purpose: Propose and track revisioned tasks; use View Plan to reopen the current conversation’s latest saved plan.
-- Access: Chat → right sidebar → View Plan → existing plan tab
+- Purpose: Propose and track revisioned tasks with rounded completion percentages and cumulative running time; use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.
+- Access: Chat → right sidebar → + New Tab → View Plan → existing plan tab
 - Prerequisite: runtime
 - Agent access: existing-tools
-- Confirmation: View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.
+- Confirmation: View Plan appears beside Open Files and Open Memory Recall on blank/empty tabs only. It reopens the current session's latest existing plan without generating or accepting one. Human Accept authorizes only that revision and targets. Execution time counts running intervals only; Resume adds to the saved total. Restart keeps recorded time without restoring authority or counting downtime; older executed plans may lack historical timing.
 - Limits: No agent tool can accept a plan.
 - Pages: none
 - Settings sections: none

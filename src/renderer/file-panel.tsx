@@ -220,21 +220,6 @@ export function FilePanel({
     >
       {(focusActiveTab) => (
         <>
-          {!disabled && currentPlan && (
-            <button
-              type="button"
-              className="file-open-link file-panel-view-plan"
-              onClick={() => {
-                if (onViewPlan) onViewPlan();
-                else {
-                  focusActiveTab();
-                  act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
-                }
-              }}
-            >
-              View Plan
-            </button>
-          )}
           {changesContent && (
             <div className="file-panel-changes" hidden={selected?.kind !== "changes"}>
               {changesContent}
@@ -251,6 +236,21 @@ export function FilePanel({
             <div className="file-panel-empty">
               <div className="file-panel-empty-actions">
                 {emptyContent}
+                {currentPlan && (
+                  <button
+                    type="button"
+                    className="file-open-link"
+                    onClick={() => {
+                      if (onViewPlan) onViewPlan();
+                      else {
+                        focusActiveTab();
+                        act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
+                      }
+                    }}
+                  >
+                    View Plan
+                  </button>
+                )}
                 <button
                   type="button"
                   className="file-open-link"

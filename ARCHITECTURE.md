@@ -606,12 +606,14 @@ completion with evidence notes; this does not approve or merge worker changes. D
 block new worker work in that conversation. Plans use existing between-turn delivery,
 not a durable job queue; restart never restores execution authority. Failed or paused
 execution requires explicit continuation. Plan tabs share the Chat side panel and show
-an equally weighted completed/total progress bar and “X out of Y” outside the document.
+an equally weighted 12px progress bar and rounded “P% (X out of Y)” outside the document.
 Each task row shows a read-only completion checkbox centred on its first line of text, a
 written status (Pending, In progress, Blocked, Completed) and its evidence note aligned
 with the task text.
-The right sidebar offers View Plan for the displayed orchestration session's
-latest existing plan, including after its tab is closed. It selects or reopens
+Blank/empty Files tabs offer View Plan in the centered action list beside Open
+Files and Open Memory Recall, for the displayed orchestration session's latest
+existing plan, including after its tab is closed. Other selected views, including
+the plan itself, do not show a duplicate View Plan button. It selects or reopens
 that plan's tab without generating a plan or granting execution authority.
 Plan records persist an immutable, conversation-local creation sequence, including
 rewound records when allocating the next sequence. Summaries sort by this sequence,
@@ -619,7 +621,8 @@ so restart, atomic file replacement and edits to older plans never change which
 plan is latest. This prerelease schema requires that sequence on saved records.
 While Relay or a custom assistant browses project files, View Plan returns to
 that conversation's own panel without putting its plan into the project file scope.
-The action wraps within the 120px panel minimum with enlarged Button Text.
+Reach the action through + New Tab from other Files views; it wraps within the
+120px panel minimum with enlarged Button Text.
 Other conversations' plans do not supply this action, including in worker views.
 
 
@@ -2887,3 +2890,29 @@ Light/Dark rendering, labels, selection, worker disclosure and read ownership.
 Relay, custom-assistant and individual worker artwork remain unchanged. No new
 capability, availability rule, preference or bridge/persistence behavior is added;
 this presentation-only change needs no capability catalog regeneration.
+
+## Plan execution time
+
+Display Execution time above the 12px progress bar, with a once-per-second local
+clock only while the visible plan is running. Use shared duration formatting and
+role=timer with aria-live=off. Progress is Math.round(completed / total * 100),
+followed by the equally weighted task count; neither timing nor counts belong to
+Markdown. View Plan is only in the centered blank/empty Files choices; retain
+latest-plan selection, keyboard focus, tab identity and captured conversation
+ownership, including Relay/custom assistants browsing a project's files.
+
+Optional host-owned executionTiming on Plan contains elapsedMs, runningSince and
+historyIncomplete. New drafts start at zero; legacy executed plans without timing
+show Not recorded. Resuming a legacy plan records new time with a recorded-only
+label. Only running intervals count, once per plan rather than per worker. Queue,
+pause/failure/finished periods do not count. State-transition writes finalize
+intervals; five-second serialized private-record checkpoints preserve revisions,
+accepted revision and Markdown. A checkpoint failure preserves saved state and
+reports a fixed desktop warning without changing execution authority.
+
+Recovery removes running anchors, retains the last checkpoint and pauses existing
+execution as before; never count offline time or restore authority. An abrupt
+crash may lose the last five-second interval (or more if storage writes failed).
+Undo restores checkpoint timing, clears anchors and freezes discarded plans.
+Owner teardown cancels timers; failed timing writes do not authorize or dispatch
+work. This adds no preference, agent-write field, IPC endpoint or dependency.
