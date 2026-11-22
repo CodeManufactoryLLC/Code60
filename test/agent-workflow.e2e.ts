@@ -1573,6 +1573,21 @@ for (const custom of [false, true]) {
               body: JSON.stringify(await page.evaluate(() => window.desktop.snapshot()), null, 2),
               contentType: "application/json",
             });
+            const review = await page
+              .evaluate(async () => {
+                const { chat } = await window.desktop.snapshot();
+                if (!chat.conversationId || chat.generation === undefined) return null;
+                return window.desktop.relayReview({
+                  type: "timeline",
+                  conversationId: chat.conversationId,
+                  generation: chat.generation,
+                });
+              })
+              .catch(() => ({ error: "Review diagnostic unavailable" }));
+            await info.attach("integration-review", {
+              body: JSON.stringify(review, null, 2),
+              contentType: "application/json",
+            });
             throw error;
           });
         await checkCheckout("human accepted target\n");

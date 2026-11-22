@@ -431,9 +431,16 @@ export class RelayService {
         }
         worker.orchestrator.reply(worker.id, request.text);
         await this.associateReview(worker, worker.orchestrator.runs()[0]?.turns ?? 1);
-      } else if (request.type === "set-mode")
-        await worker.orchestrator.setMode(worker.id, request.change);
-      else if (request.type === "save-model-default") {
+      } else if (request.type === "set-mode") {
+        const owner = { ...worker.owner };
+        const change = async () => {
+          this.authorize(owner);
+          this.execution.owned(owner, worker.id);
+          await worker.orchestrator.setMode(worker.id, request.change);
+        };
+        if (this.reviews) await this.reviews.changeWorkerSettings(worker.target.id, change);
+        else await change();
+      } else if (request.type === "save-model-default") {
         const run = worker.orchestrator.runs().find((run) => run.id === worker.id);
         if (!run || !this.modelDefaults) throw new Error("Model defaults are unavailable");
         await this.modelDefaults.save(run, "worker");

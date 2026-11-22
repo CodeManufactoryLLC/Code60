@@ -54,6 +54,8 @@ export class RelayReviews {
   private epoch = 0;
   private readonly pendingCaptures = new Map<string, Address>();
   private automaticCapture: Promise<void> | undefined;
+  private automaticTarget: string | undefined;
+  private readonly settingsChanges = new Map<string, object>();
   private readonly automaticRequests = new Set<string>();
   private readonly yieldedCaptures = new Set<string>();
 
@@ -63,16 +65,33 @@ export class RelayReviews {
     this.pendingCaptures.set(request.reviewId, request);
     this.drainCaptures();
   }
+  /** Session metadata must not invalidate capture of the already completed worker turn. */
+  async changeWorkerSettings(targetId: string, change: () => Promise<void>): Promise<void> {
+    if (this.settingsChanges.has(targetId)) throw new Error("Worker settings are already changing");
+    const token = {};
+    const epoch = this.epoch;
+    this.settingsChanges.set(targetId, token);
+    try {
+      if (this.automaticTarget === targetId) await this.automaticCapture;
+      if (epoch !== this.epoch || this.settingsChanges.get(targetId) !== token)
+        throw new Error("Worker settings change was stopped");
+      await change();
+    } finally {
+      if (this.settingsChanges.get(targetId) === token) this.settingsChanges.delete(targetId);
+      this.drainCaptures();
+    }
+  }
   private drainCaptures(): void {
     if (this.automaticCapture || this.operations.size >= 2) return;
     const request = [...this.pendingCaptures.values()].find(
-      (item) => !this.operations.has(item.targetId),
+      (item) => !this.operations.has(item.targetId) && !this.settingsChanges.has(item.targetId),
     );
     if (!request) return;
     this.pendingCaptures.delete(request.reviewId);
     const epoch = this.epoch;
     const requestId = randomUUID();
     this.automaticRequests.add(requestId);
+    this.automaticTarget = request.targetId;
     this.automaticCapture = (async () => {
       await this.store.settled();
       if (epoch !== this.epoch) return;
@@ -114,6 +133,7 @@ export class RelayReviews {
         this.automaticRequests.delete(requestId);
         this.yieldedCaptures.delete(requestId);
         this.automaticCapture = undefined;
+        this.automaticTarget = undefined;
         this.drainCaptures();
       });
   }
@@ -842,6 +862,7 @@ export class RelayReviews {
   async rendererGone(): Promise<void> {
     this.epoch++;
     this.pendingCaptures.clear();
+    this.settingsChanges.clear();
     this.cursors.clear();
     const active = [...this.operations.values()];
     for (const lease of active) lease.abort.abort(new Error("Relay review operations stopped"));
@@ -865,6 +886,7 @@ export class RelayReviews {
     const operations = [...this.operations].filter(
       ([id, lease]) => targets.has(id) || lease.cwd === canonical,
     );
+    for (const target of targets) this.settingsChanges.delete(target);
     for (const [, lease] of operations)
       lease.abort.abort(new Error("Folder review operations stopped"));
     await Promise.allSettled(operations.map(([, lease]) => lease.done));

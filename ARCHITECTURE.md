@@ -1188,6 +1188,14 @@ already match those captured at hover/focus. Actual movement still dismisses the
 Escape and pending-reveal cleanup remain independent. This reliability correction
 adds no capability, bridge method, setting, persisted schema or self-knowledge entry.
 
+Worker session-option changes and automatic review capture coordinate per conversation/target.
+An active capture completes before options change; pending capture remains queued
+until that metadata action settles, including a provider rejection. Other targets
+continue independently. Folder stop and renderer loss cancel queued metadata work;
+main rechecks its captured owner before invoking the provider. This orders existing
+operations without replaying prompts or uncertain checkout writes, and adds no
+capability, bridge method, setting, schema or self-knowledge entry.
+
 ### Renderer ownership and composition
 
 `main.tsx` only loads assets, runs existing preference migrations and mounts the
@@ -2132,6 +2140,8 @@ to idle before removal. A content resize observer follows the changing transcrip
 height only if the user is already following its bottom; reading older messages
 does not get pulled to the activity row. Preserve follow across resize-generated scroll
 events between measurement and the next controller write; upward input still cancels immediately.
+A native one-pixel rounding gap retains existing follow; explicit upward input
+stays paused at that boundary, and downward movement can resume following.
 This existing-behavior fix adds no capability or self-knowledge catalog change.
 Main Chat uses one frame-driven, retargetable
 scroll animation for incoming content, not repeated bottom jumps or restarted native

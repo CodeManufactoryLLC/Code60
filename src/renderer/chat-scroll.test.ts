@@ -71,6 +71,35 @@ function setup(initialResponse = 75) {
 }
 
 describe("main-chat smooth following", () => {
+  it.each([
+    { pixels: 1, following: true },
+    { pixels: 2, following: false },
+  ])("handles a $pixels-pixel native scroll offset", ({ pixels, following }) => {
+    const { element, position, controller, finish } = setup();
+    controller.update(true);
+    element.scrollTop -= pixels;
+    controller.onScroll();
+    expect(position.following).toBe(following);
+    element.clientHeight = 300;
+    controller.update();
+    finish();
+    expect(element.scrollTop).toBe(following ? 1100 : 998);
+  });
+
+  it("keeps an explicit one-pixel upward gesture paused at the rounding boundary", () => {
+    const { element, position, controller, frames, advance } = setup();
+    controller.update(true);
+    controller.pause();
+    element.scrollTop -= 1;
+    controller.onScroll();
+    expect(position.following).toBe(false);
+    element.scrollHeight += 100;
+    controller.update();
+    advance();
+    expect(element.scrollTop).toBe(999);
+    expect(frames.size).toBe(0);
+  });
+
   it("keeps status anchored during already-smoothed message growth instead of applying a second lag", () => {
     const { element, controller, position, frames, advance, setLayoutMoving } = setup();
     controller.update(true);
