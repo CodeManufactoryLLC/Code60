@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type {
   AutomationEditor,
   AutomationHistoryEntry,
+  AutomationNotifications,
   AutomationSummary,
   AutomationUiRequest,
   DesktopApi,
@@ -59,6 +60,9 @@ export function AutomationsPage({
   const visible = useDocumentVisible() && active;
   const [automations, setAutomations] = useState<AutomationSummary[]>([]);
   const [history, setHistory] = useState<AutomationHistoryEntry[]>([]);
+  const [notifications, setNotifications] = useState<AutomationNotifications>();
+  const [notificationError, setNotificationError] = useState(false);
+  const [reviewingNotifications, setReviewingNotifications] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [expanded, setExpanded] = useState<string>();
   const [selectedExecution, setSelectedExecution] = useState<string>();
@@ -97,8 +101,9 @@ export function AutomationsPage({
     try {
       do {
         dirty.current = false;
-        const [list, page] = await Promise.all([
+        const [list, notices, page] = await Promise.all([
           api.automation({ action: "list" }),
+          api.automation({ action: "notifications" }),
           api.automation({
             action: "history",
             ...(selected ? { id: selected } : {}),
@@ -108,10 +113,13 @@ export function AutomationsPage({
         if (owner !== generation.current) return;
         setAutomations(list as AutomationSummary[]);
         setHistory(page as AutomationHistoryEntry[]);
+        setNotifications(notices as AutomationNotifications);
+        setNotificationError(false);
         setError("");
       } while (dirty.current && owner === generation.current);
     } catch {
       if (owner === generation.current) {
+        setNotificationError(true);
         setError(
           "Scheduler unavailable. Open Apps → System Manager to check the Scheduling Service, then refresh. Existing schedules and evidence are kept.",
         );
@@ -149,13 +157,27 @@ export function AutomationsPage({
       if (request.action === "diff") setEvidence(JSON.stringify(result, null, 2));
       await refreshLatest.current();
     } catch (error) {
-      if (current()) setActionError((error as Error).message);
+      if (current()) {
+        if (request.action === "acknowledgeNotifications") {
+          setActionError(
+            "Notification acknowledgement failed. Check the Scheduling Service and storage, then use Actions → Refresh.",
+          );
+          setNotificationError(true);
+        } else setActionError((error as Error).message);
+      }
     } finally {
       pending.current = false;
       setBusy(false);
     }
   };
   const execution = history.find((value) => value.id === selectedExecution);
+  const notificationLabel = notificationError
+    ? "Notifications unavailable"
+    : !notifications
+      ? "Notifications loading…"
+      : notifications.unread > 0
+        ? `New Notifications (${notifications.unread})`
+        : "No new notifications";
   return (
     <section className="automations-page" data-active={visible}>
       <PageTitle page="automations" className="table-title" />
@@ -163,31 +185,41 @@ export function AutomationsPage({
         <h2 id="schedules-heading" className="table-card-title">
           Schedules
         </h2>
-        <DropdownMenu
-          label="Actions"
-          triggerRef={actionsTrigger}
-          active={visible}
-          disabled={busy || !!editor}
-          items={[
-            {
-              label: "New scheduled job",
-              run: () =>
-                setEditor({
-                  id: "",
-                  revision: 0,
-                  repositoryLabel: "",
-                  draft: freshDraft(agents[0] ?? ""),
-                }),
-            },
-            {
-              label: "Refresh",
-              run: () => {
-                setActionError("");
-                void refreshLatest.current();
+        <div className="automation-page-actions">
+          <button
+            type="button"
+            aria-label={notificationLabel}
+            disabled={busy || !notifications || notificationError}
+            onClick={() => setReviewingNotifications(true)}
+          >
+            <span role="status">{notificationLabel}</span>
+          </button>
+          <DropdownMenu
+            label="Actions"
+            triggerRef={actionsTrigger}
+            active={visible}
+            disabled={busy || !!editor}
+            items={[
+              {
+                label: "New scheduled job",
+                run: () =>
+                  setEditor({
+                    id: "",
+                    revision: 0,
+                    repositoryLabel: "",
+                    draft: freshDraft(agents[0] ?? ""),
+                  }),
               },
-            },
-          ]}
-        />
+              {
+                label: "Refresh",
+                run: () => {
+                  setActionError("");
+                  void refreshLatest.current();
+                },
+              },
+            ]}
+          />
+        </div>
       </header>
 
       {(actionError || error) && <p role="alert">{actionError || error}</p>}
@@ -302,6 +334,67 @@ export function AutomationsPage({
             </button>
           </div>
         </section>
+      )}
+      {visible && reviewingNotifications && (
+        <Modal
+          title="Scheduler notifications"
+          className="automation-notifications-dialog"
+          busy={busy}
+          onClose={() => setReviewingNotifications(false)}
+        >
+          {notificationError ? (
+            <p role="alert">
+              Notifications unavailable. Check the Scheduling Service, then use Actions → Refresh.
+            </p>
+          ) : (
+            <>
+              <ul className="automation-notifications">
+                {notifications?.entries.map((entry) => (
+                  <li key={entry.id}>
+                    <div>
+                      <strong>{entry.automationName}</strong>
+                      <span>
+                        {entry.status.replaceAll("_", " ")}
+                        {entry.reason ? ` · ${entry.reason.replaceAll("_", " ")}` : ""}
+                      </span>
+                      <time dateTime={entry.endedAt ?? undefined}>
+                        {entry.endedAt
+                          ? new Date(entry.endedAt).toLocaleString()
+                          : "Time unavailable"}
+                      </time>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Acknowledge ${entry.automationName} notification ${entry.sequence}`}
+                      onClick={() =>
+                        void act({ action: "acknowledgeNotifications", executionIds: [entry.id] })
+                      }
+                    >
+                      Acknowledge
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {notifications?.entries.length ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void act({
+                      action: "acknowledgeNotifications",
+                      executionIds: notifications.entries.map((entry) => entry.id),
+                    })
+                  }
+                >
+                  Acknowledge displayed notifications
+                </button>
+              ) : (
+                <p role="status">No new notifications</p>
+              )}
+            </>
+          )}
+        </Modal>
       )}
       {visible && transcriptExecution && (
         <AutomationTranscriptModal

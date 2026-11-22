@@ -38,6 +38,9 @@ it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
   expect(markup).not.toContain("New scheduled job");
   expect(markup).toContain('data-test-table="automation-history"');
   expect(markup.match(/automation-table-card/g)).toHaveLength(1);
+  expect(markup).toContain('aria-label="Notifications loading…"');
+  expect(markup).toContain('<span role="status">Notifications loading…</span>');
+  expect(markup).not.toContain("No new notifications");
   expect(markup).toContain('aria-labelledby="schedules-heading"');
   expect(markup).toContain('aria-label="Execution history"');
   expect(markup).not.toContain("Cancel active run");

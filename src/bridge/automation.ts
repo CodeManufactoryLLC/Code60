@@ -18,6 +18,11 @@ const revision = z.number().int().positive();
 const schema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("status") }),
   z.strictObject({ action: z.literal("list") }),
+  z.strictObject({ action: z.literal("notifications") }),
+  z.strictObject({
+    action: z.literal("acknowledgeNotifications"),
+    executionIds: z.array(id).min(1).max(50),
+  }),
   z.strictObject({ action: z.literal("pickRepository") }),
   z.strictObject({ action: z.literal("preview"), schedule: automationScheduleSchema }),
   z.strictObject({ action: z.literal("get"), id }),
@@ -78,4 +83,9 @@ export interface AutomationEditor {
   revision: number;
   repositoryLabel: string;
   draft: z.infer<typeof rendererAutomationDraftSchema>;
+}
+
+export interface AutomationNotifications {
+  unread: number;
+  entries: AutomationHistoryEntry[];
 }

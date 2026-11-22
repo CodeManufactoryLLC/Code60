@@ -24,6 +24,7 @@
 .automation-page-heading > h2 {
   margin: 0;
 }
+.automation-page-actions,
 .automation-action-group,
 .automation-details-actions {
   display: flex;
@@ -499,4 +500,38 @@
   .automation-job-facts {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.automation-notifications-dialog {
+  padding-bottom: 16px;
+}
+
+.automation-notifications {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 60vh;
+  overflow: auto;
+  scrollbar-gutter: auto;
+}
+
+.automation-notifications > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.automation-notifications > li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.automation-notifications time {
+  color: var(--muted);
 }

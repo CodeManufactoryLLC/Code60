@@ -219,7 +219,13 @@ export class DesktopKnowledge {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.id === "orchestration-permissions") {
+    if (cap.id === "automations") {
+      status = "unknown";
+      reason =
+        "Scheduled Jobs is available without a database. Reviewing and acknowledging scheduler notifications requires the background service; awareness never probes it.";
+      action =
+        "Apps → Scheduled Jobs → New Notifications; use System Manager if the scheduler is unavailable.";
+    } else if (cap.id === "orchestration-permissions") {
       reason =
         "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";
       action = `Open ${cap.access}.`;

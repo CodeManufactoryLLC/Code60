@@ -302,12 +302,12 @@ Schema version: 1
 
 - ID: `automations`
 - Status: shipped
-- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. Actions offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
-- Access: Apps → Scheduled Jobs
+- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. Actions offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes. New Notifications opens terminal execution outcomes with explicit individual or displayed-batch acknowledgement.
+- Access: Apps → Scheduled Jobs → New Notifications
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
-- Limits: Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
+- Limits: Notification outcomes stay unread until explicitly acknowledged; read state survives service and desktop restarts. Notification reads/saves require the running service and fail visibly. Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
 - Pages: `automations`
 - Settings sections: none
 - Tools: none

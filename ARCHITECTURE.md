@@ -445,6 +445,21 @@ or replacing the modal releases its subscription and rejects late reads. Evidenc
 reads share the core run writer queue to avoid partially appended JSONL records;
 stream notices do not mutate schedule revisions.
 
+Scheduler notifications are the retained terminal execution outcomes: finished,
+failed, cancelled, timed out, interrupted and skipped (including missed/busy/blocked
+occurrences). Claimed/running executions do not notify. Scheduled Jobs'
+New Notifications button refreshes from service notices and opens a keyboard-accessible
+review dialog with schedule, outcome, reason and completion time. Opening the dialog,
+viewing history, filtering schedules or navigating never marks anything read. Only
+Acknowledge or Acknowledge displayed notifications persists the exact displayed IDs;
+concurrent arrivals stay unread. Review batches contain at most 50 unread outcomes.
+Read markers live in the existing service-owned state alongside retained execution
+history (maximum 5,000); no new inbox or native notification delivery is introduced.
+Legacy retained terminal outcomes start unread. Repeated notices/restarts reuse the
+same execution identities. Missing/corrupt storage and failed reads/saves surface
+unavailable/error states, never an empty unread count. Hidden pages defer reads until
+reactivated. These acknowledgements grant no agent or execution authority.
+
 ### Approved agent memory
 
 The shared right sidebar includes a human-opened, closable and reorderable Memory

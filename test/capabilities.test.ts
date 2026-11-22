@@ -77,7 +77,7 @@ describe("desktop capability catalog", () => {
       DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
     ).toMatchObject({
       label: "Scheduled Jobs",
-      access: "Apps → Scheduled Jobs",
+      access: "Apps → Scheduled Jobs → New Notifications",
       prerequisite: "none",
       agentAccess: "human-only",
       confirmation: "Human installation and schedule consent.",
@@ -259,6 +259,17 @@ describe("desktop capability catalog", () => {
     expect(commands?.limitations).toContain("only in project orchestrator chats");
     expect(commands?.limitations).toContain("not Relay or worker chats");
     expect(commands?.limitations).toContain("do not grant new execution authority");
+  });
+
+  it("keeps scheduler notifications human-only and available to discover without a database", () => {
+    expect(
+      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
+    ).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("New Notifications"),
+      limitations: expect.stringContaining("explicitly acknowledged"),
+    });
   });
 
   it("matches the generated bundled reference", async () => {

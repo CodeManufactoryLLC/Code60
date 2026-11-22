@@ -7,7 +7,12 @@ import {
   type ReactNode,
 } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { AutomationSummary, AutomationUiRequest, DesktopApi } from "../bridge/index.js";
+import type {
+  AutomationNotifications,
+  AutomationSummary,
+  AutomationUiRequest,
+  DesktopApi,
+} from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
 import { AutomationJob } from "./automation-job.js";
 import { AutomationsPage } from "./automations.js";
@@ -112,7 +117,9 @@ const reply = (request: AutomationUiRequest): Promise<unknown> =>
       ? jobs
       : request.action === "history"
         ? [{ id: request.id ?? "all" }]
-        : null,
+        : request.action === "notifications"
+          ? { unread: 0, entries: [] }
+          : null,
   );
 let dispose = () => {};
 beforeEach(() => vi.stubGlobal("document", Object.assign(new EventTarget(), { hidden: false })));
@@ -121,7 +128,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 function mount() {
-  const api = { automation: vi.fn(reply), onAutomationChanged: vi.fn(() => () => {}) };
+  const listeners = new Set<() => void>();
+  const api = {
+    automation: vi.fn(reply),
+    onAutomationChanged: vi.fn((listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }),
+  };
   const hooks: Hooks = { slots: [], index: 0, dirty: false, effects: [] };
   let active = true;
   let tree: ReactNode;
@@ -165,7 +179,17 @@ function mount() {
     for (const slot of hooks.slots) slot.cleanup?.();
   };
   render();
-  return { api, render, settle, job, history, tree: () => tree };
+  return {
+    api,
+    render,
+    settle,
+    job,
+    history,
+    changed: () => {
+      for (const listener of listeners) listener();
+    },
+    tree: () => tree,
+  };
 }
 
 it.each(["job", "creation"] as const)(
@@ -263,4 +287,99 @@ it("changes history scope without closing the expanded details", async () => {
   await view.settle();
   expect(view.job("b").open).toBe(true);
   expect(view.history()).toEqual([{ id: "all" }]);
+});
+
+it("keeps arrivals unread through review/navigation and acknowledges only the captured displayed batch", async () => {
+  const view = mount();
+  await view.settle();
+  const first = {
+    id: "first",
+    sequence: 1,
+    automationId: "a",
+    automationName: "Checks",
+    status: "finished",
+    scheduledFor: null,
+    startedAt: null,
+    endedAt: null,
+    reason: null,
+    denials: 0,
+    runId: null,
+  };
+  let notices: AutomationNotifications = { unread: 1, entries: [first] };
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  view.api.automation.mockImplementation(async (request) => {
+    if (request.action === "notifications") return structuredClone(notices);
+    if (request.action === "acknowledgeNotifications") {
+      await pending;
+      notices.entries = notices.entries.filter((entry) => !request.executionIds.includes(entry.id));
+      notices.unread = notices.entries.length;
+      return null;
+    }
+    return reply(request);
+  });
+  view.changed();
+  await view.settle();
+  const status = () => required(view.tree(), (node) => node.props.role === "status");
+  expect(status().props.children).toBe("New Notifications (1)");
+  const label = status();
+  expect(
+    required(view.tree(), (node) => node.type === "button" && node.props.children === label).props[
+      "aria-label"
+    ],
+  ).toBe("New Notifications (1)");
+  (
+    required(view.tree(), (node) => node.type === "button" && node.props.children === label).props
+      .onClick as () => void
+  )();
+  view.render();
+  expect(
+    view.api.automation.mock.calls.some(
+      ([request]) => request.action === "acknowledgeNotifications",
+    ),
+  ).toBe(false);
+  view.render(false);
+  view.render(true);
+  await view.settle();
+  expect(status().props.children).toBe("New Notifications (1)");
+  (
+    required(view.tree(), (node) => node.props.children === "Acknowledge displayed notifications")
+      .props.onClick as () => void
+  )();
+  view.render();
+  notices = { unread: 2, entries: [{ ...first, id: "second", sequence: 2 }, first] };
+  view.changed();
+  await view.settle();
+  release();
+  await view.settle();
+  expect(
+    view.api.automation.mock.calls.filter(
+      ([request]) => request.action === "acknowledgeNotifications",
+    ),
+  ).toEqual([[{ action: "acknowledgeNotifications", executionIds: ["first"] }]]);
+  expect(status().props.children).toBe("New Notifications (1)");
+  expect(notices.entries.map((entry) => entry.id)).toEqual(["second"]);
+});
+
+it("shows unavailable instead of all-read when notification loading fails", async () => {
+  const view = mount();
+  await view.settle();
+  view.api.automation.mockImplementation((request) =>
+    request.action === "notifications"
+      ? Promise.reject(new Error("storage unavailable"))
+      : reply(request),
+  );
+  view.changed();
+  await view.settle();
+  const status = required(view.tree(), (node) => node.props.role === "status");
+  expect(status.props.children).toBe("Notifications unavailable");
+  expect(
+    required(view.tree(), (node) => node.type === "button" && node.props.children === status).props
+      .disabled,
+  ).toBe(true);
+  expect(required(view.tree(), (node) => node.props.role === "alert").props.children).toContain(
+    "Scheduler unavailable",
+  );
 });
