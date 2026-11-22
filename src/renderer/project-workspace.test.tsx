@@ -92,7 +92,7 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
         .mock.calls.slice(-2)
         .map((args) => args[2]),
     ).toEqual([transcriptsActive, transcriptsActive]);
-    expect(vi.mocked(useFiles).mock.lastCall?.[5]).toBe(
+    expect(vi.mocked(useFiles).mock.lastCall?.[4]).toBe(
       scope.panel(sessionPanelId("worker", undefined)).files,
     );
     expect(vi.mocked(useTranscripts).mock.calls.at(-2)?.[6]).toBe(scope.transcripts(api));
@@ -104,8 +104,10 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
 function ReviewProbe({
   api,
   capture,
+  archived = false,
 }: {
   api: DesktopApi;
+  archived?: boolean;
   capture(workspace: ReturnType<typeof useProjectWorkspace>): void;
 }) {
   capture(
@@ -114,7 +116,7 @@ function ReviewProbe({
       state: {
         snapshot: {
           ...snapshot,
-          chats: [{ run: { id: "chat-a" } }, { run: { id: "chat-b" } }],
+          chats: [{ archived, run: { id: "chat-a" } }, { run: { id: "chat-b" } }],
           chat: { ...snapshot.chat, run: { id: "chat-b" } },
           reviews: [
             { id: "review", chatId: "chat-a", title: "Task", revisions: [{ id: "revision" }] },
@@ -158,4 +160,52 @@ it("opens a review in its owning chat without changing the selected worker's tab
   expect(worker.snapshot()).toBe(before);
   expect(scope.panel(sessionPanelId(undefined, "chat-b")).snapshot().entries).toEqual([]);
   expect(api.orchestrationChatAction).toHaveBeenCalledWith({ type: "select", id: "chat-a" });
+});
+
+it("opens archived-owner evidence in the reachable selected panel without selecting or unarchiving its owner", () => {
+  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as DesktopApi;
+  let workspace: ReturnType<typeof useProjectWorkspace> | undefined;
+  renderToStaticMarkup(
+    <ReviewProbe
+      api={api}
+      archived
+      capture={(value) => {
+        workspace = value;
+      }}
+    />,
+  );
+  workspace?.openReview("review");
+  expect(scope.panel(sessionPanelId(undefined, "chat-b")).snapshot().entries).toMatchObject([
+    { kind: "revision", reviewId: "review", revisionId: "revision" },
+  ]);
+  expect(scope.panel(sessionPanelId(undefined, "chat-a")).snapshot().entries).toEqual([]);
+  expect(api.orchestrationChatAction).not.toHaveBeenCalled();
+});
+
+it("discards delayed Browse Files when a different worker is selected in the same project", async () => {
+  let release!: (value: Snapshot) => void;
+  const api = {
+    snapshot: vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          release = resolve;
+        }),
+    ),
+  } as unknown as DesktopApi;
+  let workspace: ReturnType<typeof useProjectWorkspace> | undefined;
+  renderToStaticMarkup(
+    <ReviewProbe
+      api={api}
+      capture={(value) => {
+        workspace = value;
+      }}
+    />,
+  );
+  const panel = scope.panel(sessionPanelId("worker", undefined));
+  const before = panel.snapshot();
+  const browsing = workspace?.browseFiles();
+  workspace?.selectWorker(undefined);
+  release(snapshot);
+  await browsing;
+  expect(panel.snapshot()).toBe(before);
 });

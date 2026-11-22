@@ -63,6 +63,7 @@ test("desktop: Relay file hooks survive StrictMode replay, stale frames and re-r
     await page.getByRole("button", { name: "Hold", exact: true }).click();
     await page.getByRole("button", { name: "Activate", exact: true }).click();
     await expect(preview).toBeEmpty();
+    await expect.poll(async () => (await state()).subscriptions).toBe(0);
     const hiddenSequence = (await state()).sequence;
     await page.getByRole("button", { name: "Activate", exact: true }).click();
     await expect.poll(async () => (await state()).sequence).toBeGreaterThan(hiddenSequence);
@@ -80,12 +81,12 @@ test("desktop: Relay file hooks survive StrictMode replay, stale frames and re-r
     await expect(preview).toHaveText("fresh");
     await page.getByRole("button", { name: "Target", exact: true }).click();
     await expect(preview).toBeEmpty();
-    await expect.poll(async () => (await state()).registrations).toBe(4);
+    await expect.poll(async () => (await state()).registrations).toBe(5);
     await page.getByRole("button", { name: "Publish released", exact: true }).click();
     await expect(preview).toBeEmpty();
     await page.getByRole("button", { name: "Publish latest", exact: true }).click();
     await expect(preview).toHaveText("fresh");
-    expect(await state()).toMatchObject({ subscriptions: 1, listeners: 1, releases: 3, errors: 0 });
+    expect(await state()).toMatchObject({ subscriptions: 1, listeners: 1, releases: 4, errors: 0 });
     await expect(page.getByLabel("Error")).toBeEmpty();
   } finally {
     await application?.close().catch(() => {});

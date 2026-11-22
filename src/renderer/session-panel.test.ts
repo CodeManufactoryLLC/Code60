@@ -43,3 +43,14 @@ it("isolates tabs, selection, ordering and file reads between sessions in one pr
   const reopened = new ProjectScope("/db", "/project", "new-instance");
   expect(reopened.panel(sessionPanelId(undefined, "chat-a")).snapshot().entries).toEqual([]);
 });
+
+it("reactivates retained panels after effect replay without reviving stale operations", () => {
+  const project = new ProjectScope("/db", "/project", "instance");
+  const panel = project.panel(sessionPanelId(undefined, undefined));
+  const oldRead = panel.capture();
+  project.dispose();
+  project.activate();
+  expect(oldRead()).toBe(false);
+  panel.act({ type: "file", path: "README.md" });
+  expect(panel.snapshot().entries).toEqual([{ id: 1, kind: "file", path: "README.md" }]);
+});

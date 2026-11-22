@@ -191,7 +191,13 @@ export function createFakeAgent(options = {}) {
             tasks: [{ text: "Create a target result", target }],
           });
           planId = plan.id;
-          steps = [{ message: "Relay plan awaits human acceptance." }];
+          steps = readable
+            ? [
+                { message: "Relay plan awaits human acceptance." },
+                { thought: "Verify the target and wait for human acceptance." },
+                { message: "Review the displayed target before accepting." },
+              ]
+            : [{ message: "Relay plan awaits human acceptance." }];
         } else if (planId && text.includes("Human accepted plan ")) {
           const plan = await tool("code60_read_plan", { planId });
           const context = await tool("code60_get_context");
@@ -204,6 +210,8 @@ export function createFakeAgent(options = {}) {
             cwd: task.target.cwd,
             workspaceMode: task.target.workspaceMode,
             prompt: JSON.stringify([
+              { message: "Preparing target result." },
+              { thought: "Write the accepted file in this isolated worktree." },
               { write: { path: "result.txt", content: "human accepted target\n" } },
               { message: "Target result created." },
             ]),
@@ -238,10 +246,10 @@ export function createFakeAgent(options = {}) {
       }
       if (options.planWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request === "Plan a change") {
+        if (request === "Plan a change" || request === "Plan a second change") {
           const plan = await tool("code60_create_plan", {
-            requestId: "fixture-plan",
-            title: "Planned change",
+            requestId: request === "Plan a change" ? "fixture-plan" : "fixture-second-plan",
+            title: request === "Plan a change" ? "Planned change" : "Second planned change",
             description: "Create and verify a file.",
             tasks: [{ text: "Create result" }, { text: "Verify result" }],
           });
@@ -301,7 +309,7 @@ export function createFakeAgent(options = {}) {
             const { scope } = await tool("code60_get_context");
             await tool("code60_dispatch_agent", {
               scope,
-              requestId: "planned-worker",
+              requestId: `planned-worker-${plan.id}`,
               planTaskId: plan.tasks[0].id,
               prompt: JSON.stringify([
                 { write: { path: "result.txt", content: "planned result\n" } },
@@ -560,6 +568,8 @@ export function createFakeAgent(options = {}) {
           while (!cancelled && !existsSync(step.waitForFile)) await sleep(25);
         } else if (step.hang === "cancellable") {
           await waitForCancel();
+          // Let UI journeys inspect cancellation before this external provider settles.
+          if (step.cancelWaitForFile) while (!existsSync(step.cancelWaitForFile)) await sleep(25);
           return { stopReason: "cancelled" };
         } else if (step.hang === "stubborn") {
           process.on("SIGTERM", () => {});

@@ -6,7 +6,7 @@ import { panelReport } from "./knowledge-report.js";
 describe("knowledge panel reports", () => {
   it("summarizes tab kinds and selection within the bridge contract", () => {
     const planId = crypto.randomUUID();
-    let tabs = updateFileTabs(emptyFileTabs("w"), { type: "plan", planId, title: "Plan" });
+    let tabs = updateFileTabs(emptyFileTabs(), { type: "plan", planId, title: "Plan" });
     tabs = updateFileTabs(tabs, { type: "file", path: "src/a.ts" });
     tabs = updateFileTabs(tabs, { type: "changes" });
     tabs = updateFileTabs(tabs, { type: "recall" });
@@ -32,7 +32,7 @@ describe("knowledge panel reports", () => {
   });
 
   it("omits unsupported paths and caps large panels as incomplete", () => {
-    let tabs = updateFileTabs(emptyFileTabs("w"), { type: "file", path: "C:/outside" });
+    let tabs = updateFileTabs(emptyFileTabs(), { type: "file", path: "C:/outside" });
     const omitted = panelReport(tabs);
     expect(omitted).toEqual({ tabs: [], selected: null, incomplete: true });
     for (let index = 0; index < 140; index++) tabs = updateFileTabs(tabs, { type: "blank" });

@@ -162,7 +162,51 @@ it("never exposes another application's same-relative-path preview through aware
   );
   await vi.waitFor(() => expect(files.snapshot(a.subscriptionId).files?.preview?.text).toBe("/a"));
   await vi.waitFor(() => expect(files.snapshot(b.subscriptionId).files?.preview?.text).toBe("/b"));
-  expect(files.knowledgePreview("note.txt", "agent-a")?.text).toBe("/a");
-  expect(files.knowledgePreview("note.txt", "agent-b")?.text).toBe("/b");
-  expect(files.knowledgePreview("note.txt", "agent-c")).toBeUndefined();
+  expect(files.knowledgePreview("note.txt", "agent-a", a.subscriptionId)?.text).toBe("/a");
+  expect(files.knowledgePreview("note.txt", "agent-b", b.subscriptionId)?.text).toBe("/b");
+  expect(files.knowledgePreview("note.txt", "agent-c", a.subscriptionId)).toBeUndefined();
+});
+
+it("binds same-named awareness previews to the exact active subscription and current context", async () => {
+  const { files } = fixture();
+  const parent = context(),
+    worker = context();
+  for (const [request, cwd] of [
+    [parent, "/workspace"],
+    [worker, "/target"],
+  ] as const) {
+    files.set(request, { cwd, check: async () => {} }, () => {}, "same-conversation");
+    disposers.push(() => files.remove(request.subscriptionId));
+  }
+  await vi.waitFor(() =>
+    expect(files.snapshot(worker.subscriptionId).files?.preview?.text).toBe("/target"),
+  );
+  await vi.waitFor(() =>
+    expect(files.snapshot(parent.subscriptionId).files?.preview?.text).toBe("/workspace"),
+  );
+  expect(files.knowledgePreview("note.txt", "same-conversation", parent.subscriptionId)?.text).toBe(
+    "/workspace",
+  );
+  expect(files.knowledgePreview("note.txt", "same-conversation", worker.subscriptionId)?.text).toBe(
+    "/target",
+  );
+  files.set(
+    { ...parent, sequence: 2, preview: null },
+    { cwd: "/workspace", check: async () => {} },
+    () => {},
+    "same-conversation",
+  );
+  expect(
+    files.knowledgePreview("note.txt", "same-conversation", parent.subscriptionId),
+  ).toBeUndefined();
+  files.set(
+    { ...worker, sequence: 2, active: false },
+    { cwd: "/target", check: async () => {} },
+    () => {},
+    "same-conversation",
+  );
+  expect(
+    files.knowledgePreview("note.txt", "same-conversation", worker.subscriptionId),
+  ).toBeUndefined();
+  expect(files.knowledgePreview("note.txt", "same-conversation", undefined)).toBeUndefined();
 });

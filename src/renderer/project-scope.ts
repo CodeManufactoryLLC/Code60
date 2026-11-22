@@ -42,6 +42,10 @@ export class ProjectScope extends ScopeLifetime {
     this.transcriptCache ??= new TranscriptCache(api, this.viewKey);
     return this.transcriptCache;
   }
+  override activate(): void {
+    super.activate();
+    for (const panel of this.panels.values()) panel.activate();
+  }
   override dispose(): void {
     super.dispose();
     this.transcriptCache?.dispose();

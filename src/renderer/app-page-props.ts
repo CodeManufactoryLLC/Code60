@@ -24,6 +24,7 @@ export interface AppPagesProps {
     setExplorerOpen: Dispatch<SetStateAction<boolean>>;
     visitedRelayWorkers?: string[];
     explicitProjectFiles?: boolean;
+    showConversationFiles?(): void;
   };
   preferences: ReturnType<typeof useAppPreferences>;
   sidebarBlurError: string;

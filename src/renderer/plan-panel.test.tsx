@@ -15,6 +15,7 @@ function render(
     project: null,
     revision: 1,
     proposalRevision: 1,
+    creationOrder: 1,
     requestId: "create",
     creationKey: "",
     title: "<script>plan</script>",

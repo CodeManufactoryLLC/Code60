@@ -39,6 +39,15 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe("live activity display", () => {
+  it("prioritizes live turn cancellation before process stopping or provider completion", () => {
+    const h = harness();
+    h.tool("command", "execute");
+    expect(h.snapshot().state).toBe("executing");
+    h.run.cancelling = true;
+    expect(h.run).toMatchObject({ status: "running", stopping: false });
+    expect(h.snapshot()).toMatchObject({ state: "stopping", active: false, urgent: true });
+  });
+
   it("discovers semantic types, validates strict reports and returns no visual metadata", () => {
     const h = harness();
     const context = h.display.context();

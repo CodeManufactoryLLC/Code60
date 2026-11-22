@@ -207,7 +207,13 @@ export class DesktopKnowledge {
     }
   }
   private tabRevision(panel: KnowledgePanel, tab: KnowledgePanel["tabs"][number]): string {
-    return knowledgeHash([this.renderer, panel.id, panel.owner, tab]);
+    return knowledgeHash([
+      this.renderer,
+      panel.id,
+      panel.owner,
+      tab,
+      tab.kind === "file" ? [panel.fileSubscription, panel.active, panel.open] : null,
+    ]);
   }
   private availability(cap: Capability, state: KnowledgeRuntime, caller: KnowledgeCaller) {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
@@ -225,6 +231,12 @@ export class DesktopKnowledge {
     } else if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+    } else if (cap.id === "plans") {
+      status = "unknown";
+      reason =
+        "View Plan is available in the right sidebar when the current session has an existing plan. Viewing saved content does not generate a new plan or restore execution authority.";
+      action =
+        "Open the files panel and use View Plan to reopen the current session's latest plan.";
     } else if (cap.id === "reviews") {
       status = "unknown";
       reason =
@@ -244,6 +256,10 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No connected database.";
       action = "Connect to database.";
+    } else if (cap.id === "projects") {
+      reason =
+        "Project homes remain available without an open chat; closing the last chat creates no replacement.";
+      action = "Use New Session on the project home to explicitly create a chat.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";

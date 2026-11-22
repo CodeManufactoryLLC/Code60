@@ -208,7 +208,9 @@ describe("desktop capability catalog", () => {
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
-      limitations: expect.stringContaining("never initializes Git"),
+      limitations: expect.stringContaining(
+        "Archiving the last displayed project chat returns to its home without a replacement",
+      ),
     });
     expect(projects?.access).toContain("project home → New Session");
     expect(projects?.access).toContain("red × (Close Project)");
@@ -216,6 +218,7 @@ describe("desktop capability catalog", () => {
     expect(projects?.limitations).toContain("keeps the project open");
     expect(projects?.confirmation).toContain("Stop folder confirmation");
     expect(projects?.limitations).toContain("only the project chevron");
+    expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",
@@ -242,6 +245,22 @@ describe("desktop capability catalog", () => {
       limitations: expect.stringContaining(
         "Tab sets, order and selection are independent per session",
       ),
+    });
+  });
+
+  it("describes bounded active file subscriptions and reachable archived review evidence", () => {
+    const files = DESKTOP_CAPABILITIES.find((capability) => capability.id === "files");
+    expect(files?.limitations).toContain("Inactive panels release file subscriptions");
+    expect(files?.limitations).toContain("exact active file subscription");
+    expect(files?.limitations).toContain("Archived reviews remain read-only");
+  });
+
+  it("describes sidebar activity as runtime-dependent presentation", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
+      prerequisite: "runtime",
+      access: expect.stringContaining("left navigation names"),
+      purpose: expect.stringContaining("custom assistants and Relay"),
+      limitations: expect.stringContaining("reduced motion and forced colors"),
     });
   });
 });
