@@ -1,4 +1,4 @@
-import { access, realpath, unlink } from "node:fs/promises";
+import { access, lstat, realpath, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SchedulerStatus, ServiceStatus } from "../contracts/index.js";
@@ -7,6 +7,7 @@ import {
   controlUserService,
   fileCode,
   inspectUserService,
+  lockPrivateState,
   privateDirectory,
   readPrivateJson,
   type ServiceRuntime,
@@ -22,44 +23,58 @@ const updatePath = (env: Readonly<NodeJS.ProcessEnv>) =>
 
 /** Persist restart intent before stopping: the installer replaces this process too. */
 export async function prepareSchedulerUpdate(env: Readonly<NodeJS.ProcessEnv>): Promise<void> {
-  const status = await automationClient(env)({ action: "status" }).catch(() => null);
+  await schedulerRuntime(env, true);
+  await withUpdateOwnership(env, () => prepareUpdate(env));
+}
+
+async function withUpdateOwnership(env: Readonly<NodeJS.ProcessEnv>, action: () => Promise<void>) {
+  const release = await lockPrivateState(join(automationRoot(env), "update-recovery"));
+  try {
+    await action();
+  } finally {
+    await release();
+  }
+}
+
+async function prepareUpdate(env: Readonly<NodeJS.ProcessEnv>): Promise<void> {
+  // Validate the destination before persisting intent, pausing, or stopping work.
+  await schedulerRuntime(env, true);
+  const first = await automationClient(env)({ action: "status" }).catch(() => null);
+  const registration = await registrationStatus(env);
+  const status = registration.service ?? (first as ServiceStatus | null);
+  registration.service = status;
   if (!status) {
-    const registration = await schedulerControl(env, "status");
-    if (
-      "installed" in registration &&
-      registration.installed &&
-      registration.nativeState !== "stopped"
-    )
+    if (registration.installed && registration.native.state !== "stopped")
       throw new AutomationError(
         "unavailable",
         "Scheduler stop could not be verified. No binaries were replaced.",
       );
     return;
   }
-  const registration = (await readPrivateJson(
-    join(automationRoot(env), "registration.json"),
-    16_384,
-  ).catch((error) => {
-    if (fileCode(error) !== "ENOENT") throw error;
-    return null;
-  })) as { installed?: unknown } | null;
-  if (registration?.installed !== true)
-    throw new AutomationError(
-      "refused",
-      "Stop the standalone scheduler before updating, or install the Scheduling Service first.",
-    );
+  assertNativeResponder(registration);
   const previous = await readPrivateJson(updatePath(env), 4096).catch((error) => {
     if (fileCode(error) !== "ENOENT") throw error;
     return undefined;
   });
   await writePrivateJson(
     updatePath(env),
-    previous ?? { version: 1, pausedAll: (status as { pausedAll: boolean }).pausedAll },
+    previous ?? { version: 1, pausedAll: status.pausedAll },
     previous,
     4096,
   );
   try {
     await schedulerControl(env, "stop");
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      try {
+        process.kill(status.pid, 0);
+      } catch (error) {
+        if (fileCode(error) === "ESRCH") break;
+        throw error;
+      }
+      if (Date.now() >= deadline) throw new Error("Previous scheduler has not exited");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   } catch (error) {
     if (error instanceof AutomationError) throw error;
     throw new AutomationError("unavailable", "Scheduler stop failed. No binaries were replaced.");
@@ -71,33 +86,91 @@ export async function restoreSchedulerUpdate(
   env: Readonly<NodeJS.ProcessEnv>,
   reconcileInstalled = false,
 ): Promise<void> {
-  let marker = await readPrivateJson(updatePath(env), 4096).catch((error) => {
+  const marker = await readPrivateJson(updatePath(env), 4096).catch((error) => {
     if (fileCode(error) !== "ENOENT") throw error;
     return null;
   });
   if (marker === null) {
     if (!reconcileInstalled) return;
-    const registration = await schedulerControl(env, "status");
-    if (!("installed" in registration) || !registration.installed) return;
-    if (!registration.service) {
-      if (registration.nativeState !== "stopped")
+    // Read-only preflight keeps pristine/stopped/current installations untouched.
+    // Recheck inside the ownership claim before granting any mutation authority.
+    const registered = await readPrivateJson(
+      join(automationRoot(env), "registration.json"),
+      16_384,
+    ).catch((error) => {
+      if (fileCode(error) !== "ENOENT") throw error;
+      return null;
+    });
+    if (registered === null) return;
+    const status = await registrationStatus(env);
+    if (!status.installed) return;
+    if (!status.service) {
+      if (status.native.state !== "stopped")
         throw new AutomationError(
           "unavailable",
           "Scheduler upgrade could not verify service health.",
         );
       return;
     }
-    if (registration.service.appVersion === CODE60_VERSION) return;
+    if (!olderVersion(status.service.appVersion, CODE60_VERSION)) return;
+    assertNativeResponder(status);
+  }
+  await schedulerRuntime(env, true);
+  await withUpdateOwnership(env, () => restoreUpdate(env, reconcileInstalled));
+}
+
+async function restoreUpdate(
+  env: Readonly<NodeJS.ProcessEnv>,
+  reconcileInstalled: boolean,
+): Promise<void> {
+  let marker = await readPrivateJson(updatePath(env), 4096).catch((error) => {
+    if (fileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (marker === null) {
+    if (!reconcileInstalled) return;
+    const registration = await registrationStatus(env);
+    if (!registration.installed) return;
+    if (!registration.service) {
+      if (registration.native.state !== "stopped")
+        throw new AutomationError(
+          "unavailable",
+          "Scheduler upgrade could not verify service health.",
+        );
+      return;
+    }
+    if (!olderVersion(registration.service.appVersion, CODE60_VERSION)) return;
+    assertNativeResponder(registration);
     // Manual installation has no pre-install marker. Capture the running service's
     // pause state and stop it before replacing its previously consented registration.
-    await prepareSchedulerUpdate(env);
+    await prepareUpdate(env);
     marker = await readPrivateJson(updatePath(env), 4096);
   }
   const saved = marker as { version?: unknown; pausedAll?: unknown };
   if (saved.version !== 1 || typeof saved.pausedAll !== "boolean")
     throw new AutomationError("unavailable", "Scheduler update recovery metadata is invalid.");
+  // Pending intent never authorizes taking over a standalone or newer process.
+  await schedulerRuntime(env, true);
+  const existing = await registrationStatus(env);
+  if (!existing.installed)
+    throw new AutomationError(
+      "refused",
+      "Scheduling Service is no longer installed. Restart recovery is still pending.",
+    );
+  if (existing.service) {
+    assertNativeResponder(existing);
+    if (
+      existing.service.appVersion !== CODE60_VERSION &&
+      !olderVersion(existing.service.appVersion, CODE60_VERSION)
+    )
+      throw new AutomationError(
+        "refused",
+        "A newer or unverifiable scheduler cannot be replaced by this app.",
+      );
+  }
   try {
-    await schedulerControl(env, "repair", true);
+    if (existing.service?.appVersion !== CODE60_VERSION)
+      await schedulerControl(env, "repair", true);
   } catch (error) {
     if (error instanceof AutomationError) throw error;
     throw new AutomationError(
@@ -111,6 +184,10 @@ export async function restoreSchedulerUpdate(
     const status = await client({ action: "status" }).catch(() => null);
     if (status) {
       const running = status as ServiceStatus;
+      const native = await registrationStatus(env);
+      assertNativeResponder(native);
+      if (native.service?.pid !== running.pid)
+        throw new AutomationError("unavailable", "Scheduler changed during recovery.");
       if (running.appVersion !== CODE60_VERSION)
         throw new AutomationError(
           "unavailable",
@@ -132,6 +209,7 @@ export async function restoreSchedulerUpdate(
         verified.pausedAll !== saved.pausedAll
       )
         throw new AutomationError("unavailable", "Scheduler reactivation could not be verified.");
+      assertNativeResponder(await registrationStatus(env));
       break;
     }
     if (Date.now() >= deadline)
@@ -145,8 +223,28 @@ export async function restoreSchedulerUpdate(
 const APPIMAGE_SERVICE_CODE =
   'import(require("node:url").pathToFileURL(require("node:path").join(require("node:path").dirname(process.execPath),"resources/app.asar/dist/automation/main.js")).href)';
 
-async function schedulerRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<ServiceRuntime> {
+async function schedulerRuntime(
+  env: Readonly<NodeJS.ProcessEnv>,
+  validate = false,
+): Promise<ServiceRuntime> {
   const executable = await realpath(env.APPIMAGE || process.execPath);
+  if (env.APPIMAGE && validate) {
+    // Resolve first, then verify every canonical ancestor. Sticky shared directories
+    // still permit replacement of user-owned executable names and are refused.
+    for (let path = executable; ; path = dirname(path)) {
+      const info = await lstat(path);
+      if (
+        (path === executable ? !info.isFile() || !(info.mode & 0o111) : !info.isDirectory()) ||
+        (info.uid !== 0 && info.uid !== process.getuid?.()) ||
+        info.mode & 0o022
+      )
+        throw new AutomationError(
+          "refused",
+          "The AppImage location is replaceable. Move it to a protected directory before updating the Scheduling Service.",
+        );
+      if (dirname(path) === path) break;
+    }
+  }
   await access(executable);
   const entry = resolve(dirname(fileURLToPath(import.meta.url)), "main.js");
   const runtimeEnv: Record<string, string> = { ELECTRON_RUN_AS_NODE: "1" };
@@ -175,37 +273,27 @@ export async function schedulerControl(
       "refused",
       "Explicit consent is required to install or repair the Scheduling Service.",
     );
-  const runtime = await schedulerRuntime(env);
+  const runtime = await schedulerRuntime(env, action === "install" || action === "repair");
   const definition = userServiceDefinition(process.platform, userHome(env), root, runtime);
   if (action === "status") {
-    if (
-      registered !== null &&
-      (typeof registered !== "object" ||
-        Array.isArray(registered) ||
-        typeof (registered as { installed?: unknown }).installed !== "boolean")
-    )
-      throw new AutomationError("unavailable", "Scheduling Service registration is invalid.");
-    const installed = (registered as { installed: boolean } | null)?.installed === true;
-    const [native, service] = await Promise.all([
-      inspectUserService(definition),
-      automationClient(env)({ action: "status" }).catch(() => null),
-    ]);
-    if (installed !== native.definitionPresent || (!installed && native.state === "running"))
-      throw new AutomationError("unavailable", "Scheduling Service registration needs repair.");
+    const status = await registrationStatus(env);
     return {
-      installed,
-      nativeState: native.state,
-      service: service as ServiceStatus | null,
+      installed: status.installed,
+      nativeState: status.native.state,
+      service: status.service,
     } satisfies SchedulerStatus;
   }
-  if (action === "stop" || action === "uninstall" || action === "repair")
+  if (action === "stop" || action === "uninstall" || action === "repair") {
+    const status = await registrationStatus(env);
+    if (status.service) assertNativeResponder(status);
     await suspendScheduler(env);
+  }
   if (action === "install" || action === "repair") await privateDirectory(root);
   const result = await controlUserService(definition, action);
   if (action === "install" || action === "repair" || action === "uninstall")
     await writePrivateJson(
       marker,
-      { installed: action !== "uninstall", appVersion: CODE60_VERSION, runtime },
+      { installed: action !== "uninstall", runtime },
       registered ?? undefined,
       16_384,
     );
@@ -237,4 +325,62 @@ async function suspendScheduler(env: Readonly<NodeJS.ProcessEnv>): Promise<void>
       );
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+}
+
+async function registrationStatus(env: Readonly<NodeJS.ProcessEnv>) {
+  const root = automationRoot(env);
+  const registered = await readPrivateJson(join(root, "registration.json"), 16_384).catch(
+    (error) => {
+      if (fileCode(error) !== "ENOENT") throw error;
+      return null;
+    },
+  );
+  if (
+    registered !== null &&
+    (typeof registered !== "object" ||
+      Array.isArray(registered) ||
+      typeof (registered as { installed?: unknown }).installed !== "boolean")
+  )
+    throw new AutomationError("unavailable", "Scheduling Service registration is invalid.");
+  const installed = (registered as { installed: boolean } | null)?.installed === true;
+  const definition = userServiceDefinition(
+    process.platform,
+    userHome(env),
+    root,
+    await schedulerRuntime(env),
+  );
+  const [native, service] = await Promise.all([
+    inspectUserService(definition),
+    automationClient(env)({ action: "status" }).catch(() => null),
+  ]);
+  if (installed !== native.definitionPresent || (!installed && native.state === "running"))
+    throw new AutomationError("unavailable", "Scheduling Service registration needs repair.");
+  return { installed, native, service: service as ServiceStatus | null };
+}
+
+function assertNativeResponder(status: Awaited<ReturnType<typeof registrationStatus>>) {
+  if (
+    !status.installed ||
+    status.native.state !== "running" ||
+    !status.native.pid ||
+    status.service?.pid !== status.native.pid
+  )
+    throw new AutomationError(
+      "refused",
+      "Stop the standalone or unverified scheduler before updating the Scheduling Service.",
+    );
+}
+
+function olderVersion(service: string, app: string): boolean {
+  // Release versions are three bounded numeric components. Unknown versions do
+  // not grant automatic downgrade/replacement authority.
+  const parse = (value: string) =>
+    /^([0-9]{1,8})\.([0-9]{1,8})\.([0-9]{1,8})$/.exec(value)?.slice(1).map(Number);
+  const left = parse(service),
+    right = parse(app);
+  if (!left || !right) return false;
+  for (let i = 0; i < 3; i++) {
+    if (left[i] !== right[i]) return left[i]! < right[i]!;
+  }
+  return false;
 }

@@ -50,6 +50,8 @@ recovery upgrades the existing registration, checks the scheduler's `appVersion`
 against the running main app and restores its previous global pause state.
 Packaged startup also reconciles an active older scheduler after manual
 installation; it does not activate a previously stopped or uninstalled service.
+Automatic recovery requires the socket responder PID to match the native manager’s service PID. Standalone or unverified processes are left untouched, as are newer or unknown versions. Concurrent recovery has one exclusive owner. AppImage registration requires the executable and every canonical parent to be owned by the user or root and not writable by group/others; move an unsafe AppImage to a protected location before retrying. A failed launchd stop requires a successful domain inventory showing that the job is absent before registration replacement.
+
 A version mismatch, recovery block or failed restart keeps the pending restart
 metadata and displays an error. Preserve that evidence and use the consented
 System Manager repair path; never erase the marker to report success.

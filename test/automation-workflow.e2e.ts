@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { type ElectronApplication, expect, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
@@ -21,201 +21,261 @@ import { recordedAgentPid } from "./fixtures/run-readiness.js";
 
 const root = resolve(import.meta.dirname, "..");
 
-test("workflow: app upgrade stops the old scheduler, aligns its version and resumes retained schedules", async () => {
-  test.skip(process.platform !== "linux", "Uses only the isolated fake systemd boundary");
-  test.setTimeout(150_000);
-  const directory = await mkdtemp(join(tmpdir(), "c60-upgrade-"));
-  const supervisor = await nativeSupervisorFixture(directory);
-  const oldApp = join(directory, "old-app");
-  const repo = join(directory, "project");
-  const stateRoot = join(directory, "state/code60/automations");
-  const env = {
-    ...process.env,
-    ...supervisor.environment,
-    HOME: join(directory, "home"),
-    XDG_CONFIG_HOME: join(directory, "config"),
-    XDG_STATE_HOME: join(directory, "state"),
-  };
-  const api = await import(pathToFileURL(join(root, "dist/automation/index.js")).href);
-  const client = api.automationClient(env);
-  const saved = async () => JSON.parse(await readFile(join(stateRoot, "state.json"), "utf8"));
-  const helper = async (appRoot: string, action: "install" | "prepare") => {
-    await promisify(execFile)(
-      process.execPath,
-      [
-        "--input-type=module",
-        "-e",
-        'const api = await import(process.argv[1]); if (process.argv[2] === "install") await api.schedulerControl(process.env, "install", true); else await api.prepareSchedulerUpdate(process.env);',
-        pathToFileURL(join(appRoot, "dist/automation/index.js")).href,
-        action,
-      ],
-      { env, timeout: 30_000 },
-    );
-  };
-  const alive = (pid: number) => {
+for (const updateRoute of ["startup", "install-ui"] as const) {
+  test(`workflow: ${updateRoute} app upgrade stops the old scheduler, aligns its version and resumes retained schedules`, async () => {
+    test.skip(process.platform !== "linux", "Uses only the isolated fake systemd boundary");
+    test.setTimeout(150_000);
+    const directory = await mkdtemp(join(tmpdir(), "c60-upgrade-"));
+    const supervisor = await nativeSupervisorFixture(directory);
+    const oldApp = join(directory, "old-app");
+    const repo = join(directory, "project");
+    const stateRoot = join(directory, "state/code60/automations");
+    const env = {
+      ...process.env,
+      ...supervisor.environment,
+      HOME: join(directory, "home"),
+      XDG_CONFIG_HOME: join(directory, "config"),
+      XDG_STATE_HOME: join(directory, "state"),
+    };
+    const api = await import(pathToFileURL(join(root, "dist/automation/index.js")).href);
+    const client = api.automationClient(env);
+    const saved = async () => JSON.parse(await readFile(join(stateRoot, "state.json"), "utf8"));
+    const helper = async (appRoot: string, action: "install" | "prepare") => {
+      await promisify(execFile)(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          'const api = await import(process.argv[1]); if (process.argv[2] === "install") await api.schedulerControl(process.env, "install", true); else await api.prepareSchedulerUpdate(process.env);',
+          pathToFileURL(join(appRoot, "dist/automation/index.js")).href,
+          action,
+        ],
+        { env, timeout: 30_000 },
+      );
+    };
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+        return false;
+      }
+    };
+    let application: ElectronApplication | undefined;
+    const exitedApplications: ElectronApplication[] = [];
     try {
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-      return false;
+      // Simulate the prior app install, with its own package version and runtime.
+      // Native installation alone is fake; service, IPC, storage and agent are real.
+      await cp(join(root, "dist"), join(oldApp, "dist"), {
+        recursive: true,
+        filter: (source) => source !== join(root, "dist/renderer"),
+      });
+      await symlink(join(root, "node_modules"), join(oldApp, "node_modules"), "dir");
+      const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+      await writeFile(
+        join(oldApp, "package.json"),
+        JSON.stringify({
+          ...manifest,
+          version: updateRoute === "startup" ? "0.0.0" : manifest.version,
+        }),
+      );
+      await mkdir(env.HOME);
+      await mkdir(join(directory, "config/code60"), { recursive: true });
+      await writeFile(
+        join(directory, "config/code60/config.json"),
+        JSON.stringify({
+          agents: {
+            claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
+          },
+        }),
+      );
+      await mkdir(repo);
+      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+      await writeFile(join(repo, "result.txt"), "original\n");
+      execFileSync("git", ["add", "."], { cwd: repo });
+      commitFixture(repo);
+      const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
+      const index = await readFile(join(repo, ".git/index"));
+      await helper(oldApp, "install");
+      const oldStatus = await client({ action: "status" });
+      expect(oldStatus.appVersion).toBe(updateRoute === "startup" ? "0.0.0" : manifest.version);
+      const automation = await client({
+        action: "create",
+        draft: {
+          name: "Retained upgrade job",
+          agent: "claude",
+          repository: repo,
+          baseBranch: "main",
+          allow: [],
+          turnTimeout: "1m",
+          enabled: true,
+          prompt: JSON.stringify([{ message: "scheduled after upgrade" }]),
+          schedule: {
+            type: "interval",
+            everyMinutes: 1,
+            anchor: new Date(Date.now() + 45_000).toISOString(),
+          },
+        },
+      });
+      await client({ action: "runNow", id: automation.id });
+      await expect.poll(async () => (await saved()).executions[0]?.status).toBe("finished");
+      const before = await saved();
+      if (updateRoute === "install-ui") {
+        await writeFile(join(directory, "old-service-pid"), String(oldStatus.pid));
+        application = await launchDesktop(
+          directory,
+          repo,
+          join(directory, "projects.sqlite"),
+          false,
+          supervisor.environment,
+          fileURLToPath(new URL("./fixtures/update-app.mjs", import.meta.url)),
+        );
+        const page = await application.firstWindow();
+        const wizard = page.locator(".agent-setup-dialog");
+        await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+        await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+        await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+        await page.getByRole("button", { name: "Start", exact: true }).click();
+        await page.getByRole("tab", { name: "Settings", exact: true }).click();
+        await page.getByRole("button", { name: "Open Updates", exact: true }).click();
+        const updates = page.locator("#app-updates");
+        await updates.getByRole("switch", { name: "Automatically check for updates" }).uncheck();
+        await updates.getByRole("button", { name: "Check for updates", exact: true }).click();
+        const popup = page.getByRole("dialog", { name: "Update available", exact: true });
+        await expect(popup).toBeVisible();
+        await popup.getByRole("button", { name: "Later", exact: true }).click();
+        await updates.getByRole("button", { name: "Download update", exact: true }).click();
+        const mainPid = await application.evaluate(() => process.pid);
+        await updates.getByRole("button", { name: "Install and restart", exact: true }).click();
+        await expect.poll(() => alive(mainPid)).toBe(false);
+        const evidence = (await readFile(join(directory, "installer-boundary.jsonl"), "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line));
+        expect(evidence).toContainEqual({
+          action: "install",
+          marker: { version: 1, pausedAll: false },
+          oldExited: true,
+        });
+        expect(evidence).toContainEqual({ action: "relaunch" });
+        expect(evidence).toContainEqual({
+          action: "dialog",
+          type: "warning",
+          message: "Install update and restart Code60?",
+          buttons: ["Keep working", "Install and restart"],
+          defaultId: 0,
+          cancelId: 0,
+        });
+        exitedApplications.push(application);
+        application = undefined;
+      } else await helper(root, "prepare");
+      expect(alive(oldStatus.pid)).toBe(false);
+      expect(JSON.parse(await readFile(join(stateRoot, "update-restart.json"), "utf8"))).toEqual({
+        version: 1,
+        pausedAll: false,
+      });
+      // Installation completes and the newly installed main app starts. Its normal
+      // startup consumes the marker; no test calls the recovery helper in Electron.
+      application = await launchDesktop(
+        directory,
+        repo,
+        join(directory, "projects.sqlite"),
+        false,
+        supervisor.environment,
+      );
+      const status = await client({ action: "status" });
+      expect(status).toMatchObject({ appVersion: manifest.version, pausedAll: false, block: null });
+      expect(status.pid).not.toBe(oldStatus.pid);
+      expect(alive(status.pid)).toBe(true);
+      const executable = await application.evaluate(() => process.execPath);
+      const registration = JSON.parse(await readFile(join(stateRoot, "registration.json"), "utf8"));
+      expect(registration).toMatchObject({
+        installed: true,
+        runtime: { executable, args: [join(root, "dist/automation/main.js")] },
+      });
+      expect(registration).not.toHaveProperty("appVersion");
+      expect(
+        await readFile(join(env.HOME, ".config/systemd/user/code60-scheduler.service"), "utf8"),
+      ).toContain(`ExecStart="${executable}" "${join(root, "dist/automation/main.js")}"`);
+      await expect(readFile(join(stateRoot, "update-restart.json"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      const after = await saved();
+      const { nextRunAt: _beforeNext, ...definition } = before.automations[0];
+      const { nextRunAt, ...retained } = after.automations[0];
+      expect(retained).toEqual(definition);
+      expect(Date.parse(nextRunAt)).toBeGreaterThan(Date.now());
+      expect(after.executions).toEqual(before.executions);
+      const commands = (await readFile(join(directory, "supervisor-commands.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line)[1]);
+      expect(commands.filter((action) => action !== "show")).toEqual([
+        "daemon-reload",
+        "enable",
+        "stop",
+        "stop",
+        "daemon-reload",
+        "enable",
+      ]);
+      // Observe the main process's exit independently. Playwright's context close
+      // also waits for inherited debug pipes held by the fake supervisor's service;
+      // a real per-user supervisor does not inherit those test-only descriptors.
+      const previous = application;
+      const mainPid = await previous.evaluate(() => process.pid);
+      exitedApplications.push(previous);
+      void previous.evaluate(({ app }) => app.quit()).catch(() => {});
+      await expect.poll(() => alive(mainPid)).toBe(false);
+      application = await launchDesktop(
+        directory,
+        repo,
+        join(directory, "projects.sqlite"),
+        false,
+        supervisor.environment,
+      );
+      expect((await client({ action: "status" })).pid).toBe(status.pid);
+      // Recurrence itself, rather than Run now, must resume after installation.
+      await expect
+        .poll(
+          async () =>
+            (await saved()).executions.find(
+              (execution: { trigger: string }) => execution.trigger === "schedule",
+            )?.status,
+          { timeout: 65_000 },
+        )
+        .toBe("finished");
+      const final = await saved();
+      expect(final.executions).toHaveLength(2);
+      expect(
+        final.executions.filter(
+          (execution: { trigger: string }) => execution.trigger === "schedule",
+        ),
+      ).toHaveLength(1);
+      expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+      expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+      expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" })).toBe(
+        head,
+      );
+      await test.info().attach("scheduler-upgrade-outcomes", {
+        body: JSON.stringify({
+          oldVersion: oldStatus.appVersion,
+          newVersion: status.appVersion,
+          oldStopped: !alive(oldStatus.pid),
+          pidRetainedAcrossRestart: (await client({ action: "status" })).pid === status.pid,
+          commands,
+          executionCount: final.executions.length,
+        }),
+        contentType: "application/json",
+      });
+    } finally {
+      await supervisor.cleanup();
+      await application?.close().catch(() => {});
+      for (const previous of exitedApplications) await previous.close().catch(() => {});
+      await removeDesktopFixture(directory, { recursive: true, force: true });
     }
-  };
-  let application: ElectronApplication | undefined;
-  const exitedApplications: ElectronApplication[] = [];
-  try {
-    // Simulate the prior app install, with its own package version and runtime.
-    // Native installation alone is fake; service, IPC, storage and agent are real.
-    await cp(join(root, "dist"), join(oldApp, "dist"), {
-      recursive: true,
-      filter: (source) => source !== join(root, "dist/renderer"),
-    });
-    await symlink(join(root, "node_modules"), join(oldApp, "node_modules"), "dir");
-    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-    await writeFile(
-      join(oldApp, "package.json"),
-      JSON.stringify({ ...manifest, version: "0.0.0" }),
-    );
-    await mkdir(env.HOME);
-    await mkdir(join(directory, "config/code60"), { recursive: true });
-    await writeFile(
-      join(directory, "config/code60/config.json"),
-      JSON.stringify({
-        agents: {
-          claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
-        },
-      }),
-    );
-    await mkdir(repo);
-    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
-    await writeFile(join(repo, "result.txt"), "original\n");
-    execFileSync("git", ["add", "."], { cwd: repo });
-    commitFixture(repo);
-    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
-    const index = await readFile(join(repo, ".git/index"));
-    await helper(oldApp, "install");
-    const oldStatus = await client({ action: "status" });
-    expect(oldStatus.appVersion).toBe("0.0.0");
-    const automation = await client({
-      action: "create",
-      draft: {
-        name: "Retained upgrade job",
-        agent: "claude",
-        repository: repo,
-        baseBranch: "main",
-        allow: [],
-        turnTimeout: "1m",
-        enabled: true,
-        prompt: JSON.stringify([{ message: "scheduled after upgrade" }]),
-        schedule: {
-          type: "interval",
-          everyMinutes: 1,
-          anchor: new Date(Date.now() + 45_000).toISOString(),
-        },
-      },
-    });
-    await client({ action: "runNow", id: automation.id });
-    await expect.poll(async () => (await saved()).executions[0]?.status).toBe("finished");
-    const before = await saved();
-    await helper(root, "prepare");
-    expect(alive(oldStatus.pid)).toBe(false);
-    expect(JSON.parse(await readFile(join(stateRoot, "update-restart.json"), "utf8"))).toEqual({
-      version: 1,
-      pausedAll: false,
-    });
-    expect(
-      JSON.parse(await readFile(join(stateRoot, "registration.json"), "utf8")).appVersion,
-    ).toBe("0.0.0");
-    // Installation completes and the newly installed main app starts. Its normal
-    // startup consumes the marker; no test calls the recovery helper in Electron.
-    application = await launchDesktop(
-      directory,
-      repo,
-      join(directory, "projects.sqlite"),
-      false,
-      supervisor.environment,
-    );
-    const status = await client({ action: "status" });
-    expect(status).toMatchObject({ appVersion: manifest.version, pausedAll: false, block: null });
-    expect(status.pid).not.toBe(oldStatus.pid);
-    expect(alive(status.pid)).toBe(true);
-    expect(JSON.parse(await readFile(join(stateRoot, "registration.json"), "utf8"))).toMatchObject({
-      appVersion: manifest.version,
-      installed: true,
-    });
-    await expect(readFile(join(stateRoot, "update-restart.json"))).rejects.toMatchObject({
-      code: "ENOENT",
-    });
-    const after = await saved();
-    const { nextRunAt: _beforeNext, ...definition } = before.automations[0];
-    const { nextRunAt, ...retained } = after.automations[0];
-    expect(retained).toEqual(definition);
-    expect(Date.parse(nextRunAt)).toBeGreaterThan(Date.now());
-    expect(after.executions).toEqual(before.executions);
-    const commands = (await readFile(join(directory, "supervisor-commands.jsonl"), "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line)[1]);
-    expect(commands.filter((action) => action !== "show")).toEqual([
-      "daemon-reload",
-      "enable",
-      "stop",
-      "stop",
-      "daemon-reload",
-      "enable",
-    ]);
-    // Observe the main process's exit independently. Playwright's context close
-    // also waits for inherited debug pipes held by the fake supervisor's service;
-    // a real per-user supervisor does not inherit those test-only descriptors.
-    const previous = application;
-    const mainPid = await previous.evaluate(() => process.pid);
-    exitedApplications.push(previous);
-    void previous.evaluate(({ app }) => app.quit()).catch(() => {});
-    await expect.poll(() => alive(mainPid)).toBe(false);
-    application = await launchDesktop(
-      directory,
-      repo,
-      join(directory, "projects.sqlite"),
-      false,
-      supervisor.environment,
-    );
-    expect((await client({ action: "status" })).pid).toBe(status.pid);
-    // Recurrence itself, rather than Run now, must resume after installation.
-    await expect
-      .poll(
-        async () =>
-          (await saved()).executions.find(
-            (execution: { trigger: string }) => execution.trigger === "schedule",
-          )?.status,
-        { timeout: 65_000 },
-      )
-      .toBe("finished");
-    const final = await saved();
-    expect(final.executions).toHaveLength(2);
-    expect(
-      final.executions.filter((execution: { trigger: string }) => execution.trigger === "schedule"),
-    ).toHaveLength(1);
-    expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
-    expect(await readFile(join(repo, ".git/index"))).toEqual(index);
-    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" })).toBe(head);
-    await test.info().attach("scheduler-upgrade-outcomes", {
-      body: JSON.stringify({
-        oldVersion: oldStatus.appVersion,
-        newVersion: status.appVersion,
-        oldStopped: !alive(oldStatus.pid),
-        pidRetainedAcrossRestart: (await client({ action: "status" })).pid === status.pid,
-        commands,
-        executionCount: final.executions.length,
-      }),
-      contentType: "application/json",
-    });
-  } finally {
-    await supervisor.cleanup();
-    await application?.close().catch(() => {});
-    for (const previous of exitedApplications) await previous.close().catch(() => {});
-    await removeDesktopFixture(directory, { recursive: true, force: true });
-  }
-});
+  });
+}
 
 test("workflow: desktop automation survives app quit, retains history and cancels without CLI", async () => {
   test.setTimeout(120_000);

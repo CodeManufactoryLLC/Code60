@@ -5190,17 +5190,32 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
             const label = entry.querySelector(".chat-sidebar-label");
             const icon = entry.querySelector(".navigation-icon");
             const bounds = label?.getBoundingClientRect();
+            const button = entry.getBoundingClientRect();
+            const style = getComputedStyle(entry);
+            const innerLeft = button.left + Number.parseFloat(style.paddingLeft);
+            const innerRight = button.right - Number.parseFloat(style.paddingRight);
+            const indicator = entry
+              .querySelector(".chat-sidebar-indicators")
+              ?.getBoundingClientRect();
+            const leading = entry.parentElement?.querySelector(
+              ".chat-workers-toggle-leading .navigation-icon",
+            );
             return {
-              width: bounds?.width ?? 0,
+              width: bounds
+                ? Math.max(0, Math.min(bounds.right, innerRight) - Math.max(bounds.left, innerLeft))
+                : 0,
               left: bounds?.left ?? 0,
-              iconRight: icon?.getBoundingClientRect().right ?? 0,
+              iconRight: (icon ?? leading)?.getBoundingClientRect().right ?? 0,
+              indicatorsFit:
+                !indicator || (indicator.left >= innerLeft && indicator.right <= innerRight + 0.1),
             };
           }),
         );
       expect(readable.length).toBeGreaterThan(0);
       for (const label of readable) {
-        expect(label.width).toBeGreaterThanOrEqual(20);
-        expect(label.left).toBeGreaterThanOrEqual(label.iconRight + 7.9);
+        expect.soft(label.width).toBeGreaterThanOrEqual(20);
+        expect.soft(label.left).toBeGreaterThanOrEqual(label.iconRight + 7.9);
+        expect.soft(label.indicatorsFit).toBe(true);
       }
       expect.soft(positions.clipped).toBe(false);
       for (const row of positions.toggles) {
@@ -5296,14 +5311,49 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     await expect(aChat).toBeVisible();
     const workersToggle = group.locator(".chat-workers-toggle");
     const workerRows = group.locator("[data-role='worker']");
+    const ownerRow = workersToggle.locator("..");
+    const ownerChat = ownerRow.locator(".chat-sidebar-entry");
+    await expect(ownerRow.locator('[data-icon="ai-agent"]')).toHaveCount(0);
+    await expect(workersToggle.locator('[data-icon="app-communication"]')).toHaveCount(1);
+    // Rename and Archive reserve trailing row space; disclosure reuses the leading artwork.
+    await expect(
+      ownerRow.locator(":scope > .icon-button:not(.chat-workers-toggle-leading)"),
+    ).toHaveCount(2);
+    await aChat.click();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
+    const renameOwner = ownerRow.getByRole("button", { name: /^Rename chat:/ });
+    await renameOwner.press("Space");
+    const renameOwnerDialog = page.getByRole("dialog", { name: "Rename chat", exact: true });
+    await expect(renameOwnerDialog).toBeVisible();
+    await renameOwnerDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await ownerChat.press("Shift+F10");
+    const ownerMenu = page.getByRole("menu", { name: "Chat actions", exact: true });
+    await expect(ownerMenu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
+    await ownerMenu.press("Escape");
+    await expect(ownerChat).toBeFocused();
+    await expect(aChat).toHaveAttribute("aria-current", "true");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await ownerChat.click();
+    await expect(ownerChat).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
     await expect(workerRows).toHaveCount(2);
     for (const worker of await workerRows.all()) await expect(worker).toBeHidden();
     // Reopening a project intentionally keeps its descendants closed. Reveal workers
     // explicitly before measuring their indentation at each width and text size.
-    await workersToggle.press("ArrowRight");
+    await workersToggle.click();
     await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
     for (const worker of await workerRows.all()) await expect(worker).toBeVisible();
+    await expect(ownerChat).toHaveAttribute("aria-current", "true");
+    await workersToggle.press("ArrowLeft");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+    await ownerChat.press("ArrowRight");
+    await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+    await aChat.click();
+    await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(selected);
     await aChat.click();
     await expect(composer()).toHaveValue("project-a draft 1");
@@ -5355,7 +5405,55 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
     expect(retained.runs.map((run) => run.record.id).sort()).toEqual(
       beforeClose.runs.map((run) => run.record.id).sort(),
     );
+    // Keep the worker-owning chat in the background with real unread and approval counts.
+    const autoApproval = page.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    if ((await autoApproval.getAttribute("aria-pressed")) === "true") await autoApproval.click();
+    await expect(autoApproval).toHaveAttribute("aria-pressed", "false");
+    const ownerId = (await ownerChat.getAttribute("id"))?.replace(/^conversation-/, "");
+    if (!ownerId) throw new Error("Missing worker owner");
+    await page.evaluate(
+      ({ id, text }) => window.desktop.orchestrationChatAction({ type: "send", id, text }),
+      {
+        id: ownerId,
+        text: JSON.stringify([
+          { message: "Background layout reply" },
+          { permission: { id: "layout-approval", title: "Layout permission", kind: "execute" } },
+        ]),
+      },
+    );
+    await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+    await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
+    await expect(aChat).toHaveAttribute("aria-current", "true");
     while (await dismiss.count()) await dismiss.first().click();
+    const expectBadgesUnclipped = async (context: string) => {
+      for (const badge of await ownerChat.locator(".chat-unread, .chat-approval-count").all()) {
+        expect
+          .soft(
+            await badge.evaluate((element) => {
+              const bounds = element.getBoundingClientRect();
+              let parent = element.parentElement;
+              while (parent) {
+                const style = getComputedStyle(parent);
+                const clip = parent.getBoundingClientRect();
+                if (
+                  /(hidden|clip|auto|scroll)/.test(style.overflowX) &&
+                  (bounds.left < clip.left - 0.1 || bounds.right > clip.right + 0.1)
+                )
+                  return false;
+                if (
+                  /(hidden|clip|auto|scroll)/.test(style.overflowY) &&
+                  (bounds.top < clip.top - 0.1 || bounds.bottom > clip.bottom + 0.1)
+                )
+                  return false;
+                parent = parent.parentElement;
+              }
+              return true;
+            }),
+            `badge clipped at ${context}`,
+          )
+          .toBe(true);
+      }
+    };
     for (const theme of ["light", "dark"]) {
       for (const [width, size] of [
         [180, 15],
@@ -5384,7 +5482,41 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
           theme,
         );
         await page.emulateMedia({ reducedMotion: "reduce" });
+        await workersToggle.focus();
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Shift+Tab");
+        await expect(workersToggle).toBeFocused();
+        const focus = await workersToggle.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            width: style.outlineWidth,
+            style: style.outlineStyle,
+            color: style.outlineColor,
+          };
+        });
+        expect.soft(focus.width).toBe("2px");
+        expect.soft(focus.style).toBe("solid");
+        expect.soft(focus.color).not.toBe("rgba(0, 0, 0, 0)");
+        if (width === 180 && size === 32)
+          await page.screenshot({ path: test.info().outputPath(`leading-focus-${theme}.png`) });
+        await workersToggle.press("Enter");
+        await expect(workersToggle).toHaveAttribute("aria-expanded", "false");
+        await workersToggle.press("Space");
+        await expect(workersToggle).toHaveAttribute("aria-expanded", "true");
+        await expect(aChat).toHaveAttribute("aria-current", "true");
+        await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+        await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
         await expectHierarchy(width < 300);
+        await expectBadgesUnclipped(`${theme}/${width}/${size}`);
+        const disclosureBounds = await workersToggle.boundingBox();
+        const labelBounds = await ownerChat.locator(".chat-sidebar-label").boundingBox();
+        expect(disclosureBounds).not.toBeNull();
+        expect(labelBounds).not.toBeNull();
+        if (disclosureBounds && labelBounds) {
+          expect(disclosureBounds.x + disclosureBounds.width).toBeLessThanOrEqual(labelBounds.x);
+          if (width === 180) expect(disclosureBounds.width).toBe(24);
+          if (width === 180 && size === 32) expect(labelBounds.width).toBeGreaterThanOrEqual(32);
+        }
         await expect(page.locator(".project-sidebar-open")).toHaveAttribute(
           "aria-label",
           "Add Project",
@@ -5407,7 +5539,26 @@ test("desktop: multi-project sidebar has aligned hierarchy and circular folder s
         });
       }
     }
+    const resizer = page.getByRole("button", { name: "Resize navigation sidebar", exact: true });
+    for (let width = 480; width > 180; width -= 20) await resizer.press("ArrowLeft");
+    await page.evaluate(() => {
+      const style = document.querySelector<HTMLElement>(".app-workspace")?.style;
+      style?.setProperty("--nav-font-size", "32px");
+      style?.setProperty("--button-size", "32px");
+    });
     await page.emulateMedia({ forcedColors: "active" });
+    await workersToggle.focus();
+    await expectHierarchy(true);
+    await expectBadgesUnclipped("forced-colors/180/32");
+    await expect(ownerChat.locator(".chat-unread")).toHaveText("1");
+    await expect(ownerChat.locator(".chat-approval-count")).toHaveText("(1)");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(workersToggle).toBeFocused();
+    await expect.soft(workersToggle).toHaveCSS("outline-width", "2px");
+    await expect.soft(workersToggle).toHaveCSS("outline-style", "solid");
+    await expect.soft(workersToggle).not.toHaveCSS("outline-color", "rgba(0, 0, 0, 0)");
+    await page.screenshot({ path: test.info().outputPath("leading-focus-forced-colors.png") });
     await expect(circle).toHaveCSS("box-shadow", "none");
     await expect(circle).toHaveCSS("border-style", "solid");
   } finally {
@@ -6777,11 +6928,11 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
         .locator(".workspace-breadcrumbs")
         .getByRole("button", { name: "Rename chat: ok", exact: true }),
     ).toBeVisible();
+    const manualTitle = "Manual parser title longer than nineteen";
     const sidebar = page.locator("nav.chat-sidebar");
-    await sidebar.getByRole("button", { name: "Actions for ok", exact: true }).click();
+    await sidebar.getByRole("button", { name: "Rename chat: ok", exact: true }).press("Enter");
     const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
-    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
-    await menu.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await expect(menu).toHaveCount(0);
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await expectModalSurface(rename);
     await page.screenshot({ path: test.info().outputPath("rename-dialog-neobrutalism.png") });
@@ -6792,36 +6943,50 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       .locator(".workspace-breadcrumbs")
       .getByRole("button", { name: "Rename chat: Parser work", exact: true })
       .click();
-    await rename.getByRole("textbox", { name: "Chat name" }).fill("Header name");
+    await rename.getByRole("textbox", { name: "Chat name" }).fill(manualTitle);
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await sidebar
-      .getByRole("button", { name: "Header name", exact: true })
+      .getByRole("button", { name: manualTitle, exact: true })
       .click({ button: "right" });
     await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
     await menu.press("Escape");
-    await sidebar.getByRole("button", { name: "Header name", exact: true }).press("Shift+F10");
+    await sidebar.getByRole("button", { name: manualTitle, exact: true }).press("Shift+F10");
     await menu.getByRole("menuitem", { name: "Open", exact: true }).click();
     await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: Header name", exact: true }),
+      page.locator(".workspace-breadcrumbs").getByRole("button", {
+        name: `Rename chat: ${manualTitle}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    // Generated-title limits never shorten an explicit human name on later turns/reload.
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill("Continue after manual rename");
+    await composer.press("Enter");
+    await expect(chat.locator(".event.prompt").last()).toContainText(
+      "Continue after manual rename",
+    );
+    await expect(chat.locator(".event.message")).toHaveCount(2);
+    await page.reload();
+    await expect(
+      page.locator(".workspace-breadcrumbs").getByRole("button", {
+        name: `Rename chat: ${manualTitle}`,
+        exact: true,
+      }),
     ).toBeVisible();
     const before = await page.evaluate(() => window.desktop.snapshot());
-    await sidebar.getByRole("button", { name: "Actions for Header name", exact: true }).click();
-    await menu.getByRole("menuitem", { name: "Archive", exact: true }).click();
-    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    await sidebar
+      .getByRole("button", { name: `Archive chat: ${manualTitle}`, exact: true })
+      .press("Space");
+    await expect(sidebar.getByRole("button", { name: manualTitle, exact: true })).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Done notification", exact: true })).toContainText(
       "Chat archived.",
     );
-    await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-    await expect
-      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
-      .toBe("relay");
-    await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeFocused();
+    const projectHome = page.locator("#panel-project .home-page:visible");
+    await expect(projectHome).toContainText("New Session");
+    await expect(page.locator(".orchestration-chat-page:visible")).toHaveCount(0);
     const archived = await page.evaluate(() => window.desktop.snapshot());
+    expect(archived.chats).toHaveLength(before.chats.length);
     expect(archived.chats.find((item) => item.run?.id === before.chat.run?.id)?.archived).toBe(
       true,
     );
@@ -6842,10 +7007,12 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
     await selectProjectConversation(page);
     const background = await page.evaluate(() => window.desktop.snapshot());
     const backgroundId = background.chat.run?.id;
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
-    const relayChat = page.locator(
-      `.orchestration-chat-page[data-chat-id="${archived.chat.run?.id}"]`,
-    );
+    const relay = page.getByRole("button", { name: "Relay", exact: true });
+    const relayId = (await relay.getAttribute("id"))?.replace(/^conversation-/, "");
+    expect(relayId).toBeTruthy();
+    await relay.click();
+    await expect(relay).toHaveAttribute("aria-current", "true");
+    const relayChat = page.locator(`.orchestration-chat-page[data-chat-id="${relayId}"]:visible`);
     await expect(relayChat).toBeVisible();
     const relayComposer = relayChat.getByRole("combobox", {
       name: "Message to orchestrator",
@@ -6865,7 +7032,12 @@ test("desktop: chat titles, context menus, archive and advanced navigation", asy
       0,
     );
     await page.reload();
-    await expect(sidebar.getByRole("button", { name: "Header name", exact: true })).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("button", {
+        name: manualTitle,
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     const advanced = page.locator("#advanced-toggle");
     if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
@@ -7293,13 +7465,13 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
     for (const [, marker] of markers) expect(marker).toMatch(/^\d+$/);
     await expect(
       page.locator(
-        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
+        ".sidebar svg:not(.navigation-icon):not(.agent-logo):not(.provider-primary > svg):not(.page-group-toggle > svg):not(.icon-button > svg):not(.project-chat-label > svg):not(.sidebar-card-chevron > svg):not(.sidebar-card-stop > svg):not(.sidebar-card-add > svg):not(.sidebar-card-action > svg):not(.navigation-icon > svg), .sidebar img:not(.navigation-icon):not(.agent-logo)",
       ),
     ).toHaveCount(0);
     await expect(
       first
         .locator("..")
-        .getByRole("button", { name: /^Actions for / })
+        .getByRole("button", { name: /^Rename chat: / })
         .locator("svg"),
     ).toHaveCount(1);
     for (const disclosure of [
@@ -7520,7 +7692,9 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
             height: icon.getBoundingClientRect().height,
             fixedSize: icon.closest(".provider-primary-compact")
               ? 12
-              : icon.closest(".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop")
+              : icon.closest(
+                    ".sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action",
+                  )
                 ? 16
                 : undefined,
           })),
@@ -10377,9 +10551,8 @@ test("desktop: parent project cards preserve conversations, unread state, worker
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Actions for Renamed conversation", exact: true })
+      .getByRole("button", { name: "Archive chat: Renamed conversation", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(
       projectHome.getByRole("button", { name: "Open Renamed conversation", exact: true }),
     ).toHaveCount(0);
@@ -10871,26 +11044,14 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(row(owner)).toHaveAttribute("aria-current", "true");
     await expect(row(owner)).toHaveAttribute("data-role", "orchestrator");
     await expect(row(a)).toHaveAttribute("data-role", "worker");
-    await expect(row(owner).locator('[data-icon="app-communication"]')).toHaveCount(1);
+    const ownerDisclosure = row(owner)
+      .locator("..")
+      .locator(":scope > .chat-workers-toggle-leading");
+    // These manually started workers acquire ownership only in the later projection.
+    await expect(row(owner).locator("..").locator('[data-icon="app-communication"]')).toHaveCount(
+      1,
+    );
     await expect(row(a).locator('[data-icon="app-down-right"]')).toHaveCount(1);
-    for (const [id, file] of [
-      [owner, "labour-day"],
-      [a, "drone"],
-      [b, "drone"],
-    ]) {
-      if (!id) throw new Error("Missing conversation identity");
-      const icon = row(id).locator("img.navigation-icon");
-      await expect(icon).toHaveAttribute(
-        "src",
-        new RegExp(`/${file}-[\\w-]+\\.(?:png|gif)(?:\\?play=[^ ]+)?$`),
-      );
-      await expect(icon).toHaveAttribute("alt", "");
-      await expect(icon).toHaveAttribute("aria-hidden", "true");
-      await expect(icon).toHaveJSProperty("complete", true);
-      expect(
-        await icon.evaluate((element) => (element as HTMLImageElement).naturalWidth),
-      ).toBeGreaterThan(0);
-    }
     await expect(page.locator(".chat-dock, .chat-popup")).toHaveCount(0);
 
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -10953,7 +11114,7 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
 
-    // Pushed worker replies use the same per-turn unread markers as orchestrators.
+    // Pushed worker replies remain available without a numeric unread badge.
     await row(b).click();
     await expect(worker(b)).toBeVisible();
     await page.evaluate(
@@ -10969,8 +11130,14 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
         }),
       a,
     );
-    await expect(row(a).locator(".chat-unread")).toHaveText("1");
+    // Wait for the background reply in the renderer without selecting its worker.
+    await expect(worker(a).locator(".event.message").last()).toContainText("more text");
+    await expect(row(b)).toHaveAttribute("aria-current", "true");
+    await expect(worker(b)).toBeVisible();
+    await expect(worker(a)).toBeHidden();
+    await expect(row(a).locator(".chat-unread")).toHaveCount(0);
     await row(a).click();
+    await expect(worker(a).locator(".event.message").last()).toContainText("more text");
     await expect(row(a).locator(".chat-unread")).toHaveCount(0);
     const scroller = worker(a).locator(".transcript");
     await expect
@@ -11048,6 +11215,26 @@ test("desktop: workers use the Chat hierarchy with independent full-page convers
     const toggle = page.getByRole("button", { name: "Workers for Chat 1", exact: true });
     await expect(children).toBeVisible();
     await expect(children.locator('[data-role="worker"]')).toHaveCount(2);
+    await expect(ownerDisclosure.locator('[data-icon="app-communication"]')).toHaveCount(1);
+    await expect(row(owner).locator("img.navigation-icon")).toHaveCount(0);
+    for (const [id, file] of [
+      [owner, "labour-day"],
+      [a, "drone"],
+      [b, "drone"],
+    ]) {
+      if (!id) throw new Error("Missing conversation identity");
+      const icon = (id === owner ? ownerDisclosure : row(id)).locator("img.navigation-icon");
+      await expect(icon).toHaveAttribute(
+        "src",
+        new RegExp(`/${file}-[\\w-]+\\.(?:png|gif)(?:\\?play=[^ ]+)?$`),
+      );
+      await expect(icon).toHaveAttribute("alt", "");
+      await expect(icon).toHaveAttribute("aria-hidden", "true");
+      await expect(icon).toHaveJSProperty("complete", true);
+      expect(
+        await icon.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      ).toBeGreaterThan(0);
+    }
     await children.locator(`#conversation-${a}`).click();
     await expect(worker(a).getByLabel("Message", { exact: true })).toHaveValue("draft A");
     await expectNavigationHighlight(page, row(a).locator(".."));
@@ -11476,6 +11663,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     // A citation opens the exact captured source through existing event navigation.
     await overview.getByRole("button", { name: /^Source 1:/ }).click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await selectSidebarPage(page, "Search");
     await expect(overview).toContainText("The recorded sessions report");
 
@@ -11603,6 +11792,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     // Single-click titles and keyboard actions both open sources without a preview pane.
     await search.locator(".search-result-title").first().click();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await selectSidebarPage(page, "Search");
     await query.focus();
     await query.press("ArrowDown");
@@ -11615,6 +11806,8 @@ test("desktop: project search, shared transcripts, and saved filters", async () 
     );
     await expect(page.locator(".event.search-match")).toBeFocused();
     await expect(page.locator(".event.search-match")).toContainText("Parser fixed");
+    // Retained worker matches may exist while hidden; wait for actual source navigation.
+    await expect(page.locator(".event.search-match")).toBeVisible();
     await page.screenshot({
       animations: "disabled",
       path: join(root, "test-results", "theme-chat.png"),
@@ -12202,6 +12395,12 @@ test("desktop: project questions use files without saved sessions", async () => 
     await expect(
       page.getByRole("complementary", { name: "File preview", exact: true }),
     ).toContainText("README.md");
+    await expect(
+      page.getByRole("complementary", { name: "File preview", exact: true }).locator(".view-lines"),
+    ).toContainText("accessible palettes");
+    const opened = await page.evaluate(() => window.desktop.snapshot());
+    expect(opened.runs).toHaveLength(0);
+    expect(opened.chats.filter((chat) => chat.kind === "project")).toHaveLength(0);
   } finally {
     await application.close();
     await rm(directory, { recursive: true, force: true });
@@ -15110,7 +15309,9 @@ test("desktop: Chat file panel tabs, scoped reads, themes and responsive layout"
       .locator(".sidebar")
       .getByRole("button", { name: /^New Session in / })
       .click();
-    await expect(tabs.getByRole("tab", { name: "test/main.ts", exact: true })).toHaveAttribute(
+    await expect(tabs.getByRole("tab")).toHaveCount(0);
+    await add.click();
+    await expect(tabs.getByRole("tab", { name: "New tab", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -17137,6 +17338,7 @@ test("desktop: accepted plans show task progress outside their Markdown document
     await page.keyboard.press("Delete");
     await page.evaluate(() => window.desktop.orchestrationChatAction({ type: "new" }));
     const backgroundChat = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
     await page.evaluate(
       (id) => window.desktop.orchestrationChatAction({ type: "send", id, text: "Revise the plan" }),
       originalChat,
@@ -17197,6 +17399,20 @@ test("desktop: accepted plans show task progress outside their Markdown document
     expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.[0]?.state).toBe(
       "completed",
     );
+    const existing = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    const viewPlan = page
+      .locator("#chat-file-panel")
+      .getByRole("button", { name: "View Plan", exact: true });
+    await viewPlan.focus();
+    await viewPlan.press("Space");
+    await expect(panel.getByRole("heading", { name: "Revised change", exact: true })).toBeVisible();
+    await expect(panel.getByText("2 out of 2", { exact: true })).toBeVisible();
+    const reopened = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(reopened.plans).toEqual(existing.plans);
+    expect(reopened.run?.turns).toBe(existing.run?.turns);
+    expect(
+      await readFile(join(snapshot.chat.directory as string, "plans", `${plan?.id}.md`), "utf8"),
+    ).toBe(markdown);
   } finally {
     await application?.close().catch(() => {});
     await rm(directory, { recursive: true, force: true });

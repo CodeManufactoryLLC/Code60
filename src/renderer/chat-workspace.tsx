@@ -12,6 +12,7 @@ import { observeBreadcrumbRightInset } from "./page-title-header.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
 import type { ReviewPreview } from "./review-actions.js";
+import { projectChatIdentity } from "./session-panel.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -62,6 +63,7 @@ export function ChatWorkspace({
     snapshot?.chat.conversationId ??
     "";
   const relayPanelOpen = panelOpen[panelKey] ?? false;
+  const [planRequest, setPlanRequest] = useState<{ conversationId: string; serial: number }>();
   const [revisionPreview, setRevisionPreview] = useState<{ id: number; preview: ReviewPreview }>();
   const {
     scope,
@@ -69,6 +71,7 @@ export function ChatWorkspace({
     setGitSetupProject,
     chatRequest,
     fileTabs: currentFileTabs,
+    filePanel,
     explorerOpen,
     setExplorerOpen,
   } = project;
@@ -111,6 +114,7 @@ export function ChatWorkspace({
         : chat.conversationId === snapshot?.chat.conversationId),
   );
   const relayActive = snapshot?.chat.kind === "relay" && !workerId;
+  const displayedRelayPlan = relayActive ? relay?.plans?.at(-1) : undefined;
   const relayWorkerActive = !!snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
   const recallSource = selectedRecallSource(state, workerId, transcripts, scope.viewKey);
   const reviewSummaries = snapshot?.reviews ?? [];
@@ -162,7 +166,7 @@ export function ChatWorkspace({
             key={
               chat?.kind === "relay"
                 ? chatDraftKey(chat)
-                : `${database}:${chat?.projectId}:${chat?.directory ?? chat?.run?.id ?? "disconnected"}`
+                : `${database}:${chat?.projectId}:${projectChatIdentity(chat?.run?.id, chat?.directory)}`
             }
             api={api}
             notice={chat?.kind === "relay" ? null : projectNotice}
@@ -254,12 +258,26 @@ export function ChatWorkspace({
       </Card>
       <section className="project-file-panel-scope" hidden={!projectFiles}>
         <RetainedProjectPanels
-          id={scope.viewKey}
-          liveIds={project.retainedScopes.map((owner) => owner.viewKey)}
+          id={filePanel.identity}
+          liveIds={project.retainedScopes.flatMap((owner) =>
+            [...owner.panels.values()].map((panel) => panel.identity),
+          )}
         >
           <FilePanel
             disabled={!database}
             plans={plans}
+            viewPlan={displayedRelayPlan}
+            onViewPlan={
+              displayedRelayPlan && relay?.conversationId
+                ? () => {
+                    project.showConversationFiles?.();
+                    setPlanRequest((previous) => ({
+                      conversationId: relay.conversationId as string,
+                      serial: (previous?.serial ?? 0) + 1,
+                    }));
+                  }
+                : undefined
+            }
             api={api}
             recallSource={recallSource}
             reviews={reviewSummaries}
@@ -269,7 +287,7 @@ export function ChatWorkspace({
                 ? (directory ?? undefined)
                 : undefined
             }
-            currentChat={snapshot?.chat.run?.id}
+            currentChat={workerId ? undefined : snapshot?.chat.run?.id}
             knowledgeOwner={
               snapshot?.projectInstanceId && snapshot.databaseEpoch !== undefined
                 ? {
@@ -279,7 +297,7 @@ export function ChatWorkspace({
                   }
                 : undefined
             }
-            key={scope.viewKey}
+            key={filePanel.identity}
             tabs={currentFileTabs}
             onAction={fileAction}
             browser={fileBrowser}
@@ -292,27 +310,43 @@ export function ChatWorkspace({
       </section>
       {snapshot?.chats
         .filter((chat) => chat.kind === "relay")
-        .map((owner) => (
-          <RelayPlansPanel
-            key={`${owner.conversationId}:${owner.generation}`}
-            snapshot={{ ...snapshot, chat: owner }}
-            api={api}
-            plans={owner.plans ?? []}
-            conversationId={owner.conversationId}
-            generation={owner.generation}
-            active={
-              !splash &&
-              conversationActive &&
-              owner.conversationId === relay?.conversationId &&
-              (relayActive || relayWorkerActive) &&
-              !projectFiles
-            }
-            recallSource={recallSource}
-            open={panelOpen[owner.conversationId ?? ""] ?? false}
-            onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
-            revisionPreview={revisionPreview}
-          />
-        ))}
+        .flatMap((owner) =>
+          [
+            undefined,
+            ...workerViews
+              .filter(({ run }) => {
+                const worker = run?.relay;
+                return (
+                  worker &&
+                  worker.conversationId === owner.conversationId &&
+                  worker.generation === owner.generation
+                );
+              })
+              .map(({ id }) => id),
+          ].map((id) => (
+            <RelayPlansPanel
+              key={`${owner.conversationId}:${owner.generation}:${id ?? "relay"}`}
+              snapshot={{ ...snapshot, chat: owner }}
+              api={api}
+              plans={id ? [] : (owner.plans ?? [])}
+              conversationId={owner.conversationId}
+              currentChat={!id ? owner.conversationId : undefined}
+              generation={owner.generation}
+              active={
+                !splash &&
+                conversationActive &&
+                owner.conversationId === relay?.conversationId &&
+                (id ? relayWorkerActive && workerId === id : relayActive) &&
+                !projectFiles
+              }
+              recallSource={recallSource}
+              open={panelOpen[owner.conversationId ?? ""] ?? false}
+              onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
+              planRequest={id ? undefined : planRequest}
+              revisionPreview={id ? undefined : revisionPreview}
+            />
+          )),
+        )}
     </div>
   );
 }

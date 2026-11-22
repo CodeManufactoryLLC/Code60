@@ -46,6 +46,7 @@ export const planSchema = z.strictObject({
   project: z.string().max(4_096).nullable(),
   revision,
   proposalRevision: revision,
+  creationOrder: revision,
   requestId: z.string().max(128),
   creationKey: z.string().max(250_000),
   title,

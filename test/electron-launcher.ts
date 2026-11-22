@@ -23,6 +23,7 @@ export async function launchDesktop(
   database: string,
   minimalPath = false,
   environment: Record<string, string> = {},
+  entry = root,
 ) {
   const packaged = process.env.CODE60_PACKAGED_EXECUTABLE;
   const env: Record<string, string> = {};
@@ -90,7 +91,7 @@ export async function launchDesktop(
     // Playwright otherwise injects --no-sandbox on Linux.
     chromiumSandbox: true,
     executablePath: packaged ? resolve(packaged) : (require("electron") as string),
-    args: [...(packaged ? [] : [root]), `--user-data-dir=${join(directory, "user-data")}`],
+    args: [...(packaged ? [] : [entry]), `--user-data-dir=${join(directory, "user-data")}`],
     cwd: directory,
     env,
   });
@@ -98,9 +99,10 @@ export async function launchDesktop(
     ({ dialog }, paths) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths.folder] });
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: paths.database });
-      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+      if (paths.mockMessageBox)
+        dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
     },
-    { folder, database },
+    { folder, database, mockMessageBox: entry === root },
   );
   await launched.firstWindow();
   await launched.evaluate(({ app, BrowserWindow }) => {

@@ -2476,6 +2476,7 @@ export class DesktopController {
         });
       }
       return {
+        revision: this.revision,
         projectId: owner.id,
         databaseEpoch: request.databaseEpoch,
         source,
@@ -3578,12 +3579,17 @@ export class DesktopController {
         session.titleTask?.abort.abort();
         await this.saveChat(session);
       } else if (request.type === "archive") {
+        const archived = session.archived;
         session.archived = true;
-        await this.saveChat(session);
+        try {
+          await this.saveChat(session);
+        } catch (cause) {
+          session.archived = archived;
+          throw cause;
+        }
         if (this.conversations.current === session) {
           const next = this.conversations.sessions.find((entry) => !entry.archived);
           if (next) this.conversations.current = next;
-          else await this.startChat(this.conversations.create());
         }
       } else if (request.type === "resume-updates") {
         if (session.restored || !session.chat)
@@ -3932,12 +3938,18 @@ export class DesktopController {
     runtime: (caller) => this.knowledgeRuntime(caller),
     valid: (caller) => this.validKnowledgeCaller(caller),
     validOwner: (owner) => this.validKnowledgeOwner(owner),
-    readView: async (caller, _panel, tab) => {
+    readView: async (caller, panel, tab) => {
       if (caller.kind === "relay") {
         if (tab.kind === "plan")
           return this.relay?.owner(caller.conversationId)?.knowledgePlan(tab.planId);
         if (tab.kind === "file" && !tab.savedRevision)
-          return this.relayFiles.knowledgePreview(tab.path, caller.conversationId);
+          return panel.active && panel.open
+            ? this.relayFiles.knowledgePreview(
+                tab.path,
+                caller.conversationId,
+                panel.fileSubscription,
+              )
+            : undefined;
         return undefined;
       }
       const owner = this.projectHost.byId(caller.projectId);

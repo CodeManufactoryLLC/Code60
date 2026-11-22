@@ -72,7 +72,9 @@ export function useRelayFiles(
   const scope = relayFileScope(snapshot, root);
   const key = scope ? detailScopeKey(scope) : `unavailable:${root}`;
   const owner = useMemo(() => new FileBrowserState(key), [key]);
-  const registration = useMemo(() => ({ api, key, enabled }), [api, key, enabled]);
+  // Retain Explorer state, release the bounded main-process view on deactivation.
+  const subscribed = enabled && active;
+  const registration = useMemo(() => ({ api, key, subscribed }), [api, key, subscribed]);
   useLayoutEffect(() => {
     owner.activate();
     return () => owner.dispose();
@@ -86,7 +88,7 @@ export function useRelayFiles(
   const sequence = useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: key canonically includes the complete scope; snapshot/selection changes never replace an unchanged root.
   useEffect(() => {
-    if (!enabled || !scope || !api.setRelayFileContext || !api.subscribeDetails) return;
+    if (!subscribed || !scope || !api.setRelayFileContext || !api.subscribeDetails) return;
     setConnection(undefined);
     const request = { scope, subscriptionId: crypto.randomUUID() };
     let alive = true;
@@ -104,8 +106,8 @@ export function useRelayFiles(
       alive = false;
       stop();
     };
-  }, [api, key, enabled, owner, registration]);
-  const current = enabled && connection?.registration === registration ? connection : undefined;
+  }, [api, key, subscribed, owner, registration]);
+  const current = subscribed && connection?.registration === registration ? connection : undefined;
   const requestId = current?.frame.closed === false ? current.request.subscriptionId : undefined;
   const directories =
     preview !== null
@@ -164,6 +166,7 @@ export function useRelayFiles(
     }) === requestJson;
   const polling = payload?.filePolling;
   return {
+    subscriptionId: requestId,
     root,
     preview,
     selectedFile: state.selected,

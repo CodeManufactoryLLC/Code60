@@ -44,6 +44,8 @@ requests and 256 MiB of recorded rollback data; interrupted Undo requires explic
 recovery. Saved, unapplied reviews remain read-only historical evidence after
 restart, never work to integrate automatically. Human **Accept** authorizes the displayed plan
 revision and target assignments, not later target changes.
+The right sidebar's **View Plan** button reopens the current session's latest
+existing plan after its tab is closed, without generating a new plan.
 
 Project accordions retain independent chats, drafts and file views. Project chats
 remain database-backed and bound to their project. Reopening Code60 restores the

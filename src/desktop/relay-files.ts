@@ -110,20 +110,25 @@ export class RelayFiles {
           .sources.find((s) => s.key === "files") ?? null,
     };
   }
-  /** Only an already loaded preview from exactly one live view; never reads the filesystem. */
+  /** An exact live subscription pins the root; stale or inactive caches are unreadable. */
   knowledgePreview(
     path: string,
-    conversationId?: string,
+    conversationId: string,
+    subscriptionId: string | undefined,
   ): RelayFileSnapshot["preview"] | undefined {
-    const matches = [...this.views.values()].filter(
-      (view) =>
-        view.files?.preview?.path === path &&
-        (conversationId === undefined || view.conversationId === conversationId),
-    );
-    const view = matches.length === 1 ? matches[0] : undefined;
-    if (!view) return undefined;
+    const view = subscriptionId ? this.views.get(subscriptionId) : undefined;
+    if (
+      !view ||
+      !this.visible ||
+      !this.active(view) ||
+      view.conversationId !== conversationId ||
+      view.context.preview !== path ||
+      view.files?.preview?.path !== path ||
+      view.files.context.sequence !== view.context.sequence
+    )
+      return undefined;
     view.valid();
-    return view.files?.preview ?? undefined;
+    return view.files.preview;
   }
   version(id: string): number {
     return this.views.get(id)?.revision ?? 0;

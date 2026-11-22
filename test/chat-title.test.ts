@@ -9,7 +9,7 @@ describe("chat titles", () => {
     let permission: Promise<string> | undefined;
     const agents = new FakeAgents((_, session) => {
       permission = session.requestPermission({ toolCallId: "t", title: "Edit", kind: "edit" });
-      session.update({ type: "message", text: "Fix parser validation" });
+      session.update({ type: "message", text: "Parser validation" });
       return "end_turn";
     });
     expect(
@@ -20,22 +20,54 @@ describe("chat titles", () => {
         "y".repeat(20_000),
         new AbortController().signal,
       ),
-    ).toBe("Fix parser validation");
+    ).toBe("Parser validation");
     expect(await permission).toBe("deny");
     expect(agents.sessions[0]?.prompts[0]?.length).toBeLessThan(17_000);
+    expect(agents.sessions[0]?.prompts[0]).toContain("under 20 characters (at most 19 characters)");
     expect(agents.sessions[0]?.stops).toEqual([1_000]);
     expect(agents.specs[0]?.mcpServers).toBeUndefined();
   });
-  it.each(["", "x".repeat(121), "two\nlines"])("rejects an invalid title", async (text) => {
+  it.each([
+    ["x".repeat(19), "x".repeat(19)],
+    ["x".repeat(20), "x".repeat(19)],
+    ["x".repeat(500), "x".repeat(19)],
+    ["Parser work", "Parser work"],
+    ['"Parser validation"', "Parser validation"],
+    [`"${" ".repeat(19)}Fix parser   "`, "Fix parser"],
+    ["  '   Fix parser   '  ", "Fix parser"],
+    [`"  ${"x".repeat(20)}  "`, "x".repeat(19)],
+    [`${"x".repeat(18)} extra`, "x".repeat(18)],
+    [`${"x".repeat(18)}😀extra`, `${"x".repeat(18)}😀`],
+  ])("cuts off generated title %j to %j", async (text, expected) => {
     const agents = new FakeAgents((_, session) => {
-      session.update({ type: "message", text });
+      session.update({ type: "message", text: text.slice(0, 10) });
+      session.update({ type: "message", text: text.slice(10) });
       return "end_turn";
     });
-    await expect(
-      generateChatTitle(agents, spec, "task", "reply", new AbortController().signal),
-    ).rejects.toThrow();
+    const title = await generateChatTitle(
+      agents,
+      spec,
+      "task",
+      "reply",
+      new AbortController().signal,
+    );
+    expect(title).toBe(expected);
+    expect([...title].length).toBeLessThanOrEqual(19);
     expect(agents.sessions[0]?.stops).toEqual([1_000]);
   });
+  it.each(["", "   ", '"   "', "'   '", "two\nlines", `${"x".repeat(20)}\ninvalid`])(
+    "rejects an invalid title",
+    async (text) => {
+      const agents = new FakeAgents((_, session) => {
+        session.update({ type: "message", text });
+        return "end_turn";
+      });
+      await expect(
+        generateChatTitle(agents, spec, "task", "reply", new AbortController().signal),
+      ).rejects.toThrow();
+      expect(agents.sessions[0]?.stops).toEqual([1_000]);
+    },
+  );
   it("cancels hanging title generation and stops its process", async () => {
     const agents = new FakeAgents(() => "hang");
     const abort = new AbortController();
@@ -51,6 +83,9 @@ describe("chat titles", () => {
     expect(
       parseOrchestrationChatAction({ type: "rename", id, title: "Parser work" }),
     ).toMatchObject({ title: "Parser work" });
+    expect(
+      parseOrchestrationChatAction({ type: "rename", id, title: "x".repeat(120) }),
+    ).toMatchObject({ title: "x".repeat(120) });
     expect(parseOrchestrationChatAction({ type: "archive", id })).toEqual({ type: "archive", id });
     for (const title of ["", " ", "x".repeat(121), "two\nlines", "\0"])
       expect(() => parseOrchestrationChatAction({ type: "rename", id, title })).toThrow();

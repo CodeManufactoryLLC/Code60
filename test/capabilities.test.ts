@@ -137,6 +137,15 @@ describe("desktop capability catalog", () => {
     expect(service?.limitations).toContain("sixty seconds");
     expect(service?.limitations).toContain("no native Stop action");
   });
+  it("describes the scheduler update ownership and executable prerequisites without agent authority", () => {
+    const update = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
+    expect(update?.limitations).toContain("native service PID");
+    expect(update?.limitations).toContain("newer or unknown version");
+    expect(update?.limitations).toContain("one exclusive owner");
+    expect(update?.limitations).toContain("parent locations protected");
+    expect(update?.prerequisite).toBe("runtime");
+    expect(update?.agentAccess).toBe("human-only");
+  });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
     expect(PAGE_CAPABILITIES.providers).toBe("providers");
     expect(PAGE_CAPABILITIES.provider).toBe("providers");
@@ -216,7 +225,9 @@ describe("desktop capability catalog", () => {
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
       confirmation: expect.stringContaining("Confirm the full selected path"),
-      limitations: expect.stringContaining("never initializes Git"),
+      limitations: expect.stringContaining(
+        "Archiving the last displayed project chat returns to its home without a replacement",
+      ),
     });
     expect(projects?.access).toContain("project home → New Session");
     expect(projects?.access).toContain("red × (Close Project)");
@@ -224,6 +235,7 @@ describe("desktop capability catalog", () => {
     expect(projects?.limitations).toContain("keeps the project open");
     expect(projects?.confirmation).toContain("Stop folder confirmation");
     expect(projects?.limitations).toContain("only the project chevron");
+    expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
     const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",
@@ -241,5 +253,31 @@ describe("desktop capability catalog", () => {
 
   it("matches the generated bundled reference", async () => {
     await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
+  });
+
+  it("describes session-owned file tabs without changing their runtime prerequisite", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "files")).toMatchObject({
+      prerequisite: "runtime",
+      purpose: expect.stringContaining("individual chat or worker session"),
+      limitations: expect.stringContaining(
+        "Tab sets, order and selection are independent per session",
+      ),
+    });
+  });
+
+  it("describes bounded active file subscriptions and reachable archived review evidence", () => {
+    const files = DESKTOP_CAPABILITIES.find((capability) => capability.id === "files");
+    expect(files?.limitations).toContain("Inactive panels release file subscriptions");
+    expect(files?.limitations).toContain("exact active file subscription");
+    expect(files?.limitations).toContain("Archived reviews remain read-only");
+  });
+
+  it("describes sidebar activity as runtime-dependent presentation", () => {
+    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
+      prerequisite: "runtime",
+      access: expect.stringContaining("left navigation names"),
+      purpose: expect.stringContaining("custom assistants and Relay"),
+      limitations: expect.stringContaining("reduced motion and forced colors"),
+    });
   });
 });

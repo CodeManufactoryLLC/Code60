@@ -21,6 +21,13 @@ const root = resolve(import.meta.dirname, "..");
 // atomic replacement. Native ARM64 measured about 5 s for each step.
 const nativeJournalTimeout = 5_000;
 
+async function attachJsonEvidence(name: string, evidence: unknown) {
+  const info = test.info();
+  const path = info.outputPath(`${name}.json`);
+  await writeFile(path, JSON.stringify(evidence, null, 2));
+  await info.attach(name, { path, contentType: "application/json" });
+}
+
 test("workflow: conversational browser modes, external errors, cancellation and restart", async () => {
   test.setTimeout(90_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-ui-")));
@@ -292,6 +299,158 @@ function alive(pid: number) {
   }
 }
 
+async function checkAgentMessageSpacing(
+  app: ElectronApplication,
+  page: Page,
+  chat: Locator,
+  name: string,
+  fontSize: number,
+) {
+  const messages = chat.locator(".event.message");
+  await expect.poll(() => messages.count()).toBeGreaterThanOrEqual(2);
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const settled = async () => {
+    await expect(chat.locator('[data-layout-animating="true"]')).toHaveCount(0);
+    await expect
+      .poll(() =>
+        messages.evaluateAll((elements) =>
+          elements.every((element) => {
+            const outer = element.closest(".chat-message-layout");
+            if (!outer) return true; // Worker messages are direct transcript children.
+            const inner = outer.querySelector(".chat-message-layout-content");
+            return (
+              inner &&
+              Math.abs(
+                outer.getBoundingClientRect().height - inner.getBoundingClientRect().height,
+              ) < 0.05
+            );
+          }),
+        ),
+      )
+      .toBe(true);
+  };
+  const measure = () =>
+    messages.evaluateAll((elements) =>
+      elements.map((element) => {
+        const markdown = element.querySelector(".chat-markdown");
+        const bubble = element.querySelector(".agent-message-bubble");
+        const controls = element.querySelector(".message-copy");
+        const copy = controls?.querySelector("button");
+        const outer = element.closest(".chat-message-layout");
+        if (!markdown || !bubble || !controls || !copy)
+          throw new Error("Missing message layout or Copy");
+        const style = getComputedStyle(markdown);
+        const bounds = markdown.getBoundingClientRect();
+        const target = copy.getBoundingClientRect();
+        // Parent items use display:contents turn containers, some empty after
+        // activity is folded into its disclosure. Workers are direct children.
+        let nextItem = outer ? outer.parentElement?.nextElementSibling : element.nextElementSibling;
+        while (nextItem?.matches(".chat-turn-content") && !nextItem.firstElementChild)
+          nextItem = nextItem.nextElementSibling;
+        const candidate = nextItem?.matches(".chat-turn-content")
+          ? nextItem.firstElementChild
+          : nextItem;
+        const next = candidate?.matches(".chat-message-layout, .event.message, .chat-activity")
+          ? candidate
+          : null;
+        return {
+          text: markdown.textContent,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight,
+          letterSpacing: style.letterSpacing,
+          bubblePadding: getComputedStyle(bubble).padding,
+          outerPadding: getComputedStyle(element).padding,
+          width: bounds.width,
+          height: bounds.height,
+          copyWidth: target.width,
+          copyHeight: target.height,
+          trailingGap:
+            (outer ?? element).getBoundingClientRect().bottom -
+            controls.getBoundingClientRect().bottom +
+            (outer ? 0 : Number.parseFloat(getComputedStyle(element).marginBottom)),
+          adjacentGap: next
+            ? next.getBoundingClientRect().top - controls.getBoundingClientRect().bottom
+            : null,
+        };
+      }),
+    );
+  // Recreate the pre-PR margin on the same replies. Bubble and outer padding,
+  // typography, viewport and display settings remain identical in both samples.
+  await messages.evaluateAll((elements) => {
+    for (const element of elements)
+      if (element instanceof HTMLElement) element.style.marginBottom = "8px";
+  });
+  let before: Awaited<ReturnType<typeof measure>>;
+  try {
+    await settled();
+    before = await measure();
+    await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-before.png`) });
+  } finally {
+    await messages.evaluateAll((elements) => {
+      for (const element of elements)
+        if (element instanceof HTMLElement) element.style.removeProperty("margin-bottom");
+    });
+  }
+  await settled();
+  const after = await measure();
+  await chat.screenshot({ path: test.info().outputPath(`${name}-spacing-after.png`) });
+  await test.info().attach(`${name}-message-spacing`, {
+    body: JSON.stringify({ before, after }, null, 2),
+    contentType: "application/json",
+  });
+  expect(after).toHaveLength(before.length);
+  expect(before.filter((message) => message.adjacentGap !== null).length).toBeGreaterThan(0);
+  for (const [index, message] of after.entries()) {
+    const previous = before[index];
+    if (!previous) throw new Error("Message set changed during spacing measurement");
+    const { width, height, copyWidth, copyHeight, trailingGap, adjacentGap, ...content } = message;
+    const {
+      width: oldWidth,
+      height: oldHeight,
+      copyWidth: oldCopyWidth,
+      copyHeight: oldCopyHeight,
+      trailingGap: oldTrailingGap,
+      adjacentGap: oldAdjacentGap,
+      ...oldContent
+    } = previous;
+    expect(content).toEqual(oldContent);
+    expect(message.fontSize).toBe(`${fontSize}px`);
+    expect(message.bubblePadding).toBe("12px 18px");
+    expect(message.outerPadding).toBe("0px 0px 16px");
+    // 0.05 CSS px permits subpixel transform noise, not a visible size change.
+    for (const [actual, expected] of [
+      [width, oldWidth],
+      [height, oldHeight],
+      [copyWidth, oldCopyWidth],
+      [copyHeight, oldCopyHeight],
+      [oldTrailingGap, 24],
+      [trailingGap, oldTrailingGap * 0.75],
+    ] as const) {
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(0.05);
+    }
+    if (oldAdjacentGap !== null) {
+      expect(adjacentGap).not.toBeNull();
+      expect(Math.abs((adjacentGap as number) - oldAdjacentGap * 0.75)).toBeLessThanOrEqual(0.05);
+    }
+    expect(copyWidth).toBeGreaterThanOrEqual(24 - 0.05);
+    expect(copyHeight).toBeGreaterThanOrEqual(24 - 0.05);
+    // An earlier toast or copied reply cannot satisfy this activation.
+    await app.evaluate(
+      ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+      `${name}-${index}-not-copied`,
+    );
+    const copy = messages.nth(index).getByRole("button", { name: "Copy message", exact: true });
+    await copy.focus();
+    await expect(copy).toBeVisible();
+    await copy.press("Enter");
+    await expect
+      .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toBe(message.text);
+  }
+}
+
 async function checkSidebarIconSpacing(entry: Locator) {
   // Opening lazily replaces the placeholder row. Sample all boxes in the same frame.
   await expect(async () => {
@@ -352,6 +511,59 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await expect(composer).toBeEditable();
     await composer.fill(name);
   }
+
+  // Two sessions in the SAME project must retain separate tab sets and selections.
+  const panel = page.locator("#chat-file-panel");
+  const tabs = panel.getByRole("tablist", { name: "File tabs", exact: true });
+  const first = entries.nth(count - 2);
+  const second = entries.nth(count - 1);
+  await first.click();
+  await expect(first).toHaveAttribute("aria-current", "true");
+  await expect(composer).toHaveValue("First sidebar draft");
+  const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "docs", exact: true }).click();
+  await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
+  await panel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).press("Alt+ArrowLeft");
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+  await panel.getByRole("treeitem", { name: "notes.txt", exact: true }).click();
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await tabs.getByRole("button", { name: "Close File Explorer", exact: true }).click();
+  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
+  await first.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["result.txt", "File Explorer", "Memory Recall"]);
+  await expect(tabs.getByRole("tab", { name: "result.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("original");
+  await tabs.getByRole("tab", { name: "File Explorer", exact: true }).click();
+  await expect(panel.getByRole("treeitem", { name: "docs", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
+  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
+  await tabs.getByRole("button", { name: "Close Memory Recall", exact: true }).click();
+  await second.click();
+  await expect(tabs.getByRole("tab")).toHaveText(["notes.txt", "New tab"]);
+  await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
+  await page.screenshot({ path: test.info().outputPath("session-panel-isolation.png") });
+  await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
 
   for (const theme of ["light", "dark"]) {
     await page.locator("#tab-settings").click();
@@ -607,11 +819,227 @@ async function checkSidebarNavigation(page: Page, repo: string) {
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
     await project.locator(".project-chat-toggle").press("ArrowRight");
+    const row = entries.last().locator("..");
+    const actions = row.locator(".chat-sidebar-action");
+    await expect(actions).toHaveCount(2);
+    await expect(row.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+    await page.locator(".sidebar-toggle").focus();
+    await page.mouse.move(1000, 500);
+    await expect(actions.first().locator(".sidebar-card-action")).toHaveCSS("opacity", "0");
+    await row.hover();
+    const reference = await project.locator(".sidebar-card-add").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return Object.fromEntries(
+        ["width", "height", "borderRadius", "backgroundColor", "border", "boxShadow"].map((key) => [
+          key,
+          style[key as keyof CSSStyleDeclaration],
+        ]),
+      );
+    });
+    for (const action of await actions.all()) {
+      const circle = action.locator(".sidebar-card-action");
+      await expect(circle).toHaveCSS("opacity", "1");
+      expect(
+        await circle.evaluate((element, keys) => {
+          const style = getComputedStyle(element);
+          return Object.fromEntries(
+            keys.map((key) => [key, style[key as keyof CSSStyleDeclaration]]),
+          );
+        }, Object.keys(reference)),
+      ).toEqual(reference);
+    }
+    await page.screenshot({ path: test.info().outputPath(`project-chat-actions-${theme}.png`) });
   }
+  const row = entries.last().locator("..");
+  const selected = entries.last();
+  const id = (await selected.getAttribute("id"))?.replace("conversation-", "");
+  await row.getByRole("button", { name: /^Rename chat: / }).focus();
+  await expect(row.locator(".sidebar-card-action").first()).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Enter");
+  const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
+  await rename.getByRole("textbox", { name: "Chat name" }).fill("Sidebar control check");
+  await rename.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(selected).toHaveAccessibleName("Sidebar control check");
+  await selected.press("Enter");
+  await expect(composer).toHaveValue("Second sidebar draft");
+  await selected.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: "Chat actions", exact: true });
+  await expect(menu.getByRole("menuitem")).toHaveText(["Open", "Rename", "Archive"]);
+  await menu.press("Escape");
+  await expect(selected).toBeFocused();
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  const archive = row.getByRole("button", {
+    name: "Archive chat: Sidebar control check",
+    exact: true,
+  });
+  await archive.focus();
+  await expect(archive.locator(".sidebar-card-action")).toHaveCSS("box-shadow", "none");
+  await expect(archive.locator(".sidebar-card-action")).toHaveCSS("transition-duration", "0s");
+  await page.screenshot({ path: test.info().outputPath("project-chat-actions-forced-colors.png") });
+  await archive.press("Space");
+  await expect(
+    project.getByRole("button", { name: "Sidebar control check", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  const snapshot = await page.evaluate(() => window.desktop.snapshot());
+  expect(
+    snapshot.chats.find((chat) => chat.conversationId === id || chat.run?.id === id)?.archived,
+  ).toBe(true);
+  await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
   await page.locator(".sidebar-toggle").click();
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("inert", "");
   await page.locator(".sidebar-toggle").press("Enter");
   await expect(page.locator("#navigation-sidebar")).toHaveAttribute("aria-hidden", "false");
+}
+
+async function checkSidebarSpotlight(page: Page, repo: string, custom: boolean) {
+  const relay = page.getByRole("button", { name: "Relay", exact: true, includeHidden: true });
+  const relayName = relay.locator(".chat-sidebar-label");
+  const project = page.getByRole("region", {
+    name: `Project ${repo}`,
+    exact: true,
+    includeHidden: true,
+  });
+  const chat = () => page.locator(".orchestration-chat-page:visible");
+  const composer = () =>
+    chat().getByRole("combobox", { name: "Message to orchestrator", exact: true });
+  const send = async (text: string) => {
+    await expect(composer()).toBeEditable();
+    await composer().fill(text);
+    await expect(chat().getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    await composer().press("Enter");
+  };
+  const hang = JSON.stringify([{ message: "Working until cancelled." }, { hang: "cancellable" }]);
+  const ownerCancelGate = join(repo, "..", "spotlight-owner-cancel-release");
+  const workerCancelGate = join(repo, "..", "spotlight-worker-cancel-release");
+  const gatedHang = (cancelWaitForFile: string) =>
+    JSON.stringify([
+      { message: "Working until cancelled." },
+      { hang: "cancellable", cancelWaitForFile },
+    ]);
+  await relay.click();
+  await expect(relay).toHaveAttribute("aria-current", "true");
+  const relayId = (await relay.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!relayId) throw new Error("Missing Relay identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await send(
+    `Relay target: ${JSON.stringify({ cwd: repo, workspaceMode: "worktree", label: "Spotlight worker", prompt: gatedHang(workerCancelGate) })}`,
+  );
+  const worker = page.getByRole("button", { name: /^Spotlight worker \[/, includeHidden: true });
+  const workerName = worker.locator(".chat-sidebar-label");
+  await expect(workerName).toHaveAttribute("data-working", "true");
+  await expect(composer()).toBeEditable();
+  // Relay continues monitoring its owned worker after its own turn becomes idle.
+  await expect(relayName).toHaveAttribute("data-working", "true");
+  await expect(relay).toHaveAttribute("aria-description", /Monitoring subagents/);
+  await expect(relay).toHaveAttribute("title", /Monitoring subagents/);
+  await send(hang);
+  let assistant = project.locator(".chat-sidebar-entry").last();
+  if (custom) {
+    assistant = page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Workflow Agent", exact: true, includeHidden: true });
+    await assistant.click();
+  } else {
+    const chatCount = await project.locator(".chat-sidebar-entry").count();
+    await project.getByRole("button", { name: /^New Session in / }).click();
+    await expect(project.locator(".chat-sidebar-entry")).toHaveCount(chatCount + 1);
+    assistant = project.locator(".chat-sidebar-entry").last();
+  }
+  const assistantName = assistant.locator(".chat-sidebar-label");
+  await expect(assistant).toHaveAttribute("aria-current", "true");
+  const assistantId = (await assistant.getAttribute("id"))?.replace(/^conversation-/, "");
+  if (!assistantId) throw new Error("Missing assistant identity");
+  await expect(chat()).toHaveAttribute("data-chat-id", assistantId);
+  await send(gatedHang(ownerCancelGate));
+  await expect(assistantName).toHaveAttribute("data-working", "true");
+  const names = [relayName, workerName, assistantName];
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(name).toHaveCSS("animation-duration", "2.8s");
+  }
+  const activityName = chat().locator(".activity-display .activity-name");
+  await expect(activityName).toHaveCSS("animation-name", "activity-spotlight");
+  const spotlightStyle = (element: Element) => {
+    const style = getComputedStyle(element);
+    return [
+      style.backgroundImage,
+      style.backgroundSize,
+      style.backgroundClip,
+      style.color,
+      style.animationName,
+      style.animationDuration,
+      style.animationTimingFunction,
+      style.animationIterationCount,
+    ];
+  };
+  const reference = await activityName.evaluate(spotlightStyle);
+  for (const name of names) expect(await name.evaluate(spotlightStyle)).toEqual(reference);
+  await page.screenshot({ path: test.info().outputPath("sidebar-spotlight.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+  for (const name of names) {
+    await expect(name).toHaveCSS("animation-name", "none");
+    await expect(name).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
+  }
+  await page.emulateMedia({ forcedColors: "none" });
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await page.locator(".sidebar-toggle").click();
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "activity-spotlight");
+  // Cancelling one owner never removes another owner's spotlight, even off selection.
+  try {
+    await chat().getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(assistantName).toHaveAttribute("data-working", "false");
+    await expect(assistant).toHaveAttribute("aria-description", /Stopping/);
+    await expect(assistantName).toHaveCSS("animation-name", "none");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).chats.find(
+      (entry) => entry.run?.id === assistantId,
+    );
+    if (!cancelling) throw new Error("Missing cancelling assistant");
+    expect(cancelling.activity?.state).toBe("stopping");
+    expect(cancelling.run).toMatchObject({ status: "running", stopping: false, cancelling: true });
+    await expect(relayName).toHaveCSS("animation-name", "activity-spotlight");
+    await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  } finally {
+    await writeFile(ownerCancelGate, "release\n");
+  }
+  await relay.click();
+  await expect(chat()).toHaveAttribute("data-chat-id", relayId);
+  await chat().getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(workerName).toHaveCSS("animation-name", "activity-spotlight");
+  await worker.click();
+  try {
+    await page
+      .locator(".worker-chat-page:visible")
+      .getByRole("button", { name: "Stop", exact: true })
+      .click();
+    await expect(workerName).toHaveAttribute("data-working", "false");
+    await expect(worker).toHaveAttribute("aria-description", /Stopping/);
+    const workerId = (await worker.getAttribute("id"))?.replace(/^conversation-/, "");
+    const cancelling = (await page.evaluate(() => window.desktop.snapshot())).runs.find(
+      ({ record }) => record.id === workerId,
+    );
+    expect(cancelling?.view).toMatchObject({
+      status: "running",
+      stopping: false,
+      cancelling: true,
+    });
+  } finally {
+    await writeFile(workerCancelGate, "release\n");
+  }
+  for (const name of names) await expect(name).toHaveCSS("animation-name", "none");
+  await expect
+    .poll(async () =>
+      (await page.evaluate(() => window.desktop.snapshot())).runs.filter(
+        (run) => run.view?.status === "running",
+      ),
+    )
+    .toEqual([]);
 }
 
 for (const custom of [false, true]) {
@@ -635,7 +1063,9 @@ for (const custom of [false, true]) {
       git("init", "-q", "-b", "main");
       await writeFile(join(repo, "result.txt"), "original\n");
       await writeFile(join(repo, "notes.txt"), "committed notes\n");
-      git("add", "result.txt", "notes.txt");
+      await mkdir(join(repo, "docs"));
+      await writeFile(join(repo, "docs/nested.txt"), "nested fixture\n");
+      git("add", "result.txt", "notes.txt", "docs/nested.txt");
       commitFixture(repo);
       await writeFile(join(repo, "notes.txt"), "staged notes\n");
       git("add", "notes.txt");
@@ -802,9 +1232,93 @@ for (const custom of [false, true]) {
         checks.push(
           "Fresh setup, database creation and project opening completed through visible controls.",
         );
+        await application.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]?.setSize(1500, 1000),
+        );
         await checkSidebarNavigation(page, repo);
         checks.push(
           "Sidebar geometry, footer-matched glyphs, recursive collapse, stable selection colors and non-dimming navigation passed in Light and Dark.",
+        );
+
+        if (custom) {
+          const disclosure = page.locator("#settings-card-toggle");
+          if ((await disclosure.getAttribute("aria-expanded")) === "false")
+            await disclosure.click();
+          await page
+            .locator("#settings-pages")
+            .getByRole("tab", { name: "Text", exact: true })
+            .click();
+          await page
+            .getByRole("group", { name: "Agent Chat Messages", exact: true })
+            .getByLabel("Font size")
+            .fill("32");
+        }
+
+        const allProjectChats = (await page.evaluate(() => window.desktop.snapshot())).chats.filter(
+          (chat) => chat.kind === "project",
+        );
+        const projectChats = allProjectChats.filter((chat) => !chat.archived);
+        expect(projectChats.length).toBeGreaterThan(0);
+        const providerStarts = (await processes()).length;
+        const records = await Promise.all(
+          projectChats.map((chat) =>
+            readFile(
+              join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+              "utf8",
+            ),
+          ),
+        );
+        for (const item of projectChats) {
+          const row = page.locator(`#conversation-${item.run?.id}`);
+          await row.click();
+          await expect(row).toHaveAttribute("aria-current", "true");
+          await row.press("Shift+F10");
+          await page
+            .getByRole("menu", { name: "Chat actions", exact: true })
+            .getByRole("menuitem", { name: "Archive", exact: true })
+            .click();
+          await expect(row).toHaveCount(0);
+        }
+        const projectHome = page.locator("#panel-project .home-page:visible");
+        await expect(projectHome).toContainText("No conversations");
+        const newSession = projectHome.getByRole("button", { name: /^New Session in / });
+        await expect(newSession).toContainText("New Session");
+        await expect(
+          page.locator(".orchestration-chat-page:visible, .worker-chat-page:visible"),
+        ).toHaveCount(0);
+        const closed = await page.evaluate(() => window.desktop.snapshot());
+        expect(closed.chats.filter((chat) => chat.kind === "project")).toHaveLength(
+          allProjectChats.length,
+        );
+        expect(
+          closed.chats.filter((chat) => chat.kind === "project").every((chat) => chat.archived),
+        ).toBe(true);
+        expect((await processes()).length).toBe(providerStarts);
+        expect(
+          await Promise.all(
+            projectChats.map((chat) =>
+              readFile(
+                join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+                "utf8",
+              ),
+            ),
+          ),
+        ).toEqual(records);
+        await checkCheckout("original\n");
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        await newSession.focus();
+        await newSession.press("Enter");
+        await expect(
+          page.locator(".orchestration-chat-page:visible").getByRole("combobox"),
+        ).toBeEditable();
+        const explicit = await page.evaluate(() => window.desktop.snapshot());
+        expect(explicit.chat.projectId).toBe(projectChats[0]?.projectId);
+        expect(explicit.chats.filter((chat) => chat.kind === "project")).toHaveLength(
+          allProjectChats.length + 1,
+        );
+        await expect.poll(async () => (await processes()).length).toBe(providerStarts + 1);
+        checks.push(
+          "Closing the last project chat returned home without provider/session creation or record/Git changes; New Session explicitly created one chat.",
         );
 
         // Exercise the same production execution path for Relay and a custom owner.
@@ -877,6 +1391,7 @@ for (const custom of [false, true]) {
             exact: true,
           }),
         );
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await composer.fill(requestText);
         await composer.press("Enter");
         const plan = page.getByRole("region", { name: "Plan", exact: true });
@@ -897,6 +1412,36 @@ for (const custom of [false, true]) {
         checks.push(
           "Draft plan has no worker, worktree or checkout mutation before human acceptance.",
         );
+        const planPanel = page.locator(custom ? '[id^="relay-plan-panel-"]' : "#relay-plan-panel");
+        const existingPlans = (await page.evaluate(() => window.desktop.snapshot())).chat.plans;
+        const documentText =
+          (await plan.getByRole("article", { name: "Plan document" }).textContent()) ?? "";
+        await planPanel
+          .getByRole("tab", { name: "Plan · Relay target plan", exact: true })
+          .press("Delete");
+        await expect(plan).toHaveCount(0);
+        await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
+        await viewPlan.focus();
+        await viewPlan.press("Enter");
+        await expect(plan.getByRole("article", { name: "Plan document" })).toHaveText(documentText);
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toBeFocused();
+        await viewPlan.focus();
+        await viewPlan.press("Space");
+        await expect(
+          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+        ).toHaveCount(1);
+        expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans).toEqual(
+          existingPlans,
+        );
+        expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        await checkCheckout("original\n");
+        checks.push(
+          "Keyboard View Plan reopened the same closed Relay plan from another tab without generating, accepting or dispatching work.",
+        );
         await plan.getByRole("button", { name: "Accept", exact: true }).click();
         await expect
           .poll(
@@ -910,13 +1455,39 @@ for (const custom of [false, true]) {
         const completed = await page.evaluate(() => window.desktop.snapshot());
         const worker = completed.runs.find((run) => run.relay);
         if (!worker) throw new Error("Accepted plan did not create a worker");
+        const workerRow = page.locator(`[id="conversation-${worker.record.id}"]`);
+        await expect(workerRow).toBeVisible();
+        await expect(workerRow).toHaveAttribute("data-role", "worker");
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
+        await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
+        const parentTabsBeforeWorker = await planPanel.getByRole("tab").evaluateAll((tabs) =>
+          tabs.map((tab) => ({
+            label: tab.textContent,
+            selected: tab.getAttribute("aria-selected"),
+          })),
+        );
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+        await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
+        await checkAgentMessageSpacing(
+          application,
+          page,
+          page.locator(`#chat-${worker.record.id}`),
+          "worker",
+          custom ? 32 : 14,
+        );
         const workerModel = page
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
+        const workerTabs = page.getByRole("tablist", { name: "File tabs", exact: true });
+        await expect(workerTabs.getByRole("tab")).toHaveCount(0);
+        await page.getByRole("button", { name: "New file tab", exact: true }).click();
+        await page.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -941,6 +1512,9 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
+        await expect(
+          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
+        ).toHaveAttribute("aria-selected", "true");
         // Cached worker text can show before selection settles; a click meanwhile is ignored.
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
@@ -953,6 +1527,28 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
+        expect(
+          await planPanel.getByRole("tab").evaluateAll((tabs) =>
+            tabs.map((tab) => ({
+              label: tab.textContent,
+              selected: tab.getAttribute("aria-selected"),
+            })),
+          ),
+        ).toEqual(parentTabsBeforeWorker);
+        const parentChat = page.locator(".orchestration-chat-page:visible");
+        // Worker completion queues a separate autonomous parent turn. Wait for
+        // its known reply and idle UI before capturing either layout sample.
+        await expect(
+          parentChat.locator(".chat-markdown").filter({ hasText: /^ok$/ }),
+        ).toBeVisible();
+        await expect(parentChat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+        await checkAgentMessageSpacing(
+          application,
+          page,
+          parentChat,
+          custom ? "assistant" : "relay",
+          custom ? 32 : 14,
+        );
         checks.push(
           "Workers kept independent connector defaults; saving and clearing their role default preserved the live selection and the orchestrator default.",
         );
@@ -983,6 +1579,75 @@ for (const custom of [false, true]) {
         expect((await dialogs())?.observed).toHaveLength(3);
         checks.push(
           "An accepted isolated worker integrated automatically without another approval, preserving staging and HEAD.",
+        );
+
+        // Browsing a project from either table must retain the displayed conversation's plan action.
+        const savedPlan = await page.evaluate(() =>
+          window.desktop.snapshot().then((s) => s.chat.plans?.at(-1)),
+        );
+        if (!savedPlan) throw new Error("Missing saved conversation plan");
+        const workspaceRoot = (await page.evaluate(() => window.desktop.snapshot())).chat.directory;
+        const planRoot = workspaceRoot ? join(workspaceRoot, "..", "documents") : undefined;
+        if (!planRoot) throw new Error("Missing conversation storage");
+        const savedRecord = await readFile(
+          join(planRoot, ".code60/plans", `${savedPlan.id}.json`),
+          "utf8",
+        );
+        for (const source of ["Sessions", "Worktrees"]) {
+          const apps = page.locator("#apps-card-toggle");
+          if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+          const tables = page.locator("#tables-toggle");
+          if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
+          await page.getByRole("tab", { name: source, exact: true }).click();
+          const grid = page.locator(`#panel-${source.toLowerCase()} .sessions-grid`);
+          await expect(grid.locator('[data-testid^="glide-cell-1-"]').first()).toBeAttached();
+          const canvas = grid.getByTestId("data-grid-canvas");
+          const box = await canvas.boundingBox();
+          if (!box) throw new Error("Missing project table");
+          await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+          await page.getByRole("menuitem", { name: "Browse project files", exact: true }).click();
+          const projectPanel = page.locator("#chat-file-panel");
+          await expect(projectPanel.getByLabel("File root")).toHaveValue(repo);
+          await expect(projectPanel.getByRole("note", { name: "File target" })).toContainText(repo);
+          await expect(projectPanel.getByRole("region", { name: "Plan", exact: true })).toHaveCount(
+            0,
+          );
+          const snapshot = await page.evaluate(() => window.desktop.snapshot());
+          expect(snapshot.chat.conversationId).toBe(completed.chat.conversationId);
+          expect(
+            snapshot.chats
+              .filter((chat) => chat.kind === "project")
+              .flatMap((chat) => chat.plans ?? []),
+          ).not.toContainEqual(expect.objectContaining({ id: savedPlan.id }));
+          await projectPanel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
+          await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
+          await page.locator(`[id="conversation-${worker.record.id}"]`).click();
+          await expect(page.locator(`#chat-${worker.record.id}`)).toBeVisible();
+          await page
+            .locator(".sidebar")
+            .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
+            .click();
+          await expect(
+            projectPanel.getByRole("tab", { name: "result.txt", exact: true }),
+          ).toHaveAttribute("aria-selected", "true");
+          await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
+          const openPlan = projectPanel.getByRole("button", { name: "View Plan", exact: true });
+          await openPlan.focus();
+          await openPlan.press(source === "Sessions" ? "Enter" : "Space");
+          await expect(
+            plan.getByRole("heading", { name: savedPlan.title, exact: true }),
+          ).toBeVisible();
+          await expect(projectPanel).toBeHidden();
+          expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.at(-1)).toEqual(
+            savedPlan,
+          );
+          expect(
+            await readFile(join(planRoot, ".code60/plans", `${savedPlan.id}.json`), "utf8"),
+          ).toBe(savedRecord);
+          await checkCheckout("human accepted target\n");
+        }
+        checks.push(
+          "Sessions and Worktrees project-file browsing retained keyboard access to the displayed Relay/custom plan, with unchanged private record and project ownership.",
         );
 
         const panel = page.locator(custom ? '[id^="relay-plan-panel-"]' : "#relay-plan-panel");
@@ -1033,6 +1698,7 @@ for (const custom of [false, true]) {
         await expect(composer).toBeEditable();
         const restored = await page.evaluate(() => window.desktop.snapshot());
         expect(restored.runs.map((run) => run.record.id)).toEqual([worker.record.id]);
+        await expect(workerRow.locator(".chat-unread")).toHaveCount(0);
         expect(restored.chat.conversationId).toBe(completed.chat.conversationId);
         await expect(composer).toHaveValue(draft);
         await expect(page.getByRole("list", { name: "Attached code references" })).toContainText(
@@ -1112,13 +1778,17 @@ for (const custom of [false, true]) {
         checks.push(
           "Confirmed message Undo restores code and conversation, returns the unsent request, stops owned workers and preserves private evidence, unrelated edits, index bytes and HEAD.",
         );
-        await info.attach("workflow-checkpoints", {
-          body: JSON.stringify(
-            { checks, native, worker: { id: worker.record.id, worktree }, before },
-            null,
-            2,
-          ),
-          contentType: "application/json",
+        await checkSidebarSpotlight(page, repo, custom);
+        await checkCheckout("original\n");
+        expect(errors).toEqual([]);
+        checks.push(
+          "Concurrent Relay, assistant and worker names share the exact chat spotlight; accessibility, hidden navigation and independent cancellation preserve live ownership and checkout bytes.",
+        );
+        await attachJsonEvidence("workflow-checkpoints", {
+          checks,
+          native,
+          worker: { id: worker.record.id, worktree },
+          before,
         });
       } finally {
         // No broad process search/kill. Observe only this app and fixture-owned PIDs.
@@ -1144,9 +1814,10 @@ for (const custom of [false, true]) {
         // Include helpers started between the last checkpoint and shutdown.
         for (const entry of await processes()) owned.add(entry.pid);
         await expect.poll(() => [...owned].filter(alive), { timeout: 10_000 }).toEqual([]);
-        await info.attach("owned-process-cleanup", {
-          body: JSON.stringify({ pids: [...owned], remaining: [], checks }),
-          contentType: "application/json",
+        await attachJsonEvidence("owned-process-cleanup", {
+          pids: [...owned],
+          remaining: [],
+          checks,
         });
         await removeDesktopFixture(directory, { recursive: true, force: true });
       }
@@ -1357,9 +2028,8 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
     await firstGroup
-      .getByRole("button", { name: "Actions for Hidden saved chat", exact: true })
+      .getByRole("button", { name: "Archive chat: Hidden saved chat", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
     await expect(
       firstGroup.getByRole("button", { name: "Hidden saved chat", exact: true }),
     ).toHaveCount(0);
@@ -1387,6 +2057,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
     }
     await expect.poll(() => [...owned].filter(alive)).toEqual([]);
 
+    // Reproduce retained running history whose recorded owner PID is still alive.
+    const historical = chats[0];
+    if (!historical) throw new Error("Missing saved project conversation");
+    const historicalFile = join(historical.directory, ".code60/runs", historical.id, "run.json");
+    const historicalRecord = JSON.parse(await readFile(historicalFile, "utf8"));
+    await writeFile(
+      historicalFile,
+      JSON.stringify({ ...historicalRecord, status: "running", ownerPid: process.pid }),
+    );
+
     page = await launch();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByRole("button", { name: "Relay", exact: true })).toHaveAttribute(
@@ -1403,6 +2083,16 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       page.getByRole("region", { name: `Project ${projects[2]}`, exact: true }),
     ).toBeVisible();
     const restored = await page.evaluate(() => window.desktop.snapshot());
+    expect(restored.chats.find((entry) => entry.run?.id === historical.id)).toMatchObject({
+      restored: true,
+      run: { status: "running" },
+      activity: { state: "idle", active: false },
+    });
+    for (const saved of chats.slice(0, 2)) {
+      const name = page.locator(`[id="conversation-${saved.id}"] .chat-sidebar-label`);
+      await expect(name).toHaveAttribute("data-working", "false");
+      await expect(name).toHaveCSS("animation-name", "none");
+    }
     expect(restored.openProjects?.map((entry) => entry.path)).toEqual(projects);
     expect(
       restored.openProjects?.some((entry) =>
@@ -1814,6 +2504,687 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     await expect(worker).toContainText("permission next-read: opt-allow_once");
   } finally {
     await application?.close();
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: completed project plans reopen latest after restart with narrow enlarged text", async () => {
+  test.setTimeout(120_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-project-plans-")));
+  const repo = join(directory, "repo");
+  const database = join(directory, "projects.sqlite");
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "processes");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  git("init", "-q", "-b", "main");
+  await writeFile(join(repo, "result.txt"), "original\n");
+  await writeFile(join(repo, "notes.txt"), "unrelated\n");
+  git("add", ".");
+  commitFixture(repo);
+  await writeFile(join(repo, "notes.txt"), "staged\n");
+  git("add", "notes.txt");
+  await writeFile(join(repo, "notes.txt"), "unstaged\n");
+  const before = {
+    head: git("rev-parse", "HEAD"),
+    index: await readFile(join(repo, ".git/index")),
+    staged: git("diff", "--cached", "--binary"),
+    worktrees: git("worktree", "list", "--porcelain"),
+  };
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--plan",
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  const processes = async (): Promise<ProcessEvidence[]> =>
+    Promise.all(
+      (await readdir(processLog)).map(async (file) =>
+        JSON.parse(await readFile(join(processLog, file), "utf8")),
+      ),
+    );
+  const owned = new Set<number>();
+  let application: ElectronApplication | undefined;
+  const close = async () => {
+    if (!application) return;
+    const pid = application.process().pid;
+    if (pid) owned.add(pid);
+    for (const child of await application.evaluate(({ app }) =>
+      app.getAppMetrics().map((entry) => entry.pid),
+    ))
+      owned.add(child);
+    for (const entry of await processes()) owned.add(entry.pid);
+    await application.close();
+    application = undefined;
+    for (const entry of await processes()) owned.add(entry.pid);
+    await expect.poll(() => [...owned].filter(alive), { timeout: 10_000 }).toEqual([]);
+  };
+  try {
+    await expect(readFile(join(directory, "state/code60/desktop.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    application = await launchDesktop(directory, repo, database);
+    await application.evaluate(
+      ({ dialog }, { repo, database }) => {
+        const requests: Record<string, unknown>[] = [];
+        (globalThis as typeof globalThis & { planDialogs: typeof requests }).planDialogs = requests;
+        dialog.showSaveDialog = async (...args: unknown[]) => {
+          requests.push({ kind: "save", ...(args.at(-1) as Record<string, unknown>) });
+          return { canceled: false, filePath: database };
+        };
+        dialog.showOpenDialog = async (...args: unknown[]) => {
+          requests.push({ kind: "open", ...(args.at(-1) as Record<string, unknown>) });
+          return { canceled: false, filePaths: [repo] };
+        };
+        dialog.showMessageBox = async (...args: unknown[]) => {
+          requests.push({ kind: "message", ...(args.at(-1) as Record<string, unknown>) });
+          return { response: 1, checkboxChecked: false };
+        };
+      },
+      { repo, database },
+    );
+    let page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    expect((await readFile(database)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    await page
+      .locator("#panel-projects")
+      .getByRole("button", { name: "New Project", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Open Project", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: `Project ${repo}`, exact: true })).toBeVisible();
+    const native = await application.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { planDialogs: Record<string, unknown>[] }).planDialogs,
+    );
+    expect(native).toEqual([
+      expect.objectContaining({
+        kind: "save",
+        title: "Create database",
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      }),
+      expect.objectContaining({
+        kind: "open",
+        title: "Open project",
+        properties: ["openDirectory", "createDirectory"],
+      }),
+      expect.objectContaining({
+        kind: "message",
+        title: "Open project?",
+        message: "Open this project?",
+        detail: repo,
+        buttons: ["Cancel", "Open project"],
+        defaultId: 0,
+        cancelId: 0,
+      }),
+    ]);
+    await page
+      .getByRole("region", { name: `Project ${repo}`, exact: true })
+      .getByRole("button", { name: /^New Session in / })
+      .click();
+    await expect(
+      page
+        .locator(".orchestration-chat-page:visible")
+        .getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+    ).toBeEditable();
+    const chatId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!chatId) throw new Error("Missing project conversation");
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const plan = page.getByRole("region", { name: "Plan", exact: true });
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
+    for (const [index, request] of ["Plan a change", "Plan a second change"].entries()) {
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+      await composer.fill(request);
+      await composer.press("Enter");
+      await expect(
+        plan.getByRole("heading", {
+          name: index ? "Second planned change" : "Planned change",
+          exact: true,
+        }),
+      ).toBeVisible();
+      expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(index);
+      if (!index) {
+        expect(git("worktree", "list", "--porcelain")).toBe(before.worktrees);
+        expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+      }
+      await plan.getByRole("button", { name: "Accept", exact: true }).click();
+      await expect(plan.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect.poll(() => readFile(join(repo, "result.txt"), "utf8")).toBe("planned result\n");
+    }
+    const completed = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(completed.plans).toHaveLength(2);
+    const latest = completed.plans?.at(-1);
+    if (!latest || !completed.directory) throw new Error("Missing latest completed plan");
+    const recordPath = join(completed.directory, ".code60/plans", `${latest.id}.json`);
+    const record = await readFile(recordPath, "utf8");
+    const markdown = await readFile(join(completed.directory, "plans", `${latest.id}.md`), "utf8");
+    expect(JSON.parse(record)).toMatchObject({
+      creationOrder: 2,
+      acceptedRevision: 1,
+      state: "completed",
+    });
+    const worktrees = git("worktree", "list", "--porcelain");
+    const panel = page.locator("#chat-file-panel");
+    const geometry = [];
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    for (const size of [14, 32, 64]) {
+      const settings = page.locator("#settings-card-toggle");
+      if ((await settings.getAttribute("aria-expanded")) === "false") await settings.click();
+      await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
+      await page
+        .getByRole("group", { name: "Button Text", exact: true })
+        .getByLabel("Font size")
+        .fill(String(size));
+      await page.locator(`[id="conversation-${chatId}"]`).click();
+      const resize = panel.getByRole("button", { name: "Resize files panel", exact: true });
+      const handle = await resize.boundingBox();
+      const panelBox = await panel.boundingBox();
+      if (!handle || !panelBox) throw new Error("Missing panel resize geometry");
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + 40);
+      await page.mouse.down();
+      await page.mouse.move(panelBox.x + panelBox.width - 120, handle.y + 40);
+      await page.mouse.up();
+      await resize.press("ArrowRight");
+      await expect
+        .poll(() => panel.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+        .toBe(120);
+      await panel
+        .getByRole("tab", { name: "Plan · Second planned change", exact: true })
+        .press("Delete");
+      const view = panel.getByRole("button", { name: "View Plan", exact: true });
+      await expect(view).toHaveCSS("font-size", `${size}px`);
+      const bounds = await view.evaluate((button) => {
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        const text = [...range.getClientRects()].map((r) => ({ x: r.x, right: r.right }));
+        const pane = button.closest(".file-panel")?.getBoundingClientRect();
+        const box = button.getBoundingClientRect();
+        return {
+          panelWidth: pane?.width,
+          panelRight: pane?.right,
+          x: box.x,
+          right: box.right,
+          height: box.height,
+          scrollWidth: button.scrollWidth,
+          clientWidth: button.clientWidth,
+          text,
+        };
+      });
+      expect(bounds.panelWidth).toBeCloseTo(120, 0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.panelRight ?? 0);
+      expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+      for (const rect of bounds.text) {
+        expect(rect.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right);
+      }
+      geometry.push({ size, ...bounds });
+      await view.focus();
+      await view.press(size === 32 ? "Space" : "Enter");
+      await expect(
+        plan.getByRole("heading", { name: "Second planned change", exact: true }),
+      ).toBeVisible();
+      expect(await readFile(recordPath, "utf8")).toBe(record);
+      if (size === 64)
+        await page.screenshot({ path: test.info().outputPath("view-plan-120px-64px.png") });
+    }
+    await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Button Text", exact: true })
+      .getByLabel("Font size")
+      .fill("14");
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    await panel
+      .getByRole("tab", { name: "Plan · Second planned change", exact: true })
+      .press("Delete");
+    const previousPids = new Set((await processes()).map((entry) => entry.pid));
+    const workerDirectories = (await page.evaluate(() => window.desktop.snapshot())).runs.map(
+      (run) => run.record.worktree,
+    );
+    await close();
+    // Rewrite older synthetic files last; their modification time cannot decide latest.
+    const first = completed.plans?.[0];
+    if (!first) throw new Error("Missing first plan");
+    const oldPath = join(completed.directory, ".code60/plans", `${first.id}.json`);
+    await writeFile(oldPath, await readFile(oldPath));
+    application = await launchDesktop(directory, repo, database);
+    page = await application.firstWindow();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.locator(`[id="conversation-${chatId}"]`).click();
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    const reopen = page
+      .locator("#chat-file-panel")
+      .getByRole("button", { name: "View Plan", exact: true });
+    await reopen.focus();
+    await reopen.press("Space");
+    await expect(
+      page
+        .getByRole("region", { name: "Plan", exact: true })
+        .getByRole("heading", { name: "Second planned change", exact: true }),
+    ).toBeVisible();
+    const restored = (await page.evaluate(() => window.desktop.snapshot())).chat;
+    expect(restored.plans).toEqual(completed.plans);
+    expect(restored.restored).toBe(true);
+    expect(JSON.parse(await readFile(recordPath, "utf8"))).toEqual(JSON.parse(record));
+    const newProcesses = (await processes()).filter((entry) => !previousPids.has(entry.pid));
+    expect(newProcesses.some((entry) => workerDirectories.includes(entry.cwd))).toBe(false);
+    expect(await readFile(join(completed.directory, "plans", `${latest.id}.md`), "utf8")).toBe(
+      markdown,
+    );
+    expect(git("worktree", "list", "--porcelain")).toBe(worktrees);
+    expect(git("rev-parse", "HEAD")).toBe(before.head);
+    expect(git("diff", "--cached", "--binary")).toBe(before.staged);
+    expect(await readFile(join(repo, ".git/index"))).toEqual(before.index);
+    expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("unstaged\n");
+    await attachJsonEvidence("project-plan-reopen-evidence", {
+      geometry,
+      native,
+      newProcesses,
+      plans: restored.plans,
+      record: JSON.parse(record),
+      worktrees,
+      head: before.head,
+    });
+  } finally {
+    await close();
+    await attachJsonEvidence("project-plan-process-cleanup", { pids: [...owned], remaining: [] });
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: seventeen retained assistant file panels release inactive views and isolate same paths", async () => {
+  test.setTimeout(180_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-panel-capacity-")));
+  const config = join(directory, "config/code60");
+  const processLog = join(directory, "processes");
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  const pids = new Set<number>();
+  const evidence: { conversationId: string; directory: string; content: string }[] = [];
+  try {
+    application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const panel = page.locator(".project-file-panel-scope:not([hidden]) .file-panel");
+    for (let index = 0; index < 17; index++) {
+      const name = `Panel ${index + 1}`;
+      await page.locator("#tab-home").click();
+      await page.getByRole("button", { name: "Open Custom Assistants", exact: true }).click();
+      await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
+      await editor.getByLabel("Name", { exact: true }).fill(name);
+      await editor
+        .getByLabel("Special instructions", { exact: true })
+        .fill(`Fixture ${index + 1}.`);
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await page.getByRole("button", { name: `Open ${name}`, exact: true }).click();
+      await expect(
+        page.locator(".orchestration-chat-page:visible").getByRole("combobox"),
+      ).toBeEditable();
+      const snapshot = await page.evaluate(() => window.desktop.snapshot());
+      const cwd = snapshot.chat.directory;
+      const conversationId = snapshot.chat.conversationId;
+      if (!cwd || !conversationId) throw new Error("Missing assistant workspace");
+      const content = `owned panel ${index + 1}`;
+      await writeFile(join(cwd, "same.txt"), content);
+      evidence.push({ conversationId, directory: cwd, content });
+      const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+      await panel.getByRole("treeitem", { name: "same.txt", exact: true }).click();
+      await expect(panel.locator(".view-lines")).toContainText(content);
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Too many Relay file views" }),
+      ).toHaveCount(0);
+      if (!index) {
+        await panel.getByRole("tab", { name: "same.txt", exact: true }).press("Alt+ArrowLeft");
+        await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+      }
+    }
+    await page
+      .locator("#custom-agent-pages")
+      .getByRole("button", { name: "Panel 1", exact: true })
+      .click();
+    await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+    await expect(panel.getByRole("tab", { name: "same.txt", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(panel.locator(".view-lines")).toContainText("owned panel 1");
+    for (const entry of evidence)
+      expect(await readFile(join(entry.directory, "same.txt"), "utf8")).toBe(entry.content);
+    expect(new Set(evidence.map((entry) => entry.directory)).size).toBe(17);
+    expect((await page.evaluate(() => window.desktop.snapshot())).runs).toHaveLength(0);
+    expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
+    await attachJsonEvidence("seventeen-panels", evidence);
+    await page.screenshot({ path: test.info().outputPath("seventeen-panels.png") });
+  } finally {
+    if (application) {
+      if (application.process().pid) pids.add(application.process().pid as number);
+      for (const pid of await application.evaluate(({ app }) =>
+        app.getAppMetrics().map((metric) => metric.pid),
+      ))
+        pids.add(pid);
+      for (const file of await readdir(processLog))
+        pids.add(JSON.parse(await readFile(join(processLog, file), "utf8")).pid);
+      await application.close();
+      await expect.poll(() => [...pids].filter(alive), { timeout: 10_000 }).toEqual([]);
+    }
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow: session review arrivals preserve closed tabs and archived evidence stays reachable", async () => {
+  test.setTimeout(90_000);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-review-panels-")));
+  const repo = join(directory, "repo"),
+    database = join(directory, "projects.sqlite");
+  const config = join(directory, "config/code60"),
+    processLog = join(directory, "processes");
+  await mkdir(repo);
+  await mkdir(config, { recursive: true });
+  await mkdir(processLog);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  git("init", "-q", "-b", "main");
+  await writeFile(join(repo, "task.txt"), "original\n");
+  git("add", ".");
+  commitFixture(repo);
+  const head = git("rev-parse", "HEAD"),
+    index = await readFile(join(repo, ".git/index"));
+  await writeFile(
+    join(config, "config.json"),
+    JSON.stringify({
+      agents: {
+        claude: {
+          command: [
+            process.execPath,
+            join(root, "test/fixtures/fake-agent.mjs"),
+            "--review",
+            "--process-log",
+            processLog,
+          ],
+        },
+      },
+    }),
+  );
+  let application: ElectronApplication | undefined;
+  const pids = new Set<number>();
+  try {
+    application = await launchDesktop(directory, repo, database);
+    await application.evaluate(
+      ({ dialog }, { repo, database }) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath: database });
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [repo] });
+        dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+      },
+      { repo, database },
+    );
+    const page = await application.firstWindow();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Claude", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Claude connected");
+    await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Select database", exact: true })
+      .getByRole("button", { name: "Create database…", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const relayId = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    await page.getByRole("button", { name: "Add Project", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true })
+      .click();
+    const group = page.getByRole("region", { name: `Project ${repo}`, exact: true });
+    const create = group.getByRole("button", { name: /^New Session in / });
+    const composer = page
+      .locator(".orchestration-chat-page:visible")
+      .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const panel = page.locator("#chat-file-panel");
+    const send = async (request: string, reviewCount: number) => {
+      await expect(composer).toBeVisible();
+      await expect(composer).toBeEditable();
+      await composer.fill(request);
+      await composer.press("Enter");
+      await expect
+        .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).reviews?.length, {
+          timeout: 20_000,
+        })
+        .toBe(reviewCount)
+        .catch(async (cause) => {
+          await attachJsonEvidence(
+            "review-arrival-failure",
+            await page.evaluate(() => window.desktop.snapshot()),
+          );
+          throw cause;
+        });
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.desktop.snapshot())).runs.filter(
+              (run) => run.view?.status === "idle",
+            ).length,
+        )
+        .toBe(reviewCount);
+    };
+    await create.click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.kind)
+      .toBe("project");
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const a = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!a) throw new Error("Missing chat A");
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
+    await send("Implement task loop", 1);
+    await create.click();
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.desktop.snapshot())).chats.filter(
+            (chat) => chat.kind === "project",
+          ).length,
+      )
+      .toBe(2);
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const b = (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id;
+    if (!b) throw new Error("Missing chat B");
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
+    await send("Implement task loop", 2);
+    const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await panel.getByRole("tab", { name: "Changes", exact: true }).press("Delete");
+    await panel.getByRole("button", { name: "Open Files", exact: true }).click();
+    await panel.getByRole("treeitem", { name: "task.txt", exact: true }).click();
+    const savedTabs = await panel
+      .getByRole("tab")
+      .evaluateAll((tabs) =>
+        tabs.map((tab) => ({ text: tab.textContent, selected: tab.getAttribute("aria-selected") })),
+      );
+    await group.locator(`[id="conversation-${a}"]`).click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.desktop.snapshot())).chat.run?.id)
+      .toBe(a);
+    await send("Implement second task loop", 3);
+    await group.locator(`[id="conversation-${b}"]`).click();
+    await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
+    await expect
+      .poll(() =>
+        panel.getByRole("tab").evaluateAll((tabs) =>
+          tabs.map((tab) => ({
+            text: tab.textContent,
+            selected: tab.getAttribute("aria-selected"),
+          })),
+        ),
+      )
+      .toEqual(savedTabs);
+    await expect(panel.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(0);
+    const archive = async (id: string) => {
+      await group.locator(`[id="conversation-${id}"]`).click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+      await expect(group.locator(`[id="conversation-${id}"]`)).toHaveCount(0);
+    };
+    await archive(a);
+    const openReview = async () => {
+      const apps = page.locator("#apps-card-toggle");
+      if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
+      const tables = page.locator("#tables-toggle");
+      if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+      const canvas = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("Missing sessions grid");
+      await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+      await page.getByRole("menuitem", { name: "Review changes", exact: true }).click();
+      await expect(
+        panel.locator(".review-panel .modified .view-lines:not([monaco-view-zone])"),
+      ).toContainText("accepted task result");
+      const snapshot = await page.evaluate(() => window.desktop.snapshot());
+      expect(snapshot.chats.find((chat) => chat.run?.id === a)?.archived).toBe(true);
+      expect(snapshot.chats.filter((chat) => chat.kind === "project")).toHaveLength(2);
+      expect(git("rev-parse", "HEAD")).toBe(head);
+      expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+      expect(await readFile(join(repo, "second.txt"), "utf8")).toBe("accepted task result\n");
+    };
+    await openReview();
+    expect((await page.evaluate(() => window.desktop.snapshot())).chat.run?.id).toBe(b);
+    await archive(b);
+    await expect(page.locator("#panel-project")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Chat archived." })).toBeVisible();
+    await openReview();
+    const archived = await page.evaluate(() => window.desktop.snapshot());
+    expect(archived.chat.kind).toBe("relay");
+    expect(archived.chat.run?.id).toBe(relayId);
+    expect(archived.chats.filter((chat) => chat.kind === "project" && !chat.archived)).toEqual([]);
+    await attachJsonEvidence("archived-review-panels", {
+      head,
+      indexUnchanged: true,
+      a,
+      b,
+      savedTabs,
+      worktrees: git("worktree", "list", "--porcelain"),
+    });
+    // Supporting integration segment: delay only the read-only snapshot IPC
+    // response. All navigation still uses production UI, bridge and controllers.
+    await create.click();
+    await expect(
+      group.locator('.chat-sidebar-entry[data-role="orchestrator"]').last(),
+    ).toHaveAttribute("aria-current", "true");
+    const captured = await page.evaluate(() => window.desktop.snapshot());
+    await application.evaluate(({ ipcMain }, captured) => {
+      const gate = { requested: false, release: undefined as (() => void) | undefined };
+      Object.assign(globalThis, { panelSnapshotGate: gate });
+      ipcMain.removeHandler("desktop:snapshot");
+      ipcMain.handle(
+        "desktop:snapshot",
+        () =>
+          new Promise((resolve) => {
+            gate.requested = true;
+            gate.release = () => resolve(captured);
+          }),
+      );
+    }, captured);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+    const canvas = page.locator("#panel-sessions").getByTestId("data-grid-canvas");
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error("Missing sessions grid");
+    await page.mouse.click(box.x + 70, box.y + 44, { button: "right" });
+    await page.getByRole("menuitem", { name: "Browse project files", exact: true }).click();
+    await expect
+      .poll(() =>
+        application?.evaluate(
+          () =>
+            (globalThis as unknown as { panelSnapshotGate: { requested: boolean } })
+              .panelSnapshotGate.requested,
+        ),
+      )
+      .toBe(true);
+    await page.locator(".sidebar").getByRole("button", { name: "Relay", exact: true }).click();
+    await page.locator("#tab-home").click();
+    await expect(page.locator("#panel-home")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "return to splash page", exact: true }),
+    ).toBeDisabled();
+    await application.evaluate(() =>
+      (
+        globalThis as unknown as { panelSnapshotGate: { release?: () => void } }
+      ).panelSnapshotGate.release?.(),
+    );
+    // Wait for the command's finally block, not an arbitrary timeout.
+    await expect(
+      page.getByRole("button", { name: "return to splash page", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator("#panel-home")).toBeVisible();
+    await expect(page.locator("#panel-chat")).toBeHidden();
+    expect(git("rev-parse", "HEAD")).toBe(head);
+    expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+    await attachJsonEvidence("delayed-browse-navigation", {
+      released: true,
+      destination: "Home",
+      gitUnchanged: true,
+    });
+  } finally {
+    if (application) {
+      if (application.process().pid) pids.add(application.process().pid as number);
+      for (const file of await readdir(processLog))
+        pids.add(JSON.parse(await readFile(join(processLog, file), "utf8")).pid);
+      await application.close();
+      await expect.poll(() => [...pids].filter(alive), { timeout: 10_000 }).toEqual([]);
+    }
     await removeDesktopFixture(directory, { recursive: true, force: true });
   }
 });

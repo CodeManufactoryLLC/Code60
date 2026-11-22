@@ -54,6 +54,8 @@ export interface ProjectSearchPage {
   warnings: string[];
 }
 export interface ProjectSearchOpened {
+  /** Main revision after committing source selection; renderer waits for this snapshot. */
+  revision: number;
   projectId: string;
   databaseEpoch: number;
   source: ProjectSearchSource;

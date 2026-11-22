@@ -37,7 +37,7 @@ if (action === "show") {
     join(process.env.HOME, ".config/systemd/user/code60-scheduler.service"),
   ).catch(() => null);
   process.stdout.write(
-    `LoadState=${installed ? "loaded" : "not-found"}\nActiveState=${alive(pid) ? "active" : "inactive"}\n`,
+    `LoadState=${installed ? "loaded" : "not-found"}\nActiveState=${alive(pid) ? "active" : "inactive"}\nMainPID=${alive(pid) ? pid : 0}\n`,
   );
 } else if (action === "daemon-reload") {
   // No OS manager is contacted.

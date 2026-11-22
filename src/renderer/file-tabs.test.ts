@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyFileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
+import { ProjectScope } from "./project-scope.js";
 
 describe("Chat file tabs", () => {
   it("retains every pinned target in a grouped request preview without reusing a single-target tab", () => {
@@ -13,7 +14,7 @@ describe("Chat file tabs", () => {
     const first = { scope, revisionId: "one", title: "Change files" };
     const related = [first, { ...first, scope: { ...scope, targetId: "b", reviewId: "review-b" } }];
     const action = { type: "revision" as const, reviewId: scope.reviewId, ...first };
-    let state = updateFileTabs(emptyFileTabs("relay"), action);
+    let state = updateFileTabs(emptyFileTabs(), action);
     state = updateFileTabs(state, { ...action, related });
     expect(state.entries).toHaveLength(2);
     expect(state.entries[1]).toMatchObject({ related });
@@ -34,7 +35,7 @@ describe("Chat file tabs", () => {
       title: "same.ts",
       application: { operationId: "operation", fileId: "file" },
     };
-    let state = updateFileTabs(emptyFileTabs("relay"), {
+    let state = updateFileTabs(emptyFileTabs(), {
       type: "revision",
       reviewId: "review",
       revisionId: "revision",
@@ -66,7 +67,7 @@ describe("Chat file tabs", () => {
     expect(state.entries[0]).toMatchObject({ scope });
   });
   it("opens, reorders, closes and reopens a single Memory Recall tab without affecting other tabs", () => {
-    let state = updateFileTabs(emptyFileTabs("project"), { type: "browse" });
+    let state = updateFileTabs(emptyFileTabs(), { type: "browse" });
     state = updateFileTabs(state, { type: "blank" });
     const blank = state.active;
     state = updateFileTabs(state, { type: "recall" });
@@ -88,7 +89,7 @@ describe("Chat file tabs", () => {
     expect(state.active).not.toBe(recall.id);
   });
   it("starts empty, converts blanks in place, and allows multiple Explorers", () => {
-    const empty = emptyFileTabs("db:project");
+    const empty = emptyFileTabs();
     expect(empty.entries).toEqual([]);
     let state = updateFileTabs(empty, { type: "blank" });
     const id = state.active;
@@ -102,7 +103,7 @@ describe("Chat file tabs", () => {
   });
 
   it("deduplicates files by path and routes Browse to an existing Explorer", () => {
-    let state = updateFileTabs(emptyFileTabs("project"), { type: "browse" });
+    let state = updateFileTabs(emptyFileTabs(), { type: "browse" });
     state = updateFileTabs(state, { type: "file", path: "src/main.ts" });
     state = updateFileTabs(state, { type: "file", path: "test/main.ts" });
     const ids = state.entries.map((tab) => tab.id);
@@ -120,7 +121,7 @@ describe("Chat file tabs", () => {
   });
 
   it("closes active tabs toward the right, then left, and finally returns to empty", () => {
-    let state = emptyFileTabs("project");
+    let state = emptyFileTabs();
     for (let i = 0; i < 3; i++) state = updateFileTabs(state, { type: "blank" });
     state = updateFileTabs(state, { type: "select", id: 2 });
     state = updateFileTabs(state, { type: "close", id: 2 });
@@ -134,7 +135,7 @@ describe("Chat file tabs", () => {
   });
 
   it("preserves selection when closing background tabs and moving either kind of tab", () => {
-    let state = emptyFileTabs("project");
+    let state = emptyFileTabs();
     for (let i = 0; i < 4; i++) state = updateFileTabs(state, { type: "blank" });
     state = updateFileTabs(state, { type: "move", id: 4, to: -1 });
     expect(state.entries.map((tab) => tab.id)).toEqual([4, 1, 2, 3]);
@@ -150,10 +151,15 @@ describe("Chat file tabs", () => {
   });
 
   it("keeps the same workspace state and clears all tabs when project or database changes", () => {
-    const state = updateFileTabs(emptyFileTabs("db:project"), { type: "file", path: "a.txt" });
-    expect(updateFileTabs(state, { type: "reset", workspace: "db:project" })).toBe(state);
-    for (const workspace of ["db:other-project", "other-db:project"])
-      expect(updateFileTabs(state, { type: "reset", workspace })).toEqual(emptyFileTabs(workspace));
+    const state = updateFileTabs(emptyFileTabs(), { type: "file", path: "a.txt" });
+    expect(updateFileTabs(state, { type: "close", id: 99 })).toBe(state);
+    for (const [database, directory] of [
+      ["db", "other-project"],
+      ["other-db", "project"],
+    ] as const)
+      expect(new ProjectScope(database, directory).panel("chat").snapshot()).toEqual(
+        emptyFileTabs(),
+      );
     const tab = state.entries[0];
     if (!tab) throw new Error("Missing tab");
     expect(fileTabLabel(tab, state.entries)).toBe("a.txt");
@@ -161,7 +167,7 @@ describe("Chat file tabs", () => {
 });
 
 it("keeps project and immutable worker versions distinct even with the same relative path", () => {
-  let state = updateFileTabs(emptyFileTabs("project"), { type: "file", path: "same.ts" });
+  let state = updateFileTabs(emptyFileTabs(), { type: "file", path: "same.ts" });
   for (const worker of ["a", "b"])
     state = updateFileTabs(state, {
       type: "file",
@@ -189,7 +195,7 @@ it("keeps project and immutable worker versions distinct even with the same rela
 });
 
 it("deduplicates plan tabs by identity and keeps their revised titles", () => {
-  let state = updateFileTabs(emptyFileTabs("project"), {
+  let state = updateFileTabs(emptyFileTabs(), {
     type: "plan",
     planId: "plan",
     title: "First",
@@ -202,7 +208,7 @@ it("deduplicates plan tabs by identity and keeps their revised titles", () => {
 });
 
 it("keeps one Changes list tab without stealing focus on new captures", () => {
-  let state = updateFileTabs(emptyFileTabs("project"), {
+  let state = updateFileTabs(emptyFileTabs(), {
     type: "file",
     path: "README.md",
   });
@@ -227,7 +233,7 @@ it("keeps one Changes list tab without stealing focus on new captures", () => {
 });
 
 it("opens separate pinned revision tabs, deduplicates by review and revision, and supports closing/reopening", () => {
-  let state = updateFileTabs(emptyFileTabs("project"), { type: "changes" });
+  let state = updateFileTabs(emptyFileTabs(), { type: "changes" });
   const revision = {
     type: "revision" as const,
     reviewId: "task-a",

@@ -83,7 +83,7 @@ Schema version: 1
 - Prerequisite: database
 - Agent access: read
 - Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
-- Limits: Opening or selecting a project is a human action; opening never initializes Git. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
 - Tools: none
@@ -120,11 +120,11 @@ Schema version: 1
 
 - ID: `plans`
 - Status: shipped
-- Purpose: Propose and track revisioned tasks.
-- Access: Chat → plan tab
-- Prerequisite: provider
+- Purpose: Propose and track revisioned tasks; use View Plan to reopen the current conversation’s latest saved plan.
+- Access: Chat → right sidebar → View Plan → existing plan tab
+- Prerequisite: runtime
 - Agent access: existing-tools
-- Confirmation: Human Accept authorizes only that revision and targets.
+- Confirmation: View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.
 - Limits: No agent tool can accept a plan.
 - Pages: none
 - Settings sections: none
@@ -162,12 +162,12 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews.
+- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session.
 - Access: Chat → Files panel
 - Prerequisite: runtime
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Awareness can read only authorized open cached previews, not arbitrary paths.
+- Limits: Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Inactive panels release file subscriptions. Archived reviews remain read-only in a reachable panel. Awareness can read only authorized open cached previews from the exact active file subscription, not arbitrary paths.
 - Pages: `files`
 - Settings sections: none
 - Tools: none
@@ -363,7 +363,7 @@ Schema version: 1
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Human approval before installation and shutdown.
-- Limits: Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.
+- Limits: Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Automatic recovery requires the native service PID to match the responding scheduler and never replaces a newer or unknown version. Recovery has one exclusive owner. AppImages require executable and parent locations protected from other users. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.
 - Pages: none
 - Settings sections: `updates`
 - Tools: none
@@ -442,12 +442,12 @@ Schema version: 1
 
 - ID: `activity`
 - Status: shipped
-- Purpose: Show the orchestrator's current step beside the transcript.
-- Access: Chat transcript activity line
+- Purpose: Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.
+- Access: Chat transcript activity line and left navigation names
 - Prerequisite: runtime
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Presentation only; reports never change work or permissions.
+- Limits: Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.
 - Pages: none
 - Settings sections: none
 - Tools: `code60_get_activity_context`, `code60_report_activity`

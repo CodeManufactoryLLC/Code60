@@ -236,6 +236,7 @@ export class Run {
       modeChanging: this.modeChanging,
       pending: [...this.pending.values()].map((p) => p.view),
       stopping: this.ending && !this.isFinal(),
+      ...(this.turnActive && this.cancelCause !== undefined ? { cancelling: true } : {}),
     };
   }
 
