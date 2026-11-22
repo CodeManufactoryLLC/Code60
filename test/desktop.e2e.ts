@@ -18292,6 +18292,9 @@ test("desktop: plan execution time persists through pause, navigation, reload an
     await page.locator(`[id="conversation-${chatId}"]`).click();
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    // The restarted conversation opens on its blank view. Wait for its plan
+    // entry to load before interacting with the restored Files owner.
+    await expect(page.getByRole("button", { name: "View Plan", exact: true })).toBeVisible();
     await newFileTab(page);
     await expect(page.locator('[role="listbox"][aria-label="Open Files tabs"]')).toBeHidden();
     await page.screenshot({ path: test.info().outputPath("plan-blank-actions.png") });
