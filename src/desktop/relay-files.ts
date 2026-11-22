@@ -13,6 +13,7 @@ export interface RelayFileRoot {
   check(): Promise<void>;
 }
 interface View {
+  conversationId?: string | undefined;
   context: RelayFileContext;
   root: RelayFileRoot;
   valid(): void;
@@ -38,7 +39,12 @@ export class RelayFiles {
     private readonly read = readFiles,
   ) {}
 
-  set(context: RelayFileContext, root: RelayFileRoot, valid: () => void): void {
+  set(
+    context: RelayFileContext,
+    root: RelayFileRoot,
+    valid: () => void,
+    conversationId?: string,
+  ): void {
     valid();
     const previous = this.views.get(context.subscriptionId);
     if (previous && context.sequence <= previous.context.sequence) {
@@ -74,6 +80,7 @@ export class RelayFiles {
       poller.pause(this.paused);
     }
     const view: View = {
+      conversationId,
       context: structuredClone(context),
       root,
       valid,
@@ -103,13 +110,25 @@ export class RelayFiles {
           .sources.find((s) => s.key === "files") ?? null,
     };
   }
-  /** Only an already loaded preview from exactly one live view; never reads the filesystem. */
-  knowledgePreview(path: string): RelayFileSnapshot["preview"] | undefined {
-    const matches = [...this.views.values()].filter((view) => view.files?.preview?.path === path);
-    const view = matches.length === 1 ? matches[0] : undefined;
-    if (!view) return undefined;
+  /** An exact live subscription pins the root; stale or inactive caches are unreadable. */
+  knowledgePreview(
+    path: string,
+    conversationId: string,
+    subscriptionId: string | undefined,
+  ): RelayFileSnapshot["preview"] | undefined {
+    const view = subscriptionId ? this.views.get(subscriptionId) : undefined;
+    if (
+      !view ||
+      !this.visible ||
+      !this.active(view) ||
+      view.conversationId !== conversationId ||
+      view.context.preview !== path ||
+      view.files?.preview?.path !== path ||
+      view.files.context.sequence !== view.context.sequence
+    )
+      return undefined;
     view.valid();
-    return view.files?.preview ?? undefined;
+    return view.files.preview;
   }
   version(id: string): number {
     return this.views.get(id)?.revision ?? 0;

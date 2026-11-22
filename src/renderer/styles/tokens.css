@@ -18,17 +18,28 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
-  --rule: 1px;
-  --rule-strong: 1px;
+  --rule: 2px;
+  --rule-strong: 3px;
   --rule-select: 2px;
   --ui-radius: 0;
-  --button-radius: 5px;
-  --chat-radius: 5px;
-  --dialog-radius: 5px;
-  --card-radius: 5px;
-  --input-radius: 5px;
+  --button-radius: 0px;
+  --chat-radius: 0px;
+  --dialog-radius: 10px;
+  --card-radius: 0px;
+  --navigation-card-radius: 5px;
+  --settings-card-radius: 0px;
+  --card-header-fill: var(--surface);
+  --card-header-text: var(--text);
+  --card-header-muted: var(--muted);
+  --card-header-hover: var(--hover-bg);
+  --panel-border: var(--border);
+  --card-shadow: 4px 4px 0 var(--shadow-color);
+  --shadow-color: #111111;
+  --button-shadow: 2px 2px 0 var(--shadow-color);
+  --sidebar-background-opacity: 100%;
+  --input-radius: 0px;
   /* Metadata (timestamps, counts, versions) uses a compact monospace face. */
-  --meta-font: var(--text-weight, 300) 11px / 16px var(--mono);
+  --meta-font: var(--text-weight, 400) 11px / 16px var(--mono);
   --meta-spacing: 0.02em;
   --motion: 175ms;
   --navigation-hover-delay: 20ms;
@@ -62,32 +73,33 @@
   --control-hover: var(--hover-bg);
   --group-fill: #ffffff;
   --group-hover: var(--hover-bg);
-  --group-border: color-mix(in srgb, var(--border) 75%, var(--muted));
-  /* Surfaces are defined by hairline borders; only overlays keep one tight shadow. */
+  --group-border: var(--control-border);
+  /* Hard edges separate surfaces; only panels and explicit actions cast shadows. */
   --group-shadow: none;
   --composer-shadow: none;
   --surface-edge: var(--border);
   --field-fill: var(--surface);
   --surface-band: var(--surface);
-  --footer-bg: var(--surface);
+  --footer-bg: var(--bg);
   --scrollbar-thumb: color-mix(in srgb, var(--surface) 78%, var(--muted));
   --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
-  --overlay-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+  --overlay-shadow: 4px 4px 0 var(--shadow-color);
   color-scheme: light;
-  --bg: #ffffff;
+  --bg: #e8eefb;
+  --workspace-background: #e8eefb;
   --surface: #ffffff;
   --surface-hover: #ffffff;
   --row-alt: #ffffff;
-  --text: #000000;
-  --muted: #555555;
-  --border: #d0d0d0;
-  --control-border: #777777;
-  --accent: #245f9e;
-  --accent-bg: #ededed;
-  --hover-bg: #e5f0fc;
-  --primary: #5b9fe6;
-  --primary-hover: #4b8bd0;
-  --primary-text: #000000;
+  --text: #111111;
+  --muted: #4b5563;
+  --border: #111111;
+  --control-border: #111111;
+  --accent: #1d4ed8;
+  --accent-bg: #dbeafe;
+  --hover-bg: #e8eefb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-text: #ffffff;
   --danger: var(--text);
   --change-additions: #42603a;
   --change-deletions: #9b3a35;
@@ -99,60 +111,74 @@
   --disabled-stripe: transparent;
   --chat-bg: #ffffff;
   --chat-neutral: var(--surface);
-  --composer-bg: #f3f3f3;
-  --composer-focus-bg: #e9e9e9;
-  --user-bubble: #d8e8fa;
-  --on-user-bubble: #000000;
-  --human-text: #245f9e;
+  --composer-bg: #ffffff;
+  --composer-focus-bg: #ffffff;
+  --user-bubble: #dbeafe;
+  --on-user-bubble: #111111;
+  --agent-bubble: #f1f0e8;
+  --on-agent-bubble: #111111;
+  --human-text: #1d4ed8;
+  --project-stop-color: #b91c1c;
   --destructive: #a03d31;
   --destructive-hover: #873327;
   --on-destructive: #ffffff;
-  --focus-line: #245f9e;
-  --focus-band: #d8e8fa;
+  --focus-line: #1d4ed8;
+  --focus-band: #dbeafe;
 }
 
 :root[data-color-scheme="dark"] {
   color-scheme: dark;
-  --surface-edge: var(--border);
+  --card-header-hover: #43294e;
+  --card-header-text: #f0e9f2;
+  --card-header-muted: #d7c9dd;
+  --card-header-fill: #2f1d37;
+  --panel-border: #050505;
+  --shadow-color: #050505;
+  --surface-edge: var(--control-border);
   --group-hover: var(--hover-bg);
   --control-fill: var(--surface);
   --control-hover: var(--hover-bg);
-  --field-fill: var(--surface);
+  --field-fill: #161616;
   --disabled-fill: var(--surface);
-  --footer-bg: var(--surface);
-  --overlay-shadow: 0 2px 8px rgb(0 0 0 / 45%);
-  /* Charcoal surfaces; blue is reserved for header bands and interaction accents. */
-  --surface-band: #253347;
-  --group-fill: #303030;
-  --bg: #252525;
-  --surface: #252525;
-  --surface-hover: #252525;
-  --row-alt: #252525;
-  --text: #ffffff;
-  --muted: #b1b1b1;
-  --border: #484848;
-  --control-border: #8c8c8c;
-  --accent: #9bcaff;
-  --accent-bg: #3c3c3c;
-  --hover-bg: #1b2d4a;
-  --primary: #77b7f5;
-  --primary-hover: var(--accent);
-  --primary-text: #000000;
-  --danger: #ffffff;
+  --footer-bg: var(--bg);
+  --overlay-shadow: 4px 4px 0 var(--shadow-color);
+  --card-shadow: 4px 4px 0 var(--shadow-color);
+  /* Near-black reading planes and deep plum bands keep Dark dark; blue marks actions. */
+  --surface-band: #282828;
+  --group-fill: #282828;
+  --bg: #111111;
+  --workspace-background: #111111;
+  --surface: #202020;
+  --surface-hover: #242424;
+  --row-alt: #202020;
+  --text: #f7f7f2;
+  --muted: #c8c8c0;
+  --border: #727272;
+  --control-border: #aaaaaa;
+  --accent: #7db7ff;
+  --accent-bg: #464646;
+  --hover-bg: #3b3b3b;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-text: #ffffff;
+  --danger: var(--text);
   --change-additions: #afc59d;
   --change-deletions: #dfa69b;
-  --warning-bg: #252525;
+  --warning-bg: #202020;
   --warning-text: var(--accent);
-  --success: #aaaaaa;
-  --code: #252525;
+  --success: var(--muted);
+  --code: #161616;
   --disabled-stripe: transparent;
-  --chat-bg: #252525;
+  --chat-bg: #202020;
   --chat-neutral: var(--surface);
-  --composer-bg: #303030;
-  --composer-focus-bg: #383838;
-  --user-bubble: #1b3a5c;
-  --on-user-bubble: #ffffff;
+  --composer-bg: #161616;
+  --composer-focus-bg: #202020;
+  --user-bubble: #35263e;
+  --on-user-bubble: #f7f7f2;
+  --agent-bubble: #282b25;
+  --on-agent-bubble: #f7f7f2;
   --human-text: var(--accent);
+  --project-stop-color: #f87171;
   --destructive: #df9d8f;
   --destructive-hover: #edb3a7;
   --on-destructive: #000000;
@@ -160,14 +186,11 @@
   --focus-band: var(--hover-bg);
 }
 
-/* A light shadow marks focus; the optional treatment adds a solid outline and wider halo. */
+/* Keyboard focus stays distinct from the hard decorative shadows. */
 :root {
-  --focus-outline: transparent;
-  --focus-shadow-edge: color-mix(in srgb, var(--focus-line) 80%, transparent);
-  --focus-shadow-blur: color-mix(in srgb, var(--focus-line) 32%, transparent);
-  --focus-shadow: 0 0 0 1px var(--focus-shadow-edge), 0 1px 4px var(--focus-shadow-blur);
-  --focus-inset-shadow:
-    inset 0 0 0 1px var(--focus-shadow-edge), inset 0 0 4px var(--focus-shadow-blur);
+  --focus-outline: var(--focus-line);
+  --focus-shadow: 0 0 0 2px var(--surface);
+  --focus-inset-shadow: inset 0 0 0 2px var(--focus-line);
 }
 
 :root[data-focus-highlight="on"] {

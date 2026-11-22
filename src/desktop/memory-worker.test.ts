@@ -13,6 +13,21 @@ import { MemoryStore } from "./memory-store.js";
 import { indexMemoryBatch, memorySearch, openMemoryStore } from "./memory-worker.js";
 import { sqliteAvailable } from "./projects.js";
 
+// Node 22.12 has SQLite but lacks the FTS5 tables required by these memory fixtures.
+function sqliteFtsAvailable(): boolean {
+  if (!sqliteAvailable()) return false;
+  const sqlite = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
+  const database = new sqlite.DatabaseSync(":memory:");
+  try {
+    return (
+      database.prepare("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled").get()
+        ?.enabled === 1
+    );
+  } finally {
+    database.close();
+  }
+}
+
 let dir: string;
 let db: MemoryStore;
 beforeEach(async () => {
@@ -56,9 +71,10 @@ function seed(cid: string, count: number, label: string) {
   db.publish(cid, range.cursor, range.boundary, value, "fixture");
 }
 const vector = () => Float32Array.from({ length: 768 }, (_, i) => (i === 0 ? 1 : 0));
-describe.skipIf(!sqliteAvailable())("memory index", () => {
+describe.skipIf(!sqliteFtsAvailable())("memory index", () => {
   it("refuses a second writer before it can prune another owner's incomplete exchange", async () => {
-    const path = join(dir, "exclusive");
+    // The lock verifies both its root and its private application-state parent.
+    const path = join(dir, "state", "exclusive");
     const first = await openMemoryStore(path);
     try {
       const cid = first.store.register("owner", "Owner", null).id;

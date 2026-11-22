@@ -1,17 +1,17 @@
 # Architecture
 
-Status: implemented (first version). Code60 has two interfaces: the Electron desktop app and the headless `code60` command-line tool.
+Status: implemented. Code60 is an Electron desktop application for macOS and Linux.
+The background scheduler retains an internal headless executor; there is no public Code60 CLI.
 
 ## What it does
 
 `code60` runs coding agents in parallel. Isolated runs get their own worktrees.
 Desktop chats checkpoint human requests and automatically integrate isolated
-working-file changes at safe turn boundaries, with message-level Undo. Headless
-CLI runs retain their existing review-only worktree behavior.
+working-file changes at safe turn boundaries, with message-level Undo. Scheduled runs retain review-only worktree behavior.
 
-Git is not required for headless CLI runs. Desktop project workers require a Git repository with an initial commit. In the CLI, outside a Git repository, or in a repository with no commits yet, every run works directly in the current directory instead (see [Runs without a worktree](#runs-without-a-worktree)).
+Project workers and Scheduled Jobs require a Git repository with an initial commit. Relay may explicitly execute in a direct folder (see [Runs without a worktree](#runs-without-a-worktree)).
 
-That is the whole product. The tool talks to agents over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), runs them from an Electron and React desktop app or headless from the CLI, and keeps only the plain files it needs to show what happened.
+That is the whole product. The tool talks to agents over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), runs them from the Electron and React desktop app or its independent scheduler, and keeps only the plain files it needs to show what happened.
 
 ## Relay and multi-project architecture
 
@@ -28,21 +28,40 @@ features, resource bounds and remaining native-platform validation.
   Project chats belong to individual open projects. Selecting or expanding a
   project changes presentation, never Relay's authority.
   Home is the first sidebar page-list destination, with a Phosphor house icon
-  and a database-independent launchpad, followed by Relay, Search and Projects. Home
-  uses the standard page title position and “Welcome to Code60” above exactly five title-only feature cards,
-  ordered Relay, Search, Projects, Apps and Sessions. The Relay card selects Relay
+  and a database-independent launchpad, followed by Search, Assistants, Projects and Providers.
+  Assistants is a database-independent navigation home containing exactly two
+  title-only cards: Relay and Custom Assistants. Its sidebar heading opens this
+  page without toggling its children; the separate chevron retains saved expansion
+  and the supplied speech-bubble icon. Cards reuse Home artwork, gating, focus,
+  pending/error handling and existing navigation without connecting a provider or
+  starting work. Relay and Custom Assistants breadcrumbs link back to Assistants.
+  Closed contents are inert; closing recursively collapses nested disclosures,
+  and explicit destination navigation reveals its ancestors without starting work.
+  No new execution authority is introduced. Home
+  uses the standard page title position and “Welcome to Code60” above exactly six title-only feature cards,
+  ordered Relay, Custom Assistants, Search, Projects, Apps and Sessions. The Relay card selects Relay
   and clears worker selection; Search and Sessions require a database, while
-  Projects and Apps do not. Cards adapt to narrow
+  Custom Assistants, Projects and Apps do not. The Custom Assistants card opens management,
+  not an agent conversation or provider connection. Cards adapt to narrow
   layouts and enlarged text, with shared keyboard focus and theme colors.
   Startup remains on Chat. Search is a regular labelled sidebar page tab with
   selected, disabled and arrow-key behavior; there is no utility row or sidebar wordmark.
-  Relay uses the locally bundled steering-wheel artwork. Projects uses the supplied backlog artwork and contains the
+  Relay uses the locally bundled pet animation. Projects uses the supplied project-initiation animation and contains the
   open project headings. Project chats
   indent one 24px step beneath their project; owned workers indent one more step
-  beneath their conversation. Labels toggle disclosures without chevrons, with separate New chat
-  and More actions. Rows retain full-width highlights. Project menus anchor to
-  their trigger and remain within the viewport. The Projects heading contains a separate plus action labelled Open Project
-  when connected, opening the existing project modal.
+  beneath their conversation. Project labels navigate without toggling their disclosure. Project conversations expose separate Rename and Archive buttons and retain a context menu;
+  project rows use a red circular × with the “Close Project” tooltip. That icon
+  invokes the existing confirmed Stop Folder operation, keeping the project open
+  while stopping its project-owned work and Relay workers in the same folder. Each project row puts a circular + before the red × and a circular disclosure
+  chevron after it. The + starts the existing project-bound New Session flow
+  without changing expansion. The project name opens its home without toggling;
+  only the dedicated chevron controls project expansion, including on keyboard
+  activation. Selection and ancestor hiding preserve the project disclosure state. Rows retain highlights across the navigation area inside a 12px right gutter. Conversation menus anchor to
+  their trigger and remain within the viewport. The Projects heading has a circular “+” action immediately left of its circular
+  disclosure chevron, opening the existing project modal when connected or database
+  connection flow otherwise. It remains available when collapsed; the list contains
+  only project entries. This placement change adds no capability and requires no
+  self-knowledge catalog change.
 - Desktop host, Relay service, project host, execution host and database services
   remain in `src/desktop`. Do not construct a DesktopController per project.
   Core stays Electron-independent and receives explicit workspaces/dependencies.
@@ -73,16 +92,16 @@ features, resource bounds and remaining native-platform validation.
   verified provider and the harness's permission decisions remain authoritative.
   Never fall back between modes or retry in a different directory.
   Keep filesystem device/inode comparisons at full integer precision, including
-  Windows file identities above JavaScript's safe-number range. These internal
+  identities above JavaScript's safe-number range. These internal
   identities are not renderer capabilities or persisted execution authority.
 - Explicit direct mode runs in the exact directory, even inside Git. Host-owned
   bounded folder preimages cover files before execution; Undo also rewinds manual
   edits since that snapshot and must warn explicitly. This is not isolated
   application/discard. Worktree mode requires a valid Git base.
-  CLI defaults and existing run-record format remain unchanged.
+  Existing run-record formats remain readable.
 - Relay lives in `$XDG_STATE_HOME/code60/relay` (default
   `~/.local/state/code60/relay`). `state.json` sits outside `workspace/`, its
-  persistent ACP/process directory. Validate private permissions, Windows ACLs,
+  persistent ACP/process directory. Validate private permissions,
   same-handle bounded reads and atomic writes. Never initialize Git, associate it
   with a database, or remove it on shutdown. Missing workspace data, malformed
   metadata and unsafe storage require explicit recovery. An exclusive writer
@@ -146,7 +165,7 @@ features, resource bounds and remaining native-platform validation.
   a Git lock or hold this metadata queue over working-file integration/Undo writes.
   Interactive run shutdown cancels queued worktree creation without waiting for
   another owner's metadata operation. Started worktree commands use owned process
-  trees and settle cleanup before shutdown returns. Headless CLI execution keeps
+  trees and settle cleanup before shutdown returns. Scheduled execution keeps
   its existing subprocess behavior.
 - Freeze instructions per human request. Baselines, worker assignments, plan rows,
   results and reviews are target-qualified. Human Accept authorizes the specific
@@ -219,7 +238,7 @@ features, resource bounds and remaining native-platform validation.
   Explicit hidden worktree inventory reads omit recursive sizes. A visible size
   scan checks its captured owner and visibility throughout traversal, stopping
   on navigation, hide or close rather than finishing an unwanted filesystem scan.
-  Existing CLI worktree listing defaults remain unchanged.
+  Default worktree listing behavior is unchanged.
   Renderer detail readers share the app stream's bounded subscribe-before-read
   recovery protocol, but merge on their own revisions. Retained caches are keyed
   by the complete owner address and pruned on close/generation replacement.
@@ -378,19 +397,48 @@ base branch resolved at launch, explicit deny-by-default permissions and no MCP 
 implicit memory. Pin repository and provider identities; changes require review.
 Worktrees are not sandboxes. Never automatically merge, apply, commit or push.
 
-Installation requires consent. Use per-user launchd, Task Scheduler or systemd
-without linger. No TCP or hosted service. Desktop and CLI use the automation public
+Installation requires consent. Use per-user launchd or systemd
+without linger. No TCP or hosted service. Desktop controls use the automation public
 API; the renderer uses narrow validated preload methods and opaque repository IDs.
 Desktop shutdown and Stop all do not stop service-owned work.
-The database-independent Automation Studio page is nested under Apps, alphabetically
+The database-independent Scheduled Jobs page is nested under Apps, alphabetically
 before Command Builder in both display and keyboard order. Its Apps home card opens
 the same page and remains enabled without a database. The quit dialog explains that
-background automations continue. Apps → System Manager owns the background-service
-status, install/repair/start/stop/uninstall, pause/resume and recovery controls,
-separate from Automation Studio's schedule and history tables. System Manager
+background automations continue. Apps → System Manager owns the Scheduling Service
+status, install/repair/start/stop/uninstall, resume and recovery controls,
+separate from Scheduled Jobs's schedule accordions and history table. System Manager
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
+System Manager also checks status two seconds after each completed read while the
+page and document are visible, respecting global Pause polling. Failed or
+unavailable checks back off to at most sixty seconds and reset after recovery.
+Background reads coalesce with the current flight, leave controls interactive and
+retain action failures. Visibility changes discard stale replies; leaving the
+page or pausing polling disposes its timer. Initial and explicit reads remain
+available while automatic polling is paused. This adds no poll-source key.
+The existing scheduler/status UI request returns typed installation, native runtime
+state and optional live health without installing, starting or repairing anything.
+Validate the registration's installed flag against its native definition; false
+uninstall markers are not installed. Invalid/inconsistent metadata and failed native
+inspection show Status unavailable. Bounded launchd/systemd reads distinguish an
+inactive job from an unavailable supervisor. The live scheduler protocol is unchanged.
+System Manager shows Not installed (dashed neutral badge, Install), Stopped (solid
+neutral badge, Start), and verified Running (compact blue badge, Stop). A running
+standalone scheduler is also labelled Not installed and offers Install instead of
+native Stop. Jobs paused and active execution remain separate annotations. Checking
+and unavailable states never guess a main lifecycle action; explicit Repair remains
+under Service options for recovery, with Uninstall only for verified installation.
+Keep pending action feedback beside the last verified state, suppress competing
+actions and refresh afterward, including failures and declined confirmations.
+Stop is the sole main action for an installed running service, pausing jobs and
+cancelling active work before stopping the process. Do not show a separate
+pause-and-cancel button. Resume jobs remains secondary for existing paused state,
+including after Start; starting the process never resumes jobs automatically.
+Preserve single-flight reads, hidden-view disposal,
+stale-response rejection and native consent. Use the shared neo-brutalist tokens,
+saved typography and forced-color system edges without bright dark-mode panels.
+No new preload method, setting, persisted schema or migration is introduced.
 Open execution transcripts subscribe before reading, coalesce saved-chunk notices,
 assemble adjacent text chunks and show the saved execution outcome. Closing, hiding
 or replacing the modal releases its subscription and rejects late reads. Evidence
@@ -446,7 +494,7 @@ it never changes project schemas or grants persisted execution authority.
 Automatic extraction uses the verified orchestration provider with tools denied.
 Global promotion is human-only. Memory settings, source provenance, corrections,
 suppression and bounded retrieval are owned by desktop; core receives optional
-injected lifecycle hooks. CLI defaults and the manual RAG experiment stay unchanged.
+injected lifecycle hooks. Scheduler defaults and the manual RAG experiment stay unchanged.
 Only completed, committed source ranges can advance extraction cursors. Provider
 session replacement never replays a dispatched request or restores task authority.
 
@@ -470,7 +518,7 @@ sidecar batches, retaining shared evidence required by surviving records and
 suppressing recreation. Shortening retention requires a main-owned count preview,
 native confirmation and revalidation. Maintenance runs independently of Settings.
 Search indexing retries automatically with bounded backoff; manual repair is shown
-only after those retries fail. CLI, scheduled automations and manual RAG are unchanged.
+only after those retries fail. Scheduled automations and manual RAG are unchanged.
 
 Exception for the desktop RAG experiment: Settings → Advanced → Experiments → RAG
 manually snapshots all saved/live orchestration chats and workers across the
@@ -497,7 +545,7 @@ Private, versioned JSON generations beneath
 `.code60_workspace/rag/<database-path-sha256>` store conversation provenance,
 message ordinal, original offsets/text and little-endian float32 vectors encoded
 as base64. Model, chunker, database, source and vector identities are checked.
-The database schema, CLI, Search and MCP tools are unchanged. Future repository
+The database schema, Search and MCP tools are unchanged. Future repository
 sources must add a distinct versioned source kind, not misuse conversation fields.
 An atomic manifest replacement publishes a completed generation. Failed/cancelled
 builds keep the old manifest; native-confirmed Clear deletes only derived RAG files.
@@ -562,6 +610,17 @@ an equally weighted completed/total progress bar and “X out of Y” outside th
 Each task row shows a read-only completion checkbox centred on its first line of text, a
 written status (Pending, In progress, Blocked, Completed) and its evidence note aligned
 with the task text.
+The right sidebar offers View Plan for the displayed orchestration session's
+latest existing plan, including after its tab is closed. It selects or reopens
+that plan's tab without generating a plan or granting execution authority.
+Plan records persist an immutable, conversation-local creation sequence, including
+rewound records when allocating the next sequence. Summaries sort by this sequence,
+so restart, atomic file replacement and edits to older plans never change which
+plan is latest. This prerelease schema requires that sequence on saved records.
+While Relay or a custom assistant browses project files, View Plan returns to
+that conversation's own panel without putting its plan into the project file scope.
+The action wraps within the 120px panel minimum with enlarged Button Text.
+Other conversations' plans do not supply this action, including in worker views.
 
 
 Exception for Chat review: desktop-only review records, immutable bounded file snapshots,
@@ -570,7 +629,7 @@ legacy human review decisions and pending feedback are persisted beneath the pri
 job queue. Restart never automatically delivers saved feedback or grants worker authority.
 Historical reviews remain read-only; they cannot silently become new work. New
 requests use ordinary-chat corrections, automatic integration and message Undo.
-CLI records and the database schema are unchanged.
+run records and the database schema are unchanged.
 
 Chat review groups workers by the human request that dispatched them. A Changes tab shares
 the Chat side panel with project and revision-specific file tabs. Overlapping paths in
@@ -604,22 +663,21 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Merging, committing worker changes to a project branch, pushing, or deciding whether a task succeeded. Exceptions for explicit initial commits and internal desktop task snapshots are described here.
 - Retries, durable task queues, and exactly-once execution. A failed run is reported, and the user starts a new one.
 - Automatic crash recovery. After a crash, the tool lists what was left behind; recovery starts only when the user sends a new message to an ended session in the desktop app.
-- Storing credentials. Agents log in through their own CLIs. The CLI passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
+- Storing credentials. Agents log in through their own CLIs. The scheduler passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
 - Settings profiles, workspace trust, imported project settings, and settings export. The desktop app's saved run configurations (see [Desktop app](#desktop-app)) are the one exception: named batch settings stored in the project database, never applied to the CLI or the config file.
 - CLI orchestration services, external ACP servers, and arbitrary agent-to-agent communication. Only the desktop Orchestration Chat may dispatch and control its own workers in the open project through the scoped MCP tools described below.
-- Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and mid-run model changes. Follow-up prompts between turns are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
+- Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and model changes during a turn. Between-turn model changes and follow-up prompts are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
 - Budgets, cost tracking, and usage totals. The desktop shows only the current context occupancy reported by the harness.
 - Workspace capacity limits, transcript retention, and Worktrunk hooks. The read-only Worktrees tab measures logical file sizes when it is opened and in the background while it is visible, but does not enforce limits. Private desktop diagnostics are the focused retention exception described below.
 - File watching. The desktop app polls external state on a schedule (see [Polling](#polling)) instead.
 - Shared or remote Code60 servers, and coordination across machines. User-configured remote MCP tool servers are supported as described below.
 - Sandboxing. A worktree is not a security boundary, and the agent runs with the user's permissions.
-- Windows ARM64 and Windows versions older than Windows 11. Windows desktop distribution targets x64 only.
+- Windows desktop execution and distribution.
 
 ## Desktop diagnostic logging
 
 Desktop startup alone enables an optional typed log sink in core and agents. The
-headless CLI does not construct a store or enable capture; its commands, output,
-exit codes and run records are unchanged. Browser-safe record/query schemas live
+scheduler does not construct a desktop diagnostic store or enable capture. Browser-safe record/query schemas live
 in contracts and cross the bridge through its existing entry point. Desktop owns
 the focused JSONL store, not SQLite or the transcript store.
 
@@ -638,7 +696,7 @@ at 256 KiB or one minute. A shared exclusive directory lock serializes every app
 pruning, append, clear and query, with a 300 ms acquisition deadline. Live or
 unverifiable owners are never displaced; dead-owner locks become reclaimable after
 30 seconds. Unique owner filenames prevent stale reclaimers deleting a new owner's
-file. POSIX ownership/modes and Windows private ACL checks reject unsafe storage.
+file. POSIX ownership and private modes reject unsafe storage.
 
 Capture validates an allowlist before serialization. It accepts no arbitrary text,
 exceptions, prompts, transcript fragments, raw ACP/tool payloads, environments,
@@ -674,9 +732,16 @@ The seven-day/20 MiB policy does **not** expire or limit existing transcripts.
 
 ## Modules
 
+Desktop stdout/stderr are optional terminal output: the GUI may outlive the
+launcher that consumed them. Install stream-local EPIPE guards before desktop
+dependencies can log, so a closed pipe cannot produce an Uncaught Exception
+dialog or interrupt work. Other stream errors still propagate; do not install
+process-wide exception suppression or apply this policy to MCP protocol stdout,
+agent transports, scheduler output or persisted diagnostics. This reliability
+fix introduces no capability, setting or stored schema; no catalog change is needed.
+
 | Module | Source | Responsibility |
 | --- | --- | --- |
-| CLI | `src/cli` | Argument parsing, headless output, signals, and exit codes. |
 | Desktop | `src/desktop` | Electron main process: the window, native dialogs, the IPC handlers, one workspace with multiple independent run batches, and shutdown. |
 | Bridge | `src/bridge` | The typed IPC contract between `desktop` and `renderer`, and validation of every request from the renderer. |
 | Renderer | `src/renderer` | The React interface, built with Vite. It runs sandboxed, with no Node.js or Electron access. |
@@ -685,11 +750,10 @@ The seven-day/20 MiB policy does **not** expire or limit existing transcripts.
 | Automation | `src/automation` | Electron-independent scheduled execution service, private metadata, execution integration and local client. |
 | Agents | `src/agents` | Starting an agent process, the ACP client, translating ACP updates into run events, cancelling, and killing the process. |
 | Git | `src/git` | Creating, listing, and removing worktrees, measuring their logical file sizes, diffs, and status, using the `git` executable. |
-| Platform | `src/platform` | Node-only leaf module for executable/environment resolution, owned process trees, native identity, path identity, and private storage. Uses the first-party `native/windows` helper on Windows, never an ABI-dependent addon. |
+| Platform | `src/platform` | Node-only leaf module for executable/environment resolution, owned process trees, native identity, path identity, and private storage. |
 
 ```mermaid
 flowchart LR
-  CLI["cli"] --> Core["core"]
   Renderer["renderer (React)"] -. preload IPC .-> Desktop["desktop (Electron main)"]
   Renderer --> Bridge["bridge"]
   Desktop --> Bridge
@@ -706,51 +770,14 @@ flowchart LR
   Core --> Platform
   Agents --> Platform
   Git --> Platform
-  Platform --> Win32["Win32 helper / Job Objects"]
 ```
 
-- `cli` depends on `core` and `automation`. `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
+- `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
 - `desktop` depends on `core`, `bridge`, `automation` and `platform`. `bridge` and `renderer` may import only types from `core`; neither may import `platform`. The renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
 - `agents` and `git` never import each other or `core`. `core` receives them as injected interfaces, so tests can use fakes.
-- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP.
+- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP. Colocated contracts unit tests may import Vitest; production imports remain restricted to Zod, and all other boundaries still apply to tests.
 - Domain logic lives in `core` and runs without the desktop app.
 - `core`, `agents`, `git`, and `desktop` may import `platform` only through its index. `platform` imports no application modules, Electron, React, or provider SDKs. Bridge, renderer, and contracts remain browser-safe.
-
-### Native Windows contracts
-
-On Windows, all agent roles use a first-party helper executable outside ASAR.
-It creates agents suspended, assigns them to exclusive kill-on-close Job Objects
-with no breakaway, restricts inherited handles to ACP stdio, and then resumes
-them. A separate authenticated control pipe and an owner-process handle stop
-the job on owner/control loss. Root exit also terminates descendants. Startup
-has a five-second deadline and job exit verification a five-second deadline.
-ACP cancellation and its ten-second wait are unchanged. Windows then terminates
-the owned job, without emulating SIGTERM. POSIX retains its existing grace.
-
-Optional native identities contain creation time, owner SID, and agent job name.
-Legacy records remain readable. Windows never authorizes a leftover stop using
-command text or a PID alone. Missing, inaccessible or mismatched identities
-block continuation/discard and unsafe stops; only a verified absent owned job
-authorizes writing to its worktree again. Owner access failures are conservative.
-Recovery remains explicit and ACP once-only permission rules are unchanged.
-
-Windows desktop discovery reads inherited, user and machine PATH and documented
-installation directories, separated with semicolons. It never runs shell profiles.
-Environment names are case-insensitive on Windows; absolute executable commands
-remain authoritative. Standard npm/npx shims resolve to their CLI JavaScript and
-a matching Node executable. Other batch launchers use one rejecting adapter,
-never blanket shell mode. Prompts stay on ACP stdin.
-
-Browser-relative file paths remain slash-separated. Windows previews/listings
-hold non-delete-sharing handles for every ancestor, reject every reparse point,
-and bound reads. Local absolute drive paths are supported; device/drive-relative
-paths, alternate streams and unsupported long paths fail clearly. Filesystem
-identity uses canonical spelling, not globally lowercased paths. XDG/home config
-and state defaults remain unchanged. New private objects receive restrictive
-owner/SYSTEM ACLs at creation; existing user parent ACLs are never rewritten.
-An unsafe existing Code60-private ACL fails closed. Atomic rename retries only
-Windows EBUSY, asynchronously for at most 500 ms, never delete-then-write. Each
-helper rename attempt keeps the normal seven-second helper bound.
 
 ## A run
 
@@ -758,10 +785,10 @@ A run is one agent session in one new worktree (or, [without a worktree](#runs-w
 
 1. **Create the worktree.** Core creates a run ID, then, when the run has a worktree, `git` runs `git worktree add -b code60/<run-id> <path> <base>`. `<base>` defaults to `HEAD`. Worktrees go in `<repo-parent>/<repo-name>.worktrees/<run-id>` unless the config says otherwise.
 2. **Start the agent.** `agents` spawns the configured command with the worktree as its working directory, in its own process group. It initializes ACP, creates a session rooted at the worktree, and sends the prompt.
-3. **Stream events.** ACP session updates become run events (see [Run events](#run-events)). Core appends each event to the run's event log and forwards it to the CLI.
+3. **Stream events.** ACP session updates become run events (see [Run events](#run-events)). Core appends each event to the run's event log and forwards it to the owning caller.
 4. **Answer permission requests.** Core applies the [permission policy](#permissions). The desktop app may ask the user. Headless mode never waits.
 5. **End the turn.** In headless mode, the turn's stop reason decides the run's final status, and `agents` stops the agent process. In the desktop app, the run becomes `idle` instead (see [Follow-up turns](#follow-up-turns)).
-6. **Review.** `code60 diff <run-id>` shows the worktree's changes against `<base>`, including untracked files and any commits the agent made. The user keeps the work by committing or merging with Git, or removes it with `discard`.
+6. **Review.** Desktop review shows worktree changes against `<base>`. Scheduled changes remain review-only; desktop conversations use guarded automatic integration and message Undo.
 
 The tool advertises no ACP file-system or terminal client capabilities. Agents use their own tools inside the worktree, and permission requests are the only point where the tool approves anything.
 
@@ -769,12 +796,9 @@ If an agent requires ACP authentication, the run fails with a message telling th
 
 ### Runs without a worktree
 
-In the CLI, when the current directory is not inside a Git repository (or `git` is missing), or `HEAD` resolves to no commit because the repository has none yet, the runs have no worktree. The agent starts directly in the current directory, and nothing is created, initialized, or committed for it.
-
-- The CLI says so on standard error before the runs start. With more than one run, it warns that the runs share the directory and can overwrite each other's changes.
-- `--base` still requires a commit and is a usage error (exit code 2) when it cannot be resolved.
-- The record has `base` and `branch` set to `null`, and `worktree` is the directory the agent ran in. `--json` reports `"branch": null` and `"changedFiles": null`.
-- `diff` and `discard` refuse (exit code 1), because there is no separate worktree or branch. Review and undo the changes in the directory itself. `list` and `stop` work as usual.
+Project workers and scheduled automations require a Git repository with an initial commit.
+Relay alone can explicitly select direct-folder execution without Git. Direct mode
+never silently falls back to or from worktree mode. Existing direct-run history stays readable.
 
 ### Run statuses
 
@@ -821,7 +845,7 @@ The turn timeout (`turnTimeout`, default 30 minutes) applies to each turn, not t
 
 Cancelling a turn, whether by the Cancel turn command (context menu or command palette) or timeout, sends ACP `session/cancel` and waits up to 10 seconds for the turn to end. In the desktop app, a turn that ends within that time leaves the run `idle`, so you can reply or finish. In headless mode, or when the turn does not end in time, the run ends: the agent's process group gets SIGTERM, followed by SIGKILL after 5 seconds. Killing the whole group also stops the tool processes the agent started. The worktree is always kept.
 
-On SIGINT or SIGTERM, the CLI cancels every active turn and ends every run. It waits for the agents to stop and exits with code 130. The desktop app does the same on these signals, then quits. A second signal skips the grace periods.
+On SIGINT or SIGTERM, the desktop cancels active turns, stops its owned processes, then quits. A second signal skips the grace periods. The independent scheduler handles its own signals and work.
 
 ## Permissions
 
@@ -861,13 +885,19 @@ Every ACP session update is recorded as a raw `acp` event, including updates tha
 
 ### Session information and harness modes
 
-Orchestrator and worker composers share a compact footer: the current mode on the left; context donut, read-only model name, 20px harness logo and Send/Stop on the right. Metadata formerly below the composer is inside it. Missing reports use **N/A**; zero capacity has no percentage. The donut uses dark charcoal for used capacity against a light track, clamps its visual fraction to 0–100%, and exposes reported token counts and percentage in a mouse/keyboard tooltip. Long model names truncate with full-name tooltips; unknown harnesses use a Carbon terminal icon. The footer wraps on narrow composers. Context usage may decrease after compaction and is never inferred from transcript length. The model label is read-only. Ended sessions retain read-only values identified as **Last reported** in their tooltips.
+Orchestrator and worker composers share a compact footer: the current mode on the left; context donut, Model picker, 20px harness logo and Send/Stop on the right. Metadata formerly below the composer is inside it. Missing reports use **N/A**; zero capacity has no percentage. The donut uses dark charcoal for used capacity against a light track, clamps its visual fraction to 0–100%, and exposes reported token counts and percentage in a mouse/keyboard tooltip. Long model names truncate with full-name tooltips; unknown harnesses use a Carbon terminal icon. The footer wraps on narrow composers. Context usage may decrease after compaction and is never inferred from transcript length. Ended sessions retain read-only values identified as **Last reported** in their tooltips.
 
-To change a mode, wait until the session is idle and use the custom popover menu above its trigger. It preserves advertised controls and option groups, uses radio semantics and checkmarks, supports arrow/Home/End/Enter/Space navigation and Escape/outside dismissal, and restores trigger focus. Busy, inactive, ended, session replacement and new mode reports dismiss an open menu. The visible Harness Mode label is omitted, with an accessible label retained. Names, ordering and groups come from that harness; Code60 does not impose universal approval levels. **Code60 auto-approval**, shown in the mode trigger tooltip, is a separate policy. Orchestration chats and their workers keep it on: selecting an Ask mode does not turn off Code60's automatic once-only answers to permission requests. The harness determines the effects of its modes, including any sandbox behavior; Code60 forwards the selected value.
+To change a mode, wait until the session is idle and use the custom popover menu above its trigger. It preserves advertised controls and option groups, uses radio semantics and checkmarks, supports arrow/Home/End/Enter/Space navigation and Escape/outside dismissal, and restores trigger focus. Busy, inactive, ended, session replacement and new mode reports dismiss an open menu. The visible Harness Mode label is omitted, with an accessible label retained. Names, ordering and groups come from that harness; Code60 does not impose universal approval levels. The harness menu uses the Neobrutalism Dropdown Menu presentation. Beside it, the **Code60 auto-approval** toggle controls one application-wide policy for orchestration chats and their workers, independently of harness mode. It defaults on and persists across restarts. With it off, each new ACP request waits for Allow once or Deny in the requesting conversation. Live sessions read the preference at request time. Changing it leaves pending decisions with the user. The footer counts pending decisions and opens their owning conversation, including an archived project chat while it has a pending request. Permission answers can settle while session options or a handoff are in progress. The harness determines the effects of its modes, including any sandbox behavior; Code60 forwards the selected value.
 
-The stable ACP v1 adapter prefers categorized select `configOptions` and uses legacy `modes` only when config options are absent. It does not advertise boolean-config support or interpret provider metadata. New/load/resume responses and pushed config, mode and usage notifications feed a bounded, validated session snapshot. Updates before a new session's ID arrives are limited to 128 metadata notifications / 256 KiB and matched to the returned ID. Usage has safe nonnegative integer counts; malformed/unsupported controls cannot grant capabilities.
+The stable ACP v1 adapter retains every valid non-mode select `configOptions` control (including uncategorized and reasoning options) in optional `SessionState.settings`. Model and mode fields remain compatible with older records. It uses legacy `modes` only when config options are absent. It does not advertise boolean-config support or interpret provider metadata. New/load/resume responses and pushed config, mode and usage notifications feed a bounded, validated session snapshot. Setter responses and notifications replace the complete configuration, including dependent reasoning options. Updates before a new session's ID arrives are limited to 128 metadata notifications / 256 KiB and matched to the returned ID. Usage has safe nonnegative integer counts; malformed/unsupported controls cannot grant capabilities.
 
-Optional `sessionState` in `run.json` and `RunView` retains model, usage, mode controls and report timestamps. Deduplicated `sessionState` events use existing ordered writes and snapshot revisions, without polling, SQLite changes or a record-format bump. Older records remain readable. Fresh handoffs clear old values; restored connections use newly reported state without reapplying a saved mode. State events do not become conversation text, unread replies, timing activity or worker summaries. CLI JSON output omits this added record metadata.
+Optional `sessionState` in `run.json` and `RunView` retains model, usage, mode/setting controls and report timestamps. Deduplicated `sessionState` events use existing ordered writes and snapshot revisions, without polling, SQLite changes or a record-format bump. Older records remain readable. Fresh handoffs clear old reports; restored connections use newly reported state without reapplying saved settings. State events do not become conversation text, unread replies, timing activity or worker summaries.
+
+The Model picker shares the mode popover's grouped choices, keyboard navigation and dismissal. It forwards ACP `session/set_config_option` between turns only, using the existing `set-mode` action and idle/single-flight checks. Busy sessions explain **Available after this turn**; missing controls explain **Not advertised by this connector**; timeouts show **Model unconfirmed** without claiming rollback. There are no hard-coded provider models or legacy `session/set_model` calls.
+
+The picker can save confirmed `model`, `thought_level` and `model_config` values as defaults for new orchestrator or worker sessions. Main derives selections from the owned run; the `save-model-default` action accepts only its ID. Orchestrator defaults cover Relay, project chats and Custom Assistants. Workers use their own role default and never follow parent changes. Settings → Agents → Default models lists saved connector/role entries; the fixed `modelDefault` preload method clears one entry. Strict, bounded `modelDefaults` version 1 preferences live in `desktop.json`, using its existing serialized atomic writer; compact snapshots contain selections, not option catalogs.
+
+Precedence is explicit in-session choice, then saved role default, then connector default. Interactive core receives optional `initialSettings`, applies the advertised model first after installing a new session, then rechecks dependent controls before applying reasoning. Unavailable, refused or unconfirmed values produce visible notes without preventing startup or choosing substitutes. Explicit choices are retained in memory across session replacement for context handoff; an explicit model change discards prior dependent choices. ACP load/resume does not reapply defaults. Helpers and scheduled automations keep connector defaults.
 
 The existing worker/chat IPC action unions accept a narrow `set-mode` action with a run ID and `{source, configId, value}`. Main-process ownership and core idle-state checks apply, and values must match current advertised choices. Core exposes a pending mode-change flag, rejects overlapping prompts/changes, and automatic worker delivery waits until it clears. The controller releases its action queue while awaiting the RPC so shutdown and other sessions remain responsive. Requests time out after 15 seconds; local waits abort on shutdown. A rejected change retains reported state; a timeout labels mode unconfirmed until a subsequent report or successful retry. No failure claims to roll back the harness.
 
@@ -912,7 +942,7 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
 }
 ```
 
-Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (exit code 2). Durations use the same grammar in CLI configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
+Every key is optional. `permissions`, `agents`, and `prompts` are merged over the defaults shown above, one kind, agent, or template at a time. Unknown keys (including inside agent definitions) and invalid values are a configuration error (a configuration error). Durations use the same grammar in shared configuration and saved desktop configurations, and must total a positive safe integer number of milliseconds.
 
 The model is part of an agent's command or of the agent's own configuration. The tool does not pick models; the desktop displays the model reported through ACP configuration.
 
@@ -924,11 +954,11 @@ accepts only `command`, `args` and `env`; HTTP/SSE accept only `url` and `header
 Names and commands must be nonempty, arguments and environment/header values must
 be strings, and URLs must use HTTP(S). Omitted `args`, `env` and `headers` become
 empty collections. Unknown fields and the reserved server name `code60` are usage
-errors (exit code 2). MCP validation and malformed-JSON errors never echo values.
+errors (a configuration error). MCP validation and malformed-JSON errors never echo values.
 
 The distributed `mcp.default.json` is an opt-in starter containing pinned stdio
 Playwright MCP (isolated/headless) and Context7 definitions without credentials.
-It ships in the CLI package root and desktop resources, but is never loaded
+It ships in desktop resources, but is never loaded
 automatically or copied over user configuration. Users explicitly merge selected
 entries into `config.json`; runtime defaults remain empty.
 
@@ -950,10 +980,10 @@ Attribution is presentation metadata, never authority or evidence of success.
 The built-in worker transcript projection flattens attribution to `mcp` and
 `server` fields, keeping its scalar-only contract.
 
-Core resolves a detached server list when preparing headless CLI runs, desktop
+Core resolves a detached server list when preparing scheduled runs, desktop
 manual runs, dispatched workers, orchestration chats and explicit ended-run
 recovery. Only chats also receive their own built-in Code60 stdio gateway.
-Workers, CLI and manual sessions receive configured servers without that gateway.
+Workers and manual sessions receive configured servers without that gateway.
 Setup/connection probes, episodic-memory extraction and search-summary helpers
 receive neither user servers nor the gateway.
 
@@ -969,7 +999,7 @@ Config reloads do not restart or alter active sessions, including idle sessions.
 Later runs/workers, new/retried chats and explicit recovery use the newly resolved
 configuration. Restoration and fresh handoffs do not use saved server definitions.
 Definitions stay in main-process memory and ACP setup requests, not run records,
-transcripts, renderer snapshots or CLI results. The agent owns MCP connections and
+transcripts, renderer snapshots or execution results. The agent owns MCP connections and
 stdio children; Code60 retains its existing agent process-tree cleanup and
 once-only permission policies. This is not a new sandbox or a permission grant.
 
@@ -979,11 +1009,67 @@ Users must trust their providers and servers: configured environment/header valu
 are sent to the selected provider, and agent/tool output can still contain sensitive
 content in ordinary transcripts. Keep the config private and out of source control.
 
+### Conversational browser automation
+
+The built-in orchestration gateway exposes `code60_browser` to Relay, Custom
+Assistants and project chats. A user states a preference in chat, without a
+Settings selector or persisted mode. Each live conversation defaults to Headless;
+`set-mode` chooses `headless`, `visible` or `existing-browser`. `status` and mode
+selection do not start a process. `list-tools` and `call` lazily launch the fixed
+`npx -y @playwright/mcp@0.0.84` command in a generated private npm context outside
+repositories and conversation directories. A fixed package manifest, empty
+user/global npm configuration, fixed public registry, script shell and private
+application cache prevent repository package/config substitution. npm/Node
+override variables are removed and package installation scripts are disabled.
+Headless adds `--isolated --headless`; Visible adds `--isolated`; Existing Browser
+adds `--extension`. Chrome and Node.js/npm are user-installed prerequisites.
+The first requested use may download the pinned MCP package. Existing Browser
+requires Microsoft's Playwright extension and its connection approval; ambient
+`PLAYWRIGHT_MCP_*` overrides, including approval-bypass tokens, are not inherited.
+User-configured MCP servers remain separate and unchanged.
+
+`browser-automation.ts` owns one connection and rejects overlapping calls. It
+validates strict action/mode inputs, discovers the upstream tool catalog and
+accepts only the intersection of that catalog and the product-owned browser tool
+allowlist. Unsafe host-code, installation, upload and page-registered WebMCP tools
+are excluded from both discovery and dispatch. `browser-client.ts` implements bounded
+stdio MCP initialization, tool discovery/paging and calls, with no host sampling,
+elicitation or arbitrary executable capability. Its sole fixed workspace root is
+the host-owned conversation directory, independently of npm's private cwd, so
+requested outputs retain their scope without repository-controlled resolution.
+Main owns the subprocess
+group through `platform`; stdout is protocol-only and stderr is drained without
+capture. One action has a 100-second deadline, responses are bounded to 8 MiB and
+catalogs to 128 tools. The gateway preserves browser images and upstream tool
+errors. Failure never retries an uncertain action or silently selects a new mode.
+Automatically named artifacts use a separate temporary directory with a 32 MiB
+eviction budget and are removed after verified cleanup. Explicit output filenames
+are restricted to regular files directly in the owning conversation workspace.
+Only Chrome is currently selected for Existing Browser; no Edge support is implied.
+
+Browser authority starts at the dispatched prompt event, never process startup.
+Cancel revokes it before asynchronous ACP cancellation; turn failure/timeout and
+agent exit revoke and release browser work. MCP cancellation aborts its gateway
+fetch, whose disconnect signal cancels the owned browser action. Isolated Chromium
+uses a separate group, so cleanup awaits its browser-close acknowledgement before
+terminating the MCP watchdog group. Unverified shutdown retains ownership and
+reports a retryable cleanup failure; verification retries never re-signal a stale
+process group. Existing Browser only detaches its connection, preserving Chrome.
+
+Changing modes closes the old connection before publishing the new mode and loses
+isolated state. Cancel aborts pending work and releases the connection; Stop,
+message Undo, replacement, close and shutdown retire owned processes. Navigation
+does not transfer ownership or stop another chat's browser. Restart restores
+history only, with a new Headless selection. External website effects are not
+reversed by message Undo. Workers, setup probes, isolated helpers and the scheduler
+never receive this gateway tool. It automates browser content, not native desktop
+applications. Self-knowledge reports unverified runtime prerequisites as unknown.
+
 ### Prompt templates
 
 Orchestration and recovery prompts that Code60 writes itself are templates in `src/contracts/prompts.ts`. Dedicated memory extraction and search overview helpers use fixed prompt-rendering functions in `contracts`; these are not orchestration template overrides. A template marks merge fields as `{{name}}` (spaces inside the braces are allowed). `prompts` in `config.json` may replace any template by its ID. The `operatingContract` is injected before each user message in the orchestration chat; its text is not recorded as if the user wrote it. ACP v1 has no stable system-prompt field, so this context is included in the prompt sent to the selected provider.
 
-The orchestration chat uses the connected database's saved Operating Contract edit first, then `config.json`, then the built-in template, on each new turn. Desktop handoffs resolve each template the same way; edits apply only to later handoffs, never a turn already in progress. Edits are shared by every project in that database. The CLI does not read database edits and never sends these templates.
+The orchestration chat uses the connected database's saved Operating Contract edit first, then `config.json`, then the built-in template, on each new turn. Desktop handoffs resolve each template the same way; edits apply only to later handoffs, never a turn already in progress. Edits are shared by every project in that database. Scheduled execution uses its saved prompt rather than database chat templates.
 
 `operatingContract` is a fixed clause map rather than a string. Its required keys, in assembly order, are
 `role`, `requests`, `delegation`, `planning`, `workers`, `activity`, `updates`, `reviews`,
@@ -1000,15 +1086,15 @@ legacy string overrides reset to built-in clauses instead of being migrated.
 | `operatingContract` | Prepended to each user turn in the app-wide orchestration chat. | none |
 | `workerUpdates` | Automatic worker turn-end and failure updates, delivered between orchestration chat turns. | `updates` (required; worker states and bounded reply excerpts) |
 
-- A template is at most 8,000 characters and not empty. An unknown or malformed merge field, an unknown template ID, or a missing required field is a configuration error (exit code 2).
+- A template is at most 8,000 characters and not empty. An unknown or malformed merge field, an unknown template ID, or a missing required field is a configuration error (a configuration error).
 - Merging is one pass: values are inserted as they are, never escaped and never scanned for further merge fields. Saved prompts and agent output are untrusted text inside the prompt.
 - Automatic orchestration turns also receive the Operating Contract, with an explicit automatic-update heading. Their prompt events carry `origin: "automatic"`; older/user prompt events omit it. The saved clause set is assembled immediately before delivery; edits never affect a turn already in progress.
-- The CLI's own prompts are exactly the user's text, so headless runs use no template.
+- Scheduled execution uses exactly the saved prompt text without a chat template.
 
 ### Commands
 
 Commands are reusable user-authored prompts, separate from system prompt templates.
-The Command Builder page precedes Prompt Builder under Apps. It lists `/name` and title beside an editor
+The Command Builder page precedes Prompt Builder under Apps. It lists `$name` and title beside an editor
 for Name, Title, Description and Prompt, with Save, Discard and natively confirmed
 Delete. The name follows the title until manually edited. Drafts stay in memory
 across page, project and command switches within the connected database.
@@ -1045,6 +1131,13 @@ when useful, and five documents or labelled sections: decision brief, supporting
 feasibility analysis, market/economics model, risks/assumptions, and validation plan.
 These are prompt instructions, not new execution authority or automated jobs;
 existing plan, Git-readiness, worker ownership and permission checks still apply.
+Four bundled conversation commands use the current conversation and optional
+additional instructions: `$catch-me-up` explains broader context and missed
+background; `$big-picture` pauses the current line of work and reassesses its
+value and approach; `$pushback` rechecks disputed claims against evidence,
+correcting errors without agreeing merely to appease; `$simplify` explains the
+current topic in plain language without requesting code refactoring. These
+commands request explanation or reassessment, not expanded execution authority.
 Built-ins are supplied by contracts and resolved by main at send time. They do not
 count toward the 200 saved-command limit or appear as editable database rows.
 An existing saved command with the same name takes precedence in both the picker
@@ -1075,7 +1168,7 @@ command, and Copy still copies the original message.
 The orchestrator composer exposes a filtered ARIA combobox while the caret is in
 the initial dollar word. Up/Down selects; Enter or Tab inserts `$name ` rather than
 sending; Escape dismisses. Unknown dollar words show a plain-text notice and are
-sent unchanged. Slash-prefixed text, including `/plan` and paths such as `/tmp`, is always plain text. Worker chats and the CLI do not
+sent unchanged. Slash-prefixed text, including `/plan` and paths such as `/tmp`, is always plain text. Worker chats do not
 expand commands.
 
 ## Leftovers after a crash
@@ -1088,36 +1181,12 @@ expand commands.
 - Worktrees are never removed automatically.
 - In the desktop app, an ended run with its worktree intact may be continued by sending a message after its leftover agent is stopped. It attempts ACP restoration first, then starts a handoff if needed as described above. This is not automatic crash recovery.
 
-## CLI
-
-```text
-code60 run [prompt] [--prompt-file <path>] [--agent <name>]... [--base <rev>]
-           [--turn-timeout <duration>] [--parallel <n>] [--allow <kind>]... [--allow-all]
-           [--headless] [--json]
-code60 list [--json]
-code60 diff <run-id>
-code60 discard <run-id> [--yes]
-code60 stop <run-id>
-code60 --version
-```
-
-- `run` is always headless and runs exactly one turn per run. It reads the prompt from the argument, `--prompt-file`, or standard input, and exactly one of them must be given. Standard input is read only when neither of the others is given and it is not a TTY. `--headless` is accepted for compatibility and changes nothing. Use the desktop app for interactive runs.
-- In headless mode, progress goes to standard error: status changes, new tool calls, and permission decisions, without tool/permission titles or status reasons that may echo task content. `--json` writes one result object to standard output, `{"runs": [...]}`, with every run's ID, agent, status, reason, branch, worktree, and changed-file count. Diagnostic reasons receive best-effort credential redaction; fields and exit-code semantics stay unchanged. Without `--json`, a short table goes to standard output.
-- `discard` refuses while the run is active or its agent process is alive. It shows the files that would be lost, then removes the worktree and its `code60/<run-id>` branch. It asks for confirmation in a TTY and requires `--yes` otherwise.
-
-### Exit codes
-
-When runs end with different statuses, the code earliest in this table wins:
-
-| Code | Meaning |
-| --- | --- |
-| 2 | Invalid usage or configuration, including an unknown run ID. |
-| 130 | Cancelled by a signal, or at least one run was cancelled by the user. |
-| 124 | At least one run timed out. |
-| 1 | At least one run failed or was interrupted. |
-| 0 | Every run finished. |
-
 ## Desktop app
+
+Shared desktop tooltips ignore delayed scroll notifications whose ancestor positions
+already match those captured at hover/focus. Actual movement still dismisses them;
+Escape and pending-reveal cleanup remain independent. This reliability correction
+adds no capability, bridge method, setting, persisted schema or self-knowledge entry.
 
 ### Renderer ownership and composition
 
@@ -1133,8 +1202,8 @@ Ownership does not imply visibility:
 | --- | --- |
 | Application | Preferences, updates, notifications, navigation, splash, snapshot subscription and file-panel layout/visibility |
 | Database | Orchestrator identities/events, conversation views and Command Builder/Prompt Builder drafts |
-| Project instance | Worker views/selection, Explorer and file tabs/reads, transcript cache, table selections, menus and project dialogs |
-| Conversation or dialog | Form/draft text, action progress/errors, scroll and disclosure state |
+| Project instance | Worker views/selection, retained session panels, transcript cache, table selections, menus and project dialogs |
+| Conversation or dialog | Right-panel tabs/order/selection and Explorer/file preview state per chat or worker, form/draft text, action progress/errors, scroll and disclosure state |
 
 Hiding a page, closing the file panel or returning to splash does not dispose its
 owner. Replacing the single open project disposes its temporary state and read
@@ -1165,12 +1234,16 @@ The curated Home cards and guarded Relay selection retain their existing content
 Parent labels navigate home and expand when clicked from another page. On that
 home, a label toggles its disclosure without navigating. Left/Right only change
 disclosure or focus, not the active page. Closing a navigation accordion also
-closes all descendant accordions; reopening it does not restore those expansions.
+closes descendant worker/page disclosures; project lists retain their individual
+chevron state while their ancestor is hidden. Reopening does not restore other
+descendant expansions.
 External navigation reveals only the destination's ancestors. Selecting Relay
 never reveals project chats. Selection retains the single-flight action guard
 without temporarily disabling or dimming unrelated navigation rows. Project and
 chat labels keep their text color through pointer presses and selection.
-Existing disclosure storage keys and independent plus/More actions are preserved.
+Existing disclosure storage keys and independent project plus/conversation actions
+are preserved. Project rows replace the former More menu with the circular red ×
+Stop Folder action described above.
 Settings also opens home from the palette and Cmd+, / Ctrl+,. Its section panels
 remain mounted so controls and drafts survive. Direct Updates and Polling links
 still open their requested sections.
@@ -1195,9 +1268,12 @@ permissions, tactics, semantic activity and timing retain their feature owners.
 `utilities`, then `accessibility`. Feature sheets in `styles/` own navigation,
 editors, settings, tables, chats, files/plans, overlays and splash. Glide CSS is
 imported into `vendor`; necessary Monaco runtime adapters target only its editor
-internals. Cards use `--card-radius: 5px` and editable text/number/date fields and textareas
-use `--input-radius: 5px`. Buttons use `--button-radius: 5px` and chat surfaces/composers
-use `--chat-radius: 5px`, as do human prompt bubbles. Modal dialogs use
+internals. Cards use `--card-radius: 5px`, with navigation cards overriding it to
+10px. Shared Settings cards and fieldset groups use `--settings-card-radius: 10px`
+across every Settings page. Editable text/number/date fields and textareas
+use `--input-radius: 5px`. Buttons use `--button-radius: 5px` and chat surfaces
+use `--chat-radius: 5px`. Composers use `--composer-radius: 10px`, and human prompt
+bubbles use `--user-bubble-radius: 5px`. Modal dialogs use
 `--dialog-radius: 5px`; the full-window splash keeps its native geometry.
 Unrelated controls and surfaces remain square through
 `--ui-radius: 0`; radio buttons and status dots remain circular. Keep radius
@@ -1207,10 +1283,16 @@ lifecycle retains selected `data-theme` and publishes resolved
 signal tokens, artwork and canvas/editor colors.
 
 The workspace reserves its measured preceding height as a header row above its
-content, keeping Home's doubled top clearance even with a wrapped database notice.
+content, including a wrapped database notice. The sidebar has no extra top padding;
+its first card starts at the workspace top with its normal 6px outer margin.
+The sidebar spans the full workspace height and starts directly below the preceding
+strip and notice. Breadcrumb icon sizes and wrapping affect only
+the content column, never the sidebar position. Its scrollport disables automatic
+scroll anchoring during disclosure changes; selecting an already focused row
+does not refocus or scroll it.
 A ResizeObserver keeps this inset synchronized with strip/notice/window changes, avoids redundant
 style writes and disconnects on disposal. All PageTitle breadcrumb containers share
-this top origin; Search, Automation Studio and System Manager do not add their
+this top origin; Search, Scheduled Jobs and System Manager do not add their
 own top padding. Header controls align to the top at every title size, and Git
 readiness notices render below chat headers. Navigation cards stay 224px wide,
 with 36px artwork and 32px gaps, wrapping without stretching. Their title size is
@@ -1224,19 +1306,19 @@ activation alone grants none of those capabilities.
 
 The Code60 desktop app is the interactive interface. It is a standalone Electron app with a React interface. `npm run dev` builds and starts it, rebuilding on changes; `npm start` starts the built app. It is not packaged or signed in this version.
 
-- **Orchestration Chat.** Chat is the default page after the splash and renderer reload, and the first alphabetical sidebar entry. Once setup is complete and a database and enabled orchestration provider are available, the main process loads saved conversations as stopped history. With no saved conversations, it creates an initial idle ACP session in a generated UUID subfolder of `.code60_workspace` beside the database. **New chat** creates and selects another independent session; the expandable Chat group in the primary sidebar switches conversations without stopping background turns. An accessible Carbon plus action sits beside Chat, outside the tab button and available even while the Chat group is collapsed. It creates a conversation and reveals the group. Only labelled conversation buttons are nested beneath Chat, with selection, unread/approval counts and accessible activity/failure descriptions. Creation and selection share an in-flight guard and visible failure feedback. Expansion is remembered, external navigation reveals the selected conversation, and collapse never changes it. Each live chat has its own working directory, transcript, draft, scroll position, worker ownership, authenticated gateway and automatic-update inbox. New directories use mode `0700`; existing folders and legacy workspace contents are retained, with no Git initialization or branch creation. Sessions start idle without a prompt and use the fixed allow-all, once-only permission policy. They stay alive across page and project switches; changing databases, provider, or its configured command ends live chats while preserving their saved files. Renderer reloads reuse all main-process sessions and the selected conversation, never creating another. Conversations are independent of project batches, tables and search. Run and event records live privately in `.code60_workspace/<chat-folder>/.code60/runs`, outside SQLite. Restart restores only stopped history and metadata, not gateways, worker ownership, update inboxes or plan authority. The empty conversation shows “Give Code60 a task.” The header retains connection controls. The page presents user messages on the right and streamed replies on the left; thoughts, tools, permissions and session notes appear in inline activity dropdowns toggled by the live activity icon/status or completed turn timing. Errors stay visible. A persistent composer has 5px corners, no border and no outer shadow. It uses light gray (#f3f3f3) in Light and dark gray (#303030) in Dark/System dark. The left sidebar matches the main app surface, white in Light and charcoal (#252525) in Dark/System dark. Composer focus subtly changes the background to #e9e9e9 or #383838, without a layout shift; worker composers share these rules. Forced colors use system-colored outlines. The right file panel and previews retain the main app surface. The current provider logo appears inside the composer footer; connection, cancel and new-session controls remain in the header. It shows explicit semantic activity below the latest transcript message. Neither chat composers nor sidebar entries show striped loading lines. Current-project worker counts remain in the activity tooltip, supplied by main-process ownership snapshots even when automatic updates are paused. These counts never change orchestrator sendability or Stop semantics. Enter sends a new human request, Shift+Enter inserts a newline, and Stop cancels that chat's turn. Stopped chats wait for Send, which starts a new request with the current tactic selection; Chat omits New session, Continue task and the saved-chat-stopped warning. Database connection, Cancel, Relay Retry connection, connection errors and current history-saving warnings remain available. The main process validates every action against an existing chat run ID; stale requests cannot target replacement sessions. Paths are generated only in the main process, never supplied by the renderer or agents. Existing core startup and turn timeouts, permission handling, cancellation and process-group cleanup apply. Stop all and every shutdown path stop every chat; quitting warns when any chat is starting or working, and idle orchestrators alone do not trigger a confirmation. Each chat's draft survives switching conversations, pages and renderer reloads for the current run. Initial database connection is available from Chat when needed.
+- **Orchestration Chat.** Chat is the default page after the splash and renderer reload, and the first alphabetical sidebar entry. Once setup is complete and a database and enabled orchestration provider are available, the main process loads saved conversations as stopped history. With no saved conversations, it creates an initial idle ACP session in a generated UUID subfolder of `.code60_workspace` beside the database. **New chat** creates and selects another independent session; the expandable Chat group in the primary sidebar switches conversations without stopping background turns. An accessible Carbon plus action sits beside Chat, outside the tab button and available even while the Chat group is collapsed. It creates a conversation and reveals the group. Only labelled conversation buttons are nested beneath Chat, with selection, unread/approval counts and accessible activity/failure descriptions. Creation and selection share an in-flight guard and visible failure feedback. Expansion is remembered, external navigation reveals the selected conversation, and collapse never changes it. Each live chat has its own working directory, transcript, draft, scroll position, worker ownership, authenticated gateway and automatic-update inbox. New directories use mode `0700`; existing folders and legacy workspace contents are retained, with no Git initialization or branch creation. Sessions start idle without a prompt and use the current orchestration approval setting. They stay alive across page and project switches; changing databases, provider, or its configured command ends live chats while preserving their saved files. Renderer reloads reuse all main-process sessions and the selected conversation, never creating another. Conversations are independent of project batches, tables and search. Run and event records live privately in `.code60_workspace/<chat-folder>/.code60/runs`, outside SQLite. Restart restores only stopped history and metadata, not gateways, worker ownership, update inboxes or plan authority. The empty conversation shows “Give Code60 a task.” The header retains connection controls. The page presents user messages on the right and streamed replies on the left; thoughts, tools, permissions and session notes appear in inline activity dropdowns toggled by the live activity icon/status or completed turn timing. Errors stay visible. A persistent composer has square corners, no border and no outer shadow. It uses light gray (#f3f3f3) in Light and dark gray (#303030) in Dark/System dark. The sidebar background shares the diagonal blue workspace gradient; foreground cards use white in Light and charcoal (#252525) in Dark/System dark. Composer focus subtly changes the background to #e9e9e9 or #383838, without a layout shift; worker composers share these rules. Forced colors use system-colored outlines. The right file panel and previews retain the main app surface. The current provider logo appears inside the composer footer; connection, cancel and new-session controls remain in the header. It shows explicit semantic activity below the latest transcript message. Neither chat composers nor sidebar entries show striped loading lines. Current-project worker counts remain in the activity tooltip, supplied by main-process ownership snapshots even when automatic updates are paused. These counts never change orchestrator sendability or Stop semantics. Enter sends a new human request, Shift+Enter inserts a newline, and Stop cancels that chat's turn. Stopped chats wait for Send, which starts a new request with the current tactic selection; Chat omits New session, Continue task and the saved-chat-stopped warning. Database connection, Cancel, Relay Retry connection, connection errors and current history-saving warnings remain available. The main process validates every action against an existing chat run ID; stale requests cannot target replacement sessions. Paths are generated only in the main process, never supplied by the renderer or agents. Existing core startup and turn timeouts, permission handling, cancellation and process-group cleanup apply. Stop all and every shutdown path stop every chat; quitting warns when any chat is starting or working, and idle orchestrators alone do not trigger a confirmation. Each chat's draft survives switching conversations, pages and renderer reloads for the current run. Initial database connection is available from Chat when needed.
 
 - **Agent setup.** Every installation, including existing users with a legacy provider preference, must complete the desktop wizard once. The desktop-owned catalog presents Antigravity, Claude, Codex, Copilot, Droid, Kiro and OpenCode alphabetically with bundled logos in button cards that start detection and connection immediately on click or keyboard activation, without radio inputs or a Continue step. Wizard headings are 16px and text/controls 13px, independent of larger page-title preferences. Choose a Primary / Orchestrator, detect its executable and prerequisites, then initialize ACP and create a session without a prompt. Successful verification automatically commits through the existing main-process finish action, without add-another questions, review pages or confirmation dialogs. The result stays open with Close and an optional Add another agent action; failures offer Close and Retry. Save failures retain verification for an explicit save retry and never claim Connected. Each optional addition starts a new add transaction, preserving the saved primary and earlier successes even when a later attempt fails or is dismissed. Only Detected and Connected label agent status; progress and failures are separate. Settings offers Add agents and Change primary. Changing primary requires all active orchestration work to finish or stop; adding agents preserves live chats. Existing settings remain active until the verified connection is saved automatically.
 
 - **Setup transaction and probes.** The main process owns the candidate, role, phase, errors and verified set, recovered through snapshots after renderer reload. A single attempt runs at a time. Detection refreshes desktop PATH and checks provider-specific prerequisites; npx alone does not establish Claude/Codex detection. Configured command overrides remain authoritative. Existing npx adapters may download when connecting; Code60 never installs provider CLIs or stores login credentials. A probe initializes ACP and creates a session in a generated private `code60-agent-probe-*` temporary directory independent of the database. It sends no prompts and creates no runs, transcripts or worktrees. The existing 15-second timeout and process cleanup apply; stop the process before removing the directory. Cancellation, dismissal, config changes, renderer loss/reload and shutdown cancel attempts and discard stale completions. Completed verification stays in memory until committed or abandoned.
 
-- **Enabled agents.** The automatically invoked finish action atomically writes `agentSetup` version 1 to desktop preferences: primary provider, enabled IDs and SHA-256 identities of verified command argument arrays. Legacy preferences never satisfy this gate and available agents are never imported automatically. Persisted membership means configured, not a live connection. Automatic chat startup, manual and MCP worker dispatch, continuation, and saved run configuration validation require completed setup and an enabled provider with an unchanged command identity. Snapshots and MCP provider lists contain only enabled agents. Changing a verified command requires verification again. Core accepts an optional resolved configuration for desktop launches/recovery; the headless CLI still uses its original config, defaults, flags and lifecycle. Native desktop defaults add `agy acp`, `copilot --acp --stdio`, and `kiro-cli acp`, retaining Claude/Codex npx adapters and the existing Droid/OpenCode commands.
+- **Enabled agents.** The automatically invoked finish action atomically writes `agentSetup` version 1 to desktop preferences: primary provider, enabled IDs and SHA-256 identities of verified command argument arrays. Legacy preferences never satisfy this gate and available agents are never imported automatically. Persisted membership means configured, not a live connection. Automatic chat startup, manual and MCP worker dispatch, continuation, and saved run configuration validation require completed setup and an enabled provider with an unchanged command identity. Snapshots and MCP provider lists contain only enabled agents. Changing a verified command requires verification again. Core accepts resolved desktop configuration; scheduled execution uses its saved configuration and lifecycle. Native desktop defaults add `agy acp`, `copilot --acp --stdio`, and `kiro-cli acp`, retaining Claude/Codex npx adapters and the existing Droid/OpenCode commands.
 
-- **Visual system.** Light uses white surfaces except for gray composers and colored user bubbles, including resting controls, table headers and rows, code blocks, disabled controls, and the footer. Hairline borders separate fields, buttons, groups and sections; only overlays keep one tight shadow. Hover uses pale blue fills without adding borders; selection uses neutral gray. Primary actions use blue (`#5b9fe6`). Dark and System dark use charcoal (`#252525`) resting surfaces, including every table row, with dark gray (`#303030`) composers. Button groups use raised gray (`#303030`); table headers and dialog headings retain muted dark blue (`#253347`), and hover highlights retain `#1b2d4a`. Main text is white, muted text is `#b1b1b1`, subtle borders are `#484848`, control borders are `#8c8c8c`, and selection uses neutral gray (`#3c3c3c`). The native title-bar overlay and window background use `#252525`. Fine borders separate controls and fields; disabled controls are dimmed with solid borders, without hatching or dashed outlines, and unavailable sidebar destinations are dimmed labels without outlines. The database notice is a single compact status row with its Connect to database action. Primary actions use a lighter blue (`#77b7f5`), with related shades for focus and hover; human message bubbles use dark blue (`#1b3a5c`) with white text, or pale blue (`#d8e8fa`) with black text in Light. Status signals remain opt-in. The sidebar is square and has no outer border; main page surfaces have no outer border, with 5px corners on Chat. Passive containers other than cards and modal dialogs are square; modal dialogs have 5px corners. The shared Code60 wordmark uses locally bundled D-DIN Regular, independently of text-role preferences, and has a small 45-degree chamfer at the upper-right of its colored 60 block. The subtitle retains its D-DIN font. Cards (including settings groups, agent choices, approvals and result cards) have 5px corners. Buttons outside the left sidebar, switch buttons and new-message composer frames use 5px corners; left-sidebar buttons and selected rows are square; checkboxes and modal/popup windows remain square; radio inputs and their selected dots stay circular, without altering Carbon checkbox marks. The selected sidebar row carries a 2px inset accent bar on its left edge. Digits use tabular numerals, and timestamps, counts, versions and fact labels use a compact monospace metadata face, while card titles use their independent text role. The full-window splash and native window frame retain their existing geometry. Human message bubbles, agent messages, non-Chat page panels and vendor editor/table internals remain square. Editable text/number/date fields, textareas and composite prompt fields have 5px corners. Selects, scrollbar thumbs and other passive containers stay square. Standard controls and composite prompt editors show a subtle shadow on keyboard focus. The Focus highlight border switch adds an outline and stronger halo. Both chat composers use a focus border, and independent icon actions highlight the glyph. The switch defaults off, applies immediately, and persists locally as `code60.focusHighlight`. When enabled, outlines follow control geometry; explicit selection, validation, approval and failure cues remain. Standalone buttons have no trailing-edge border effect. Related controls, including segmented radio choices, form seamless square groups with straight internal separators, with no overlapping hit areas. A fine outer border distinguishes control groups; their fill is white in Light and raised charcoal in Dark. Standard groups use 28px controls (30px including the frame); compact groups use 24px controls. Menus, dialogs, chat windows, the palette and toasts use one tight overlay shadow. Sidebar pages and navigation groups use locally bundled Phosphor duotone icons sized to match their navigation label text. Carbon glyphs in navigation scale with the same setting. Resting left footer glyphs match the footer text. Original paths and 20% secondary-layer opacity are retained from @phosphor-icons/core 2.1.1 (MIT), without a dependency or runtime fetch. Decorative glyphs inherit their label color through hover, selection and forced colors. Icons are decorative, without extra names, focus targets or actions, and retain an 8px label gap and at least 12px of leading space. The gutter and 40px minimum rows expand with larger text to avoid clipping and preserve hierarchy alignment. Other icons use locally bundled IBM Carbon glyphs in the DOM and canvas, with 16px as the standard size. Seven configurable text roles retain their independent choices. Status labels and symbols carry meaning with optional signal colors; nothing blinks. Reduced motion disables functional animation; forced colors retain visible control edges and selection. Scrollbars use subtle theme-relative thumbs and a stronger hover tone app-wide; forced colors retain native contrast. Dialogs, menus, editors and canvas-table scrollers reserve a stable gutter before overflow so wrapping and scrollbar appearance do not shift content sideways. Horizontal tab strips, workflow diagrams and code/table blocks reserve scrollbar height as well. Non-scrolling clipped frames keep automatic gutters, and Monaco retains its own overlay-scrollbar layout. No decorative dots or middle-dot delimiters are added outside the explicitly requested dotted preview frame.
+- **Visual system.** Light uses white surfaces except for gray composers and colored user bubbles, including resting controls, table headers and rows, code blocks, disabled controls, and the footer. Hairline borders separate fields, buttons, groups and sections; only overlays keep one tight shadow. Hover uses pale blue fills without adding borders; selection uses neutral gray. Primary actions use blue (`#5b9fe6`). Dark and System dark use charcoal (`#252525`) resting surfaces, including every table row, with dark gray (`#303030`) composers. Button groups use raised gray (`#303030`); table headers and dialog headings retain muted dark blue (`#253347`), and hover highlights retain `#1b2d4a`. Main text is white, muted text is `#b1b1b1`, subtle borders are `#484848`, control borders are `#8c8c8c`, and selection uses neutral gray (`#3c3c3c`). The native title-bar overlay and window background use `#252525`. Fine borders separate controls and fields; disabled controls are dimmed with solid borders, without hatching or dashed outlines, and unavailable sidebar destinations are dimmed labels without outlines. The database notice is a single compact status row with its Connect to database action. Primary actions use a lighter blue (`#77b7f5`), with related shades for focus and hover; human message bubbles use dark blue (`#1b3a5c`) with white text, or pale blue (`#d8e8fa`) with black text in Light. Status signals remain opt-in. The sidebar is square and has no outer border; main page surfaces have no outer border, with square corners on Chat. Passive containers other than cards and modal dialogs are square; modal dialogs have square corners. The shared Code60 wordmark uses locally bundled D-DIN Regular, independently of text-role preferences, and has a small 45-degree chamfer at the upper-right of its colored 60 block. The subtitle retains its D-DIN font. Settings cards and groups have square corners; agent choices, approvals and result cards have square corners. Buttons outside the left sidebar use square corners; toggle switches use pill-shaped tracks and circular thumbs; new-message composer frames use square corners; left-sidebar buttons and selected rows use square corners with square outer corners on each card’s first/last visible rows; checkboxes and modal/popup windows remain square; radio inputs and their selected dots stay circular, without altering Carbon checkbox marks. The selected sidebar row carries a 2px inset accent bar on its left edge. Digits use tabular numerals, and timestamps, counts, versions and fact labels use a compact monospace metadata face, while card titles use their independent text role. The full-window splash and native window frame retain their existing geometry. Human message bubbles use square corners; agent messages, non-Chat page panels and vendor editor/table internals remain square. Editable text/number/date fields, textareas and composite prompt fields have square corners. Selects, scrollbar thumbs and other passive containers stay square. Standard controls and composite prompt editors show a subtle shadow on keyboard focus. The Focus highlight border switch adds an outline and stronger halo. Both chat composers use a focus border, and independent icon actions highlight the glyph. The switch defaults off, applies immediately, and persists locally as `code60.focusHighlight`. When enabled, outlines follow control geometry; explicit selection, validation, approval and failure cues remain. Standalone buttons have no trailing-edge border effect. Related controls, including segmented radio choices, form seamless square groups with straight internal separators, with no overlapping hit areas. A fine outer border distinguishes control groups; their fill is white in Light and raised charcoal in Dark. Standard groups use 28px controls (30px including the frame); compact groups use 24px controls. Menus, dialogs, chat windows, the palette and toasts use one tight overlay shadow. Sidebar pages and navigation groups use locally bundled Phosphor duotone icons sized to match their navigation label text. Carbon glyphs in navigation scale with the same setting. Resting left footer glyphs match the footer text. Original paths and 20% secondary-layer opacity are retained from @phosphor-icons/core 2.1.1 (MIT), without a dependency or runtime fetch. Decorative glyphs inherit their label color through hover, selection and forced colors. Icons are decorative, without extra names, focus targets or actions, and retain an 8px label gap and at least 12px of leading space. The gutter and shared 40px rows grow together with larger saved text to avoid clipping and preserve hierarchy alignment; clicking never resizes a row. Other icons use locally bundled IBM Carbon glyphs in the DOM and canvas, with 16px as the standard size. Seven configurable text roles retain their independent choices. Status labels and symbols carry meaning with optional signal colors; nothing blinks. Reduced motion disables functional animation; forced colors retain visible control edges and selection. Scrollbars use subtle theme-relative thumbs and a stronger hover tone app-wide; forced colors retain native contrast. Dialogs, menus, editors and canvas-table scrollers reserve a stable gutter before overflow so wrapping and scrollbar appearance do not shift content sideways. Horizontal tab strips, workflow diagrams and code/table blocks reserve scrollbar height as well. Non-scrolling clipped frames keep automatic gutters, and Monaco retains its own overlay-scrollbar layout. No decorative dots or middle-dot delimiters are added outside the explicitly requested dotted preview frame.
 - **Overlays.** Buttons with an accessible label or a `data-tooltip` show an inverted tooltip after a 500ms hover, or at once on keyboard focus or a quick move from another tooltip; Escape hides it. Tooltips prefer to sit above their control with a 2px stem pointing at it, flip below near the top edge, appear beside menus for menu items, and show shortcuts (from `data-tooltip-keys`) at the right. Unavailable menu items and buttons explain why in their tooltip. Cmd+K (Ctrl+K) opens a command palette, unless a dialog is open. An empty query lists every command in groups: Pages (Chat, File Explorer, and the remaining page tabs, including Prompt Builder and Settings), Project (New agent session, Open project, Connect to database, Poll project data, Stop all runs), Appearance (each theme, Signal colors, and Inline charts, with checkmarks on the current choices), and Session (commands for the selected session). Typing switches to one ranked list: label prefixes first, then word starts, then substrings, then matches in the group or run context, with matched letters bold and underlined. Arrow keys move, Enter runs, Escape closes and restores focus, and the footer counts the results. Unavailable commands are listed but disabled, following the same rules as the buttons they mirror. Right-clicking a session row, pressing the Context Menu key or Shift+F10 on the grid, or activating its Actions cell opens the same actions menu: Open chat and Review changes; Cancel turn, Finish run, Resume, and Stop leftover agent; and Delete worktree last under a 2px rule. Actions menus never have title strips. Items have Carbon icons; unavailable items keep their place, hatched, and say why in a tooltip. Arrow keys, Home, End, and typing a letter move between items; Escape or Tab closes the menu and restores focus, while an outside click, resizing, or window blur closes it without moving focus. Resume is unavailable while the recorded process group is alive or the worktree was deleted; it only opens the chat and focuses the composer. Toasts appear 16px from the window's bottom-left corner, newest at the bottom, at most three (a fourth displaces the oldest). Each has a Carbon icon, a written tone, and a 3px left rule: Note (4 seconds), Done (6 seconds), Warning (8 seconds), and Error (stays until dismissed or displaced). A bottom bar shows the time remaining; hover or focus pauses it, and the dismiss button or Escape closes a focused toast. Notes, Done, and Warning are announced politely; errors use `role="alert"`. Approvals stay in place until handled.
-- **Splash.** Require verified main-process agent setup before entry. The full-window splash uses solid white or midnight slate for the saved Light, Dark or System appearance, with upper-right Light/Dark controls and a separate draggable top strip. Center the bundled D-DIN wordmark and exact subtitle "v0.2 'Paddock' (Beta)" with one Start button below them. Lift the group up to 48px within its available space, reducing the lift on short windows. Project selection is available through the Projects plus action after entry, not on the splash. Start and Escape enter without opening or switching a project; Start receives focus when configured and connected to a database. Retain the database notice and connection action when disconnected, the setup wizard when unverified, and actionable errors. Active runs do not block entry. Returning from the footer preserves projects, chats, drafts and active work; an explicit return remains visible across reloads until Start or Escape. Use system colors and visible focus in forced colors. Dark and System dark show one bundled, licensed background image (`src/renderer/splash-backgrounds/stripes.jpeg`) over the midnight-slate surface; Light and forced colors stay solid. There is no background selector or legacy splash-background preference.
+- **Splash.** Require verified main-process agent setup before entry. The full-window splash uses solid white or midnight slate for the saved Light, Dark or System appearance, with upper-right Light/Dark controls and a separate draggable top strip. Center the bundled D-DIN wordmark and exact subtitle "v0.2 Paddock (Beta)" with one Start button below them. Lift the group up to 48px within its available space, reducing the lift on short windows. Project selection is available through the Projects → Add Project action after entry, not on the splash. Start and Escape enter without opening or switching a project; Start receives focus when configured and connected to a database. Retain the database notice and connection action when disconnected, the setup wizard when unverified, and actionable errors. Active runs do not block entry. Returning from the footer preserves projects, chats, drafts and active work; an explicit return remains visible across reloads until Start or Escape. Use system colors and visible focus in forced colors. Dark and System dark use a solid midnight-slate surface; Light and forced colors also stay solid. There is no background selector or legacy splash-background preference.
 - **Database.** Edit > Database Connection… in the native application menu, or Connect to database on the start screen, opens a Select database dialog to open an existing SQLite file or create a new one with the native file pickers. The database stores the history of opened project folders (canonical path and last-opened time), saved run configurations, prompt template edits and reusable commands; run records stay where they are. New databases use schema 5. Older Code60 databases upgrade in one transaction: schemas 1 and 2 gain the prompt-template table, schema 1 also gains the run-configuration table, single-block Operating Contract edits are reset once when upgrading from before schema 4, and schemas 1–4 gain the commands table. Other saved prompts, configurations and project history are preserved. Schema 4 introduced Operating Contract clause maps as JSON in its prompt-template row. Opening projects requires a connection. The app remembers the selected database in `$XDG_STATE_HOME/code60/desktop.json` and reconnects on launch; a saved database that is missing or unusable is reported, never recreated. Only empty files and Code60 databases are accepted, and other databases are never modified. Switching databases requires every run to have ended and closes the open project.
-- **Workspace.** File > Open Project… in the native application menu (Cmd+O or Ctrl+O) is enabled while a database is connected and no batch is active. Open Project shows a dialog with a borderless header and the connected database's project history, newest first. Choosing an entry first asks for confirmation; Open Folder is a centered plus-labelled button link below the list. Its native folder picker supports explicitly creating a directory as well as selecting an existing one, then confirms the full selected path before opening. Cancel leaves the current project and history unchanged. Opening never initializes Git or automatically creates project files; a directory explicitly created in the native picker can remain after cancellation. Each opened folder is recorded once. A labelled x icon in the upper-right of each project row removes only that history entry, without touching its folder or runs; the row has one shared hover fill rather than a separate Remove region. The selectors no longer expose a bulk Clear history button. A folder that no longer exists is reported and stays in the history. Run records are found the same way as for the CLI, so the app shows the folder's earlier runs as history. Switching projects requires every run to have ended.
+- **Workspace.** File > Open Project… in the native application menu (Cmd+O or Ctrl+O) is enabled while a database is connected and no batch is active. Open Project shows a dialog with a borderless header and the connected database's project history, newest first. Choosing an entry first asks for confirmation; Open Folder is a centered plus-labelled button link below the list. Its native folder picker supports explicitly creating a directory as well as selecting an existing one, then confirms the full selected path before opening. Cancel leaves the current project and history unchanged. Opening never initializes Git or automatically creates project files; a directory explicitly created in the native picker can remain after cancellation. Each opened folder is recorded once. A labelled x icon in the upper-right of each project row removes only that history entry, without touching its folder or runs; the row has one shared hover fill rather than a separate Remove region. The selectors no longer expose a bulk Clear history button. A folder that no longer exists is reported and stays in the history. Run records are found in their existing storage locations, so the app shows the folder's earlier runs as history. Switching projects requires every run to have ended.
 - **Run batches.** The sessions table's New agent session add row (see [Tables](#tables)), or New agent session in the command palette, starts one batch with an optional first prompt, one or more agents (the same agent may repeat), a parallel count with the same meaning as `--parallel`, and advanced options for the base revision, turn timeout, and per-kind permission overrides. Validation and defaults are the same as for `run`. Additional independent batches can start while earlier sessions are running, waiting for approval, or idle. Parallel limits apply per batch. The controller tracks each batch and its subscriptions, routes actions and approvals to its owner, and combines snapshots and sequenced events without clearing earlier transcripts. Completion history reads are serialized with starts and refreshes so overlapping batches cannot overwrite newer history or a switched workspace. Project and database switches stay blocked until all batches have ended; Stop all and every shutdown path stop all batches, including forced shutdown. Without a first prompt, each run goes straight to `idle` ("no prompt yet"), and the first prompt you send becomes turn 1 and the run's first prompt. Finishing a run that never got a prompt gives `finished` with the reason "no prompt was sent".
 - **Database workspace directory.** Whenever the desktop app successfully opens or reconnects to a Code60 SQLite database, it creates `.code60_workspace` in the database file’s parent directory if missing, using private directory permissions. Existing contents are preserved. This includes startup reconnection and databases selected after launch. A file conflict or filesystem error follows the existing database connection error path.
 - **Episodic Memory experiment.** Settings → Advanced → Experiments → Episodic Memory extracts important details from the open project's recorded events with the configured orchestration provider. A **Maximum events** field beside the centered extraction button accepts a whole number from 1 to 10,000, defaults to 10,000, and remembers the last valid value locally. The cap follows the existing session order and takes each session’s earliest recorded events until reached; a larger limit processes all available events. The button count reflects the capped selection. Invalid limits disable extraction, and the limit cannot change during a run. Clear retains both the prompt and the limit. The **Extract from N events** button captures the displayed per-session event counts, waits for complete transcript reads, and displays each returned natural-language statement as a separate cloud, with softly rounded edges, two subtle lobes, and a continuous contrasting outline around the filled shape. Clouds flow side by side and wrap onto new rows with a 35ch maximum width, 28px vertical/32px horizontal padding, and text at least 16px. Light mode uses a diagonal white-to-light-blue fill and dark text. Dark mode uses the gradient only in a thick 4px outline, with a transparent interior and the normal foreground text color. The silhouette keeps fixed-size lobes as text grows; forced-colors mode uses system colors and a plain outline. Completion reports the end-to-end elapsed time measured with a monotonic clock, including startup and cleanup; Clear and a new extraction reset the timing status. **Edit prompt** opens an inline editor; edits persist locally, **Reset prompt** restores the default instructions, and **Clear** removes results and status while retaining the prompt. Results remain in memory across page switches and reset on project/database changes or renderer reload. Extraction may be rerun with a revised prompt. Empty input, unavailable providers, incomplete reads, invalid responses, and errors are explicit; failed or cancelled runs do not publish partial results.
@@ -1245,31 +1327,62 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 
 - **Prompt Builder.** A permanent sidebar page lists the handoff templates, worker-update template and Operating Contract, with each effective source (Saved edit, config.json, or Built-in). The Operating Contract has 13 labelled clause editors in a fixed order, without add/remove/reorder controls. Its single Preview replaces all boxes with the assembled read-only body, including unsaved changes. Save commits all clauses together; Discard changes and confirmed Reset to default affect the whole contract. Other templates keep one monospace editor, a merge-field dropdown when fields exist, and inline validation; their Preview uses fixed sample values, never real run data. Edit template returns to the unsaved draft. The page does not list MCP tool descriptions or input contracts. Invalid templates cannot be saved. Unsaved drafts are kept per template through page switches; Discard changes restores the effective text. Save stores an edit in the connected database. Reset to default confirms before removing the saved edit and restores the config.json template, or the built-in template when no config override exists; its tooltip names that source. The page offers Connect to database when disconnected. Saved edits load on connection and with the run-configurations poll; invalid or unknown saved templates are skipped with a warning.
 - **Run configurations.** A permanent Configurations tab shows a table like the sessions table with Name, Preset Provider (every distinct agent in the configuration), # Agents (sessions the configuration creates), Uses, and Last Used (local time, or Never). Its New run configuration add row opens the run configuration editor; it is unavailable while another action is in progress. An Actions column after Name works like the sessions table's: clicking its cell, or pressing Enter on it, opens a menu with Edit and Delete for that configuration; deleting asks for confirmation and never affects sessions. A configuration holds the batch settings from the run form (agents, parallel count, base revision, turn timeout, and permission overrides), never a task prompt or project path. Names are unique within the database, ignoring case, and configurations are shared by every project in it. When saved, a missing parallel count or turn timeout is filled in from the current defaults; an empty base revision stays empty, so the configuration also works without Git. New agent session first lists the configurations and a Do not use a run configuration option. Choosing a configuration opens the run form prefilled with its settings and an empty prompt; changes apply only to that batch. Back returns to the list and keeps the draft. A batch counts as one use of its configuration once it has started; declined and invalid starts do not count. After a batch starts, a confirmation reports how many sessions started and has an unchecked Save Run Configuration checkbox. Checking it shows a name field, and saving stores the batch's settings as a new configuration with one use, without starting agents again. Each batch can be saved once; a failed save can be retried.
-- **Git readiness.** Desktop dispatch, manual launch and continuation require Git and an initial HEAD commit. Core preparation revalidates required isolation before creating records or workers. Existing non-isolated runs remain readable and stoppable, but cannot receive prompts or resume, even after Git setup. Their review says “No baseline was captured for this run” and offers project browsing and setup where needed; Refresh cannot reconstruct it. CLI defaults remain unchanged.
+- **Git readiness.** Desktop dispatch, manual launch and continuation require Git and an initial HEAD commit. Core preparation revalidates required isolation before creating records or workers. Existing non-isolated runs remain readable and stoppable, but cannot receive prompts or resume, even after Git setup. Their review says “No baseline was captured for this run” and offers project browsing and setup where needed; Refresh cannot reconstruct it.
 
 <a id="tables"></a>
 
-- **Tables.** The Sessions, Messages, Events, Configurations, Worktrees, and Polling tables share one Glide Data Grid component and its built-in interactions. Each grid has a page title on the left, followed by any store-wide selectors, and one right-aligned toolbar of borderless Carbon icon actions: Search, Filters, Columns, Settings, and any table-wide actions after a thin divider. Each action keeps its accessible name, which the shared tooltip shows. An applied saved filter appears as a removable chip (Unapply filter) beside Filters. When the controls exceed the available width, a separate container scrolls horizontally and places the scrollbar below the toolbar. The area behind the toolbar is transparent; there is no separate toolbar above it. Pages do not add explanatory sentences about how their filters or controls work. Search, or Cmd+F (Ctrl+F) while that table's page is visible and no dialog is open, opens Glide's search overlay for that table only; Escape closes it and returns focus to the grid. Each column heading except Actions has a Glide header menu (also reachable from the Column picker by keyboard) with Sort ascending, Sort descending, and a filter. Text columns offer Contains, Is, Is not, Is empty, and Is present; category columns such as Agent and Status choose Is or Is not from the column's values; number and date columns add At least and At most (on or after and on or before for dates). Filters on several columns combine with AND. While column filters apply, a row below the header shows one removable chip per filtered column (Clear <column> filter), a Clear all filters link and an N of M rows status. Ad hoc column filters are kept in memory for the open database and project only, and reset when either changes; Polling result rows always stay under their source. The Settings button opens a labelled native modal dialog for that table: Row density, Row lines, Column lines, Heading lines, Fit columns to width, Visible columns (at least one stays visible), Inline charts on the sessions table, and Reset to defaults. The modal uses an 880px maximum width, 32px viewport margins, fixed header/footer, and a scrollable body. Its four-row Glide preview uses fictional sample data with the current table's headings, order and widths, shared typography and theme, and sample Sessions charts. Draft edits update only the preview until Apply; Cancel, Escape and the close button discard them and return focus to the trigger. Reset changes the draft to inherited defaults; Apply then removes the saved override unless the user edits the reset draft. Turning off charts preserves at least one ordinary visible column. Workspace/table replacement discards an open draft. The preview has an orange dotted outer frame and a plain Preview heading. Visible columns lives in a closed-by-default dropdown above it; Escape closes the dropdown before the modal, and outside clicks or moving focus outside the dropdown dismiss it. Display settings use two columns of On/Off toggles with no row dividers, stacking only on very small windows. Column visibility also uses toggles. The preview has no editing, sorting, resizing, or row actions. Column widths from resizing and the column order from dragging headings are saved with these choices by stable column ID, per table, in local storage under `code60.tableView.v1:<table>`; a table without saved choices follows the Settings page's Table defaults. Legacy session-filter storage is preserved; the new named-filter workflow uses its own versioned schema. The sessions and run configuration tables end with Glide's sticky, tinted add row (New agent session and New run configuration); activating it opens the existing creation form and never creates a row inline. A labelled button with the same name, visible on keyboard focus, does the same, and both are disabled under the same conditions. Selection stays with the row's ID through sorting, filtering, and data updates.
+- **Tables.** All Settings pages use 10px card corners. Table defaults uses a 5px density selector with inner end corners following its border. Toggle switches app-wide use pill-shaped tracks and circular thumbs, preserving their size, ON/OFF text, focus and forced-color behavior. These are presentation changes only. Fresh global defaults use Low density (44px rows), with row, column and heading lines off. Explicit global choices and per-table overrides remain saved; Reset to defaults inherits the global choices. The Sessions, Messages, Events, Configurations, Worktrees, and Polling tables share one Glide Data Grid component and its built-in interactions. Each grid has a page title on the left, followed by any store-wide selectors, and one right-aligned toolbar of borderless Carbon icon actions: Search, Filters, Columns, Settings, and any table-wide actions after a thin divider. Each action keeps its accessible name, which the shared tooltip shows. An applied saved filter appears as a removable chip (Unapply filter) beside Filters. When the controls exceed the available width, a separate container scrolls horizontally and places the scrollbar below the toolbar. The area behind the toolbar is transparent; there is no separate toolbar above it. Pages do not add explanatory sentences about how their filters or controls work. Search, or Cmd+F (Ctrl+F) while that table's page is visible and no dialog is open, opens Glide's search overlay for that table only; Escape closes it and returns focus to the grid. Each column heading except Actions has a Glide header menu (also reachable from the Column picker by keyboard) with Sort ascending, Sort descending, and a filter. Text columns offer Contains, Is, Is not, Is empty, and Is present; category columns such as Agent and Status choose Is or Is not from the column's values; number and date columns add At least and At most (on or after and on or before for dates). Filters on several columns combine with AND. While column filters apply, a row below the header shows one removable chip per filtered column (Clear <column> filter), a Clear all filters link and an N of M rows status. Ad hoc column filters are kept in memory for the open database and project only, and reset when either changes; Polling result rows always stay under their source. The Settings button opens a labelled native modal dialog for that table: Row density, Row lines, Column lines, Heading lines, Fit columns to width, Visible columns (at least one stays visible), Inline charts on the sessions table, and Reset to defaults. The modal uses an 880px maximum width, 32px viewport margins, fixed header/footer, and a scrollable body. Its four-row Glide preview uses fictional sample data with the current table's headings, order and widths, shared typography and theme, and sample Sessions charts. Draft edits update only the preview until Apply; Cancel, Escape and the close button discard them and return focus to the trigger. Reset changes the draft to inherited defaults; Apply then removes the saved override unless the user edits the reset draft. Turning off charts preserves at least one ordinary visible column. Workspace/table replacement discards an open draft. The preview has an orange dotted outer frame and a plain Preview heading. Visible columns lives in a closed-by-default dropdown above it; Escape closes the dropdown before the modal, and outside clicks or moving focus outside the dropdown dismiss it. Display settings use two columns of On/Off toggles with no row dividers, stacking only on very small windows. Column visibility also uses toggles. The preview has no editing, sorting, resizing, or row actions. Column widths from resizing and the column order from dragging headings are saved with these choices by stable column ID, per table, in local storage under `code60.tableView.v1:<table>`; a table without saved choices follows the Settings page's Table defaults. Legacy session-filter storage is preserved; the new named-filter workflow uses its own versioned schema. The sessions and run configuration tables end with Glide's sticky, tinted add row (New agent session and New run configuration); activating it opens the existing creation form and never creates a row inline. A labelled button with the same name, visible on keyboard focus, does the same, and both are disabled under the same conditions. Selection stays with the row's ID through sorting, filtering, and data updates.
 - **Named filters.** Every existing table has a Named filters dialog for creating, inspecting, editing, deleting, applying and unapplying a definition. Conditions use stable column IDs and typed comparisons with Match all/any, including relative minutes for date columns. A preview counts matching parent rows after ad hoc column filters. Only one named filter is active per table and it intersects with existing column filters; edits apply immediately, unapply removes only its effect, and deletion clears its selection. Versioned local storage scopes definitions and selection to table plus database/project (Polling uses the database). Unknown columns/types/operators/versions are explained and never silently rewritten. Malformed libraries are retained until the user explicitly resets them.
-- **Consolidated Search.** Search starts with a 560px-wide form centered horizontally and set slightly below the vertical midpoint with an explicit Search button followed by square, accessible Type and Sort dropdowns. The dropdowns wrap beneath the query and button when space is tight. Enter or Search captures the query, type and sort together and moves the form above the results with a responsive top inset. A notification icon appears while draft edits are unapplied, with an Unapplied Search Changes tooltip on hover and keyboard focus. Clearing the query cancels generation and returns to the entry view with the filter selections preserved. While transcript reads or the overview are in progress, Search centers bundled artwork tinted with the current theme’s primary blue and a spotlight-animated Searching... label below the form. Skeleton paragraphs preview the AI overview, followed by skeleton result rows with timestamp, title and snippet placeholders. As the overview settles, placeholders fade and collapse while completed content fades in. Reduced-motion and forced-colors settings use a static icon, label and skeleton. Search covers the current project's documentation and source files as well as its identity, run metadata, prompts, messages and thoughts. The shared transcript cache settles pending reads before capturing an immutable submitted result set, preserving partial-read errors and retry. Literal session results require all terms case-insensitively; title and exact identifier matches rank ahead of content, with newest sorting available. If a natural-language question has no literal match, the overview uses relevant saved context ranked by meaningful query words, then recent context. Every submitted question starts an overview, including an empty-evidence question, for which the worker must report the missing evidence. Results form a single column below an AI overview, with highlighted excerpts and local metadata. Clicking a title or activating it by keyboard opens its source; transcript results retain the first event's address. Arrow keys, Home and End move between result actions. Search remains mounted across page switches.
+- **Consolidated Search.** Search includes every project registered in the connected database, open or closed, without a selected project or scope picker. The complete registry is independent of the recent-project list's 200-entry limit. Other databases, Relay, Custom Assistant and database-wide legacy conversations are excluded. A 560px entry form retains the Type and Sort controls, explicit Enter/Search submission, unapplied-changes tooltip, responsive layout and existing loading artwork. Clearing the query keeps filter choices. Reduced motion and forced colors retain static loading alternatives.
 
-  The overview uses one dedicated background ACP helper with the configured orchestration provider, independent of conversations and ordinary workers. A narrow validated bridge accepts a unique request ID, the current directory as a scope check, the query, and up to 20 saved-result excerpts of 4,000 characters each, including an empty list; source session IDs must belong to the open project. An optional includeFiles flag defaults on; All types and File searches enable it. The main process independently gathers project file evidence through the Files reader, visiting at most 32 directories (four levels deep), examining at most 24 text files and returning at most ten excerpts. It prioritizes documentation, manifests and query-relevant paths/content and skips hidden paths, generated/dependency folders, symlinks, binary/oversized files, lockfiles and known credential filenames. Up to ten saved excerpts plus ten file excerpts form the evidence when files are available; otherwise up to twenty saved excerpts are retained. No caller-selected file path is accepted by the summary endpoint. The result returns the exact numbered evidence; file result/citation actions open the existing read-only project preview. Source results remain visible beside the overview even when they were retrieved as context rather than literal matches. The main process generates a private temporary working directory, never uses a caller path as the helper's working directory, passes no Code60 MCP gateway, and denies permission requests. The contracts module owns the evidence-only prompt. This is a prompt/permission policy, not a filesystem sandbox. Only the completed plain-text answer is shown; validated in-range numeric citations open the captured local sources. Queries are bounded at 2,048 characters, replies at 16,000 characters and generation at five minutes including startup. Empty literal matches still start the helper; missing evidence is explicit in its response. Generation uses a search-only 12px striped loading-line animation, inset one pixel inside the search field's top edge and spanning only the field width. It preserves reduced-motion and forced-color behavior, with an accessible status announcement. Errors offer Retry while results remain usable. Stop cancels generation. Only one helper is active; replacement waits for cleanup. Project/database/provider or provider-command changes, renderer reload, Stop all and shutdown cancel it. Every exit stops the process and releases listeners, timers and the temporary directory. Helpers create no run records, worktrees, sidebar conversation or chat-dock entry; summaries are not persisted.
-- **Shared transcripts.** Search, Messages and Events share a renderer-owned cache for each database/project. Reads use the existing validated `events` action, run at most four concurrently, deduplicate in-flight/cached requests and invalidate changed run versions. Project switches dispose the old cache and stop queued reads; late results cannot publish into the new project. Loading, per-run partial failures, retry and empty states are visible. Live events supersede cached history. No CLI or IPC capability is added.
+  Main captures the database epoch, request UUID and project membership on submission. Four concurrent project readers gather project identity, saved project conversations and worker transcripts, plus existing bounded file evidence for All/File queries. Reads never call `listRuns`, reconcile interrupted records, initialize folders, open runtimes, resume agents or repair saved history. Per-project history uses the existing bounded, symlink-rejecting storage readers; missing, corrupt or oversized records produce concise partial-results feedback while healthy sources continue. Documentation/source retrieval retains its 32-directory, four-level, 24-text-file and ten-excerpt bounds per project and existing exclusion/encoding checks.
+
+  Matching excerpts live in a private, disposable SQLite results file. Global relevance (exact identifiers/title matches first) or newest ordering, all-term case-insensitive matching and Type filtering are captured immutably. Pages contain 100 results; opaque cursors provide Load more. Every result has a project-qualified identity and provenance; duplicate project names display their paths. Identical filenames and session IDs from different projects remain separate. Search stays mounted across page and project switches, preserving drafts, results and overview. New registrations join the next submitted search; removal of a captured member invalidates its search. Database replacement, replacement queries, clearing, renderer reload, Stop all and shutdown cancel owned reads/helpers and remove temporary results after cleanup.
+
+  One dedicated ACP overview helper uses up to twenty globally ranked captured excerpts of 4,000 characters each. Natural-language questions without literal matches use relevant context, which is displayed with the overview. The strict bridge accepts only a captured search UUID/database epoch and a separate overview request UUID, never renderer-supplied excerpts, filesystem roots or commands. Replies return the exact project-attributed numbered evidence. The helper retains a private temporary working directory, denied permissions, no gateway, 2,048-character queries, 16,000-character replies and a five-minute deadline. It creates no run records, worktrees or conversations. Every exit stops the process before removing its directory. Provider/command changes cancel only the overview; literal results remain usable on missing providers or failures, with Retry overview available. Plain text and validated local numeric citations never execute generated markup.
+
+  Source opening resolves an opaque captured source against the current database epoch, retained membership and directory identity. It reuses an open runtime, or asks the existing native Open Project confirmation before opening a closed project. Declining leaves navigation unchanged; confirmation is revalidated before selecting the captured owner and navigating to its file, session or original transcript-event address. Archived conversations remain read-only excerpts and are never restored merely by opening a result. Ordinary project selection does not invalidate requests. No setting or persistent schema migration is added; the capability catalog documents the expanded scope.
+
+- **Shared transcripts.** Messages, Events and project worker views share a renderer-owned cache for each database/project. Reads use the existing validated `events` action, run at most four concurrently and deduplicate in-flight/cached requests. Late responses cannot publish into replacement scopes. Search uses its independent main-owned database request and never depends on this selected-project cache.
 
 - **Sessions table and chat.** A Glide Data Grid table fills the window. There is no app header. Stop leftover agent and Stop all runs (while a batch is active) join the shared table toolbar as stop icons; refresh is in the application footer polling widget. Rows are numbered on the left, with white backgrounds in Light and black backgrounds in Dark; clicking a row number opens that session's chat like any other cell. Sortable, resizable columns show Agent, Actions, Status (including discarded runs), Turns, Approvals (blank at zero), ID (last six characters), PID (the agent's process group, blank before the agent starts), Branch (`none` without a worktree), and Started (local time). Clicking a session's Actions cell, or pressing Enter on it, opens the actions menu described under Overlays instead of the chat. Sorted columns show a Carbon arrow in the heading. Newest sessions appear first by default. Status is text, not only color: the Status column draws each state's 16px Carbon icon and 12px label in a 128px slot, following the emphasis rules under Visual system. With Inline charts on (the default), three more columns draw on the canvas from the run's recorded events: Turn time (a line of the last six completed turns, prompt to turn end, with the latest duration), Events, 5 min (bars for ten 30-second buckets of non-status events, with the total), and Last 2 min (a strip of state spans, solid while working and hatched while awaiting approval). Each column shares one scale across rows (at least 0 to 20 seconds and 0 to 8 events); a run without samples shows Unavailable rather than zero, and the cells' text gives the same values in words. The charts redraw on the chart ticker, every five seconds by default (see [Polling](#polling)), and only while the Sessions tab and window are visible. Context usage, ratings, tags, and owners are not shown, since Code60 does not record them. The application footer polling widget shows an eye icon and scoped agent-message age above its Pause/Start and Refresh buttons. Search, column filters, and table settings work as described under Tables. Click a row, or press Enter on the focused cell, to select the session and open its chat.
 
-Current-project sessions, including history, appear beneath Chat in the primary sidebar. Orchestrator-owned workers nest beneath their controlling chat, using the current snapshot's ownership IDs; manual sessions and history without a known owner appear directly under Chat, except that finished sessions are hidden unless a current (unarchived) orchestrator owns them. They stay available in the Sessions table. Ownership is not inferred or persisted across app restarts. Workers are named by the `label` the orchestrator gave `code60_dispatch_agent` (held in memory with ownership and published as `workerLabels`), in both the sidebar row and the worker chat heading; without one they show the provider and short run ID. Conversation names have decorative Phosphor chat-circle icons for project orchestrators and arrow-elbow-down-right icons for workers, with role and status in accessible descriptions and tooltips, plus independent unread and approval counts. Conversation rows do not display activity, completion or error labels. A separate labelled chevron disclosure controls each orchestrator's workers. New children expand their parent without selecting a conversation or stealing focus; otherwise manual collapse is retained. External worker navigation reveals Chat and its parent. Up/Down traverse visible controls, Right expands or enters workers, and Left collapses or returns to the parent. Collapse never changes selection.
+Current-project sessions, including history, appear beneath Chat in the primary sidebar. Orchestrator-owned workers nest beneath their controlling chat, using the current snapshot's ownership IDs; manual sessions and history without a known owner appear directly under Chat, except that finished sessions are hidden unless a current (unarchived) orchestrator owns them. They stay available in the Sessions table. Ownership is not inferred or persisted across app restarts. Workers are named by the `label` the orchestrator gave `code60_dispatch_agent` (held in memory with ownership and published as `workerLabels`), in both the sidebar row and the worker chat heading; without one they show the provider and short run ID. Conversation rows use leading chat artwork for project orchestrators and decorative worker artwork for workers, with role and status in accessible descriptions and tooltips, plus approval counts. Unread reply counts appear only for orchestrators; worker rows omit them, including in tooltips and accessible descriptions. Conversation rows do not display activity, completion or error labels. Project orchestrators with owned workers use their leading chat artwork as a separately labelled disclosure; other orchestrators retain their separate trailing worker disclosure. The conversation label selects independently. New children expand their parent without selecting a conversation or stealing focus; otherwise manual collapse is retained. External worker navigation reveals Chat and its parent. Up/Down traverse visible controls, Right expands or enters workers, and Left collapses or returns to the parent. Collapse never changes selection.
 
 One selected conversation fills the normal Chat workspace beside the shared file panel. Sessions, Events, Search, Open chat and Resume all navigate there, never into a popup. Worker selection does not change backend orchestrator selection, ownership, automatic updates, sendability or Stop semantics. The footer retains polling, updates and an actionable approval count, but no chat dock. Opening a session preserves other conversations' drafts and scroll positions. New or discovered sessions never replace the selected conversation. Worker drafts survive renderer reload for the same run; reload otherwise starts on the selected orchestrator. Workspace changes clear worker selection and view state. Historical transcripts are loaded on demand through the existing bounded, project-scoped cache, with retryable failures. Agent output remains plain text; thoughts, tools, permissions and recovery notes are in expandable Activity. Copy and turn timing use the shared components.
 - **Controls.** Worker composers send follow-ups to idle runs or explicitly continue ended runs using existing ACP restoration/handoff safeguards. Enter sends and Shift+Enter adds a line. Stop cancels the selected worker's active turn; Finish run, leftover stop and worktree deletion remain in session actions. Deleted worktrees show an inactive message; other blockers explain why sending is unavailable. Approvals retain Allow once and Deny, with other runs continuing independently. Chat no longer has window, minimize, close, fullscreen or dock-reordering controls.
 
 - **Review.** Quiet files-changed links open pinned read-only diffs. Changes retains captured worker revisions and branch/worktree provenance, including untracked files. Corrections use ordinary chat and exact Add to chat references; message Undo restores code and conversation. Delete Worktree is enabled once the session has ended and its agent is gone. Delete Worktree and Stop leftover agent use the same core commands and safeguards as `discard` and `stop`; discard lists the files that will be lost in a native confirmation dialog.
 - **Worktrees.** A permanent Worktrees tab lists every existing Git worktree registered with the currently open repository, including worktrees created outside Code60. Each row shows its path, an Actions menu with Browse project files, branch (or detached), filesystem creation time, repository name, and logical size. Creation time uses the directory's birth time when available. Size is the sum of regular-file byte sizes, excluding symlinks and the top-level `.git` entry so shared Git objects are not attributed to one worktree; inaccessible or missing values show as unknown. The shared table header names the page; refresh uses the application footer. The tab scans when selected and then polls in the background while it and the window stay visible; the listing arrives in the revisioned snapshot. A failed scan keeps the last listing and shows the error. It never changes, removes, or prunes worktrees. A non-Git project shows an explanatory empty state.
-- **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Search and Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
+- **Events.** A permanent Events table consolidates all recorded events from every run in the open project, newest first. Every log entry stays separate, including streamed chunks, intermediate tool states, raw ACP updates and turn-end outcomes. Columns show time, agent, full session ID, event type, status or outcome (including permission decision and stop reason), ACP update name, tool kind, tool-call ID, and payload details as plain text. Raw ACP details show their JSON text directly, with an explicit marker and original byte size when clipped at 256 KiB; other details are JSON fields. Selecting a row opens its session chat at that event; raw ACP and turn-end events do not create duplicate chat blocks. It uses the shared table search, typed column filters, named filters and saved presentation settings, and shares the project transcript cache with Messages, including loading, partial errors and retry. The orchestration chat can read and search these same source rows through `code60_read_events` and `code60_search_events`; no new IPC is added. Raw ACP and turn-end events are excluded from activity chart counts to avoid double-counting typed events.
 - **Messages.** A permanent Messages tab lists every prompt, agent message, and thought from every run in the open project. Adjacent streamed message and thought updates are combined into one row. The table shows time, agent, session ID, type, and message text; tool calls, status events, permissions, and stderr are not message rows.
-- **Page tabs.** After the splash, a borderless 220px left navigation container with square corners, full-width rows, wider in-row label indents and the main app surface wraps its project-opening action and page tabs. Its top and bottom align with the desktop right file panel, with a 12px bottom inset above the footer; the native-control drag strip remains separate from its fill. A labelled icon toggle fixed in the native-control row opens and closes the sidebar, vertically centered with the OS window controls and clear of their left inset (at least 80px). It remains non-draggable and clickable in transparent windows, without changing page placement or reserving a separate width track; closed-sidebar breadcrumbs center across the window. The sidebar slides and fades over the shared 175ms motion duration, animating registered numeric reveal progress rather than the saved width so pointer/keyboard resizing stays immediate. Closing navigation becomes inert immediately and stays painted only until its fade ends. Reversing mid-transition follows the latest requested state without timers or unmounting. Reduced motion and forced colors skip these transitions. No sidebar border or full-height divider is generated in either state. Open/closed state and expanded width persist locally. Closing sets its track to zero and makes its mounted contents inert and hidden, retaining selection, drafts, disclosures and scroll. The toggle and footer actions remain available when closed; there is no hover expansion. Its right edge is a keyboard-accessible resize handle (Left/Right arrows adjust by 20px). Width defaults to 220px, is bounded between 180px and 480px while reserving 360px for content, and persists locally as code60.sidebarWidth. Window resizing clamps the displayed width to available space. Resizing preserves page selection, conversations, drafts and disclosure state. The tab list scrolls within the remaining sidebar height. Its scrollbar is hidden so rows reach the right divider when the list overflows. Its Projects heading uses the Phosphor clipboard icon and an independent Carbon plus action labelled Open Project when connected. Without a database the plus is labelled Connect to database and opens the database dialog. There is no standalone Open Project header. When connected it opens the project-selection modal for recent projects or a folder picker. Successful opening adds or selects a retained project and shows a success toast; the action label remains unchanged. Cancelling preserves selection; errors stay in the modal. Other projects may remain active while opening or selecting a project. Home sits first, followed by Relay and Projects (with project accordions, per-project New chat actions and owned conversations), Apps (Command Builder, Data Viewer and Prompt Builder). Data Viewer contains Configurations, Events, Logs, Memories, Messages, Polling, Sessions and Worktrees, all with the Phosphor grid-nine icon. Settings follows Apps as the last normal navigation item. Its Advanced disclosure contains Experiments → Episodic Memory and the sibling Contributor Tools placeholder. Project orchestrator rows have Phosphor chat-circle icons; worker rows have arrow-elbow-down-right icons. Relay retains its custom icon. Nested pages and groups have dedicated Phosphor duotone icons. A Carbon folder marks each project accordion. Project labels and row backgrounds open their project home and expand its direct children; clicking again on that home toggles disclosure. Sidebar parent labels follow this same rule, without chevrons or empty icon actions. Apps uses the Phosphor app-window icon; clicking its sidebar item opens a database-independent Apps home page with a card for every nested app. Cards open their corresponding pages and retain each page's database requirement. The database-independent Data Viewer card opens its own table-card home and expands both Apps and Data Viewer. Clicking Apps from another page opens Apps home and expands its children; clicking on that home toggles disclosure without leaving home. Left/Right collapses/expands the group without changing the active page, and external child navigation reveals it. Its expansion retains the existing code60.toolsExpanded storage key. Owned workers retain a separate agent-icon toggle so collapsing them does not change the open conversation. More uses the horizontal overflow icon. Independent icon actions retain accessible labels; New chat uses a separate icon-only Carbon plus button. Keyboard, selection, expansion and disabled semantics are preserved. The database icon remains in the separate application footer, with an independent Carbon back arrow immediately to its left. Its tooltip is “return to splash page”; it preserves every open project and active work. No tab has a close button. Sessions shows the start screen before a database is connected and the sessions table afterward. Page labels use a 40px minimum base left inset, growing to fit larger icons, and 24px hierarchy steps (conversation labels retain their 4px alignment offset), without narrowing full-row highlights. Full-width, left-aligned tab buttons stack vertically, wrap long labels, have square button corners with no gaps between sidebar items, 4px vertical padding and 40px minimum rows that grow with larger button text, and have no side rules. Resting labeled controls use the sidebar background. Enabled hover uses blue. The selected page has a contrasting fill at regular text weight, without an underline or bottom border, with selection also exposed to assistive technology. Preserve system selection outlines in forced colors. Up/Down wrap through the visible navigation order. Home and End move to the first and last visible destination. Switching tabs preserves table state, session selection, chat drafts, and Settings scroll position. A separate 28px draggable strip above the workspace reserves space for native window controls. The active page fills the remaining space to the right of the sidebar, separated by 12px; the workspace has matching 12px left and right insets and a 12px bottom inset. Each main page has no outer border; Chat has 5px corners and other page surfaces remain square. Page headers have a small bottom margin. Content uses consistent spacing: toolbars, the chat footer, and banners are inset 16px from the sides, the workspace sits above the application-wide footer with no footer reserved inside individual pages, Settings scrolls between 20px top and bottom margins, and conversations fill the Chat workspace. Toasts and actions menus render outside the page frame so they are never clipped. Every launch and renderer reload starts on Chat; saved preferences are unaffected. Chats use the normal Chat workspace; change reviews share its side panel with project files.
-- **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. On Windows, the native caption controls remain native, and their overlay background and symbols follow the effective app theme, including changes to System appearance. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
-- **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. Each Settings page uses its specific name as its only main title, aligned at the standard upper-left page inset, without an additional Settings heading. Cards stay centered in a readable 640px maximum-width column; only the header drags the window so the page can scroll. The Settings overview retains its Settings title. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), a Transparent background switch (off by default), and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. The switch is saved in the main process's desktop.json alongside the database path, and applies only after restarting the app, not on renderer reload. When enabled, the window is created transparent without a native shadow; the area outside the content frame and opaque tabs is fully transparent instead of the solid theme surface. On macOS, mouse movement over these transparent areas enables click-through to the desktop, restoring interaction over content, overlays, tabs, and native controls. Linux keeps the window clickable. The splash stays opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, Card Titles, and Normal Text: font size (8 to 64px), weight (Light, Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, OCR-A, Roboto, Space Grotesk, Tahoma, or Verdana). All seven categories default to Light (300). Page Titles defaults to IBM Plex Serif at 16 CSS px. All other categories, including Card Titles and Table Headings, default to IBM Plex Sans: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Card Titles 22px, and Normal Text 13px. All roles default to sentence case. Home/Apps card names and settings card/field-group titles use Card Titles, independently of every Page Titles choice. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses D-DIN Regular; the regular 18px D-DIN splash subtitle remains unchanged. Both IBM Plex families include bundled Light (300) normal and italic faces; IBM Plex Sans also includes bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Navigation, headings, labels, status text and the wordmark have no fixed bold styling. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows, the default), Medium (32px), or Low (44px). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, OCR-A, Roboto, and Space Grotesk are bundled for offline use (OCR-A has only a regular weight, and bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
+- **Page tabs.** After the splash, the left navigation defaults to a 220px track,
+  resizable from 180px to 480px. Five opaque, outlined cards group Home/Search,
+  Assistants (Relay and Custom Assistants), Projects, Apps and Settings. Cards use
+  square corners and the shared hard shadow; rows use square corners. Keep 11px
+  between cards, 6px inner card padding, 2.5px between rows and an extra 3px above
+  the second row. Row height is fixed at 40px for default text and grows together
+  with larger saved navigation text to fit 2.5em artwork. Use 2px vertical row
+  padding, 15px extra internal left inset, 24px hierarchy steps and a 12px gutter
+  beside the divider. Selection changes fill without adding a left border,
+  changing weight, resizing rows or shifting the navigation. Only each card's
+  first row uses Medium (500); other rows use the saved Button Text style.
+  Dedicated top-right chevrons own card expansion; heading clicks navigate.
+  Arrow keys retain disclosure and visible-order navigation, with Home/End and
+  Up/Down wraparound. Add Project is a circular heading action left of the
+  Projects chevron, reachable with Tab even when collapsed; each project row has
+  + (New Session), red × (Stop Folder) and its own chevron, in that order. Keep open/closed state, drafts and ownership
+  across navigation and resizing. The navigation toggle stays in the 28px drag
+  strip, clear of native controls; collapsing hides and inerts the entire sidebar.
+  Breadcrumbs occupy a normal-flow 10px card above the primary content card,
+  excluding an open side-by-side inspector's width. Chat frames the conversation
+  and inspector separately with a 12px gap. Card surfaces stay opaque while the
+  entire left background supports independent opacity and macOS native blur.
+  Preserve keyboard focus, forced-color outlines, state retention and existing
+  owner-scoped file/review behavior.
+
+- **Window frame and app menu.** There is no native title bar. The window controls sit over the dedicated top drag strip (the macOS traffic lights at its left; on Linux, window buttons drawn at its right), above the sidebar tabs so the tabs stay clear. Dragging the top strip, the sessions toolbar, the start screen, or the Settings page heading moves the window. The window title stays `Code60 - <version>` for the Window menu and window switchers. The first native menu is the Code60 app menu, with About Code60 showing the version from `package.json`; on Linux it also holds Quit. On macOS the bold menu title is the running bundle's name, which stays Electron while the app is unpackaged.
+- **Settings.** There is no native Settings menu or app-wide settings gear. The File Explorer gear opens only its own settings dialog. The permanent Settings tab, Settings in the command palette, or Cmd+, (Ctrl+,) selects Settings, unless a dialog is open. Escape does not leave Settings; choose another tab instead. Each Settings page uses its specific name as its only main title, aligned at the standard upper-left page inset, without an additional Settings heading. Cards stay centered in a readable 640px maximum-width column; only the header drags the window so the page can scroll. The Settings overview retains its Settings title. Settings pages show no explanatory paragraphs; an information button beside a setting or section heading shows the explanation in a tooltip, and the setting's control keeps it as its accessible description. Each Settings page starts with a header holding its title and page-wide actions (Change primary and Add agents; Reset text; Reset polling defaults and Open polling monitor; Check for updates and the download and install actions; Copy version info), followed by bordered cards: titled groups of rows (Appearance: Window and Accessibility; Table defaults: Lines and Layout, with Row density as a joined segmented control; Agents: Connected agents and Permissions), field groups with a Reset button at the top right (each Text role, with a live preview and a Reset shown once customized; each polling source and Charts), the Updates status and automatic-check rows, and the About version list. The Appearance section has Theme (Light, Dark, or System, the default), a Transparent background switch (off by default), and a Signal colors switch (off by default) that adds red failure and green success colors without removing icons or labels. The switch is saved in the main process's desktop.json alongside the database path, and applies only after restarting the app, not on renderer reload. The window always supports native alpha for live sidebar opacity. When Transparent background is enabled, other margins also become transparent without a native shadow; the area outside the content frame and opaque tabs is fully transparent instead of the solid theme surface. On macOS, mouse movement over these transparent areas enables click-through to the desktop, restoring interaction over content, overlays, tabs, and native controls. Linux keeps the window clickable. The splash stays opaque. The Text section has independent settings for Table Headings, Button Text, Agent Chat Messages, Human Chat Messages, Page Titles, Card Titles, and Normal Text: font size (8 to 64px), weight (Light, Regular, Medium, Semibold, Bold), a Case choice (As written, Uppercase, or Lowercase), and Typeface (System, Computer Modern, D-DIN, Georgia, IBM Plex Sans, IBM Plex Serif, Lexend, Shantell Sans, Scientifica, Roboto, Space Grotesk, Tahoma, or Verdana). Page Titles defaults to Space Grotesk Bold (700) at 16 CSS px; Card Titles uses Space Grotesk Bold (700). Body and chat default to IBM Plex Sans Regular (400); Button Text and Table Headings use IBM Plex Sans Semibold (600). Role sizes remain: Table Headings 12px, Button Text 13px, Agent Chat Messages 14px, Human Chat Messages 14px, Card Titles 22px, and Normal Text 13px. All roles default to sentence case. Home/Apps card names and settings card/field-group titles use Card Titles, independently of every Page Titles choice. Left navigation labels default to 15px while other buttons stay at 13px; an explicit Button Text size overrides both, even when explicitly set to 13px. Resetting Button Text restores the separate defaults. Saved typefaces, sizes, weights and case choices remain intact when adopting the new defaults, without advancing the existing migration markers or repeating their resets. The legacy one-time typography migration still clears old typeface and weight overrides while preserving sizes, case, theme, table layouts and later choices. The shared wordmark uses D-DIN Regular; the regular 18px D-DIN splash subtitle remains unchanged. Both IBM Plex families include bundled Light (300) normal and italic faces; IBM Plex Sans also includes bold and regular/bold italic faces for existing weight settings and semantic Markdown emphasis. Page/card titles default to Bold; sidebar rows honor Button Text weight independently of selection. Other navigation, labels, status text and the wordmark retain their configured weights. The Table defaults section sets the defaults for tables without their own Table settings: Row lines, Column lines, and Heading lines (the lines directly above and below the column headings) switches, all off by default; an Inline charts switch (on by default) for the sessions table's chart columns; a Fit columns to width switch (off by default) that scales the columns, keeping their proportions, to exactly fill the window's width as it is resized, with column resizing disabled while it is on; and Row density radio buttons: High (24px rows), Medium (32px), or Low (44px, the default). Legacy Paper selections resolve to Light and are saved as Light on load. All other appearance and table choices are stored in the renderer's local storage. Explicit role choices override these defaults; size, weight, and case remain independent. Page Titles includes table page headings, Settings, and dialog titles. Normal Text sets table-cell size, weight, and case, while data cells use Normal Text’s typeface; Table Headings styles the canvas headers. Reset text restores only text settings to their built-in defaults. The Code60 theme resets every appearance setting once (text styles, the legacy typeface, theme, table lines, row density, fit columns, signal colors, and inline charts), marked by `code60.appearanceVersion = theme-4`; per-table presentation settings are reset in this same migration; later choices, named filters, drafts, saved configurations, and project and database data are preserved. Case changes affect display only, never stored messages or prompts; code and diffs stay monospace and case-preserving. Computer Modern uses CMU Serif. D-DIN, CMU Serif, IBM Plex, Lexend, Shantell Sans, Scientifica, Roboto, and Space Grotesk are bundled for offline use (Scientifica includes regular, bold and italic faces; bold is never synthesized for buttons and titles); Georgia, Tahoma, and Verdana use installed system fonts with fallbacks. The agent configuration file stays read-only.
 - **Polling.** See [Polling](#polling). Settings has a Polling section after Text for intervals and reset controls, and a button that opens the Polling page.
 - **Quitting.** Closing the window or quitting while runs are active asks for confirmation, then cancels active turns, finishes every run, and waits for the agents to stop. SIGINT and SIGTERM do the same without asking; a second signal skips the grace periods. A crashed renderer also triggers this shutdown. Worktrees are never removed.
 
@@ -1293,21 +1406,27 @@ Each right-panel tab paints its selected or hovered fill under both its label an
 separate transparent Close button, without giving the icon action its own fill.
 Keep selection, closing, drag/reorder and keyboard semantics unchanged.
 
-Conversation navigation rows paint one shared background with 5px outer corners beneath the
-chat label, ellipsis action and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
+Conversation navigation rows paint one shared background with square outer corners beneath the
+chat label, Rename and Archive actions and worker disclosure, with straight internal seams. Keep these buttons independent, transparent when
 enabled, keyboard reachable and visibly focused; retain disabled cues.
 New or revised draft plans still open their existing side-panel tabs, without
 adding duplicate Plan buttons above the conversation.
 
-Human prompt bubbles have 5px corners and solid pale-blue (#d8e8fa) fills in Light
-with black text, or dark-blue (#1b3a5c) fills in Dark/System dark with white text.
+Human prompt bubbles use the local Neobrutalism Bubble content with 5px corners,
+2px theme-aware outlines, pale-blue Light and dark-plum Dark/System-dark fills
+and contrasting text.
 Automatic worker prompts and agent code blocks remain square. Agent responses
-use 8px bottom margins; timing notices use 4px margins, with 4px above and 12px
-below their separator. Completed-turn timing notices have
+use 2px bottom margins after their unchanged 16px outer bottom padding, giving
+18px of trailing space below Copy (75% of the previous 24px). Human and agent bubbles share 12px vertical and 18px
+horizontal padding. Timing notices leave visually equal 8px gaps above and below their separator;
+the following agent bubble starts 8px below the line. Its content starts 22px
+below the line after border and padding, matching human bubble insets.
+Markdown boundary margin resets follow general block spacing to enforce that gap
+for paragraphs, code and tables. Completed-turn timing notices have
 a theme-aware 1px horizontal separator below the timing text or disclosure button,
 not inside that button; active timers have no separator. Both message composers
-are defined by their 1px border without an outer shadow. Focus replaces only the
-border color, without adding a glow or changing the box geometry. Forced colors
+use the local Card with a 2px control outline and no outer shadow. Focus adds an
+independent outline and subtle theme fill without changing the box geometry. Forced colors
 retain the existing system-colored borders and Canvas/CanvasText message fills.
 
 Page selection fades the incoming content from 40% to full opacity over the shared
@@ -1323,11 +1442,11 @@ reasons and events remain unchanged, as do recovery safety and actionable errors
 
 Standard controls show a subtle shadow on keyboard focus. Focus highlight border adds an outline and stronger halo and is off by default. Forced colors uses a system outline. Independent icon actions throughout the app use borderless, transparent hit targets. Hover, pressed and focus states highlight the glyph without filling its background or adding an outline, including when Focus highlight border is enabled; disabled controls retain their muted glyph. Decorative icons inherit the state of their labeled button, navigation item or row. Close, add and drag controls inside larger areas remain independent buttons with their own hover state.
 
-Chat has one right-side file panel, toggled by an accessible Carbon side-panel drawer icon at the right of its tab header. It starts fully closed at zero width with no divider or reserved rail. The same accessible toggle appears at the top-right of the chat area when closed, and inside the panel toolbar when open. Expanding/closing animates over 175ms and respects reduced motion. On narrow windows the closed panel also has zero height. Hidden panel contents are inert; toggling preserves focus, tabs, preview state and the last expanded width. It shares the main app surface through the independent `--chat-neutral` token, including Monaco, with only a subtle 1px theme-aware left divider and no top, bottom or left container padding. It is hidden outside Chat. A single borderless keyboard/pointer divider resizes the panel, initially 20% of the Chat workspace (40% of its former half-width), with a 120px panel minimum and a 300px conversation minimum. At window widths of 1200px or below it stacks beneath Chat and the width divider is hidden.
+Chat has one right-side file panel, toggled by an accessible Carbon side-panel drawer icon at the right of its tab header. It starts fully closed at zero width with no divider or reserved rail. The same accessible toggle appears at the top-right of the chat area when closed, and inside the panel toolbar when open. Expanding/closing animates over 175ms and respects reduced motion. On narrow windows the closed panel also has zero height. Hidden panel contents are inert; toggling preserves focus, tabs, preview state and the last expanded width. It is an opaque card with a full 3px theme-aware border, square corners and a 12px gap from the chat/breadcrumb column. Above 1200px, the right card extends upward into the reserved space beside the breadcrumb row, aligning both card tops while keeping its bottom at the footer inset. The existing layout observer measures this extension on header/body resizing and clears it on hide/disposal; the chat itself stays below the header and clips its transcript. The gap moves above the card in stacked layouts, with no upward extension, and closes to zero with the panel. CSS and pointer/keyboard resize bounds include this gap to preserve the conversation minimum. Its tab-header row uses the same solid `--card-header-fill` as sidebar cards, with Canvas in forced colors and a transparent resize grip. Content shares the main app surface through the independent `--chat-neutral` token, including Monaco, with no container padding. It is hidden outside Chat. A single borderless keyboard/pointer divider resizes the panel, initially 20% of the Chat workspace (40% of its former half-width), with a 120px panel minimum and a 300px conversation minimum. At window widths of 1200px or below it stacks beneath Chat and the width divider is hidden.
 
 The empty panel shows a centered Open Files link button. A plus action immediately after the rightmost tab creates a closable New tab with the same empty view. Open Files replaces its blank tab with File Explorer, or creates an Explorer tab from an empty panel. Multiple Explorer tabs are allowed. Selecting a file opens and selects a read-only file tab, reusing an existing tab for that project-relative path. Only the selected tab's content is shown. Duplicate basenames use relative paths as tab labels. The tab strip scrolls horizontally while the adjacent plus and drawer toggle stay available. Every tab can be dragged to reorder or closed; Left/Right and Home/End select tabs, Delete closes, and Alt+Left/Right reorders. Closing the selected tab focuses its right neighbor, then its left neighbor, or plus when none remain. Closing the final tab keeps the panel open in its empty state.
 
-Tabs, order, selection, panel width and Monaco scroll/selection state remain in renderer memory across panel toggles, conversation changes and page switches. Project/database changes and renderer reloads clear tabs; paths and contents are not persisted. Headless Tree retains keyboard navigation, lazy reads and per-project expansion; Explorer tabs share expansions, last selected file and the hidden-files preference. Show hidden files lives only in the native modal opened by the settings icon beside the Explorer title. Its checkbox applies immediately; Done, close and Escape dismiss the modal and restore trigger focus. Workspace/page/tab changes or hiding the panel dismiss it.
+Each individual chat or worker session owns its right-panel tabs, order, selection, Explorer state and Monaco scroll/selection state. Switching sessions within one project restores the selected session’s panel without changing another session’s tabs. Relay and its workers also have independent panels. Panel visibility remains shared layout; each mounted panel retains its resized width. Session panels remain in renderer memory across panel toggles, page switches and open-project navigation; closing the owning project, replacing the database or reloading the renderer clears project panels. Paths and contents are not persisted. Inactive Relay panels release their main-process file subscriptions while retaining renderer state. Awareness preview reads bind to the active panel’s exact subscription and current context, including its owned root. Read-only archived review evidence opens in the reachable selected panel without selecting or unarchiving the owner. Headless Tree retains keyboard navigation and lazy reads; Explorer tabs within a session share expansions, last selected file and the hidden-files preference. Show hidden files lives only in the native modal opened by the settings icon beside the Explorer title. Its checkbox applies immediately; Done, close and Escape dismiss the modal and restore trigger focus. Workspace/page/tab changes or hiding the panel dismiss it.
 
 Explorer always browses the current project root (including non-Git projects), never a worktree or private orchestration directory. Without a project it offers Open project. Legacy Files navigation, the palette and Browse project files actions select an existing Explorer tab or create one, revealing Chat and the panel. Search file sources open their file tab directly. File context and polling visibility follow only the active Explorer or file tab; blank/empty panels, hidden panels and pages outside Chat clear context and suspend file reads. Project/context changes discard late reads. No preview has a Reveal in Files action.
 
@@ -1357,14 +1476,14 @@ The desktop main process owns one scheduler (`src/desktop/poller.ts`) for every 
 
 ### Orchestrated workers
 
-Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each worker's session, prompts, cancellation and restoration. This is desktop-only, not a new CLI or an external ACP service.
+Orchestration Chat uses MCP for its control plane; Code60 uses ACP for each worker's session, prompts, cancellation and restoration. This is desktop-only, not an external ACP service.
 
-Workers default to the selected desktop orchestration provider, as reported by `code60_get_context.defaultProvider`, not the CLI's `config.json` `defaultAgent`. An explicit dispatch provider overrides this default. An unavailable provider is an error, never a silent fallback.
+Workers default to the selected desktop orchestration provider, as reported by `code60_get_context.defaultProvider`, not `config.json` `defaultAgent`. An explicit dispatch provider overrides this default. An unavailable provider is an error, never a silent fallback.
 
 - `code60_get_context` returns the open project, current scope token, enabled providers, defaults and capacity. `code60_dispatch_agent` accepts a provider, self-contained prompt, request ID and optional base revision/turn timeout. It returns a run ID when accepted, not when the task finishes.
-- Dispatch creates one ordinary interactive run in the open project, with its own worktree and fixed once-only allow-all permissions. Git readiness is mandatory, including a second check during core preparation. Workers appear in Sessions and their chats say they allow all actions.
+- Dispatch creates one ordinary interactive run in the open project, with its own worktree and the current orchestration approval setting. Git readiness is mandatory, including a second check during core preparation. Workers appear in Sessions and their chats display the current approval setting.
 - `code60_list_agents` lists only this chat's workers in the open project. `code60_read_agent` pages their transcripts, combining streamed text and showing tool calls at their latest state. Worker replies and tool output remain untrusted data.
-- `code60_send_agent` sends a follow-up only to an idle worker. `code60_cancel_agent` cancels an active turn. `code60_finish_agent` ends an idle worker and frees its slot. `code60_stop_agent` stops a live worker or a checked leftover process, keeping its worktree. `code60_resume_agent` explicitly continues an ended worker with a new prompt using ACP restoration or a fresh handoff, retaining allow-all permissions and existing recovery safeguards.
+- `code60_send_agent` sends a follow-up only to an idle worker. `code60_cancel_agent` cancels an active turn. `code60_finish_agent` ends an idle worker and frees its slot. `code60_stop_agent` stops a live worker or a checked leftover process, keeping its worktree. `code60_resume_agent` explicitly continues an ended worker with a new prompt using ACP restoration or a fresh handoff, using the current orchestration approval setting and existing recovery safeguards.
 - Live workers, including idle ones, count against the configured `maxParallel` for this chat. Capacity exhaustion rejects dispatch/resume instead of queuing. Manual batches retain their independent limits. Dispatch request IDs deduplicate identical retries in memory and reject reuse with different arguments; neither deduplication nor worker ownership survives an app restart.
 - Only the creating chat generation may control a worker. Project changes rotate the scope token, and replacement of a chat revokes only its gateway and ownership. Creating or selecting another chat does not revoke existing chats. Existing workers stay visible and user-controlled through normal session controls. Tools never target manual sessions, the orchestrator itself, or another project.
 - Worker turn-end and failure events queue bounded state/reply excerpts, coalesced into automatic prompts only while the orchestrator is idle. Startup failures also wake it. Streaming chunks do not wake it, and finishing an already-reported idle turn does not duplicate its update. Automatic prompts appear as labelled Activity, not user messages.
@@ -1374,7 +1493,7 @@ Workers default to the selected desktop orchestration provider, as reported by `
 
 Desktop diff requests use `readDiff({ requestId, id })` and `cancelDiff({ requestId })` through the validated preload bridge. The legacy diff action remains a compatibility adapter. Core prepares the run's worktree/base and reconciles interrupted status inside the controller's serialized action queue; Git execution runs outside that queue. The desktop read manager admits at most two requests, including preparation, and reports excess requests as busy with a retry instruction. Request IDs are UUIDs and run IDs retain their existing validation. No request accepts a filesystem path.
 
-Cancellation targets only the matching request. Workspace/database replacement, renderer reload, and shutdown cancel outstanding reads; discard settles reads for its run before removing the worktree. Cancelled queued preparations cannot later start Git, and results from an obsolete workspace/database are rejected. Git receives an optional abort signal through temporary-index preparation and diff execution. Cancellation waits for the subprocess completion callback before removing the temporary index; the worktree's real index remains unchanged. CLI patch output, default timeouts, and exit behavior are unchanged.
+Cancellation targets only the matching request. Workspace/database replacement, renderer reload, and shutdown cancel outstanding reads; discard settles reads for its run before removing the worktree. Cancelled queued preparations cannot later start Git, and results from an obsolete workspace/database are rejected. Git receives an optional abort signal through temporary-index preparation and diff execution. Cancellation waits for the subprocess completion callback before removing the temporary index; the worktree's real index remains unchanged. Default Git patch output and timeouts are unchanged.
 
 In retained-project mode every diff, review capture and review-file read captures
 its runtime before yielding, including the selected runtime. Navigation does not
@@ -1395,7 +1514,7 @@ snapshots carry only review summaries and versions.
 `ReviewStore` persists versioned JSON metadata and immutable file content below
 `.code60_workspace/reviews/<database-hash>/<project-hash>`. Writes use private files and atomic
 replacement. New immutable content uses `<revision-id>.rev` beside review metadata to stay
-within the same Windows path limit; reads retain compatibility with the older
+within the same bounded storage paths; reads retain compatibility with the older
 `<review-id>/<revision-id>.json` layout. Existing data is not migrated or rewritten.
 Limits are 200 reviews per project, 100 revisions per review, 1 MiB per text blob,
 8 MiB text per worker snapshot and combined review capture, 2,000 files per capture, and
@@ -1437,7 +1556,7 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - The preload script exposes a fixed set of methods (`windowAppearance`, `setWindowTheme`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `readDiff`, `cancelDiff`, `readReview`, `readReviewFile`, `captureReview`, `reviewAction`, `checkGit`, `beginGitSetup`, `previewGitSetupFile`, `initializeGit`, `commitGitSetup`, `cancelGitSetup`, `beginAgentSetup`, `attemptAgentSetup`, `cancelAgentSetup`, `finishAgentSetup`, `abandonAgentSetup`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `knowledgeRenderer`, `reportKnowledge`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
 - The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
 - The orchestration chat receives one built-in Code60 MCP stdio server, in addition to user-configured MCP servers. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive configured servers but no Code60 MCP server. User servers cannot replace the reserved `code60` entry or inherit its gateway credentials. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No built-in tool accepts SQL, arbitrary commands, environment settings or target directories.
-- **Desktop self-knowledge.** Relay and project chats (never workers or the CLI) receive five read-only tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization` and `code60_read_view`. A browser-safe catalog in `src/contracts/knowledge.ts` classifies every shipped capability, page, settings section and agent-visible tool; `docs/capabilities.md` is generated from it and `test/capabilities.test.ts` fails `npm run check` on drift. The desktop `DesktopKnowledge` read model derives availability (available/blocked/unsupported/unknown) and open-state metadata from existing owners on demand, with separate runtime, customization and UI revisions, revision-bound cursors, 8,000-character content pages and a 64 KiB response cap. The renderer reports presentation-only navigation and Files-panel tab metadata through the fixed `knowledgeRenderer`/`reportKnowledge` preload methods; main validates the renderer generation, per-view sequence and project/epoch or Relay conversation/generation owner, and discards reports on reload or owner close/replacement. Content reads return only the caller's own plans/reviews or an already loaded preview. Each delivered turn appends a separately labelled envelope of at most 8 KiB with counts, revisions and blockers, never inventories, transcripts, drafts, credentials, environments, MCP headers, diagnostic logs or memory records. `code60_get_context` keeps its fields and adds a compact `knowledge` hint. Awareness never selects projects, opens views, scans files, starts providers or grants authority; UI selection is never an execution target.
+- **Desktop self-knowledge.** Relay and project chats (never workers) receive five read-only tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization` and `code60_read_view`. A browser-safe catalog in `src/contracts/knowledge.ts` classifies every shipped capability, page, settings section and agent-visible tool; `docs/capabilities.md` is generated from it and `test/capabilities.test.ts` fails `npm run check` on drift. The desktop `DesktopKnowledge` read model derives availability (available/blocked/unsupported/unknown) and open-state metadata from existing owners on demand, with separate runtime, customization and UI revisions, revision-bound cursors, 8,000-character content pages and a 64 KiB response cap. The renderer reports presentation-only navigation and Files-panel tab metadata through the fixed `knowledgeRenderer`/`reportKnowledge` preload methods; main validates the renderer generation, per-view sequence and project/epoch or Relay conversation/generation owner, and discards reports on reload or owner close/replacement. Content reads return only the caller's own plans/reviews or an already loaded preview. Each delivered turn appends a separately labelled envelope of at most 8 KiB with counts, revisions and blockers, never inventories, transcripts, drafts, credentials, environments, MCP headers, diagnostic logs or memory records. `code60_get_context` keeps its fields and adds a compact `knowledge` hint. Awareness never selects projects, opens views, scans files, starts providers or grants authority; UI selection is never an execution target.
 - Updates are batched about every 40 ms. Each carries a revision number and the
   previous broadcast revision. The renderer subscribes before reading its initial
   snapshot and buffers at most 32 update frames during each read. A buffer
@@ -1457,10 +1576,10 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 - ACP uses the protocol version exported by its SDK. MCP negotiates its supported dated protocol versions, preferring `2025-03-26`. Neither protocol version is a Code60 release number.
 - Settings About shows the product, database schema, run-record format, ACP and MCP protocol versions, plus the running Electron, Chromium and Node.js versions from `process.versions`. It also shows the configured embedding model identity, pinned revision, dimensions and precision shared with the offline sidecar, and the resolved `onnxruntime-node` package name/version and CPU execution information. Main reads package JSON once beside Transformers, without importing native inference, loading/downloading a model or claiming configured assets are loaded. Missing package metadata is nonfatal and displays Unavailable. Copy version info includes all these values and the copyright/license line. These read-only values arrive in `snapshot.versions`; they add no IPC capability.
 
-- TypeScript, ESM, Node.js 22.12 or later, on macOS, Linux and native Windows 11 x64.
+- TypeScript, ESM, Node.js 22.12 or later, on macOS and Linux.
 - Runtime validation uses Zod as a direct dependency for configuration, IPC requests (including polling), and persisted run records/events. Types for IPC requests and records/events are inferred from schemas.
 - Dependencies: `@agentclientprotocol/sdk` (only `agents` imports it), Electron for the desktop app (only `desktop` imports it), and React with React DOM plus `@glideapps/glide-data-grid` (pinned to its React 19 beta) for its interface (only `renderer` imports them). The grid draws on a canvas with the app's theme colors and bundles its CSS file, so it needs no runtime style injection; Monaco's generated styles use the nonce described above. Vite builds the renderer; TypeScript builds everything else. The project database uses the built-in `node:sqlite` (only `desktop` uses it). Processes use `node:child_process`, with argument arrays and explicit working directories. Add libraries only when Node.js cannot reasonably do the job.
-- Renderer fonts: `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-serif`, and `@fontsource/roboto`; vendored D-DIN from [datto-d-din](https://github.com/amcchord/datto-d-din) and CMU Serif from `computer-modern@0.1.3`, with their OFL licenses in `src/renderer/fonts`; Shantell Sans from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/shantellsans) with its OFL license; unmodified variable Lexend and Space Grotesk from their upstream projects, with pinned source references, SHA-256 hashes and OFL licenses in their font directories; and OCR-A from Matthew Skala's [OCR font package 0.3.1](https://tsukurimashou.org/files/ocr-0.3.1.zip) with its upstream notice in `src/renderer/fonts/ocr-a`. Vite emits font files rather than inline data URLs to preserve `font-src 'self'`.
+- Renderer fonts: `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-serif`, and `@fontsource/roboto`; vendored D-DIN from [datto-d-din](https://github.com/amcchord/datto-d-din) and CMU Serif from `computer-modern@0.1.3`, with their OFL licenses in `src/renderer/fonts`; Shantell Sans from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/shantellsans) with its OFL license; unmodified variable Lexend and Space Grotesk from their upstream projects, with pinned source references, SHA-256 hashes and OFL licenses in their font directories; and Scientifica from the upstream [v2.3 release](https://github.com/oppiliappan/scientifica/releases/tag/v2.3), with SHA-256 hashes and its OFL license in `src/renderer/fonts/scientifica`. Vite emits font files rather than inline data URLs to preserve `font-src 'self'`.
 - Every subprocess, whether `git` or an agent, runs with a timeout or under a run's cancellation.
 
 ## Open questions
@@ -1469,11 +1588,16 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 
 ### Shared chat timing and Copy
 
-Orchestrator and worker chats use borderless agent text and solid user bubbles: pale blue in Light and dark blue in Dark/System dark, with contrasting black/white text. Activity and tool disclosures stay distinct. Sidebar conversation rows show numeric badges for unread replies, separate from their decorative role icons. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
+Agent replies in main and worker chats have a 2px outer bottom margin and retain
+16px outer bottom padding. The rendered trailing gap below Copy is 18px, 75% of
+the previous 24px (16px padding plus 8px margin). Bubble content padding and
+typography are unchanged; completed-turn separator gaps remain 8px.
+
+Orchestrator and worker chats use 5px composer and message-bubble corners. Human fills are pale blue in Light and plum in Dark; agent fills are warm neutral in Light and olive-charcoal in Dark, with contrasting text. Activity and tool disclosures stay distinct. Sidebar orchestrator rows show numeric badges for unread replies, separate from their decorative role icons. Worker rows omit unread reply counts across transcript and compact summary updates; notification delivery and reply tracking remain unchanged. A separate indicators column reserves space for unread/approval counts, with status only in accessible descriptions and tooltips; names ellipsize without overlapping badges when the sidebar narrows. Each turn counts once at its first nonempty agent text; chunks, thoughts, tools and status events add nothing. Opening a conversation clears unread immediately regardless of scroll, and replies while open stay read. Database/run-scoped session-storage read markers retain read state across renderer reloads, storing identifiers and turn/count markers only. Compact conversations push constant-space reply counts on the existing summary stream; legacy event-only snapshots and workers retain turn markers. No transcript is loaded or polled merely for an unread badge.
 
 Both chat interfaces group response/activity by prompt turns. The orchestrator uses its live animation, status and activity timer instead of a separate Working for line. Worker chats retain the local Working for timer after the prompt, above the agent turn. Completed turns freeze as Worked for with their recorded outcome, not a success claim. Prompt dispatch and completion timestamps exclude queue, startup and idle time but include permission waits. Optional turnEnd outcome/completedAt metadata distinguishes cancellation from timeout; terminal status events may carry turn/completedAt for transport failures before process cleanup. Older records remain readable. Missing crash/history boundaries and clock anomalies show timing unavailable/incomplete, never invented duration. Small display components use the existing visibility-aware local ticker, with no backend polling, per-tick live announcements, focus changes or transcript scroll resets.
 
-Nonempty user and agent text messages, including historical and streamed source, have one shared icon-only Carbon Copy control with an accessible label, a 16px icon, a 24px hit target and no separate fill or border. For user messages it sits outside the colored bubble. A compact relative age immediately before Copy uses the original prompt or first response-chunk timestamp, not replay time; missing/invalid timestamps remain explicitly unavailable. The row retains its layout space while hidden and fades in/out on message or controls hover, with keyboard focus also revealing it. Clock-only updates stay inside the small time display and stop in hidden chats/documents, without per-tick announcements. Every Copy activation briefly depresses only the glyph; reserved time width and always-overlaid failure feedback keep the button position stable through pending, success, failure and toast dismissal/expiry. Reduced motion disables the fade and depression. Copy retains only the exact source captured at invocation, including whitespace and code, never adjacent activity, timers or attachments. After clipboard completion, the existing application toast stack shows “Copied.” as a success notification, with its shared six-second lifetime, pause/dismiss controls and polite announcement, never a local success tooltip. Failure keeps actionable inline feedback and Retry Copy without changing drafts, selection, scroll or agent state.
+Nonempty user and agent text messages, including historical and streamed source, have one shared icon-only Carbon Copy control with an accessible label, a 16px icon, a 24px hit target and no separate fill or border. For both human and agent messages it sits outside the colored bubble. A compact relative age immediately before Copy uses the original prompt or first response-chunk timestamp, not replay time; missing/invalid timestamps remain explicitly unavailable. Agent ages align at the message text's left edge with natural content width. Both message types share the same 8px timestamp-to-button gap and 4px glyph padding, giving 12px of visible text-to-Copy spacing. Human-message ages keep their reserved width and right alignment. The row retains its layout space while hidden and fades in/out on message or controls hover, with keyboard focus also revealing it. Clock-only updates stay inside the small time display and stop in hidden chats/documents, without per-tick announcements. Every Copy activation briefly depresses only the glyph; always-overlaid failure feedback keeps the button position stable through pending, success, failure and toast dismissal/expiry. Reduced motion disables the fade and depression. Copy retains only the exact source captured at invocation, including whitespace and code, never adjacent activity, timers or attachments. After clipboard completion, the existing application toast stack shows “Copied.” as a success notification, with its shared six-second lifetime, pause/dismiss controls and polite announcement, never a local success tooltip. Failure keeps actionable inline feedback and Retry Copy without changing drafts, selection, scroll or agent state.
 
 Agent replies in orchestrator and worker chats render Markdown through the shared,
 memoized renderer-only `ChatMarkdown` component using `react-markdown` and
@@ -1500,22 +1624,96 @@ The bottom-right application footer persistently shows full runtime snapshot.ver
 
 ### Sidebar table navigation
 
+Project chats with owned workers use their leading chat artwork as the independent
+worker disclosure. They have no trailing legacy agent icon or reserved slot for
+it. The label still selects the chat, More retains its menu, and Enter/Space and
+Left/Right keyboard disclosure remain available. Narrow rows reserve readable text
+and complete indicators before shrinking the leading artwork gutter. The disclosure
+keeps a visible focus edge in Light, Dark and forced colors.
+
+Assistants, Apps, Projects and Settings each sit inside a separate opaque sidebar card, enclosing the
+heading, row actions and any expanded descendants. Home and Search share a matching
+opaque card above those sections. All cards use the current theme
+surface through the local Neobrutalism Card primitive, a 2px outline, 5px corners
+and a hard offset shadow. A 4px inset preserves the previous combined 6px
+border-and-padding row offset. The top row
+uses the same surface fill as its descendants and the main navigation-card
+artwork through `--card-header-fill`; forced colors use Canvas.
+Cards trim
+the final row's 2.5px spacing, including nested and collapsed disclosures,
+to preserve equal top and bottom padding. Cards have 8px top and 3px bottom margins, giving
+11px between cards; the first card retains its 6px top margin for breadcrumb
+alignment. The gap before each card's second
+row is 5.5px; subsequent row gaps remain 2.5px, and collapsed groups add no space.
+They remain opaque
+at every sidebar background opacity/blur setting. Row heights remain unchanged. Each card has a dedicated top-right chevron button
+with aria-expanded, aria-controls and Expand/Collapse labels. Clicking it changes
+only disclosure, without navigating or dispatching work. Home/Search can collapse
+Search and saves its expansion. Other header buttons navigate without toggling;
+Assistants opens its navigation home. Keyboard Left/Right disclosure and
+explicit descendant navigation still reveal the correct ancestors. Collapsed children
+stay mounted but inert/hidden, and nested disclosures close recursively. The chevron
+rotates over the shared motion duration and shows a solid primary-color glyph
+backplate on hover, keyboard focus or press, with contrasting text color and the
+shared icon press effect. Its accessible labels remain, while native and shared
+tooltips are suppressed. Forced colors use Highlight/HighlightText; reduced motion
+and forced colors disable animation.
+
 The whole sidebar starts 24px from the window's left edge, twice the shared 12px
 workspace inset. This replaces the earlier flush-to-window positioning; full-width
 rows and their internal label indents stay unchanged within the sidebar. The
 workspace width clamp accounts for the gap, and the footer database/return controls
 remain aligned with the borderless sidebar's right edge when resized.
 
-Automation Studio, Command Builder, Data Viewer and Prompt Builder use the
-user-supplied `robotic-arm.svg`, `megaphone.svg` (attached as `megaphone (2).svg`), `database.svg` and `ai.svg`,
-respectively. Apps, Settings, Projects and Home use the supplied `apps.svg`,
-`cogwheel.svg`, `backlog.svg` and `home2.svg` (attached as `home (2).svg`).
+Apps sidebar descendants use 2.5em icons, a 25% increase from 2em, including nested
+Data Viewer tables. Label insets reserve the larger artwork while row heights,
+navigation-card artwork and breadcrumb icon sizes stay unchanged.
+
+Scheduled Jobs, Command Builder and Data Viewer use transparent `time-management.gif`
+(64 frames, 2.37 seconds), `marketing-automation.gif` (181 frames, 3.62 seconds) and
+`database-table.gif` (85 frames, 2.22 seconds). Individual tables use `table.gif`
+(109 frames, 2.9 seconds). Each has a first-frame PNG and preserves enclosed white
+details, frame timing and the 640px canvas. Their original SVGs remain geometry
+references. Prompt Builder uses transparent `spell-book.gif` (46 frames, 2 seconds)
+and System Manager uses `gear-wheel.gif` (63 frames, 2.52 seconds), each with a
+first-frame PNG and preserved enclosed white details and timing. `ai.svg` and the
+generic wrench remain original geometry references. Projects uses the transparent `project-initiation.gif` (97 frames,
+2.22 seconds) and its first-frame PNG, preserving the rocket's white window.
+Its original `backlog.svg` remains a geometry reference. Apps uses `menu.gif`
+(55 frames, 2 seconds), Home uses `home.gif` (59 frames, 2 seconds), and Custom
+Assistants uses `robot.gif` (59 frames, 3 seconds), with matching first-frame PNGs.
+The robot retains its white head and chest details while its exterior is transparent.
+Their white backgrounds are transparent.
+Settings uses the
+supplied `options.gif`, with a transparent background, retaining all
+57 frames and the original 2-second duration. Its transparent first-frame PNG is
+shown at rest. The GIF plays once on hover or keyboard focus in navigation cards. Clicking a card does
+not restart that playback. In the left sidebar and breadcrumb links, the GIF
+plays once per click, including keyboard activation; hover and focus alone never
+start playback there. Noninteractive page headings stay still. Reduced motion and forced
+colors retain the still frame; hiding the document resets playback. Listeners are
+cleaned up on disposal. Assistants, Apps, Custom Assistants, Home, Search, Relay and Projects share this same playback
+behavior. Custom Assistants has its own artwork identity; Settings → Agents retains
+the static helmet. The original SVG sources remain geometry references.
+Animated artwork uses 2em navigation/breadcrumb boxes and 72px navigation-card
+boxes, twice the ordinary icon size. Relay, Search, Projects and Custom Assistants are a further
+20% larger: 2.4em in navigation/breadcrumbs and 86.4px on cards. All left-sidebar items share a fixed 40px row height at the default text size,
+growing together only for enlarged text preferences. Selection, press, disclosure
+and animation never resize an item; row actions stay on one line and long labels
+ellipsize. The workspace header grows to fit its artwork without clipping content.
 Settings Appearance, Text, Polling, Updates, Advanced and About use
 `color-palette.svg`, `text-size.svg`, `heart-rate.svg`, `cloud-computing.svg`,
 `analyze.svg` and `info.svg`. Individual projects, orchestrator chats and subagents
-use `folder.svg` (attached as `folder (1).svg`), `communication.svg` and
-`down-right.svg`. Relay uses `steering-wheel.svg` (attached as `steering-wheel (5).svg`).
-Search uses `search.svg` in its sidebar row, Home card and page title.
+use transparent `folder.gif` (79 frames, 2.12 seconds), `labour-day.gif`
+(100 frames, 4 seconds) and `drone.gif` (109 frames, 2.4 seconds), respectively,
+with first-frame PNGs at rest and the shared navigation playback behavior. Preserve
+the folder star; remove the gear opening with its background. Original folder,
+communication and down-right SVGs remain geometry references. Keep project artwork
+out of the label/activity flow so fixed rows and label indents remain stable. Relay uses the transparent `pet.gif` (120 frames, 2.4 seconds)
+and its first-frame PNG. Its original steering-wheel SVG remains a geometry reference.
+Search uses the transparent `search.gif` (162 frames, 3.56 seconds, supplied as
+`search (1).gif`) and its first-frame PNG in its sidebar row, Home card and page
+title. The separate Search loading artwork remains unchanged.
 Individual Data Viewer tables and Settings Table defaults share `table.svg`.
 Contributor Tools uses `under-construction.svg`. These replace their earlier
 Carbon/Phosphor icons, including the grid-nine table icons.
@@ -1534,11 +1732,14 @@ box, preserving aspect ratio, paths and colors. Integrity tests restore only the
 original viewport before checking the original SVG checksum, and a sandboxed
 desktop fixture independently compares all 52 viewports with Chromium's actual
 geometry bounds. Toolbar icons and provider logos are outside this normalization.
-The monochrome Text artwork instead uses its unchanged SVG as a mask, inheriting
-its label color so it stays visible in Light, Dark and forced-color themes.
+The Text artwork uses the supplied colored font-size.gif with a matching still
+poster; the original SVG remains a geometry reference.
 Page headings reuse their navigation icons through `PageTitle`, at 1em of their
 title text, including Settings sub-pages and dynamic Relay, orchestrator and worker
-names. Decorative icons do not change accessible heading names or rename actions.
+names. Breadcrumb chat labels are “Agent” for agent conversations and “Subagent”
+for workers, including an “Agent” parent breadcrumb for a worker. Relay keeps its
+name. Stored titles, sidebar names, rename dialogs and identity-bound navigation
+remain unchanged. Decorative icons do not change rename actions.
 Page titles form breadcrumb navigation in the workspace header from an icon-only
 Home root to the active page, with an accessible Home name, the navigation icon on every item and
 decorative Carbon chevrons sized at 1em. Home itself has one icon-only current
@@ -1549,13 +1750,71 @@ the same 8px icon gap as plain titles. Parent buttons use the
 existing navigation actions; only the active leaf is the heading and is marked
 current. Its text is underlined, including rename controls; the icon-only Home
 heading has an underline too. Breadcrumb items align on a shared horizontal line.
+The first breadcrumb row uses the sidebar's shared row height and 12px first-row
+inset so its icon centers align with the sidebar Home icon. An opaque theme-surface
+card with a 2px outline, 5px corners and a hard shadow spans the content column
+around the trail. Its background matches the sidebar cards' surface through
+`--card-header-fill`, without a tinted header band. Header outer spacing is 6px
+vertically; the card has 6px inner vertical padding, preserving alignment and
+responsive wrapping. Forced
+colors use Canvas/CanvasText, and focus outlines remain unclipped. During Chat,
+ResizeObserver tracks the actual conversation column and reserves the open right
+panel's measured width and separating gap beside the breadcrumb card, including live resizing and
+close transitions. Stacked panels and non-Chat pages restore full card width.
+Observation is scoped to active Chat and releases the inset/listeners on hide or
+disposal; no polling or transcript-triggered layout reads are added. The header
+reserves space above the content in normal flow on every page, including Chat.
+Content never scrolls beneath the card. Wrapped trails and oversized artwork never
+move the sidebar.
 Breadcrumbs preserve title typography and wrap rather than overflow. With the
-sidebar closed, center the trail across the window, balancing the workspace's
-asymmetric insets; reopening restores content alignment without remounting it.
+sidebar closed, center the trail inside its card. The header and main content
+stay in the same grid column throughout the shared sidebar reveal animation,
+keeping their card edges and widths aligned without a column or margin jump.
+An open inspector retains its measured breadcrumb right inset. Reopening preserves
+mounted content and navigation. This geometry fix adds no capability, setting or
+persisted schema and needs no self-knowledge catalog change.
+Breadcrumb additions and removals use the existing motion duration. Stable item
+identities slide between their measured positions; incoming items fade in and
+outgoing items fade out as inert, aria-hidden, ID-free snapshots without duplicate
+headings. Only the destination trail is interactive and current immediately.
+Snapshot raster artwork into canvases instead of cloning image elements: detached
+file-image clones can initiate requests blocked by the renderer's unchanged CSP.
+Live artwork playback remains unchanged. This presentation fix adds no capability
+and needs no self-knowledge catalog change.
+Publish React portal ownership in the layout phase and initialize breadcrumb
+motion during mutation delivery, before paint. Do not defer setup to the next
+animation frame and flash the new trail at its final opacity or height before
+rewinding it. Preserve geometry across an empty portal handoff and carry current
+opacity through interrupted entrances. Wrapped card height changes animate in
+normal flow. Match unchanged visible text, artwork and current-page role across
+different destination identities, so switching between Agent chats does not fade
+an identical trail out and back in. Keep the destination's real controls and
+captured navigation targets; visual continuity must never reuse an old handler.
+Reserve retained identities before matching equivalent items and match each old
+item at most once. Rapid replacement cancels
+owned effects, and resize/visibility changes and disposal settle them and remove
+snapshots. Initial hydration, reduced motion and forced colors remain immediate.
+This adds no setting, stored schema or capability; no catalog change is needed.
+During asynchronous chat/project selection, keep the currently displayed chat and
+its portalled breadcrumb visible until the selected snapshot arrives. Make that
+outgoing chat and breadcrumb inert while selection is pending, and keep detail
+reads inactive; never hide every conversation and collapse the header between
+owners. Only the explicit navigation-pending inert owner may continue publishing
+its title; other inert or hidden retained views must not publish.
+Page switching keeps the primary card background, outline and shadow fully
+opaque. A short translation of the active content uses the shared motion timing;
+never fade the entire card and expose the workspace between destinations. Target
+only the visible settings section or conversation transcript, keeping Chat's
+composer, cards and inspector stationary and retaining hidden views, drafts and
+scroll state. Background updates and late initial chat/project identities do
+not restart entrance motion. Replacement, motion/visibility changes and disposal
+cancel owned effects; reduced motion, forced colors and initial hydration remain
+immediate. This presentation change adds no capability or catalog requirement.
 Only visible
-views publish a trail into the header. Each original page title slot remains an
-inert, invisible, ID-free placeholder at its former size (64px by default, or the
-explicitly saved size), preserving wrapping and all other page-element positions.
+views publish a trail into the header. Each original page title marker remains
+inert and ID-free with display:none, reserving no space inside the page. Title-only
+table and Settings headers collapse; headers containing actions or information
+buttons remain compact and usable. Breadcrumbs still wrap in the workspace header.
 Retained hidden projects, chats, workers and Settings pages cannot overwrite the
 active trail. Original heading IDs and rename controls exist only once.
 The sidebar toggle stays outside inert navigation, fixed in the native-control
@@ -1569,11 +1828,39 @@ ownership, never the globally selected project. Relay remains application-owned.
 Secondary section headings, file-panel headings and embedded table history are not
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
-Automation Studio's Schedules and Execution history are bordered table cards with
-one icon-free heading each, using the independent Card Titles role. Only the
-outer Automation Studio heading is a page breadcrumb. Navigation cards keep their
-224px width and 32px gaps when rows wrap rather than stretching remaining columns.
-Projects and individual project homes prepend New Project and New Chat creation
+Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Schedules
+and the Actions dropdown share the top row, with a 16px inset inside the main
+content area. Actions offers the existing New scheduled job and Refresh handlers;
+creation and editing use inline Card/Button/Textarea controls. Execution history
+remains a table, with its own icon-free Card Titles heading. Only the outer
+Scheduled Jobs title is a page breadcrumb.
+
+Each collapsed job header has independent run/cancel, delete and disclosure
+buttons in DOM and visual order. Use 24px transparent circles in 28px targets,
+black outlines, 2px hard shadows, 1px press offsets and contrasting glyphs over
+the blue fill. Paint hover on the full stationary header, without generic press
+scaling. Its 3px inner corners fit the outer 5px radius and 2px border; square
+lower corners while expanded. The noninteractive job heading labels the details
+panel; only the final chevron toggles it. Omit agent/runtime/next-run subtitles;
+append `(Paused)` beside disabled schedules, independently of manual execution.
+Preserve visible keyboard focus, narrow wrapping, reduced motion and system
+fills/outlines without shadows in forced colors.
+
+Run starts one turn. The live pause glyph retains the Stop label and cancels
+that run; its pulse is static for reduced motion/forced colors. The service list
+adds optional ephemeral live ownership, independently of recurrence and history
+paging. Older services without that field require a restart before run controls
+are available. Never persist it or infer it from unfinished history. Expanded
+jobs load their saved prompt, schedule, next run, repository, agent, branch,
+timeout and permissions. Enable/pause remains a separate recurrence action.
+Native delete confirmation, active-run refusal, revision checks and retained
+evidence remain authoritative. Update the capability catalog for this workflow;
+its presentation refinements introduce no additional capability, setting,
+bridge method or stored format.
+
+Navigation cards keep their 224px width and 32px gaps when rows wrap rather than
+stretching remaining columns.
+Projects and individual project homes prepend New Project and New Session creation
 cards instead of page-header plus buttons. Each is a keyboard-native card with
 the same width and corners as normal cards, a thick dashed border, no gradient
 artwork or corner arrow, and a centered Carbon plus and label. Keep creation
@@ -1588,8 +1875,13 @@ tabs, disclosures and choice controls. It uses 60ms press and 90ms release effec
 with a 50ms minimum visible press, without delaying or replaying actions. Icon
 actions animate only their glyph; inline links use opacity without reflow.
 Sidebar controls also animate only their glyph, keeping row backgrounds and hit
-targets stationary. Selected sidebar rows paint their accent edge once in a
-pointer-transparent overlay above their buttons, independently of keyboard focus.
+targets stationary. Sidebar items and their hover/selected fills use square corners, with 5px top corners on the first visible row of each foreground card and 5px bottom corners on its last visible row. A single visible row gets all four corners at 5px. Edges follow nested disclosure and row changes without layout measurement, and the observer disconnects on disposal. Selected rows use
+their background fill without an accent edge or border. Preserve keyboard-focus and forced-color outlines. A shared
+12px gutter separates all navigation rows and their actions from the sidebar's
+right edge; the resize grip stays at the outer edge. Navigation rows have 2.5px
+bottom margins, applied once per row across nested lists and creation actions. Each item adds 15px of
+internal left padding to its shared icon/text inset, preserving hierarchy and
+the icon-to-label gap without moving its selection fill.
 Existing Copy feedback remains glyph-only. Motion is skipped for reduced motion
 and forced colors, and effects/listeners are cancelled on interruption/disposal.
 
@@ -1600,6 +1892,10 @@ Settings sub-pages are alphabetical, including Advanced between About and Agents
 Its Advanced disclosure contains Contributor Tools followed by Experiments →
 Episodic Memory and RAG. All three disclosures remember expansion and
 reveal externally selected destinations. Collapsing a disclosure preserves the active page.
+
+### Navigation history
+
+Back and Forward icon buttons sit in the title bar beside the navigation sidebar toggle, and remain available with the sidebar closed. They share one history of destinations: each page, each Settings page, each project/provider home by ID, and each specific orchestrator, Relay or worker chat, identified by its conversation ID. The renderer records the destination whenever it changes, so the sidebar, command palette, search results, reviews and other entry points all add to the same history, and switching between two chats creates separate steps even though Chat stays selected. Selecting the current destination again adds nothing; choosing a different destination after Back clears forward history; traversal never adds entries, and arriving at an entry updates it in place without discarding forward history. Orchestrator selection completes in the main process, so the renderer lists the destinations a selection passes through on its way and ignores only those until the requested chat appears, the request fails, or two seconds pass; a request already satisfied does not wait. Any other destination means the user moved on: it is recorded at once, and a slow restore that it superseded no longer changes the page or worker selection. Returning to a chat selects the existing conversation through the shared owner-aware navigation actions, preserving drafts and running work. Archived orchestrators, runs no longer in the snapshot, and pages unavailable without a database (the shared `pageAvailable` policy) are skipped. Each button is disabled when nothing is available in its direction, has an accessible name, and hands keyboard focus to its sibling, or to Chat, when the history it pressed through runs out. History holds up to 100 entries, lives only in renderer memory, and starts fresh on relaunch or renderer reload.
 
 ### Database connection state
 
@@ -1630,32 +1926,45 @@ The footer keeps 4px bottom padding beneath its message text, return-to-splash a
 It opens the same Select database modal for opening an existing
 database or creating one, even when a database is already connected. It shares the
 project selector's busy/active-project-run restrictions and native modal focus restoration.
-Page and conversation rows, the project header and adjacent row actions use 40px
-heights; the tab list scrolls independently of the footer.
+Page and conversation rows, the project header and adjacent row actions use shared
+fixed 48px heights at the default text size, independent of selection and animation; the tab list scrolls independently of the footer.
 
 ### Chat names and archive
 
 After the first completed human/agent exchange, a separate presentation-only ACP
 turn asks the configured orchestration provider for a short descriptive title.
+The prompt requests under 20 characters; valid generated titles are deterministically
+cut off at 19 Unicode characters, preserving complete code points. Existing titles
+and manual renames retain their existing limits.
 It runs in a private temporary directory, without MCP servers, denies permissions,
 bounds input/output and times out after 30 seconds. Replacement, manual rename,
 Stop all and shutdown cancel generation; cleanup stops the process before removing
 its directory. Failure retains the numbered fallback. It never adds transcript
 messages or overwrites a human title.
 
-Orchestrator sidebar rows expose Open, Rename and Archive through both their
-labelled More icon button and context menu, including Shift+F10. The main header displays
+Project orchestrator sidebar rows open through their label and expose Rename and
+Archive as separate named circular icon controls, matching the project-row controls.
+Their glyphs reveal on row hover or keyboard focus and follow the active theme,
+reduced motion and forced colors. Open, Rename and Archive also remain available
+in the context menu, including Shift+F10. The main header displays
 the same title and opens the same rename dialog. Titles are bounded single-line
 plain text and actions target validated existing chat IDs.
+
+At narrow sidebar widths, simultaneous project chat counts stack within their
+reserved indicator column. Preserve label room, both unread/approval badges, leading
+worker artwork disclosure and independent Rename/Archive targets without clipping.
 
 Archive only hides the orchestrator from sidebar navigation. It retains session
 records, transcripts, worker ownership and running work. Workers remain accessible.
 After successfully archiving the currently displayed chat, the renderer shows a
-“Chat archived.” success toast and selects Relay. Archiving another chat does not
+“Chat archived.” success toast. Closing the last unarchived chat for its project
+opens that project’s home with the New Session creation card, without creating or
+opening a replacement conversation. New Session explicitly creates a new chat.
+If another project chat remains, the existing Relay fallback applies. Archiving another chat does not
 change the displayed page or conversation. Failed archives keep inline feedback.
 Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped
-chat history, never execution authority. No SQLite schema or CLI behavior changes.
+chat history, never execution authority. No SQLite schema changes.
 
 The Prompt Builder groups its four system templates beneath an initially expanded System disclosure. Collapsing the group preserves the selected editor and unsaved drafts. Saved overrides remain in System; individual items omit source labels and show unsaved changes when present. Prompt items have no border and share neutral gray selection and blue hover with navigation.
 
@@ -1663,9 +1972,9 @@ The Prompt Builder groups its four system templates beneath an initially expande
 ### Desktop distribution
 
 The release workflow packages the Electron desktop as an Apple Silicon macOS DMG,
-Linux x64 DEB/AppImage and signed per-user Windows x64 NSIS installer.
+Linux x64 DEB/AppImage.
 The bundle ID is `com.codemanufactory.code60`; the
-Linux GUI executable is `code60-desktop`, separate from the headless `code60` CLI.
+Linux GUI executable is `code60-desktop`.
 Installers bundle the desktop runtime and preserve existing config, preferences,
 and user-selected database paths. Git and provider CLIs remain external.
 Settings → Updates offers explicit Check for updates, Download update, cancellation,
@@ -1675,13 +1984,13 @@ check completes, independently of workspace polling and its pause switch. Checks
 are single-flight, run only from idle update state, stop on shutdown, and never
 download automatically. Background failures stay quiet; manual failures are shown.
 The on-by-default automatic-check switch persists as `updateCheck` in desktop.json;
-fixed `auto-on`/`auto-off` update actions change it without affecting CLI configuration.
+fixed `auto-on`/`auto-off` update actions change it without affecting shared configuration.
 A footer button opens Settings → Updates and labels availability, download progress,
 or readiness to install. A popup offers Download now / Later once per version,
 remembered in renderer local storage, and waits for other dialogs to close.
 `electron-updater` reads the
 fixed public GitHub release feed and validates downloaded SHA-512 checksums;
-macOS and Windows also retain their native signature verification. Stable builds
+macOS also retains native signature verification. Stable builds
 stay on stable releases; prerelease builds can receive their channel and stable
 releases. Downgrades, background downloads and quit-time installation are disabled.
 No renderer request accepts a URL, path or command: `update` accepts only fixed
@@ -1689,11 +1998,23 @@ actions, and `onUpdate` pushes revisioned progress, including across renderer re
 Development builds report updates unavailable. Downloads cancel on quit and have
 a 30-minute deadline. Installation asks with a native dialog and shuts down all
 agents, gateways and polling before replacing the app. Config, records and databases
-are kept. macOS uses the signed ZIP update, Windows uses NSIS, Linux DEB uses an
+are kept. macOS uses the signed ZIP update, Linux DEB uses an
 asynchronous, five-minute-bounded `pkexec /usr/bin/dpkg -i` authorization, and AppImage
 stages a complete executable beside the original before atomic replacement.
 Linux authorization or installation failures are shown before closing the stopped app.
 The main process rejects other renderer requests during installation.
+Before replacement, app updates persist scheduler restart intent, cancel active
+automation work and stop the installed Scheduling Service. On the first launch
+after installation, startup repairs the previously consented registration using
+the new runtime, verifies its reported app version and absence of recovery blocks,
+then restores and verifies the saved global pause state before clearing restart
+intent. Packaged startup also detects and reconciles an active older scheduler
+after a manual app installation. Stopped or uninstalled services are not activated
+without pending restart intent. Development startup does not reconcile versions.
+Native repair refuses to replace a registration after a failed stop unless native
+inspection proves the service stopped (launchd must show the job absent from a successful domain inventory). Native supervisor PID and socket responder PID must match before automatic stop or reactivation. Update recovery holds an exclusive private process-owned lock; concurrent launches cannot consume the same intent. Automatic reconciliation never replaces newer or unknown release versions. AppImage executable and canonical ancestor ownership/permissions must exclude replacement by other users before any pause, stop or registration rewrite. No app version is persisted in registration; the live process supplies it. Stop, upgrade and reactivation failures
+remain visible and retain recovery intent; definitions, occurrence history and
+worktrees are never removed or replayed by this sequence.
 Release staging verifies channel metadata against the exact final artifacts.
 The macOS ZIP and platform channel YAML files are published alongside installers.
 
@@ -1714,22 +2035,14 @@ logged or imported. Shell PATH entries precede inherited entries, followed by
 standard system directories. Empty, relative, and duplicate entries are removed.
 Missing or failing shells use inherited PATH and the same fallbacks. This applies
 to Git, agent connection tests, orchestration chats, and workers; absolute agent
-commands remain authoritative. The CLI and configuration files are unchanged.
-Windows instead uses the bounded native discovery and owned-job contracts above;
-it never probes a shell profile. See [Windows setup and limitations](WINDOWS.md).
-Windows release promotion requires timestamped SHA-256 Authenticode signatures
-from Azure Artifact Signing (GitHub OIDC, no stored key), verified against the
-validated publisher name and Microsoft's identity-verification root, on the final installer, installed executable, helper and uninstaller, followed
-by reinstall/uninstall data-preservation checks. These run on the Windows Server
-2025 x64 CI runner; ARM64 development/emulation cannot satisfy them, and there is
-no separate manual Windows 11 hardware acceptance.
+commands remain authoritative. Configuration files are unchanged.
 
 macOS releases use Developer ID signing and notarization. Packaging preserves
 Electron's Node mode because orchestration providers launch the bundled MCP
 sidecar with the app executable and `ELECTRON_RUN_AS_NODE=1`. Packaged tests
 exercise that path through its authenticated gateway. The renderer remains
 sandboxed; the desktop refuses `--no-sandbox` launches, including AppImage
-fallbacks. Packaging adds no CLI configuration fields; the only update bridge
+fallbacks. Packaging adds no shared configuration fields; the only update bridge
 methods are the fixed-action `update` and `onUpdate` described above.
 
 
@@ -1817,7 +2130,10 @@ fade the image and label out together over 175 ms by default, then fade in the l
 The row expands from zero height when opened and shrinks to zero height while fading
 to idle before removal. A content resize observer follows the changing transcript
 height only if the user is already following its bottom; reading older messages
-does not get pulled to the activity row. Main Chat uses one frame-driven, retargetable
+does not get pulled to the activity row. Preserve follow across resize-generated scroll
+events between measurement and the next controller write; upward input still cancels immediately.
+This existing-behavior fix adds no capability or self-knowledge catalog change.
+Main Chat uses one frame-driven, retargetable
 scroll animation for incoming content, not repeated bottom jumps or restarted native
 smooth scrolls. Upward input cancels it immediately. Initial history and returning
 to a conversation restore instantly; hidden views and reduced motion skip scrolling
@@ -1836,7 +2152,20 @@ same-state purpose updates preserve the timer and do not fade. Approval, stoppin
 and non-idle terminal states interrupt immediately. Hidden views and reduced motion
 skip transitions. Final artwork is independent of MCP.
 Display failure never fails an agent task; operating instructions request meaningful
-phase reports, not heartbeats. CLI, persisted records and worker access are unchanged.
+phase reports, not heartbeats. Persisted records and worker access are unchanged.
+
+Live conversation and worker names in the left navigation, including custom
+assistants and Relay, reuse the transcript activity spotlight's gradient and
+2.8-second linear animation. Connecting, working and monitoring owned workers
+qualify; approval, stopping, idle and saved entries remain static. Each name
+follows its own live snapshot independently of chat selection. Hidden documents,
+collapsed/inert navigation, reduced motion and forced colors disable the effect.
+Existing readable role/status descriptions and indicators remain available.
+Owner names follow ephemeral conversation activity rather than retained run statuses.
+Worker run views expose a current-turn cancellation hint so their names stop animating
+before provider completion; this hint neither marks process shutdown nor enters saved records.
+Monitoring owners use the same “Monitoring subagents” wording in their accessible
+descriptions and tooltips as the transcript activity display.
 
 Settings → Appearance has a Transitions card for reply entrance, scroll response,
 activity fade and activity dropdown timing. All four default to 175 ms. Each accepts 0–30,000 ms, with a
@@ -1852,7 +2181,7 @@ height transition. CSS durations and activity timers share the same preferences.
 Reduced motion, hidden views and urgent activity still override ordinary transitions.
 Long dropdown reveals cancel on user input, collapse, hidden views, stale details or
 unmount, rather than fighting the reader for the configured duration. No new IPC,
-backend preference, transcript data or CLI behavior is introduced. Other interface
+backend preference, transcript data  is introduced. Other interface
 transitions also default to 175 ms. Unversioned saved chat timings are read at half
 their previous bounded duration, rounded to whole milliseconds; missing or invalid
 fields use the new defaults. Later saves include version 1 so subsequent edits and
@@ -1860,8 +2189,333 @@ reloads never halve the values again. Reset transitions applies the current
 defaults. Non-transition timers, notification lifetimes and backend timeouts stay
 unchanged.
 
-Worker conversation headers place status as a subtitle under the agent name. Branch/terminal role icons in navigation and worker headings scale to 1em of their label text. The polling dialog has a 200px minimum height bounded by viewport height, and a centered pair of equal-width buttons. Last-seen and harness-mode triggers use 12px horizontal padding.
+Worker conversation headers place status as a subtitle under the agent name. Animated conversation role icons use 2em in navigation, while worker heading icons stay 1em of their label text. The polling dialog has a 200px minimum height bounded by viewport height, and a centered pair of equal-width buttons. Last-seen and harness-mode triggers use 12px horizontal padding.
 
 The left navigation has no border or divider overlay, including across the
 native-control drag strip and application footer. Sidebar content bounds, resizing
 and footer placement remain unchanged.
+
+## Neobrutalism surfaces and chat
+
+Main-content navigation/creation cards, the five sidebar navigation groups,
+primary content, breadcrumb, conversation, composer and right-side inspector shells
+use locally adapted Neobrutalism Card primitives, with upstream source/license
+recorded beside them. Chat also uses native Button, Textarea and human Bubble
+adapters; breadcrumb trails use the local Breadcrumb primitives. Tailwind 4 is a
+build-only Vite integration: `nb:` utilities are generated from explicit local
+primitive and navigation-adapter sources only, without Preflight or automatic discovery. Its
+neobrutalism layer precedes application layout/components; accessibility stays last.
+Tokens alias live Code60 colors, hard shadows and saved typography; the upstream
+layout inset is `--nb-card-spacing`, never the saved text `--card-spacing`.
+
+Card shells own 5px corners, 2px outlines and 4px shadows. Main-content cards
+retain the 224px grid and contain native Open/create buttons; sidebar cards fill
+the existing resizable column. Span-rendered parts preserve valid button
+content and artwork playback. Assistant action menus remain outside Open, with
+existing consent/revision checks. Focus is independent of a 1px pressed offset;
+reduced motion and forced colors suppress decorative movement/shadows. Legacy
+card chrome is removed. Sidebar adapters keep direct-child hierarchy, fixed row
+geometry, independent disclosure/actions and opaque header bands without clipping
+focus. Saved width/expansion, opacity and native blur remain unchanged; only the
+sidebar background layer responds to opacity/blur. Unrelated controls keep their CSS;
+CSP, mounted state and appearance persistence stay unchanged. No capability,
+API, setting, schema or migration is added, so no self-knowledge catalog update
+or capabilities generation is needed for this presentation change.
+
+
+Primary/content and inspector adapters retain their former combined 3px edge
+with a 2px Card outline plus 1px inner padding; breadcrumb padding similarly
+compensates the thinner border. Keep the breadcrumb portal, motion ownership and
+right-edge/upward-extension observers unchanged. The outer Chat tabpanel stays
+transparent and unframed: only its conversation and inspector are surface Cards.
+All retained tabpanels, landmarks, refs, inert/hidden state and native controls
+keep their existing DOM identity and behavior. Composer Cards use the existing
+quiet inset fill, control edge and no decorative shadow; their embedded Textarea
+is borderless and independently retains command/IME/Enter/Shift+Enter behavior.
+Human Bubble content remains preformatted, safely escaped and theme-aware.
+Agent Bubble content uses a div containing semantic safe Markdown, including code
+and tables. Light agent fill is warm neutral (#f1f0e8); Dark is olive-charcoal
+(#282b25), distinct from human pale-blue/plum fills, with >=4.5:1 text contrast.
+Both use 5px corners/2px edges without shadows. Timestamp/Copy/Undo remain outside
+bubbles; agent metadata aligns with the text inset. Automatic updates and tool
+activity are not message bubbles. Forced colors uses Canvas/CanvasText.
+Native chat buttons use saved control typography, stationary hover, 1px pressed
+offset and independent focus. Quiet transcript/inline actions remain shadowless;
+reduced motion removes movement and forced colors uses system fills/edges with
+no decorative shadows. No Base UI, CVA or remote runtime dependency is introduced.
+This expansion changes presentation only: no capability/catalog generation,
+bridge contract, setting, schema, migration or appearance reset is required.
+
+
+Chat uses the local Neobrutalism Scroll Area native adapter: a compact solid,
+rounded, theme-contrasting thumb at the conversation Card's inner right edge,
+not beside the centered reading column. Retain native viewport identity, refs,
+wheel/keyboard/drag input, stable gutter, streaming follow and saved scroll state.
+Constrain inner messages, approvals and composer to the existing reading widths;
+keep the composer fixed with its 16px bottom inset. Worker chats use the same
+viewport and inner reading-column layout. Keep inspector scrolling independent,
+including stacked layouts. Do not restyle code, tables or other app scrollbars.
+Forced colors retains native system scrollbars and independent keyboard focus.
+This presentation change adds no capability, API, setting, schema or migration,
+so the self-knowledge catalog and generated capabilities need no change.
+
+## Custom Assistants
+
+Custom Assistants is a database-independent destination under Assistants in the sidebar, immediately after
+Relay. Users create up to 64 application-owned agents with a name (120 characters)
+and special instructions (32,000 characters), using the shared verified provider.
+Each assistant card has an independent upper-right More actions menu: Edit and
+Archive for active definitions, Restore for archived definitions. Use the shared
+anchored menu with keyboard navigation and dismissal, keeping the menu trigger
+outside the card Open button. Remove the duplicate names/action list below the
+cards. Menus close when the page is hidden or its active/archived view changes;
+revision-checked actions retain their captured assistant.
+Each agent has one persistent conversation and the same guarded orchestration
+capabilities as Relay. The built-in Relay remains a singleton.
+
+`ApplicationAgents` routes requests to captured conversation owners, never UI
+selection. Each custom assistant reuses `RelayService` with an immutable instruction
+revision and its own private UUID directory under `code60/custom-agents` in the
+application state directory. The revision-checked, locked catalog is independent
+of project databases. The compact catalog references immutable instruction
+files, which load only on explicit definition reads or agent Open. Catalog failure
+must not disable built-in Relay.
+
+Custom sessions connect lazily on explicit Open. Startup restores definitions,
+not processes or execution authority. History is evidence on the next human Send.
+Workers, plans, checkpoints, file contexts, reviews and memory scopes stay
+conversation-owned. Stop all, folder-stop, provider replacement and shutdown cover
+all application owners; database/project changes cannot retarget them.
+Special instructions supplement the operating contract and cannot bypass host
+permissions or change target authority.
+
+Editing requires stopped agent work, retires provider context and keeps history.
+Archive confirms natively and stops only that agent; Restore never resumes work.
+Both preserve histories, workspaces and review evidence. There is no permanent
+deletion, per-agent provider choice, management MCP tool .
+These rules extend earlier Relay-only ownership and bridge rules to custom assistants;
+the built-in Relay's identity, store and navigation entry remain unchanged.
+
+## Chat activity artwork
+
+Chat activity and connection indicators use static semantic icons only. Do not render
+activity GIFs in Relay, project chats, workers or custom-agent chats. This supersedes
+earlier animated-artwork guidance. Preserve activity labels, timers, attribution,
+disclosures, theme behavior and transitions. Search loading artwork is unchanged.
+
+## Left sidebar background controls
+
+Settings → Appearance → Left sidebar provides Background opacity (0–100%, default
+100%) and Background blur strength (0–100%, default 0), plus Reset sidebar. Changes apply
+immediately and persist in `code60.sidebarAppearance`, with bounds checking and a
+visible retry message if storage fails. No appearance migration marker changes.
+Text and icons retain their normal opacity and sharpness.
+
+One decorative background covers the full window height from its left edge to
+the sidebar's adjustable divider, including the native-control strip, margins
+and footer background. Its width follows resizing and collapse; it is absent on
+the splash and while the sidebar is closed. Resting navigation fills and the
+left footer background are transparent above this layer; selection, hover, focus,
+drag regions and foreground controls remain usable. The full left region stays
+interactive in transparent windows, including at zero background opacity.
+
+The native window always supports alpha. While navigation is open, body/app paint
+no opaque layer behind its left background, so lowering opacity immediately
+reveals the desktop even when Transparent background is off. The rest of the
+window remains opaque unless that separate, restart-only margin setting is on;
+the splash remains opaque and transparent sidebar areas stay interactive.
+On macOS, desktop blur uses an owned, non-focusable native vibrancy backdrop
+window behind the foreground window, clipped to the left background bounds. Its
+0–100% strength blends the OS-managed blur; it is not a pixel radius. The backdrop
+has no web contents, ignores mouse input, follows the owner bounds and stacking,
+and hides on collapse, splash, opaque tint, minimized/hidden state and forced
+colors. Reset it on renderer navigation/loss; close it and dispose listeners when
+the owner closes or the application shuts down. Native failures close the backdrop
+and surface a fixed error. Linux keeps opacity with the native blur slider disabled.
+A strict width/strength/visibility-only preload method updates this owned backdrop;
+main clamps its bounds to the owning window. No capture permission, screen capture,
+arbitrary window handle or agent-write capability is added. Sidebar preference
+values are not added to awareness reports. Forced colors use an opaque system fill.
+
+## Neo-brutalist presentation
+
+This section defines the current visual style and supersedes earlier visual-only
+color, border, corner, shadow and weight descriptions. Layout and interaction
+contracts continue to apply. This is a visual replacement, with no new theme
+selector, bridge API, setting, prerequisite or execution capability.
+
+Light uses a flat pale-blue canvas (`#e8eefb`), white surfaces, near-black
+text/outlines (`#111111`) and electric-blue actions (`#2563eb`) with white labels.
+Dark and System dark use a near-black canvas (`#111111`), charcoal reading surfaces
+(`#202020`), darker inset fields/composers (`#161616`) and off-white text.
+Deep plum (`#2f1d37`) header bands with pale text define structure without bright
+fills. Black (`#050505`) panel edges and hard shadows replace white panel frames.
+Bright blue (`#2563eb`) is reserved for primary actions and focus/link accents.
+Control outlines remain distinct from decorative panel borders. Hover and
+selection retain separate neutral fills. Text maintains 4.5:1 contrast; controls and
+focus edges maintain 3:1. Semantic change colors and optional signal colors remain.
+
+Controls use 2px outlines; unrelated controls retain square corners while migrated
+chat action buttons use 5px corners. Radio buttons retain circular markers;
+switches retain their On/Off labels with square tracks and thumbs. Neobrutalism
+Card shells (sidebar, navigation, breadcrumb, primary content, conversation and
+inspector) use 2px outlines, 5px corners and `--card-shadow`: a solid 4px right/down
+offset with no blur (near-black in Light, ink black in Dark). Nested Settings
+surfaces retain 3px square frames. Composer and approval Cards are quiet,
+without shadows. Menus/dialogs retain their existing hard outlined edges and
+offset shadows. Primary/destructive actions use a 2px hard shadow and
+move 1px when pressed, reducing the shadow to 1px. Navigation cards move 1px with
+a 3px shadow on press; sidebar rows and icon actions stay stationary. Transcript
+text, nested rows and icon actions have no decorative shadows. No new cards,
+headings, promotional text or decorative counts are introduced.
+
+Page/Card Titles use bundled Space Grotesk Bold (700); body and chat use IBM Plex
+Sans Regular (400); Button Text and Table Headings use IBM Plex Sans Semibold
+(600). Keep all existing role sizes, independent navigation size and saved
+role overrides. Do not advance appearance/typography migration markers or reset
+preferences. The wordmark and all animated navigation artwork/playback remain.
+
+Keep the existing panel widths, row heights, card gaps, retained views, transcript
+scrolling and responsive inspector stacking. Account for panel borders inside
+existing padding; leave clearance for hard shadows. On Chat, frame the conversation
+and right inspector separately; the outer Chat layout remains transparent and
+shadowless. The 5px page top margin and 11px sidebar-card gaps remain.
+
+Sidebar opacity/blur still affect only the full-height background, independently
+of restart-only transparent margins; never paint an opaque layer behind that
+sidebar tint. Splash stays opaque and uses the same palette. Forced colors uses
+system fills/outlines and removes decorative shadows; reduced motion disables
+transitions. Keyboard focus uses a distinct solid outline/inset edge; the saved
+Focus highlight border preference retains its stronger treatment.
+
+This change adds no capability, so the self-knowledge catalog, availability rules
+and generated capability artifacts need no changes.
+
+All visible left-navbar artwork stays at 100% opacity at rest, on hover/focus,
+and in unavailable destinations; unavailable labels retain muted text and native
+disabled semantics. Artwork playback and reduced-motion rules are unchanged.
+
+Settings navigation artwork uses the supplied info.gif for About, laptop.gif
+for Advanced, setting.gif for Agents and books.gif for Memory. Transparent
+exteriors preserve white foreground details. All use shared still/one-shot
+playback, sidebar opacity and reduced-motion/forced-color behavior.
+
+Settings Polling, Appearance and Text use heartbeat.gif, painting.gif and
+font-size.gif respectively. Preserve transparent exteriors, white foreground
+details, exact animation frames/timing and shared sidebar/card playback behavior.
+
+Updates uses the supplied download animation with transparent exterior and a
+matching PNG poster, preserving original frames/timing and shared click-only
+sidebar/breadcrumb and hover/focus-once navigation-card playback.
+
+Breadcrumb cards scroll within 40% of the viewport height when large saved title
+sizes wrap, preserving usable content below the header.
+
+Transparent Linux windows use three renderer caption buttons in the native drag
+strip because Electron hides its native caption controls for translucent windows.
+A strict minimize/maximize/close enum targets only the owned main window. Close
+must call the normal guarded close path, never destroy the window or kill work.
+macOS retains native window controls. No arbitrary window IDs cross the bridge.
+
+Breadcrumb right-edge measurement also follows the stacked transcript scrollbar
+gutter, keeping its card aligned with the conversation at narrow widths.
+
+Keep breadcrumb and conversation right edges aligned in stacked layouts too,
+accounting for the transcript scrollport gutter without raising the inspector.
+
+Native sidebar blur reports fixed application failures beside the Appearance
+sliders independently of persistence status, including failures during owner events.
+Send hidden visibility immediately; animation frames may stop in hidden documents.
+Track macOS owner show/hide events and renderer visibility rather than Electron
+45's inverted isVisible predicate. Keep the decorative backdrop out of Mission Control.
+Linux caption controls remain accessible inside the splash and first-use setup modals.
+At narrow sidebar widths and large text sizes, bound conversation indentation and
+artwork to preserve readable labels and independent action targets.
+
+Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
+decorative window from Mission Control. A payload-free failure notice reports native
+event failures beside Appearance controls, separately from preference save errors; a
+successful adjustment clears the native error. Keep caption controls inside the active
+splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
+Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
+
+## Settings action icons and spacing
+
+Appearance leaves 16px above the Left sidebar group. Chat bodies retain a 16px
+bottom inset beneath composers at every width. Left-navbar disclosure chevrons
+and the Add Project action have a visible 24px circle within their unchanged
+28px hit target. Use black outlines and 2px hard black shadows with a theme-aware
+fill; pressing offsets the circle 1px and reduces its shadow. Rotate only the
+chevron glyph. Retain keyboard behavior, independent focus and accessible
+expansion state. Reveal sidebar circles only while their own header/item is
+hovered or contains keyboard-visible focus. Hovering a nested conversation does
+not reveal its project/header actions. Keep action space reserved so labels stay
+stationary and hidden actions remain keyboard-reachable. Forced colors use
+system edges/fills without shadows. This visibility refinement adds no capability
+and requires no self-knowledge catalog change.
+Memory Refresh, About Copy version info, Updates Check for updates and global
+Reset text use the shared named icon-button treatment and existing action handlers,
+disabled states, feedback and tooltips. Memory and Updates omit their header help
+icons; retain the explanations as accessible descriptions of the Memory switch
+and Check for updates action. No capability or availability change is introduced,
+so the self-knowledge catalog and generated capabilities do not change.
+
+Completed-turn dividers and agent bubbles share the reading column’s full outer
+width. Keep visually equal 8px gaps between the visible timing text and divider and
+between divider and following bubble border. The row-to-divider margin is
+`calc(8px - 0.15em)` to account for the font descent remaining after leading trim. Timing disclosures have no extra vertical padding,
+retain a 24px minimum target and grow with saved text size. Their inner label
+trims trailing font leading with text-box trim-end (cap/text) and aligns to the
+bottom of that target. The optical descent correction scales with saved body size. This spacing update
+is presentation-only and adds no capability, bridge contract, setting or schema;
+no self-knowledge catalog change is needed.
+
+
+## Providers navigation and management
+
+Providers replaces Settings → Agents. A database-independent sidebar Card after
+Projects has independent heading, Add Provider and disclosure controls. Its saved
+membership order, names, logos, primary marker and More actions match the gallery.
+The gallery starts with a dashed Add Provider card, always present and disabled
+when all catalog providers are enabled. Cards and sidebar rows open provider
+details with scoped saved orchestrator/worker model defaults and Clear actions;
+opening never probes or starts a provider. Details breadcrumbs link to Providers.
+
+`providerAction` accepts only strict set-primary/disconnect actions and a provider
+ID, with main-owned management availability in the setup snapshot. Validate again
+inside the controller queue, reject overlapping changes, setup transactions and
+active desktop work across Relay, custom assistants, projects and workers. A
+verified primary change checks the current command hash without probing and
+preserves other memberships. The primary cannot disconnect until replaced.
+Disconnect removes only the selected non-primary membership and hash, retaining
+model defaults, history and external credentials. Existing v1 setup records remain
+compatible. Save atomically before publishing; failed saves preserve the previous
+record. Use the existing provider lifecycle for primary replacement and refresh
+allowed membership without restarting unrelated chats on additional disconnect.
+
+Both visible menu items expose disabled reasons. Reuse native anchored-menu
+positioning, keyboard, dismissal and focus behavior with licensed Neobrutalism
+menu presentation. The primary gallery card alone has a 36px circular read-only
+checked status at bottom right with a Primary Provider hover/focus tooltip; sidebar
+markers are compact. Share mutation state/errors across views, return disconnected
+details to Providers, remember disclosure and reveal explicit provider destinations.
+Use local Neobrutalism adaptations with existing themes, typography and accessibility;
+no Base UI runtime, arbitrary provider configuration, management MCP tool or version
+bump is introduced. This section supersedes earlier Settings → Agents descriptions.
+
+## Neobrutalism modal dialogs
+
+In-app modal windows use the licensed local DialogContent native-dialog adapter:
+2px outline, theme-aware fill/text, hard 4px shadow and 10px border radius.
+Callers retain native showModal, focus restoration, Escape, busy guards and their
+existing header/body/footer layout. Use border-box sizing and viewport-bounded
+widths. Compact content has equal 16px side padding; zero-padding layouts such as
+table settings and the command palette keep their own body spacing, without a
+second outer inset. Modal shells and their native scrolling body panes use auto
+scrollbar gutters, eliminating empty reserved right-hand strips. Actual overflow
+still scrolls. Other reading surfaces retain stable gutters. Full-screen splash
+layout is unchanged. Forced colors uses system fills/outlines without decorative
+shadows. This supersedes earlier dialog corner and stable-modal-gutter guidance.
+No capability, permission, bridge or persisted preference changes are introduced;
+no self-knowledge catalog update is needed for this presentation-only change.

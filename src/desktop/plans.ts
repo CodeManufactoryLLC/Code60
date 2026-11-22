@@ -44,12 +44,7 @@ async function regular(path: string) {
 }
 async function read(path: string): Promise<unknown> {
   await regular(path);
-  const file = await open(
-    path,
-    constants.O_RDONLY |
-      constants.O_NONBLOCK |
-      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
-  );
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
   try {
     const info = await file.stat();
     const entry = await lstat(path);
@@ -124,11 +119,14 @@ export class PlanStore {
         ...(await readdir(store.recordRoot)).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name)),
       );
     if (entries.length > 100) throw new Error("Plan limit reached");
+    const orders = new Set<number>();
     for (const entry of entries) {
       const path = join(store.recordRoot, entry);
       const plan = planSchema.parse(await (strict ? readRelayState(path, MAX_BYTES) : read(path)));
       if (plan.chatId !== chatId || entry !== `${plan.id}.json`)
         throw new Error("Invalid plan identity");
+      if (orders.has(plan.creationOrder)) throw new Error("Duplicate plan creation order");
+      orders.add(plan.creationOrder);
       store.records.set(plan.id, structuredClone(plan));
       if (["queued", "running"].includes(plan.state)) {
         plan.state = "paused";
@@ -140,7 +138,10 @@ export class PlanStore {
     return store;
   }
   list() {
-    return [...this.records.values()].filter((plan) => !plan.rewound).map(planSummary);
+    return [...this.records.values()]
+      .filter((plan) => !plan.rewound)
+      .sort((a, b) => a.creationOrder - b.creationOrder)
+      .map(planSummary);
   }
   active() {
     return [...this.records.values()].find(
@@ -204,6 +205,8 @@ export class PlanStore {
         project,
         revision: 1,
         proposalRevision: 1,
+        creationOrder:
+          Math.max(0, ...[...this.records.values()].map((plan) => plan.creationOrder)) + 1,
         requestId: request.requestId,
         creationKey: key,
         title: request.title,
@@ -225,6 +228,8 @@ export class PlanStore {
       const plan = this.get(id);
       if (plan.rewound) throw new Error("This plan was discarded by Undo");
       edit(plan);
+      if (plan.creationOrder !== this.records.get(id)?.creationOrder)
+        throw new Error("Plan creation order cannot change");
       plan.revision++;
       return this.save(plan);
     });

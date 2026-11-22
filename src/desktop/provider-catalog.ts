@@ -4,7 +4,7 @@ import { access, stat } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
 import type { SetupProvider } from "../bridge/index.js";
 import type { Config } from "../core/index.js";
-import { environmentValue, resolveCommand } from "../platform/index.js";
+import { assertSupportedPlatform, environmentValue } from "../platform/index.js";
 
 type Command = readonly [string, ...string[]];
 interface Provider extends SetupProvider {
@@ -84,18 +84,11 @@ export async function executableExists(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform,
 ): Promise<boolean> {
-  if (platform === "win32") {
-    try {
-      const resolved = await resolveCommand([file], env, platform);
-      return (await stat(resolved.file)).isFile();
-    } catch {
-      return false;
-    }
-  }
+  assertSupportedPlatform(platform);
   if (file.includes("/") && !isAbsolute(file)) return false;
   const candidates = isAbsolute(file)
     ? [file]
-    : (environmentValue(env, "PATH", platform) ?? "")
+    : (environmentValue(env, "PATH") ?? "")
         .split(":")
         .filter(isAbsolute)
         .map((dir) => join(dir, file));

@@ -43,6 +43,35 @@ function deferred() {
 }
 
 describe("shared navigation actions", () => {
+  it.each([true, false])(
+    "settles history observation after chat selection (success=%s)",
+    async (success) => {
+      const { actions, context } = fixture();
+      const settle = vi.fn();
+      context.onNavigate = vi.fn((): [typeof settle, () => boolean] => [settle, () => true]);
+      if (!success)
+        vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(
+          new Error("Selection failed"),
+        );
+      expect(await actions.open({ kind: "conversation", id: "chat" })).toBe(success);
+      expect(context.onNavigate).toHaveBeenCalledExactlyOnceWith({
+        kind: "conversation",
+        id: "chat",
+      });
+      expect(settle).toHaveBeenCalledExactlyOnceWith(success);
+    },
+  );
+
+  it("opens Custom Assistants management without a database or conversation action", async () => {
+    const { actions, context } = fixture();
+    context.database = null;
+    expect(await actions.open({ kind: "page", id: "custom-agents" })).toBe(true);
+    expect(context.onPage).toHaveBeenCalledExactlyOnceWith("custom-agents");
+    expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
+    expect(context.api.projectAction).not.toHaveBeenCalled();
+    expect(context.selectWorker).not.toHaveBeenCalled();
+  });
+
   it("selects a project home without opening/creating a conversation or clearing its worker", async () => {
     const { actions, context, status } = fixture();
     expect(await actions.open({ kind: "project", id: "a" })).toBe(true);
@@ -171,8 +200,12 @@ describe("shared navigation actions", () => {
     expect(await pending).toBe(false);
     expect(context.onPage).not.toHaveBeenCalled();
   });
-  it("archives the displayed conversation through Relay without changing another page", async () => {
+  it("archives the displayed conversation through Relay when another project chat remains", async () => {
     const { actions, context } = fixture();
+    context.chats = [
+      ...context.chats,
+      { ...context.chats[1], run: { id: "other" } } as OrchestrationChat,
+    ];
     await actions.chatAction({ type: "archive", id: "chat" });
     expect(context.onPage).not.toHaveBeenCalled();
     context.tabs = initialTabs;
@@ -184,4 +217,150 @@ describe("shared navigation actions", () => {
     expect(context.onArchived).toHaveBeenCalledOnce();
     expect(context.onPage).toHaveBeenCalledWith("chat");
   });
+  it("returns the last displayed project chat to its home without opening or creating a chat", async () => {
+    const { actions, context, reveal } = fixture();
+    context.tabs = initialTabs;
+    context.chats = [
+      ...context.chats,
+      { ...context.chats[1], run: { id: "old" }, archived: true } as OrchestrationChat,
+    ];
+    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
+    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
+      type: "archive",
+      id: "chat",
+    });
+    expect(context.api.projectAction).toHaveBeenCalledExactlyOnceWith({
+      type: "select",
+      projectId: "a",
+    });
+    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
+    expect(context.selectWorker).toHaveBeenCalledExactlyOnceWith(undefined, "a");
+    expect(context.onPage).not.toHaveBeenCalled();
+    expect(context.onArchived).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "project", id: "a" });
+    await actions.chatAction({ type: "new", projectId: "a" });
+    expect(context.api.orchestrationChatAction).toHaveBeenLastCalledWith({
+      type: "new",
+      projectId: "a",
+    });
+    expect(context.onPage).toHaveBeenCalledExactlyOnceWith("chat");
+  });
+  it("ignores other projects when deciding whether the displayed chat is last", async () => {
+    const { actions, context } = fixture();
+    context.tabs = initialTabs;
+    context.chats = [
+      ...context.chats,
+      { ...context.chats[1], projectId: "b", run: { id: "other-project" } } as OrchestrationChat,
+    ];
+    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
+    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
+    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
+      type: "archive",
+      id: "chat",
+    });
+  });
+  it("archives a background last chat without navigating or creating a session", async () => {
+    const { actions, context, reveal } = fixture();
+    context.tabs = initialTabs;
+    context.selectedId = "relay";
+    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
+    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
+      type: "archive",
+      id: "chat",
+    });
+    expect(context.api.projectAction).not.toHaveBeenCalled();
+    expect(context.onProject).not.toHaveBeenCalled();
+    expect(context.onPage).not.toHaveBeenCalled();
+    expect(context.onArchived).not.toHaveBeenCalled();
+    expect(reveal).not.toHaveBeenCalled();
+  });
+  it.each(["page", "database", "epoch", "close", "reopen", "failure"] as const)(
+    "discards last-chat home selection after %s during project selection",
+    async (change) => {
+      const { actions, context, status, reveal } = fixture();
+      const gate = deferred();
+      context.tabs = initialTabs;
+      vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
+      if (change === "failure")
+        vi.mocked(context.api.projectAction).mockRejectedValueOnce(
+          new Error("Home selection failed"),
+        );
+      const pending = actions.chatAction({ type: "archive", id: "chat" });
+      await vi.waitFor(() => expect(context.api.projectAction).toHaveBeenCalledOnce());
+      if (change === "page") await actions.open({ kind: "page", id: "apps" });
+      if (change === "database") context.database = "/replacement";
+      if (change === "epoch") context.databaseEpoch = 2;
+      if (change === "close") context.projects = [];
+      if (change === "reopen") context.projects = [{ ...context.projects[0]!, id: "new-a" }];
+      gate.resolve();
+      expect(await pending).toBe(false);
+      expect(context.onProject).not.toHaveBeenCalled();
+      expect(context.onArchived).not.toHaveBeenCalled();
+      expect(reveal).not.toHaveBeenCalled();
+      if (change === "failure")
+        expect(status).toHaveBeenCalledWith(true, "Home selection failed", true, true);
+    },
+  );
+  it.each(["page", "epoch", "close", "failure"] as const)(
+    "does not navigate a last-chat archive after %s",
+    async (change) => {
+      const { actions, context, status } = fixture(),
+        gate = deferred();
+      context.tabs = initialTabs;
+      vi.mocked(context.api.orchestrationChatAction).mockImplementation(() =>
+        gate.promise.then(() => undefined),
+      );
+      if (change === "failure")
+        vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(
+          new Error("Archive failed"),
+        );
+      const pending = actions.chatAction({ type: "archive", id: "chat" });
+      if (change === "page") await actions.open({ kind: "page", id: "apps" });
+      if (change === "epoch") context.databaseEpoch = 2;
+      if (change === "close") context.projects = [];
+      gate.resolve();
+      expect(await pending).toBe(false);
+      expect(context.api.projectAction).not.toHaveBeenCalled();
+      expect(context.onProject).not.toHaveBeenCalled();
+      expect(context.onArchived).not.toHaveBeenCalled();
+      if (change === "failure")
+        expect(status).toHaveBeenCalledWith(true, "Archive failed", true, true);
+    },
+  );
+});
+
+it("opens custom assistants without a database and selects existing custom conversations", async () => {
+  const { actions, context } = fixture();
+  context.database = null;
+  context.api.customAgent = vi.fn(async () => ({ agents: [], conversationId: "custom-run" }));
+  expect(await actions.open({ kind: "custom-agent", id: "custom-definition" })).toBe(true);
+  expect(context.api.customAgent).toHaveBeenCalledWith({ type: "open", id: "custom-definition" });
+  expect(context.selectWorker).toHaveBeenCalledWith(undefined, null);
+  expect(context.onPage).toHaveBeenCalledWith("chat");
+  context.chats = [
+    ...context.chats,
+    {
+      kind: "relay",
+      customAgentId: "custom-definition",
+      conversationId: "custom-conversation",
+      run: { id: "custom-run" },
+    } as OrchestrationChat,
+  ];
+  expect(await actions.open({ kind: "conversation", id: "custom-run" })).toBe(true);
+  expect(context.api.orchestrationChatAction).toHaveBeenCalledWith({
+    type: "select",
+    id: "custom-run",
+  });
+});
+
+it("opens provider details locally without selecting a chat or probing a connection", async () => {
+  const { actions, context, reveal } = fixture();
+  context.database = null;
+  context.providers = ["codex"];
+  context.onProvider = vi.fn();
+  expect(await actions.open({ kind: "provider", id: "codex" })).toBe(true);
+  expect(context.onProvider).toHaveBeenCalledExactlyOnceWith("codex");
+  expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "provider", id: "codex" });
+  expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
+  expect(await actions.open({ kind: "provider", id: "missing" })).toBe(false);
 });

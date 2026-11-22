@@ -11,13 +11,10 @@ import {
   newerStable,
   run,
   signingReady,
-  unsignedWindowsBeta,
   validateCandidate,
   versionOf,
-  windowsSigningSettings,
 } from "../scripts/release/common.mjs";
 import { staple } from "../scripts/release/staple.mjs";
-import { validPublisher } from "../scripts/verify-windows-signatures.mjs";
 
 const sha = "a".repeat(40);
 
@@ -43,69 +40,6 @@ it("excludes Linux GPU providers while retaining CPU runtime files", () => {
   ).toBe(false);
 });
 
-it.runIf(process.platform === "win32")(
-  "routes the native helper through the Windows signing transformer",
-  () => {
-    const resources = JSON.parse(
-      run(
-        process.execPath,
-        ["-p", "JSON.stringify(require('./scripts/packaging-config.cjs').extraResources)"],
-        {
-          cwd: fileURLToPath(new URL("..", import.meta.url)),
-          env: { ...process.env, CODE60_RELEASE: "0" },
-        },
-      ),
-    );
-    expect(resources.find((resource) => resource.to === "native")).toEqual({
-      from: "native/win32/x64",
-      to: "native",
-      filter: ["code60-host.exe"],
-    });
-  },
-);
-
-const config = (env) =>
-  JSON.parse(
-    run(process.execPath, ["-p", "JSON.stringify(require('./scripts/packaging-config.cjs').win)"], {
-      cwd: fileURLToPath(new URL("..", import.meta.url)),
-      env: {
-        ...Object.fromEntries(
-          Object.entries(process.env).filter(
-            ([name]) => !/^(AZURE_|WIN_SIGNING_|CODE60_UNSIGNED)/.test(name),
-          ),
-        ),
-        CODE60_RELEASE: "0",
-        ...env,
-      },
-    }),
-  );
-const azure = {
-  AZURE_SIGNING_ENDPOINT: "https://eus.codesigning.azure.net/",
-  AZURE_SIGNING_ACCOUNT_NAME: "account",
-  AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: "profile",
-  WIN_SIGNING_PUBLISHER: "Example Publisher LLC",
-};
-describe("Windows Azure Artifact Signing configuration", () => {
-  it("signs through Azure only when every non-secret setting is present", () => {
-    expect(config(azure)).toMatchObject({
-      azureSignOptions: {
-        publisherName: "Example Publisher LLC",
-        endpoint: "https://eus.codesigning.azure.net/",
-        codeSigningAccountName: "account",
-        certificateProfileName: "profile",
-      },
-    });
-    expect(config(azure).signtoolOptions).toBeUndefined();
-    const partial = config({ ...azure, AZURE_SIGNING_CERTIFICATE_PROFILE_NAME: "" });
-    expect(partial.azureSignOptions).toBeUndefined();
-    expect(partial.signtoolOptions.signingHashAlgorithms).toEqual(["sha256"]);
-  });
-  it("accepts only single-line publisher names", () => {
-    expect(validPublisher("Example Publisher LLC")).toBe(true);
-    for (const name of ["", " padded", "line\nbreak", "tab\tname", "x".repeat(201), undefined])
-      expect(validPublisher(name)).toBe(false);
-  });
-});
 describe("Apple ticket delivery", () => {
   it("retries temporary service failures and stops after success", async () => {
     const error = Object.assign(new Error("connection lost"), { status: 68 });
@@ -149,7 +83,6 @@ const ready = {
   HAS_APPLE_API_KEY: "true",
   HAS_APPLE_API_KEY_ID: "true",
   HAS_APPLE_API_ISSUER: "true",
-  ...Object.fromEntries(windowsSigningSettings.map((name) => [`HAS_${name}`, "true"])),
   RELEASE_MAINTAINER: "Code60 Test <ci@example.invalid>",
 };
 const directories = [];
@@ -197,10 +130,10 @@ describe("release validation", () => {
   });
 });
 
-async function artifacts(version = "0.2.0", unsigned = false) {
+async function artifacts(version = "0.2.0") {
   const directory = await mkdtemp(join(tmpdir(), "code60-artifacts-"));
   directories.push(directory);
-  for (const platform of ["mac", "linux", "win"]) {
+  for (const platform of ["mac", "linux"]) {
     const assets = [];
     const names = assetNames(version, platform);
     const files = names
@@ -225,19 +158,6 @@ async function artifacts(version = "0.2.0", unsigned = false) {
         sha,
         platform,
         assets,
-        ...(platform === "win"
-          ? {
-              signaturesVerified: !unsigned,
-              ...(unsigned
-                ? {
-                    signing: "unsigned-beta",
-                    nativeX64: true,
-                    installedAppVerified: true,
-                    verifiedOn: { platform: "win32", arch: "x64", release: "10.0.26100" },
-                  }
-                : {}),
-            }
-          : {}),
       }),
     );
   }
@@ -256,7 +176,6 @@ describe("release artifact promotion", () => {
     for (const [platform, suffix] of [
       ["mac", "-mac"],
       ["linux", "-linux"],
-      ["win", ""],
     ]) {
       expect(assetNames("0.2.0", platform).at(-1)).toBe(`latest${suffix}.yml`);
       expect(assetNames("0.2.0-beta.5", platform).at(-1)).toBe(`beta${suffix}.yml`);
@@ -291,8 +210,8 @@ describe("release artifact promotion", () => {
   });
   it("requires every installer from the same exact commit", async () => {
     const directory = await artifacts();
-    expect(await verify(directory, "v0.2.0", sha, {})).toHaveLength(8);
-    await expect(verify(directory, "v0.2.0", "b".repeat(40), {})).rejects.toThrow("identity");
+    expect(await verify(directory, "v0.2.0", sha)).toHaveLength(6);
+    await expect(verify(directory, "v0.2.0", "b".repeat(40))).rejects.toThrow("identity");
   });
   it("rejects changed bytes, missing installers, missing manifests and unexpected files", async () => {
     for (const change of ["modified", "missing", "manifest", "extra"]) {
@@ -302,7 +221,7 @@ describe("release artifact promotion", () => {
       if (change === "missing") await rm(file);
       if (change === "manifest") await rm(join(directory, "manifest-mac.json"));
       if (change === "extra") await writeFile(join(directory, "unexpected"), "extra");
-      await expect(verify(directory, "v0.2.0", sha, {})).rejects.toThrow();
+      await expect(verify(directory, "v0.2.0", sha)).rejects.toThrow();
     }
   });
   it("rejects duplicate entries instead of accepting a missing target", async () => {
@@ -311,47 +230,22 @@ describe("release artifact promotion", () => {
     const manifest = JSON.parse(await readFile(path, "utf8"));
     manifest.assets[1] = manifest.assets[0];
     await writeFile(path, JSON.stringify(manifest));
-    await expect(verify(directory, "v0.2.0", sha, {})).rejects.toThrow();
+    await expect(verify(directory, "v0.2.0", sha)).rejects.toThrow();
   });
 });
 
-describe("explicit unsigned Windows betas", () => {
-  const unsigned = { CODE60_UNSIGNED_WINDOWS_BETA: "1" };
-  it("requires opt-in and a beta tag, retaining all Apple requirements", () => {
-    expect(unsignedWindowsBeta("0.2.0-beta.5", {})).toBe(false);
-    expect(unsignedWindowsBeta("0.2.0-beta.5", unsigned)).toBe(true);
-    for (const version of ["0.2.0", "0.2.0-rc.1", "0.2.0-alpha.1", "bad"])
-      expect(() => unsignedWindowsBeta(version, unsigned)).toThrow();
-    expect(() =>
-      unsignedWindowsBeta("0.2.0-beta.5", { CODE60_UNSIGNED_WINDOWS_BETA: "true" }),
-    ).toThrow();
-    const env = {
-      ...ready,
-      ...unsigned,
-      RELEASE_TAG: "v0.2.0-beta.5",
-      ...Object.fromEntries(windowsSigningSettings.map((name) => [`HAS_${name}`, ""])),
-    };
-    expect(() => signingReady(env)).not.toThrow();
-    expect(() => signingReady({ ...env, HAS_APPLE_API_KEY: "" })).toThrow();
-    expect(() => signingReady({ ...env, CODE60_UNSIGNED_WINDOWS_BETA: "0" })).toThrow();
-    expect(() => signingReady({ ...env, RELEASE_TAG: "v0.2.0" })).toThrow();
-  });
-  it("promotes only the explicit signing mode with native installer verification", async () => {
-    const directory = await artifacts("0.2.0-beta.5", true);
-    await expect(verify(directory, "v0.2.0-beta.5", sha, unsigned)).resolves.toHaveLength(8);
-    await expect(verify(directory, "v0.2.0-beta.5", sha, {})).rejects.toThrow("signature");
-    const path = join(directory, "manifest-win.json");
-    const original = JSON.parse(await readFile(path, "utf8"));
-    for (const change of [
-      { nativeX64: false },
-      { installedAppVerified: false },
-      { signing: "authenticode" },
-      { signaturesVerified: true },
-    ]) {
-      await writeFile(path, JSON.stringify({ ...original, ...change }));
-      await expect(verify(directory, "v0.2.0-beta.5", sha, unsigned)).rejects.toThrow("signature");
-    }
-    const signed = await artifacts("0.2.0-beta.5");
-    await expect(verify(signed, "v0.2.0-beta.5", sha, unsigned)).rejects.toThrow("signature");
-  });
+it("rejects obsolete Windows assets during promotion", async () => {
+  expect(() => assetNames("0.2.0", "win")).toThrow("Unknown installer platform");
+  const directory = await artifacts();
+  await writeFile(join(directory, "manifest-win.json"), "{}");
+  await expect(verify(directory, "v0.2.0", sha)).rejects.toThrow("Unexpected files");
+});
+
+it("ships desktop and scheduler entrypoints without a Code60 executable registration", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  expect(manifest.bin).toBeUndefined();
+  expect(manifest.os).toEqual(["darwin", "linux"]);
+  expect(manifest.main).toBe("dist/desktop/main.js");
+  for (const key of ["install:global", "uninstall:global", "package:win", "build:helper"])
+    expect(manifest.scripts[key]).toBeUndefined();
 });

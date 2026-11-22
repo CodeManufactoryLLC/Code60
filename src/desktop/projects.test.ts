@@ -4,13 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { COMMAND_LIMIT, DEFAULT_OPERATING_CONTRACT_CLAUSES } from "../bridge/index.js";
-import { privateDirectory, verifyPrivateSync } from "../platform/index.js";
+import { privateDirectory } from "../platform/index.js";
 import { filePreferences } from "./preferences.js";
 import { openProjectDatabase, SCHEMA, sqliteAvailable } from "./projects.js";
 
 async function expectPrivate(path: string, mode: number): Promise<void> {
-  if (process.platform === "win32") expect(() => verifyPrivateSync(path)).not.toThrow();
-  else expect((await stat(path)).mode & 0o777).toBe(mode);
+  expect((await stat(path)).mode & 0o777).toBe(mode);
 }
 
 let root: string;
@@ -26,6 +25,14 @@ afterEach(async () => {
 
 // Node.js 22.12 needs a flag for node:sqlite; the desktop app runs on Electron's newer Node.js.
 describe.skipIf(!sqliteAvailable())("project database", () => {
+  it("enumerates the complete search registry without changing the recent-history limit", () => {
+    const db = openProjectDatabase(join(directory, "all.sqlite"), true);
+    for (let i = 0; i < 205; i++) db.record(`/repo-${i}`, String(i));
+    expect(db.list()).toHaveLength(200);
+    expect(db.all()).toHaveLength(205);
+    db.close();
+  });
+
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
 
   it("upgrades schema 4 without resetting clause edits, then persists sorted commands", () => {
@@ -172,35 +179,6 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
       db.close();
     }
   });
-
-  it.runIf(process.platform === "win32")(
-    "bounds a real competing writer and works after the lock is released",
-    () => {
-      const path = join(directory, "contended.sqlite");
-      const db = openProjectDatabase(path, true);
-      const other = new (sqlite().DatabaseSync)(path);
-      try {
-        other.exec("BEGIN EXCLUSIVE");
-        let error: unknown;
-        const started = performance.now();
-        try {
-          db.record("C:\\project", "2026-01-01");
-        } catch (cause) {
-          error = cause;
-        }
-        const elapsed = performance.now() - started;
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toMatch(/locked/);
-        expect(elapsed).toBeLessThan(150);
-        other.exec("ROLLBACK");
-        db.record("C:\\project", "2026-01-01");
-        expect(db.list()).toEqual([{ path: "C:\\project", openedAt: "2026-01-01" }]);
-      } finally {
-        other.close();
-        db.close();
-      }
-    },
-  );
 
   it("migrates schema 1 without losing project history and persists configurations", () => {
     const path = join(directory, "old.sqlite");
@@ -399,6 +377,26 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
 });
 
 describe("desktop preferences", () => {
+  it("round trips bounded model defaults alongside concurrent preference writes", async () => {
+    const file = join(directory, "desktop.json");
+    const prefs = filePreferences(file);
+    const record = {
+      version: 1 as const,
+      providers: { claude: { worker: [{ configId: "model", value: "m1", name: "Model One" }] } },
+    };
+    expect(await prefs.modelDefaults?.()).toEqual({ version: 1, providers: {} });
+    await Promise.all([
+      prefs.setModelDefaults?.(record),
+      prefs.write("/data/projects.sqlite"),
+      prefs.setTransparent(true),
+    ]);
+    expect(await filePreferences(file).modelDefaults?.()).toEqual(record);
+    expect(await prefs.read()).toBe("/data/projects.sqlite");
+    expect(await prefs.transparent()).toBe(true);
+    await expectPrivate(file, 0o600);
+    await writeFile(file, JSON.stringify({ modelDefaults: { version: 2 } }));
+    await expect(prefs.modelDefaults?.()).rejects.toThrow();
+  });
   it("defaults release checks on and preserves the switch across concurrent writes and restarts", async () => {
     const file = join(directory, "desktop.json");
     const preferences = filePreferences(file);

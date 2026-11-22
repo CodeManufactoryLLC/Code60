@@ -2,66 +2,68 @@
 
 ## Symptoms
 
-Automations reports unavailable, a service does not start after an update, future
-runs are paused, or an unfinished agent blocks further launches. Desktop quit
-and **Stop all do not stop service-owned automations**.
+Scheduled Jobs reports unavailable, the service does not restart after an update,
+future runs are paused, or unfinished work blocks launches. Desktop quit and
+Stop all do not stop service-owned automations.
 
 ## Read-only diagnosis
 
-Run with the affected user's normal HOME/XDG settings:
+Open Apps → System Manager; service status updates automatically while visible.
+Checks normally run two seconds after the preceding read and back off to at most
+sixty seconds when unavailable. The footer's Pause polling also pauses these checks;
+Resume polling or use the optional Refresh Scheduling Service icon to check again.
+Inspect installation,
+connectivity, pause state, active execution and block independently. Open
+Scheduled Jobs to review saved schedules and execution history. An unreachable
+service is not proof that it has stopped; preserve that failure.
 
-```sh
-code60 scheduler status --json
-code60 automation list --json
-code60 automation history --json
-```
-
-Inspect native availability, service connectivity, pausedAll, activeExecutionId
-and block separately. Registration metadata alone is not proof of a healthy
-running service. If IPC is unavailable, the latter two commands may fail; retain
-that failure rather than resetting storage to make them pass.
-
-Confirm the installed runtime still exists and that the user is logged in and
-the machine awake. The service is per-user launchd, Task Scheduler or systemd
-without linger. Inspect the OS service manager read-only; do not create a second
-standalone scheduler to compete with an existing/unverifiable writer.
+Check that the installed runtime exists and that the user is logged in and awake.
+The per-user manager is launchd on macOS or systemd without linger on Linux.
+Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Supported recovery, only after consent
 
-1. If the service is reachable, request permission to pause future work. To also
-   cancel an active execution, separately explain that interruption:
-   `code60 automation pause-all --cancel-active --json`.
-   Wait until history/status show cleanup settled. Pause alone does not cancel.
-2. For a missing registration, explain background execution and use
-   `code60 scheduler install --yes --json` only with explicit approval.
-   For an existing stale runtime registration, use
-   `code60 scheduler repair --yes --json` after approval. Repair suspends active
-   work first and can refuse if ownership/cleanup is blocked. It is not a
-   metadata/history repair or a way around that refusal.
-3. For a leftover-agent block, establish that the recorded owned processes are
-   gone. With permission, `code60 automation resolve-block --json` asks the
-   service to recheck. It refuses live/unverifiable leftovers. Never kill an
-   unrelated PID or remove a lock to make this check succeed.
-4. A persistence-failure latch requires fixing the underlying storage and a
-   service restart. Request permission before `code60 scheduler stop --json`
-   and `code60 scheduler start --json`; stop can refuse blocked cleanup. If it
-   refuses, escalate rather than bypassing ownership checks.
-5. After reviewing history and saved repository/provider identities, request
-   permission before `code60 automation resume-all --json`. This enables future
-   occurrences; it must not replay missed/uncertain work. Do not use Run now as
-   an automatic recovery step.
+1. For an installed Scheduling Service, use System Manager → Stop to pause future
+   work, cancel active work and stop the service, only after explaining the
+   interruption. There is no separate pause-and-cancel button. Wait for cleanup
+   to settle and review Scheduled Jobs history. To cancel just one job (including
+   on a standalone scheduler), use the job header's Stop control (the pulsing pause
+   icon). Its separate disclosure chevron opens details; recurrence pause is independent.
+2. Check Scheduling Service status in System Manager: Not installed offers Install,
+   Stopped offers Start, and Running offers Stop. Jobs paused still means the
+   service is running. Checking or Status unavailable is not proof of installation
+   or stoppage; allow automatic checks to retry or use Refresh Scheduling Service.
+   Use Service options → Repair for a stale runtime,
+   accepting the native Scheduling Service confirmation only with explicit approval.
+   Repair can refuse blocked ownership or cleanup; do not bypass the refusal.
+3. For an unfinished-agent block, establish that recorded owned processes are gone,
+   then use Recheck. Live or unverifiable ownership must remain blocked.
+4. Fix underlying storage before stopping and starting the service through Service
+   options to clear a persistence-failure latch. If cleanup refuses, escalate.
+5. Review history and repository/provider identities before resuming schedules.
+   Resume enables future occurrences only; never use Run now to replay uncertain work.
 
 ## Verify
 
-Repeat status, list and history. Check connectivity, no block, expected pause
-state and future next-run times. Confirm no duplicate/uncertain execution appeared
-and that worktrees/history remain intact. Installation/recovery checks do not
-prove a real provider run succeeded.
+After an app installation, launch the installed Code60 once. Pending update
+recovery upgrades the existing registration, checks the scheduler's `appVersion`
+against the running main app and restores its previous global pause state.
+Packaged startup also reconciles an active older scheduler after manual
+installation; it does not activate a previously stopped or uninstalled service.
+Automatic recovery requires the socket responder PID to match the native manager’s service PID. Standalone or unverified processes are left untouched, as are newer or unknown versions. Concurrent recovery has one exclusive owner. AppImage registration requires the executable and every canonical parent to be owned by the user or root and not writable by group/others; move an unsafe AppImage to a protected location before retrying. A failed launchd stop requires a successful domain inventory showing that the job is absent before registration replacement.
+
+A version mismatch, recovery block or failed restart keeps the pending restart
+metadata and displays an error. Preserve that evidence and use the consented
+System Manager repair path; never erase the marker to report success.
+
+Observe updated System Manager status and refresh Scheduled Jobs if needed.
+Confirm connectivity, expected pause state,
+no block, future run times, and no duplicate/uncertain executions. Preserve worktrees
+and history. Installation checks do not prove a real provider run succeeded.
 
 ## Stop and escalate
 
-Stop on malformed/private-storage errors, changed repository/provider identity,
-an unavailable native manager, live/unverifiable ownership or failed cleanup.
-Preserve state, worktrees and history. Do not delete locks, edit occurrence
-claims, erase run records, replay interrupted work or run install loops.
-See [low disk](low-disk.md) for storage pressure.
+Stop on malformed or unsafe storage, changed repository/provider identity,
+unavailable service managers, unverifiable ownership or failed cleanup. Preserve
+state and evidence. Never delete locks, edit claims, erase records, replay interrupted
+work or repeat install loops. See [low disk](low-disk.md) for storage pressure.

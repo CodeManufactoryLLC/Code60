@@ -12,7 +12,7 @@ vi.mock("react-dom", async (original) => ({
   createPortal: vi.fn((children: ReactNode) => children),
 }));
 
-it("ports the sole interactive heading to the header and leaves an inert, ID-free layout slot", () => {
+it("ports the sole interactive heading to the header and leaves an inert, ID-free marker", () => {
   const header = {} as HTMLElement;
   vi.mocked(useBreadcrumbHeader).mockReturnValue(header);
   const html = renderToStaticMarkup(
@@ -36,7 +36,9 @@ it("ports the sole interactive heading to the header and leaves an inert, ID-fre
   expect(placeholder).toContain('aria-hidden="true" inert=""');
   expect(placeholder).not.toMatch(/<h[12]\b|<button\b|\bid=/);
   expect(html.match(/id="conversation-title"/g)).toHaveLength(1);
-  expect(html.match(/Rename this chat/g)).toHaveLength(1);
+  expect(html).not.toContain("Rename this chat");
+  expect(placeholder).toContain(">Agent</span>");
+  expect(html).toContain('<button type="button">Agent</button>');
   expect(html.match(/aria-label="Breadcrumb"/g)).toHaveLength(1);
   expect(createPortal).toHaveBeenCalledWith(expect.anything(), header);
 });

@@ -51,7 +51,7 @@ describe("page breadcrumb hierarchy", () => {
     ["contributor-tools", ["Settings", "Advanced"]],
     ["rag", ["Settings", "Advanced", "Experiments"]],
     ["episodic-memory", ["Settings", "Advanced", "Experiments"]],
-    ["relay", []],
+    ["relay", ["Assistants"]],
   ] as const)("resolves %s from the actual navigation tree", (page, labels) => {
     expect(breadcrumbAncestors(page, empty).map(({ label }) => label)).toEqual(
       page === "home" ? labels : ["Home", ...labels],
@@ -77,10 +77,10 @@ describe("page breadcrumb hierarchy", () => {
 
   it.each([
     ["orchestrator", "chat-a", ["Projects", "Alpha"], ["projects", "a"]],
-    ["worker", "worker-a", ["Projects", "Alpha", "Plan A"], ["projects", "a", "chat-a"]],
-    ["worker", "worker-b", ["Projects", "Beta", "Plan B"], ["projects", "b", "chat-b"]],
+    ["worker", "worker-a", ["Projects", "Alpha", "Agent"], ["projects", "a", "chat-a"]],
+    ["worker", "worker-b", ["Projects", "Beta", "Agent"], ["projects", "b", "chat-b"]],
     ["worker", "manual-a", ["Projects", "Alpha"], ["projects", "a"]],
-    ["worker", "relay-worker", ["Relay"], ["relay"]],
+    ["worker", "relay-worker", ["Assistants", "Relay"], ["assistants", "relay"]],
   ] as const)("keeps %s %s bound to its own project and conversation", (page, id, labels, ids) => {
     const ancestors = breadcrumbAncestors(page, source, { kind: "conversation", id });
     expect(ancestors.map(({ label }) => label)).toEqual(["Home", ...labels]);
@@ -111,7 +111,7 @@ describe("page breadcrumb hierarchy", () => {
 
   it.each([
     ["worker-a", ["app-backlog", "app-folder", "app-communication"]],
-    ["relay-worker", ["app-steering-wheel"]],
+    ["relay-worker", ["app-assistants", "app-steering-wheel"]],
   ] as const)("retains the icons for each dynamic %s ancestor", (id, icons) => {
     expect(
       breadcrumbAncestors("worker", source, {
@@ -136,7 +136,7 @@ describe("page breadcrumb hierarchy", () => {
         kind: "conversation",
         id: "worker-a",
       }).map(({ label }) => label),
-    ).toEqual(["Home", "Projects", "Alpha", "Plan A"]);
+    ).toEqual(["Home", "Projects", "Alpha", "Agent"]);
     const unidentified = {
       ...source,
       chats: [{ kind: "project", projectId: "b" }] as unknown as OrchestrationChat[],

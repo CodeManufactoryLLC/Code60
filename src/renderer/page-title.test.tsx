@@ -54,7 +54,14 @@ it.each([
   expect(html).toContain('<h2 class="page-title">');
   expect(html).toContain(`data-icon="${icon}"`);
   expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
-  expect(html).toContain("&lt;custom title&gt;");
+  expect(html).toContain(
+    page === "relay"
+      ? "&lt;custom title&gt;"
+      : page === "orchestrator"
+        ? ">Agent</span>"
+        : ">Subagent</span>",
+  );
+  if (page !== "relay") expect(html).not.toContain("&lt;custom title&gt;");
   expect(html).toContain('aria-label="Breadcrumb"');
   expect(html).toContain('aria-current="page"');
   expect(html).not.toMatch(/tabindex|<custom title>/);
@@ -83,7 +90,9 @@ it.each([
       <PageTitle page={page} id="current" />
     </PageTitleNavigationContext.Provider>,
   );
-  expect(html).toContain('<nav class="page-breadcrumbs" aria-label="Breadcrumb"><ol>');
+  expect(html).toContain(
+    '<nav data-slot="breadcrumb" class="page-breadcrumbs" aria-label="Breadcrumb"><ol data-slot="breadcrumb-list"',
+  );
   expect(html.match(/class="breadcrumb-link(?: breadcrumb-home)?"/g)).toHaveLength(
     parents.length + 1,
   );
@@ -134,5 +143,5 @@ it("keeps standalone secondary headings and embedded rename buttons out of neste
     </PageTitle>,
   );
   expect(html.match(/<button\b/g)).toHaveLength(1);
-  expect(html).toContain('<span class="page-title-text"><button type="button">');
+  expect(html).toContain('<span class="page-title-text"><button type="button">Agent</button>');
 });

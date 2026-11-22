@@ -45,6 +45,7 @@ async function project(name: string) {
   const cwd = join(root, name);
   await mkdir(cwd);
   git(cwd, "init", "-q");
+  git(cwd, "config", "core.autocrlf", "false");
   git(cwd, "config", "user.name", "Checkpoint fixture");
   git(cwd, "config", "user.email", "checkpoint@example.invalid");
   git(cwd, "config", "commit.gpgsign", "false");
@@ -60,6 +61,15 @@ async function project(name: string) {
     index: await readFile(join(cwd, ".git", "index")),
     head: git(cwd, "rev-parse", "HEAD"),
   };
+}
+/** Undo awaits connection preparation, but the replacement provider launch settles afterward. */
+async function replacementSession(before: number) {
+  await vi.waitFor(() => {
+    expect(agents.sessions.length).toBeGreaterThan(before);
+    expect(relay.snapshot().run?.status).toBe("idle");
+  });
+  expect(agents.sessions).toHaveLength(before + 1);
+  return required(agents.sessions.at(-1));
 }
 async function connect() {
   await relay.sync("claude", DEFAULT_CONFIG);
@@ -126,6 +136,7 @@ it.each(["plain", "git"] as const)(
     await relay.action({ type: "undo-request", id, checkpointId, replacesDraft: false });
     expect(await readFile(join(cwd, "unrelated.txt"), "utf8")).toBe("manual edit after snapshot\n");
     expect(confirm.mock.calls.at(-1)?.[1]).toContain("also rewind manual edits");
+    const sessions = agents.sessions.length;
     expect(
       await relay.action({ type: "undo-request", id, checkpointId, replacesDraft: false }),
     ).toMatchObject({ type: "rewound", text: "Edit this direct folder." });
@@ -139,7 +150,7 @@ it.each(["plain", "git"] as const)(
       expect(await readFile(join(cwd, ".git", "index"))).toEqual(target.index);
       expect(git(cwd, "rev-parse", "HEAD")).toBe(target.head);
     }
-    expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+    expect((await replacementSession(sessions)).prompts).toEqual([]);
     expect(agents.sessions.slice(0, -1).every((session) => session.stops.length > 0)).toBe(true);
   },
 );
@@ -191,6 +202,12 @@ it("enrolls idle direct-worker chat follow-ups in the new request before replyin
   });
   await vi.waitFor(() => expect(relay.workerSnapshot().runs[0]?.view?.status).toBe("idle"));
   expect(await readFile(join(cwd, "file.txt"), "utf8")).toBe("first");
+  // Drain the expected automatic result before asserting that a rejected reply sends nothing.
+  await vi.waitFor(() =>
+    expect(agents.sessions[0]?.prompts.some((text) => text.includes(String(worker.runId)))).toBe(
+      true,
+    ),
+  );
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
   await relay.action({ type: "send", id, text: "Second request" });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
@@ -259,6 +276,7 @@ it("records an older worker's later integration after the new human boundary and
     chatId: id,
     turn: required(chat.checkpoint).turn,
   });
+  const sessions = agents.sessions.length;
   await relay.action({
     type: "undo-request",
     id,
@@ -268,9 +286,8 @@ it("records an older worker's later integration after the new human boundary and
   expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("before\n");
   expect(await readFile(join(target.cwd, ".git", "index"))).toEqual(target.index);
   expect(worker.stops.length).toBeGreaterThan(0);
-  const fresh = required(agents.sessions.at(-1));
+  const fresh = await replacementSession(sessions);
   expect(fresh.prompts).toEqual([]);
-  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
   await relay.action({
     type: "send",
     id: required(relay.snapshot().run).id,
@@ -307,7 +324,8 @@ it("automatically changes two real checkouts and rewinds both without Apply, ind
       for (const target of targets)
         expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("working edit\n");
     },
-    { timeout: 10_000 },
+    // Windows CI needed 16 s for one target's full journey; two integrate serially.
+    { timeout: 20_000 },
   );
   const checkpointId = required(relay.snapshot().checkpoint).id;
   confirm.mockResolvedValueOnce(false);
@@ -316,6 +334,7 @@ it("automatically changes two real checkouts and rewinds both without Apply, ind
   ).toBeUndefined();
   for (const target of targets)
     expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("working edit\n");
+  const sessions = agents.sessions.length;
   expect(
     await relay.action({ type: "undo-request", id, checkpointId, replacesDraft: true }),
   ).toMatchObject({ type: "rewound", text: "Update both addressed folders." });
@@ -325,11 +344,12 @@ it("automatically changes two real checkouts and rewinds both without Apply, ind
     expect(await readFile(join(target.cwd, ".git", "index"))).toEqual(target.index);
     expect(git(target.cwd, "rev-parse", "HEAD")).toBe(target.head);
   }
-  const fresh = required(agents.sessions.at(-1));
+  const fresh = await replacementSession(sessions);
   expect(fresh.prompts).toHaveLength(0);
   expect(relay.snapshot().workers).toEqual([]);
   expect(agents.sessions.slice(0, -1).every((session) => session.stops.length > 0)).toBe(true);
-});
+}, 60_000); // Two serial Windows integrations can exceed the file's 30 s default.
+// A passing single-target sibling journey took 16 s on Windows CI.
 it("binds a capture delayed across Send to the checkpoint preceding its actual checkout write", async () => {
   const target = await project("delayed-capture");
   agents.script = (_text, session) => {
@@ -373,7 +393,7 @@ it("binds a capture delayed across Send to the checkpoint preceding its actual c
     await vi.waitFor(
       async () =>
         expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("captured result\n"),
-      { timeout: 10_000 },
+      { timeout: 20_000 },
     );
     const chat = relay.snapshot();
     const timeline = await relay.reviewRequest({
@@ -398,7 +418,7 @@ it("binds a capture delayed across Send to the checkpoint preceding its actual c
     release();
     delayed.mockRestore();
   }
-}, 15_000);
+}, 60_000);
 it("resumes an interrupted Undo using Relay's conversation identity without a live provider", async () => {
   const cwd = join(root, "interrupted-direct");
   await mkdir(cwd);
@@ -446,8 +466,7 @@ it("resumes an interrupted Undo using Relay's conversation identity without a li
     }),
   ).toMatchObject({ type: "rewound", text: "A recoverable direct edit" });
   expect(await readFile(join(cwd, "file.txt"), "utf8")).toBe("before");
-  expect(agents.sessions).toHaveLength(sessions + 1);
-  expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+  expect((await replacementSession(sessions)).prompts).toEqual([]);
 });
 it("returns exact saved-code references with a rewound correction without resending", async () => {
   const target = await project("code-reference");
@@ -511,6 +530,7 @@ it("returns exact saved-code references with a rewound correction without resend
     .find((prompt) => prompt.includes("Correct this exact saved line"));
   expect(sent).toContain("working edit");
   expect(sent).toContain("modified lines 1-1");
+  const sessions = agents.sessions.length;
   const result = await relay.action({
     type: "undo-request",
     id,
@@ -518,7 +538,7 @@ it("returns exact saved-code references with a rewound correction without resend
     replacesDraft: false,
   });
   expect(result).toMatchObject({ text: "Correct this exact saved line", references: [reference] });
-  expect(agents.sessions.at(-1)?.prompts).toEqual([]);
+  expect((await replacementSession(sessions)).prompts).toEqual([]);
   expect(await readFile(join(target.cwd, "file.txt"), "utf8")).toBe("working edit\n");
   expect(await readFile(join(target.cwd, ".git", "index"))).toEqual(target.index);
 });

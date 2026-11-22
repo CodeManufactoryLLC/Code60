@@ -12,7 +12,7 @@ const option = z.object({ value: sessionValueSchema, name: label });
 const select = z.object({
   id: sessionValueSchema,
   name: label,
-  category: z.enum(["model", "mode"]),
+  category: sessionValueSchema.nullish(),
   type: z.literal("select"),
   currentValue: sessionValueSchema,
   options: z.union([
@@ -45,7 +45,7 @@ export class SessionStateTracker {
     // absent v1 fields do not discard state already advertised by notification.
     if (response.configOptions != null) {
       this.configPreferred = true;
-      this.state = { ...this.state, model: null, modes: null };
+      this.state = { ...this.state, model: null, modes: null, settings: null };
       this.config(response.configOptions);
     } else if (!this.configPreferred) {
       const result = legacy.safeParse(response.modes);
@@ -114,6 +114,11 @@ export class SessionStateTracker {
         ...this.state,
         modes: { ...this.state.modes, confirmed: false },
       };
+    if (this.state.settings)
+      this.state = {
+        ...this.state,
+        settings: { ...this.state.settings, confirmed: false },
+      };
   }
 
   config(value: unknown): void {
@@ -132,7 +137,9 @@ export class SessionStateTracker {
             : [item],
         ),
       });
-      return normalized.success ? [{ ...normalized.data, category: rest.category }] : [];
+      return normalized.success
+        ? [{ ...normalized.data, category: rest.category ?? undefined }]
+        : [];
     });
     const unique = controls.filter(
       (control) => controls.filter((item) => item.id === control.id).length === 1,
@@ -150,7 +157,16 @@ export class SessionStateTracker {
       .filter((control) => control.category === "mode")
       .slice(0, 32)
       .map(({ category: _, ...control }) => control);
+    const settings = unique
+      .filter((control) => control.category !== "mode")
+      .slice(0, 32)
+      .map(({ category, ...control }) =>
+        category === undefined ? control : { ...control, category },
+      );
     const previous = this.state;
+    const sameSettings =
+      previous.settings?.confirmed &&
+      JSON.stringify(previous.settings.controls) === JSON.stringify(settings);
     const sameModel =
       previous.model?.id === nextModel?.id && previous.model?.name === nextModel?.name;
     const sameModes =
@@ -175,6 +191,12 @@ export class SessionStateTracker {
                 confirmed: true,
                 reportedAt: this.now(),
               },
+      settings:
+        settings.length === 0
+          ? null
+          : sameSettings
+            ? previous.settings
+            : { controls: settings, confirmed: true, reportedAt: this.now() },
     };
   }
 }

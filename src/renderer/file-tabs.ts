@@ -18,14 +18,12 @@ export type FileTab =
   | { id: number; kind: "application"; preview: ReviewPreview };
 
 export interface FileTabs {
-  workspace: string;
   entries: FileTab[];
   active: number | null;
   nextId: number;
 }
 
-export const emptyFileTabs = (workspace: string): FileTabs => ({
-  workspace,
+export const emptyFileTabs = (): FileTabs => ({
   entries: [],
   active: null,
   nextId: 1,
@@ -33,7 +31,6 @@ export const emptyFileTabs = (workspace: string): FileTabs => ({
 
 export type FileTabAction =
   | { type: "plan"; planId: string; title: string }
-  | { type: "reset"; workspace: string }
   | { type: "blank" | "explorer" | "browse" | "recall" }
   | { type: "file"; path: string; source?: ReviewAddress }
   | { type: "changes" | "ensure-changes" }
@@ -50,8 +47,6 @@ export type FileTabAction =
   | { type: "move"; id: number; to: number };
 
 export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs {
-  if (action.type === "reset")
-    return action.workspace === state.workspace ? state : emptyFileTabs(action.workspace);
   if (action.type === "ensure-changes") {
     if (state.entries.some((tab) => tab.kind === "changes")) return state;
     const tab: FileTab = {

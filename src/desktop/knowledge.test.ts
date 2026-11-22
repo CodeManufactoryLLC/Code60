@@ -83,7 +83,7 @@ const navigation = (renderer: string, sequence: number) => ({
   view: {
     kind: "navigation",
     page: "chat",
-    settingsSection: "agents",
+    settingsSection: null,
     splash: false,
     visible: true,
     workerId: null,
@@ -113,6 +113,195 @@ const panel = (
 const result = (value: unknown) => (value as { result: Record<string, unknown> }).result;
 
 describe("DesktopKnowledge", () => {
+  it("discovers View Plan without treating saved plan viewing as provider or execution authority", async () => {
+    const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "View Plan" }, relay),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "plans",
+        access: expect.stringContaining("right sidebar → View Plan"),
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("current session has an existing plan"),
+          action: expect.stringContaining("View Plan"),
+        }),
+      }),
+    ]);
+  });
+  it.each([false, true])(
+    "discovers the auto-name limit with database availability %s",
+    async (connected) => {
+      const { knowledge, reads } = setup(connected ? {} : { database: null });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "auto-names" }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "projects",
+          limitations: expect.stringContaining("limited to 19 characters"),
+          availability: expect.objectContaining({ status: connected ? "available" : "blocked" }),
+        }),
+      ]);
+      expect(reads).toEqual([]);
+    },
+  );
+
+  it("does not claim browser prerequisites or extension approval have been verified", async () => {
+    const { knowledge, reads } = setup({ database: null });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Browser automation" }, relay),
+    );
+    expect(capabilities.entries).toEqual([
+      expect.objectContaining({
+        id: "browser",
+        tools: ["code60_browser"],
+        availability: expect.objectContaining({
+          status: "unknown",
+          reason: expect.stringContaining("No browser was probed"),
+        }),
+      }),
+    ]);
+    expect(reads).toEqual([]);
+    const blocked = setup({ providers: [] });
+    expect(
+      result(
+        await blocked.knowledge.call(
+          "code60_get_capabilities",
+          { query: "Browser automation" },
+          relay,
+        ),
+      ).entries,
+    ).toEqual([
+      expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
+    ]);
+  });
+  it.each(["sidebar background opacity", "Scientifica"])(
+    "keeps %s settings discoverable and human-only without a database",
+    async (query) => {
+      const { knowledge } = setup({ database: null });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "settings",
+          agentAccess: "human-only",
+          access: expect.stringContaining("Appearance → Left sidebar"),
+          availability: expect.objectContaining({ status: "available" }),
+        }),
+      ]);
+    },
+  );
+  it("reports retained desktop update targets and scheduler controls without probes", async () => {
+    const { knowledge, reads } = setup();
+    const updates = result(
+      await knowledge.call("code60_get_capabilities", { query: "Updates" }, relay),
+    );
+    expect(updates.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "updates",
+          availability: expect.objectContaining({
+            status: "unknown",
+            reason: expect.stringContaining("macOS arm64 and Linux x64"),
+          }),
+        }),
+      ]),
+    );
+    const service = result(
+      await knowledge.call("code60_get_capabilities", { query: "System Manager" }, relay),
+    );
+    expect(service.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "system-manager",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("No public Code60 CLI"),
+          }),
+        }),
+      ]),
+    );
+    expect(reads).toEqual([]);
+  });
+  it("exposes approval settings as human-only even without a provider or database", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Code60 auto-approval" }, relay),
+    );
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "orchestration-permissions",
+        agentAccess: "human-only",
+        availability: expect.objectContaining({
+          status: "available",
+          action: expect.stringContaining("beside Harness mode"),
+        }),
+      }),
+    );
+  });
+  it.each([false, true])(
+    "does not infer model switching availability from provider verification: %s",
+    async (verified) => {
+      const { knowledge } = setup({ providers: verified ? ["claude"] : [] });
+      const capabilities = result(
+        await knowledge.call("code60_get_capabilities", { query: "Model and reasoning" }, relay),
+      );
+      expect(capabilities.entries).toEqual([
+        expect.objectContaining({
+          id: "model-settings",
+          agentAccess: "human-only",
+          availability: expect.objectContaining({ status: verified ? "unknown" : "blocked" }),
+        }),
+      ]);
+    },
+  );
+  it("keeps Providers discoverable without a database and directs model setup to its details", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Providers" }, relay),
+    );
+    expect(capabilities.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "providers",
+          availability: expect.objectContaining({ status: "available" }),
+        }),
+      ]),
+    );
+    const models = result(
+      await knowledge.call("code60_get_capabilities", { query: "Model and reasoning" }, relay),
+    );
+    expect(models.entries).toEqual([
+      expect.objectContaining({
+        availability: expect.objectContaining({
+          status: "blocked",
+          action: "Providers → Add Provider.",
+        }),
+      }),
+    ]);
+  });
+  it("discovers bounded human-only custom assistants without a database or verified provider", async () => {
+    const { knowledge } = setup({ database: null, providers: [] });
+    const capabilities = result(
+      await knowledge.call("code60_get_capabilities", { query: "Custom Assistants" }, relay),
+    );
+    expect(capabilities.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "custom-agents",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("human-only"),
+            action: expect.stringContaining("Sidebar → Assistants → Custom Assistants"),
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(capabilities)).not.toContain("code60_create_agent");
+  });
   it("keeps Relay application target-scoped instead of borrowing selected-project Git readiness", async () => {
     const { knowledge } = setup({ gitReady: false });
     const capabilities = result(
@@ -208,6 +397,22 @@ describe("DesktopKnowledge", () => {
     expect(value.available).toBe(false);
     expect(reads).toEqual([]);
   });
+  it("keeps project homes available without a chat and gates session creation on a database", async () => {
+    const { knowledge, runtime } = setup({ conversations: [], selectedConversationId: null });
+    const entry = async () =>
+      (
+        result(await knowledge.call("code60_get_capabilities", { query: "Projects" }, project))
+          .entries as { id: string; availability: { status: string; action: string } }[]
+      ).find((cap) => cap.id === "projects");
+    expect(await entry()).toMatchObject({
+      availability: { status: "available", action: expect.stringContaining("New Session") },
+    });
+    runtime.database = null;
+    expect(await entry()).toMatchObject({
+      availability: { status: "blocked", action: "Connect to database." },
+    });
+  });
+
   it("reports availability without granting authority and blocks database features when disconnected", async () => {
     const { knowledge, runtime } = setup();
     const first = result(
@@ -483,4 +688,30 @@ describe("DesktopKnowledge", () => {
       knowledge.call("code60_list_customizations", { limit: 1, cursor: first.nextCursor }, project),
     ).rejects.toThrow("Stale");
   });
+});
+
+it("invalidates a discovered file view when its panel subscription or visibility changes", async () => {
+  for (const change of [{ fileSubscription: randomUUID() }, { active: false }, { open: false }]) {
+    const { knowledge, reads } = setup();
+    const renderer = knowledge.rendererIdentity(),
+      id = randomUUID();
+    const initial = panel(
+      renderer,
+      1,
+      id,
+      { kind: "relay", conversationId: relayId, generation: 2 },
+      [{ id: 1, kind: "file", path: "same.txt", savedRevision: false }],
+    );
+    const view = { ...initial.view, fileSubscription: randomUUID() };
+    knowledge.report({ ...initial, view });
+    const discovery = result(
+      await knowledge.call("code60_get_app_state", { section: "tabs" }, relay),
+    );
+    const [tab] = discovery.entries as { revision: string }[];
+    knowledge.report({ ...initial, sequence: 2, view: { ...view, ...change } });
+    await expect(
+      knowledge.call("code60_read_view", { panelId: id, tabId: 1, revision: tab?.revision }, relay),
+    ).rejects.toThrow("View changed");
+    expect(reads).toEqual([]);
+  }
 });

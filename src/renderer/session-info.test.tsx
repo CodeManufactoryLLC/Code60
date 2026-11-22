@@ -36,6 +36,7 @@ const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
       editable
       changing={false}
       autoApproval
+      onAutoApprovalChange={async () => {}}
       onMode={() => {}}
       {...overrides}
     />,
@@ -44,13 +45,17 @@ const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
 describe("session information", () => {
   it("shows separate model, context, harness mode and Code60 approval state", () => {
     const html = render();
-    expect(html).toContain(">Model One</span>");
+    expect(html).toContain('class="mode-value">Model One</span>');
     expect(html).toContain("26.5%");
     expect(html).toContain("Harness mode");
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('width="20"');
     expect(html).toContain('stroke-dasharray="26.5 100"');
-    expect(html).toContain("Code60 auto-approval: On");
+    expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
+    expect(render({ autoApproval: false, editable: false })).toContain(
+      'aria-label="Code60 auto-approval" aria-pressed="false" data-tooltip=',
+    );
+    expect(render({ onAutoApprovalChange: undefined })).not.toContain('data-slot="toggle"');
     expect(html).toContain('aria-disabled="false"');
     expect(html).not.toContain("<select");
   });
@@ -61,6 +66,31 @@ describe("session information", () => {
     expect(html).toContain("Last reported");
     expect(html).toContain("Ask");
     expect(html).not.toContain("<select");
+  });
+  it("offers advertised model settings, identifies unconfirmed reports and explains read-only states", () => {
+    const settings = {
+      confirmed: true,
+      reportedAt: at,
+      controls: [
+        {
+          id: "model",
+          category: "model",
+          name: "Model",
+          currentValue: "m1",
+          options: [{ value: "m1", name: "Model One" }],
+        },
+      ],
+    };
+    const html = render({ state: { ...state, settings } });
+    expect(html).toContain('aria-label="Model"');
+    expect(html).not.toContain("Not advertised by this connector");
+    expect(render({ state: { ...state, settings: { ...settings, confirmed: false } } })).toContain(
+      "Model unconfirmed",
+    );
+    expect(render({ editable: false, state: { ...state, settings } })).toContain(
+      "Available after this turn",
+    );
+    expect(render()).toContain("Not advertised by this connector");
   });
   it("handles absent values and zero capacity without estimating", () => {
     expect(render({ state: undefined })).toContain("N/A");

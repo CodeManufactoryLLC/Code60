@@ -13,7 +13,6 @@ describe("Settings home", () => {
       expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
         "About",
         "Advanced",
-        "Agents",
         "Appearance",
         "Memory",
         "Polling",
@@ -21,7 +20,7 @@ describe("Settings home", () => {
         "Text",
         "Updates",
       ]);
-      expect(html.match(/class="home-card"/g)).toHaveLength(9);
+      expect(html.match(/class="home-card"/g)).toHaveLength(8);
       expect(html).not.toContain("disabled");
       expect(html).not.toContain("home-card-description");
       expect(html).not.toContain('data-feature="rag"');
@@ -41,7 +40,6 @@ describe("Settings home", () => {
     expect(onOpen.mock.calls.map(([id]) => id)).toEqual([
       "about",
       "advanced",
-      "agents",
       "appearance",
       "memory",
       "polling-settings",

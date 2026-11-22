@@ -10,6 +10,8 @@ const pending: {
   reject(error: Error): void;
 }[] = [];
 const fixture = {
+  subscriptionsAtRead: [] as number[],
+  switchExecution: (_id: string) => {},
   listeners: () => listeners.size,
   pending: () => pending.map((read) => read.id),
   changed() {
@@ -41,6 +43,7 @@ const api = {
   automation: (request) =>
     new Promise((resolve, reject) => {
       if (request.action !== "transcript") throw new Error("Unexpected request");
+      fixture.subscriptionsAtRead.push(listeners.size);
       pending.push({ id: request.executionId, resolve, reject });
     }),
   onAutomationChanged(listener) {
@@ -52,6 +55,7 @@ const api = {
 } satisfies Pick<DesktopApi, "automation" | "onAutomationChanged">;
 function Fixture() {
   const [id, setId] = useState<string>();
+  fixture.switchExecution = setId;
   return (
     <>
       <button type="button" onClick={() => setId("A")}>
@@ -62,7 +66,6 @@ function Fixture() {
       </button>
       {id && (
         <AutomationTranscriptModal
-          key={id}
           api={api as DesktopApi}
           executionId={id}
           onClose={() => setId(undefined)}

@@ -102,8 +102,10 @@ export function ReviewPanel({
                   original={content.content.original}
                   modified={content.content.modified}
                   onAddToChat={(selection) => {
-                    const chat = review.relay?.conversationId ?? review.chatId;
-                    const added = attachToChat(`code60.orchestrationDraft:${chat}`, {
+                    const chatKey = review.relay
+                      ? `code60.orchestrationDraft:${review.relay.conversationId}`
+                      : `code60.orchestrationDraft:${review.chatId}`;
+                    const added = attachToChat(chatKey, {
                       reference: {
                         reviewId: review.id,
                         revisionId,

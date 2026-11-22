@@ -67,14 +67,14 @@ The dependency inventory compares the lockfile with the pre-feature baseline
 and sums installed regular files, filtered by target OS/architecture. It is not
 an installer-size measurement: package exclusions, archive compression, notices
 and the small application-code delta change the final installed/download size.
-Linux x64 and Windows x64 inventories and actual packaged sizes require their
+Linux x64 inventories and actual packaged sizes require their
 native release jobs.
 
 ## Release checks
 
 CI prepares model assets explicitly and runs offline model fixtures. Packaged
 tests load the installed model through the installed application's real sidecar,
-not the development asset directory, on macOS arm64, Linux x64 and Windows x64.
+not the development asset directory, on macOS arm64 and Linux x64.
 Native packaged/installer tests have not been run locally because of disk
 pressure. Do not replace them with host Electron tests or a cross-target
 inventory estimate.

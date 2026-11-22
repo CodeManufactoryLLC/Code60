@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ActivitySnapshot, ActivityState } from "../bridge/index.js";
-import { ActivityDisplay, activityAnimation, activityIcon } from "./activity-display.js";
+import { ActivityDisplay, activityIcon } from "./activity-display.js";
 
 const activity: ActivitySnapshot = {
   state: "executing",
@@ -46,17 +46,15 @@ describe("activity presentation", () => {
       expect(html).not.toContain("<button");
       expect(html).not.toContain('class="activity-timer"');
       expect(html).not.toContain("aria-expanded");
-      if (hidden) expect(html).not.toContain("<img");
-      else expect(html).toContain("communicating.gif");
+      expect(html).not.toContain("<img");
     }
-    expect(activityAnimation("connecting")).toBe(activityAnimation("communicating"));
   });
 
   it("preserves attribution, counts, and plain text without implying test success", () => {
     const html = render(activity);
     expect(html).toContain(">Executing...</span>");
     expect(html).toContain('data-tooltip="Observed activity: Executing');
-    expect(html).toContain("executing.gif");
+    expect(html).not.toContain("<img");
     expect(html).not.toContain("testing.gif");
     expect(html).toContain("Agent-reported purpose:");
     expect(html).toContain("&lt;script&gt;");
@@ -73,7 +71,7 @@ describe("activity presentation", () => {
     });
     expect(declared).toContain("Agent-reported");
     expect(declared).toContain(">Testing...</span>");
-    expect(declared).toContain("testing.gif");
+    expect(declared).not.toContain("<img");
   });
   it("pauses hidden visuals and uses a static fallback for unmapped artwork", () => {
     expect(render(activity, true)).toContain('data-animate="false"');
@@ -82,10 +80,6 @@ describe("activity presentation", () => {
     expect(activityIcon("future-type" as ActivityState)).toBe("information");
   });
   it("uses local semantic artwork without treating retrieval as a download", () => {
-    expect(activityAnimation("responding")).toBe(activityAnimation("writing"));
-    expect(activityAnimation("dispatching")).toBe(activityAnimation("delegating"));
-    expect(activityAnimation("retrieving")).toBeUndefined();
-    expect(activityAnimation("future-type" as ActivityState)).toBeUndefined();
     expect(render({ ...activity, state: "idle", active: false })).toBe("");
   });
   it("presents waiting for workers as monitoring subagents", () => {
@@ -99,7 +93,7 @@ describe("activity presentation", () => {
     });
     expect(html).toContain("Monitoring subagents...");
     expect(html).toContain('data-immediate="false"');
-    expect(html).toContain("waiting_for_workers.gif");
+    expect(html).not.toContain("<img");
     expect(html).not.toContain("Waiting for workers");
   });
   it("shows urgent local stopping immediately", () => {

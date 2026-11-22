@@ -1,11 +1,12 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
 import type { useAppPreferences } from "./app-preferences.js";
-import type { FileTabAction } from "./file-tabs.js";
+import type { FileTabAction, FileTabs } from "./file-tabs.js";
 import type { FileBrowser } from "./files.js";
 import type { NavigationActions } from "./navigation-actions.js";
 import type { ToastMessage, ToastTone } from "./overlays.js";
 import type { useProjectScope } from "./project-scope.js";
+import type { SessionPanel } from "./session-panel.js";
 import type { DesktopState } from "./snapshot-state.js";
 import type { PageTabs, SettingsSectionId } from "./tabs.js";
 import type { Transcripts } from "./transcripts.js";
@@ -13,15 +14,20 @@ import type { useUpdates } from "./updates.js";
 import type { useWindowAppearance } from "./window-appearance.js";
 
 export interface AppPagesProps {
+  providerManagement: import("./provider-management.js").ProviderManagement;
   api: DesktopApi;
   state: DesktopState | undefined;
   project: ReturnType<typeof useProjectScope> & {
+    filePanel: SessionPanel;
+    fileTabs: FileTabs;
     explorerOpen: boolean;
     setExplorerOpen: Dispatch<SetStateAction<boolean>>;
     visitedRelayWorkers?: string[];
     explicitProjectFiles?: boolean;
+    showConversationFiles?(): void;
   };
   preferences: ReturnType<typeof useAppPreferences>;
+  sidebarBlurError: string;
   appearance: ReturnType<typeof useWindowAppearance>;
   updates: ReturnType<typeof useUpdates>;
   tabs: PageTabs;

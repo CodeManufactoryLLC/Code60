@@ -41,5 +41,11 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/renderer/neobrutalism/theme.css"],
+      "css": { "parser": { "tailwindDirectives": true } }
+    }
+  ]
 }

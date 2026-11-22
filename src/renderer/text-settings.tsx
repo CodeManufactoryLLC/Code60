@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { Icon } from "./icons.js";
 import { SettingsHeader } from "./settings-layout.js";
 import {
   defaultTextStyles,
@@ -45,8 +46,14 @@ export function TextSettings({
   return (
     <section className="settings-section text-settings" aria-labelledby={`${id}-text`}>
       <SettingsHeader page="text" id={`${id}-text`}>
-        <button type="button" onClick={() => onTextStyles(structuredClone(defaultTextStyles))}>
-          Reset text
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Reset text"
+          title="Reset text"
+          onClick={() => onTextStyles(structuredClone(defaultTextStyles))}
+        >
+          <Icon name="renew" />
         </button>
       </SettingsHeader>
       <div className="text-styles">

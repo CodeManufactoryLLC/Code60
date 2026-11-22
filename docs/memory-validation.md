@@ -3,7 +3,7 @@
 ## Ownership and defaults
 
 The production desktop host enables the optional memory integration. Core and
-the headless CLI do not create memory databases or provider calls.
+the scheduler do not create memory databases or provider calls.
 
 The private store is `$XDG_STATE_HOME/code60/memory/memory.sqlite`, falling back
 to `~/.local/state/code60/memory/memory.sqlite`. It has its own schema version,

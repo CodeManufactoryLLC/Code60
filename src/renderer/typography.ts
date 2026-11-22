@@ -13,7 +13,7 @@ export const typefaces = [
   { id: "ibm-plex-serif", label: "IBM Plex Serif", family: '"IBM Plex Serif", Georgia, serif' },
   { id: "lexend", label: "Lexend", family: `"Lexend", ${systemFont}` },
   { id: "shantell-sans", label: "Shantell Sans", family: '"Shantell Sans", sans-serif' },
-  { id: "ocr-a", label: "OCR-A", family: '"OCR-A", ui-monospace, monospace' },
+  { id: "scientifica", label: "Scientifica", family: `"Scientifica", ${systemFont}` },
   { id: "roboto", label: "Roboto", family: `Roboto, ${systemFont}` },
   { id: "space-grotesk", label: "Space Grotesk", family: `"Space Grotesk", ${systemFont}` },
   { id: "tahoma", label: "Tahoma", family: `Tahoma, Verdana, ${systemFont}` },
@@ -41,7 +41,7 @@ export const textRoles = [
     css: "heading",
     typeface: defaultTypeface.id,
     size: 12,
-    weight: 300,
+    weight: 600,
   },
   {
     id: "buttons",
@@ -49,7 +49,7 @@ export const textRoles = [
     css: "button",
     typeface: defaultTypeface.id,
     size: 13,
-    weight: 300,
+    weight: 600,
   },
   {
     id: "agentMessages",
@@ -57,7 +57,7 @@ export const textRoles = [
     css: "agent",
     typeface: defaultTypeface.id,
     size: 14,
-    weight: 300,
+    weight: 400,
   },
   {
     id: "humanMessages",
@@ -65,23 +65,23 @@ export const textRoles = [
     css: "human",
     typeface: defaultTypeface.id,
     size: 14,
-    weight: 300,
+    weight: 400,
   },
   {
     id: "pageTitles",
     label: "Page Titles",
     css: "title",
-    typeface: "ibm-plex-serif",
+    typeface: "space-grotesk",
     size: 16,
-    weight: 300,
+    weight: 700,
   },
   {
     id: "cardTitles",
     label: "Card Titles",
     css: "card",
-    typeface: defaultTypeface.id,
+    typeface: "space-grotesk",
     size: 22,
-    weight: 300,
+    weight: 700,
   },
   {
     id: "normalText",
@@ -89,7 +89,7 @@ export const textRoles = [
     css: "text",
     typeface: defaultTypeface.id,
     size: 13,
-    weight: 300,
+    weight: 400,
   },
 ] as const;
 export type TextRole = (typeof textRoles)[number]["id"];

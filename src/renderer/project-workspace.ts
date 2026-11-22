@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
 import { useDesktopVisibility } from "./desktop-visibility.js";
 import { prepareFileNavigation, showsProjectFiles } from "./file-navigation.js";
-import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
+import type { FileTabAction } from "./file-tabs.js";
 import { useFiles } from "./files.js";
+import type { ChatNavigation } from "./history-navigation.js";
 import { isNavigationHome } from "./navigation-tree.js";
 import { useProjectScope } from "./project-scope.js";
+import { sessionPanelId } from "./session-panel.js";
 import { updateTabs } from "./tabs.js";
 import { useTranscripts } from "./transcripts.js";
 
@@ -17,6 +19,7 @@ type WorkspaceProps = Pick<
   setBusy(busy: boolean): void;
   onWorkerSelection(id: string | undefined): void;
   navigationPending: boolean;
+  onChatNavigation?: ChatNavigation;
 };
 export function useProjectWorkspace({
   api,
@@ -29,6 +32,7 @@ export function useProjectWorkspace({
   setBusy,
   onWorkerSelection,
   navigationPending,
+  onChatNavigation,
 }: WorkspaceProps) {
   const snapshot = state?.snapshot;
   const database = snapshot?.database ?? null;
@@ -38,7 +42,7 @@ export function useProjectWorkspace({
   const [relayWorkerSelection, setRelayWorkerSelection] = useState<string>();
   const [visitedRelayWorkers, setVisitedRelayWorkers] = useState<string[]>([]);
   const [requestedProjectWorker, setRequestedProjectWorker] = useState<string>();
-  const [explicitFileScope, setExplicitFileScope] = useState<string>();
+  const navigation = useRef({ key: "", version: 0 });
   const project = {
     ...useProjectScope(
       database,
@@ -64,8 +68,6 @@ export function useProjectWorkspace({
     setWorkerSelection,
     setVisitedWorkers,
     setChatRequest,
-    fileTabs,
-    setFileTabs,
   } = project;
   const workspace = scope.workspace;
   const workerScope = workspace;
@@ -83,7 +85,7 @@ export function useProjectWorkspace({
     projectId?: string | null,
     navigationCurrent: () => boolean = () => true,
   ) => {
-    setExplicitFileScope(undefined);
+    navigation.current.version++;
     setRequestedProjectWorker(undefined);
     if (id === undefined && projectId !== undefined) {
       setRelayWorkerSelection(undefined);
@@ -96,7 +98,9 @@ export function useProjectWorkspace({
       return;
     }
     const owner = id
-      ? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id))
+      ? (snapshot?.openProjects?.find(
+          (owner) => owner.id === snapshot.projectInstanceId && owner.workerIds.includes(id),
+        ) ?? snapshot?.openProjects?.find((owner) => owner.workerIds.includes(id)))
       : undefined;
     if (owner && owner.id !== snapshot?.projectInstanceId) {
       const current = scope.capture();
@@ -167,15 +171,30 @@ export function useProjectWorkspace({
       ...(eventIndex === undefined ? {} : { eventIndex }),
     }));
   };
-  const currentFileTabs = fileTabs.workspace === workspace ? fileTabs : emptyFileTabs(workspace);
+  const filePanel = scope.panel(
+    sessionPanelId(workerId, snapshot?.chat.run?.id, snapshot?.chat.directory),
+  );
+  const currentFileTabs = useSyncExternalStore(
+    filePanel.subscribe,
+    filePanel.snapshot,
+    filePanel.snapshot,
+  );
   const fileAction = (action: FileTabAction) => {
     if (directory && ["browse", "file", "explorer", "revision", "changes"].includes(action.type))
-      setExplicitFileScope(scope.viewKey);
-    setFileTabs((current) =>
-      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), action),
-    );
+      filePanel.showProjectFiles(true);
+    filePanel.act(action);
   };
-  const explicitProjectFiles = explicitFileScope === scope.viewKey;
+  const explicitProjectFiles = filePanel.projectFiles;
+  const navigationKey = JSON.stringify([
+    filePanel.identity,
+    tabs.active,
+    snapshot?.chat.conversationId,
+    snapshot?.chat.run?.id,
+    navigationPending,
+  ]);
+  if (navigation.current.key !== navigationKey) {
+    navigation.current = { key: navigationKey, version: navigation.current.version + 1 };
+  }
   const activeFileTab = currentFileTabs.entries.find((tab) => tab.id === currentFileTabs.active);
   const readsActive = !splash && !navigationPending && !isNavigationHome(tabs.active);
   const filesActive =
@@ -190,14 +209,13 @@ export function useProjectWorkspace({
     snapshot,
     filesActive,
     activeFileTab?.kind === "file" && !activeFileTab.source ? activeFileTab.path : null,
-    scope.viewKey,
-    snapshot?.openProjects ? scope.files() : undefined,
+    filePanel.files,
   );
   const relayIds = new Set(snapshot?.runs.filter((run) => run.relay).map((run) => run.record.id));
   const projectTranscripts = useTranscripts(
     api,
     scope.viewKey,
-    !!directory && readsActive,
+    !!directory && readsActive && tabs.active !== "search",
     tabs.active === "chat"
       ? snapshot?.runs.filter((run) => !run.relay && run.record.id === workerId)
       : snapshot?.runs.filter((run) => !run.relay),
@@ -208,7 +226,7 @@ export function useProjectWorkspace({
   const relayTranscripts = useTranscripts(
     api,
     "relay-workers",
-    readsActive,
+    readsActive && tabs.active !== "search",
     snapshot?.runs.filter(
       (run) => run.relay && (tabs.active !== "chat" || run.record.id === workerId),
     ),
@@ -240,15 +258,24 @@ export function useProjectWorkspace({
   const browseFiles = async () => {
     if (!snapshot) return;
     const current = scope.capture();
+    const panelCurrent = filePanel.capture();
+    const navigationVersion = navigation.current.version;
     setBusy(true);
     try {
       const latest = await prepareFileNavigation(api, snapshot);
-      if (!latest || !current()) return;
+      if (
+        !latest ||
+        !current() ||
+        !panelCurrent() ||
+        navigation.current.version !== navigationVersion
+      )
+        return;
       fileAction({ type: "browse" });
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     } catch (cause) {
-      if (current()) notify(message(cause), "error");
+      if (current() && navigation.current.version === navigationVersion)
+        notify(message(cause), "error");
     } finally {
       setBusy(false);
     }
@@ -261,29 +288,21 @@ export function useProjectWorkspace({
   };
   const reviewSummaries = snapshot?.reviews ?? [];
   useEffect(() => {
-    const latest = reviewSummaries.at(-1);
-    if (!latest || scope.ensuredChangesReview.get(workspace) === latest.id) return;
-    scope.ensuredChangesReview.set(workspace, latest.id);
-    setFileTabs((current) =>
-      updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
-        type: "ensure-changes",
-      }),
-    );
-  }, [reviewSummaries, workspace, scope, setFileTabs]);
+    const latest = reviewSummaries
+      .filter((review) => review.chatId === snapshot?.chat.run?.id)
+      .at(-1);
+    if (workerId || !latest || filePanel.ensuredChangesReview === latest.id) return;
+    filePanel.ensuredChangesReview = latest.id;
+    filePanel.act({ type: "ensure-changes" });
+  }, [reviewSummaries, filePanel, snapshot?.chat.run?.id, workerId]);
   useEffect(() => {
     if (!readsActive || tabs.active !== "chat" || workerId || snapshot?.chat.kind === "relay")
       return;
     for (const plan of snapshot?.chat.plans ?? []) {
-      if (plan.state !== "draft" || scope.openedPlans.get(plan.id) === plan.proposalRevision)
+      if (plan.state !== "draft" || filePanel.openedPlans.get(plan.id) === plan.proposalRevision)
         continue;
-      scope.openedPlans.set(plan.id, plan.proposalRevision);
-      setFileTabs((current) =>
-        updateFileTabs(current.workspace === workspace ? current : emptyFileTabs(workspace), {
-          type: "plan",
-          planId: plan.id,
-          title: plan.title,
-        }),
-      );
+      filePanel.openedPlans.set(plan.id, plan.proposalRevision);
+      filePanel.act({ type: "plan", planId: plan.id, title: plan.title });
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     }
@@ -293,16 +312,24 @@ export function useProjectWorkspace({
     snapshot?.chat.kind,
     readsActive,
     workerId,
-    workspace,
-    scope,
-    setFileTabs,
+    filePanel,
     setTabs,
   ]);
   const openReview = (id: string) => {
-    selectWorker(undefined);
     const review = snapshot?.reviews?.find((review) => review.id === id);
+    const chatId = review?.chatId;
+    const owner = snapshot?.chats.find((chat) => chat.run?.id === chatId);
+    // Archived history stays read-only in a reachable panel. Do not bypass the
+    // controller's selection guard or create a replacement for the last chat.
+    const switchChat = chatId && owner && (!owner.archived || Boolean(owner.run?.pending?.length));
+    const navigation = switchChat ? onChatNavigation?.({ type: "select", id: chatId }) : undefined;
+    selectWorker(undefined);
     const revision = review?.revisions.at(-1);
-    fileAction(
+    const destinationChat = switchChat ? owner : snapshot?.chat;
+    const destination = scope.panel(
+      sessionPanelId(undefined, destinationChat?.run?.id, destinationChat?.directory),
+    );
+    destination.act(
       review && revision
         ? {
             type: "revision",
@@ -312,13 +339,18 @@ export function useProjectWorkspace({
           }
         : { type: "changes" },
     );
+    destination.showProjectFiles(true);
     setExplorerOpen(true);
     setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
     const current = scope.capture();
-    if (review?.chatId && snapshot?.chats.some((chat) => chat.run?.id === review.chatId))
-      void api.orchestrationChatAction({ type: "select", id: review.chatId }).catch((cause) => {
-        if (current()) setError(message(cause));
-      });
+    if (switchChat)
+      void api.orchestrationChatAction({ type: "select", id: chatId }).then(
+        () => navigation?.[0](true),
+        (cause) => {
+          navigation?.[0](false);
+          if (current()) setError(message(cause));
+        },
+      );
   };
   const reviewRun = async (runId: string) => {
     if (!directory) return;
@@ -342,7 +374,13 @@ export function useProjectWorkspace({
   };
   useDesktopVisibility(api, tabs.active, splash, filesActive, setError);
   return {
-    project: { ...project, explicitProjectFiles },
+    project: {
+      ...project,
+      filePanel,
+      fileTabs: currentFileTabs,
+      explicitProjectFiles,
+      showConversationFiles: () => filePanel.showProjectFiles(false),
+    },
     workerId,
     fileBrowser,
     transcripts,

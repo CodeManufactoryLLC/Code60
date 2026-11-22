@@ -3,8 +3,11 @@ import { readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import {
   type AgentSetupRecord,
+  type ModelDefaultsRecord,
   type PollSettingsPatch,
   parseAgentSetupRecord,
+  parseBoolean,
+  parseModelDefaults,
   parseOrchestrationProvider,
   parsePollSettings,
 } from "../bridge/index.js";
@@ -12,12 +15,16 @@ import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/i
 
 /** Remembers the selected project database between launches. */
 export interface DesktopPreferences {
+  modelDefaults?(): Promise<ModelDefaultsRecord>;
+  setModelDefaults?(record: ModelDefaultsRecord): Promise<void>;
   agentSetup?(): Promise<AgentSetupRecord | null>;
   setAgentSetup?(record: AgentSetupRecord): Promise<void>;
   read(): Promise<string | undefined>;
   write(database: string): Promise<void>;
   polling?(): Promise<PollSettingsPatch>;
   setPolling?(settings: PollSettingsPatch): Promise<void>;
+  orchestrationAutoApproval?(): Promise<boolean>;
+  setOrchestrationAutoApproval?(enabled: boolean): Promise<void>;
   orchestrationProvider?(): Promise<string | null>;
   setOrchestrationProvider?(provider: string | null): Promise<void>;
 }
@@ -32,7 +39,7 @@ export function filePreferences(file: string): DesktopPreferences & {
   orchestrationProvider(): Promise<string | null>;
   setOrchestrationProvider(provider: string | null): Promise<void>;
 } {
-  async function load(): Promise<Record<string, unknown>> {
+  async function load(strict = false): Promise<Record<string, unknown>> {
     let text: string;
     try {
       text = await readFile(file, "utf8");
@@ -42,18 +49,19 @@ export function filePreferences(file: string): DesktopPreferences & {
     }
     try {
       const value: unknown = JSON.parse(text);
-      return value !== null && typeof value === "object" && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : {};
-    } catch {
+      if (value !== null && typeof value === "object" && !Array.isArray(value))
+        return value as Record<string, unknown>;
+      throw new Error("Invalid desktop preferences");
+    } catch (error) {
+      if (strict) throw error;
       return {};
     }
   }
   // Database and appearance writes share one queue so neither can lose the other's changes.
   let pending = Promise.resolve();
-  function update(patch: Record<string, unknown>): Promise<void> {
+  function update(patch: Record<string, unknown>, strict = false): Promise<void> {
     const result = pending.then(async () => {
-      const value = { ...(await load()), ...patch };
+      const value = { ...(await load(strict)), ...patch };
       await privateDirectory(dirname(file));
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
@@ -70,6 +78,12 @@ export function filePreferences(file: string): DesktopPreferences & {
     return result;
   }
   return {
+    async modelDefaults() {
+      return parseModelDefaults((await load()).modelDefaults ?? { version: 1, providers: {} });
+    },
+    setModelDefaults(record) {
+      return update({ modelDefaults: parseModelDefaults(record) });
+    },
     async agentSetup() {
       const value = (await load()).agentSetup;
       return value == null ? null : parseAgentSetupRecord(value);
@@ -104,6 +118,13 @@ export function filePreferences(file: string): DesktopPreferences & {
     },
     async setPolling(settings) {
       return update({ polling: parsePollSettings(settings) });
+    },
+    async orchestrationAutoApproval() {
+      const value = (await load(true)).orchestrationAutoApproval;
+      return value === undefined ? true : parseBoolean(value);
+    },
+    setOrchestrationAutoApproval(enabled) {
+      return update({ orchestrationAutoApproval: parseBoolean(enabled) }, true);
     },
     async orchestrationProvider() {
       const value = (await load()).orchestrationProvider;

@@ -1,5 +1,5 @@
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
-import { conversationId, conversations, conversationTitle } from "./chats.js";
+import { conversationId, conversations } from "./chats.js";
 import {
   isSettingsSection,
   type PageId,
@@ -43,7 +43,7 @@ function pageAncestors(
 ): Breadcrumb[] {
   if (isSettingsSection(page)) return [pageCrumb("settings")];
   if (page === "project") return [pageCrumb("projects")];
-  if (page === "relay") return [];
+  if (page === "relay") return [pageCrumb("assistants")];
   if (page !== "orchestrator" && page !== "worker") {
     const parent = navigationParent(page);
     return parent ? [...pageAncestors(parent, source), pageCrumb(parent)] : [];
@@ -63,23 +63,36 @@ function pageAncestors(
       : source.projects.find((project) =>
           owner?.projectId ? project.id === owner.projectId : project.workerIds.includes(target.id),
         );
-  const ancestors: Breadcrumb[] = project
-    ? [
-        pageCrumb("projects"),
-        {
-          label: pathLabel(project.path),
-          icon: "app-folder",
-          target: { kind: "project", id: project.id },
-        },
-      ]
-    : [];
+  const ancestors: Breadcrumb[] = owner?.customAgentId
+    ? [pageCrumb("assistants"), pageCrumb("custom-agents")]
+    : project
+      ? [
+          pageCrumb("projects"),
+          {
+            label: pathLabel(project.path),
+            icon: "app-folder",
+            target: { kind: "project", id: project.id },
+          },
+        ]
+      : run?.relay || owner?.kind === "relay"
+        ? [pageCrumb("assistants")]
+        : [];
   if (page === "worker") {
-    const chat = owner ?? (run?.relay && source.chats.find((chat) => chat.kind === "relay"));
+    const chat =
+      owner ??
+      (run?.relay &&
+        source.chats.find(
+          (chat) => chat.kind === "relay" && chat.conversationId === run.relay?.conversationId,
+        ));
     const id = chat && !chat.archived ? conversationId(chat) : undefined;
     if (chat && id)
       ancestors.push({
-        label: conversationTitle(source.chats, chat),
-        icon: chat.kind === "relay" ? "app-steering-wheel" : "app-communication",
+        label: chat.kind === "relay" && !chat.customAgentId ? "Relay" : "Agent",
+        icon: chat.customAgentId
+          ? "app-custom-agents"
+          : chat.kind === "relay"
+            ? "app-steering-wheel"
+            : "app-communication",
         target: { kind: "conversation", id },
       });
   }

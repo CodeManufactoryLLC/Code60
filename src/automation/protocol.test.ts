@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTOMATION_FRAME_LIMIT } from "../contracts/index.js";
-import { readPrivateJson } from "../platform/index.js";
+import { createPrivateDirectory, readPrivateJson } from "../platform/index.js";
 import { AutomationError } from "./errors.js";
 import {
   listenService,
@@ -20,8 +20,11 @@ afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
 });
 async function setup() {
-  const root = await mkdtemp(join(tmpdir(), "c60-ipc-"));
-  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const parent = await mkdtemp(join(tmpdir(), "c60-ipc-"));
+  cleanups.push(() => rm(parent, { recursive: true, force: true }));
+  // Match service startup's private root, including the native owner and ACL.
+  const root = join(parent, "state");
+  await createPrivateDirectory(root);
   const listeners = new Set<(revision: number) => void>();
   const handle = vi.fn(async () => ({ result: true }));
   const server = await listenService(root, handle, (listener) => {
@@ -55,7 +58,7 @@ describe("private scheduler protocol", () => {
         (operation) =>
           expect(operation).rejects.toMatchObject({
             code: "unavailable",
-            message: "Scheduler is not running. Install or start the background service.",
+            message: "Scheduler is not running. Check the Scheduling Service in System Manager.",
           }),
       ),
     );

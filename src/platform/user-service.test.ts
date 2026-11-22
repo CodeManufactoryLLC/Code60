@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { controlUserService, userServiceDefinition } from "./user-service.js";
+import { controlUserService, inspectUserService, userServiceDefinition } from "./user-service.js";
 
 describe("per-user service supervisors", () => {
   const runtime = {
@@ -25,18 +25,6 @@ describe("per-user service supervisors", () => {
     expect(definition.contents).not.toContain("After=default.target");
     expect(JSON.stringify(definition)).not.toContain("linger");
     expect(definition.install[1]?.slice(0, 2)).toEqual(["systemctl", "--user"]);
-  });
-  it("uses interactive non-elevated Windows tasks, no runtime limit and bounded restart attempts", () => {
-    const definition = userServiceDefinition("win32", "/home/test", "/state", runtime);
-    expect(definition.contents).toContain("InteractiveToken");
-    expect(definition.contents).toContain("LeastPrivilege");
-    expect(definition.contents).toContain("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>");
-    expect(definition.contents).toContain("<Count>3</Count>");
-    const encoded = /EncodedCommand ([A-Za-z0-9+/=]+)/.exec(definition.contents)?.[1] ?? "";
-    const command = Buffer.from(encoded, "base64").toString("utf16le");
-    expect(command).toContain("'/app/agent''s entry.js'");
-    expect(command).toContain("$env:ELECTRON_RUN_AS_NODE='1'");
-    expect(definition.uninstall.map((argv) => argv[1])).toEqual(["/End", "/Delete"]);
   });
   it("starts an unloaded launchd job and tolerates bootstrap only when kickstart succeeds", async () => {
     const definition = userServiceDefinition("darwin", "/Users/test", "/state", runtime);
@@ -84,4 +72,121 @@ describe("per-user service supervisors", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it.each(["running", "unavailable", "stopped"] as const)(
+    "checks failed repair stops before replacement when native state is %s",
+    async (state) => {
+      const root = await mkdtemp(join(tmpdir(), "c60-repair-stop-"));
+      try {
+        const definition = userServiceDefinition("linux", root, root, runtime);
+        await controlUserService(definition, "install", async () => true);
+        const replacement = { ...definition, contents: "replacement" };
+        const command = vi.fn(async (argv: readonly string[]) => !argv.includes("stop"));
+        const inspect = vi.fn(async () => ({
+          ok: state !== "unavailable",
+          stdout: `LoadState=loaded\nActiveState=${state === "running" ? "active" : "inactive"}\n`,
+        }));
+        const repair = controlUserService(replacement, "repair", command, inspect);
+        if (state === "stopped") await repair;
+        else await expect(repair).rejects.toThrow("could not stop");
+        expect(await readFile(definition.path, "utf8")).toBe(
+          state === "stopped" ? "replacement" : definition.contents,
+        );
+        expect(command.mock.calls.map(([argv]) => argv)).toEqual(
+          state === "stopped" ? [...definition.stop, ...definition.install] : definition.stop,
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+  it.each(["timeout", "loaded", "absent"])(
+    "requires positive launchd unload evidence after failed bootout (%s)",
+    async (kind) => {
+      const root = await mkdtemp(join(tmpdir(), "c60-launchd-stop-"));
+      try {
+        const definition = userServiceDefinition("darwin", root, root, runtime);
+        await controlUserService(definition, "install", async () => true);
+        const command = vi.fn(async (argv: readonly string[]) => argv[1] !== "bootout");
+        const inspect = vi.fn(async (argv: readonly string[]) => ({
+          ok: kind !== "timeout" && !argv[2]?.includes("/com."),
+          stdout:
+            kind === "loaded"
+              ? "services = {\n  123 0 com.codemanufactory.code60.scheduler\n}\n"
+              : "services = {\n}\n",
+        }));
+        const repair = controlUserService(
+          { ...definition, contents: "replacement" },
+          "repair",
+          command,
+          inspect,
+        );
+        if (kind === "absent") await repair;
+        else await expect(repair).rejects.toThrow("could not stop");
+        expect(await readFile(definition.path, "utf8")).toBe(
+          kind === "absent" ? "replacement" : definition.contents,
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+  it.each(["linux", "darwin"] as const)(
+    "reads the native service PID through fixed %s command results",
+    async (platform) => {
+      const definition = userServiceDefinition(platform, "/no-such-code60-home", "/state", runtime);
+      const command = vi.fn(async () => ({
+        ok: true,
+        stdout:
+          platform === "linux"
+            ? "LoadState=loaded\nActiveState=active\nMainPID=1234\n"
+            : "state = running\npid = 1234\n",
+      }));
+      expect(await inspectUserService(definition, command)).toMatchObject({
+        state: "running",
+        pid: 1234,
+      });
+      expect(command.mock.calls).toHaveLength(1);
+    },
+  );
+  it.each([
+    [true, "LoadState=loaded\nActiveState=active\n", "running"],
+    [true, "LoadState=loaded\nActiveState=inactive\n", "stopped"],
+    [true, "LoadState=loaded\nActiveState=failed\n", "stopped"],
+    [false, "LoadState=not-found\nActiveState=inactive\n", "stopped"],
+    [false, "", "unavailable"],
+    [true, "unexpected output", "unavailable"],
+  ])("reads systemd state without writing service files, ok=%s", async (ok, stdout, state) => {
+    const root = await mkdtemp(join(tmpdir(), "c60-service-inspect-"));
+    try {
+      const definition = userServiceDefinition("linux", root, root, runtime);
+      const command = vi.fn(async () => ({ ok: !!ok, stdout: String(stdout) }));
+      expect(await inspectUserService(definition, command)).toEqual({
+        definitionPresent: false,
+        state,
+      });
+      expect(command).toHaveBeenCalledOnce();
+      await expect(readFile(definition.path)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it.each([
+    [{ ok: true, stdout: "state = running\n" }, true, "running"],
+    [{ ok: true, stdout: "state = not running\n" }, true, "stopped"],
+    [{ ok: false, stdout: "" }, true, "stopped"],
+    [{ ok: false, stdout: "" }, false, "unavailable"],
+  ])(
+    "distinguishes an unloaded launchd job from an unavailable supervisor",
+    async (result, available, state) => {
+      const definition = userServiceDefinition("darwin", "/no-such-code60-home", "/state", runtime);
+      const command = vi
+        .fn()
+        .mockResolvedValueOnce(result)
+        .mockResolvedValue({ ok: available, stdout: "services = {\n}\n" });
+      expect(await inspectUserService(definition, command)).toMatchObject({
+        definitionPresent: false,
+        state,
+      });
+    },
+  );
 });

@@ -50,6 +50,14 @@ it("does not steal focus from a later interaction", async () => {
   expect(root.getElementById).not.toHaveBeenCalled();
 });
 
+it("does not refocus an already focused sidebar destination and trigger scrolling", async () => {
+  const focus = vi.fn();
+  const activeElement = { focus, closest: () => null } as unknown as HTMLElement;
+  focusNavigation("tab-home", { activeElement, getElementById: () => activeElement });
+  await Promise.resolve();
+  expect(focus).not.toHaveBeenCalled();
+});
+
 it("still focuses navigation after hiding the previous page drops focus to the body", async () => {
   const focus = vi.fn();
   const root = {

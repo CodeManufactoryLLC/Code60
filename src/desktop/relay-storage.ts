@@ -7,7 +7,6 @@ import { isDeepStrictEqual } from "node:util";
 import {
   atomicReplace,
   createPrivateDirectory,
-  helperOutput,
   privateDirectory,
   writePrivateFile,
 } from "../platform/index.js";
@@ -22,8 +21,7 @@ export async function verifyRelayStorage(path: string, directory: boolean): Prom
     (directory ? !info.isDirectory() : !info.isFile() || info.nlink !== 1n)
   )
     throw new Error("Unsafe Relay storage");
-  if (process.platform === "win32") await helperOutput(["verify-private", path]);
-  else if ((info.mode & 0o077n) !== 0n || info.uid !== BigInt(process.getuid?.() ?? -1))
+  if ((info.mode & 0o077n) !== 0n || info.uid !== BigInt(process.getuid?.() ?? -1))
     throw new Error("Unsafe Relay permissions");
   return info;
 }
@@ -46,8 +44,8 @@ export async function relayFile(path: string, writable = false) {
       current.ino !== entry.ino ||
       !current.isFile() ||
       current.nlink !== 1n ||
-      (process.platform !== "win32" &&
-        ((current.mode & 0o077n) !== 0n || current.uid !== BigInt(process.getuid?.() ?? -1)))
+      (current.mode & 0o077n) !== 0n ||
+      current.uid !== BigInt(process.getuid?.() ?? -1)
     )
       throw new RelayPersistenceError("open", "identity", undefined, [
         ...new Set([

@@ -182,6 +182,30 @@ describe("main-chat smooth following", () => {
     expect(element.scrollTop).toBe(1300);
   });
 
+  it("keeps following when a resize scroll arrives after measurement but before the next frame", () => {
+    const { element, position, controller, finish } = setup();
+    controller.update(true);
+    element.clientWidth = 450;
+    element.clientHeight = 250;
+    element.scrollHeight = 1600;
+    // The browser clamps a prior layout's offset before the controller writes again.
+    element.scrollTop = 980;
+    controller.update();
+    controller.onScroll();
+    expect(position.following).toBe(true);
+    finish();
+    expect(element.scrollTop).toBe(1350);
+    // Real upward input during a later resize must still release follow immediately.
+    element.clientHeight = 200;
+    controller.update();
+    controller.pause();
+    element.scrollTop -= 20;
+    controller.onScroll();
+    finish();
+    expect(position.following).toBe(false);
+    expect(element.scrollTop).toBe(1330);
+  });
+
   it("upward input cancels an in-flight animation even inside the bottom threshold", () => {
     const { element, position, controller, frames, advance } = setup();
     controller.update(true);

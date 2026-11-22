@@ -4,12 +4,9 @@ import { fileURLToPath } from "node:url";
 import electron from "electron";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-// Bootstrap only the first-party compiler and helper, with finite deadlines.
+// Bootstrap only the first-party compiler, with finite deadlines.
 // Once compiled, all long-lived development processes use the production owner.
-for (const args of [
-  ["scripts/build-windows-helper.mjs"],
-  ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"],
-])
+for (const args of [["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"]])
   execFileSync(process.execPath, args, {
     cwd: root,
     stdio: "inherit",
@@ -25,7 +22,7 @@ let timer;
 let watcher;
 let restarting = false;
 let dirty = false;
-const appGrace = process.platform === "win32" ? 0 : 25_000;
+const appGrace = 25_000;
 
 async function launch(command, args) {
   const child = await spawnOwnedProcess([command, ...args], root);

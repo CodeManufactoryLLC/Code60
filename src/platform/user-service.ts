@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { atomicReplace, writePrivateFile } from "./storage.js";
 
@@ -19,7 +19,6 @@ export interface UserServiceDefinition {
   status: readonly string[];
 }
 const LABEL = "com.codemanufactory.code60.scheduler";
-const TASK = "\\Code60 Scheduler";
 const xml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -33,7 +32,6 @@ const unit = (value: string) =>
     .replaceAll('"', '\\"')
     .replaceAll("%", "%%")
     .replaceAll("$", "$$")}"`;
-const powershell = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 export function userServiceDefinition(
   platform: NodeJS.Platform,
@@ -50,7 +48,7 @@ export function userServiceDefinition(
     ) ||
     Object.keys(runtime.env).some((v) => !/^[A-Z_][A-Z0-9_]*$/.test(v))
   )
-    throw new Error("Invalid background runtime");
+    throw new Error("Invalid Scheduling Service runtime");
   if (platform === "darwin") {
     const path = join(home, "Library", "LaunchAgents", `${LABEL}.plist`);
     const target = `gui/${process.getuid?.() ?? -1}`;
@@ -100,40 +98,108 @@ Restart=on-failure\nRestartSec=30\nTimeoutStopSec=60\nKillMode=control-group
       status: ["systemctl", "--user", "is-active", "code60-scheduler.service"],
     };
   }
-  if (platform === "win32") {
-    const path = join(root, "scheduler-task.xml");
-    const command = `${Object.entries(runtime.env)
-      .map(([k, v]) => `$env:${k}=${powershell(v)};`)
-      .join(
-        "",
-      )}& ${[runtime.executable, ...runtime.args].map(powershell).join(" ")};exit $LASTEXITCODE`;
-    // PowerShell's encoded command is a transport for fixed, safely quoted arguments.
-    const args = `-NoLogo -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(command, "utf16le").toString("base64")}`;
-    return {
-      path,
-      contents: `<?xml version="1.0" encoding="UTF-8"?>
-<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-<Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
-<Principals><Principal id="User"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
-<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>
-<Actions Context="User"><Exec><Command>powershell.exe</Command><Arguments>${xml(args)}</Arguments></Exec></Actions></Task>\n`,
-      install: [
-        ["schtasks.exe", "/Create", "/TN", TASK, "/XML", path, "/F"],
-        ["schtasks.exe", "/Run", "/TN", TASK],
-      ],
-      start: [["schtasks.exe", "/Run", "/TN", TASK]],
-      stop: [["schtasks.exe", "/End", "/TN", TASK]],
-      uninstall: [
-        ["schtasks.exe", "/End", "/TN", TASK],
-        ["schtasks.exe", "/Delete", "/TN", TASK, "/F"],
-      ],
-      status: ["schtasks.exe", "/Query", "/TN", TASK, "/FO", "CSV", "/NH"],
-    };
-  }
   throw new Error("Background scheduling is unsupported on this platform");
 }
 
 export type ServiceCommand = (argv: readonly string[]) => Promise<boolean>;
+type ServiceInspectionCommand = (
+  argv: readonly string[],
+) => Promise<{ ok: boolean; stdout: string }>;
+const inspectCommand: ServiceInspectionCommand = (argv) =>
+  new Promise((resolve) => {
+    const [file, ...args] = argv;
+    if (!file) return resolve({ ok: false, stdout: "" });
+    execFile(
+      file,
+      args,
+      { timeout: 5000, maxBuffer: 64 * 1024, windowsHide: true },
+      (error, stdout) => resolve({ ok: !error, stdout }),
+    );
+  });
+
+/** Inspect only fixed supervisor commands; never install, repair or start on a read. */
+export async function inspectUserService(
+  definition: UserServiceDefinition,
+  command: ServiceInspectionCommand = inspectCommand,
+): Promise<{
+  definitionPresent: boolean;
+  state: "running" | "stopped" | "unavailable";
+  pid?: number;
+  loaded?: boolean;
+}> {
+  const file = await lstat(definition.path).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return null;
+  });
+  if (file && (!file.isFile() || file.size > 64 * 1024))
+    throw new Error("Scheduling Service registration is unavailable.");
+  const definitionPresent = file !== null;
+  if (definition.status[0] === "systemctl") {
+    const result = await command([
+      "systemctl",
+      "--user",
+      "show",
+      "code60-scheduler.service",
+      "--property=LoadState",
+      "--property=ActiveState",
+      "--property=MainPID",
+    ]);
+    const fields = new Map(
+      result.stdout
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const [key = "", value = ""] = line.split("=");
+          return [key, value] as const;
+        }),
+    );
+    const load = fields.get("LoadState");
+    const state = fields.get("ActiveState");
+    return {
+      definitionPresent,
+      ...(Number(fields.get("MainPID")) > 0 ? { pid: Number(fields.get("MainPID")) } : {}),
+      state:
+        (!result.ok && !(load === "not-found" && state === "inactive")) ||
+        !["loaded", "not-found"].includes(load ?? "")
+          ? "unavailable"
+          : state === "active" ||
+              state === "activating" ||
+              state === "reloading" ||
+              state === "deactivating"
+            ? "running"
+            : state === "inactive" || state === "failed"
+              ? "stopped"
+              : "unavailable",
+    };
+  }
+  const result = await command(definition.status);
+  if (result.ok) {
+    const state = /^\s*state = (.+)$/m.exec(result.stdout)?.[1]?.trim();
+    return {
+      definitionPresent,
+      loaded: true,
+      ...(/^\s*pid = ([1-9]\d*)$/m.exec(result.stdout)
+        ? { pid: Number(/^\s*pid = ([1-9]\d*)$/m.exec(result.stdout)?.[1]) }
+        : {}),
+      state:
+        state === "running"
+          ? "running"
+          : state === "not running" || state === "waiting"
+            ? "stopped"
+            : "unavailable",
+    };
+  }
+  // A reachable domain alone is insufficient. Its successful service inventory
+  // must positively show that this job is absent, even after a failed bootout.
+  const supervisor = await command(["launchctl", "print", `gui/${process.getuid?.() ?? -1}`]);
+  const services = /^\s*services = \{\n([\s\S]*?)^\s*\}/m.exec(supervisor.stdout)?.[1];
+  const unloaded = supervisor.ok && services !== undefined && !services.includes(LABEL);
+  return {
+    definitionPresent,
+    ...(unloaded ? { loaded: false } : {}),
+    state: unloaded ? "stopped" : "unavailable",
+  };
+}
 const runServiceCommand: ServiceCommand = (argv) =>
   new Promise((resolve) => {
     const [file, ...args] = argv;
@@ -151,10 +217,19 @@ export async function controlUserService(
   definition: UserServiceDefinition,
   action: "install" | "repair" | "start" | "stop" | "uninstall" | "status",
   command: ServiceCommand = runServiceCommand,
+  inspectionCommand: ServiceInspectionCommand = inspectCommand,
 ): Promise<{ available: boolean }> {
   if (action === "status") return { available: await command(definition.status) };
   if (action === "install" || action === "repair") {
-    if (action === "repair") for (const argv of definition.stop) await command(argv);
+    if (action === "repair")
+      for (const argv of definition.stop)
+        if (!(await command(argv))) {
+          const native = await inspectUserService(definition, inspectionCommand);
+          if (native.state !== "stopped" || (argv[0] === "launchctl" && native.loaded !== false))
+            throw new Error(
+              "Scheduling Service could not stop. Its registration was not replaced.",
+            );
+        }
     await mkdir(join(definition.path, ".."), { recursive: true, mode: 0o700 });
     const temporary = join(definition.path, "..", `${randomUUID()}.tmp`);
     await writePrivateFile(temporary, definition.contents, { mode: 0o600, flag: "wx" });
@@ -168,7 +243,7 @@ export async function controlUserService(
     for (const argv of definition.install)
       if (!(await command(argv)))
         throw new Error(
-          "Background service registration failed. The native user supervisor may be unavailable.",
+          "Scheduling Service registration failed. The native user supervisor may be unavailable.",
         );
     return { available: true };
   }
@@ -177,7 +252,7 @@ export async function controlUserService(
       // Bootstrap fails for an already loaded job; only a successful kickstart
       // proves that start succeeded. All other failures remain fatal.
       if (action === "start" && argv[0] === "launchctl" && argv[1] === "bootstrap") continue;
-      throw new Error("Background service control failed. Check the native user supervisor.");
+      throw new Error("Scheduling Service control failed. Check the native user supervisor.");
     }
   if (action === "uninstall") await unlink(definition.path);
   return { available: action === "start" };

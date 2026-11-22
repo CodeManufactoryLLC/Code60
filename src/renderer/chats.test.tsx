@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type {
+  ActivitySnapshot,
+  DesktopApi,
+  DesktopRun,
+  OrchestrationChat,
+} from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversations, conversationTitle, reconcileDisclosure, workerLabel } from "./chats.js";
@@ -33,6 +38,167 @@ const run = (id: string, status: RunStatus = "idle"): DesktopRun =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe("conversation hierarchy", () => {
+  const activity = (state: ActivitySnapshot["state"]): ActivitySnapshot => ({
+    state,
+    label: state,
+    source: "host",
+    active: state === "working",
+    urgent: false,
+    declaration: null,
+    workerCount: state === "waiting_for_workers" ? 1 : 0,
+    otherOperations: 0,
+  });
+  const activityChat = (
+    kind: "project" | "relay" | "custom",
+    status: RunStatus,
+    state: ActivitySnapshot["state"],
+  ): OrchestrationChat => ({
+    ...chat("owner"),
+    kind: kind === "project" ? "project" : "relay",
+    ...(kind === "custom" ? { customAgentId: "assistant-id" } : {}),
+    run: view("owner", status),
+    activity: activity(state),
+  });
+  const renderOwner = (owner: OrchestrationChat) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    return renderToStaticMarkup(
+      <ChatSidebar
+        chats={[owner]}
+        runs={[]}
+        selectedId={undefined}
+        navigationSerial={undefined}
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+  };
+
+  it.each(["project", "relay", "custom"] as const)(
+    "keeps restored queued/running %s history static despite a retained run view",
+    (kind) => {
+      for (const status of ["queued", "running"] as const) {
+        const owner = { ...activityChat(kind, status, "idle"), restored: true };
+        expect(renderOwner(owner)).not.toContain('data-working="true"');
+      }
+    },
+  );
+
+  it.each(["project", "relay", "custom"] as const)(
+    "stops %s spotlight and exposes stopping before its provider finishes",
+    (kind) => {
+      const owner = activityChat(kind, "running", "stopping");
+      expect(owner.run?.stopping).toBe(false);
+      const html = renderOwner(owner);
+      expect(html).not.toContain('data-working="true"');
+      expect(html).toContain('aria-description="Orchestrator. Stopping"');
+    },
+  );
+
+  it.each(["project", "relay", "custom"] as const)(
+    "exposes %s worker monitoring through its description and tooltip",
+    (kind) => {
+      const html = renderOwner(activityChat(kind, "idle", "waiting_for_workers"));
+      expect(html).toContain('data-working="true"');
+      expect(html).toContain('aria-description="Orchestrator. Monitoring subagents"');
+      expect(html).toMatch(/title="[^"]*Monitoring subagents"/);
+      expect(html).not.toContain("Awaiting input");
+    },
+  );
+
+  it.each<RunStatus>([
+    "queued",
+    "running",
+    "waiting",
+    "idle",
+    "finished",
+    "failed",
+    "cancelled",
+    "timed_out",
+    "interrupted",
+  ])("spotlights only live active sidebar entries (%s)", (status) => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const ownerRun = view("owner", status);
+    const owner: OrchestrationChat = {
+      ...chat("owner", ["worker"]),
+      title: "Custom assistant",
+      kind: "relay",
+      customAgentId: "assistant-id",
+      run: ownerRun,
+      activity: activity(
+        status === "queued"
+          ? "connecting"
+          : status === "running"
+            ? "working"
+            : status === "waiting"
+              ? "waiting_for_approval"
+              : status,
+      ),
+    };
+    const relay: OrchestrationChat = {
+      ...chat("relay"),
+      kind: "relay",
+      run: view("relay", status),
+      activity: owner.activity,
+    };
+    const worker = run("worker", status);
+    const render = () =>
+      renderToStaticMarkup(
+        <ChatSidebar
+          chats={[owner, relay]}
+          runs={[worker]}
+          selectedId="relay"
+          navigationSerial={undefined}
+          database="/db"
+          eventsByRun={{}}
+          open
+          pending={false}
+          onSelect={() => {}}
+        />,
+      );
+    const working = () => (render().match(/data-working="true"/g) ?? []).length;
+    expect(working()).toBe(status === "running" || status === "queued" ? 3 : 0);
+    if (status !== "running") return;
+    ownerRun.stopping = true;
+    expect(working()).toBe(2);
+    relay.error = "Connection failed";
+    expect(working()).toBe(1);
+    if (worker.view) worker.view.pending = [{ id: "approval" } as RunView["pending"][number]];
+    expect(working()).toBe(0);
+    ownerRun.stopping = false;
+    ownerRun.status = "idle";
+    owner.activity = { state: "waiting_for_workers" } as NonNullable<OrchestrationChat["activity"]>;
+    expect(working()).toBe(1);
+    delete worker.view;
+    expect(working()).toBe(1); // A running saved record without a live view is static.
+    owner.run = null;
+    expect(working()).toBe(0);
+  });
+
+  it("keeps a cancelling worker static before its provider finishes", () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const worker = run("worker", "running");
+    if (!worker.view) throw new Error("Missing worker view");
+    worker.view.cancelling = true;
+    const html = renderToStaticMarkup(
+      <ChatSidebar
+        chats={[]}
+        runs={[worker]}
+        selectedId={undefined}
+        navigationSerial={undefined}
+        database="/db"
+        eventsByRun={{}}
+        open
+        pending={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-working="true"');
+    expect(html).toContain('aria-description="Worker. Stopping"');
+  });
+
   it("keeps worker interruption history without showing the retired PID as a chat warning", () => {
     const worker = run("old-worker", "interrupted");
     worker.record.reason = "the owning process (PID 12345) is gone";
@@ -84,6 +250,7 @@ describe("conversation hierarchy", () => {
     expect(html).not.toContain('data-icon="app-communication"');
     expect(html).not.toContain('data-icon="app-down-right"');
     expect(html).not.toContain("disabled");
+    expect(html).not.toContain("chat-sidebar-action");
   });
   it("renders only project-bound conversations inside project groups", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -128,14 +295,35 @@ describe("conversation hierarchy", () => {
       const project = projects[index];
       expect(section).toContain(`id="conversation-${project?.id}"`);
       expect(section).not.toContain('id="conversation-relay"');
-      expect(section.indexOf("project-chat-name")).toBeLessThan(section.indexOf("New chat in"));
-      expect(section.indexOf("New chat in")).toBeLessThan(section.indexOf("More for"));
+      expect(section.indexOf("project-chat-name")).toBeLessThan(
+        section.indexOf("project-session-add"),
+      );
+      expect(section.indexOf("project-session-add")).toBeLessThan(
+        section.indexOf("project-folder-stop"),
+      );
+      expect(section.indexOf("project-folder-stop")).toBeLessThan(
+        section.indexOf("project-chat-toggle"),
+      );
+      expect(section.indexOf("project-chat-toggle")).toBeLessThan(
+        section.indexOf("project-chat-pages"),
+      );
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("project-chat-pages"));
+      expect(section.indexOf("New Session in")).toBeLessThan(section.indexOf("chat-sidebar"));
+      expect(section).toContain(`aria-label="Close Project: ${project?.path}"`);
+      expect(section).toContain('title="Close Project"');
+      expect(section).toContain('data-tooltip="Close Project"');
+      expect(section).toContain('class="sidebar-card-stop"');
+      const stopButton = section.match(
+        /<button[^>]*class="icon-button project-folder-stop"[^>]*>/,
+      )?.[0];
+      expect(stopButton).not.toContain('aria-haspopup="menu"');
       expect(section).not.toContain("Toggle chats");
       expect(section).toContain('aria-expanded="true"');
       expect(section).toContain('aria-hidden="false"');
       const folder = section.match(/<span class="project-chat-label">([\s\S]*?)<\/span>/)?.[0];
       expect(folder).toContain('data-icon="app-folder"');
-      expect(folder).toContain("folder.svg");
+      expect(folder).toContain("folder.png");
+      expect(folder).toContain('data-animated="true"');
       expect(folder).toContain('alt="" aria-hidden="true" draggable="false"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
@@ -257,7 +445,7 @@ describe("conversation hierarchy", () => {
     const next = conversations([chat("a", ["one", "two"])], [run("one"), run("two")]);
     expect([...reconcileDisclosure({ a: ["one"] }, next, new Set(["a"]))]).toEqual([]);
   });
-  it("marks conversation roles with icons, accessible status, unread counts and separate actions", () => {
+  it("marks conversation roles with icons, accessible status and separate actions without worker unread counts", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = {
       one: [{ runId: "one", at: "2026-01-01", type: "message", text: "reply" }] as RunEvent[],
@@ -276,18 +464,22 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html).toContain('data-role="orchestrator"');
-    expect(html).toContain('aria-label="Actions for Chat 1"');
-    expect(html).not.toContain('aria-label="Actions for fake');
+    expect(html).toContain('aria-label="Rename chat: Chat 1"');
+    expect(html).toContain('aria-label="Archive chat: Chat 1"');
+    expect(html).not.toContain('aria-haspopup="menu"');
+    expect(html).not.toContain('aria-label="Actions for ');
+    expect(html).not.toContain('aria-label="Rename chat: fake');
+    expect(html).not.toContain('aria-label="Archive chat: fake');
     expect(html).toContain('data-role="worker"');
     expect(html).toContain('aria-label="Workers for Chat 1"');
     expect(html).toContain('aria-label="Chat 1 workers"');
-    expect(html).toContain('aria-label="1 unread reply"');
+    expect(html).not.toContain('class="chat-unread"');
     expect(html).toContain("Worker. Failed");
     expect(html).not.toContain('class="chat-sidebar-status"');
-    expect(html).toContain('<span class="sr-only">Worker. Failed. 1 unread reply</span>');
-    for (const action of ["Actions", "Workers"]) {
+    expect(html).toContain('<span class="sr-only">Worker. Failed</span>');
+    for (const action of ["Rename chat: Chat 1", "Archive chat: Chat 1", "Workers for Chat 1"]) {
       const button = html.match(
-        new RegExp(`<button[^>]*aria-label="${action} for Chat 1"[\\s\\S]*?</button>`),
+        new RegExp(`<button[^>]*aria-label="${action}"[\\s\\S]*?</button>`),
       )?.[0];
       expect(button).toContain('class="icon-button');
       expect(button?.match(/<svg/g)).toHaveLength(1);
@@ -332,17 +524,17 @@ describe("conversation hierarchy", () => {
     );
     expect(html).toContain('<span class="chat-approval-count">(1)</span>');
     expect(html).toContain("Connection failed. 1 approvals waiting");
-    expect(html.match(/<button[^>]*aria-label="Actions for Chat 1"[^>]*>/)?.[0]).toContain(
+    expect(html.match(/<button[^>]*aria-label="Rename chat: Chat 1"[^>]*>/)?.[0]).toContain(
       "disabled",
     );
-    expect(html.match(/<svg/g)).toHaveLength(1);
+    expect(html.match(/<svg/g)).toHaveLength(2);
     expect(html.match(/<img/g)).toHaveLength(1);
     expect(html).toContain('data-icon="app-communication"');
   });
-  it("clears unread for the selected worker without clearing its siblings", () => {
+  it("keeps orchestrator unread counts while hiding selected and background worker counts", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const events = Object.fromEntries(
-      ["one", "two"].map((id) => [
+      ["a", "one", "two"].map((id) => [
         id,
         [{ runId: id, at: "2026-01-01", type: "message", text: "reply" }],
       ]),
@@ -361,6 +553,10 @@ describe("conversation hierarchy", () => {
       />,
     );
     expect(html.match(/aria-label="1 unread reply"/g)).toHaveLength(1);
+    expect(html).toContain(
+      '<span class="sr-only">Orchestrator. Awaiting input. 1 unread reply</span>',
+    );
+    expect(html).not.toContain("Worker. Awaiting input. 1 unread reply");
   });
 });
 
@@ -409,7 +605,7 @@ describe("embedded worker chat", () => {
       expect(html).toContain("<h1>Result</h1>");
       expect(html).toContain("<strong>Bold</strong>");
       expect(html).toContain("<code>code</code>");
-      expect(html).toContain("<pre>**literal user**</pre>");
+      expect(html).toMatch(/<pre[^>]*>\*\*literal user\*\*<\/pre>/);
       expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
       expect(html.toLowerCase().match(/datetime="2026-01-01t00:00:00.000z"/g)).toHaveLength(2);
       expect(html.toLowerCase()).not.toContain('datetime="2026-01-01t00:00:30.000z"');
@@ -444,7 +640,7 @@ describe("embedded worker chat", () => {
     expect(html).toContain('class="page-title worker-chat-title"');
     expect(html).toContain('data-icon="app-down-right"');
     expect(html).toContain("Orchestrator worker");
-    expect(html).toContain("Code60 auto-approval: On");
+    expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
     expect(html).toContain('aria-label="Worker composer"');
     expect(html).not.toContain('role="dialog"');
     for (const label of ["Minimize chat", "Close chat", "full screen"])
@@ -469,9 +665,9 @@ describe("embedded worker chat", () => {
     expect(html).not.toContain('class="turn-separator"');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
-  it("titles the worker by its role name, falling back to provider and run ID", () => {
-    expect(render(run("one"), [], true, "Test writer")).toMatch(/Test writer<\/span><\/h2>/);
-    expect(render(run("one"))).toMatch(/fake \/ one<\/span><\/h2>/);
+  it("uses the generic Subagent breadcrumb independently of its saved role label", () => {
+    expect(render(run("one"), [], true, "Test writer")).toMatch(/Subagent<\/span><\/h2>/);
+    expect(render(run("one"))).toMatch(/Subagent<\/span><\/h2>/);
   });
   it("keeps deleted-worktree sessions visible but inactive", () => {
     const worker = run("one", "finished");

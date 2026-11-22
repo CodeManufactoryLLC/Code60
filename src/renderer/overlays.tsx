@@ -8,7 +8,9 @@ import {
   useState,
 } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import { markParts, rankCommands } from "./palette.js";
+import { captureTooltipScroll } from "./tooltip-scroll.js";
 
 export interface Command {
   id: string;
@@ -63,7 +65,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
         entries: matches.filter((entry) => entry.command.group === name),
       }));
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="command-palette"
       aria-label="Command palette"
@@ -166,7 +168,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
           {matches.length} {matches.length === 1 ? "result" : "results"}
         </span>
       </footer>
-    </dialog>
+    </DialogContent>
   );
 }
 
@@ -209,6 +211,7 @@ export function Tooltips() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let focusFrame: number | undefined;
     let focusing: HTMLElement | undefined;
+    let scrollMoved: ((source: EventTarget | null) => boolean) | undefined;
     let described: HTMLElement | undefined;
     let previous: string | null = null;
     let hiddenAt = 0;
@@ -217,6 +220,7 @@ export function Tooltips() {
       if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
       focusFrame = undefined;
       focusing = undefined;
+      scrollMoved = undefined;
       if (described) {
         if (previous === null) described.removeAttribute("aria-describedby");
         else described.setAttribute("aria-describedby", previous);
@@ -236,6 +240,7 @@ export function Tooltips() {
       if (!target || target.matches(":disabled") || (event as PointerEvent).buttons) return;
       const text = target.dataset.tooltip ?? target.getAttribute("aria-label");
       if (!text) return;
+      scrollMoved = captureTooltipScroll(target);
       const reveal = () => {
         previous = target.getAttribute("aria-describedby");
         described = target;
@@ -266,9 +271,10 @@ export function Tooltips() {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") hide();
     };
-    const scroll = () => {
+    const scroll = (event: Event) => {
+      const moved = scrollMoved?.(event.target) ?? true;
       if (focusFrame !== undefined && focusing === document.activeElement) return;
-      hide();
+      if (moved) hide();
     };
     document.addEventListener("pointerover", show);
     document.addEventListener("focusin", show);

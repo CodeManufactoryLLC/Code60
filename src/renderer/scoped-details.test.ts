@@ -53,6 +53,32 @@ const detail = (): DetailFrame => ({
     },
   },
 });
+it("keeps repeated saved conversation IDs and their detail overlays qualified by project", () => {
+  const second = { ...chat, projectId: "b7cdf9b2-cf49-4de9-a45e-36c6c3c31296", directory: "/b" };
+  const state = applyUpdate(undefined, { ...snapshot, summaryOnly: true, chats: [chat, second] });
+  const a = detail();
+  const b: DetailFrame = {
+    ...a,
+    closed: false,
+    scope: { ...a.scope, projectId: second.projectId } as DetailFrame["scope"],
+    payload: {
+      kind: "conversation",
+      chat: {
+        ...second,
+        events: [
+          { revision: 5, event: { type: "message", runId: "chat", at: "", text: "B reply" } },
+        ],
+      },
+    },
+  };
+  const merged = applyDetails(state, {
+    [detailScopeKey(a.scope)]: a,
+    [detailScopeKey(b.scope)]: b,
+  });
+  expect(merged?.chatEventsByRun[`${projectId}:chat`]).toMatchObject([{ text: "A reply" }]);
+  expect(merged?.chatEventsByRun[`${second.projectId}:chat`]).toMatchObject([{ text: "B reply" }]);
+  expect(merged?.chatEvents).toMatchObject([{ text: "A reply" }]);
+});
 it("does not overlay a pre-Undo detail cache after the same project conversation rewinds", () => {
   const rewound = { ...chat, rewindRevision: 1 };
   const state = applyUpdate(undefined, {

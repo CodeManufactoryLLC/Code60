@@ -8,6 +8,27 @@ afterEach(async () => {
 });
 
 describe("Code60 private MCP gateway", () => {
+  it("cancels owned work when its HTTP caller disconnects", async () => {
+    let observed: AbortSignal | undefined;
+    gateway = await createMcpGateway(async (_name, _args, signal) => {
+      observed = signal;
+      return new Promise((resolve) =>
+        signal.addEventListener("abort", () => resolve({ cancelled: true }), { once: true }),
+      );
+    });
+    const cancellation = new AbortController();
+    const call = fetch(gateway.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${gateway.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "code60_browser", arguments: { action: "list-tools" } }),
+      signal: cancellation.signal,
+    });
+    const rejected = expect(call).rejects.toThrow();
+    await vi.waitFor(() => expect(observed).toBeDefined());
+    cancellation.abort();
+    await rejected;
+    await vi.waitFor(() => expect(observed?.aborted).toBe(true));
+  });
   it("redacts credential-bearing tool errors without altering successful payloads", async () => {
     gateway = await createMcpGateway(async () => {
       throw new Error(`connection failed: api_key=${["synthetic", "credential"].join("-")}`);
@@ -51,7 +72,7 @@ describe("Code60 private MCP gateway", () => {
     expect(handler).not.toHaveBeenCalled();
     const valid = await call(gateway.token, { name: "code60_read_sessions", arguments: {} });
     expect(await valid.json()).toEqual({ result: { rows: [] } });
-    expect(handler).toHaveBeenCalledWith("code60_read_sessions", {});
+    expect(handler).toHaveBeenCalledWith("code60_read_sessions", {}, expect.any(AbortSignal));
     expect(valid.headers.get("cache-control")).toBe("no-store");
     await gateway.close();
     await expect(call(gateway.token, {})).rejects.toThrow();

@@ -73,6 +73,31 @@ const entry = (revision: number, text: string) => ({
   event: { runId: "r1", at: "t", type: "message" as const, text },
 });
 
+it("retains submitted project-chat evidence separately when saved run IDs repeat", () => {
+  const makeChat = (projectId: string, text: string) => ({
+    ...snapshot(1).chat,
+    kind: "project" as const,
+    projectId,
+    run: { id: "r1" } as NonNullable<Snapshot["chat"]["run"]>,
+    events: [entry(1, text)],
+  });
+  const a = makeChat("project-a", "A reply");
+  const b = makeChat("project-b", "B reply");
+  const state = applyUpdate(undefined, { ...snapshot(1), chat: a, chats: [a, b] });
+  expect(state.chatEventsByRun["project-a:r1"]).toMatchObject([{ text: "A reply" }]);
+  expect(state.chatEventsByRun["project-b:r1"]).toMatchObject([{ text: "B reply" }]);
+  const changed = applyUpdate(state, {
+    ...snapshot(2),
+    chat: { ...b, events: [] },
+    chats: [
+      { ...a, events: [] },
+      { ...b, events: [] },
+    ],
+  });
+  expect(changed.chatEvents).toMatchObject([{ text: "B reply" }]);
+  expect(changed.chatEventsByRun["project-a:r1"]).toMatchObject([{ text: "A reply" }]);
+});
+
 it("updates tool attribution without duplicating blocks and accepts corrected metadata", () => {
   const tool = {
     runId: "r",
@@ -282,39 +307,35 @@ describe("desktop stream state", () => {
     expect([...values]).toEqual(chosen);
   });
 
-  it("defaults all roles to Light, 16px serif page titles and sans card/table headings", () => {
-    for (const role of [
-      "tableHeadings",
-      "buttons",
-      "agentMessages",
-      "humanMessages",
-      "cardTitles",
-      "normalText",
-    ] as const)
+  it("defaults to bold Grotesk headings, semibold labels and regular Plex body text", () => {
+    for (const role of ["agentMessages", "humanMessages", "normalText"] as const)
       expect(resolveText(defaultTextStyles, role)).toMatchObject({
         family: fontFamily("ibm-plex-sans"),
-        weight: 300,
+        weight: 400,
       });
-    expect(resolveText(defaultTextStyles, "tableHeadings")).toMatchObject({
-      size: 12,
-      weight: 300,
-      case: undefined,
-    });
-    expect(resolveText(defaultTextStyles, "pageTitles")).toMatchObject({
-      family: fontFamily("ibm-plex-serif"),
-      size: 16,
-      weight: 300,
-      case: undefined,
-    });
-    expect(resolveText(defaultTextStyles, "cardTitles").size).toBe(22);
+    for (const role of ["tableHeadings", "buttons"] as const)
+      expect(resolveText(defaultTextStyles, role)).toMatchObject({
+        family: fontFamily("ibm-plex-sans"),
+        weight: 600,
+      });
+    for (const [role, size] of [
+      ["pageTitles", 16],
+      ["cardTitles", 22],
+    ] as const)
+      expect(resolveText(defaultTextStyles, role)).toMatchObject({
+        family: fontFamily("space-grotesk"),
+        size,
+        weight: 700,
+        case: undefined,
+      });
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
-      "--title-font": fontFamily("ibm-plex-serif"),
+      "--title-font": fontFamily("space-grotesk"),
       "--title-size": "16px",
-      "--title-weight": "300",
-      "--card-font": fontFamily("ibm-plex-sans"),
+      "--title-weight": "700",
+      "--card-font": fontFamily("space-grotesk"),
       "--card-size": "22px",
-      "--card-weight": "300",
-      "--human-weight": "300",
+      "--card-weight": "700",
+      "--human-weight": "400",
       "--page-title-space-size": "64px",
     });
     expect(parseTextStyles(JSON.stringify(defaultTextStyles))).toEqual(defaultTextStyles);
@@ -342,8 +363,14 @@ describe("desktop stream state", () => {
     const styles = parseTextStyles(storage.getItem("code60.textStyles"));
     for (const role of Object.keys(defaultTextStyles) as (keyof typeof defaultTextStyles)[])
       expect(resolveText(styles, role)).toMatchObject({
-        family: fontFamily(role === "pageTitles" ? "ibm-plex-serif" : "ibm-plex-sans"),
-        weight: 300,
+        family: fontFamily(
+          ["pageTitles", "cardTitles"].includes(role) ? "space-grotesk" : "ibm-plex-sans",
+        ),
+        weight: ["pageTitles", "cardTitles"].includes(role)
+          ? 700
+          : ["tableHeadings", "buttons"].includes(role)
+            ? 600
+            : 400,
       });
     expect(styles.normalText).toEqual({ size: 22, case: "lower" });
     expect(storage.getItem("code60.theme")).toBe("dark");
@@ -395,7 +422,7 @@ describe("desktop stream state", () => {
       weight: 400,
     });
     expect(styles.cardTitles).toEqual({});
-    expect(resolveText(styles, "cardTitles").family).toBe(fontFamily("ibm-plex-sans"));
+    expect(resolveText(styles, "cardTitles").family).toBe(fontFamily("space-grotesk"));
     expect(textStyleProperties(styles)["--nav-font-size"]).toBe("13px");
   });
 
@@ -460,7 +487,7 @@ describe("desktop stream state", () => {
     });
     expect(resolveText(styles, "buttons")).toMatchObject({
       size: 13,
-      weight: 300,
+      weight: 600,
       case: undefined,
     });
     expect(resolveText(styles, "normalText")).toMatchObject({ weight: 700, case: "lower" });
@@ -473,7 +500,7 @@ describe("desktop stream state", () => {
     });
     expect(textStyleProperties(defaultTextStyles)).toMatchObject({
       "--heading-size": "12px",
-      "--heading-weight": "300",
+      "--heading-weight": "600",
       "--heading-case": undefined,
       "--text-size": "13px",
     });
@@ -668,9 +695,9 @@ describe("fit columns to width", () => {
 });
 
 describe("row density setting", () => {
-  it("defaults to high and keeps known densities", () => {
-    expect(parseRowDensity(null)).toBe("high");
-    expect(parseRowDensity("dense")).toBe("high");
+  it("defaults to low and keeps known densities", () => {
+    expect(parseRowDensity(null)).toBe("low");
+    expect(parseRowDensity("dense")).toBe("low");
     expect(parseRowDensity("high")).toBe("high");
     expect(parseRowDensity("low")).toBe("low");
   });
@@ -684,6 +711,7 @@ describe("typeface setting", () => {
   it.each([
     ["lexend", "Lexend"],
     ["space-grotesk", "Space Grotesk"],
+    ["scientifica", "Scientifica"],
   ] as const)("offers and restores %s independently for every text role", (typeface, label) => {
     expect(typefaces).toContainEqual({ id: typeface, label, family: fontFamily(typeface) });
     expect(parseTypeface(typeface)).toBe(typeface);
@@ -717,7 +745,12 @@ describe("typeface setting", () => {
   });
 
   it("falls back to the system font for removed typefaces", () => {
-    for (const removed of ["fractal-monolith-grotesk", "kryon-null-grotesk", "quantum-grotesk"]) {
+    for (const removed of [
+      "fractal-monolith-grotesk",
+      "kryon-null-grotesk",
+      "quantum-grotesk",
+      "ocr-a",
+    ]) {
       expect(parseTypeface(removed)).toBe("system");
       expect(
         parseTextStyles(JSON.stringify({ normalText: { typeface: removed } })).normalText,
@@ -732,6 +765,6 @@ describe("typeface setting", () => {
 
   it("uses normal letter spacing for the bundled typefaces", () => {
     expect(letterSpacing("d-din")).toBe("normal");
-    expect(letterSpacing("ocr-a")).toBe("normal");
+    expect(letterSpacing("scientifica")).toBe("normal");
   });
 });

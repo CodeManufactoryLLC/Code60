@@ -37,6 +37,7 @@ async function project(name: string) {
   const directory = join(root, name);
   await mkdir(directory);
   command(directory, "init", "-q");
+  command(directory, "config", "core.autocrlf", "false");
   command(directory, "config", "user.name", "Test");
   command(directory, "config", "user.email", "test@example.invalid");
   await writeFile(join(directory, "file.txt"), "before\n");
@@ -388,6 +389,25 @@ it("automatically integrates and restores two targets without changing their ind
     expect(await taskGit.identity(directory)).toBe(identity[index]);
   }
 });
+it("keeps inverse journals within the Windows helper path limit beneath deep chat storage", async () => {
+  const directory = await project("deep");
+  // Project chats keep checkpoints several generated directories below the database.
+  const parent = join(root, "c".repeat(Math.max(1, 185 - root.length - "/checkpoints".length - 1)));
+  await mkdir(parent);
+  checkpoints = await ChatCheckpoints.open(join(parent, "checkpoints"), taskGit);
+  const id = await begin();
+  const { loop, operation } = await proposal(directory, "after\n");
+  await checkpoints.integrate(
+    loop,
+    async () => operation,
+    () => {},
+  );
+  await checkpoints.restore(id, 12);
+  expect(await readFile(join(directory, "file.txt"), "utf8")).toBe("before\n");
+  const entry = checkpoints.latest?.restores[0];
+  if (!entry) throw new Error("Missing inverse");
+  expect(join(entry.root, `${randomUUID()}.tmp`).length).toBeLessThan(248);
+});
 it("preflights all targets and preserves both if one has conflicting newer edits", async () => {
   const a = await project("a"),
     b = await project("b");
@@ -631,4 +651,4 @@ it("recovers a partially written inverse journal without overwriting newer files
   await checkpoints.restore(id, 12);
   expect(await readFile(join(a, "file.txt"), "utf8")).toBe("before\n");
   expect(await readFile(join(b, "file.txt"), "utf8")).toBe("before\n");
-}, 10_000);
+}); // File default: sibling two-target restores took 15-19 s on Windows CI.

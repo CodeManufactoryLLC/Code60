@@ -32,6 +32,47 @@ const options = { cwd: "/work", agentName: "test" };
 afterEach(() => vi.useRealTimers());
 
 describe("ACP session information transport", () => {
+  it("switches model from the setter response alone and replaces dependent reasoning options", async () => {
+    const second = {
+      ...model,
+      currentValue: "m2",
+      options: [...model.options, { value: "m2", name: "Model Two" }],
+    };
+    const effort = {
+      ...mode(),
+      id: "effortLevel",
+      category: "thought_level" as const,
+      currentValue: "low",
+      options: [{ value: "low", name: "Low" }],
+    };
+    const app = agent({ name: "test" })
+      .onRequest(methods.agent.initialize, () => ({ protocolVersion: PROTOCOL_VERSION }))
+      .onRequest(methods.agent.session.new, () => ({
+        sessionId: "s1",
+        configOptions: [{ ...second, currentValue: "m1" }, effort],
+      }))
+      .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
+        expect(params.configId).toBe("model");
+        expect(params.value).toBe("m2");
+        return {
+          configOptions: [
+            second,
+            { ...effort, currentValue: "auto", options: [{ value: "auto", name: "Automatic" }] },
+          ],
+        };
+      });
+    const session = await openSession(app, options);
+    try {
+      await session.setMode({ source: "config", configId: "model", value: "m2" });
+      expect(session.sessionState.model?.id).toBe("m2");
+      expect(session.sessionState.settings?.controls[1]?.currentValue).toBe("auto");
+      await expect(
+        session.setMode({ source: "config", configId: "effortLevel", value: "low" }),
+      ).rejects.toThrow(/no longer available/);
+    } finally {
+      session.close();
+    }
+  });
   it("captures setup and early usage, rejects unrelated sessions, and uses returned config after changes", async () => {
     let prompts = 0;
     let requested: unknown;
@@ -114,7 +155,10 @@ describe("ACP session information transport", () => {
     let hang = true;
     const app = agent({ name: "test" })
       .onRequest(methods.agent.initialize, () => ({ protocolVersion: PROTOCOL_VERSION }))
-      .onRequest(methods.agent.session.new, () => ({ sessionId: "s1", configOptions: [mode()] }))
+      .onRequest(methods.agent.session.new, () => ({
+        sessionId: "s1",
+        configOptions: [model, mode()],
+      }))
       .onRequest(methods.agent.session.setConfigOption, async ({ signal }) => {
         if (hang)
           await new Promise<void>((resolve) =>
@@ -131,6 +175,7 @@ describe("ACP session information transport", () => {
       await vi.advanceTimersByTimeAsync(15_000);
       await failed;
       expect(session.sessionState.modes?.confirmed).toBe(false);
+      expect(session.sessionState.settings?.confirmed).toBe(false);
       hang = false;
       await session.setMode(change);
       expect(session.sessionState.modes?.confirmed).toBe(true);

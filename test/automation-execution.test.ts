@@ -223,8 +223,8 @@ describe("isolated automation execution", () => {
     const workspace = await openWorkspace(s.deps, s.repository, s.env);
     const base = { runId: s.execution.runId as string, at: "2026-01-01T00:00:00Z" };
     await Promise.all(
-      Array.from({ length: 600 }, () =>
-        workspace.store.appendEvent({ ...base, type: "message", text: "x " }),
+      Array.from({ length: 600 }, (_, i) =>
+        workspace.store.appendEvent({ ...base, type: "message", text: `${i} \n` }),
       ),
     );
     await workspace.store.appendEvent({ ...base, type: "thought", text: "thought " });
@@ -242,7 +242,7 @@ describe("isolated automation execution", () => {
     expect(value.truncated).toBe(false);
     expect(
       value.entries.filter((entry) => entry.type === "message").map((entry) => entry.text),
-    ).toEqual(["x ".repeat(600), "separate reply"]);
+    ).toEqual([Array.from({ length: 600 }, (_, i) => `${i} \n`).join(""), "separate reply"]);
     expect(
       value.entries.filter((entry) => entry.type === "thought").map((entry) => entry.text),
     ).toEqual(["thought continued"]);
@@ -251,6 +251,59 @@ describe("isolated automation execution", () => {
     const bounded = await read();
     expect(bounded.truncated).toBe(true);
     expect(bounded.entries.reduce((sum, entry) => sum + entry.text.length, 0)).toBe(48_000);
+  });
+
+  it("suppresses raw ACP while preserving empty semantic boundaries and the entry display limit", async () => {
+    const s = await setup();
+    await s.executor.execute(
+      s.automation,
+      s.execution,
+      new AbortController().signal,
+      async () => {},
+    );
+    const workspace = await openWorkspace(s.deps, s.repository, s.env);
+    const base = { runId: s.execution.runId as string, at: "2026-01-01T00:00:00Z" };
+    await workspace.store.appendEvent({ ...base, type: "message", text: "A " });
+    await workspace.store.appendEvent({
+      ...base,
+      type: "acp",
+      update: "agent_message_chunk",
+      payload: "duplicate",
+      size: 9,
+    });
+    await workspace.store.appendEvent({ ...base, type: "message", text: " B" });
+    await workspace.store.appendEvent({
+      ...base,
+      type: "turnEnd",
+      turn: 1,
+      stopReason: "end_turn",
+    });
+    await workspace.store.appendEvent({ ...base, type: "message", text: "C" });
+    await workspace.store.appendEvent({ ...base, type: "note", text: "" });
+    await workspace.store.appendEvent({ ...base, type: "message", text: "D" });
+    const read = async () =>
+      (await executionEvidence(
+        { execution: () => s.execution },
+        s.deps,
+        s.env,
+        s.execution.id,
+        "transcript",
+      )) as import("../src/contracts/index.js").AutomationTranscript;
+    const value = await read();
+    expect(
+      value.entries.filter((entry) => entry.type === "message").map((entry) => entry.text),
+    ).toEqual(["A  B", "C", "D"]);
+    expect(JSON.stringify(value)).not.toContain("duplicate");
+    await Promise.all(
+      Array.from({ length: 501 }, (_, i) =>
+        workspace.store.appendEvent({ ...base, type: "note", text: `note ${i}` }),
+      ),
+    );
+    const bounded = await read();
+    expect(bounded.entries).toHaveLength(500);
+    expect(bounded.truncated).toBe(true);
+    expect(bounded.entries.slice(0, value.entries.length)).toEqual(value.entries);
+    expect(bounded.entries.reduce((sum, entry) => sum + entry.text.length, 0)).toBeLessThan(48_000);
   });
 
   it("refuses changed providers, missing bases and replaced repositories before starting agents", async () => {

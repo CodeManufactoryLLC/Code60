@@ -1,23 +1,7 @@
 // Stable electron-builder 26 configuration. Publication belongs to release.yml.
+if (process.platform !== "darwin" && process.platform !== "linux")
+  throw new Error("Code60 packages support macOS and Linux only");
 const release = process.env.CODE60_RELEASE === "1";
-const { unsignedWindowsBeta } = require("./release/windows-policy.cjs");
-const unsignedWindows = unsignedWindowsBeta(require("../package.json").version);
-// Azure Artifact Signing settings; authentication comes from the GitHub OIDC Azure login.
-const azureSigningSettings = [
-  "AZURE_SIGNING_ENDPOINT",
-  "AZURE_SIGNING_ACCOUNT_NAME",
-  "AZURE_SIGNING_CERTIFICATE_PROFILE_NAME",
-  "WIN_SIGNING_PUBLISHER",
-];
-if (unsignedWindows && process.platform === "win32") {
-  // Prevent local certificate discovery or ambient credentials from changing the chosen mode.
-  process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
-  delete process.env.WIN_CSC_LINK;
-  delete process.env.WIN_CSC_KEY_PASSWORD;
-  delete process.env.CSC_LINK;
-  delete process.env.CSC_KEY_PASSWORD;
-  for (const name of azureSigningSettings) delete process.env[name];
-}
 const maintainer = process.env.RELEASE_MAINTAINER;
 if (release && !/^.+ <[^<>\s]+@[^<>\s]+>$/.test(maintainer || "")) {
   throw new Error("Set RELEASE_MAINTAINER to Name <email> for release packages");
@@ -33,19 +17,6 @@ if (release && process.platform === "darwin") {
     if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
   }
 }
-if (release && process.platform === "win32" && !unsignedWindows) {
-  for (const name of azureSigningSettings) {
-    if (!process.env[name]) throw new Error(`Missing release signing setting: ${name}`);
-  }
-}
-const azureSignOptions = azureSigningSettings.every((name) => process.env[name])
-  ? {
-      publisherName: process.env.WIN_SIGNING_PUBLISHER,
-      endpoint: process.env.AZURE_SIGNING_ENDPOINT,
-      codeSigningAccountName: process.env.AZURE_SIGNING_ACCOUNT_NAME,
-      certificateProfileName: process.env.AZURE_SIGNING_CERTIFICATE_PROFILE_NAME,
-    }
-  : null;
 module.exports = {
   appId: "com.codemanufactory.code60",
   productName: "Code60",
@@ -75,17 +46,11 @@ module.exports = {
           "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
           "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
         ]
-      : process.platform === "win32"
-        ? [
-            "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
-            "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
-            "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*",
-          ]
-        : [
-            "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
-            "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
-            "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**/*",
-          ]),
+      : [
+          "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+          "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
+          "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**/*",
+        ]),
   ],
   extraResources: [
     { from: "mcp.default.json", to: "mcp.default.json" },
@@ -105,17 +70,6 @@ module.exports = {
         ].map((name) => `jinaai/jina-embeddings-v2-base-code/${name}`),
       ],
     },
-    ...(process.platform === "win32"
-      ? [
-          {
-            // Directory copies run electron-builder's executable signing transformer.
-            // A single-file extraResource bypasses that transformer.
-            from: "native/win32/x64",
-            to: "native",
-            filter: ["code60-host.exe"],
-          },
-        ]
-      : []),
   ],
   publish: {
     provider: "github",
@@ -138,30 +92,6 @@ module.exports = {
     ...(release ? {} : { identity: "-" }),
   },
   dmg: { sign: release },
-  win: {
-    target: [{ target: "nsis", arch: ["x64"] }],
-    executableName: "Code60",
-    forceCodeSigning: release && !unsignedWindows,
-    signAndEditExecutable: true,
-    // Azure defaults to SHA-256 file digests and RFC 3161 SHA-256 timestamps.
-    ...(azureSignOptions
-      ? { azureSignOptions }
-      : {
-          signtoolOptions: {
-            signingHashAlgorithms: ["sha256"],
-            rfc3161TimeStampServer: "https://timestamp.digicert.com",
-          },
-        }),
-  },
-  nsis: {
-    oneClick: true,
-    perMachine: false,
-    allowElevation: false,
-    createDesktopShortcut: false,
-    createStartMenuShortcut: true,
-    deleteAppDataOnUninstall: false,
-    runAfterFinish: false,
-  },
   linux: {
     // DEB and AppImage map ${arch} to different aliases; use one release filename convention.
     // biome-ignore lint/suspicious/noTemplateCurlyInString: electron-builder expands these macros.

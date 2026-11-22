@@ -23,6 +23,7 @@ async function notices(directory, base, target) {
 }
 await notices("src/renderer/fonts", "src", "vendored");
 await notices("src/renderer/icons", "src", "vendored");
+await notices("src/renderer/neobrutalism", "src", "vendored");
 await notices("src/renderer/activity-animations", "src", "vendored");
 await mkdir(join(output, "models"), { recursive: true });
 await cp("models/provenance.json", join(output, "models/provenance.json"));

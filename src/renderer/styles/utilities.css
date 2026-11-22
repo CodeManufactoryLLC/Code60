@@ -17,11 +17,21 @@
   opacity: 0.6;
 }
 
+/* Provider menus keep readable disabled labels, a neutral fill and focusable reasons. */
+.actions-menu.provider-dropdown [role="menuitem"][aria-disabled="true"] {
+  border: 2px solid transparent;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 /* Unavailable navigation destinations are dimmed labels, not outlined controls. */
 .app .sidebar :is(button, [role="tab"]):is(:disabled, [aria-disabled="true"]) {
   border-color: transparent;
   background: transparent;
-  opacity: 0.45;
+  opacity: 1;
+  color: var(--muted);
 }
 
 .app input[type="checkbox"]:disabled:checked:not(.plan-task input)::before {
@@ -81,6 +91,13 @@
   color: var(--accent);
 }
 
+/* Raster disclosure artwork needs a focus edge beyond the shared glyph-color highlight. */
+:root button.chat-workers-toggle-leading:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+  box-shadow: var(--focus-inset-shadow);
+}
+
 .app .button-group > button:is(:disabled, [aria-disabled="true"]) {
   border-style: solid;
   border-color: var(--border);
@@ -90,6 +107,7 @@
 @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
   .activity-display[data-animate="true"] .activity-name,
   .chat-connecting[data-animate="true"] .activity-name,
+  .chat-sidebar-label[data-working="true"]:not([inert] *, [hidden] *, [aria-hidden="true"] *),
   .search-loading-label {
     background-image: linear-gradient(
       100deg,

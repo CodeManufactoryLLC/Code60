@@ -207,15 +207,36 @@ export class DesktopKnowledge {
     }
   }
   private tabRevision(panel: KnowledgePanel, tab: KnowledgePanel["tabs"][number]): string {
-    return knowledgeHash([this.renderer, panel.id, panel.owner, tab]);
+    return knowledgeHash([
+      this.renderer,
+      panel.id,
+      panel.owner,
+      tab,
+      tab.kind === "file" ? [panel.fileSubscription, panel.active, panel.open] : null,
+    ]);
   }
   private availability(cap: Capability, state: KnowledgeRuntime, caller: KnowledgeCaller) {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.id === "memory-recall") {
+    if (cap.id === "orchestration-permissions") {
+      reason =
+        "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";
+      action = `Open ${cap.access}.`;
+    } else if (cap.id === "custom-agents") {
+      reason =
+        "Assistant management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";
+      action =
+        "Home → Custom Assistants or Sidebar → Assistants → Custom Assistants; New Assistant; stop work before Edit; Archived → Restore.";
+    } else if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+    } else if (cap.id === "plans") {
+      status = "unknown";
+      reason =
+        "View Plan is available in the right sidebar when the current session has an existing plan. Viewing saved content does not generate a new plan or restore execution authority.";
+      action =
+        "Open the files panel and use View Plan to reopen the current session's latest plan.";
     } else if (cap.id === "reviews") {
       status = "unknown";
       reason =
@@ -235,10 +256,26 @@ export class DesktopKnowledge {
       status = "blocked";
       reason = "No connected database.";
       action = "Connect to database.";
+    } else if (cap.id === "projects") {
+      reason =
+        "Project homes remain available without an open chat; closing the last chat creates no replacement.";
+      action = "Use New Session on the project home to explicitly create a chat.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";
-      action = "Settings → Agents.";
+      action = "Providers → Add Provider.";
+    } else if (cap.id === "model-settings") {
+      status = "unknown";
+      reason =
+        "Human-only controls require a connected idle session and connector-advertised choices; provider verification alone does not establish model switching availability.";
+      action =
+        "Inspect the session's Model picker. Clear saved defaults in Providers → provider details.";
+    } else if (cap.id === "browser") {
+      status = "unknown";
+      reason =
+        "The browser tool is available, but Node.js/npm, Chrome and Existing Browser extension approval are checked only when used. No browser was probed.";
+      action =
+        "Use code60_browser status, select the mode requested in chat, then list-tools and call. Report missing prerequisites without switching modes.";
     } else if (cap.prerequisite === "project" && !state.projectOpen) {
       status = "blocked";
       reason = "Caller has no bound open project.";
@@ -263,6 +300,15 @@ export class DesktopKnowledge {
       status = state.gitReady === false ? "blocked" : "unknown";
       reason = "Project workers require Git readiness with an initial commit.";
       action = "Set up Git from Chat, then continue explicitly.";
+    } else if (cap.id === "system-manager") {
+      reason =
+        "Desktop controls manage the independent macOS/Linux Scheduling Service and show verified installation/runtime status. No public Code60 CLI; awareness never probes or controls the service.";
+      action = "Apps → System Manager.";
+    } else if (cap.id === "updates") {
+      status = "unknown";
+      reason =
+        "Updates ship for macOS arm64 and Linux x64. Development builds may be unavailable; awareness never checks or downloads.";
+      action = "Settings → Updates.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =

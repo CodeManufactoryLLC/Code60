@@ -2,6 +2,22 @@ import type { SVGProps } from "react";
 
 /** IBM Carbon icon geometry (Apache-2.0; see icons/carbon/LICENSE). Coordinates are retained. */
 const carbonIcons = {
+  edit: {
+    size: 32,
+    paths: [
+      { d: "M2 26H30V28H2z" },
+      {
+        d: "M25.4,9c0.8-0.8,0.8-2,0-2.8c0,0,0,0,0,0l-3.6-3.6c-0.8-0.8-2-0.8-2.8,0c0,0,0,0,0,0l-15,15V24h6.4L25.4,9z M20.4,4L24,7.6 l-3,3L17.4,7L20.4,4z M6,22v-3.6l10-10l3.6,3.6l-10,10H6z",
+      },
+    ],
+  },
+  archive: {
+    size: 32,
+    paths: [
+      { d: "M14 19H18V21H14z" },
+      { d: "M6,2V28a2,2,0,0,0,2,2H24a2,2,0,0,0,2-2V2ZM24,28H8V16H24Zm0-14H8V10H24ZM8,8V4H24V8Z" },
+    ],
+  },
   "overflow-menu--horizontal": {
     size: 16,
     paths: [
@@ -150,6 +166,10 @@ const carbonIcons = {
   "arrow--left": {
     size: 16,
     paths: [{ d: "M6.7 12.3 2.9 8.5 15 8.5 15 7.5 2.9 7.5 6.7 3.7 6 3 1 8 6 13z" }],
+  },
+  "arrow--right": {
+    size: 16,
+    paths: [{ d: "M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z" }],
   },
   draggable: {
     size: 32,
@@ -312,6 +332,14 @@ const carbonIcons = {
       },
       {
         d: "M12,4v8h-2V4H12 M12,3h-2C9.4,3,9,3.4,9,4v8c0,0.6,0.4,1,1,1h2c0.6,0,1-0.4,1-1V4C13,3.4,12.6,3,12,3z",
+      },
+    ],
+  },
+  play: {
+    size: 16,
+    paths: [
+      {
+        d: "M3.5,14C3.2,14,3,13.8,3,13.5v-11c0-0.2,0.1-0.3,0.2-0.4C3.4,2,3.6,2,3.8,2.1l9.5,5.5c0.2,0.1,0.3,0.4,0.2,0.7 c0,0.1-0.1,0.1-0.2,0.2l-9.5,5.5C3.7,14,3.6,14,3.5,14z M4,3.4v9.3L12,8L4,3.4z",
       },
     ],
   },

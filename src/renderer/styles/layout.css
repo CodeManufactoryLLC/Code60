@@ -16,11 +16,63 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .app:has(.sidebar[data-open="false"]) {
   --sidebar-reveal: 0;
+}
+
+/* Paint the workspace behind cards while preserving native sidebar transparency. */
+.app:has(.sidebar)::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--workspace-background);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app:has(.sidebar[data-open="true"])::before {
+  clip-path: inset(0 0 0 calc(var(--sidebar-left-inset) + var(--sidebar-track-width)));
+}
+
+:root[data-transparent="true"] .app::before {
+  display: none;
+}
+
+/* One background spans the full left area; all controls paint sharply above it. */
+.sidebar-background {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: calc(var(--sidebar-left-inset) + var(--sidebar-track-width));
+  z-index: 0;
+  background: var(--workspace-background);
+  background-size: 100vw 100dvh;
+  opacity: var(--sidebar-background-opacity);
+  pointer-events: none;
+}
+
+.app:has(.sidebar[data-open="false"]) .sidebar-background {
+  display: none;
+}
+
+.app:has(.sidebar) > :is(.window-drag-strip, .database-notice, .app-workspace) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Do not paint another solid surface behind the sidebar's adjustable tint. */
+body:has(.app .sidebar) {
+  background: transparent;
+}
+
+.app:has(.sidebar[data-open="true"]) {
+  background: linear-gradient(
+    to right,
+    transparent calc(var(--sidebar-left-inset) + var(--sidebar-track-width)),
+    var(--bg) calc(var(--sidebar-left-inset) + var(--sidebar-track-width))
+  );
 }
 
 :root[data-transparent="true"],
@@ -38,6 +90,7 @@
 
 .app-workspace {
   position: relative;
+  --nav-row-height: max(40px, calc(2.5 * var(--nav-font-size, 15px) + 2px));
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -50,44 +103,58 @@
 }
 
 .app-workspace:has(> .sidebar) {
-  grid-template-rows: var(--workspace-top-inset, var(--app-titlebar-height)) minmax(0, 1fr);
+  grid-template-rows:
+    minmax(var(--workspace-top-inset, var(--app-titlebar-height)), max-content)
+    minmax(0, 1fr);
 }
 
 .workspace-header {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   column-gap: var(--page-margin);
   align-items: flex-start;
   min-width: 0;
   min-height: 0;
-  padding: 0;
+  padding: 6px 0;
 }
 
 .workspace-breadcrumbs {
-  grid-column: 2;
+  grid-column: 1;
   min-width: 0;
-  padding-inline: var(--page-padding);
+  margin-right: var(--breadcrumb-right-inset, 0px);
+  /* Large title preferences may wrap; keep the content area usable. */
+  max-height: 40vh;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  box-sizing: border-box;
+  /* Header margin and inner padding retain the 12px first-row inset. */
+  padding: 4px calc(var(--page-padding) - 1px);
+  gap: 0;
+  --nb-card-fill: var(--card-header-fill);
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
 }
 
+.workspace-breadcrumbs .page-breadcrumbs li {
+  min-height: var(--nav-row-height);
+}
+
 .app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
-  grid-column: 1 / -1;
+  /* Keep the card on the content track throughout the shared reveal transition. */
   display: flex;
   justify-content: safe center;
-  /* Balance the workspace's wider left inset around the window center. */
-  margin-left: calc(var(--page-margin) - var(--sidebar-left-inset));
 }
 
 .app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs ol {
   justify-content: safe center;
 }
 
-/* Unframed main content alongside the navigation. */
+/* Primary content is a surface card beside the navigation. */
 .page-panel {
+  box-sizing: border-box;
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -96,9 +163,9 @@
   min-height: 0;
   min-width: 0;
   position: relative;
-  border: 0;
-  border-radius: 0;
-  background: var(--bg);
+  /* Retain the former 3px combined edge without duplicating Card chrome. */
+  padding: 1px;
+  gap: 0;
   overflow: hidden;
 }
 
@@ -111,6 +178,7 @@
 }
 
 .app-workspace > .page-panel {
+  margin-top: 5px;
   margin-bottom: var(--page-margin);
 }
 
@@ -153,4 +221,38 @@ dialog::backdrop {
   min-height: var(--titlebar-height);
   padding-left: max(30px, var(--titlebar-left));
   padding-right: max(30px, calc(var(--titlebar-right) + 12px));
+}
+
+/* Transparent Linux windows need caption controls in the existing drag strip. */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 8px;
+  height: 28px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+.window-controls > .icon-button {
+  width: 36px;
+  height: 28px;
+  min-height: 28px;
+  --icon-size: 14px;
+}
+.window-controls > .window-close:hover {
+  background: var(--destructive-hover);
+  color: var(--on-destructive);
+}
+
+/* Dark plum bands separate compact headers from near-black reading surfaces. */
+:root[data-color-scheme="dark"] .workspace-breadcrumbs {
+  --text: var(--card-header-text);
+  --muted: var(--card-header-muted);
+  --focus-line: var(--card-header-text);
+  --focus-outline: var(--card-header-text);
+  --accent: var(--card-header-text);
+  --hover-bg: var(--card-header-hover);
+  --accent-bg: var(--card-header-hover);
+  --control-hover: var(--card-header-hover);
 }

@@ -23,6 +23,7 @@ import { FileBrowserState } from "./file-browser-state.js";
 import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
 import type { PreviewViewState } from "./monaco-preview.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 import { PageTitle } from "./page-title.js";
 import { pathLabel } from "./path-label.js";
 
@@ -36,14 +37,13 @@ export function useFiles(
   snapshot: Snapshot | undefined,
   active: boolean,
   preview: string | null,
-  instance?: string,
   ownerState?: FileBrowserState,
 ): FileBrowser {
   const project = snapshot?.directory ?? null;
   const workspace = `${snapshot?.database}:${project}`;
   const owner = useMemo(
-    () => ownerState ?? new FileBrowserState(instance ?? workspace),
-    [workspace, instance, ownerState],
+    () => ownerState ?? new FileBrowserState(workspace),
+    [workspace, ownerState],
   );
   useLayoutEffect(() => {
     owner.activate();
@@ -132,6 +132,7 @@ export function useFiles(
   };
 }
 export interface FileBrowser {
+  subscriptionId?: string | undefined;
   root: string | null;
   preview: string | null;
   selectedFile: string | null;
@@ -256,7 +257,7 @@ function FileSettings({
     };
   }, []);
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className="setup-dialog picker-dialog"
       aria-labelledby={id}
@@ -290,7 +291,7 @@ function FileSettings({
           Done
         </button>
       </div>
-    </dialog>
+    </DialogContent>
   );
 }
 

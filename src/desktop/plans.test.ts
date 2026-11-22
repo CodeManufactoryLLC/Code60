@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -74,10 +74,8 @@ it("keeps Relay target assignments and rejects private-record changes instead of
   expect(await readFile(path, "utf8")).toContain("Changed outside Code60");
   await writeFile(path, data);
   expect((await PlanStore.open(root, "relay", true)).get(plan.id).tasks[0]?.target).toEqual(target);
-  if (process.platform !== "win32") {
-    await chmod(path, 0o644);
-    await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
-  }
+  await chmod(path, 0o644);
+  await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
 });
 it("creates one draft, preserves task identities on revision and deduplicates creation", async () => {
   const { root, store } = await setup();
@@ -157,11 +155,14 @@ it("repairs Markdown from its record and never resumes execution on reopen", asy
 it("rejects links and preserves visible state on a failed write", async () => {
   const { root, store } = await setup();
   const plan = await store.create(draft, null);
+  const directory = join(root, "outside");
+  await mkdir(directory);
   const target = join(root, "outside.txt");
   await writeFile(target, "untouched");
   const path = join(root, "plans", `${plan.id}.md`);
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(target, path, "file");
   await expect(
     store.action({ type: "accept", chatId: "chat", planId: plan.id, revision: 1 }),
   ).rejects.toThrow("Unsafe");
@@ -193,10 +194,13 @@ it("rolls back the document if its record cannot be committed", async () => {
   const markdown = join(root, "plans", `${plan.id}.md`);
   const before = await readFile(markdown, "utf8");
   const path = join(root, ".code60", "plans", `${plan.id}.json`);
+  const directory = join(root, "outside");
+  await mkdir(directory);
   const target = join(root, "unrelated.txt");
   await writeFile(target, "untouched");
   await rm(path);
-  await symlink(target, path);
+  // Junctions exercise reparse-point refusal without requiring Windows elevation.
+  await symlink(target, path, "file");
   await expect(
     store.update({
       operation: "revise",
@@ -208,4 +212,66 @@ it("rolls back the document if its record cannot be committed", async () => {
   expect(store.get(plan.id)).toEqual(plan);
   expect(await readFile(markdown, "utf8")).toBe(before);
   expect(await readFile(target, "utf8")).toBe("untouched");
+});
+
+it.each([false, true])(
+  "persists creation order through rewrites and repeated reopen (private %s)",
+  async (strict) => {
+    const { root } = await setup();
+    let store = await PlanStore.open(root, "chat", strict);
+    const first = await store.create(draft, null);
+    await store.action({ type: "dismiss", chatId: "chat", planId: first.id, revision: 1 });
+    const latest = await store.create({ ...draft, requestId: "latest", title: "Latest" }, null);
+    await store.action({ type: "accept", chatId: "chat", planId: latest.id, revision: 1 });
+    await store.mutate(latest.id, (plan) => {
+      plan.state = "completed";
+    });
+    // Older plans may have more revisions and newer modification times.
+    for (let index = 0; index < 4; index++)
+      await store.mutate(first.id, (plan) => {
+        plan.description += " older edit";
+      });
+    const metadata = join(root, ".code60", "plans");
+    // Force UUID enumeration to disagree with creation order without depending on random IDs.
+    const earlyId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const lateId = "00000000-0000-4000-8000-000000000000";
+    const expected = [store.get(first.id), store.get(latest.id)].map((plan, index) => ({
+      ...plan,
+      id: index ? lateId : earlyId,
+    }));
+    for (const plan of [first, latest]) await rm(join(metadata, `${plan.id}.json`));
+    for (const plan of expected)
+      await writeFile(join(metadata, `${plan.id}.json`), JSON.stringify(plan), { mode: 0o600 });
+    await utimes(join(metadata, `${earlyId}.json`), new Date(2030, 1), new Date(2030, 1));
+    const documents = await Promise.all(
+      [first, latest].map((plan) => readFile(join(root, "plans", `${plan.id}.md`), "utf8")),
+    );
+    for (let restart = 0; restart < 3; restart++) {
+      store = await PlanStore.open(root, "chat", strict);
+      expect(store.list().map((plan) => plan.id)).toEqual([earlyId, lateId]);
+      expect(store.get(lateId)).toEqual(expected[1]);
+      expect(store.get(earlyId)).toEqual(expected[0]);
+      for (const [index, plan] of expected.entries())
+        expect(await readFile(join(root, "plans", `${plan.id}.md`), "utf8")).toBe(documents[index]);
+    }
+    await store.rewind([store.get(earlyId)]);
+    const next = await store.create({ ...draft, requestId: "after-undo" }, null);
+    expect(next.creationOrder).toBe(3);
+  },
+);
+
+it("rejects altered or duplicate creation order", async () => {
+  const { root, store } = await setup();
+  const first = await store.create(draft, null);
+  await expect(
+    store.mutate(first.id, (plan) => {
+      plan.creationOrder = 2;
+    }),
+  ).rejects.toThrow("cannot change");
+  expect(store.get(first.id)).toEqual(first);
+  await store.action({ type: "dismiss", chatId: "chat", planId: first.id, revision: 1 });
+  const second = await store.create({ ...draft, requestId: "second" }, null);
+  const path = join(root, ".code60", "plans", `${second.id}.json`);
+  await writeFile(path, JSON.stringify({ ...second, creationOrder: first.creationOrder }));
+  await expect(PlanStore.open(root, "chat")).rejects.toThrow("Duplicate plan creation order");
 });

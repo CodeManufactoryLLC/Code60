@@ -44,7 +44,6 @@ in an issue form does not automatically apply a platform label.
 | `priority:low` | `c5def5` | Can wait behind other accepted work. |
 | `platform:macos` | `bfd4f2` | Specific to macOS. |
 | `platform:linux` | `bfd4f2` | Specific to Linux. |
-| `platform:windows` | `bfd4f2` | Windows requests; Windows is currently unsupported. |
 | `good first issue` | `7057ff` | Small, clear scope with guidance and no unresolved design decisions. |
 | `help wanted` | `008672` | Contributions are welcome. |
 | `release-blocker` | `b60205` | Must be resolved or explicitly removed from the target release's scope. |
@@ -58,6 +57,15 @@ support requires updating the architecture and adding validation.
 
 Use macOS or Linux with Node.js 22.12 or later and npm.
 
+Node.js 22.12 needs `NODE_OPTIONS=--experimental-sqlite` when running checks so
+database tests participate in coverage. CI and release validation enable this for Node 22.12;
+Node 24 exposes SQLite without the flag. Coverage floors remain the same.
+Memory tests additionally probe FTS5 in a private in-memory database; Node 22.12
+does not bundle FTS5, so those suites run on Node 24 and Electron instead.
+Project-database and controller coverage still runs on both CI versions.
+Disposable x64 CI desktop runners use Ubuntu's primary package mirror and
+bounded download timeouts to avoid stalled regional graphics-package downloads.
+
 ```sh
 npm ci
 npm run check
@@ -67,12 +75,12 @@ Useful scripts:
 
 - `npm run check`: instruction validation, typecheck, Biome checks, Knip, and one coverage-enabled unit/integration suite.
 - `npm run check:instructions`: validate literal documented npm scripts, local Markdown references/heading anchors, module instructions and skill metadata. This static check never executes Markdown commands, fetches remote links or proves prose semantics.
-- `npm run test:coverage`: prepare Windows helpers, run Vitest once, write JSON summary/HTML to `coverage/`, and enforce all four coverage metrics.
+- `npm run test:coverage`: run Vitest once, write JSON summary/HTML to `coverage/`, and enforce all four coverage metrics.
 - `npm run check:unused`: check unused files, exports, types and dependencies with Knip.
 - `npm run test:logs:performance`: build, then measure production logging in a fresh process against an exact 20 MiB fixture, including first query, 24 saved plus 24 column conditions, 200-row pages, event-loop delay, memory and dirty shutdown. Run `node scripts/benchmark-logs.mjs --fragmented` afterward for a seven-day, 10,066-segment worst case.
 - `npm run format`: apply formatting and safe lint fixes.
 - `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
-- `npm run build`: compile the CLI and desktop main process and build the renderer.
+- `npm run build`: compile the desktop main process and scheduler and build the renderer.
 - `npm run prepare:models`: download and verify the pinned Jina INT8 assets into
   ignored `models/` (about 164.5 MB). Run once before using RAG or packaging.
   `node scripts/prepare-models.mjs --verify` verifies existing assets without downloads.
@@ -82,7 +90,7 @@ Useful scripts:
   It prints load/index/query latency and peak RSS. Routine unit tests use fakes.
 - `npm run dev`: build and start the desktop app with rebuilds on changes.
 - `npm run test:desktop:container`: build and run the Electron Playwright tests in a Linux container with Xvfb, without opening windows on your machine. Use this for local desktop testing.
-- `npm run test:desktop`: build and run the same tests directly on the host. A display is required. Use it only in CI and for native-platform validation (macOS, Windows, packaged and installer tests).
+- `npm run test:desktop`: build and run the same tests directly on the host. A display is required. Use it only in CI and for native-platform validation (macOS, packaged and installer tests).
 
 Run `npm run check` before each commit. Run `npm run test:desktop:container` for
 desktop changes; if Docker is unavailable, report that instead of running the
@@ -147,11 +155,11 @@ provider exactly aligned with Vitest when changing either dependency.
 
 `npm test` and `npm run test:watch` remain available without coverage. `check`
 runs the suite only once. CI retains HTML and machine-readable summaries for
-seven days on Linux Node 22.12/24 and in native Windows/macOS Node 24 validation.
+seven days on Linux Node 22.12/24 and in native macOS Node 24 validation.
 Native runs remain required evidence for platform claims; local POSIX runs do not
-substitute for Windows helper/ACL or installer validation.
+substitute for native installer validation.
 
-Knip follows the CLI, desktop main/preload, renderer/Vite workers, MCP sidecar,
+Knip follows the desktop main/preload, renderer/Vite workers, MCP sidecar,
 tests, dynamically launched fake agents/Docker fixtures and manual icon generator.
 Vite's configured renderer root and HTML script provide its renderer entry and
 worker imports; the redundant global renderer entry is intentionally omitted.
@@ -160,6 +168,12 @@ packaged output or native binaries. Native helper source, bundled fonts/icons an
 worker assets remain discoverable through build/Vite/packaging entry points.
 `test/unused-gates.test.mjs` also runs Knip on a fixture containing deliberate
 unused files, exports and a dependency, without suppressing categories.
+
+The explicit external-binary exceptions are `mkfifo` (POSIX storage fixtures)
+and `openbox` (the isolated Linux caption-control journey). Openbox is supplied by
+the container/CI operating-system packages and stopped by its owning test; it is
+not an npm executable. These exceptions do not exclude code, exports or issue
+categories from analysis.
 
 The only dependency exceptions are `@wyw-in-js/shared` and `app-builder-lib`:
 `test/dependency-compatibility.test.ts` intentionally inspects these installed
@@ -349,7 +363,7 @@ live settings match.
 Read [ARCHITECTURE.md](ARCHITECTURE.md), [AGENTS.md](AGENTS.md), and the
 `src/<module>/AGENTS.md` instructions for the modules you change. Keep module
 boundaries intact and import other modules through their `index.ts` entry points.
-Add tests for changed behavior and update CLI help and relevant documentation
+Add tests for changed behavior and update relevant desktop and scheduler documentation
 when the user-visible behavior changes.
 
 Keep pull requests focused. Explain what changed, why, and which checks you ran.
@@ -390,7 +404,11 @@ contribution under the project's license. Use your own name and email.
 ## Installer CI
 
 Require the **CI passed** check for merges. Routine PRs and pushes to main use
-only Linux for checks, Electron UI tests, and DEB/AppImage packaging and
-installation tests. Windows and macOS run only for manually requested release
+only Linux: Node 22.12/24 checks, three Electron UI test shards, and a separate
+DEB/AppImage packaging and installation job all start independently. Each desktop
+shard uses its own runner and one worker; together they run the full suite.
+**CI passed** requires both Node checks, all three desktop shards, and the
+installer job to succeed. Failed, cancelled, or skipped jobs prevent success.
+macOS runs only for manually requested release
 candidates. See [RELEASING.md](RELEASING.md) for local packaging, required GitHub
 settings, and the signed installer workflow.

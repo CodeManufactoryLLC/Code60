@@ -4,30 +4,54 @@ export function parseTheme(value: string | null): Theme {
   return value === "light" || value === "dark" ? value : "system";
 }
 
+export interface SidebarAppearance {
+  opacity: number;
+  blur: number;
+}
+export const sidebarPercentageLimit = 100;
+export const defaultSidebarAppearance: Readonly<SidebarAppearance> = Object.freeze({
+  opacity: 100,
+  blur: 0,
+});
+
+export function parseSidebarAppearance(raw: string | null): SidebarAppearance {
+  try {
+    const value: unknown = JSON.parse(raw ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return defaultSidebarAppearance;
+    const record = value as Record<string, unknown>;
+    const bounded = (key: keyof SidebarAppearance) => {
+      const number = record[key];
+      return typeof number === "number" && Number.isFinite(number)
+        ? Math.round(Math.max(0, Math.min(sidebarPercentageLimit, number)))
+        : defaultSidebarAppearance[key];
+    };
+    return { opacity: bounded("opacity"), blur: bounded("blur") };
+  } catch {
+    return defaultSidebarAppearance;
+  }
+}
+
+export function sidebarAppearanceProperties(appearance: SidebarAppearance): Record<string, string> {
+  return {
+    "--sidebar-background-opacity": `${appearance.opacity}%`,
+  };
+}
+
 /** The selected preference and resolved scheme have distinct, single owners. */
 export function observeColorScheme(
   theme: Theme,
   root: Pick<HTMLElement, "dataset">,
   system: Pick<MediaQueryList, "matches" | "addEventListener" | "removeEventListener">,
-  nativeTheme: (dark: boolean) => Promise<void>,
-  fail: (message: string) => void,
 ) {
-  let alive = true;
-  let revision = 0;
   root.dataset.theme = theme;
   const update = () => {
-    const request = ++revision;
     const dark = theme === "dark" || (theme === "system" && system.matches);
     root.dataset.colorScheme = dark ? "dark" : "light";
-    void nativeTheme(dark).catch((cause: unknown) => {
-      if (alive && revision === request)
-        fail(cause instanceof Error ? cause.message : String(cause));
-    });
   };
   update();
   if (theme === "system") system.addEventListener("change", update);
   return () => {
-    alive = false;
     if (theme === "system") system.removeEventListener("change", update);
   };
 }

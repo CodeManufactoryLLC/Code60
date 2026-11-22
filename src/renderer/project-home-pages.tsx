@@ -60,8 +60,8 @@ export function ProjectHomePages({
       error={navigation.error}
       pending={navigation.pending}
       create={{
-        label: "New Chat",
-        ariaLabel: `New chat in ${pathLabel(project.path)}`,
+        label: "New Session",
+        ariaLabel: `New Session in ${pathLabel(project.path)}`,
         onClick: () => void navigation.chatAction({ type: "new", projectId: project.id }),
       }}
     />

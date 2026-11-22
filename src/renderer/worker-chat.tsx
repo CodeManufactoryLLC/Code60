@@ -7,7 +7,12 @@ import { chatFailureReason, sessionStatus, turnTimings } from "./chat-presentati
 import type { OpenChat } from "./chats.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
+import { Button } from "./neobrutalism/button.js";
+import { Card } from "./neobrutalism/card.js";
+import { ScrollArea } from "./neobrutalism/scroll-area.js";
+import { Textarea } from "./neobrutalism/textarea.js";
 import { PageTitle } from "./page-title.js";
+import { PendingApprovals } from "./pending-approvals.js";
 import { continueBlocker } from "./recovery.js";
 import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
@@ -23,11 +28,14 @@ export function WorkerChat({
   orchestrated,
   events,
   active,
+  hidden = !active,
+  selectionPending = false,
   request,
   loading,
   historyError,
   onRetry,
   onCopied,
+  autoApproval = true,
   notice,
 }: {
   api: DesktopApi;
@@ -37,11 +45,14 @@ export function WorkerChat({
   orchestrated: boolean;
   events: readonly RunEvent[];
   active: boolean;
+  hidden?: boolean;
+  selectionPending?: boolean;
   request: OpenChat | undefined;
   loading: boolean;
   historyError: string | undefined;
   onRetry(): void;
   onCopied?: (() => void) | undefined;
+  autoApproval?: boolean;
   notice?: ReactNode;
 }) {
   const id = run.record.id;
@@ -152,7 +163,10 @@ export function WorkerChat({
       className="orchestration-chat-page worker-chat-page"
       id={`chat-${id}`}
       aria-labelledby={titleId}
-      hidden={!active}
+      hidden={hidden}
+      inert={selectionPending}
+      data-navigation-pending={selectionPending || undefined}
+      aria-busy={selectionPending || undefined}
     >
       <header className="orchestration-chat-heading worker-chat-heading">
         <div className="worker-chat-identity">
@@ -174,10 +188,7 @@ export function WorkerChat({
           </span>
         </div>
         {orchestrated && (
-          <span
-            className="status-label chat-worker-label"
-            title="Dispatched by an orchestrator. Each tool call is allowed once without asking."
-          >
+          <span className="status-label chat-worker-label" title="Dispatched by an orchestrator.">
             Orchestrator worker
           </span>
         )}
@@ -197,9 +208,9 @@ export function WorkerChat({
         <div className="error-banner" role="alert">
           {failure}
           {historyError && (
-            <button type="button" onClick={onRetry}>
+            <Button type="button" onClick={onRetry}>
               Retry reads
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -210,7 +221,7 @@ export function WorkerChat({
         </div>
       )}
       <div className="orchestration-chat-body">
-        <div
+        <ScrollArea
           className="transcript"
           ref={scroll}
           role="log"
@@ -228,109 +239,85 @@ export function WorkerChat({
             savedScroll.current = element.scrollTop;
           }}
         >
-          {loading && !blocks.length ? (
-            <p className="muted">Loading…</p>
-          ) : (
-            <>
-              {blocks.length > visible && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    follow.current = false;
-                    setVisible((n) => n + 300);
-                  }}
-                >
-                  Show earlier activity
-                </button>
-              )}
-              {blocks.length === 0 && (
-                <div className="activity-empty">
-                  <p>
-                    {sendable
-                      ? "Send a prompt below to start this agent's first turn."
-                      : "Agent activity will appear here."}
-                  </p>
-                </div>
-              )}
-              {blocks.slice(-visible).map((block) => {
-                const activity =
-                  block.automatic ||
-                  ["thought", "toolCall", "permission", "note"].includes(block.type);
-                const message = (
-                  <ChatMessage
-                    block={block}
-                    openLink={api.openWebLink}
-                    at={events[Number(block.key)]?.at}
-                    visible={active}
-                    onCopied={onCopied}
-                    className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
-                    eventIndex={block.key}
-                    tabIndex={-1}
-                    detail={
-                      block.detail ? (
-                        <details>
-                          <summary>Handoff summary</summary>
-                          <pre>{block.detail}</pre>
+          <div className="worker-transcript-content">
+            {loading && !blocks.length ? (
+              <p className="muted">Loading…</p>
+            ) : (
+              <>
+                {blocks.length > visible && (
+                  <Button
+                    variant="quiet"
+                    type="button"
+                    onClick={() => {
+                      follow.current = false;
+                      setVisible((n) => n + 300);
+                    }}
+                  >
+                    Show earlier activity
+                  </Button>
+                )}
+                {blocks.length === 0 && (
+                  <div className="activity-empty">
+                    <p>
+                      {sendable
+                        ? "Send a prompt below to start this agent's first turn."
+                        : "Agent activity will appear here."}
+                    </p>
+                  </div>
+                )}
+                {blocks.slice(-visible).map((block) => {
+                  const activity =
+                    block.automatic ||
+                    ["thought", "toolCall", "permission", "note"].includes(block.type);
+                  const message = (
+                    <ChatMessage
+                      block={block}
+                      openLink={api.openWebLink}
+                      at={events[Number(block.key)]?.at}
+                      visible={active}
+                      onCopied={onCopied}
+                      className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
+                      eventIndex={block.key}
+                      tabIndex={-1}
+                      detail={
+                        block.detail ? (
+                          <details>
+                            <summary>Handoff summary</summary>
+                            <pre>{block.detail}</pre>
+                          </details>
+                        ) : undefined
+                      }
+                    />
+                  );
+                  return (
+                    <Fragment key={block.key}>
+                      {activity ? (
+                        <details className="chat-activity">
+                          <summary>
+                            <Icon name="terminal" />
+                            Activity
+                          </summary>
+                          <div className="chat-activity-content">{message}</div>
                         </details>
-                      ) : undefined
-                    }
-                  />
-                );
-                return (
-                  <Fragment key={block.key}>
-                    {activity ? (
-                      <details className="chat-activity">
-                        <summary>
-                          <Icon name="terminal" />
-                          Activity
-                        </summary>
-                        <div className="chat-activity-content">{message}</div>
-                      </details>
-                    ) : (
-                      message
-                    )}
-                    {timings.get(block.key) && (
-                      <TurnTimer timing={timings.get(block.key)} visible={active} />
-                    )}
-                  </Fragment>
-                );
-              })}
-            </>
-          )}
-        </div>
-        {runPending.length > 0 && (
-          <section className="approvals" aria-label="Pending approvals">
-            {runPending.map((permission) => (
-              <div className="approval" key={permission.id}>
-                <div>
-                  <strong>Approval needed / {permission.kind}</strong>
-                  <pre>{permission.title}</pre>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void act({ type: "permission", id: permission.id, answer: "deny" })
-                  }
-                >
-                  Deny
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    void act({ type: "permission", id: permission.id, answer: "allow" })
-                  }
-                >
-                  Allow once
-                </button>
-              </div>
-            ))}
-          </section>
-        )}
+                      ) : (
+                        message
+                      )}
+                      {timings.get(block.key) && (
+                        <TurnTimer timing={timings.get(block.key)} visible={active} />
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </ScrollArea>
+        <PendingApprovals
+          requests={runPending}
+          onAnswer={(id, answer) => api.action({ type: "permission", id, answer })}
+        />
         {inactive ? (
-          <div className="composer composer-inactive" role="status">
+          <Card className="composer composer-inactive" role="status">
             <p>Agent is inactive. Its worktree was deleted.</p>
             <SessionInfo
               state={run.view?.sessionState ?? run.record.sessionState}
@@ -340,18 +327,21 @@ export function WorkerChat({
               active={active}
               editable={false}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated}
+              autoApproval={autoApproval}
+              onAutoApprovalChange={
+                orchestrated ? (value) => api.setOrchestrationAutoApproval(value) : undefined
+              }
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}
             />
-          </div>
+          </Card>
         ) : (
-          <section className="composer" aria-label="Worker composer">
+          <Card as="section" className="composer" aria-label="Worker composer">
             <label className="sr-only" htmlFor={replyId}>
               Message
             </label>
-            <textarea
+            <Textarea
               id={replyId}
               ref={composer}
               placeholder="Send a message..."
@@ -380,14 +370,20 @@ export function WorkerChat({
               state={run.view?.sessionState ?? run.record.sessionState}
               ended={ended}
               editable={editable && !busy}
+              onSaveDefault={() => {
+                void act({ type: "save-model-default", id });
+              }}
               changing={!!run.view?.modeChanging}
-              autoApproval={orchestrated}
+              autoApproval={autoApproval}
+              onAutoApprovalChange={
+                orchestrated ? (value) => api.setOrchestrationAutoApproval(value) : undefined
+              }
               onMode={(change) => {
                 void act({ type: "set-mode", id, change });
               }}
             >
               {working && run.view ? (
-                <button
+                <Button
                   type="button"
                   className="composer-send"
                   disabled={busy || run.view.stopping}
@@ -395,19 +391,20 @@ export function WorkerChat({
                 >
                   <Icon name="stop" />
                   Stop
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="primary"
                   type="button"
                   className="primary composer-send"
                   disabled={busy || !sendable || !draft.trim()}
                   onClick={() => void send()}
                 >
                   Send <Icon name="arrow--up" />
-                </button>
+                </Button>
               )}
             </SessionInfo>
-          </section>
+          </Card>
         )}
       </div>
     </main>

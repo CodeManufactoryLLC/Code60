@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { AutomationTranscript, DesktopApi } from "../bridge/index.js";
 import { Modal } from "./modal.js";
 
@@ -14,7 +14,9 @@ export function AutomationTranscriptModal({
   const [value, setValue] = useState<AutomationTranscript>();
   const [error, setError] = useState("");
   const refreshLatest = useRef<() => void>(() => {});
-  useEffect(() => {
+  useLayoutEffect(() => {
+    setValue(undefined);
+    setError("");
     let disposed = false;
     let reading = false;
     let dirty = false;

@@ -24,6 +24,12 @@ const record = z
   );
 export type AgentSetupRecord = z.infer<typeof record>;
 export const parseAgentSetupRecord = (value: unknown): AgentSetupRecord => record.parse(value);
+const providerAction = z.strictObject({
+  type: z.enum(["set-primary", "disconnect"]),
+  provider,
+});
+export type ProviderAction = z.infer<typeof providerAction>;
+export const parseProviderAction = (value: unknown): ProviderAction => providerAction.parse(value);
 const begin = z.strictObject({ mode: z.enum(["primary", "add"]) });
 const session = z.strictObject({ sessionId: z.uuid() });
 const attempt = session.extend({ provider });
@@ -51,6 +57,7 @@ export interface AgentSetupSession {
   verified: string[];
 }
 export interface AgentSetupSnapshot {
+  management?: { blockedReason: string | null };
   complete: boolean;
   primary: string | null;
   enabled: string[];

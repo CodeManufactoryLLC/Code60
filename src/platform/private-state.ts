@@ -4,7 +4,6 @@ import { constants } from "node:fs";
 import { lstat, open, readdir, rmdir, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { helperOutput } from "./helper.js";
 import {
   atomicReplace,
   createPrivateDirectory,
@@ -22,8 +21,7 @@ export async function verifyPrivatePath(path: string, directory: boolean) {
     (directory ? !info.isDirectory() : !info.isFile() || info.nlink !== 1n)
   )
     throw new Error("Unsafe private storage");
-  if (process.platform === "win32") await helperOutput(["verify-private", path]);
-  else if ((info.mode & 0o077n) !== 0n || info.uid !== BigInt(process.getuid?.() ?? -1))
+  if ((info.mode & 0o077n) !== 0n || info.uid !== BigInt(process.getuid?.() ?? -1))
     throw new Error("Unsafe private storage permissions");
   return info;
 }
@@ -96,7 +94,7 @@ export async function writePrivateJson(
     }
     await verify();
     await atomicReplace(temporary, path);
-    if (process.platform !== "win32") {
+    {
       const dir = await open(dirname(path), constants.O_RDONLY);
       try {
         await dir.sync();

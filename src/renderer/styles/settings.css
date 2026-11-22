@@ -46,7 +46,7 @@
   --letter-spacing: var(--title-spacing, normal);
   letter-spacing: var(--title-tracking, normal);
   font-size: var(--title-size, 16px);
-  font-weight: var(--title-weight, 300);
+  font-weight: var(--title-weight, 700);
   text-transform: var(--title-case, none);
   line-height: 1.25;
   font-synthesis: none;
@@ -74,6 +74,16 @@
   margin-bottom: var(--page-header-gap);
 }
 
+/* Titles in the workspace header leave no empty heading row inside Settings. */
+.settings-section-header:has(.page-title-placeholder) {
+  min-height: 0;
+  margin-bottom: 12px;
+}
+
+.settings-section-header:has(.page-title-placeholder):not(:has(.settings-actions, .info-tip)) {
+  display: none;
+}
+
 .settings-actions {
   display: flex;
   align-items: center;
@@ -93,13 +103,28 @@
 }
 
 .settings-card {
+  box-sizing: border-box;
   min-width: 0;
   margin: 0 0 12px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: var(--rule-strong) solid var(--panel-border);
   background: var(--surface);
 
-  border-radius: var(--card-radius);
+  border-radius: var(--settings-card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.table-density-selector {
+  border-radius: var(--ui-radius);
+}
+
+/* Keep fills and focus inside the rounded selector without clipping outlines. */
+.table-density-selector > .segmented-option:first-child {
+  border-radius: var(--ui-radius);
+}
+
+.table-density-selector > .segmented-option:last-child {
+  border-radius: var(--ui-radius);
 }
 
 /* A floated legend sits inside the card instead of breaking its top border. */
@@ -110,7 +135,7 @@
   margin: 0;
   padding: 12px 16px 4px;
   color: var(--muted);
-  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   font-variant-numeric: tabular-nums;
   --letter-spacing: var(--card-spacing, normal);
@@ -242,14 +267,16 @@ button.info-tip {
 
 /* A settings group is a fieldset card; its floated legend sits inside the card's top border. */
 .settings-group {
+  box-sizing: border-box;
   position: relative;
   min-width: 0;
   margin: 0 0 12px;
   padding: 14px 16px 16px;
-  border: 1px solid var(--border);
+  border: var(--rule-strong) solid var(--panel-border);
   background: var(--surface);
 
-  border-radius: var(--card-radius);
+  border-radius: var(--settings-card-radius);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-group-title {
@@ -258,7 +285,7 @@ button.info-tip {
   margin: 0 0 12px;
   padding: 0 88px 0 0;
   color: var(--text);
-  font: var(--card-weight, 300) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
   text-transform: var(--card-case, none);
   --letter-spacing: var(--card-spacing, normal);
 }
@@ -327,6 +354,32 @@ button.settings-group-reset {
 
 .transition-settings .settings-group-title {
   padding-right: 140px;
+}
+
+.sidebar-appearance-settings {
+  margin-top: var(--space-4);
+}
+
+.sidebar-appearance-settings .settings-group-title {
+  padding-right: 120px;
+}
+
+.sidebar-appearance-setting + .sidebar-appearance-setting {
+  margin-top: 16px;
+}
+
+.sidebar-appearance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sidebar-appearance-heading output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .transition-setting + .transition-setting {
@@ -598,7 +651,7 @@ button.settings-group-reset {
   margin: 0;
   font-family: var(--title-font, var(--font));
   font-size: var(--title-size, 16px);
-  font-weight: var(--title-weight, 300);
+  font-weight: var(--title-weight, 700);
   letter-spacing: var(--title-tracking, normal);
   text-transform: var(--title-case, none);
   white-space: normal;

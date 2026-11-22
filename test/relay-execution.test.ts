@@ -101,7 +101,11 @@ it("resolves a symbolic base again for distinct dispatches but not accepted retr
   expect(await host.dispatch(owner, req, DEFAULT_CONFIG)).toBe(first);
   expect(first.record.base).toBe("a".repeat(40));
 });
-it("freezes current files by task and target while resolving explicit bases independently", async () => {
+// Seven dispatches each create private run records; on Windows every durable write runs the
+// native ACL/atomic-replace helper, which alone took about 4.6 seconds on an ARM64 VM.
+it("freezes current files by task and target while resolving explicit bases independently", {
+  timeout: 5000,
+}, async () => {
   const initial = "a".repeat(40);
   let current = "b".repeat(40);
   const snapshot = vi.fn(async () => current);
@@ -161,6 +165,7 @@ it("starts real worktrees from saved files without changing HEAD or staging", as
   const command = (...args: string[]) =>
     execFileSync("git", args, { cwd: target, encoding: "utf8" }).trim();
   command("init", "-q");
+  command("config", "core.autocrlf", "false");
   await writeFile(join(target, "tracked.txt"), "committed\n");
   command("add", "tracked.txt");
   commitFixture(target);
@@ -208,7 +213,7 @@ it("starts real worktrees from saved files without changing HEAD or staging", as
   expect(command("rev-parse", "HEAD")).toBe(head);
   expect(command("diff", "--cached", "--binary")).toBe(staged);
   expect(await readFile(join(target, "tracked.txt"), "utf8")).toBe("later human edits\n");
-});
+}, 30_000); // Three real Windows worktrees took 5.2 s in CI; one sibling snapshot took 4.8 s.
 it.each(["folder", "all"] as const)(
   "aborts pending baseline capture on %s stop before an agent starts",
   async (kind) => {
@@ -443,7 +448,7 @@ it("rejects changed directory identities and malformed or relative targets", asy
   await expect(host.dispatch(owner, request(original, "replaced"), DEFAULT_CONFIG)).rejects.toThrow(
     "identity changed",
   );
-  if (process.platform !== "win32") {
+  {
     await symlink(join(root, "b"), join(root, "alias"));
     const b = await host.dispatch(owner, request(join(root, "alias"), "alias"), DEFAULT_CONFIG);
     expect(b.target.cwd).toBe(join(root, "b"));

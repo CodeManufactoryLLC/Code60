@@ -21,7 +21,7 @@ const topics = [
   "Database migrations run inside a single transaction and roll back on failure",
   "The sidebar collapses below nine hundred pixels to keep the editor readable",
   "Log rotation keeps seven days of private diagnostic segments",
-  "Windows installers need the job object helper for process cleanup",
+  "POSIX agent groups must stop all owned descendants during cleanup",
   "The tactics picker remembers the last selection per chat",
   "Prompt templates are validated again in the main process before saving",
   "Search summaries cite numbered evidence from saved conversations",

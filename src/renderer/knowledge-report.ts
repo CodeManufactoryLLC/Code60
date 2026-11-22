@@ -87,16 +87,24 @@ export function panelReport(tabs: FileTabs) {
 export function useKnowledgePanel(
   api: DesktopApi | undefined,
   owner: KnowledgeOwner | undefined,
-  panel: { tabs: FileTabs; open: boolean; active: boolean },
+  panel: { tabs: FileTabs; open: boolean; active: boolean; fileSubscription?: string | undefined },
 ): void {
   const [id] = useState(() => crypto.randomUUID());
-  const { tabs, open, active } = panel;
+  const { tabs, open, active, fileSubscription } = panel;
   const ownerKey = owner && JSON.stringify(owner);
   // biome-ignore lint/correctness/useExhaustiveDependencies: ownerKey canonically identifies owner.
   useEffect(() => {
     if (!owner) return;
-    report(api, { kind: "panel", id, owner, active, open, ...panelReport(tabs) });
-  }, [api, id, ownerKey, tabs, open, active]);
+    report(api, {
+      kind: "panel",
+      id,
+      owner,
+      active,
+      open,
+      ...(fileSubscription ? { fileSubscription } : {}),
+      ...panelReport(tabs),
+    });
+  }, [api, id, ownerKey, tabs, open, active, fileSubscription]);
   useEffect(() => {
     if (ownerKey) return () => report(api, { kind: "remove", id });
   }, [api, id, ownerKey]);

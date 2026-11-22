@@ -65,9 +65,9 @@ export class Scheduler {
         "Schedule persistence failed. No further launches are allowed.",
       );
     }
-    this.publish();
+    this.notify();
   }
-  private publish() {
+  private notify() {
     for (const listener of this.listeners) {
       try {
         listener(this.store.state.revision);
@@ -270,7 +270,7 @@ export class Scheduler {
               entry.evidence = evidence;
               await this.save(state);
             }),
-          () => this.publish(),
+          () => this.notify(),
         );
       } catch (error) {
         outcome = {
@@ -308,6 +308,8 @@ export class Scheduler {
       this.failed = true; // An uncertain save cannot authorize more execution.
     } finally {
       this.active = null;
+      // Live ownership changes even when saving the final outcome failed.
+      this.notify();
     }
   }
 
@@ -349,6 +351,11 @@ export class Scheduler {
         case "list":
           return state.automations.map(({ prompt: _prompt, repository, ...value }) => ({
             ...value,
+            running:
+              this.active?.automationId === value.id &&
+              state.executions.some(
+                (entry) => entry.id === this.active?.executionId && unfinished(entry),
+              ),
             repository: { dev: repository.dev, ino: repository.ino },
           }));
         case "get":

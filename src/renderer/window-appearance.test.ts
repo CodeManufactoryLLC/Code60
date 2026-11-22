@@ -12,6 +12,34 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("keeps the full left background interactive even where there is no navigation control", async () => {
+  const events = new EventTarget();
+  vi.stubGlobal("window", events);
+  vi.stubGlobal("document", {
+    documentElement: { dataset: {} },
+    elementFromPoint: () => null,
+    querySelector: (selector: string) =>
+      selector === ".sidebar-background"
+        ? { getBoundingClientRect: () => ({ left: 0, right: 244, top: 0, bottom: 900 }) }
+        : null,
+  });
+  const hitTest = vi.fn(async (_ignore: boolean) => {});
+  useWindowAppearance(
+    {
+      windowAppearance: async () => ({ transparent: true, enabled: true, clickThrough: true }),
+      setBackgroundHitTest: hitTest,
+    } as unknown as DesktopApi,
+    vi.fn(),
+  );
+  const dispose = effects[0]?.();
+  await Promise.resolve();
+  events.dispatchEvent(Object.assign(new Event("mousemove"), { clientX: 300, clientY: 14 }));
+  expect(hitTest).toHaveBeenLastCalledWith(true);
+  events.dispatchEvent(Object.assign(new Event("mousemove"), { clientX: 150, clientY: 14 }));
+  expect(hitTest).toHaveBeenLastCalledWith(false);
+  dispose?.();
+});
+
 it.each([
   { control: "title-bar toggle", selector: ".sidebar-toggle", x: 94, y: 14 },
   { control: "header breadcrumbs", selector: ".workspace-breadcrumbs", x: 300, y: 36 },

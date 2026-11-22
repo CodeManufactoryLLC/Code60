@@ -43,8 +43,7 @@ it("reads the validated handle when its pathname is replaced", async () => {
     return file;
   });
   const restored = ReviewStore.open(root, "/project");
-  if (process.platform === "win32") await expect(restored).rejects.toThrow("changed");
-  else expect((await restored).get(review.id).title).toBe("Original review");
+  expect((await restored).get(review.id).title).toBe("Original review");
   expect(closed).toBe(true);
 });
 
@@ -72,17 +71,14 @@ it("bounds the actual read if a record grows after handle validation", async () 
   expect(closed).toBe(true);
 });
 
-it.skipIf(process.platform === "win32")(
-  "rejects symlinks and FIFOs without reading or blocking",
-  async () => {
-    const review = await store.create("chat", 1, "Linked review");
-    const path = join(store.root, `${review.id}.json`);
-    const original = `${path}.original`;
-    await rename(path, original);
-    await symlink(original, path);
-    await expect(ReviewStore.open(root, "/project")).rejects.toThrow();
-    await rm(path);
-    execFileSync("mkfifo", [path]);
-    await expect(ReviewStore.open(root, "/project")).rejects.toThrow("unavailable");
-  },
-);
+it("rejects symlinks and FIFOs without reading or blocking", async () => {
+  const review = await store.create("chat", 1, "Linked review");
+  const path = join(store.root, `${review.id}.json`);
+  const original = `${path}.original`;
+  await rename(path, original);
+  await symlink(original, path);
+  await expect(ReviewStore.open(root, "/project")).rejects.toThrow();
+  await rm(path);
+  execFileSync("mkfifo", [path]);
+  await expect(ReviewStore.open(root, "/project")).rejects.toThrow("unavailable");
+});

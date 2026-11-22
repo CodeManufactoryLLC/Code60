@@ -12,7 +12,10 @@ import { FileBrowserState } from "./file-browser-state.js";
 import type { FileBrowser } from "./files.js";
 
 export function relayFileRoots(snapshot: Snapshot | undefined) {
-  const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const relay =
+    snapshot?.chat.kind === "relay"
+      ? snapshot.chat
+      : snapshot?.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   if (!relay?.conversationId || relay.generation === undefined) return [];
   const targets = new Map(
     snapshot?.runs.flatMap((run) =>
@@ -24,7 +27,10 @@ export function relayFileRoots(snapshot: Snapshot | undefined) {
     ),
   );
   return [
-    { path: "workspace", label: "Relay workspace" },
+    {
+      path: "workspace",
+      label: relay.customAgentId ? `${relay.title} workspace` : "Relay workspace",
+    },
     ...[...targets].map(([id, cwd]) => ({ path: `target:${id}`, label: `Target · ${cwd}` })),
   ];
 }
@@ -33,7 +39,10 @@ export function relayFileScope(
   snapshot: Snapshot | undefined,
   root: string,
 ): DetailScope | undefined {
-  const relay = snapshot?.chats.find((chat) => chat.kind === "relay");
+  const relay =
+    snapshot?.chat.kind === "relay"
+      ? snapshot.chat
+      : snapshot?.chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   if (!relay?.conversationId || relay.generation === undefined) return;
   if (root === "workspace")
     return {
@@ -63,7 +72,9 @@ export function useRelayFiles(
   const scope = relayFileScope(snapshot, root);
   const key = scope ? detailScopeKey(scope) : `unavailable:${root}`;
   const owner = useMemo(() => new FileBrowserState(key), [key]);
-  const registration = useMemo(() => ({ api, key, enabled }), [api, key, enabled]);
+  // Retain Explorer state, release the bounded main-process view on deactivation.
+  const subscribed = enabled && active;
+  const registration = useMemo(() => ({ api, key, subscribed }), [api, key, subscribed]);
   useLayoutEffect(() => {
     owner.activate();
     return () => owner.dispose();
@@ -77,7 +88,7 @@ export function useRelayFiles(
   const sequence = useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: key canonically includes the complete scope; snapshot/selection changes never replace an unchanged root.
   useEffect(() => {
-    if (!enabled || !scope || !api.setRelayFileContext || !api.subscribeDetails) return;
+    if (!subscribed || !scope || !api.setRelayFileContext || !api.subscribeDetails) return;
     setConnection(undefined);
     const request = { scope, subscriptionId: crypto.randomUUID() };
     let alive = true;
@@ -95,8 +106,8 @@ export function useRelayFiles(
       alive = false;
       stop();
     };
-  }, [api, key, enabled, owner, registration]);
-  const current = enabled && connection?.registration === registration ? connection : undefined;
+  }, [api, key, subscribed, owner, registration]);
+  const current = subscribed && connection?.registration === registration ? connection : undefined;
   const requestId = current?.frame.closed === false ? current.request.subscriptionId : undefined;
   const directories =
     preview !== null
@@ -155,6 +166,7 @@ export function useRelayFiles(
     }) === requestJson;
   const polling = payload?.filePolling;
   return {
+    subscriptionId: requestId,
     root,
     preview,
     selectedFile: state.selected,

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { Icon } from "./icons.js";
+import { DialogContent } from "./neobrutalism/dialog.js";
 
 export function Modal({
   title,
@@ -24,7 +25,7 @@ export function Modal({
     return () => previous?.focus();
   }, []);
   return (
-    <dialog
+    <DialogContent
       ref={dialog}
       className={`setup-dialog ${wide ? "changes-dialog" : "picker-dialog"} ${className}`}
       aria-labelledby={id}
@@ -46,6 +47,6 @@ export function Modal({
         </button>
       </div>
       {children}
-    </dialog>
+    </DialogContent>
   );
 }

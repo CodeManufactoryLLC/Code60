@@ -31,9 +31,7 @@ describe("automation store", () => {
     await expect(store.save({ ...store.state, revision: 1 })).rejects.toThrow();
     await store.close();
     await expect(AutomationStore.open(root)).rejects.toThrow();
-    if (process.platform !== "win32") {
-      await chmod(join(root, "state.json"), 0o644);
-      await expect(AutomationStore.open(root)).rejects.toThrow("permissions");
-    }
+    await chmod(join(root, "state.json"), 0o644);
+    await expect(AutomationStore.open(root)).rejects.toThrow("permissions");
   });
 });

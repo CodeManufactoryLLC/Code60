@@ -45,7 +45,9 @@ const navigation: NavigationActions = {
   projectAction: vi.fn(async () => true),
   invalidate: vi.fn(),
   pending: false,
+  busy: false,
   projectPending: false,
+  conversationPending: false,
   error: "",
 };
 
@@ -67,10 +69,10 @@ describe("navigation tree", () => {
   });
   it("resolves only immediate children in sidebar order with real destinations", () => {
     expect(staticChildren("apps", null).map(({ id }) => id)).toEqual([
-      "automations",
       "commands",
       "tables",
       "prompts",
+      "automations",
       "system-manager",
     ]);
     expect(staticChildren("tables", null).map(({ id }) => id)).toEqual([
@@ -119,6 +121,7 @@ describe("navigation tree", () => {
     expect(inNavigationBranch("logs", "settings")).toBe(false);
     expect(navigationParent("home")).toBeUndefined();
     for (const id of [
+      "assistants",
       "projects",
       "project",
       "tables",
@@ -191,7 +194,7 @@ describe("navigation tree", () => {
     });
     const html = renderToStaticMarkup(dynamic);
     expect(html).toContain("No conversations");
-    expect(html).toContain('aria-label="New chat in A"');
+    expect(html).toContain('aria-label="New Session in A"');
     expect(html).toContain('id="project-a-title"');
     expect(dynamic[0]?.props.hidden).toBe(false);
     dynamic[0]?.props.create?.onClick();
@@ -223,7 +226,7 @@ describe("navigation tree", () => {
     },
   );
 
-  it("keeps New Chat first and bound to each retained project, without a header plus", () => {
+  it("keeps New Session first and bound to each retained project, without a header plus", () => {
     const chatAction = vi.fn(async () => true);
     const pages = ProjectHomePages({
       projects: [project, { ...project, id: "b", path: "/projects/B", chatIds: [] }],
@@ -239,7 +242,7 @@ describe("navigation tree", () => {
       const html = renderToStaticMarkup(page);
       const header = html.slice(0, html.indexOf('class="home-content"'));
       expect(header).not.toContain('class="icon-button"');
-      expect(html).toContain("New Chat");
+      expect(html).toContain("New Session");
       if (id === "a")
         expect(html.indexOf("home-card-create")).toBeLessThan(html.indexOf('data-feature="one"'));
       expect(page.props.hidden).toBe(id !== "b");
