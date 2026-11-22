@@ -2444,6 +2444,77 @@ test("workflow: review live Relay and worker permissions with auto-approval off"
     const chat = page.locator(".orchestration-chat-page:visible");
     const toggle = chat.getByRole("button", { name: "Code60 auto-approval", exact: true });
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    const input = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    const draft = "Keep this draft while changing approval.";
+    await input.fill(draft);
+    const setTextSize = async (size: number) => {
+      const settings = page.locator("#settings-card-toggle");
+      if ((await settings.getAttribute("aria-expanded")) === "false") await settings.click();
+      await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
+      await page
+        .getByRole("group", { name: "Button Text", exact: true })
+        .getByLabel("Font size")
+        .fill(String(size));
+      await relay.click();
+    };
+    const checkComposer = async (name: string) => {
+      const composer = chat.locator(".composer");
+      const layout = await composer.evaluate((composer) => {
+        const controls = [...composer.querySelectorAll("button, textarea")];
+        const bounds = composer.getBoundingClientRect();
+        return {
+          overflow: composer.scrollWidth > composer.clientWidth + 1,
+          controlsInside: controls.every((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.left >= bounds.left && rect.right <= bounds.right;
+          }),
+        };
+      });
+      expect(layout).toEqual({ overflow: false, controlsInside: true });
+      await expect(chat.locator(".chat-connection-frame")).toHaveCSS("min-height", "120px");
+      await expect(input).toHaveValue(draft);
+      // Focusing and activating after scrolling exercises reachability, not only bounds.
+      await toggle.scrollIntoViewIfNeeded();
+      await toggle.focus();
+      await expect(toggle).toBeFocused();
+      await page.keyboard.press("Space");
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await expect(input).toHaveValue(draft);
+      const screenshot = await application?.evaluate(async ({ BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (!window) throw new Error("Missing desktop window");
+        return (await window.webContents.capturePage()).toPNG().toString("base64");
+      });
+      if (!screenshot) throw new Error("Missing composer screenshot");
+      await writeFile(
+        test.info().outputPath(`composer-${name}.png`),
+        Buffer.from(screenshot, "base64"),
+      );
+      await expect(toggle).toBeEnabled();
+      await toggle.focus();
+      await page.keyboard.press("Space");
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await chat.getByRole("button", { name: "Send", exact: true }).scrollIntoViewIfNeeded();
+      await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeInViewport();
+    };
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 600),
+    );
+    for (const size of [13, 32, 64]) {
+      await setTextSize(size);
+      await checkComposer(`narrow-text-${size}`);
+    }
+    await setTextSize(13);
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window?.setSize(1280, 900);
+      window?.webContents.setZoomFactor(2);
+    });
+    await expect.poll(() => page.evaluate(() => innerWidth)).toBe(640);
+    await checkComposer("zoom-200");
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.setZoomFactor(1),
+    );
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await expect
