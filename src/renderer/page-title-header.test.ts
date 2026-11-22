@@ -76,6 +76,7 @@ it("tracks the right panel divider, restores stacked/closed width and releases q
   conversationRight = 650;
   resized();
   expect(values.get("--breadcrumb-right-inset")).toBe("0px");
+  expect(values.has("--breadcrumb-card-height")).toBe(false);
   stop();
   expect(disconnect).toHaveBeenCalledOnce();
   headerPresent = true;

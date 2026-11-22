@@ -119,8 +119,6 @@ async function send(page: Page, text: string) {
 }
 async function memoryOff(page: Page) {
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  const apps = page.locator("#apps-card-toggle");
-  if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
   await page.getByRole("tab", { name: "Memory", exact: true }).click();
   const toggle = page
     .locator("#panel-settings-memory")

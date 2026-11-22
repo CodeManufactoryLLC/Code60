@@ -5,6 +5,8 @@ export interface IconAppearance {
   contrast: number;
 }
 
+export const iconContrastBounds = { min: 0, max: 200 } as const;
+
 export const defaultIconAppearance: Readonly<IconAppearance> = Object.freeze({
   animations: true,
   monochrome: false,
@@ -22,7 +24,9 @@ export function parseIconAppearance(raw: string | null): IconAppearance {
       monochrome: record.monochrome === true,
       contrast:
         typeof record.contrast === "number" && Number.isFinite(record.contrast)
-          ? Math.round(Math.max(0, Math.min(200, record.contrast)))
+          ? Math.round(
+              Math.max(iconContrastBounds.min, Math.min(iconContrastBounds.max, record.contrast)),
+            )
           : defaultIconAppearance.contrast,
       color:
         typeof record.color === "string" && /^#[\da-f]{6}$/i.test(record.color)

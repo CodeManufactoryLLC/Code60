@@ -65,7 +65,9 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     await openLogs(page);
     const logs = page.locator("#panel-logs");
     await expect(
-      page.locator(".workspace-breadcrumbs").getByRole("heading", { name: "Logs", exact: true }),
+      page
+        .locator(".content-page-heading:visible")
+        .getByRole("heading", { name: "Logs", exact: true }),
     ).toBeVisible();
     expect((await page.evaluate(() => window.desktop.snapshot())).database).toBeNull();
     await expect(logs.getByRole("button", { name: "Older page", exact: true })).toBeEnabled();
@@ -148,9 +150,6 @@ test("desktop: app-wide Logs query retained history, preserve paused reading, an
     const id = retained.records[0]?.id;
     expect(id).toBeTruthy();
     for (const theme of ["dark", "light", "system"]) {
-      const settingsPages = page.locator("#apps-card-toggle");
-      if ((await settingsPages.getAttribute("aria-expanded")) === "false")
-        await settingsPages.press("ArrowRight");
       await page
         .locator("#app-pages")
         .getByRole("tab", { name: "Appearance", exact: true })

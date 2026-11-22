@@ -414,11 +414,11 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       await expect(job(page)).toHaveCSS("border-top-left-radius", "5px");
       await expect(job(page).locator(".automation-job-header")).toHaveCSS(
         "border-top-left-radius",
-        "3px",
+        "4px",
       );
       await expect(job(page).locator(".automation-job-header")).toHaveCSS(
         "border-bottom-left-radius",
-        "3px",
+        "4px",
       );
       await expect(controls.locator("button")).toHaveCount(3);
       await expect(controls.locator("button").nth(0)).toHaveAccessibleName(
@@ -464,7 +464,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect(job(page).locator(".automation-job-details")).toBeVisible();
       await expect(header).toHaveCSS("border-bottom-left-radius", "0px");
-      await expect(header).toHaveCSS("border-top-left-radius", "3px");
+      await expect(header).toHaveCSS("border-top-left-radius", "4px");
       await trigger.click();
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       await job(page).getByRole("button", { name: "Delete Retained scheduler" }).hover();

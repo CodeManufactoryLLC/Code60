@@ -158,7 +158,7 @@ test("workflow: conversational browser modes, external errors, cancellation and 
     await editor.getByLabel("Special instructions", { exact: true }).fill("Help with websites.");
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await page.getByRole("button", { name: "Open Browser helper", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Browser helper", exact: true })).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -503,7 +503,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
 
   // Two sessions in the SAME project must retain separate tab sets and selections.
   const panel = page.locator("#chat-file-panel");
-  const tabs = panel.getByRole("tablist", { name: "File tabs", exact: true });
+  const selector = panel.getByRole("combobox", { name: "Files view", exact: true });
   const first = entries.nth(count - 2);
   const second = entries.nth(count - 1);
   await first.click();
@@ -517,39 +517,35 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
   await panel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
   await expect(panel.locator(".view-lines")).toContainText("original");
-  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await newFileTab(page);
   await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).press("Alt+ArrowLeft");
+  await selectFileView(page, "result.txt");
+  await selector.press("Alt+ArrowLeft");
   await second.click();
-  await expect(tabs.getByRole("tab")).toHaveCount(0);
+  expect(await fileViewLabels(page)).toEqual([]);
   await panel.getByRole("button", { name: "Open Files", exact: true }).click();
   await panel.getByRole("treeitem", { name: "notes.txt", exact: true }).click();
   await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
-  await tabs.getByRole("button", { name: "Close File Explorer", exact: true }).click();
-  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
-  await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
+  await selectFileView(page, "File Explorer");
+  await selector.press("Delete");
+  await newFileTab(page);
+  await selectFileView(page, "notes.txt");
   await first.click();
-  await expect(tabs.getByRole("tab")).toHaveText(["result.txt", "File Explorer", "Memory Recall"]);
-  await expect(tabs.getByRole("tab", { name: "result.txt", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(selector).toHaveText("result.txt");
+  expect(await fileViewLabels(page)).toEqual(["result.txt", "File Explorer", "Memory Recall"]);
   await expect(panel.locator(".view-lines")).toContainText("original");
-  await tabs.getByRole("tab", { name: "File Explorer", exact: true }).click();
+  await selectFileView(page, "File Explorer");
   await expect(panel.getByRole("treeitem", { name: "docs", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
   await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
-  await tabs.getByRole("button", { name: "Close Memory Recall", exact: true }).click();
+  await selectFileView(page, "Memory Recall");
+  await selector.press("Delete");
+  await selectFileView(page, "result.txt");
   await second.click();
-  await expect(tabs.getByRole("tab")).toHaveText(["notes.txt", "New tab"]);
-  await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(selector).toHaveText("notes.txt");
+  expect(await fileViewLabels(page)).toEqual(["notes.txt", "New tab"]);
   await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
   await page.screenshot({ path: test.info().outputPath("session-panel-isolation.png") });
   await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
@@ -1517,12 +1513,10 @@ for (const custom of [false, true]) {
         await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
-        const parentTabsBeforeWorker = await planPanel.getByRole("tab").evaluateAll((tabs) =>
-          tabs.map((tab) => ({
-            label: tab.textContent,
-            selected: tab.getAttribute("aria-selected"),
-          })),
-        );
+        const parentTabsBeforeWorker = await fileViewLabels(page);
+        const parentSelectedBeforeWorker = await planPanel
+          .getByRole("combobox", { name: "Files view", exact: true })
+          .textContent();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await checkAgentMessageSpacing(
@@ -1536,13 +1530,11 @@ for (const custom of [false, true]) {
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
-        const workerTabs = page.getByRole("tablist", { name: "File tabs", exact: true });
-        await expect(workerTabs.getByRole("tab")).toHaveCount(0);
-        await page.getByRole("button", { name: "New file tab", exact: true }).click();
+        const workerSelector = page.getByRole("combobox", { name: "Files view", exact: true });
+        expect(await fileViewLabels(page)).toEqual([]);
+        await newFileTab(page);
         await page.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
-        await expect(
-          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
-        ).toHaveAttribute("aria-selected", "true");
+        await expect(workerSelector).toHaveText("Memory Recall");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -1567,9 +1559,7 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
-        await expect(
-          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
-        ).toHaveAttribute("aria-selected", "true");
+        await expect(workerSelector).toHaveText("Memory Recall");
         // Cached worker text can show before selection settles; a click meanwhile is ignored.
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
@@ -1582,14 +1572,10 @@ for (const custom of [false, true]) {
           page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
-        expect(
-          await planPanel.getByRole("tab").evaluateAll((tabs) =>
-            tabs.map((tab) => ({
-              label: tab.textContent,
-              selected: tab.getAttribute("aria-selected"),
-            })),
-          ),
-        ).toEqual(parentTabsBeforeWorker);
+        expect(await fileViewLabels(page)).toEqual(parentTabsBeforeWorker);
+        await expect(
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
+        ).toHaveText(parentSelectedBeforeWorker ?? "");
         const parentChat = page.locator(".orchestration-chat-page:visible");
         // Worker completion queues a separate autonomous parent turn. Wait for
         // its known reply and idle UI before capturing either layout sample.
@@ -1695,12 +1681,23 @@ for (const custom of [false, true]) {
             plan.getByRole("heading", { name: savedPlan.title, exact: true }),
           ).toBeVisible();
           await expect(projectPanel).toBeHidden();
-          expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.at(-1)).toEqual(
-            savedPlan,
-          );
-          expect(
+          const restoredPlan = (
+            await page.evaluate(() => window.desktop.snapshot())
+          ).chat.plans?.at(-1);
+          expect(restoredPlan).toEqual(savedPlan);
+          const restoredRecord = JSON.parse(
             await readFile(join(planRoot, ".code60/plans", `${savedPlan.id}.json`), "utf8"),
-          ).toBe(savedRecord);
+          );
+          const originalRecord = JSON.parse(savedRecord);
+          // Running timer checkpoints may advance; browsing cannot change the plan document or authority.
+          expect(restoredRecord).toEqual({
+            ...originalRecord,
+            executionTiming: expect.any(Object),
+          });
+          expect(restoredRecord.executionTiming.elapsedMs).toBeGreaterThanOrEqual(
+            originalRecord.executionTiming.elapsedMs,
+          );
+          expect(restoredRecord.revision).toBe(originalRecord.revision);
           await checkCheckout("human accepted target\n");
         }
         checks.push(
@@ -2321,7 +2318,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     expect(beforeOpen.database).toBeNull();
     expect(beforeOpen.chats.filter((chat) => chat.customAgentId)).toHaveLength(0);
     await page.getByRole("button", { name: "Open Reviewer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
@@ -2332,7 +2329,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     await composer.fill("Reviewer unsent draft");
     await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "Open Writer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Writer", exact: true })).toBeVisible();
     await expect(composer).toHaveValue("");
     await checkSidebarIconSpacing(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Writer", exact: true }),
@@ -2443,7 +2440,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     // Restore only synthetic evidence, then retry using the same visible entry.
     await writeFile(statePath, saved);
     await recoveryEntry.click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
     await expect(
       page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
     ).toBeEditable();

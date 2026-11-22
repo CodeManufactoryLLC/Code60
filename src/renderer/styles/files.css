@@ -118,7 +118,9 @@
   margin: 0;
   padding-inline: 6px;
   gap: 4px;
-  font: var(--button-weight, 600) var(--button-size, 13px) var(--button-font, var(--font));
+  font:
+    var(--button-weight, 600) min(var(--button-size, 13px), 22px) / 1.5
+    var(--button-font, var(--font));
   text-transform: none;
 }
 

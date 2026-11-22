@@ -2,7 +2,7 @@ import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
 import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
-import type { IconAppearance } from "./icon-appearance.js";
+import { type IconAppearance, iconContrastBounds } from "./icon-appearance.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
@@ -141,8 +141,8 @@ export function SettingsPage({
                 <input
                   id={`${id}-icon-contrast`}
                   type="range"
-                  min={0}
-                  max={200}
+                  min={iconContrastBounds.min}
+                  max={iconContrastBounds.max}
                   step={1}
                   value={iconAppearance.contrast}
                   disabled={!iconAppearance.monochrome}

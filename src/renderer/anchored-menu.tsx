@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { menuAnchorMoved } from "./menu-anchor.js";
+import { clampMenuPosition, menuAnchorMoved } from "./menu-anchor.js";
 import { menuTypeahead } from "./menu-typeahead.js";
 
 export function AnchoredMenu({
@@ -44,14 +44,7 @@ export function AnchoredMenu({
     const previous = anchor ?? document.activeElement;
     let bounds = previous instanceof HTMLElement ? previous.getBoundingClientRect() : undefined;
     const rect = menu.current?.getBoundingClientRect();
-    if (rect)
-      setPosition({
-        left: Math.max(
-          8,
-          Math.min(align === "end" ? x - rect.width : x, innerWidth - rect.width - 8),
-        ),
-        top: Math.max(8, Math.min(y, innerHeight - rect.height - 8)),
-      });
+    if (rect) setPosition(clampMenuPosition(align === "end" ? x - rect.width : x, y, rect));
     // A live title can change the trigger's position without changing its owner.
     // Reposition the same menu without resetting the highlighted item or focus.
     let disposed = false;
@@ -64,16 +57,11 @@ export function AnchoredMenu({
         const rect = menu.current?.getBoundingClientRect();
         if (!rect) return;
         bounds = anchor.getBoundingClientRect();
-        const next = {
-          left: Math.max(
-            8,
-            Math.min(
-              (align === "end" ? bounds.right - rect.width : bounds.left) + offsetX,
-              innerWidth - rect.width - 8,
-            ),
-          ),
-          top: Math.max(8, Math.min(bounds.bottom + offsetY, innerHeight - rect.height - 8)),
-        };
+        const next = clampMenuPosition(
+          (align === "end" ? bounds.right - rect.width : bounds.left) + offsetX,
+          bounds.bottom + offsetY,
+          rect,
+        );
         setPosition((current) =>
           current.left === next.left && current.top === next.top ? current : next,
         );

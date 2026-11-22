@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopApi, KnowledgeOwner, PlanSummary, ReviewSummary } from "../bridge/index.js";
-import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
+import { type FileTabAction, type FileTabs, fileMainViews, fileTabLabel } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
 import { useKnowledgePanel } from "./knowledge-report.js";
@@ -172,28 +172,19 @@ export function FilePanel({
           tab.kind === "revision" ||
           tab.kind === "application",
         icon:
-          tab.kind === "changes"
-            ? ("task--tools" as const)
-            : tab.kind === "explorer"
-              ? ("folder" as const)
-              : tab.kind === "revision"
-                ? ("file--diff" as const)
-                : ("document" as const),
+          tab.kind === "changes" || tab.kind === "explorer" || tab.kind === "recall"
+            ? fileMainViews[tab.kind].icon
+            : tab.kind === "revision"
+              ? ("file--diff" as const)
+              : ("document" as const),
       })),
     [tabs.entries],
   );
-  const act = (action: FileTabAction) => {
-    const next = updateFileTabs(tabs, action);
-    onAction(action);
-    return next.active;
-  };
+  const act = onAction;
   // Offer unopened destinations without mounting readers or changing stored tabs.
   const pages: PanelPage[] = [];
-  for (const [kind, label, icon] of [
-    ["explorer", "File Explorer", "folder"],
-    ["changes", "Changes", "task--tools"],
-    ["recall", "Memory Recall", "document"],
-  ] as const) {
+  for (const kind of ["explorer", "changes", "recall"] as const) {
+    const { label, icon } = fileMainViews[kind];
     if (!tabs.entries.some((tab) => tab.kind === kind))
       pages.push({
         id: `page-${kind}`,

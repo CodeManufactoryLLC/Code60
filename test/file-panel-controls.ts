@@ -18,7 +18,7 @@ export async function selectFileView(page: Page, label: string, index = 0) {
 export async function fileViewLabels(page: Page) {
   const selector = page.getByRole("combobox", { name: "Files view", exact: true });
   await expect(selector).toBeVisible();
-  if (await selector.isDisabled()) return [];
+  await expect(selector).toBeEnabled();
   const list = await openFileViews(page);
   // Main-page destinations and New Tab are available actions, not stored tabs.
   const labels = await list

@@ -131,14 +131,6 @@ body:has(.app .window-background) {
   pointer-events: auto;
 }
 
-/* Workspace shell cards share the sidebar's thin outline. */
-.workspace-breadcrumbs,
-.page-panel[data-slot="card"],
-.chat-conversations,
-.file-panel {
-  border-width: 1px;
-}
-
 /* Remove shell shadows without changing nested cards or inspector surfaces. */
 .page-panel[data-slot="card"],
 .chat-conversations {

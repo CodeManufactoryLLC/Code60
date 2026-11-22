@@ -87,7 +87,7 @@
   color-scheme: light;
   --bg: #f4f8fe;
   --workspace-background: #f4f8fe;
-  --sidebar-background: #f4f8fe;
+  --sidebar-background: var(--workspace-background);
   --content-background: #ffffff;
   --content-grid-line: rgb(0 0 0 / 7%);
   --surface: #ffffff;

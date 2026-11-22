@@ -10,10 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../icons.js";
-import { menuAnchorMoved } from "../menu-anchor.js";
+import { clampMenuPosition, menuAnchorMoved } from "../menu-anchor.js";
 import { menuTypeahead } from "../menu-typeahead.js";
 
-export interface ComboboxOption {
+interface ComboboxOption {
   id: string;
   label: string;
   title?: string;
@@ -32,6 +32,7 @@ export function Combobox({
   onTriggerKeyDown,
   listLabel = "Current page and parents",
   placeholder = "",
+  preserveCase = false,
 }: {
   label: string;
   value: string;
@@ -42,6 +43,7 @@ export function Combobox({
   onTriggerKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   listLabel?: string;
   placeholder?: string;
+  preserveCase?: boolean;
 }) {
   const id = useId();
   const localTrigger = useRef<HTMLButtonElement>(null);
@@ -93,6 +95,7 @@ export function Combobox({
         <ComboboxPopup
           id={id}
           label={listLabel}
+          preserveCase={preserveCase}
           open={expanded}
           anchor={trigger.current}
           value={value}
@@ -109,6 +112,7 @@ export function Combobox({
 }
 
 function ComboboxPopup({
+  preserveCase,
   id,
   label,
   open,
@@ -118,6 +122,7 @@ function ComboboxPopup({
   onClose,
   onSelect,
 }: {
+  preserveCase: boolean;
   id: string;
   label: string;
   open: boolean;
@@ -146,8 +151,12 @@ function ComboboxPopup({
     setActive(value);
     const bounds = anchor.getBoundingClientRect();
     element.showPopover();
-    element.style.left = `${Math.max(8, Math.min(bounds.left, innerWidth - element.offsetWidth - 8))}px`;
-    element.style.top = `${Math.max(8, Math.min(bounds.bottom + 6, innerHeight - element.offsetHeight - 8))}px`;
+    const position = clampMenuPosition(bounds.left, bounds.bottom + 6, {
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+    });
+    element.style.left = `${position.left}px`;
+    element.style.top = `${position.top}px`;
     list.current?.focus({ preventScroll: true });
     // Delegated press feedback scales the button; compare its stationary wrapper.
     const anchorElement = anchor.parentElement ?? anchor;
@@ -177,17 +186,18 @@ function ComboboxPopup({
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [anchor, open, value]);
+  const highlightedId = highlighted ? optionId(highlighted) : undefined;
   useLayoutEffect(() => {
-    if (open && highlighted)
-      document.getElementById(optionId(highlighted))?.scrollIntoView({ block: "nearest" });
-  });
+    if (open && highlightedId)
+      document.getElementById(highlightedId)?.scrollIntoView({ block: "nearest" });
+  }, [open, highlightedId]);
 
   return createPortal(
     <div
       ref={popup}
       popover="auto"
       className="neo-combobox-popup"
-      data-slot="popover-content"
+      data-preserve-case={preserveCase || undefined}
       aria-hidden={!open || undefined}
       inert={!open}
       onBeforeToggle={(event) => {

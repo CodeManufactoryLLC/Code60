@@ -2667,7 +2667,7 @@ selector, which still offers the main pages and + New Tab. Content uses a named 
 obsolete tabpanel semantics. Keep all IDs, state, cached previews, reader and
 conversation ownership, panel sizing and main-card corner toggle unchanged.
 The shared combobox accepts optional trigger ref/keyboard handler, list label
-and empty placeholder; existing breadcrumb defaults stay intact. The Files
+and empty placeholder; existing breadcrumb defaults stay intact. Files options preserve filename case independently of saved Button Text case. Bound Files closed-trigger text to 22px with 1.5 line height inside the fixed control, while popup rows grow for the full saved size. Scroll the popup to its highlight only on opening or a highlight change; unrelated streamed updates preserve manual scrolling. The Files
 catalog describes this UI without granting any new execution or read authority.
 
 ## Shared content page headers

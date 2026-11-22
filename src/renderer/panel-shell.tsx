@@ -47,7 +47,7 @@ export function PanelShell({
   tabs: readonly PanelTab[];
   pages?: readonly PanelPage[];
   selectedId: number | null;
-  onAction(action: PanelAction): number | null;
+  onAction(action: PanelAction): void;
   open: boolean;
   active: boolean;
   onToggle(): void;
@@ -163,6 +163,7 @@ export function PanelShell({
             <div className="file-tab-selector">
               <Combobox
                 label={`${name} view`}
+                preserveCase
                 listLabel={`Open ${name} tabs`}
                 placeholder="No open tabs"
                 value={selectedId === null ? "" : String(selectedId)}

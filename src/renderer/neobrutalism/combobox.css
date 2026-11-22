@@ -18,6 +18,8 @@
   color: var(--card-header-text);
   box-shadow: none;
   font: inherit;
+  font-size: min(1em, 24px);
+  line-height: 1.2;
   text-transform: inherit;
   white-space: nowrap;
   -webkit-app-region: no-drag;
@@ -79,6 +81,10 @@
   font-size: var(--button-size, 13px);
   font-weight: var(--button-weight, 600);
   text-transform: var(--button-case, none);
+}
+
+.neo-combobox-popup[data-preserve-case] {
+  text-transform: none;
 }
 
 .neo-combobox-popup:popover-open {

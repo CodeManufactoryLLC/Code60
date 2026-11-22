@@ -1,6 +1,12 @@
 import type { ReviewPreview, ReviewScope } from "./review-actions.js";
 import type { ReviewAddress } from "./review-content.js";
 import { reviewScopeKey } from "./review-session.js";
+export const fileMainViews = {
+  explorer: { label: "File Explorer", icon: "folder" },
+  changes: { label: "Changes", icon: "task--tools" },
+  recall: { label: "Memory Recall", icon: "document" },
+} as const;
+
 export type FileTab =
   | { id: number; kind: "plan"; planId: string; title: string }
   | { id: number; kind: "blank" | "explorer" | "recall" }
@@ -181,10 +187,10 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
 export function fileTabLabel(tab: FileTab, entries: FileTab[]): string {
   if (tab.kind === "application") return `Application · ${tab.preview.title}`;
   if (tab.kind === "plan") return `Plan · ${tab.title}`;
-  if (tab.kind === "changes") return "Changes";
-  if (tab.kind === "recall") return "Memory Recall";
+  if (tab.kind === "changes" || tab.kind === "recall" || tab.kind === "explorer")
+    return fileMainViews[tab.kind].label;
   if (tab.kind === "revision") return tab.title;
-  if (tab.kind !== "file") return tab.kind === "blank" ? "New tab" : "File Explorer";
+  if (tab.kind !== "file") return "New tab";
   if (tab.source) return `${tab.path.split("/").at(-1)} · ${tab.source.label}`;
   const name = tab.path.split("/").at(-1) ?? tab.path;
   return entries.some(
